@@ -83,3 +83,10 @@ class TemporalWorkflowService:
         except Exception as e:
             logger.error(f"Failed to resume task: {e}")
             return False
+
+    async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
+        try:
+            return await self._execution_service.send_a2ui_action(execution_id, action_data)
+        except Exception as e:
+            logger.error(f"Failed to send A2UI action: {e}")
+            return False

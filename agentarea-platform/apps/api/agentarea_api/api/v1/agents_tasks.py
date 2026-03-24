@@ -664,6 +664,67 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+@router.post("/{task_id}/a2ui/action")
+async def send_a2ui_action(
+    agent_id: UUID,
+    task_id: UUID,
+    action: dict,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Send an A2UI user action to a running task workflow.
+
+    The action is signaled to the Temporal workflow, which injects it as a user
+    message so the agent can respond to the interaction.
+
+    Action payload follows A2UI v0.9 client-to-server action format:
+    {
+        "name": "submitForm",
+        "surface_id": "s1",
+        "source_component_id": "submit_button",
+        "context": {"email": "user@example.com"}
+    }
+    """
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if not getattr(agent, "a2ui_enabled", False):
+        raise HTTPException(status_code=400, detail="Agent does not have A2UI enabled")
+
+    try:
+        execution_id = f"agent-task-{task_id}"
+        status = await workflow_task_service.get_workflow_status(execution_id)
+
+        if status.get("status") == "unknown":
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        current_status = status.get("status", "").lower()
+        if current_status in ["completed", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400, detail=f"Cannot send action to task in '{current_status}' state"
+            )
+
+        success = await workflow_task_service.send_a2ui_action(execution_id, action)
+
+        if success:
+            return {
+                "status": "accepted",
+                "task_id": str(task_id),
+                "action_name": action.get("name", "unknown"),
+                "message": "Action sent to workflow",
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send action to workflow")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
 @router.get("/{task_id}/events", response_model=TaskEventResponse)
 async def get_task_events(
     agent_id: UUID,

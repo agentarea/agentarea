@@ -77,6 +77,8 @@ class AgentExecutionWorkflow:
         self._pause_reason = ""
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
+        # A2UI action queue — frontend signals land here, workflow loop drains them
+        self._a2ui_action_queue: list[dict[str, Any]] = []
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -115,6 +117,19 @@ class AgentExecutionWorkflow:
                     "iteration": self.state.current_iteration,
                 },
             )
+
+    @workflow.signal
+    async def handle_a2ui_action(self, action_data: dict) -> None:
+        """Signal from frontend when user interacts with an A2UI surface.
+
+        The action is queued and injected as a user message on the next LLM call,
+        so the agent can respond to the user's interaction.
+        """
+        self._a2ui_action_queue.append(action_data)
+        workflow.logger.info(
+            f"A2UI action received: {action_data.get('name', 'unknown')} "
+            f"on surface {action_data.get('surface_id', 'unknown')}"
+        )
 
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
@@ -653,6 +668,21 @@ class AgentExecutionWorkflow:
                 )
                 await self._publish_events_immediately()
                 self.context_manager.mark_warning_sent()
+
+        # Drain queued A2UI actions as user messages so the LLM can respond
+        if self._a2ui_action_queue:
+            import json as _json
+
+            for action in self._a2ui_action_queue:
+                action_msg = (
+                    f"[A2UI Action] The user interacted with the UI surface "
+                    f"'{action.get('surface_id', 'unknown')}': "
+                    f"action={action.get('name', 'unknown')}, "
+                    f"source={action.get('source_component_id', 'unknown')}, "
+                    f"context={_json.dumps(action.get('context', {}))}"
+                )
+                self.state.messages.append(Message(role="user", content=action_msg))
+            self._a2ui_action_queue.clear()
 
         # Call LLM
         llm_response = await self._call_llm()

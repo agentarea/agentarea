@@ -7,7 +7,7 @@ import SystemMessage from "./componets/SystemMessage";
 import ToolCallStartedMessage from "./componets/ToolCallStartedMessage";
 import ToolResultMessage from "./componets/ToolResultMessage";
 import WorkflowResultMessage from "./componets/WorkflowResultMessage";
-import { MessageComponentType } from "./types";
+import { A2UIAction, MessageComponentType } from "./types";
 
 // Export the type for use in other components
 export type { MessageComponentType };
@@ -16,7 +16,12 @@ export type { MessageComponentType };
 export const MessageRenderer: React.FC<{
   message: MessageComponentType;
   agent_name?: string;
-}> = ({ message, agent_name }) => {
+  onA2UIAction?: (
+    action: A2UIAction,
+    surfaceId: string,
+    sourceComponentId: string,
+  ) => void;
+}> = ({ message, agent_name, onA2UIAction }) => {
   switch (message.type) {
     case "llm_response":
       return (
@@ -53,7 +58,18 @@ export const MessageRenderer: React.FC<{
     case "system":
       return <SystemMessage data={message.data} key={message.data.id} />;
     case "a2ui_surface":
-      return <A2UIMessage data={message.data} key={message.data.id} />;
+      return (
+        <A2UIMessage
+          data={message.data}
+          key={message.data.id}
+          onAction={
+            onA2UIAction
+              ? (action, sourceId) =>
+                  onA2UIAction(action, message.data.surfaceId, sourceId)
+              : undefined
+          }
+        />
+      );
     default:
       return null;
   }

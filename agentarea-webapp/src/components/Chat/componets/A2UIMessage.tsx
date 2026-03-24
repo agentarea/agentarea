@@ -7,7 +7,7 @@
  * DynamicString values are resolved against the surface data model.
  */
 import React from "react";
-import { A2UIComponent, A2UISurfaceData } from "../types";
+import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
 
 // ── DynamicString resolution ──────────────────────────────────────────────────
 
@@ -36,6 +36,8 @@ function resolvePointer(obj: any, pointer: string): any {
 interface RenderCtx {
   components: Record<string, A2UIComponent>;
   dataModel: Record<string, any>;
+  surfaceId: string;
+  onAction?: (action: A2UIAction, sourceComponentId: string) => void;
 }
 
 function renderById(id: string, ctx: RenderCtx): React.ReactNode {
@@ -253,11 +255,17 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
         primary: "bg-blue-600 text-white hover:bg-blue-700",
         borderless: "text-blue-600 hover:underline",
       };
+      const handleClick = () => {
+        if (node.action && ctx.onAction) {
+          ctx.onAction(node.action as A2UIAction, node.id);
+        }
+      };
       return (
         <button
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${variantClass[node.variant ?? "default"] ?? variantClass.default}`}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer ${variantClass[node.variant ?? "default"] ?? variantClass.default}`}
           disabled={node.disabled}
           title={resolveString(node.accessibility?.label, dm)}
+          onClick={handleClick}
         >
           {child ? renderById(child, ctx) : null}
         </button>
@@ -286,7 +294,6 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
               placeholder={resolveString(node.placeholder, dm)}
               defaultValue={resolveString(node.value, dm)}
               rows={4}
-              readOnly
             />
           ) : (
             <input
@@ -294,7 +301,6 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
               placeholder={resolveString(node.placeholder, dm)}
               defaultValue={resolveString(node.value, dm)}
-              readOnly
             />
           )}
         </div>
@@ -307,7 +313,6 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
           <input
             type="checkbox"
             defaultChecked={!!node.value}
-            readOnly
             className="rounded"
           />
           {resolveString(node.label, dm)}
@@ -346,7 +351,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
               key={opt.value}
               className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200"
             >
-              <input type={isMulti ? "checkbox" : "radio"} value={opt.value} readOnly />
+              <input type={isMulti ? "checkbox" : "radio"} value={opt.value} />
               {opt.label}
             </label>
           ))}
@@ -367,7 +372,6 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
             min={node.min ?? 0}
             max={node.max}
             defaultValue={typeof node.value === "number" ? node.value : 0}
-            readOnly
             className="w-full"
           />
         </div>
@@ -392,7 +396,6 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
             defaultValue={resolveString(node.value, dm)}
             min={node.min}
             max={node.max}
-            readOnly
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
           />
         </div>
@@ -405,11 +408,16 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
 
 // ── Surface renderer ──────────────────────────────────────────────────────────
 
-const A2UIMessage: React.FC<{ data: A2UISurfaceData }> = ({ data }) => {
+const A2UIMessage: React.FC<{
+  data: A2UISurfaceData;
+  onAction?: (action: A2UIAction, sourceComponentId: string) => void;
+}> = ({ data, onAction }) => {
   const { surface } = data;
   const ctx: RenderCtx = {
     components: surface.components,
     dataModel: surface.dataModel,
+    surfaceId: surface.surfaceId,
+    onAction,
   };
 
   const rootNode = surface.components["root"];
