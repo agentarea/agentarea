@@ -46,7 +46,8 @@
     }
   },
   "404": {
-    "title": "404",
+    "title": "Ошибка 404",
+    "404": "404",
     "description": "Страница, которую вы ищете, не существует.",
     "goHome": "Вернуться на главную"
   },
@@ -106,7 +107,11 @@
     "connections": "Соединения",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
+    "apiKeys": "API Ключи",
+    "workspace": "Рабочее пространство",
     "modelSpecs": "Спецификации моделей",
+    "automation": "Автоматизация",
+    "network": "Сеть",
     "settings": "Настройки",
     "logout": "Выйти"
   },
@@ -284,6 +289,7 @@
     "addServer": "Добавить MCP сервер",
     "emptyDescription": "Добавьте новый MCP сервер для подключения к AI сервисам",
     "createCustomButton": "Добавить свой сервер",
+    "myConnections": "Мои соединения",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
     "createInstance": {
@@ -641,6 +647,8 @@
     "noSkills": "Навыков пока нет",
     "noMatchingSkills": "Нет навыков, соответствующих запросу \"{query}\"",
     "clearSearch": "Очистить поиск",
+    "noSkillsDescription": "Навыки — это многоразовые возможности, которые можно назначать агентам. Создайте первый навык, чтобы начать.",
+    "loading": "Загрузка...",
     "createFirstSkill": "Создайте первый навык, чтобы начать.",
     "error": {
       "loadSkills": "Не удалось загрузить навыки",
@@ -661,6 +669,7 @@
       "name": "Имя",
       "description": "Описание",
       "source": "Источник",
+      "updated": "Обновлено",
       "created": "Создано",
       "actions": "Действия"
     },
@@ -676,6 +685,7 @@
       "delete": "Удалить",
       "name": "Имя",
       "description": "Описание",
+      "source": "Источник",
       "updated": "Обновлено",
       "sourceCode": "Исходный код",
       "configuration": "Конфигурация",
@@ -788,6 +798,186 @@
         "label": "Отладить проблему",
         "text": "Я столкнулся с ошибкой при интеграции API. Можешь помочь отладить?"
       }
+    }
+  },
+
+  "APIKeysPage": {
+    "title": "API Ключи",
+    "description": "Управление API ключами для программного доступа к рабочему пространству",
+    "createKey": "Создать API ключ",
+    "noKeys": "API ключей пока нет",
+    "noKeysDescription": "Создайте API ключ для программного доступа к рабочему пространству.",
+    "table": {
+      "name": "Имя",
+      "tokenPrefix": "Префикс токена",
+      "status": "Статус",
+      "created": "Создан",
+      "expires": "Истекает",
+      "lastUsed": "Последнее использование",
+      "actions": "Действия"
+    },
+    "status": {
+      "active": "Активен",
+      "revoked": "Отозван",
+      "expired": "Истёк"
+    },
+    "create": {
+      "title": "Создать API ключ",
+      "description": "Создайте новый API ключ для программного доступа",
+      "name": "Имя ключа",
+      "namePlaceholder": "напр., CI/CD Pipeline",
+      "expiresInDays": "Истекает через (дней)",
+      "expiresInDaysPlaceholder": "Оставьте пустым для бессрочного ключа",
+      "createButton": "Создать ключ"
+    },
+    "created": {
+      "title": "API ключ создан",
+      "warning": "Обязательно скопируйте API ключ сейчас. Вы не сможете увидеть его снова!",
+      "copied": "Скопировано в буфер обмена",
+      "copy": "Копировать"
+    },
+    "revoke": {
+      "title": "Отозвать API ключ",
+      "description": "Вы уверены, что хотите отозвать \"{keyName}\"? Это действие нельзя отменить.",
+      "button": "Отозвать"
+    },
+    "error": {
+      "createFailed": "Не удалось создать API ключ",
+      "revokeFailed": "Не удалось отозвать API ключ",
+      "loadFailed": "Не удалось загрузить API ключи"
+    },
+    "success": {
+      "created": "API ключ успешно создан",
+      "revoked": "API ключ успешно отозван"
+    }
+  },
+
+  "TriggersPage": {
+    "title": "Автоматизация",
+    "description": "Настройте триггеры для автоматического выполнения задач агентов",
+    "createTrigger": "Создать триггер",
+    "noTriggers": "Триггеров пока нет",
+    "noTriggersDescription": "Создайте триггер для автоматизации рабочих процессов агентов.",
+    "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
+    "table": {
+      "name": "Имя",
+      "type": "Тип",
+      "agent": "Агент",
+      "status": "Статус",
+      "nextRun": "Следующий запуск",
+      "lastRun": "Последний запуск",
+      "created": "Создан"
+    },
+    "type": {
+      "cron": "Cron",
+      "webhook": "Webhook"
+    },
+    "status": {
+      "active": "Активен",
+      "inactive": "Неактивен",
+      "error": "Ошибка"
+    },
+    "create": {
+      "title": "Создать триггер",
+      "description": "Настройте новый триггер автоматизации",
+      "back": "Назад к автоматизации",
+      "name": "Имя триггера",
+      "namePlaceholder": "напр., Ежедневный генератор отчётов",
+      "triggerType": "Тип триггера",
+      "selectType": "Выберите тип триггера",
+      "agent": "Агент",
+      "selectAgent": "Выберите агента",
+      "cronExpression": "Выражение Cron",
+      "cronPlaceholder": "напр., 0 9 * * 1-5",
+      "timezone": "Часовой пояс",
+      "webhookType": "Тип Webhook",
+      "selectWebhookType": "Выберите тип webhook",
+      "webhookTypes": {
+        "generic": "Универсальный",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "github": "GitHub",
+        "gmail": "Gmail",
+        "teams": "Microsoft Teams",
+        "linear": "Linear",
+        "stripe": "Stripe"
+      },
+      "allowedMethods": "Разрешённые методы",
+      "taskParameters": "Параметры задачи",
+      "taskParametersPlaceholder": "{}",
+      "failureThreshold": "Порог ошибок",
+      "failureThresholdPlaceholder": "напр., 3",
+      "createButton": "Создать триггер"
+    },
+    "detail": {
+      "overview": "Обзор",
+      "executions": "Выполнения",
+      "metrics": "Метрики",
+      "edit": "Редактировать",
+      "enable": "Включить",
+      "disable": "Отключить",
+      "delete": "Удалить триггер",
+      "deleteDescription": "Вы уверены, что хотите удалить этот триггер? Это действие нельзя отменить.",
+      "configuration": "Конфигурация",
+      "triggerType": "Тип триггера",
+      "agent": "Агент",
+      "cronExpression": "Выражение Cron",
+      "nextRun": "Следующий запуск",
+      "lastRun": "Последний запуск",
+      "totalExecutions": "Всего выполнений",
+      "successRate": "Успешность",
+      "avgExecutionTime": "Среднее время выполнения",
+      "noExecutions": "Выполнений пока нет",
+      "noExecutionsDescription": "Этот триггер ещё не выполнялся."
+    },
+    "error": {
+      "createFailed": "Не удалось создать триггер",
+      "updateFailed": "Не удалось обновить триггер",
+      "deleteFailed": "Не удалось удалить триггер",
+      "loadFailed": "Не удалось загрузить триггер",
+      "enableFailed": "Не удалось включить триггер",
+      "disableFailed": "Не удалось отключить триггер"
+    },
+    "success": {
+      "created": "Триггер успешно создан",
+      "updated": "Триггер успешно обновлён",
+      "deleted": "Триггер успешно удалён",
+      "enabled": "Триггер успешно включён",
+      "disabled": "Триггер успешно отключён"
+    }
+  },
+
+  "NetworkPage": {
+    "title": "Сеть",
+    "description": "Визуальный обзор топологии рабочего пространства"
+  },
+
+  "WorkspacePage": {
+    "title": "Рабочее пространство",
+    "description": "Импорт и экспорт конфигурации рабочего пространства",
+    "export": {
+      "title": "Экспорт конфигурации",
+      "description": "Скачайте конфигурацию рабочего пространства в формате YAML",
+      "button": "Экспорт YAML",
+      "success": "Конфигурация рабочего пространства успешно экспортирована",
+      "error": "Не удалось экспортировать конфигурацию рабочего пространства"
+    },
+    "import": {
+      "title": "Импорт конфигурации",
+      "description": "Импортируйте конфигурацию рабочего пространства из YAML",
+      "pasteLabel": "Вставьте YAML конфигурацию",
+      "pastePlaceholder": "Вставьте вашу YAML конфигурацию здесь...",
+      "uploadLabel": "Или загрузите YAML файл",
+      "dragDrop": "Перетащите YAML файл или",
+      "browse": "выберите",
+      "skipMissing": "Пропустить отсутствующие зависимости",
+      "skipMissingDescription": "Продолжить импорт, даже если некоторые зависимости не найдены",
+      "overrideExisting": "Перезаписать существующие",
+      "overrideExistingDescription": "Заменить существующие ресурсы импортированными",
+      "button": "Импорт",
+      "success": "Конфигурация рабочего пространства успешно импортирована",
+      "error": "Не удалось импортировать конфигурацию рабочего пространства"
     }
   }
 }
