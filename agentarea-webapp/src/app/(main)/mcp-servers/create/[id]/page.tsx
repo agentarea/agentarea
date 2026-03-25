@@ -19,7 +19,8 @@ export default async function CreateMCPInstancePage({
   const t = await getTranslations("MCPServersPage");
 
   const serversResponse = await listMCPServers();
-  const mcpServers = (serversResponse.data || []) as MCPServer[];
+  const serversData = serversResponse.data as any;
+  const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
   const mcpServer = mcpServers.find((s) => String(s.id) === String(id));
 
   return (

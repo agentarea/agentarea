@@ -236,9 +236,7 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.GET("/v1/mcp-servers/", {
         params: { query: params },
       });
-      // API returns paginated response; unwrap to items array for callers
-      const items = (data as any)?.items ?? data;
-      return { data: items, error };
+      return { data, error };
     },
 
     createMCPServer: async (
@@ -1027,6 +1025,39 @@ export function createApiClient(client: Client) {
 
     previewOpenAPISpec: async (body: { spec_url?: string; spec_json?: string }) => {
       const { data, error } = await client.POST("/v1/openapi-connections/preview" as any, { body });
+      return { data, error };
+    },
+
+    // Project API
+    listProjects: async () => {
+      const { data, error } = await client.GET("/v1/projects/");
+      return { data, error };
+    },
+
+    getProject: async (projectId: string) => {
+      const { data, error } = await client.GET("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    createProject: async (project: components["schemas"]["ProjectCreate"]) => {
+      const { data, error } = await client.POST("/v1/projects/", { body: project });
+      return { data, error };
+    },
+
+    updateProject: async (projectId: string, project: components["schemas"]["ProjectUpdate"]) => {
+      const { data, error } = await client.PATCH("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+        body: project,
+      });
+      return { data, error };
+    },
+
+    deleteProject: async (projectId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
       return { data, error };
     },
   };
