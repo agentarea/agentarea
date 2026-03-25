@@ -54,9 +54,21 @@ class Database:
             await session.close()
 
     async def get_db(self) -> AsyncGenerator[AsyncSession, None]:
-        """Dependency for FastAPI."""
-        async with self.session() as session:
+        """Dependency for FastAPI.
+
+        Uses a flat try/finally (not nested async-with) so that
+        session.close() runs even when the client disconnects
+        mid-response and FastAPI cancels the generator.
+        """
+        session = self.session_factory()
+        try:
             yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 # Create global instances
