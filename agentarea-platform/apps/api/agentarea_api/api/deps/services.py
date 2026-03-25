@@ -14,7 +14,7 @@ from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.auth import UserContextDep
-from agentarea_common.base import RepositoryFactoryDep
+from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.event_stream_service import EventStreamService
@@ -331,6 +331,33 @@ async def get_openapi_connection_service(
     )
 
 
+async def get_read_agent_service(
+    repository_factory: ReadRepositoryFactoryDep,
+    event_broker: EventBrokerDep,
+) -> AgentService:
+    """Get a read-only AgentService (uses AUTOCOMMIT session)."""
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    authz = resolve(AuthorizationService)
+    return AgentService(repository_factory, event_broker, authorization_service=authz)
+
+
+async def get_read_task_service(
+    repository_factory: ReadRepositoryFactoryDep,
+    event_broker: EventBrokerDep,
+) -> TaskService:
+    """Get a read-only TaskService (uses AUTOCOMMIT session)."""
+    task_manager = await _create_task_manager(repository_factory)
+    workflow_service = await get_temporal_workflow_service()
+    return TaskService(
+        repository_factory=repository_factory,
+        event_broker=event_broker,
+        task_manager=task_manager,
+        workflow_service=workflow_service,
+    )
+
+
 # Common service type hints for easier use
 AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
 SkillServiceDep = Annotated[SkillService, Depends(get_skill_service)]
@@ -341,6 +368,8 @@ ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
 TaskManagerDep = Annotated[BaseTaskManager, Depends(get_task_manager)]
+ReadAgentServiceDep = Annotated[AgentService, Depends(get_read_agent_service)]
+ReadTaskServiceDep = Annotated[TaskService, Depends(get_read_task_service)]
 EventStreamServiceDep = Annotated[EventStreamService, Depends(get_event_stream_service)]
 TemporalWorkflowServiceDep = Annotated[
     TemporalWorkflowService, Depends(get_temporal_workflow_service)
