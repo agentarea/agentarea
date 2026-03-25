@@ -1,7 +1,7 @@
 """Projects CRUD API endpoints."""
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from agentarea_common.auth.dependencies import UserContextDep
@@ -54,6 +54,44 @@ class AssociationBody(BaseModel):
     id: str
 
 
+class ProjectSkillRef(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectAgentRef(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectMcpInstanceRef(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectFileInfo(BaseModel):
+    path: str
+    key: str
+    size: int
+    last_modified: str
+
+
+class ProjectFileListResponse(BaseModel):
+    files: list[ProjectFileInfo]
+    prefix: str
+
+
+class ProjectFileDownloadResponse(BaseModel):
+    url: str
+    key: str
+
+
 class ProjectResponse(BaseModel):
     id: UUID
     workspace_id: str
@@ -63,9 +101,9 @@ class ProjectResponse(BaseModel):
     instructions: str | None
     parent_project_id: str | None
     minio_prefix: str
-    skills: list[Any] = []
-    mcp_instances: list[Any] = []
-    agents: list[Any] = []
+    skills: list[ProjectSkillRef] | None = []
+    mcp_instances: list[ProjectMcpInstanceRef] | None = []
+    agents: list[ProjectAgentRef] | None = []
 
     model_config = {"from_attributes": True}
 
@@ -256,7 +294,7 @@ async def upload_project_file(
     )
 
 
-@router.get("/{project_id}/files")
+@router.get("/{project_id}/files", response_model=ProjectFileListResponse)
 async def list_project_files(
     project_id: UUID,
     user_context: UserContextDep,
@@ -286,7 +324,7 @@ async def list_project_files(
     return {"files": files, "prefix": project.minio_prefix}
 
 
-@router.get("/{project_id}/files/{file_path:path}")
+@router.get("/{project_id}/files/{file_path:path}", response_model=ProjectFileDownloadResponse)
 async def download_project_file(
     project_id: UUID,
     file_path: str,
