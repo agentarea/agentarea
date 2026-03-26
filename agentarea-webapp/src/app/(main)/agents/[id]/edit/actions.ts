@@ -69,7 +69,7 @@ export async function updateAgent(
   > = {};
   const mcpToolConfigs: Record<
     number,
-    Record<number, Partial<MCPConfig>>
+    Record<number, Partial<MCPToolConfig>>
   > = {};
 
   formData.forEach((value, key) => {
@@ -103,7 +103,7 @@ export async function updateAgent(
       }
 
       if (field === "requires_user_confirmation") {
-        mcpToolConfigs[serverIndex][toolIndex][field] =
+        mcpToolConfigs[serverIndex][toolIndex].requires_user_confirmation =
           value === "on" || value === "true";
       } else if (field === "tool_name") {
         mcpToolConfigs[serverIndex][toolIndex].tool_name = value as string;
