@@ -131,18 +131,23 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
+    skills: list[dict] | None = None
 
     @classmethod
-    def from_domain(cls, agent: Agent) -> "AgentResponse":
-        # Convert raw dict/list from database to Pydantic models
+    def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
         tools = None
         if agent.tools:
             if isinstance(agent.tools, list):
-                # New format - already a list of tool configs
                 tools = [ToolConfigYAML(**tool) for tool in agent.tools]
             elif isinstance(agent.tools, dict):
-                # Could be legacy format or empty dict
                 tools = []
+
+        skills = None
+        if include_skills and hasattr(agent, "skills") and agent.skills:
+            skills = [
+                {"id": str(skill.id), "name": skill.name, "description": skill.description}
+                for skill in agent.skills
+            ]
 
         return cls(
             id=agent.id,
@@ -154,6 +159,7 @@ class AgentResponse(BaseModel):
             tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
+            skills=skills,
         )
 
 
@@ -204,10 +210,10 @@ async def get_agent(
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Get an agent by ID."""
-    agent = await agent_service.get(agent_id)
+    agent = await agent_service.get_with_skills(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent)
+    return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.get("", response_model=list[AgentResponse])
@@ -254,7 +260,8 @@ async def update_agent(
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent)
+    agent = await agent_service.get_with_skills(agent_id)
+    return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.delete("/{agent_id}")
