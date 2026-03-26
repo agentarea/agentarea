@@ -14,7 +14,7 @@ for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", 
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
@@ -223,7 +223,7 @@ def create_app() -> FastAPI:
         name="AgentArea",
         description="AgentArea platform — agents, tasks, MCP servers, tools",
         auth_config=AuthConfig(
-            dependencies=[Depends(get_mcp_user_context)],
+            dependencies=[Depends(get_user_context)],
         ),
         headers=["authorization", "x-workspace-id"],
     )
