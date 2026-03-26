@@ -8,7 +8,11 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.import_export import ToolConfigYAML
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
-from agentarea_api.api.deps.services import get_agent_service, get_mcp_server_instance_service, get_read_agent_service
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_mcp_server_instance_service,
+    get_read_agent_service,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
@@ -19,7 +23,6 @@ from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-# Import A2A protocol subroutes
 from . import agents_a2a, agents_well_known
 
 router = APIRouter(prefix="/agents", tags=["agents"])

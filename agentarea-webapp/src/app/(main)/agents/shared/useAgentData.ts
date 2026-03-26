@@ -81,8 +81,12 @@ export async function loadAgentEditData(
     instruction: agent.instruction || "",
     model_id: agent.model_id,
     tools_config: {
-      mcp_server_configs: agent.tools_config?.mcp_server_configs || [],
-      builtin_tools: agent.tools_config?.builtin_tools || [],
+      mcp_server_configs: (agent.tools || [])
+        .filter((t: any) => t.type === "mcp")
+        .map((t: any) => ({ server_name: t.name, ...(t.settings || {}) })),
+      builtin_tools: (agent.tools || [])
+        .filter((t: any) => t.type === "code")
+        .map((t: any) => t.name),
     },
     events_config: {
       events: agent.events_config?.events || [],

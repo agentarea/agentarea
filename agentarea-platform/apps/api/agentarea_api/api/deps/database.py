@@ -2,10 +2,9 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+from agentarea_common.infrastructure.database import get_read_db_session
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea_common.infrastructure.database import get_read_db_session
 
 from ...config import get_db
 
