@@ -9,9 +9,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.auth_models import (
+    APIKey,
     CompoundMCP,
     CompoundMCPMember,
-    APIKey,
     MCPAuthConfig,
     MCPOAuthLink,
     MCPOAuthSession,
