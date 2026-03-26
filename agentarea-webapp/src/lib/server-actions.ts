@@ -427,15 +427,17 @@ export async function listProjectFilesAction(projectId: string) {
 }
 
 export async function uploadProjectFileAction(projectId: string, formData: FormData) {
-  // Validate projectId to prevent SSRF via path traversal
+  // Validate projectId as UUID to prevent path traversal / SSRF
   if (!/^[a-f0-9-]{36}$/.test(projectId)) {
     return { data: null, error: { detail: "Invalid project ID" } };
   }
 
   const authToken = await getAuthToken();
-  const uploadUrl = `${env.API_URL}/v1/projects/${encodeURIComponent(projectId)}/files`;
+  // Build URL safely via URL API — base is a trusted server-only env var
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/projects/${encodeURIComponent(projectId)}/files`;
 
-  const response = await fetch(uploadUrl, {
+  const response = await fetch(base.href, {
     method: "POST",
     headers: {
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
