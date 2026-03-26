@@ -188,37 +188,37 @@ export interface paths {
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        get: operations["handle_webhook_webhooks__webhook_id__options"];
+        get: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        put: operations["handle_webhook_webhooks__webhook_id__options"];
+        put: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        post: operations["handle_webhook_webhooks__webhook_id__options"];
+        post: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        delete: operations["handle_webhook_webhooks__webhook_id__options"];
+        delete: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        options: operations["handle_webhook_webhooks__webhook_id__options"];
+        options: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        head: operations["handle_webhook_webhooks__webhook_id__options"];
+        head: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        patch: operations["handle_webhook_webhooks__webhook_id__options"];
+        patch: operations["handle_webhook_webhooks__webhook_id__delete"];
         trace?: never;
     };
     "/v1/agents/": {
@@ -5438,7 +5438,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5469,7 +5469,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5500,7 +5500,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5531,7 +5531,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5562,7 +5562,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5593,7 +5593,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5624,7 +5624,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__options: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;

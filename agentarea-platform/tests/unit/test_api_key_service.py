@@ -1,4 +1,4 @@
-"""Unit tests for MCPAccessTokenService."""
+"""Unit tests for APIKeyService."""
 
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
@@ -7,11 +7,11 @@ from uuid import uuid4
 import pytest
 
 from agentarea_mcp.application.access_token_service import (
-    MCPAccessTokenService,
+    APIKeyService,
     hash_token,
     _TOKEN_PREFIX,
 )
-from agentarea_mcp.domain.auth_models import MCPAccessToken
+from agentarea_mcp.domain.auth_models import APIKey
 
 
 def _make_token(
@@ -19,8 +19,8 @@ def _make_token(
     raw: str = "aat_testtoken",
     is_active: bool = True,
     expires_at: datetime | None = None,
-) -> MCPAccessToken:
-    record = MagicMock(spec=MCPAccessToken)
+) -> APIKey:
+    record = MagicMock(spec=APIKey)
     record.id = uuid4()
     record.name = name
     record.token_hash = hash_token(raw)
@@ -47,7 +47,7 @@ def repo():
 
 @pytest.fixture
 def service(repo):
-    return MCPAccessTokenService(repo)
+    return APIKeyService(repo)
 
 
 # ---------------------------------------------------------------------------

@@ -128,8 +128,11 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         model_name = kwargs.get("model_name")
         existing = await self.find_one_by(provider_spec_id=provider_spec_id, model_name=model_name)
         if existing:
-            update_fields = {k: v for k, v in kwargs.items()
-                            if k not in ("provider_spec_id", "model_name") and v is not None}
+            update_fields = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ("provider_spec_id", "model_name") and v is not None
+            }
             updated = await self.update(existing.id, **update_fields)
             return updated or existing
         else:

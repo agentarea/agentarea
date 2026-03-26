@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 container = get_container()
 
 
-
 async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
@@ -308,5 +307,6 @@ async def health_check():
         "connections": connection_health,
         "timestamp": datetime.now().isoformat(),
     }
+
 
 # reload test

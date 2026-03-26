@@ -101,9 +101,9 @@ class ProjectResponse(BaseModel):
     instructions: str | None
     parent_project_id: str | None
     minio_prefix: str
-    skills: list[ProjectSkillRef] | None = []
-    mcp_instances: list[ProjectMcpInstanceRef] | None = []
-    agents: list[ProjectAgentRef] | None = []
+    skills: list[ProjectSkillRef] = []
+    mcp_instances: list[ProjectMcpInstanceRef] = []
+    agents: list[ProjectAgentRef] = []
 
     model_config = {"from_attributes": True}
 

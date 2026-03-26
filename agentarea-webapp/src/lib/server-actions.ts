@@ -54,6 +54,21 @@ import {
   testOpenAPIConnection,
   createOpenAPIConnection,
   previewOpenAPISpec,
+  listProjects,
+  getProject,
+  createProject,
+  updateProject,
+  deleteProject,
+  addSkillToProject,
+  removeSkillFromProject,
+  addAgentToProject,
+  removeAgentFromProject,
+  addMcpInstanceToProject,
+  removeMcpInstanceFromProject,
+  listProjectFiles,
+  uploadProjectFile,
+  downloadProjectFile,
+  deleteProjectFile,
 } from "@/lib/api";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
@@ -328,6 +343,9 @@ export async function listMCPServersAction(params?: {
   status?: string;
   is_public?: boolean;
   tag?: string;
+  page?: number;
+  page_size?: number;
+  search?: string;
 }) {
   return await listMCPServers(params);
 }
@@ -348,13 +366,93 @@ export async function testOpenAPIConnectionAction(connectionId: string) {
   return await testOpenAPIConnection(connectionId);
 }
 
-export async function createOpenAPIConnectionAction(body: {
-  name: string;
-  base_url: string;
-  description?: string;
-  spec_url?: string;
-}) {
+export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
   return await createOpenAPIConnection(body);
+}
+
+// Project Actions
+export async function listProjectsAction() {
+  return await listProjects();
+}
+
+export async function getProjectAction(projectId: string) {
+  return await getProject(projectId);
+}
+
+export async function createProjectAction(project: {
+  name: string;
+  description?: string | null;
+  instructions?: string | null;
+}) {
+  return await createProject(project as any);
+}
+
+export async function updateProjectAction(
+  projectId: string,
+  project: { name?: string | null; description?: string | null; instructions?: string | null }
+) {
+  return await updateProject(projectId, project as any);
+}
+
+export async function deleteProjectAction(projectId: string) {
+  return await deleteProject(projectId);
+}
+
+export async function addSkillToProjectAction(projectId: string, skillId: string) {
+  return await addSkillToProject(projectId, skillId);
+}
+
+export async function removeSkillFromProjectAction(projectId: string, skillId: string) {
+  return await removeSkillFromProject(projectId, skillId);
+}
+
+export async function addAgentToProjectAction(projectId: string, agentId: string) {
+  return await addAgentToProject(projectId, agentId);
+}
+
+export async function removeAgentFromProjectAction(projectId: string, agentId: string) {
+  return await removeAgentFromProject(projectId, agentId);
+}
+
+export async function addMcpInstanceToProjectAction(projectId: string, mcpInstanceId: string) {
+  return await addMcpInstanceToProject(projectId, mcpInstanceId);
+}
+
+export async function removeMcpInstanceFromProjectAction(projectId: string, mcpInstanceId: string) {
+  return await removeMcpInstanceFromProject(projectId, mcpInstanceId);
+}
+
+export async function listProjectFilesAction(projectId: string) {
+  return await listProjectFiles(projectId);
+}
+
+export async function uploadProjectFileAction(projectId: string, formData: FormData) {
+  const authToken = await getAuthToken();
+  const uploadUrl = `${env.API_URL}/v1/projects/${projectId}/files`;
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
+    return { data: null, error: errorData };
+  }
+
+  const data = await response.json();
+  return { data, error: null };
+}
+
+export async function downloadProjectFileAction(projectId: string, filePath: string) {
+  return await downloadProjectFile(projectId, filePath);
+}
+
+export async function deleteProjectFileAction(projectId: string, filePath: string) {
+  return await deleteProjectFile(projectId, filePath);
 }
 
 export async function previewOpenAPISpecAction(body: {

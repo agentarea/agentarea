@@ -6,8 +6,8 @@ import secrets
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from agentarea_mcp.domain.auth_models import MCPAccessToken
-from agentarea_mcp.infrastructure.auth_repository import MCPAccessTokenRepository
+from agentarea_mcp.domain.auth_models import APIKey
+from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +27,17 @@ def hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
-class MCPAccessTokenService:
+class APIKeyService:
     """Manage PAT lifecycle: creation, validation, revocation."""
 
-    def __init__(self, repo: MCPAccessTokenRepository) -> None:
+    def __init__(self, repo: APIKeyRepository) -> None:
         self._repo = repo
 
     async def create_token(
         self,
         name: str,
         expires_in_days: int | None = None,
-    ) -> tuple[MCPAccessToken, str]:
+    ) -> tuple[APIKey, str]:
         """Create a new PAT.
 
         Returns ``(token_record, raw_token)``.  The raw token is shown once
@@ -60,7 +60,7 @@ class MCPAccessTokenService:
         logger.info("Created MCP access token '%s' (id=%s)", name, created.id)
         return created, raw_token
 
-    async def validate_token(self, raw_token: str) -> MCPAccessToken | None:
+    async def validate_token(self, raw_token: str) -> APIKey | None:
         """Return the token record if the raw token is valid, or None.
 
         A token is invalid if:
@@ -78,10 +78,10 @@ class MCPAccessTokenService:
             return None
         return record
 
-    async def get_token(self, token_id: UUID) -> MCPAccessToken | None:
+    async def get_token(self, token_id: UUID) -> APIKey | None:
         return await self._repo.get_by_id(token_id)
 
-    async def list_tokens(self) -> list[MCPAccessToken]:
+    async def list_tokens(self) -> list[APIKey]:
         return await self._repo.list_all()
 
     async def revoke_token(self, token_id: UUID) -> bool:

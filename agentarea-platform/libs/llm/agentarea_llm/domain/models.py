@@ -20,7 +20,10 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_configs = relationship(
-        "ProviderConfig", back_populates="provider_spec", cascade="all, delete-orphan", lazy="selectin"
+        "ProviderConfig",
+        back_populates="provider_spec",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     model_specs = relationship(
         "ModelSpec", back_populates="provider_spec", cascade="all, delete-orphan", lazy="selectin"
@@ -49,7 +52,10 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     # Relationships (lazy="selectin" for async compatibility)
     provider_spec = relationship("ProviderSpec", back_populates="provider_configs", lazy="selectin")
     model_instances = relationship(
-        "ModelInstance", back_populates="provider_config", cascade="all, delete-orphan", lazy="selectin"
+        "ModelInstance",
+        back_populates="provider_config",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self):
@@ -105,7 +111,9 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships (lazy="selectin" for async compatibility)
-    provider_config = relationship("ProviderConfig", back_populates="model_instances", lazy="selectin")
+    provider_config = relationship(
+        "ProviderConfig", back_populates="model_instances", lazy="selectin"
+    )
     model_spec = relationship("ModelSpec", back_populates="model_instances", lazy="selectin")
 
     def __repr__(self):

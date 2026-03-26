@@ -67,7 +67,9 @@ async def fetch_and_parse_spec(
     # validate_url ensures scheme is http(s) and hostname is not private.
     # build_pinned_url constructs a fresh URL from the validated IP.
     request_headers = dict(headers or {})
-    fetch_url, original_host, _path = build_pinned_url(url, resolved_ips[0] if resolved_ips else None)
+    fetch_url, original_host, _path = build_pinned_url(
+        url, resolved_ips[0] if resolved_ips else None
+    )
     if original_host:
         request_headers.setdefault("Host", original_host)
 

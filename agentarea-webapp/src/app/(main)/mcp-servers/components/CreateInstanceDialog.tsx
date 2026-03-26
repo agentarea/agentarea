@@ -49,7 +49,7 @@ export function CreateInstanceDialog({
       setInstanceDescription(t("defaults.description", { serverName: mcpServer.name }));
       const initialEnvVars: Record<string, string> = {};
       mcpServer.env_schema?.forEach((envVar) => {
-        initialEnvVars[envVar.name] = envVar.default || "";
+        initialEnvVars[envVar.name as string] = (envVar.default as string) || "";
       });
       setEnvVars(initialEnvVars);
       setValidationResult(null);

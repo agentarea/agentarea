@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agentarea_mcp.domain.auth_models import (
     CompoundMCP,
     CompoundMCPMember,
-    MCPAccessToken,
+    APIKey,
     MCPAuthConfig,
     MCPOAuthLink,
     MCPOAuthSession,
@@ -42,24 +42,22 @@ class MCPAuthConfigRepository(WorkspaceScopedRepository[MCPAuthConfig]):
         return [str(row[0]) for row in result.fetchall()]
 
 
-class MCPAccessTokenRepository(WorkspaceScopedRepository[MCPAccessToken]):
+class APIKeyRepository(WorkspaceScopedRepository[APIKey]):
     def __init__(self, session: AsyncSession, user_context: UserContext) -> None:
-        super().__init__(session, MCPAccessToken, user_context)
+        super().__init__(session, APIKey, user_context)
 
-    async def get_by_hash(self, token_hash: str) -> MCPAccessToken | None:
+    async def get_by_hash(self, token_hash: str) -> APIKey | None:
         """Look up a token by its SHA-256 hash (no workspace filter — hash is globally unique)."""
-        result = await self.session.execute(
-            select(MCPAccessToken).where(MCPAccessToken.token_hash == token_hash)
-        )
+        result = await self.session.execute(select(APIKey).where(APIKey.token_hash == token_hash))
         return result.scalar_one_or_none()
 
     async def increment_access_count(self, token_id: UUID) -> None:
         """Atomically increment access_count and update last_accessed_at."""
         await self.session.execute(
-            update(MCPAccessToken)
-            .where(MCPAccessToken.id == token_id)
+            update(APIKey)
+            .where(APIKey.id == token_id)
             .values(
-                access_count=MCPAccessToken.access_count + 1,
+                access_count=APIKey.access_count + 1,
                 last_accessed_at=datetime.utcnow(),
             )
         )
