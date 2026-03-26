@@ -382,9 +382,9 @@ def main():
         fail("AGENTAREA_API_KEY not set")
 
     ok(f"API URL: {API_URL}")
-    ok(f"API Key: {API_KEY[:10]}...")
+    ok(f"API Key: {'*' * 8}...{API_KEY[-4:]}")
     if OPENROUTER_API_KEY:
-        ok(f"OpenRouter Key: {OPENROUTER_API_KEY[:10]}...")
+        ok(f"OpenRouter Key: {'*' * 8}...{OPENROUTER_API_KEY[-4:]}")
     else:
         ok("OpenRouter Key: not set (using existing provider config in DB)")
 

@@ -427,8 +427,13 @@ export async function listProjectFilesAction(projectId: string) {
 }
 
 export async function uploadProjectFileAction(projectId: string, formData: FormData) {
+  // Validate projectId to prevent SSRF via path traversal
+  if (!/^[a-f0-9-]{36}$/.test(projectId)) {
+    return { data: null, error: { detail: "Invalid project ID" } };
+  }
+
   const authToken = await getAuthToken();
-  const uploadUrl = `${env.API_URL}/v1/projects/${projectId}/files`;
+  const uploadUrl = `${env.API_URL}/v1/projects/${encodeURIComponent(projectId)}/files`;
 
   const response = await fetch(uploadUrl, {
     method: "POST",
