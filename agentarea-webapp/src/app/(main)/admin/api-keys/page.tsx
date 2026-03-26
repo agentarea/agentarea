@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import APIKeysContent from "./APIKeysContent";
+import CreateAPIKeyButton from "./components/CreateAPIKeyButton";
 
 export const metadata: Metadata = {
   title: "API Keys",
@@ -20,6 +21,7 @@ export default async function APIKeysPage() {
           { label: t("title") },
         ],
         description: t("description"),
+        controls: <CreateAPIKeyButton />,
       }}
     >
       <Suspense

@@ -11,6 +11,7 @@ import {
   ChevronsLeftRightEllipsis,
   Clock,
   Cpu,
+  Key,
   Link,
   List,
   Network,
@@ -26,7 +27,7 @@ import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
 type EmptyStateProps = {
   title: string;
   description?: string;
-  iconsType?: "404" | "agent" | "llm" | "mcp" | "tasks" | "triggers";
+  iconsType?: "404" | "agent" | "apiKey" | "llm" | "mcp" | "tasks" | "triggers";
   action?: {
     label: string;
     href?: string;
@@ -52,15 +53,17 @@ export default function EmptyState({
       ? [Ban, Unplug, BotOff]
       : iconsType === "agent"
         ? [Bot, Zap, Shield]
-        : iconsType === "llm"
-          ? [Sparkles, Cpu, Brain]
-          : iconsType === "tasks"
-            ? [List, Bot, Blocks]
-            : iconsType === "mcp"
-              ? [Server, Network, Link]
-              : iconsType === "triggers"
-                ? [Zap, Clock, Timer]
-                : [Bot, Blocks, ChevronsLeftRightEllipsis]
+        : iconsType === "apiKey"
+          ? [Key, Shield, Zap]
+          : iconsType === "llm"
+            ? [Sparkles, Cpu, Brain]
+            : iconsType === "tasks"
+              ? [List, Bot, Blocks]
+              : iconsType === "mcp"
+                ? [Server, Network, Link]
+                : iconsType === "triggers"
+                  ? [Zap, Clock, Timer]
+                  : [Bot, Blocks, ChevronsLeftRightEllipsis]
     : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
   return (
