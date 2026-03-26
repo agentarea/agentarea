@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Calculator,
   ChevronDown,
@@ -75,6 +76,7 @@ export const BuiltinToolIconGrid = ({
   onUpdateToolConfig,
   loading = false,
 }: BuiltinToolIconGridProps) => {
+  const t = useTranslations("BuiltinToolIconGrid");
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 
   const isToolSelected = (toolName: string) => {
@@ -140,9 +142,9 @@ export const BuiltinToolIconGrid = ({
   if (loading) {
     return (
       <div className="space-y-3">
-        <h4 className="text-sm font-medium text-foreground">Built-in Tools</h4>
+        <h4 className="text-sm font-medium text-foreground">{t("title")}</h4>
         <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-          Loading tools...
+          {t("loading")}
         </div>
       </div>
     );
@@ -151,10 +153,8 @@ export const BuiltinToolIconGrid = ({
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-medium text-foreground">Built-in Tools</h4>
-        <p className="text-xs text-muted-foreground">
-          Tap to enable tools for your agent
-        </p>
+        <h4 className="text-sm font-medium text-foreground">{t("title")}</h4>
+        <p className="text-xs text-muted-foreground">{t("hint")}</p>
       </div>
 
       <div className="space-y-3">
@@ -311,12 +311,10 @@ export const BuiltinToolIconGrid = ({
         })}
       </div>
 
-      {/* Selected tools summary */}
       {selectedTools.length > 0 && (
         <div className="border-t border-border/30 pt-2">
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium">{selectedTools.length}</span> tool
-            {selectedTools.length !== 1 ? "s" : ""} enabled
+            {t("toolsEnabled", { count: selectedTools.length })}
           </p>
         </div>
       )}

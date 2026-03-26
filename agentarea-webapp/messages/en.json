@@ -615,6 +615,17 @@
     "agent": "Agent",
     "statusLabel": "Status",
     "created": "Created",
+    "noTasks": "No tasks found",
+    "noTasksDescription": "No tasks have been created yet",
+    "noMatchingTasks": "No matching tasks",
+    "noMatchingTasksDescription": "No tasks match your search \"{query}\"",
+    "taskRunning": "Task Running",
+    "taskRunningDescription": "Results will appear when complete",
+    "noResults": "No Results",
+    "noResultsDescription": "No results produced",
+    "noDescription": "No description",
+    "noDescriptionAvailable": "No description available",
+    "taskNotFound": "Task not found",
     "status": {
       "running": "Running",
       "completed": "Completed",
@@ -975,5 +986,144 @@
       "success": "Workspace configuration imported successfully",
       "error": "Failed to import workspace configuration"
     }
+  },
+
+  "SkillsSection": {
+    "title": "Skills",
+    "addSkill": "Add Skill",
+    "searchPlaceholder": "Search skills...",
+    "loading": "Loading skills...",
+    "noSkillsAvailable": "No skills available",
+    "createSkill": "Create a skill",
+    "noSkillsFound": "No skills found",
+    "noSkillsAssigned": "No skills assigned. Add skills to enhance this agent's capabilities."
+  },
+
+  "TriggerControl": {
+    "error": "Something went wrong with the trigger",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "availableMethods": "Available Methods:",
+    "availableTools": "Available Tools:"
+  },
+
+  "OpenAPIForm": {
+    "openApiSpec": "OpenAPI Spec",
+    "url": "URL",
+    "pasteJson": "Paste JSON",
+    "urlHint": "Paste a URL to auto-detect name, base URL, and available tools.",
+    "jsonHint": "Paste the full OpenAPI 3.x JSON. Name, base URL, and tools will be auto-detected.",
+    "detectedTools": "Detected Tools",
+    "tool": "tool",
+    "name": "Name",
+    "baseUrl": "Base URL",
+    "baseUrlHint": "The base URL for API requests",
+    "description": "Description (optional)",
+    "customHeaders": "Custom Headers (optional)",
+    "addHeader": "Add Header",
+    "headersHint": "Add headers for authentication or custom API requirements.",
+    "headerName": "Header name",
+    "headerValue": "Value",
+    "secretHeadersHint": "Secret headers are encrypted and never returned in API responses.",
+    "creating": "Creating...",
+    "createConnection": "Create Connection",
+    "cancel": "Cancel",
+    "failedToFetchSpec": "Failed to fetch spec",
+    "validJsonNoOperations": "Valid JSON but no OpenAPI 3.x operations found.",
+    "invalidJson": "Invalid JSON",
+    "invalidJsonHint": "Invalid JSON. Please check the spec content.",
+    "failedToCreate": "Failed to create connection"
+  },
+
+  "TaskDetailsCard": {
+    "title": "Task Details",
+    "description": "Core information",
+    "status": "Status",
+    "noDescription": "No description available",
+    "created": "Created",
+    "started": "Started",
+    "completed": "Completed",
+    "duration": "Duration",
+    "executionId": "Execution ID"
+  },
+
+  "TaskErrorCard": {
+    "error": "Error"
+  },
+
+  "TaskResultsCard": {
+    "title": "Task Results",
+    "description": "Output data",
+    "result": "Result",
+    "taskRunning": "Task Running",
+    "noResults": "No Results",
+    "resultsWillAppear": "Results will appear when complete",
+    "noResultsProduced": "No results produced",
+    "sessionId": "Session ID"
+  },
+
+  "TasksFilters": {
+    "searchPlaceholder": "Search tasks by description, agent name, or task ID...",
+    "filterByStatus": "Filter by status",
+    "allStatuses": "All Statuses",
+    "clearFilters": "Clear Filters",
+    "activeFilters": "Active filters:"
+  },
+
+  "TaskDetailPage": {
+    "taskNotFound": "Task Not Found",
+    "taskNotFoundDescription": "The requested task could not be found.",
+    "backToTasks": "Back to Tasks",
+    "tryAgain": "Try Again",
+    "chatWith": "Chat with {agentName}",
+    "cancelTask": "Cancel Task",
+    "cancelTaskDescription": "Are you sure you want to cancel this task? This action cannot be undone and will terminate the task execution immediately.",
+    "keepRunning": "Keep Running",
+    "cancelling": "Cancelling...",
+    "pausedSuccessfully": "Task paused successfully",
+    "failedToPause": "Failed to pause task",
+    "resumedSuccessfully": "Task resumed successfully",
+    "failedToResume": "Failed to resume task",
+    "cancelledSuccessfully": "Task cancelled successfully",
+    "failedToCancel": "Failed to cancel task",
+    "errorWhilePausing": "An error occurred while pausing the task",
+    "errorWhileResuming": "An error occurred while resuming the task",
+    "errorWhileCancelling": "An error occurred while cancelling the task",
+    "unexpectedError": "An unexpected error occurred"
+  },
+
+  "WorkplacePage": {
+    "workplace": "Workplace",
+    "failedToLoadAgents": "Failed to load agents",
+    "noAgentsAvailable": "No agents available.",
+    "createFirstAgent": "Create your first agent to get started."
+  },
+
+  "BuiltinToolIconGrid": {
+    "title": "Built-in Tools",
+    "loading": "Loading tools...",
+    "hint": "Tap to enable tools for your agent",
+    "toolsEnabled": "{count, plural, =1 {# tool enabled} other {# tools enabled}}"
+  },
+
+  "ApprovalRequestMessage": {
+    "approvalRequired": "Approval Required:",
+    "approved": "Approved",
+    "denied": "Denied",
+    "waiting": "Waiting...",
+    "arguments": "Arguments",
+    "approve": "Approve",
+    "deny": "Deny",
+    "denyReasonPlaceholder": "Reason for denial (optional)",
+    "cancel": "Cancel",
+    "sendingDecision": "Sending decision...",
+    "reason": "Reason:"
+  },
+
+  "ErrorMessage": {
+    "error": "Error",
+    "type": "Type:",
+    "retryable": "Retryable",
+    "nonRetryable": "Non-retryable"
   }
 }

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Lock, Unlock, Loader2 } from "lucide-react";
+import { Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   createOpenAPIConnectionAction as createOpenAPIConnection,
   discoverOpenAPIToolsAction as discoverOpenAPITools,
@@ -51,7 +52,15 @@ function extractFromSpec(spec: Record<string, any>) {
 
   if (spec.openapi && String(spec.openapi).startsWith("3.")) {
     const paths = spec.paths || {};
-    const methods = ["get", "post", "put", "patch", "delete", "head", "options"];
+    const methods = [
+      "get",
+      "post",
+      "put",
+      "patch",
+      "delete",
+      "head",
+      "options",
+    ];
     for (const [path, pathItem] of Object.entries(paths)) {
       if (!pathItem || typeof pathItem !== "object") continue;
       for (const method of methods) {
@@ -78,6 +87,7 @@ function extractFromSpec(spec: Record<string, any>) {
 
 export function AddOpenAPIForm() {
   const router = useRouter();
+  const t = useTranslations("OpenAPIForm");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -132,7 +142,7 @@ export function AddOpenAPIForm() {
       setPreviewTools(data.tools);
       setSpecResolved(true);
     },
-    [],
+    []
   );
 
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -172,19 +182,19 @@ export function AddOpenAPIForm() {
           });
           if (fetchErr) {
             setPreviewError(
-              (fetchErr as any)?.detail || "Failed to fetch spec",
+              (fetchErr as any)?.detail || t("failedToFetchSpec")
             );
           } else if (data) {
             applyPreview(data as any);
           }
         } catch {
-          setPreviewError("Failed to fetch spec");
+          setPreviewError(t("failedToFetchSpec"));
         } finally {
           setFetching(false);
         }
       }, 800);
     },
-    [applyPreview],
+    [applyPreview, t]
   );
 
   const parseJsonPreview = useCallback(
@@ -200,7 +210,7 @@ export function AddOpenAPIForm() {
         if (result.tools.length > 0) {
           applyPreview(result);
         } else {
-          setPreviewError("Valid JSON but no OpenAPI 3.x operations found.");
+          setPreviewError(t("validJsonNoOperations"));
           // Still try to fill metadata
           if (result.title) setName(result.title);
           if (result.description) setDescription(result.description);
@@ -208,10 +218,10 @@ export function AddOpenAPIForm() {
           setSpecResolved(true);
         }
       } catch {
-        setPreviewError("Invalid JSON");
+        setPreviewError(t("invalidJson"));
       }
     },
-    [applyPreview],
+    [applyPreview, t]
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -224,7 +234,7 @@ export function AddOpenAPIForm() {
       try {
         specContent = JSON.parse(specJson);
       } catch {
-        setError("Invalid JSON. Please check the spec content.");
+        setError(t("invalidJsonHint"));
         setLoading(false);
         return;
       }
@@ -244,15 +254,12 @@ export function AddOpenAPIForm() {
       });
 
       if (createError) {
-        setError(
-          (createError as any)?.detail || "Failed to create connection",
-        );
+        setError((createError as any)?.detail || t("failedToCreate"));
         return;
       }
 
       const hasSpec =
-        (specMode === "url" && specUrl) ||
-        (specMode === "json" && specContent);
+        (specMode === "url" && specUrl) || (specMode === "json" && specContent);
       if (hasSpec && data?.id) {
         try {
           await discoverOpenAPITools(data.id);
@@ -264,7 +271,7 @@ export function AddOpenAPIForm() {
       router.push("/mcp-servers");
       router.refresh();
     } catch (err) {
-      setError("Failed to create connection");
+      setError(t("failedToCreate"));
     } finally {
       setLoading(false);
     }
@@ -272,24 +279,23 @@ export function AddOpenAPIForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
-      {/* Step 1: Spec input */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>OpenAPI Spec</Label>
+          <Label>{t("openApiSpec")}</Label>
           <div className="flex gap-1 rounded-md border p-0.5 text-xs">
             <button
               type="button"
               className={`rounded px-2 py-0.5 transition-colors ${specMode === "url" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => switchMode("url")}
             >
-              URL
+              {t("url")}
             </button>
             <button
               type="button"
               className={`rounded px-2 py-0.5 transition-colors ${specMode === "json" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => switchMode("json")}
             >
-              Paste JSON
+              {t("pasteJson")}
             </button>
           </div>
         </div>
@@ -308,24 +314,19 @@ export function AddOpenAPIForm() {
                 <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Paste a URL to auto-detect name, base URL, and available tools.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("urlHint")}</p>
           </>
         ) : (
           <>
             <Textarea
               id="spec_json"
-              placeholder="Paste your OpenAPI 3.x spec JSON here..."
+              placeholder={t("jsonHint")}
               value={specJson}
               onChange={(e) => parseJsonPreview(e.target.value)}
               rows={10}
               className="font-mono text-xs"
             />
-            <p className="text-xs text-muted-foreground">
-              Paste the full OpenAPI 3.x JSON. Name, base URL, and tools will
-              be auto-detected.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("jsonHint")}</p>
           </>
         )}
         {previewError && (
@@ -333,11 +334,10 @@ export function AddOpenAPIForm() {
         )}
       </div>
 
-      {/* Tool Preview */}
       {previewTools.length > 0 && (
         <div className="rounded-lg border p-4">
           <h4 className="mb-2 text-sm font-medium">
-            Detected Tools ({previewTools.length})
+            {t("detectedTools")} ({previewTools.length})
           </h4>
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {previewTools.map((tool) => (
@@ -349,7 +349,7 @@ export function AddOpenAPIForm() {
                   variant="outline"
                   className="mt-0.5 shrink-0 text-[10px]"
                 >
-                  tool
+                  {t("tool")}
                 </Badge>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium">{tool.name}</p>
@@ -365,11 +365,10 @@ export function AddOpenAPIForm() {
         </div>
       )}
 
-      {/* Step 2: Details — only shown after spec is resolved */}
       {specResolved && (
         <>
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("name")}</Label>
             <Input
               id="name"
               placeholder="e.g. Stripe API"
@@ -380,7 +379,7 @@ export function AddOpenAPIForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="base_url">Base URL</Label>
+            <Label htmlFor="base_url">{t("baseUrl")}</Label>
             <Input
               id="base_url"
               placeholder="https://api.stripe.com"
@@ -389,13 +388,11 @@ export function AddOpenAPIForm() {
               required
               type="url"
             />
-            <p className="text-xs text-muted-foreground">
-              The base URL for API requests
-            </p>
+            <p className="text-xs text-muted-foreground">{t("baseUrlHint")}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="description">{t("description")}</Label>
             <Input
               id="description"
               placeholder="Payment processing API"
@@ -404,10 +401,9 @@ export function AddOpenAPIForm() {
             />
           </div>
 
-          {/* Custom Headers */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Custom Headers (optional)</Label>
+              <Label>{t("customHeaders")}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -415,12 +411,12 @@ export function AddOpenAPIForm() {
                 onClick={addHeader}
               >
                 <Plus className="mr-1 h-3 w-3" />
-                Add Header
+                {t("addHeader")}
               </Button>
             </div>
             {headers.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Add headers for authentication or custom API requirements.
+                {t("headersHint")}
               </p>
             )}
             {headers.map((h, i) => {
@@ -428,14 +424,14 @@ export function AddOpenAPIForm() {
               return (
                 <div key={i} className="flex items-center gap-2">
                   <Input
-                    placeholder="Header name"
+                    placeholder={t("headerName")}
                     value={h.name}
                     onChange={(e) => updateHeader(i, "name", e.target.value)}
                     className="flex-1"
                   />
                   <div className="relative flex-1">
                     <Input
-                      placeholder="Value"
+                      placeholder={t("headerValue")}
                       value={h.value}
                       onChange={(e) => updateHeader(i, "value", e.target.value)}
                       type={secret ? "password" : "text"}
@@ -463,8 +459,7 @@ export function AddOpenAPIForm() {
             {headers.some((h) => h.name.trim() && isSecretHeader(h.name)) && (
               <p className="text-xs text-muted-foreground">
                 <Lock className="mr-1 inline h-3 w-3" />
-                Secret headers are encrypted and never returned in API
-                responses.
+                {t("secretHeadersHint")}
               </p>
             )}
           </div>
@@ -477,27 +472,26 @@ export function AddOpenAPIForm() {
 
           <div className="flex gap-3">
             <Button type="submit" disabled={loading || !name || !baseUrl}>
-              {loading ? "Creating..." : "Create Connection"}
+              {loading ? t("creating") : t("createConnection")}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => router.push("/mcp-servers")}
             >
-              Cancel
+              {t("cancel")}
             </Button>
           </div>
         </>
       )}
 
-      {/* Cancel button always visible */}
       {!specResolved && (
         <Button
           type="button"
           variant="outline"
           onClick={() => router.push("/mcp-servers")}
         >
-          Cancel
+          {t("cancel")}
         </Button>
       )}
     </form>

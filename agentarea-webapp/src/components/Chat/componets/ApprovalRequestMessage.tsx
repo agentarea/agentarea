@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { ShieldAlert, Check, X } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Check, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import BaseMessage from "./BaseMessage";
@@ -16,7 +17,11 @@ interface ApprovalRequestData {
   resolved?: boolean;
   approved?: boolean;
   deny_comment?: string;
-  _onResolve?: (escalationId: string, approved: boolean, comment: string) => void;
+  _onResolve?: (
+    escalationId: string,
+    approved: boolean,
+    comment: string
+  ) => void;
 }
 
 interface Props {
@@ -24,6 +29,7 @@ interface Props {
 }
 
 const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
+  const t = useTranslations("ApprovalRequestMessage");
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [denyComment, setDenyComment] = useState("");
   const [resolving, setResolving] = useState(false);
@@ -46,16 +52,18 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
         headerLeft={
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-amber-500" />
-            <span>Approval Required: {data.tool_name}</span>
+            <span>
+              {t("approvalRequired")} {data.tool_name}
+            </span>
           </div>
         }
         headerRight={
           isResolved ? (
             <span className={data.approved ? "text-green-600" : "text-red-600"}>
-              {data.approved ? "Approved" : "Denied"}
+              {data.approved ? t("approved") : t("denied")}
             </span>
           ) : (
-            <span className="animate-pulse text-amber-600">Waiting...</span>
+            <span className="animate-pulse text-amber-600">{t("waiting")}</span>
           )
         }
         collapsed={false}
@@ -68,7 +76,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
           {Object.keys(data.arguments || {}).length > 0 && (
             <details className="cursor-pointer text-xs text-gray-500">
               <summary className="hover:text-gray-700 dark:hover:text-gray-300">
-                Arguments
+                {t("arguments")}
               </summary>
               <pre className="mt-1 overflow-x-auto rounded bg-gray-100 p-2 dark:bg-gray-800">
                 {JSON.stringify(data.arguments, null, 2)}
@@ -85,7 +93,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
                 className="bg-green-600 hover:bg-green-700"
               >
                 <Check className="mr-1 h-3 w-3" />
-                Approve
+                {t("approve")}
               </Button>
 
               {!showDenyForm ? (
@@ -96,12 +104,12 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
                   className="border-red-300 text-red-600 hover:bg-red-50"
                 >
                   <X className="mr-1 h-3 w-3" />
-                  Deny
+                  {t("deny")}
                 </Button>
               ) : (
                 <div className="flex flex-1 flex-col gap-2">
                   <Textarea
-                    placeholder="Reason for denial (optional)"
+                    placeholder={t("denyReasonPlaceholder")}
                     value={denyComment}
                     onChange={(e) => setDenyComment(e.target.value)}
                     className="min-h-[60px] text-sm"
@@ -112,14 +120,14 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
                       variant="destructive"
                       onClick={handleDeny}
                     >
-                      Deny
+                      {t("deny")}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setShowDenyForm(false)}
                     >
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </div>
                 </div>
@@ -128,12 +136,14 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
           )}
 
           {resolving && !isResolved && (
-            <p className="animate-pulse text-sm text-gray-500">Sending decision...</p>
+            <p className="animate-pulse text-sm text-gray-500">
+              {t("sendingDecision")}
+            </p>
           )}
 
           {isResolved && !data.approved && data.deny_comment && (
             <p className="text-sm text-red-600">
-              Reason: {data.deny_comment}
+              {t("reason")} {data.deny_comment}
             </p>
           )}
         </div>

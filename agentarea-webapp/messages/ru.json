@@ -616,6 +616,17 @@
     "agent": "Агент",
     "statusLabel": "Статус",
     "created": "Создано",
+    "noTasks": "Задач не найдено",
+    "noTasksDescription": "Задачи ещё не были созданы",
+    "noMatchingTasks": "Нет подходящих задач",
+    "noMatchingTasksDescription": "Нет задач, соответствующих поиску \"{query}\"",
+    "taskRunning": "Задача выполняется",
+    "taskRunningDescription": "Результаты появятся после завершения",
+    "noResults": "Нет результатов",
+    "noResultsDescription": "Результаты не получены",
+    "noDescription": "Нет описания",
+    "noDescriptionAvailable": "Описание недоступно",
+    "taskNotFound": "Задача не найдена",
     "status": {
       "running": "Выполняется",
       "completed": "Завершено",
@@ -980,5 +991,144 @@
       "success": "Конфигурация рабочего пространства успешно импортирована",
       "error": "Не удалось импортировать конфигурацию рабочего пространства"
     }
+  },
+
+  "SkillsSection": {
+    "title": "Навыки",
+    "addSkill": "Добавить навык",
+    "searchPlaceholder": "Поиск навыков...",
+    "loading": "Загрузка навыков...",
+    "noSkillsAvailable": "Навыки недоступны",
+    "createSkill": "Создать навык",
+    "noSkillsFound": "Навыки не найдены",
+    "noSkillsAssigned": "Навыки не назначены. Добавьте навыки, чтобы расширить возможности агента."
+  },
+
+  "TriggerControl": {
+    "error": "Что-то пошло не так с триггером",
+    "enabled": "включён",
+    "disabled": "отключён",
+    "availableMethods": "Доступные методы:",
+    "availableTools": "Доступные инструменты:"
+  },
+
+  "OpenAPIForm": {
+    "openApiSpec": "Спецификация OpenAPI",
+    "url": "URL",
+    "pasteJson": "Вставить JSON",
+    "urlHint": "Вставьте URL для автоматического определения имени, базового URL и доступных инструментов.",
+    "jsonHint": "Вставьте полный JSON OpenAPI 3.x. Имя, базовый URL и инструменты будут определены автоматически.",
+    "detectedTools": "Обнаруженные инструменты",
+    "tool": "инструмент",
+    "name": "Имя",
+    "baseUrl": "Базовый URL",
+    "baseUrlHint": "Базовый URL для API запросов",
+    "description": "Описание (необязательно)",
+    "customHeaders": "Пользовательские заголовки (необязательно)",
+    "addHeader": "Добавить заголовок",
+    "headersHint": "Добавьте заголовки для аутентификации или пользовательских требований API.",
+    "headerName": "Имя заголовка",
+    "headerValue": "Значение",
+    "secretHeadersHint": "Секретные заголовки шифруются и никогда не возвращаются в ответах API.",
+    "creating": "Создание...",
+    "createConnection": "Создать соединение",
+    "cancel": "Отмена",
+    "failedToFetchSpec": "Не удалось получить спецификацию",
+    "validJsonNoOperations": "JSON валиден, но операции OpenAPI 3.x не найдены.",
+    "invalidJson": "Неверный JSON",
+    "invalidJsonHint": "Неверный JSON. Пожалуйста, проверьте содержимое спецификации.",
+    "failedToCreate": "Не удалось создать соединение"
+  },
+
+  "TaskDetailsCard": {
+    "title": "Детали задачи",
+    "description": "Основная информация",
+    "status": "Статус",
+    "noDescription": "Описание недоступно",
+    "created": "Создано",
+    "started": "Запущено",
+    "completed": "Завершено",
+    "duration": "Длительность",
+    "executionId": "ID выполнения"
+  },
+
+  "TaskErrorCard": {
+    "error": "Ошибка"
+  },
+
+  "TaskResultsCard": {
+    "title": "Результаты задачи",
+    "description": "Выходные данные",
+    "result": "Результат",
+    "taskRunning": "Задача выполняется",
+    "noResults": "Нет результатов",
+    "resultsWillAppear": "Результаты появятся после завершения",
+    "noResultsProduced": "Результаты не получены",
+    "sessionId": "ID сессии"
+  },
+
+  "TasksFilters": {
+    "searchPlaceholder": "Поиск задач по описанию, имени агента или ID задачи...",
+    "filterByStatus": "Фильтр по статусу",
+    "allStatuses": "Все статусы",
+    "clearFilters": "Сбросить фильтры",
+    "activeFilters": "Активные фильтры:"
+  },
+
+  "TaskDetailPage": {
+    "taskNotFound": "Задача не найдена",
+    "taskNotFoundDescription": "Запрошенная задача не найдена.",
+    "backToTasks": "Назад к задачам",
+    "tryAgain": "Попробовать снова",
+    "chatWith": "Чат с {agentName}",
+    "cancelTask": "Отменить задачу",
+    "cancelTaskDescription": "Вы уверены, что хотите отменить эту задачу? Это действие нельзя отменить, и оно немедленно прекратит выполнение задачи.",
+    "keepRunning": "Продолжить выполнение",
+    "cancelling": "Отмена...",
+    "pausedSuccessfully": "Задача успешно приостановлена",
+    "failedToPause": "Не удалось приостановить задачу",
+    "resumedSuccessfully": "Задача успешно возобновлена",
+    "failedToResume": "Не удалось возобновить задачу",
+    "cancelledSuccessfully": "Задача успешно отменена",
+    "failedToCancel": "Не удалось отменить задачу",
+    "errorWhilePausing": "Произошла ошибка при приостановке задачи",
+    "errorWhileResuming": "Произошла ошибка при возобновлении задачи",
+    "errorWhileCancelling": "Произошла ошибка при отмене задачи",
+    "unexpectedError": "Произошла непредвиденная ошибка"
+  },
+
+  "WorkplacePage": {
+    "workplace": "Рабочее место",
+    "failedToLoadAgents": "Не удалось загрузить агентов",
+    "noAgentsAvailable": "Агенты недоступны.",
+    "createFirstAgent": "Создайте своего первого агента, чтобы начать работу."
+  },
+
+  "BuiltinToolIconGrid": {
+    "title": "Встроенные инструменты",
+    "loading": "Загрузка инструментов...",
+    "hint": "Нажмите, чтобы включить инструменты для вашего агента",
+    "toolsEnabled": "{count, plural, =1 {# инструмент включён} few {# инструмента включено} many {# инструментов включено} other {# инструмента включено}}"
+  },
+
+  "ApprovalRequestMessage": {
+    "approvalRequired": "Требуется подтверждение:",
+    "approved": "Одобрено",
+    "denied": "Отклонено",
+    "waiting": "Ожидание...",
+    "arguments": "Аргументы",
+    "approve": "Одобрить",
+    "deny": "Отклонить",
+    "denyReasonPlaceholder": "Причина отклонения (необязательно)",
+    "cancel": "Отмена",
+    "sendingDecision": "Отправка решения...",
+    "reason": "Причина:"
+  },
+
+  "ErrorMessage": {
+    "error": "Ошибка",
+    "type": "Тип:",
+    "retryable": "Повторяемая",
+    "nonRetryable": "Неповторяемая"
   }
 }
