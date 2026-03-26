@@ -859,6 +859,7 @@
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Создайте триггер для автоматизации рабочих процессов агентов.",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
+    "noMatchingTriggersDescription": "Нет триггеров, соответствующих поиску \"{query}\"",
     "table": {
       "name": "Имя",
       "type": "Тип",

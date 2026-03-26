@@ -9,6 +9,7 @@ import {
   BotOff,
   Brain,
   ChevronsLeftRightEllipsis,
+  Clock,
   Cpu,
   Link,
   List,
@@ -16,6 +17,7 @@ import {
   Server,
   Shield,
   Sparkles,
+  Timer,
   Unplug,
   Zap,
 } from "lucide-react";
@@ -24,7 +26,7 @@ import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
 type EmptyStateProps = {
   title: string;
   description?: string;
-  iconsType?: "404" | "agent" | "llm" | "mcp" | "tasks";
+  iconsType?: "404" | "agent" | "llm" | "mcp" | "tasks" | "triggers";
   action?: {
     label: string;
     href?: string;
@@ -56,7 +58,9 @@ export default function EmptyState({
             ? [List, Bot, Blocks]
             : iconsType === "mcp"
               ? [Server, Network, Link]
-              : [Bot, Blocks, ChevronsLeftRightEllipsis]
+              : iconsType === "triggers"
+                ? [Zap, Clock, Timer]
+                : [Bot, Blocks, ChevronsLeftRightEllipsis]
     : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
   return (

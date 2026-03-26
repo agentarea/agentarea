@@ -854,6 +854,7 @@
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
+    "noMatchingTriggersDescription": "No triggers match your search \"{query}\"",
     "table": {
       "name": "Name",
       "type": "Type",
