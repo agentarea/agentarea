@@ -501,6 +501,7 @@ class AgentExecutionWorkflow:
         result: ResolveAgentToolsResult = await workflow.execute_activity(
             Activities.RESOLVE_AGENT_TOOLS,
             args=[resolve_request],
+            result_type=ResolveAgentToolsResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )

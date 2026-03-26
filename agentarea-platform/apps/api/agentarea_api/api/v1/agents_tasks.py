@@ -11,6 +11,8 @@ from agentarea_agents.application.temporal_workflow_service import (
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_event_stream_service,
+    get_read_agent_service,
+    get_read_task_service,
     get_task_service,
     get_temporal_workflow_service,
 )
@@ -48,7 +50,7 @@ class TaskResponse(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None  # Workflow execution ID
 
@@ -83,7 +85,7 @@ class TaskWithAgent(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None
 
@@ -109,8 +111,8 @@ async def get_all_tasks(
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """Get all workspace tasks across all agents.
 
@@ -391,8 +393,8 @@ async def list_agent_tasks(
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """List all tasks for the specified agent.
 
@@ -454,7 +456,7 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get a specific task for the specified agent using workflow status."""
@@ -497,7 +499,7 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the execution status of a specific task workflow."""
@@ -716,7 +718,7 @@ async def get_task_events(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """Get paginated task execution events for the specified task from database."""
     # Verify agent exists
@@ -805,8 +807,8 @@ async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
     event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""

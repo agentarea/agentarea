@@ -342,7 +342,9 @@ async def check_connection(
         return await service.test_connection(connection_id)
     except ValueError as e:
         logger.warning(f"Test connection validation error for {connection_id}: {e}")
-        raise HTTPException(status_code=400, detail="Connection test failed: invalid configuration") from e
+        raise HTTPException(
+            status_code=400, detail="Connection test failed: invalid configuration"
+        ) from e
     except Exception as e:
         logger.error(f"Failed to test connection {connection_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to test connection") from e

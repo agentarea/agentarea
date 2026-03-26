@@ -155,6 +155,27 @@ export const {
 
   // Network API
   getNetworkTopology,
+
+  // Project API
+  listProjects,
+  getProject,
+  createProject,
+  updateProject,
+  deleteProject,
+
+  // Project Association API
+  addSkillToProject,
+  removeSkillFromProject,
+  addAgentToProject,
+  removeAgentFromProject,
+  addMcpInstanceToProject,
+  removeMcpInstanceFromProject,
+
+  // Project Files API
+  listProjectFiles,
+  uploadProjectFile,
+  downloadProjectFile,
+  deleteProjectFile,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -273,3 +294,5 @@ export type TaskWithAgent = TaskResponse & {
 
 // Re-export skill types for convenience
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
+
+export type Project = components["schemas"]["ProjectResponse"];

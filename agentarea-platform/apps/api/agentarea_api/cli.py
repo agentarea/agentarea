@@ -48,6 +48,7 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
         reload=reload,
         workers=workers if not reload else 1,  # Workers > 1 incompatible with reload
         log_level=log_level,
+        timeout_graceful_shutdown=3 if reload else None,  # Don't hang on reload
     )
 
 

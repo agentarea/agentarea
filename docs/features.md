@@ -13,8 +13,8 @@ AgentArea is purpose-built for **governed agentic networks**. Every feature is d
   <Card title="🛡️ Agent Governance" icon="shield-halved" href="/agent-governance">
     Tool approvals, permissions, audit trails
   </Card>
-  <Card title="🔗 A2A Protocol" icon="arrows-turn-to-dots" href="/agent-communication">
-    Native agent-to-agent communication
+  <Card title="🔌 MCP Integration" icon="plug" href="/mcp-integration">
+    Model Context Protocol for external tools
   </Card>
   <Card title="⚡ Event Triggers" icon="bolt" href="/event-triggers">
     Fire agents on timers, webhooks, events
@@ -31,7 +31,7 @@ AgentArea is purpose-built for **governed agentic networks**. Every feature is d
 
 ## 🌐 Agentic Networks
 
-VPC-inspired network architecture where agents communicate via A2A protocol with granular network permissions.
+VPC-inspired network architecture with granular network permissions for multi-agent systems.
 
 <Accordion>
   <AccordionItem title="Network Isolation">

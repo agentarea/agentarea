@@ -97,3 +97,6 @@ openspec
 agentarea-bootstrap/data/registries/
 
 .omc
+
+# CodeQL analysis
+**/codeql-db/

@@ -13,8 +13,8 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_mcp.application.access_token_service import MCPAccessTokenService
-from agentarea_mcp.infrastructure.auth_repository import MCPAccessTokenRepository
+from agentarea_mcp.application.access_token_service import APIKeyService
+from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -36,9 +36,9 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 async def get_api_key_service(
     db_session: DatabaseSessionDep,
     user_context: UserContextDep,
-) -> MCPAccessTokenService:
-    repo = MCPAccessTokenRepository(db_session, user_context)
-    return MCPAccessTokenService(repo)
+) -> APIKeyService:
+    repo = APIKeyRepository(db_session, user_context)
+    return APIKeyService(repo)
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class APIKeyCreateResponse(APIKeyResponse):
 @router.post("/", response_model=APIKeyCreateResponse, status_code=201)
 async def create_api_key(
     data: APIKeyCreateRequest,
-    service: MCPAccessTokenService = Depends(get_api_key_service),
+    service: APIKeyService = Depends(get_api_key_service),
 ):
     """Create a new API key. The raw ``token`` value is returned once — store it securely."""
     try:
@@ -100,7 +100,7 @@ async def create_api_key(
 @router.get("/", response_model=list[APIKeyResponse])
 async def list_api_keys(
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_api_key_service),
+    service: APIKeyService = Depends(get_api_key_service),
 ):
     """List all API keys for the current workspace."""
     tokens = await service.list_tokens()
@@ -111,7 +111,7 @@ async def list_api_keys(
 async def get_api_key(
     token_id: UUID,
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_api_key_service),
+    service: APIKeyService = Depends(get_api_key_service),
 ):
     """Get a single API key by ID."""
     token = await service.get_token(token_id)
@@ -124,7 +124,7 @@ async def get_api_key(
 async def revoke_api_key(
     token_id: UUID,
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_api_key_service),
+    service: APIKeyService = Depends(get_api_key_service),
 ):
     """Immediately revoke an API key."""
     revoked = await service.revoke_token(token_id)

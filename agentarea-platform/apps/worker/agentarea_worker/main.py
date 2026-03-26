@@ -104,7 +104,9 @@ class AgentAreaWorker:
         initialize_di_container(settings.workflow)
 
         # Discover extensions and wire permission service
+        from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
         from agentarea_common.auth.simple_permission import SimplePermissionService
         from agentarea_common.config.app import get_app_settings
         from agentarea_common.di.container import register_factory, register_singleton
@@ -123,6 +125,12 @@ class AgentAreaWorker:
             register_factory(PermissionService, perm_factory)
         else:
             register_singleton(PermissionService, SimplePermissionService())
+
+        authz_factory = ExtensionRegistry.get_factory("authorization")
+        if authz_factory:
+            register_factory(AuthorizationService, authz_factory)
+        else:
+            register_singleton(AuthorizationService, SimpleAuthorizationService())
 
         # Create governance interceptor pipeline
         from agentarea_governance.bridges.temporal_bridge import (

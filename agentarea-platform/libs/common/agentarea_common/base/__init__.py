@@ -1,4 +1,9 @@
-from .dependencies import RepositoryFactoryDep, get_repository_factory
+from .dependencies import (
+    ReadRepositoryFactoryDep,
+    RepositoryFactoryDep,
+    get_read_repository_factory,
+    get_repository_factory,
+)
 from .models import (
     AuditMixin,
     BaseModel,
@@ -17,11 +22,13 @@ __all__ = [
     "BaseRepository",
     "PaginatedResponse",
     "PaginationParams",
+    "ReadRepositoryFactoryDep",
     "RepositoryFactory",
     "RepositoryFactoryDep",
     "SoftDeleteMixin",
     "WorkspaceAwareMixin",
     "WorkspaceScopedMixin",
     "WorkspaceScopedRepository",
+    "get_read_repository_factory",
     "get_repository_factory",
 ]

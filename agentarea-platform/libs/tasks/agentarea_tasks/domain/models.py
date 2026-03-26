@@ -26,6 +26,16 @@ class Task(BaseModel):
     workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
+    @field_validator("result", mode="before")
+    @classmethod
+    def validate_result(cls, v):
+        """Coerce non-dict result values into a dict wrapper."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        return {"response": v}
+
     @field_validator("metadata", mode="before")
     @classmethod
     def validate_task_metadata(cls, v):
@@ -105,6 +115,16 @@ class TaskUpdate(BaseModel):
     execution_id: str | None = None
     metadata: dict[str, Any] | None = None
 
+    @field_validator("result", mode="before")
+    @classmethod
+    def validate_result(cls, v):
+        """Coerce non-dict result values into a dict wrapper."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        return {"response": v}
+
     @field_validator("metadata", mode="before")
     @classmethod
     def validate_task_update_metadata(cls, v):
@@ -150,6 +170,16 @@ class SimpleTask(BaseModel):
     completed_at: datetime | None = None
     execution_id: str | None = None  # Temporal workflow execution ID or other execution identifier
     metadata: dict[str, Any] = {}  # Additional metadata for task management
+
+    @field_validator("result", mode="before")
+    @classmethod
+    def validate_result(cls, v):
+        """Coerce non-dict result values into a dict wrapper."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        return {"response": v}
 
     class Config:
         """Pydantic model configuration."""

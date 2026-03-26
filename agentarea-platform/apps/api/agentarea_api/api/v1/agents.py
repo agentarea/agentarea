@@ -8,7 +8,11 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.import_export import ToolConfigYAML
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
-from agentarea_api.api.deps.services import get_agent_service, get_mcp_server_instance_service
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_mcp_server_instance_service,
+    get_read_agent_service,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
@@ -19,7 +23,6 @@ from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-# Import A2A protocol subroutes
 from . import agents_a2a, agents_well_known
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -67,6 +70,8 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
             r"^llama.*$",
             r"^qwen.*$",
             r"^mistral.*$",
+            # OpenRouter-style: provider/model or provider/model:variant
+            r"^[a-zA-Z][a-zA-Z0-9\-_.]*/[a-zA-Z][a-zA-Z0-9\-_.:]*(:[a-zA-Z0-9\-_.]+)?$",
             # General model names - must contain at least one letter and one non-letter
             r"^[a-zA-Z][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$",  # starts with letter
             r"^[a-zA-Z0-9]*[a-zA-Z][a-zA-Z0-9\-_.]*$",  # contains at least one letter
@@ -107,6 +112,7 @@ class AgentCreate(BaseModel):
     events_config: EventsConfig | None = None
     planning: bool | None = None
     skill_ids: list[UUID] | None = None
+    agent_type: str
 
 
 class AgentUpdate(BaseModel):
@@ -131,6 +137,7 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
+    agent_type: str = "stateless"
 
     @classmethod
     def from_domain(cls, agent: Agent) -> "AgentResponse":
@@ -154,6 +161,7 @@ class AgentResponse(BaseModel):
             tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
+            agent_type=agent.agent_type,
         )
 
 
@@ -193,6 +201,7 @@ async def create_agent(
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
         skill_ids=data.skill_ids,
+        agent_type=data.agent_type,
     )
     return AgentResponse.from_domain(agent)
 
@@ -201,7 +210,7 @@ async def create_agent(
 async def get_agent(
     agent_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """Get an agent by ID."""
     agent = await agent_service.get(agent_id)
@@ -214,7 +223,7 @@ async def get_agent(
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """List all workspace agents.
 

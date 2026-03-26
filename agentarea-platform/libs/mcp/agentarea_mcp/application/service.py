@@ -229,10 +229,13 @@ class MCPServerInstanceService:
     ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
-        # Validate the JSON specification
-        validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
-        if validation_errors:
-            raise MCPValidationError(validation_errors)
+        # Skip Docker image/port validation when server_spec_id is provided,
+        # since the spec already defines the container image.
+        # MCP infrastructure resolves the image from the server spec at deploy time.
+        if not server_spec_id:
+            validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
+            if validation_errors:
+                raise MCPValidationError(validation_errors)
 
         # Create instance using workspace-scoped repository
         create_kwargs: dict[str, Any] = {

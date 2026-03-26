@@ -93,6 +93,8 @@
   },
 
   "Sidebar": {
+    "home": "Главная",
+    "inbox": "Входящие",
     "admin": "Админ",
     "workplace": "Рабочее место",
     "agents": "Агенты",
@@ -103,10 +105,17 @@
     "llmBrowse": "Обзор",
     "mcp": "Серверы MCP",
     "mcpServers": "Серверы",
+    "projects": "Проекты",
+    "platform": "Платформа",
     "connections": "Соединения",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
+    "apiKeys": "API Ключи",
+    "workspace": "Пространство",
+    "importExport": "Импорт / Экспорт",
     "modelSpecs": "Спецификации моделей",
+    "automation": "Автоматизация",
+    "network": "Сеть",
     "settings": "Настройки",
     "logout": "Выйти"
   },

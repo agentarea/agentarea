@@ -30,7 +30,7 @@ AgentArea is an open-core platform purpose-built for **agentic networks** and **
 
 Traditional agent frameworks focus on individual agents. AgentArea is different:
 
-- **🌐 Agentic Networks First**: VPC-inspired architecture where agents communicate via A2A protocol with granular network permissions
+- **🌐 Agentic Networks First**: VPC-inspired architecture with granular network permissions between agents
 - **🛡️ Governance Built-In**: Tool approvals, permission boundaries, ReBAC authorization, and audit trails from day one
 - **🔗 A2A Protocol**: Native agent-to-agent communication standard for multi-agent orchestration
 - **⚡ Production-Ready**: Temporal-based execution, Kubernetes-native, edge deployment, enterprise authentication

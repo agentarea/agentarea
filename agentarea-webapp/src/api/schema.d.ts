@@ -2987,6 +2987,8 @@ export interface components {
         };
         /** AgentCreate */
         AgentCreate: {
+            /** Agent Type */
+            agent_type: string;
             /** Description */
             description: string;
             events_config?: components["schemas"]["EventsConfig"] | null;
@@ -3012,6 +3014,11 @@ export interface components {
         };
         /** AgentResponse */
         AgentResponse: {
+            /**
+             * Agent Type
+             * @default stateless
+             */
+            agent_type: string;
             /** Description */
             description?: string | null;
             /** Events Config */
@@ -3995,6 +4002,16 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** ProjectAgentRef */
+        ProjectAgentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Description */
@@ -4006,13 +4023,48 @@ export interface components {
             /** Parent Project Id */
             parent_project_id?: string | null;
         };
+        /** ProjectFileDownloadResponse */
+        ProjectFileDownloadResponse: {
+            /** Key */
+            key: string;
+            /** Url */
+            url: string;
+        };
+        /** ProjectFileInfo */
+        ProjectFileInfo: {
+            /** Key */
+            key: string;
+            /** Last Modified */
+            last_modified: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** ProjectFileListResponse */
+        ProjectFileListResponse: {
+            /** Files */
+            files: components["schemas"]["ProjectFileInfo"][];
+            /** Prefix */
+            prefix: string;
+        };
+        /** ProjectMcpInstanceRef */
+        ProjectMcpInstanceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** ProjectResponse */
         ProjectResponse: {
             /**
              * Agents
              * @default []
              */
-            agents: unknown[];
+            agents: components["schemas"]["ProjectAgentRef"][];
             /** Created By */
             created_by: string;
             /** Description */
@@ -4028,7 +4080,7 @@ export interface components {
              * Mcp Instances
              * @default []
              */
-            mcp_instances: unknown[];
+            mcp_instances: components["schemas"]["ProjectMcpInstanceRef"][];
             /** Minio Prefix */
             minio_prefix: string;
             /** Name */
@@ -4039,9 +4091,19 @@ export interface components {
              * Skills
              * @default []
              */
-            skills: unknown[];
+            skills: components["schemas"]["ProjectSkillRef"][];
             /** Workspace Id */
             workspace_id: string;
+        };
+        /** ProjectSkillRef */
+        ProjectSkillRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** ProjectUpdate */
         ProjectUpdate: {
@@ -4591,7 +4653,7 @@ export interface components {
             /** Result */
             result?: {
                 [key: string]: unknown;
-            } | null;
+            } | string | null;
             /** Status */
             status: string;
         };
@@ -4628,7 +4690,7 @@ export interface components {
             /** Result */
             result?: {
                 [key: string]: unknown;
-            } | null;
+            } | string | null;
             /** Status */
             status: string;
         };
@@ -8320,7 +8382,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectFileListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8385,7 +8447,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectFileDownloadResponse"];
                 };
             };
             /** @description Validation Error */
