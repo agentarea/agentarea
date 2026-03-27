@@ -1,10 +1,15 @@
 """Prompt templates for agent LLM interactions.
 
 This module contains all prompt templates used by agents to interact with LLMs.
-Following patterns from frameworks like AutoGen, CrewAI, and LangGraph,
-prompts are treated as core agentic components.
+Prompt structure follows patterns from OpenCode, Claude Code, and ADK:
+- Identity and role first (who are you?)
+- Environment context in XML blocks (what's around you?)
+- Task and success criteria (what are you doing?)
+- Tools for reference (what can you use?)
+- Guidelines and tone (how should you behave?)
 """
 
+from datetime import datetime, timezone
 from typing import Any, Final, TypedDict
 
 
@@ -18,103 +23,60 @@ class ToolInfo(TypedDict, total=False):
 
 
 class MessageTemplates:
-    """Prompt templates for agent-LLM interactions following framework best practices."""
+    """Prompt templates for agent-LLM interactions."""
 
-    SYSTEM_PROMPT: Final[str] = """You are {agent_name}, an AI agent with the following role:
+    SYSTEM_PROMPT: Final[str] = """You are {agent_name}.
 
 {agent_instruction}
 
-CURRENT TASK:
+<env>
+Date: {current_date}
+</env>
+
+# Task
+
 {goal_description}
 
-SUCCESS CRITERIA:
-{success_criteria}
+## Success Criteria
 
-AVAILABLE TOOLS:
-{available_tools}
-
-INSTRUCTIONS:
-- Follow your role and capabilities described above
-- Work systematically towards completing the current task
-- Use available tools when they can help achieve the goal
-- Provide clear, actionable responses
-- Ask for clarification if anything is unclear
-- Call the completion tool when you have successfully finished the task
-
-Remember: You are {agent_name} - stay in character and leverage your specific capabilities."""
-
-    # ReAct framework system prompt - enhanced reasoning pattern
-    REACT_SYSTEM_PROMPT: Final[
-        str
-    ] = """You are {agent_name}, an AI agent that follows the ReAct (Reasoning + Acting) framework.
-
-{agent_instruction}
-
-## Current Task
-Goal: {goal_description}
-
-Success Criteria:
 {success_criteria}
 
 ## Available Tools
+
 {available_tools}
 
-## ReAct Framework Instructions
-You MUST follow this exact pattern for EVERY action you take:
+# Guidelines
 
-1. **Thought**: First, analyze the current situation and what needs to be done
-2. **Observation**: Note what information you have and what you're missing
-3. **Action**: Decide on the next action (tool call or response)
-4. **Result**: After a tool call, observe and interpret the results
+- Think about what the task requires before acting. Understand the goal, then work towards it systematically.
+- Use available tools when they help achieve the goal. Prefer tool calls over guessing.
+- When you have completed the task, call the completion tool with a summary and result.
+- If something is unclear, state your assumption and proceed. Do not stall.
 
-For each step, explicitly state your reasoning process using these markers:
+# Tone and Style
 
-**Thought:** [Your reasoning about the current situation]
-**Observation:** [What you observe from previous results or current context]
-**Action:** [What action you decide to take and why]
-
-After receiving tool results, always provide:
-**Result Analysis:** [Interpretation of the tool results and what they mean]
-
-Example flow:
-**Thought:** I need to search for information about X to complete the task.
-**Observation:** I don't have current information about X in my knowledge.
-**Action:** I'll use the web_search tool to find recent information.
-[Tool call happens]
-**Result Analysis:** The search returned Y, which shows that...
-**Thought:** Now that I have Y, I need to...
-
-CRITICAL RULES:
-- NEVER call tools without first showing your **Thought** and **Observation**
-- NEVER call completion without first demonstrating your work step-by-step
-- You must show your reasoning process for EVERY action, including the final completion
-- The completion tool requires detailed summary, reasoning, and result - prepare
-  these thoughtfully
-
-Continue this pattern until the task is complete, then use the completion tool
-with comprehensive details.
-
-Remember: ALWAYS show your reasoning before taking actions. Users want to see
-your thought process."""
+- Be concise and direct. Lead with the answer or action, not the reasoning.
+- Do not restate the task back. Do not use filler phrases like "Based on the information provided" or "I'll help you with that".
+- Keep text responses short — a few sentences unless the task requires detailed output.
+- Use markdown for formatting when it aids readability.
+"""
 
     # A2UI v0.9 declarative UI output instructions
     A2UI_PROMPT_SECTION: Final[str] = """
-
-## A2UI — Declarative UI Output
+# A2UI — Declarative UI Output
 
 You can render rich, interactive UI surfaces for the user using the A2UI v0.9 protocol.
 When structured UI (cards, forms, tables, lists, buttons) is more useful than plain text,
 append the delimiter `---a2ui_JSON---` on its own line at the end of your text response,
 followed by a single JSON object.
 
-### Format
+## Format
 
 Your text response here...
 
 ---a2ui_JSON---
 {"events": [<list of A2UI event objects>]}
 
-### Event Types
+## Event Types
 
 Each event must have "type" and "surface_id":
 
@@ -134,7 +96,7 @@ Each event must have "type" and "surface_id":
 - **A2UIDeleteSurface**: Remove a surface
   {"type": "A2UIDeleteSurface", "surface_id": "my-surface"}
 
-### Component Types (18 primitives)
+## Component Types (18 primitives)
 
 Display: Text, Image, Icon, Video, AudioPlayer, Divider
 Layout: Row (children), Column (children), List (children)
@@ -143,7 +105,7 @@ Interactive: Button (child, action), TextField (label, value, variant),
   CheckBox (label, value), ChoicePicker (options, value), Slider (value, min, max),
   DateTimeInput (value, enableDate, enableTime)
 
-### Rules
+## Rules
 - The delimiter `---a2ui_JSON---` MUST appear on its own line
 - One component must have `"id": "root"` — this is the tree root
 - Children are ID strings (not nested objects): `"children": ["id1", "id2"]`
@@ -187,14 +149,15 @@ class PromptBuilder:
             goal_description: Current task description
             success_criteria: List of success criteria
             available_tools: List of available tools
-            use_react_framework: Whether to use ReAct framework prompting
+            use_react_framework: Ignored (kept for API compatibility)
             a2ui_enabled: Whether to include A2UI v0.9 output instructions
 
-        Following best practices from AutoGen, LangChain, and ADK:
+        Prompt structure follows OpenCode/Claude Code patterns:
         - Agent identity and instruction come first (who are you?)
+        - Environment context in XML blocks (what's around you?)
         - Current task is clearly separated (what are you doing?)
         - Tools are listed for reference (what can you use?)
-        - Status info like iteration/budget is kept separate from system prompt
+        - Guidelines and tone last (how should you behave?)
         """
         criteria_text = "\n".join(f"- {criteria}" for criteria in success_criteria)
 
@@ -210,19 +173,15 @@ class PromptBuilder:
             f"- {name}: {desc}" for name, desc in (get_tool_info(tool) for tool in available_tools)
         )
 
-        # Choose template based on framework preference
-        template = (
-            MessageTemplates.REACT_SYSTEM_PROMPT
-            if use_react_framework
-            else MessageTemplates.SYSTEM_PROMPT
-        )
+        current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        prompt = template.format(
+        prompt = MessageTemplates.SYSTEM_PROMPT.format(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=criteria_text,
             available_tools=tools_text,
+            current_date=current_date,
         )
 
         if a2ui_enabled:
@@ -239,9 +198,10 @@ class PromptBuilder:
         available_tools: list[ToolInfo],
         a2ui_enabled: bool = False,
     ) -> str:
-        """Build system prompt with ReAct framework instructions.
+        """Build system prompt (delegates to build_system_prompt).
 
-        This is a convenience method that explicitly uses ReAct framework.
+        Kept for API compatibility. The ReAct verbose markers have been removed —
+        modern models reason natively without explicit Thought/Observation/Action prompting.
         """
         return PromptBuilder.build_system_prompt(
             agent_name=agent_name,
@@ -249,7 +209,6 @@ class PromptBuilder:
             goal_description=goal_description,
             success_criteria=success_criteria,
             available_tools=available_tools,
-            use_react_framework=True,
             a2ui_enabled=a2ui_enabled,
         )
 
