@@ -1,63 +1,63 @@
 "use server";
 
+import type { components } from "@/api/schema";
+import { env } from "@/env";
 import {
-  getAgent,
-  listAgents,
-  listModelInstances,
-  getModelSpec,
-  listModelSpecs,
-  testModelInstance,
-  pauseAgentTask,
-  resumeAgentTask,
+  addSkillMember,
   cancelAgentTask,
-  getAllTasks,
-  getAgentTaskStatus,
+  checkMCPServerInstanceConfiguration,
+  createMCPAuthConfig,
+  createMCPServer,
+  createMCPServerInstance,
+  createModelInstance,
+  createOpenAPIConnection,
+  createProviderConfig,
   createSkill,
+  deleteModelInstance,
+  deleteOpenAPIConnection,
+  deleteSkill,
+  deleteTrigger,
+  disableTrigger,
+  discoverMCPInstanceTools,
+  discoverOpenAPITools,
+  enableTrigger,
+  exportWorkspace,
+  flattenSkill,
+  getAgent,
+  getAgentTaskStatus,
+  getAllTasks,
+  getMCPHealthStatus,
+  getMCPServerInstance,
+  getModelSpec,
+  getNetworkTopology,
+  getOpenAPIConnection,
   getSkill,
   getSkillContent,
-  getSkillFiles,
   getSkillFile,
-  updateSkill,
-  deleteSkill,
-  getMCPHealthStatus,
-  checkMCPServerInstanceConfiguration,
-  createMCPServer,
-  listSkills,
-  createMCPServerInstance,
-  getMCPServerInstance,
-  updateMCPServerInstance,
+  getSkillFiles,
+  importWorkspace,
+  listAgents,
   listAgentTasks,
+  listMCPAuthConfigs,
+  listMCPServers,
+  listModelInstances,
+  listModelSpecs,
   listProviderSpecs,
   listProviderSpecsWithModels,
-  createProviderConfig,
-  updateProviderConfig,
-  createModelInstance,
-  deleteModelInstance,
-  listMCPAuthConfigs,
-  createMCPAuthConfig,
-  resolveEscalation,
   listSkillMembers,
-  addSkillMember,
-  removeSkillMember,
-  flattenSkill,
-  discoverMCPInstanceTools,
-  getNetworkTopology,
-  exportWorkspace,
-  importWorkspace,
-  enableTrigger,
-  disableTrigger,
-  deleteTrigger,
-  listMCPServers,
-  getOpenAPIConnection,
-  deleteOpenAPIConnection,
-  discoverOpenAPITools,
-  testOpenAPIConnection,
-  createOpenAPIConnection,
+  listSkills,
+  pauseAgentTask,
   previewOpenAPISpec,
+  removeSkillMember,
+  resolveEscalation,
+  resumeAgentTask,
+  testModelInstance,
+  testOpenAPIConnection,
+  updateMCPServerInstance,
+  updateProviderConfig,
+  updateSkill,
 } from "@/lib/api";
-import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
-import type { components } from "@/api/schema";
 
 export async function getAgentAction(agentId: string) {
   return await getAgent(agentId);
@@ -257,7 +257,11 @@ export async function getSkillFileAction(skillId: string, filePath: string) {
 
 export async function updateSkillAction(
   skillId: string,
-  skill: { name?: string | null; description?: string | null; content?: string | null }
+  skill: {
+    name?: string | null;
+    description?: string | null;
+    content?: string | null;
+  }
 ) {
   return await updateSkill(skillId, skill);
 }
@@ -273,18 +277,30 @@ export async function resolveEscalationAction(
   approved: boolean,
   comment: string = ""
 ) {
-  return await resolveEscalation(agentId, taskId, escalationId, approved, comment);
+  return await resolveEscalation(
+    agentId,
+    taskId,
+    escalationId,
+    approved,
+    comment
+  );
 }
 
 export async function listSkillMembersAction(skillId: string) {
   return await listSkillMembers(skillId);
 }
 
-export async function addSkillMemberAction(skillId: string, childSkillId: string) {
+export async function addSkillMemberAction(
+  skillId: string,
+  childSkillId: string
+) {
   return await addSkillMember(skillId, childSkillId);
 }
 
-export async function removeSkillMemberAction(skillId: string, childSkillId: string) {
+export async function removeSkillMemberAction(
+  skillId: string,
+  childSkillId: string
+) {
   return await removeSkillMember(skillId, childSkillId);
 }
 
@@ -353,6 +369,8 @@ export async function createOpenAPIConnectionAction(body: {
   base_url: string;
   description?: string;
   spec_url?: string;
+  spec_content?: string;
+  custom_headers?: { name: string; value: string }[];
 }) {
   return await createOpenAPIConnection(body);
 }

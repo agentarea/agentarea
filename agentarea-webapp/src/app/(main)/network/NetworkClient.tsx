@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
+import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import NodeDetailPanel from "./components/NodeDetailPanel";
 import { useNetwork } from "./NetworkProvider";
 import DataFlowView from "./views/DataFlowView";
@@ -20,6 +21,7 @@ interface NetworkNodeData {
 
 export function NetworkHeaderTabs() {
   const { loading, fetchTopology } = useNetwork();
+  const t = useTranslations("NetworkPage");
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -33,16 +35,16 @@ export function NetworkHeaderTabs() {
 
   return (
     <div className="inline-flex items-center gap-3 py-2">
-      <Tabs value={view} onValueChange={setView}>
-        <TabsList className="h-8">
-          <TabsTrigger value="dataflow" className="text-xs px-3">
-            Data Flow
-          </TabsTrigger>
-          <TabsTrigger value="org" className="text-xs px-3">
-            Organization
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <AnimatedTabs
+        tabs={[
+          { value: "dataflow", label: t("dataFlow") },
+          { value: "org", label: t("organization") },
+        ]}
+        activeTab={view}
+        onChange={setView}
+        size="sm"
+        className="w-auto"
+      />
       <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
       <Button
         variant="ghost"

@@ -822,6 +822,7 @@
       "lastUsed": "Last Used",
       "actions": "Actions"
     },
+    "never": "Never",
     "status": {
       "active": "Active",
       "revoked": "Revoked",
@@ -840,7 +841,8 @@
       "title": "API Key Created",
       "warning": "Make sure to copy your API key now. You won't be able to see it again!",
       "copied": "Copied to clipboard",
-      "copy": "Copy"
+      "copy": "Copy",
+      "done": "Done"
     },
     "revoke": {
       "title": "Revoke API Key",
@@ -957,7 +959,9 @@
 
   "NetworkPage": {
     "title": "Network",
-    "description": "Visual overview of your workspace topology"
+    "description": "Visual overview of your workspace topology",
+    "dataFlow": "Data Flow",
+    "organization": "Organization"
   },
 
   "WorkspacePage": {

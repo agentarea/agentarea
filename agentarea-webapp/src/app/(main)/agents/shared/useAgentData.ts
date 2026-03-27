@@ -23,22 +23,20 @@ export async function loadAgentData(): Promise<AgentData> {
   // Fetch MCP servers
   const response = await listMCPServers({ page_size: 100 });
   const rawServers = (response.data as any)?.items || response.data || [];
-  const mcpServers: MCPServer[] = rawServers.map(
-    (server: MCPServer) => {
-      const withDownloads = server as MCPServer & { downloads?: number };
-      return {
-        ...server,
-        status: ["published", "draft", "pending", "rejected"].includes(
-          server.status
-        )
-          ? (server.status as MCPServer["status"])
-          : "draft",
-        ...(typeof withDownloads.downloads === "number"
-          ? { downloads: withDownloads.downloads }
-          : {}),
-      };
-    }
-  );
+  const mcpServers: MCPServer[] = rawServers.map((server: MCPServer) => {
+    const withDownloads = server as MCPServer & { downloads?: number };
+    return {
+      ...server,
+      status: ["published", "draft", "pending", "rejected"].includes(
+        server.status
+      )
+        ? (server.status as MCPServer["status"])
+        : "draft",
+      ...(typeof withDownloads.downloads === "number"
+        ? { downloads: withDownloads.downloads }
+        : {}),
+    };
+  });
 
   // Fetch LLM model instances
   const llmResponse = await listModelInstances();
@@ -81,14 +79,13 @@ export async function loadAgentEditData(
     instruction: agent.instruction || "",
     model_id: agent.model_id,
     tools_config: {
-      mcp_server_configs: agent.tools_config?.mcp_server_configs || [],
-      builtin_tools: agent.tools_config?.builtin_tools || [],
+      mcp_server_configs: (agent as any).tools_config?.mcp_server_configs || [],
+      builtin_tools: (agent as any).tools_config?.builtin_tools || [],
     },
     events_config: {
-      events: agent.events_config?.events || [],
+      events: (agent as any).events_config?.events || [],
     },
     planning: agent.planning || false,
-    // Note: agent.skills comes from the API but TypeScript schema may not include it yet
     skills: ((agent as any).skills || []).map((s: any) => ({
       id: s.id,
       name: s.name,

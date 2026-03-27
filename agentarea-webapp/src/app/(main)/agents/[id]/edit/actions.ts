@@ -63,13 +63,10 @@ export async function updateAgent(
   formData: FormData
 ): Promise<AddAgentFormState> {
   // Need to manually reconstruct the array/object structure for validation
-  const mcpConfigs: Record<
-    number,
-    Partial<MCPConfig>
-  > = {};
+  const mcpConfigs: Record<number, Partial<MCPConfig>> = {};
   const mcpToolConfigs: Record<
     number,
-    Record<number, Partial<MCPConfig>>
+    Record<number, Partial<MCPToolConfig>>
   > = {};
 
   formData.forEach((value, key) => {
@@ -92,8 +89,7 @@ export async function updateAgent(
     if (toolMatch) {
       const serverIndex = parseInt(toolMatch[1], 10);
       const toolIndex = parseInt(toolMatch[2], 10);
-      const field =
-        toolMatch[3] as keyof MCPToolConfig;
+      const field = toolMatch[3] as keyof MCPToolConfig;
 
       if (!mcpToolConfigs[serverIndex]) {
         mcpToolConfigs[serverIndex] = {};

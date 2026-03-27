@@ -14,19 +14,21 @@ interface AnimatedTabsProps {
   tabs: TabItem[];
   activeTab: string;
   onChange: (value: string) => void;
+  size?: "sm" | "md";
   className?: string;
   tabClassName?: string;
   iconClassName?: string;
   labelClassName?: string;
   activeIndicatorClassName?: string;
   hoverIndicatorClassName?: string;
-  layoutId?: string; // To avoid conflicts if multiple tabs exist on page
+  layoutId?: string;
 }
 
 export function AnimatedTabs({
   tabs,
   activeTab,
   onChange,
+  size = "md",
   className,
   tabClassName,
   iconClassName,
@@ -37,10 +39,22 @@ export function AnimatedTabs({
 }: AnimatedTabsProps) {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
+  const sizeStyles = {
+    sm: {
+      container: "text-xs p-0.5",
+      tab: "py-1 px-2.5",
+    },
+    md: {
+      container: "text-sm p-1",
+      tab: "py-1.5 px-3",
+    },
+  };
+
   return (
     <div
       className={cn(
-        "relative flex w-full items-center gap-1 rounded-md bg-sidebar dark:bg-zinc-900 p-1 text-sm font-medium",
+        "relative flex w-full items-center gap-1 rounded-md bg-sidebar dark:bg-zinc-900 font-medium",
+        sizeStyles[size].container,
         className
       )}
     >
@@ -56,10 +70,11 @@ export function AnimatedTabs({
             onMouseEnter={() => setHoveredTab(tab.value)}
             onMouseLeave={() => setHoveredTab(null)}
             className={cn(
-              "relative z-10 flex-1 flex items-center justify-center gap-2 rounded-sm py-1.5 px-3 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "relative z-10 flex-1 flex items-center justify-center gap-2 rounded-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground",
+              sizeStyles[size].tab,
               tabClassName
             )}
           >
@@ -96,12 +111,17 @@ export function AnimatedTabs({
             <span className="relative z-10 flex items-center justify-center gap-2">
               {tab.icon && (
                 <span
-                  className={cn("flex items-center justify-center", iconClassName)}
+                  className={cn(
+                    "flex items-center justify-center",
+                    iconClassName
+                  )}
                 >
                   {tab.icon}
                 </span>
               )}
-              <span className={cn("truncate", labelClassName)}>{tab.label}</span>
+              <span className={cn("truncate", labelClassName)}>
+                {tab.label}
+              </span>
             </span>
           </button>
         );
