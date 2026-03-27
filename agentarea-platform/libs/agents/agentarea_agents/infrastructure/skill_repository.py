@@ -4,7 +4,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,40 +19,11 @@ from agentarea_agents.domain.skill_models import (
 class SkillRepository(WorkspaceScopedRepository[Skill]):
     """Repository for Skill CRUD operations."""
 
-    # System workspace ID for global/system skills
-    SYSTEM_WORKSPACE_ID = "system"
-
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Skill, user_context)
 
-    async def get_by_id(self, skill_id: UUID | str, creator_scoped: bool = False) -> Skill | None:
-        """Get a skill by ID within the current workspace or system skills.
-
-        Args:
-            skill_id: The skill ID
-            creator_scoped: If True, also filter by created_by (ignored for system skills)
-
-        Returns:
-            The skill if found, None otherwise
-        """
-        query = select(self.model_class).where(self.model_class.id == skill_id)
-
-        if creator_scoped:
-            query = query.where(self._get_creator_workspace_filter())
-        else:
-            # Include both workspace-specific skills and system skills
-            query = query.where(
-                or_(
-                    self.model_class.workspace_id == self.user_context.workspace_id,
-                    self.model_class.workspace_id == self.SYSTEM_WORKSPACE_ID,
-                )
-            )
-
-        result = await self.session.execute(query)
-        return result.scalar_one_or_none()
-
     async def get_by_name(self, name: str) -> Skill | None:
-        """Get a skill by name within the current workspace or system skills.
+        """Get a skill by name within accessible workspaces.
 
         Args:
             name: The skill name to search for.
@@ -62,10 +33,7 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         """
         query = select(self.model_class).where(
             self.model_class.name == name,
-            or_(
-                self.model_class.workspace_id == self.user_context.workspace_id,
-                self.model_class.workspace_id == self.SYSTEM_WORKSPACE_ID,
-            ),
+            self._get_workspace_filter(),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
@@ -83,54 +51,12 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
             select(self.model_class)
             .where(
                 self.model_class.id == skill_id,
-                or_(
-                    self.model_class.workspace_id == self.user_context.workspace_id,
-                    self.model_class.workspace_id == self.SYSTEM_WORKSPACE_ID,
-                ),
+                self._get_workspace_filter(),
             )
             .options(selectinload(self.model_class.agents))
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
-
-    async def list_all(
-        self, limit: int | None = None, offset: int | None = None, **filters
-    ) -> list[Skill]:
-        """List all skills in the workspace, including system skills.
-
-        System skills (workspace_id='system') are visible to all workspaces.
-
-        Args:
-            limit: Maximum number of records to return
-            offset: Number of records to skip
-            **filters: Additional field filters
-
-        Returns:
-            List of skills within workspace scope plus system skills
-        """
-        query = select(self.model_class)
-
-        # Include both workspace-specific skills and system skills
-        query = query.where(
-            or_(
-                self.model_class.workspace_id == self.user_context.workspace_id,
-                self.model_class.workspace_id == self.SYSTEM_WORKSPACE_ID,
-            )
-        )
-
-        # Apply additional filters
-        for field, value in filters.items():
-            if hasattr(self.model_class, field):
-                query = query.where(getattr(self.model_class, field) == value)
-
-        # Apply pagination
-        if offset is not None:
-            query = query.offset(offset)
-        if limit is not None:
-            query = query.limit(limit)
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
 
     async def list_by_source_type(self, source_type: str) -> list[Skill]:
         """List all skills of a specific source type.
@@ -201,10 +127,7 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
             .join(agent_skills_table, agent_skills_table.c.skill_id == Skill.id)
             .where(
                 agent_skills_table.c.agent_id == agent_id,
-                or_(
-                    Skill.workspace_id == self.user_context.workspace_id,
-                    Skill.workspace_id == self.SYSTEM_WORKSPACE_ID,
-                ),
+                self._get_workspace_filter(),
             )
         )
         result = await self.session.execute(query)

@@ -22,6 +22,7 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     events_config: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
+    agent_type: Mapped[str] = mapped_column(String, nullable=False, default="stateless")
 
     # Relationships
     skills: Mapped[list["Skill"]] = relationship(

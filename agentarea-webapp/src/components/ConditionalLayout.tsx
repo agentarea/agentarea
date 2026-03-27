@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
 import MainLayout from "@/components/MainLayout";
+import SettingsLayout from "@/components/SettingsLayout";
 import { useAuth } from "@/hooks/useAuth";
 
 interface ConditionalLayoutProps {
@@ -58,6 +59,16 @@ export default function ConditionalLayout({
   if (!isKnownRoute && isLoaded && !isSignedIn) {
     // Unknown route + unauthenticated = no layout (clean 404)
     return <>{children}</>;
+  }
+
+  // Use SettingsLayout for settings routes and settings-related admin pages
+  const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
+  if (SETTINGS_ROUTES.some((route) => pathname.startsWith(route))) {
+    return (
+      <AuthGuard>
+        <SettingsLayout>{children}</SettingsLayout>
+      </AuthGuard>
+    );
   }
 
   // Use MainLayout for known protected routes

@@ -39,15 +39,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-import os  # noqa: E402
-
-import litellm  # noqa: E402
-
-os.environ["OLLAMA_API_BASE"] = "http://host.docker.internal:11434"
-logger.debug(
-    "Function calling supported: %s", litellm.supports_function_calling("ollama_chat/qwen2.5")
-)
-
 
 def create_activity_dependencies() -> ActivityDependencies:
     """Create basic dependencies needed by activities.
@@ -112,6 +103,48 @@ class AgentAreaWorker:
         # Initialize DI container for workflows
         initialize_di_container(settings.workflow)
 
+        # Discover extensions and wire permission service
+        from agentarea_common.auth.authorization import AuthorizationService
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+        from agentarea_common.auth.simple_permission import SimplePermissionService
+        from agentarea_common.config.app import get_app_settings
+        from agentarea_common.di.container import register_factory, register_singleton
+        from agentarea_common.extensions import discover_extensions
+        from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.features.service import DeploymentMode, FeatureService
+
+        discover_extensions()
+
+        app_settings = get_app_settings()
+        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        register_singleton(FeatureService, FeatureService(mode=mode))
+
+        perm_factory = ExtensionRegistry.get_factory("permissions")
+        if perm_factory:
+            register_factory(PermissionService, perm_factory)
+        else:
+            register_singleton(PermissionService, SimplePermissionService())
+
+        authz_factory = ExtensionRegistry.get_factory("authorization")
+        if authz_factory:
+            register_factory(AuthorizationService, authz_factory)
+        else:
+            register_singleton(AuthorizationService, SimpleAuthorizationService())
+
+        # Create governance interceptor pipeline
+        from agentarea_governance.bridges.temporal_bridge import (
+            GovernanceWorkerInterceptor,
+            validate_activity_mapping,
+        )
+        from agentarea_governance.factory import create_governance_pipeline
+
+        governance_pipeline = create_governance_pipeline()
+        all_activities = activities + mcp_activities
+        validate_activity_mapping(
+            [a.fn.__name__ if hasattr(a, "fn") else str(a) for a in all_activities]
+        )
+
         self.worker = Worker(
             self.client,
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
@@ -121,6 +154,7 @@ class AgentAreaWorker:
                 StopMCPInstanceWorkflow,
             ],
             activities=activities + mcp_activities,
+            interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )

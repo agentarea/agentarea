@@ -9,9 +9,11 @@ from typing import Any
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.skill_service import SkillService
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config import get_database
+from agentarea_common.di.container import resolve
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
@@ -37,7 +39,9 @@ class ActivityServiceContainer:
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)
         service = AgentService(
-            repository_factory=repository_factory, event_broker=self.dependencies.event_broker
+            repository_factory=repository_factory,
+            event_broker=self.dependencies.event_broker,
+            authorization_service=resolve(AuthorizationService),
         )
         return service, session
 
@@ -101,6 +105,17 @@ class ActivityServiceContainer:
         return service, session
 
 
+def _default_accessible_workspaces(workspace_id: str) -> list[str]:
+    """Return default accessible workspaces for worker context.
+
+    Workers (Temporal activities) run with system-level access and need
+    visibility into both the task's workspace and system entities.
+    """
+    from agentarea_common.auth.authorization import SYSTEM_WORKSPACE_ID
+
+    return [workspace_id, SYSTEM_WORKSPACE_ID]
+
+
 def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     """Helper to create UserContext from data dictionary.
 
@@ -121,6 +136,7 @@ def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     return UserContext(
         user_id=user_id,
         workspace_id=workspace_id,
+        accessible_workspaces=_default_accessible_workspaces(workspace_id),
     )
 
 
@@ -141,7 +157,11 @@ def create_system_context(workspace_id: str, user_id: str | None = None) -> User
     # Use provided user_id or workspace_id as fallback for system operations
     effective_user_id = user_id or workspace_id
 
-    return UserContext(user_id=effective_user_id, workspace_id=workspace_id)
+    return UserContext(
+        user_id=effective_user_id,
+        workspace_id=workspace_id,
+        accessible_workspaces=_default_accessible_workspaces(workspace_id),
+    )
 
 
 class ActivityContext:

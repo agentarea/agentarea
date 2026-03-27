@@ -1,6 +1,6 @@
 "use client";
 
-import { Skill, SkillFile } from "@/lib/browser-api";
+import { Skill, SkillFile } from "@/lib/api";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
 import SkillInfoHeader from "./components/SkillInfoHeader";
 import SkillDetails from "./components/SkillDetails";

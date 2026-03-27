@@ -92,4 +92,11 @@ openspec
 .agents
 .trae
 .sisyphus
-.omcmcp-servers-registry.json
+
+# Downloaded registry data (fetched via make init)
+agentarea-bootstrap/data/registries/
+
+.omc
+
+# CodeQL analysis
+**/codeql-db/

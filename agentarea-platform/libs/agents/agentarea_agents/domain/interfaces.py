@@ -77,6 +77,13 @@ class ExecutionServiceInterface(ABC):
         """Resume execution."""
         pass
 
+    @abstractmethod
+    async def resolve_escalation(
+        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+    ) -> bool:
+        """Resolve a tool escalation."""
+        pass
+
 
 class WorkflowServiceInterface(ABC):
     """Interface for workflow orchestration."""

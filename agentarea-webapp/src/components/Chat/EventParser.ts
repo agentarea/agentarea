@@ -296,11 +296,29 @@ export const parseEventToMessage = (
       };
     }
 
+    case "HumanApprovalRequested": {
+      const originalData = eventData.original_data || eventData;
+      return {
+        type: "approval_request",
+        data: {
+          ...baseData,
+          escalation_id: originalData.escalation_id || eventData.escalation_id,
+          tool_name: originalData.tool_name || eventData.tool_name,
+          tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
+          arguments: originalData.arguments || eventData.arguments || {},
+          message: originalData.message || eventData.message || "Approval required",
+        },
+      };
+    }
+
     // A2UIUpdateComponents, A2UIUpdateDataModel, A2UIDeleteSurface are handled
     // via setMessages mutation in messageEventHandlers — they return null here.
     case "A2UIUpdateComponents":
     case "A2UIUpdateDataModel":
     case "A2UIDeleteSurface":
+    case "HumanApprovalDenied":
+    case "HumanApprovalReceived":
+      // These update existing messages, handled in eventHandlers
       return null;
 
     default:
@@ -330,6 +348,7 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "A2UIUpdateComponents",
     "A2UIUpdateDataModel",
     "A2UIDeleteSurface",
+    "HumanApprovalRequested",
   ];
 
   return displayableEvents.includes(eventType);

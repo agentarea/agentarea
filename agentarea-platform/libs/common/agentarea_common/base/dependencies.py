@@ -6,7 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import UserContextDep
-from ..infrastructure.database import get_db_session
+from ..infrastructure.database import get_db_session, get_read_db_session
 from .repository_factory import RepositoryFactory
 
 
@@ -37,3 +37,13 @@ async def get_repository_factory(
 
 # Type alias for easier use in endpoint dependencies
 RepositoryFactoryDep = Annotated[RepositoryFactory, Depends(get_repository_factory)]
+
+
+async def get_read_repository_factory(
+    session: Annotated[AsyncSession, Depends(get_read_db_session)], user_context: UserContextDep
+) -> RepositoryFactory:
+    """FastAPI dependency for read-only repository factory (AUTOCOMMIT, no transactions)."""
+    return RepositoryFactory(session, user_context)
+
+
+ReadRepositoryFactoryDep = Annotated[RepositoryFactory, Depends(get_read_repository_factory)]

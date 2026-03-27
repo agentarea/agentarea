@@ -9,6 +9,13 @@ from .base_tool import ToolRegistry
 from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
 from .mcp_tool import MCPToolFactory
+from .tool_provider import (
+    AgentToolProvider,
+    BuiltinToolProvider,
+    CodeToolProvider,
+    MCPToolProvider,
+    ToolProvider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +183,98 @@ class ToolManager:
             logger.error(f"Failed to get tools from MCP instance {instance_name}: {e}")
 
         return all_mcp_tools
+
+    async def discover_tool_providers(
+        self,
+        agent_id: UUID,
+        tools_config: list[dict[str, Any]] | None,
+        mcp_server_instance_service,
+        agent_service=None,
+        base_url: str = "",
+        auth_token: str | None = None,
+        task_service=None,
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+    ) -> list[ToolProvider]:
+        """Discover tool providers for progressive disclosure.
+
+        Same inputs as discover_available_tools, but returns ToolProvider
+        instances instead of flat tool definitions. Used by DYNAMIC strategy.
+        """
+        providers: list[ToolProvider] = []
+
+        # Built-in tools (completion, etc.)
+        builtin_tools = self.registry.get_openai_functions()
+        if builtin_tools:
+            providers.append(BuiltinToolProvider(name="builtin", tools=builtin_tools))
+
+        if not tools_config:
+            return providers
+
+        for tool in tools_config:
+            tool_type = tool.get("type")
+            tool_name = tool.get("name")
+            settings = tool.get("settings", {})
+
+            if tool_type == "code":
+                disabled_methods = settings.get("disabled_methods", [])
+                toolset_methods = (
+                    {method: False for method in disabled_methods} if disabled_methods else {}
+                )
+                tool_instance = create_code_tool_instance(tool_name, toolset_methods)
+                if tool_instance:
+                    from .decorator_tool import Toolset, ToolsetAdapter
+
+                    if isinstance(tool_instance, Toolset):
+                        tool_instance = ToolsetAdapter(tool_instance)
+
+                    providers.append(
+                        CodeToolProvider(
+                            name=tool_name,
+                            tools=[tool_instance.get_openai_function_definition()],
+                        )
+                    )
+
+            elif tool_type == "mcp":
+                mcp_tools = await self._discover_mcp_tools_by_name(
+                    tool_name, settings.get("allowed_tools", []), mcp_server_instance_service
+                )
+                if mcp_tools:
+                    tool_defs = [t.get_openai_function_definition() for t in mcp_tools]
+                    providers.append(
+                        MCPToolProvider(
+                            name=tool_name,
+                            instance_id="",
+                            tools=tool_defs,
+                        )
+                    )
+
+            elif tool_type == "agent":
+                if not agent_service or not base_url:
+                    continue
+
+                a2a_tool = await A2AAgentToolFactory.create_tool(
+                    agent_name=tool_name,
+                    agent_service=agent_service,
+                    base_url=base_url,
+                    a2a_url_override=settings.get("a2a_url"),
+                    auth_token=auth_token,
+                    description_override=settings.get("description_override"),
+                    task_service=task_service,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                )
+                if a2a_tool:
+                    providers.append(
+                        AgentToolProvider(
+                            name=tool_name,
+                            agent_id="",
+                            tools=[a2a_tool.get_openai_function_definition()],
+                        )
+                    )
+
+        logger.info(f"Discovered {len(providers)} tool providers for agent {agent_id}")
+        return providers
 
     def register_tool(self, tool) -> None:
         """Register a custom tool."""

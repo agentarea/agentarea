@@ -483,9 +483,9 @@
   --color-brand-900: var(--brand-900);
   --color-brand-950: var(--brand-950);
 
-  --radius-buttons: 0.25rem;
-  --radius-forms: 0.25rem;
-  --radius-general: 0.25rem;
+  --radius-buttons: 8px;
+  --radius-forms: 8px;
+  --radius-general: 8px;
   --radius-branding: 0.5rem;
   --radius-cards: 0.75rem;
   --radius-identifier: 62.4375rem;

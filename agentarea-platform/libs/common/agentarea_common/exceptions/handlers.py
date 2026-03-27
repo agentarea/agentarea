@@ -7,6 +7,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 from ..auth.context_manager import ContextManager
+from ..auth.dependencies import _www_authenticate_bearer
 from .workspace import (
     InvalidJWTToken,
     MissingWorkspaceContext,
@@ -182,7 +183,7 @@ async def invalid_jwt_token_handler(request: Request, exc: InvalidJWTToken) -> J
             "detail": "Invalid or missing authentication token",
             "error_code": "AUTHENTICATION_FAILED",
         },
-        headers={"WWW-Authenticate": "Bearer", **_get_workspace_headers()},
+        headers={"WWW-Authenticate": _www_authenticate_bearer(), **_get_workspace_headers()},
     )
 
 
@@ -231,8 +232,41 @@ def _get_workspace_headers() -> dict[str, str]:
     return headers
 
 
+async def permission_error_handler(request: Request, exc: PermissionError) -> JSONResponse:
+    """Handle write protection errors from authorization layer.
+
+    Args:
+        request: FastAPI request object
+        exc: PermissionError exception
+
+    Returns:
+        JSONResponse with 403 status
+    """
+    context = _get_workspace_context_for_logging()
+    logger.info(
+        "Write access denied: %s",
+        str(exc),
+        extra={
+            "request_method": request.method,
+            "request_url": str(request.url),
+            **context,
+        },
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "Permission denied",
+            "detail": str(exc),
+            "error_code": "WRITE_ACCESS_DENIED",
+        },
+        headers=_get_workspace_headers(),
+    )
+
+
 # Registry of error handlers for easy registration
 WORKSPACE_ERROR_HANDLERS = {
+    PermissionError: permission_error_handler,
     WorkspaceAccessDenied: workspace_access_denied_handler,
     WorkspaceResourceNotFound: workspace_resource_not_found_handler,
     MissingWorkspaceContext: missing_workspace_context_handler,

@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { checkMCPServerInstanceConfiguration } from "@/lib/browser-api";
+import { checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration } from "@/lib/server-actions";
 import { createMCPServerInstance } from "../actions";
 import { MCPServer } from "../types";
 import { MCP_CONSTANTS } from "../utils";
@@ -49,7 +49,7 @@ export function CreateInstanceDialog({
       setInstanceDescription(t("defaults.description", { serverName: mcpServer.name }));
       const initialEnvVars: Record<string, string> = {};
       mcpServer.env_schema?.forEach((envVar) => {
-        initialEnvVars[envVar.name] = envVar.default || "";
+        initialEnvVars[envVar.name as string] = (envVar.default as string) || "";
       });
       setEnvVars(initialEnvVars);
       setValidationResult(null);

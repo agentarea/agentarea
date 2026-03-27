@@ -87,12 +87,12 @@ graph TB
         ports:
           - "5432:5432"
     
-      redis:
-        image: redis:7-alpine
+      valkey:
+        image: valkey/valkey:8
         ports:
           - "6379:6379"
         volumes:
-          - redis_dev_data:/data
+          - valkey_dev_data:/data
     
     volumes:
       postgres_dev_data:

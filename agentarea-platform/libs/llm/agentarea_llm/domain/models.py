@@ -18,12 +18,15 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     icon: Mapped[str | None] = mapped_column(String, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    # Relationships
+    # Relationships (lazy="selectin" for async compatibility)
     provider_configs = relationship(
-        "ProviderConfig", back_populates="provider_spec", cascade="all, delete-orphan"
+        "ProviderConfig",
+        back_populates="provider_spec",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     model_specs = relationship(
-        "ModelSpec", back_populates="provider_spec", cascade="all, delete-orphan"
+        "ModelSpec", back_populates="provider_spec", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self):
@@ -46,10 +49,13 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Relationships
-    provider_spec = relationship("ProviderSpec", back_populates="provider_configs")
+    # Relationships (lazy="selectin" for async compatibility)
+    provider_spec = relationship("ProviderSpec", back_populates="provider_configs", lazy="selectin")
     model_instances = relationship(
-        "ModelInstance", back_populates="provider_config", cascade="all, delete-orphan"
+        "ModelInstance",
+        back_populates="provider_config",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self):
@@ -72,12 +78,15 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     context_window: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
+    default_context_strategy: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )  # "static", "hybrid", "dynamic" — resolved per agent execution
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    # Relationships
-    provider_spec = relationship("ProviderSpec", back_populates="model_specs")
+    # Relationships (lazy="selectin" for async compatibility)
+    provider_spec = relationship("ProviderSpec", back_populates="model_specs", lazy="selectin")
     model_instances = relationship(
-        "ModelInstance", back_populates="model_spec", cascade="all, delete-orphan"
+        "ModelInstance", back_populates="model_spec", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self):
@@ -101,9 +110,11 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Relationships
-    provider_config = relationship("ProviderConfig", back_populates="model_instances")
-    model_spec = relationship("ModelSpec", back_populates="model_instances")
+    # Relationships (lazy="selectin" for async compatibility)
+    provider_config = relationship(
+        "ProviderConfig", back_populates="model_instances", lazy="selectin"
+    )
+    model_spec = relationship("ModelSpec", back_populates="model_instances", lazy="selectin")
 
     def __repr__(self):
         """Return a concise string representation for debugging."""

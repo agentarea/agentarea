@@ -49,7 +49,7 @@ class DatabaseSecretManager(BaseSecretManager):
         Args:
             session: SQLAlchemy async session for database operations
             user_context: User context for workspace scoping and audit trail
-            encryption_key: Optional encryption key (auto-generated if None)
+            encryption_key: Fernet encryption key (required; set SECRET_MANAGER_ENCRYPTION_KEY env var)
         """
         self.session = session
         self.user_context = user_context

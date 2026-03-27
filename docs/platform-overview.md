@@ -10,7 +10,7 @@ Traditional agent frameworks focus on individual agents. AgentArea is different:
 
 <CardGroup cols={2}>
   <Card title="🌐 Agentic Networks" icon="network-wired">
-    VPC-inspired architecture where agents communicate via A2A protocol with granular network permissions
+    VPC-inspired architecture with granular network permissions between agents
   </Card>
   <Card title="🛡️ Governance Built-In" icon="shield-halved">
     Tool approvals, permission boundaries, ReBAC authorization, and audit trails from day one

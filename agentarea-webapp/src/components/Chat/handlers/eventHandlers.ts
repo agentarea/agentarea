@@ -30,6 +30,9 @@ import {
   EVENT_A2UI_UPDATE_COMPONENTS,
   EVENT_A2UI_UPDATE_DATA_MODEL,
   EVENT_A2UI_DELETE_SURFACE,
+  EVENT_HUMAN_APPROVAL_REQUESTED,
+  EVENT_HUMAN_APPROVAL_RECEIVED,
+  EVENT_HUMAN_APPROVAL_DENIED,
 } from "../constants/eventTypes";
 
 export interface SSEEventHandlerOptions {
@@ -122,6 +125,37 @@ export function createSSEEventHandler(
 
     // Normalize to canonical event type
     const cleanEventType = normalizeEventType(actualEventType);
+
+    // Handle approval resolution - update existing approval message
+    if (
+      cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED ||
+      cleanEventType === EVENT_HUMAN_APPROVAL_DENIED
+    ) {
+      const escalationId = event.data?.escalation_id || event.data?.original_data?.escalation_id;
+      if (escalationId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (
+              "type" in msg &&
+              msg.type === "approval_request" &&
+              (msg as any).data.escalation_id === escalationId
+            ) {
+              return {
+                ...msg,
+                data: {
+                  ...(msg as any).data,
+                  resolved: true,
+                  approved: cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED,
+                  deny_comment: event.data?.comment || event.data?.original_data?.comment,
+                },
+              };
+            }
+            return msg;
+          })
+        );
+      }
+      return;
+    }
 
     // Check if this event should create a visible message
     if (!shouldDisplayEvent(cleanEventType)) {

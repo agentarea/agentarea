@@ -13,20 +13,22 @@ from . import (
     agents_a2a,
     agents_tasks,
     agents_well_known,
+    api_keys,
     compound_mcps,
-    mcp_access_tokens,
     mcp_auth_configs,
     mcp_oauth_links,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances,
     model_specs,
+    network,
+    openapi_connections,
+    projects,
     provider_configs,
     provider_specs,
     registries,
     skills,
     triggers,
-    webhooks,
     workspace_config,
 )
 
@@ -35,7 +37,8 @@ from . import (
 # ============================================================================
 public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 
-# No public endpoints currently - all endpoints require authentication via middleware
+# Webhook receiver is mounted directly on app (not under /v1) to avoid auth conflicts
+# See main.py: app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 
 # ============================================================================
 # PROTECTED ROUTER - Authentication required for ALL endpoints
@@ -66,8 +69,7 @@ protected_v1_router.include_router(provider_configs.router)
 protected_v1_router.include_router(model_specs.router)
 protected_v1_router.include_router(model_instances.router)
 
-# Webhook management - PROTECTED
-protected_v1_router.include_router(webhooks.router)
+# Webhook management - Public (moved to public_v1_router above)
 
 # Triggers management - PROTECTED
 protected_v1_router.include_router(triggers.router)
@@ -85,13 +87,22 @@ protected_v1_router.include_router(mcp_auth_configs.router)
 protected_v1_router.include_router(mcp_oauth_links.router)
 
 # MCP API Keys management - PROTECTED
-protected_v1_router.include_router(mcp_access_tokens.router)
+protected_v1_router.include_router(api_keys.router)
 
 # Registries (MCP catalog) - PROTECTED
 protected_v1_router.include_router(registries.router)
 
 # Compound MCPs - PROTECTED
 protected_v1_router.include_router(compound_mcps.router)
+
+# OpenAPI connections - PROTECTED
+protected_v1_router.include_router(openapi_connections.router)
+
+# Network topology - PROTECTED
+protected_v1_router.include_router(network.router)
+
+# Projects - PROTECTED
+protected_v1_router.include_router(projects.router)
 
 # ============================================================================
 # LEGACY: Keep old v1_router for backward compatibility during migration

@@ -38,9 +38,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 
-  // If Hydra says we can skip consent (client has skip_consent: true),
-  // auto-accept without showing the consent page.
-  if (consentRequest.skip) {
+  // Auto-accept consent for MCP clients with skip_consent: true,
+  // or when Hydra signals skip=true.
+  // MCP clients (Cursor, Claude Desktop) register with skip_consent but Hydra
+  // may still set skip=false when requested_scope is empty. Check both.
+  const clientSkipConsent = consentRequest.client?.skip_consent === true;
+
+  if (consentRequest.skip || clientSkipConsent) {
+    // Ensure we grant meaningful scopes even if the client didn't request any.
+    // MCP clients often send empty scopes; we default to openid + offline_access
+    // so the issued token works for API access.
+    const grantScope =
+      consentRequest.requested_scope?.length > 0
+        ? consentRequest.requested_scope
+        : ["openid", "offline_access"];
+
+    const grantAudience =
+      consentRequest.requested_access_token_audience?.length > 0
+        ? consentRequest.requested_access_token_audience
+        : consentRequest.client?.audience || [];
+
     try {
       const acceptRes = await fetch(
         `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept?consent_challenge=${consentChallenge}`,
@@ -48,8 +65,8 @@ export async function GET(request: NextRequest) {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            grant_scope: consentRequest.requested_scope,
-            grant_access_token_audience: consentRequest.requested_access_token_audience,
+            grant_scope: grantScope,
+            grant_access_token_audience: grantAudience,
             session: {
               access_token: {
                 workspace_id: consentRequest.context?.workspace_id || consentRequest.subject,

@@ -1,8 +1,17 @@
+// Copyright © 2024 Ory Corp
+
+import type { Metadata } from "next";
 import { Verification } from "@ory/elements-react/theme";
 import { getVerificationFlow, OryPageParams } from "@ory/nextjs/app";
-import "@ory/elements-react/theme/styles.css";
 import config from "@/ory.config";
-import { getOryBrowserConfig, rewriteFlowForBrowser } from "@/lib/auth/browser-config";
+import { rewriteFlowForBrowser } from "@/lib/auth/browser-config";
+
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { getAuthPageConfig } from "@/lib/auth/page-config";
+
+export const metadata: Metadata = {
+  title: "Verification",
+};
 
 export default async function VerificationPage(props: OryPageParams) {
   const flow = await getVerificationFlow(config, props.searchParams);
@@ -11,11 +20,12 @@ export default async function VerificationPage(props: OryPageParams) {
     return null;
   }
 
+  const browserFlow = rewriteFlowForBrowser(flow);
+  const verificationConfig = getAuthPageConfig();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-yellow-600 via-orange-600 to-red-700">
-      <div className="w-full max-w-md rounded-xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-gray-700/20 dark:bg-gray-800/95">
-        <Verification flow={rewriteFlowForBrowser(flow)} config={getOryBrowserConfig()} />
-      </div>
-    </div>
+    <AuthLayout>
+      <Verification flow={browserFlow} config={verificationConfig} />
+    </AuthLayout>
   );
 }

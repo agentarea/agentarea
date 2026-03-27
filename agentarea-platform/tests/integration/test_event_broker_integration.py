@@ -71,7 +71,7 @@ async def test_event_publishing(event_broker: RedisEventBroker, task_id: UUID):
             original_data={
                 "task_id": str(task_id),
                 "agent_id": str(uuid4()),
-                "execution_id": f"agent-task-{task_id}",
+                "execution_id": f"task-{task_id}",
                 "iteration": 1,
                 "message_count": 2,
             },

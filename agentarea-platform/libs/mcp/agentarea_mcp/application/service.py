@@ -154,9 +154,14 @@ class MCPServerService(BaseCrudService[MCPServer]):
         status: str | None = None,
         is_public: bool | None = None,
         tag: str | None = None,
-    ) -> list[MCPServer]:
+        search: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[MCPServer], int]:
         # Use repository directly since we need custom filtering
-        return await self.repository.list_servers(status=status, is_public=is_public, tag=tag)
+        return await self.repository.list_servers(
+            status=status, is_public=is_public, tag=tag, search=search, limit=limit, offset=offset
+        )
 
     async def get(self, id: UUID) -> MCPServer | None:
         return await self.repository.get(id)
@@ -224,10 +229,13 @@ class MCPServerInstanceService:
     ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
-        # Validate the JSON specification
-        validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
-        if validation_errors:
-            raise MCPValidationError(validation_errors)
+        # Skip Docker image/port validation when server_spec_id is provided,
+        # since the spec already defines the container image.
+        # MCP infrastructure resolves the image from the server spec at deploy time.
+        if not server_spec_id:
+            validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
+            if validation_errors:
+                raise MCPValidationError(validation_errors)
 
         # Create instance using workspace-scoped repository
         create_kwargs: dict[str, Any] = {

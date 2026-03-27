@@ -1,5 +1,6 @@
 import React from "react";
 import A2UIMessage from "./componets/A2UIMessage";
+import ApprovalRequestMessage from "./componets/ApprovalRequestMessage";
 import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
 import LLMResponseMessage from "./componets/LLMResponseMessage";
@@ -21,7 +22,8 @@ export const MessageRenderer: React.FC<{
     surfaceId: string,
     sourceComponentId: string,
   ) => void;
-}> = ({ message, agent_name, onA2UIAction }) => {
+  onResolveEscalation?: (escalationId: string, approved: boolean, comment: string) => void;
+}> = ({ message, agent_name, onA2UIAction, onResolveEscalation }) => {
   switch (message.type) {
     case "llm_response":
       return (
@@ -68,6 +70,13 @@ export const MessageRenderer: React.FC<{
                   onA2UIAction(action, message.data.surfaceId, sourceId)
               : undefined
           }
+        />
+      );
+    case "approval_request":
+      return (
+        <ApprovalRequestMessage
+          data={{...message.data, _onResolve: onResolveEscalation}}
+          key={message.data.id}
         />
       );
     default:

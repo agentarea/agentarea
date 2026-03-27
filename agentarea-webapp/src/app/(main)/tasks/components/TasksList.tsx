@@ -6,7 +6,7 @@ import { Bot, Calendar, Clock } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
 import { Badge } from "@/components/ui/badge";
-import { TaskWithAgent } from "@/lib/browser-api";
+import { TaskWithAgent } from "@/lib/api";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];

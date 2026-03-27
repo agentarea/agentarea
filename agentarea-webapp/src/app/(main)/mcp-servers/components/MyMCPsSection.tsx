@@ -7,14 +7,15 @@ import { AlertCircle, CheckCircle, Clock, XCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
-import { getMCPHealthStatus } from "@/lib/browser-api";
-import { MCPInstanceCard } from "./MCPCard";
-import { MCPInstance, MCPServer, HealthCheck, HealthStatus } from "../types";
+import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
+import { MCPInstanceCard, OpenAPIConnectionCard } from "./MCPCard";
+import { MCPInstance, MCPServer, OpenAPIConnection, HealthCheck, HealthStatus } from "../types";
 import { MCP_CONSTANTS } from "../utils";
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
   mcpServers: MCPServer[];
+  openApiConnections?: OpenAPIConnection[];
   viewMode?: string;
   searchQuery?: string;
   hasNoData?: boolean;
@@ -23,6 +24,7 @@ interface MyMCPsSectionProps {
 export function MyMCPsSection({
   mcpInstances,
   mcpServers,
+  openApiConnections = [],
   viewMode = "grid",
   searchQuery = "",
   hasNoData = false,
@@ -156,16 +158,18 @@ export function MyMCPsSection({
     },
   ];
 
+  const totalItems = mcpInstances.length + openApiConnections.length;
+
   // Empty state handling
-  if (mcpInstances.length === 0) {
+  if (totalItems === 0) {
     return (
       <div className="py-1">
         <EmptyState
-          title={hasNoData ? "No MCP instances" : "No matching instances"}
+          title={hasNoData ? "No connections" : "No matching connections"}
           description={
             hasNoData
-              ? "No MCP server instances are configured yet"
-              : `No instances match your search query: "${searchQuery}"`
+              ? "No MCP servers or OpenAPI connections configured yet"
+              : `No connections match your search query: "${searchQuery}"`
           }
           iconsType="mcp"
         />
@@ -175,12 +179,51 @@ export function MyMCPsSection({
 
   // Render table view
   if (viewMode === "table") {
+    // Unified rows: MCP instances + OpenAPI connections with a Type column
+    const tableRows = [
+      ...mcpInstances.map((inst) => ({
+        id: inst.id,
+        name: inst.name,
+        description: inst.description,
+        endpoint_url: inst.endpoint_url,
+        type: "MCP" as const,
+        _type: "mcp" as const,
+        _instance: inst,
+      })),
+      ...openApiConnections.map((conn) => ({
+        id: conn.id,
+        name: conn.name,
+        description: conn.description,
+        endpoint_url: conn.base_url,
+        type: "OpenAPI" as const,
+        _type: "openapi" as const,
+        _instance: null as MCPInstance | null,
+      })),
+    ];
+
+    const unifiedColumns = [
+      {
+        accessor: "type",
+        header: "Type",
+        render: (value: string) => (
+          <Badge variant="outline" className={value === "OpenAPI" ? "border-orange-300 text-orange-600" : ""}>
+            {value}
+          </Badge>
+        ),
+      },
+      ...instanceColumns,
+    ];
+
     return (
       <Table
-        data={mcpInstances}
-        columns={instanceColumns}
-        onRowClick={(instance) => {
-          router.push(`/mcp-servers/${instance.id}`);
+        data={tableRows}
+        columns={unifiedColumns}
+        onRowClick={(row) => {
+          if (row._type === "openapi") {
+            router.push(`/mcp-servers/openapi/${row.id}`);
+          } else {
+            router.push(`/mcp-servers/${row.id}`);
+          }
         }}
       />
     );
@@ -199,6 +242,12 @@ export function MyMCPsSection({
           />
         );
       })}
+      {openApiConnections.map((connection) => (
+        <OpenAPIConnectionCard
+          key={`openapi-${connection.id}`}
+          connection={connection}
+        />
+      ))}
     </div>
   );
 }

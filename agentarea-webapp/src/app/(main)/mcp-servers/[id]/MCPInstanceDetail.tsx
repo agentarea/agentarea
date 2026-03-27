@@ -9,6 +9,11 @@ import {
   Container,
   Copy,
   Link as LinkIcon,
+  Play,
+  RefreshCw,
+  Square,
+  Trash2,
+  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +22,7 @@ import Table from "@/components/Table/Table";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
+import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
@@ -60,6 +66,30 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
+  const [isRefreshingTools, setIsRefreshingTools] = useState(false);
+  const [health, setHealth] = useState<{
+    healthy: boolean;
+    response_time_ms: number;
+    container_status: string;
+  } | null>(null);
+
+  const canStart = instance.status !== "running" && instance.status !== "starting";
+  const canStop = instance.status === "running" || instance.status === "starting";
+
+  const handleRefreshTools = async () => {
+    setIsRefreshingTools(true);
+    try {
+      const { error } = await discoverMCPInstanceTools(instance.id);
+      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to refresh tools");
+      toast.success("Tools refreshed successfully");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to refresh tools");
+    } finally {
+      setIsRefreshingTools(false);
+    }
+  };
+
   // Poll for status updates during transient states
   useEffect(() => {
     const transient = ["starting", "stopping", "pending", "validating"];
@@ -81,6 +111,13 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
             setConnectionUrl(health_check.details.proxy_url);
           } else if (health_check?.url) {
             setConnectionUrl(health_check.url);
+          }
+          if (health_check) {
+            setHealth({
+              healthy: health_check.healthy,
+              response_time_ms: health_check.response_time_ms,
+              container_status: health_check.container_status,
+            });
           }
         })
         .catch(console.error)
@@ -127,6 +164,39 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Refresh Tools button */}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRefreshTools}
+                disabled={isRefreshingTools}
+              >
+                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+                Refresh Tools
+              </Button>
+              {canStart && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={true}
+                >
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Start
+                </Button>
+              )}
+              {canStop && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={true}
+                >
+                  <Square className="mr-1.5 h-3.5 w-3.5" />
+                  Stop
+                </Button>
+              )}
+            </div>
+
             {/* Connection URL - Show when running, or always for URL-type */}
             {(instance.status === "running" || isUrlType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
@@ -187,6 +257,39 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 ) : (
                   <div className="note">{t("connection.notAvailable")}</div>
                 )}
+              </div>
+            )}
+
+            {/* Health info */}
+            {health && (
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Health
+                </div>
+                <div className="grid gap-2 text-sm sm:grid-cols-3">
+                  <div>
+                    <span className="text-muted-foreground">Status</span>
+                    <p className="mt-0.5">
+                      {health.healthy ? (
+                        <span className="flex items-center gap-1 text-green-600">
+                          Healthy
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-red-600">
+                          <XCircle className="h-3.5 w-3.5" /> Unhealthy
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Response Time</span>
+                    <p className="mt-0.5 font-mono">{health.response_time_ms}ms</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Container</span>
+                    <p className="mt-0.5 capitalize">{health.container_status}</p>
+                  </div>
+                </div>
               </div>
             )}
 

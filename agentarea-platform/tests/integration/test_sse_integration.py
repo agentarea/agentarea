@@ -63,7 +63,7 @@ async def create_test_event(task_id: UUID, event_type: str) -> dict:
         "data": {
             "task_id": str(task_id),
             "agent_id": str(uuid4()),
-            "execution_id": f"agent-task-{task_id}",
+            "execution_id": f"task-{task_id}",
             "message": f"Test {event_type} event",
         },
     }
@@ -93,7 +93,7 @@ async def test_task_service_event_streaming():
         user_id="test_user",
         agent_id=uuid4(),
         status="running",
-        execution_id=f"agent-task-{task_id}",
+        execution_id=f"task-{task_id}",
     )
 
     # Store the task

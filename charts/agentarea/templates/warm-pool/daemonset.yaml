@@ -55,6 +55,8 @@ spec:
           volumeMounts:
             - name: image-cache
               mountPath: /var/cache/mcp-images
+            - name: workspace
+              mountPath: /workspace
           livenessProbe:
             httpGet:
               path: /health
@@ -76,6 +78,8 @@ spec:
           hostPath:
             path: /var/lib/mcp-image-cache
             type: DirectoryOrCreate
+        - name: workspace
+          emptyDir: {}
       tolerations:
         - operator: Exists
       affinity:

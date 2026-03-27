@@ -31,6 +31,7 @@ export type WorkflowEventType =
   | "ContextCompacted"
   | "HumanApprovalRequested"
   | "HumanApprovalReceived"
+  | "HumanApprovalDenied"
   | "A2UICreateSurface"
   | "A2UIUpdateComponents"
   | "A2UIUpdateDataModel"
@@ -263,6 +264,12 @@ export const EVENT_TYPE_CONFIG: Record<
     icon: "user-check",
     color: "green",
   },
+  HumanApprovalDenied: {
+    title: "Approval Denied",
+    level: "warning",
+    icon: "user-x",
+    color: "red",
+  },
   A2UICreateSurface: {
     title: "UI Surface Created",
     level: "info",
@@ -334,6 +341,8 @@ export const mapSSEToDisplayEvent = (
     humanapprovalrequested: "HumanApprovalRequested",
     human_approval_received: "HumanApprovalReceived",
     humanapprovalreceived: "HumanApprovalReceived",
+    human_approval_denied: "HumanApprovalDenied",
+    humanapprovaldenied: "HumanApprovalDenied",
     task_completed: "WorkflowCompleted",
     taskcompleted: "WorkflowCompleted",
     task_failed: "WorkflowFailed",

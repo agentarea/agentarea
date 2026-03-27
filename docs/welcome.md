@@ -188,7 +188,7 @@ graph LR
 
 ## License
 
-AgentArea is open-source under the **Eclipse Public License v2.0 (EPLv2)**. The core platform is free to use, with enterprise features available for compliance-critical deployments.
+AgentArea is open-source under the **Apache License 2.0**. The core platform is free to use, with enterprise features available for compliance-critical deployments.
 
 ---
 

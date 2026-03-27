@@ -22,7 +22,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
       - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://valkey:6379
       - MCP_CLIENT_TIMEOUT=30
       # Server settings
       - PORT=${PORT:-8000}
@@ -38,7 +38,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_started
       app_migrations:
         condition: service_completed_successfully
@@ -113,7 +113,7 @@ services:
       - MCP_PROVIDERS_YAML=/app/llm/mcp_providers.yaml
       - AGENTS_YAML=/app/llm/agents.yaml
       - SKILLS_YAML=/app/llm/skills.yaml
-      - REGISTRIES_CONFIG=${REGISTRIES_CONFIG:-[{"name":"MCP Public Registry","type":"mcp_servers","source_type":"url","source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json","sync_mode":"manual"}]}
+      - REGISTRIES_CONFIG=[{"name":"MCP Public Registry","type":"mcp_servers","source_type":"url","source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json","sync_mode":"manual"}]
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=db
@@ -186,14 +186,12 @@ services:
       - temporal-network
       - auth-network
 
-  redis:
-    image: redis
-    container_name: agentarea-redis
+  valkey:
+    image: valkey/valkey:8
+    container_name: agentarea-valkey
     restart: always
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
     volumes:
-      - redis_data:/data
+      - valkey_data:/data
     networks:
       - default
       - mcp-network
@@ -217,7 +215,7 @@ services:
     environment:
       LOG_LEVEL: INFO
       TRAEFIK_NETWORK: podman
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://app:8000
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
@@ -300,7 +298,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_started
       temporal:
         condition: service_healthy
@@ -315,7 +313,7 @@ services:
       - LLM_DOCKER_HOST=host.docker.internal
 
       # Redis
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://valkey:6379
 
       # Temporal
       - WORKFLOW__TEMPORAL_SERVER_URL=${WORKFLOW__TEMPORAL_SERVER_URL:-temporal:7233}
@@ -456,7 +454,7 @@ services:
 volumes:
   postgres_data:
   minio_data:
-  redis_data:
+  valkey_data:
   mcp_containers:
     driver: local
 

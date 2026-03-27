@@ -95,4 +95,4 @@ class TestWorkspaceErrorIntegration:
         assert data["error"] == "Authentication failed"
         assert data["error_code"] == "AUTHENTICATION_FAILED"
         assert "WWW-Authenticate" in response.headers
-        assert response.headers["WWW-Authenticate"] == "Bearer"
+        assert response.headers["WWW-Authenticate"].startswith("Bearer")

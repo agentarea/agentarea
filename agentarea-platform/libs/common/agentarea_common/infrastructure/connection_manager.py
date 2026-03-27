@@ -6,7 +6,6 @@ while still providing connection reuse and proper cleanup.
 
 import asyncio
 import logging
-import os
 from threading import Lock
 from typing import Optional
 
@@ -34,7 +33,9 @@ class ConnectionManager:
 
         self._event_broker_singleton = None
         self._execution_service_singleton = None
-        self._environment = os.getenv("ENVIRONMENT", "development").lower()
+        from agentarea_common.config.app import get_app_settings
+
+        self._environment = get_app_settings().ENVIRONMENT.lower()
         self._initialized = True
         logger.info("ConnectionManager singleton initialized")
 

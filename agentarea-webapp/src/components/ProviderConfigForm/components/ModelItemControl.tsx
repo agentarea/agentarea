@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { testModelInstance } from "@/lib/browser-api";
+import { testModelInstanceAction as testModelInstance } from "@/lib/server-actions";
 import type { ModelSpec } from "@/types/provider";
 
 type ModelItemControlProps = {
@@ -108,7 +108,7 @@ export const ModelItemControl = ({
       </div>
 
       {/* Test Section */}
-      {/* {canTest && providerConfigId && (
+      {canTest && providerConfigId && (
         <div className="ml-6 space-y-2">
           <div className="flex items-center gap-2">
             <Button
@@ -171,7 +171,7 @@ export const ModelItemControl = ({
             </div>
           )}
         </div>
-      )} */}
+      )}
     </div>
   );
 };

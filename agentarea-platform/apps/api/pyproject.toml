@@ -17,13 +17,15 @@ dependencies = [
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-triggers",
+    "agentarea-openapi",
+    "agentarea-projects",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
     "fastapi>=0.104.0",
     "mcp[cli]>=1.9.2",
     "python-multipart>=0.0.6",
     "click>=8.1.8",
-    "pyjwt[crypto]>=2.8.0",
+    "pyjwt[crypto]>=2.12.0",
     "fastmcp>=2.11.0",
     "fastapi-mcp>=0.4.0",
 ]
@@ -37,6 +39,8 @@ agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
 agentarea-triggers = { workspace = true }
+agentarea-openapi = { workspace = true }
+agentarea-projects = { workspace = true }
 
 [project.scripts]
 agentarea-api = "agentarea_api.cli:cli"

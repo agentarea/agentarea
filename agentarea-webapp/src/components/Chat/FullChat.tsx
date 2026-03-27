@@ -4,7 +4,10 @@ import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useMentions } from "@/hooks/useMentions";
-import { pauseAgentTask } from "@/lib/browser-api";
+import {
+  pauseAgentTaskAction as pauseAgentTask,
+  resolveEscalationAction as resolveEscalation,
+} from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
@@ -113,6 +116,16 @@ export default function FullChat({
     openFileDialog,
     clearFiles,
   } = useFileUpload();
+
+  // Callback for resolving tool escalations (approve/deny)
+  const handleResolveEscalation = React.useCallback(
+    async (escalationId: string, approved: boolean, comment: string) => {
+      const tid = currentTaskId || taskId;
+      if (!tid) return;
+      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
+    },
+    [agent.id, currentTaskId, taskId]
+  );
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
@@ -396,6 +409,7 @@ export default function FullChat({
                   key={`${message.data.id}-${message.data.event_type}-${index}`}
                   message={message}
                   agent_name={agent.name}
+                  onResolveEscalation={handleResolveEscalation}
                 />
               );
             } else if (message.role === "user") {

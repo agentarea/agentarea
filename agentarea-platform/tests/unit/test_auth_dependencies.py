@@ -152,7 +152,13 @@ class TestGetUserContext:
         self, mock_context_manager, mock_get_auth_provider, mock_request
     ):
         """Test successful user context extraction and context manager setting."""
+        from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.interfaces import AuthToken
+        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+        from agentarea_common.di.container import register_singleton
+
+        # Register AuthorizationService in DI container
+        register_singleton(AuthorizationService, SimpleAuthorizationService())
 
         # Setup mocks
         mock_auth_provider = Mock()

@@ -170,7 +170,7 @@ class TriggerService:
         Returns:
             The trigger if found, None otherwise
         """
-        return await self.trigger_repository.get(trigger_id)
+        return await self.trigger_repository.get_trigger(trigger_id)
 
     async def update_trigger(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> Trigger:
         """Update an existing trigger with validation.
@@ -431,7 +431,13 @@ class TriggerService:
             )
 
             # Record the execution
-            recorded_execution = await self.trigger_execution_repository.create(execution)
+            exec_data = execution.model_dump()
+            exec_data["status"] = (
+                exec_data["status"].value
+                if hasattr(exec_data["status"], "value")
+                else exec_data["status"]
+            )
+            recorded_execution = await self.trigger_execution_repository.create(**exec_data)
 
             logger.info(
                 "Successfully recorded trigger execution",
@@ -1004,6 +1010,7 @@ class TriggerService:
                     description=trigger.description or f"Execution of trigger {trigger.name}",
                     query=trigger.description or f"Execute trigger {trigger.name}",
                     user_id=trigger.created_by,
+                    workspace_id=trigger.workspace_id,
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
                 )
@@ -1018,14 +1025,18 @@ class TriggerService:
             # Calculate execution time
             execution_time_ms = int((time.time() - start_time) * 1000)
 
-            # Record successful execution
-            execution = await self._record_execution_success(
-                trigger_id, execution_time_ms, task_id, trigger_data
-            )
-
-            # Update trigger execution tracking
-            trigger.record_execution_success()
-            await self.trigger_repository.update(trigger)
+            # Record successful execution (non-fatal — task was already created)
+            execution = None
+            try:
+                execution = await self._record_execution_success(
+                    trigger_id, execution_time_ms, task_id, trigger_data
+                )
+                trigger.record_execution_success()
+                await self.trigger_repository.update(trigger)
+            except Exception as rec_err:
+                logger.warning(
+                    f"Failed to record execution history (task was created successfully): {rec_err}"
+                )
 
             return execution
 
@@ -1036,19 +1047,20 @@ class TriggerService:
             # Log error
             logger.error(f"Error executing trigger {trigger_id}: {e}")
 
-            # Record failed execution
-            execution = await self._record_execution_failure(
-                trigger_id, str(e), trigger_data, execution_time_ms
-            )
+            # Record failed execution (non-fatal)
+            execution = None
+            try:
+                execution = await self._record_execution_failure(
+                    trigger_id, str(e), trigger_data, execution_time_ms
+                )
+                trigger.record_execution_failure()
+                await self.trigger_repository.update(trigger)
 
-            # Update trigger execution tracking
-            trigger.record_execution_failure()
-            await self.trigger_repository.update(trigger)
-
-            # Check if trigger should be disabled due to failures
-            if trigger.should_disable_due_to_failures():
-                logger.warning(f"Disabling trigger {trigger_id} due to consecutive failures")
-                await self.disable_trigger(trigger_id)
+                if trigger.should_disable_due_to_failures():
+                    logger.warning(f"Disabling trigger {trigger_id} due to consecutive failures")
+                    await self.disable_trigger(trigger_id)
+            except Exception as rec_err:
+                logger.warning(f"Failed to record execution failure: {rec_err}")
 
             return execution
 

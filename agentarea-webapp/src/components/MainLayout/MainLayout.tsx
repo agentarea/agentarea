@@ -1,13 +1,18 @@
 import {
   Bot,
+  Brain,
   ClipboardList,
+  FolderKanban,
   GalleryVerticalEnd,
   Home,
+  Inbox,
   Key,
   LucideProps,
+  Network,
   Plug,
   Sparkles,
   SquareTerminal,
+  Zap,
 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -49,48 +54,74 @@ const navData = {
       logoFile: "/starlogo.svg",
     },
   ],
-  navMain: [
+  navSections: [
     {
-      title: "Workplace",
-      titleKey: "workplace",
-      url: "/workplace",
-      icon: Home,
+      items: [
+        {
+          title: "Home",
+          titleKey: "home",
+          url: "/workplace",
+          icon: Home,
+        },
+        {
+          title: "Inbox",
+          titleKey: "inbox",
+          url: "/inbox",
+          icon: Inbox,
+        },
+        {
+          title: "Projects",
+          titleKey: "projects",
+          url: "/projects",
+          icon: FolderKanban,
+        },
+        {
+          title: "Agents",
+          titleKey: "agents",
+          url: "/agents",
+          icon: Bot,
+        },
+        {
+          title: "Tasks",
+          titleKey: "tasks",
+          url: "/tasks",
+          icon: ClipboardList,
+        },
+      ],
     },
     {
-      title: "Browse",
-      titleKey: "browse",
-      url: "/agents",
-      icon: Bot,
-    },
-    {
-      title: "Tasks",
-      titleKey: "tasks",
-      url: "/tasks",
-      icon: ClipboardList,
-    },
-    {
-      title: "Connections",
-      titleKey: "connections",
-      url: "/mcp-servers",
-      icon: Plug,
-    },
-    {
-      title: "Skills",
-      titleKey: "skills",
-      url: "/skills",
-      icon: Sparkles,
-    },
-    {
-      title: "Admin",
-      titleKey: "admin",
-      url: "#",
-      icon: SquareTerminal,
+      label: "Platform",
+      labelKey: "platform",
       items: [
         {
           title: "Models",
           titleKey: "providerConfigs",
           url: "/admin/provider-configs",
-          icon: Key,
+          icon: Brain,
+        },
+        {
+          title: "Connections",
+          titleKey: "connections",
+          url: "/mcp-servers",
+          icon: Plug,
+        },
+        {
+          title: "Skills",
+          titleKey: "skills",
+          url: "/skills",
+          icon: Sparkles,
+        },
+        {
+          title: "Automation",
+          titleKey: "automation",
+          url: "/triggers",
+          icon: Zap,
+        },
+        {
+          title: "Network",
+          titleKey: "network",
+          url: "/network",
+          icon: Network,
         },
       ],
     },

@@ -70,6 +70,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
         "budget_exceeded",
         "human_approval_requested",
         "human_approval_received",
+        "human_approval_denied",
         "connected",
         "error",
       ];

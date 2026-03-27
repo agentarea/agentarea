@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { getAllTasks, getAgentTaskStatus } from "@/lib/browser-api";
-import type { TaskWithAgent } from "@/lib/browser-api";
+import { getAllTasksAction as getAllTasks, getAgentTaskStatusAction as getAgentTaskStatus } from "@/lib/server-actions";
+import type { TaskWithAgent } from "@/lib/api";
 
 interface TaskData {
   id: string;
@@ -67,8 +67,8 @@ export function TaskProvider({ taskId, children }: TaskProviderProps) {
       const { data: allTasks, error: tasksError } = await getAllTasks();
       if (tasksError || !allTasks?.length) {
         throw new Error(
-          tasksError instanceof Error
-            ? tasksError.message
+          (tasksError as unknown) instanceof Error
+            ? (tasksError as unknown as Error).message
             : "No tasks found"
         );
       }
@@ -99,7 +99,7 @@ export function TaskProvider({ taskId, children }: TaskProviderProps) {
         execution_id: foundTask.execution_id || undefined,
         agent_name: foundTask.agent_name,
         agent_description: foundTask.agent_description || undefined,
-        result: foundTask.result || undefined,
+        result: typeof foundTask.result === "object" && foundTask.result !== null ? foundTask.result as Record<string, unknown> : undefined,
       });
 
       // Set status if available

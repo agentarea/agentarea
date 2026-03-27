@@ -151,9 +151,14 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     except Exception:
         client_data = {}
 
-    # Inject server-side defaults for MCP clients
+    # Inject server-side defaults for MCP clients.
+    # Hydra requires client_uri to be a valid URL and contacts to be an array;
+    # MCP clients (Cursor, Claude Desktop) often omit these in their DCR payload.
     client_data.setdefault("skip_consent", True)
     client_data.setdefault("audience", [api_base])
+    client_data.setdefault("client_uri", api_base)
+    if not client_data.get("contacts"):
+        client_data["contacts"] = []
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
         upstream = await client.post(

@@ -14,13 +14,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-  createModelInstance,
-  createProviderConfig,
-  deleteModelInstance,
-  listProviderSpecs,
-  listProviderSpecsWithModels,
-  updateProviderConfig,
-} from "@/lib/browser-api";
+  createModelInstanceAction as createModelInstance,
+  createProviderConfigAction as createProviderConfig,
+  deleteModelInstanceAction as deleteModelInstance,
+  listProviderSpecsAction as listProviderSpecs,
+  listProviderSpecsWithModelsAction as listProviderSpecsWithModels,
+  updateProviderConfigAction as updateProviderConfig,
+} from "@/lib/server-actions";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 import {
@@ -110,6 +110,7 @@ export default function ProviderConfigForm({
             is_active: model.is_active,
             created_at: model.created_at,
             updated_at: model.updated_at,
+            default_context_strategy: (model as any).default_context_strategy ?? null,
           }))
         );
 

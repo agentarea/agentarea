@@ -150,6 +150,23 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    resolveEscalation: async (
+      agentId: string,
+      taskId: string,
+      escalationId: string,
+      approved: boolean,
+      comment: string = ""
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation" as any,
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } } as any,
+          body: { escalation_id: escalationId, approved, comment } as any,
+        }
+      );
+      return { data, error };
+    },
+
     getAgentTaskEvents: async (
       agentId: string,
       taskId: string,
@@ -177,21 +194,21 @@ export function createApiClient(client: Client) {
 
     // Chat API
     sendMessage: async (
-      message: components["schemas"]["ChatMessageRequest"]
+      message: { agent_id: string; message: string; conversation_id?: string }
     ) => {
-      const { data, error } = await client.POST("/v1/chat/messages", {
-        body: message,
+      const { data, error } = await client.POST("/v1/chat/messages" as any, {
+        body: message as any,
       });
       return { data, error };
     },
 
     getChatAgents: async () => {
-      const { data, error } = await client.GET("/v1/chat/agents");
+      const { data, error } = await client.GET("/v1/chat/agents" as any, {});
       return { data, error };
     },
 
     getChatAgent: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/chat/agents/{agent_id}", {
+      const { data, error } = await client.GET("/v1/chat/agents/{agent_id}" as any, {
         params: { path: { agent_id: agentId } },
       });
       return { data, error };
@@ -199,7 +216,7 @@ export function createApiClient(client: Client) {
 
     getChatMessageStatus: async (taskId: string) => {
       const { data, error } = await client.GET(
-        "/v1/chat/messages/{task_id}/status",
+        "/v1/chat/messages/{task_id}/status" as any,
         {
           params: { path: { task_id: taskId } },
         }
@@ -212,6 +229,9 @@ export function createApiClient(client: Client) {
       status?: string;
       is_public?: boolean;
       tag?: string;
+      page?: number;
+      page_size?: number;
+      search?: string;
     }) => {
       const { data, error } = await client.GET("/v1/mcp-servers/", {
         params: { query: params },
@@ -572,18 +592,10 @@ export function createApiClient(client: Client) {
       model_spec_id: string;
       test_message?: string;
     }) => {
-      // TODO: Implement model instance testing endpoint
-      return {
-        data: null,
-        error: {
-          detail: [
-            {
-              msg: "Model instance testing not yet implemented",
-              type: "error",
-            },
-          ],
-        },
-      };
+      const { data, error } = await client.POST("/v1/model-instances/test" as any, {
+        body: testRequest,
+      });
+      return { data, error };
     },
 
     getModelInstance: async (instanceId: string) => {
@@ -614,12 +626,12 @@ export function createApiClient(client: Client) {
 
     // Authentication API
     getCurrentUser: async () => {
-      const { data, error } = await client.GET("/v1/auth/users/me", {});
+      const { data, error } = await client.GET("/v1/auth/users/me" as any, {});
       return { data, error };
     },
 
     testProtectedEndpoint: async () => {
-      const { data, error } = await client.GET("/v1/protected/test", {});
+      const { data, error } = await client.GET("/v1/protected/test" as any, {});
       return { data, error };
     },
 
@@ -735,6 +747,14 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    getSkillFile: async (skillId: string, filePath: string) => {
+      const { data, error } = await client.GET(
+        `/v1/skills/${skillId}/files/${filePath}` as any,
+        {}
+      );
+      return { data, error };
+    },
+
     createSkill: async (skill: {
       content?: string | null;
       github_url?: string | null;
@@ -795,6 +815,331 @@ export function createApiClient(client: Client) {
       credentials?: Record<string, any>;
     }) => {
       const { data, error } = await client.POST("/v1/mcp-auth-configs/" as any, { body });
+      return { data, error };
+    },
+
+    // API Keys API
+    listAPIKeys: async () => {
+      const { data, error } = await client.GET("/v1/api-keys/" as any, {});
+      return { data, error };
+    },
+
+    createAPIKey: async (body: {
+      name: string;
+      expires_in_days?: number;
+    }) => {
+      const { data, error } = await client.POST("/v1/api-keys/" as any, { body });
+      return { data, error };
+    },
+
+    getAPIKey: async (tokenId: string) => {
+      const { data, error } = await client.GET(`/v1/api-keys/${tokenId}` as any, {});
+      return { data, error };
+    },
+
+    revokeAPIKey: async (tokenId: string) => {
+      const { data, error } = await client.DELETE(`/v1/api-keys/${tokenId}` as any, {});
+      return { data, error };
+    },
+
+    // Triggers API
+    listTriggers: async (params?: {
+      agent_id?: string;
+      trigger_type?: string;
+      active_only?: boolean;
+    }) => {
+      const { data, error } = await client.GET("/v1/triggers/" as any, {
+        params: { query: params },
+      });
+      return { data, error };
+    },
+
+    createTrigger: async (body: {
+      name: string;
+      trigger_type: string;
+      agent_id: string;
+      config: Record<string, any>;
+      task_parameters?: Record<string, any>;
+      failure_threshold?: number;
+    }) => {
+      const { data, error } = await client.POST("/v1/triggers/" as any, { body });
+      return { data, error };
+    },
+
+    getTrigger: async (triggerId: string) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}` as any, {});
+      return { data, error };
+    },
+
+    updateTrigger: async (triggerId: string, body: {
+      name?: string;
+      config?: Record<string, any>;
+      task_parameters?: Record<string, any>;
+      failure_threshold?: number;
+    }) => {
+      const { data, error } = await client.PATCH(`/v1/triggers/${triggerId}` as any, { body });
+      return { data, error };
+    },
+
+    deleteTrigger: async (triggerId: string) => {
+      const { data, error } = await client.DELETE(`/v1/triggers/${triggerId}` as any, {});
+      return { data, error };
+    },
+
+    enableTrigger: async (triggerId: string) => {
+      const { data, error } = await client.POST(`/v1/triggers/${triggerId}/enable` as any, {});
+      return { data, error };
+    },
+
+    disableTrigger: async (triggerId: string) => {
+      const { data, error } = await client.POST(`/v1/triggers/${triggerId}/disable` as any, {});
+      return { data, error };
+    },
+
+    getTriggerStatus: async (triggerId: string) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}/status` as any, {});
+      return { data, error };
+    },
+
+    getTriggerExecutions: async (triggerId: string, params?: {
+      page?: number;
+      page_size?: number;
+    }) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}/executions` as any, {
+        params: { query: params },
+      });
+      return { data, error };
+    },
+
+    getTriggerMetrics: async (triggerId: string) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}/metrics` as any, {});
+      return { data, error };
+    },
+
+    getTriggerTimeline: async (triggerId: string) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}/timeline` as any, {});
+      return { data, error };
+    },
+
+    getTriggerCorrelations: async (triggerId: string) => {
+      const { data, error } = await client.GET(`/v1/triggers/${triggerId}/correlations` as any, {});
+      return { data, error };
+    },
+
+    // Workspace Import/Export API
+    exportWorkspace: async () => {
+      const { data, error } = await client.GET("/v1/workspace/export" as any, {});
+      return { data, error };
+    },
+
+    importWorkspace: async (body: {
+      config: string;
+      skip_missing_dependencies?: boolean;
+      override_existing?: boolean;
+    }) => {
+      const { data, error } = await client.POST("/v1/workspace/import" as any, { body });
+      return { data, error };
+    },
+
+    // MCP Instance Tools Discovery
+    discoverMCPInstanceTools: async (instanceId: string) => {
+      const { data, error } = await client.POST(
+        `/v1/mcp-server-instances/${instanceId}/discover-tools` as any,
+        {}
+      );
+      return { data, error };
+    },
+
+    testMCPInstanceAuth: async (instanceId: string) => {
+      const { data, error } = await client.POST(
+        `/v1/mcp-server-instances/${instanceId}/test-auth` as any,
+        {}
+      );
+      return { data, error };
+    },
+
+    // Skill Bundle API
+    listSkillMembers: async (skillId: string) => {
+      const { data, error } = await client.GET(`/v1/skills/${skillId}/members` as any, {});
+      return { data, error };
+    },
+
+    addSkillMember: async (skillId: string, childSkillId: string) => {
+      const { data, error } = await client.POST(`/v1/skills/${skillId}/members` as any, {
+        body: { child_skill_id: childSkillId },
+      });
+      return { data, error };
+    },
+
+    removeSkillMember: async (skillId: string, childSkillId: string) => {
+      const { data, error } = await client.DELETE(
+        `/v1/skills/${skillId}/members/${childSkillId}` as any,
+        {}
+      );
+      return { data, error };
+    },
+
+    flattenSkill: async (skillId: string) => {
+      const { data, error } = await client.GET(`/v1/skills/${skillId}/flatten` as any, {});
+      return { data, error };
+    },
+
+    // Network Topology API
+    getNetworkTopology: async () => {
+      const { data, error } = await client.GET("/v1/network/topology" as any, {});
+      return { data, error };
+    },
+
+    // OpenAPI Connections API
+    listOpenAPIConnections: async (params?: { status?: string; search?: string; limit?: number; offset?: number }) => {
+      const { data, error } = await client.GET("/v1/openapi-connections/" as any, {
+        params: { query: params },
+      });
+      return { data, error };
+    },
+
+    createOpenAPIConnection: async (body: components["schemas"]["OpenAPIConnectionCreate"]) => {
+      const { data, error } = await client.POST("/v1/openapi-connections/" as any, { body });
+      return { data, error };
+    },
+
+    deleteOpenAPIConnection: async (connectionId: string) => {
+      const { data, error } = await client.DELETE(`/v1/openapi-connections/${connectionId}` as any, {});
+      return { data, error };
+    },
+
+    getOpenAPIConnection: async (connectionId: string) => {
+      const { data, error } = await client.GET(`/v1/openapi-connections/${connectionId}` as any, {});
+      return { data, error };
+    },
+
+    discoverOpenAPITools: async (connectionId: string) => {
+      const { data, error } = await client.POST(`/v1/openapi-connections/${connectionId}/discover` as any, {});
+      return { data, error };
+    },
+
+    testOpenAPIConnection: async (connectionId: string) => {
+      const { data, error } = await client.POST(`/v1/openapi-connections/${connectionId}/test` as any, {});
+      return { data, error };
+    },
+
+    previewOpenAPISpec: async (body: { spec_url?: string; spec_json?: string }) => {
+      const { data, error } = await client.POST("/v1/openapi-connections/preview" as any, { body });
+      return { data, error };
+    },
+
+    // Project API
+    listProjects: async () => {
+      const { data, error } = await client.GET("/v1/projects/");
+      return { data, error };
+    },
+
+    getProject: async (projectId: string) => {
+      const { data, error } = await client.GET("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    createProject: async (project: components["schemas"]["ProjectCreate"]) => {
+      const { data, error } = await client.POST("/v1/projects/", { body: project });
+      return { data, error };
+    },
+
+    updateProject: async (projectId: string, project: components["schemas"]["ProjectUpdate"]) => {
+      const { data, error } = await client.PATCH("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+        body: project,
+      });
+      return { data, error };
+    },
+
+    deleteProject: async (projectId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    // Project Association API
+    addSkillToProject: async (projectId: string, skillId: string) => {
+      const { data, error } = await client.POST("/v1/projects/{project_id}/skills" as any, {
+        params: { path: { project_id: projectId } },
+        body: { skill_id: skillId },
+      });
+      return { data, error };
+    },
+
+    removeSkillFromProject: async (projectId: string, skillId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}/skills/{skill_id}" as any, {
+        params: { path: { project_id: projectId, skill_id: skillId } },
+      });
+      return { data, error };
+    },
+
+    addAgentToProject: async (projectId: string, agentId: string) => {
+      const { data, error } = await client.POST("/v1/projects/{project_id}/agents" as any, {
+        params: { path: { project_id: projectId } },
+        body: { agent_id: agentId },
+      });
+      return { data, error };
+    },
+
+    removeAgentFromProject: async (projectId: string, agentId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}/agents/{agent_id}" as any, {
+        params: { path: { project_id: projectId, agent_id: agentId } },
+      });
+      return { data, error };
+    },
+
+    addMcpInstanceToProject: async (projectId: string, mcpInstanceId: string) => {
+      const { data, error } = await client.POST("/v1/projects/{project_id}/mcp-instances" as any, {
+        params: { path: { project_id: projectId } },
+        body: { mcp_instance_id: mcpInstanceId },
+      });
+      return { data, error };
+    },
+
+    removeMcpInstanceFromProject: async (projectId: string, mcpInstanceId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}" as any, {
+        params: { path: { project_id: projectId, mcp_instance_id: mcpInstanceId } },
+      });
+      return { data, error };
+    },
+
+    // Project Files API
+    listProjectFiles: async (projectId: string) => {
+      const { data, error } = await client.GET("/v1/projects/{project_id}/files" as any, {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    uploadProjectFile: async (projectId: string, formData: FormData) => {
+      const response = await fetch(`/api/proxy/v1/projects/${projectId}/files`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: "Upload failed" }));
+        return { data: null, error };
+      }
+      const data = await response.json();
+      return { data, error: null };
+    },
+
+    downloadProjectFile: async (projectId: string, filePath: string) => {
+      const { data, error } = await client.GET("/v1/projects/{project_id}/files/{file_path}" as any, {
+        params: { path: { project_id: projectId, file_path: filePath } },
+      });
+      return { data, error };
+    },
+
+    deleteProjectFile: async (projectId: string, filePath: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}/files/{file_path}" as any, {
+        params: { path: { project_id: projectId, file_path: filePath } },
+      });
       return { data, error };
     },
   };

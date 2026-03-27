@@ -1,5 +1,7 @@
+import logging
 from uuid import UUID
 
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
@@ -8,14 +10,31 @@ from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpda
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
 
+logger = logging.getLogger(__name__)
+
 
 class AgentService(BaseCrudService[Agent]):
-    def __init__(self, repository_factory: RepositoryFactory, event_broker: EventBroker):
-        # Create repository using factory
+    def __init__(
+        self,
+        repository_factory: RepositoryFactory,
+        event_broker: EventBroker,
+        authorization_service: AuthorizationService,
+    ):
         repository = repository_factory.create_repository(AgentRepository)
         super().__init__(repository)
         self.repository_factory = repository_factory
         self.event_broker = event_broker
+        self._user_context = repository_factory.user_context
+        self._authz = authorization_service
+
+    async def _check_write_access(self, agent: Agent) -> None:
+        """Check if the current user can mutate this agent.
+
+        Raises:
+            PermissionError: If the user cannot write to the agent's workspace.
+        """
+        if not await self._authz.can_write_workspace(self._user_context, agent.workspace_id):
+            raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
 
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
@@ -32,6 +51,7 @@ class AgentService(BaseCrudService[Agent]):
         planning: bool | None = None,
         a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str = "stateless",
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -42,6 +62,7 @@ class AgentService(BaseCrudService[Agent]):
             events_config=events_config,
             planning=planning,
             a2ui_enabled=a2ui_enabled,
+            agent_type=agent_type,
         )
         agent = await self.create(agent)
 
@@ -77,10 +98,13 @@ class AgentService(BaseCrudService[Agent]):
         planning: str | None = None,
         a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str | None = None,
     ) -> Agent | None:
         agent = await self.get(id)
         if not agent:
             return None
+
+        await self._check_write_access(agent)
 
         if name is not None:
             agent.name = name
@@ -98,6 +122,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.planning = planning
         if a2ui_enabled is not None:
             agent.a2ui_enabled = a2ui_enabled
+        if agent_type is not None:
+            agent.agent_type = agent_type
 
         agent = await self.update(agent)
 
@@ -127,6 +153,10 @@ class AgentService(BaseCrudService[Agent]):
         return await repo.get_with_skills(id)
 
     async def delete_agent(self, id: UUID) -> bool:
+        agent = await self.get(id)
+        if not agent:
+            return False
+        await self._check_write_access(agent)
         success = await self.delete(id)
         if success:
             await self.event_broker.publish(AgentDeleted(agent_id=id))

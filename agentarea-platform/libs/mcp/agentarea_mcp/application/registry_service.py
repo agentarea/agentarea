@@ -456,7 +456,7 @@ class RegistryService:
             for pkg in server.get("packages", []):
                 if pkg.get("registryType") != "oci":
                     continue
-                image = pkg.get("name", "")
+                image = pkg.get("name", "") or pkg.get("identifier", "")
                 pkg_version = pkg.get("version", version)
                 if not image:
                     continue
@@ -486,12 +486,12 @@ class RegistryService:
                     }
                 )
 
-            # npm/pypi packages → connection_type: "command"
+            # npm/pypi/nuget/mcpb packages → connection_type: "command"
             for pkg in server.get("packages", []):
                 reg_type = pkg.get("registryType", "")
-                if reg_type not in ("npm", "pypi"):
+                if reg_type not in ("npm", "pypi", "nuget", "mcpb"):
                     continue
-                pkg_name = pkg.get("name", "")
+                pkg_name = pkg.get("name", "") or pkg.get("identifier", "")
                 pkg_version = pkg.get("version", version)
                 if not pkg_name:
                     continue
@@ -501,6 +501,12 @@ class RegistryService:
                     command = runtime_args[0]
                     args = runtime_args[1:]
                 elif reg_type == "npm":
+                    command = "npx"
+                    args = ["-y", pkg_name]
+                elif reg_type == "nuget":
+                    command = "dotnet"
+                    args = ["tool", "run", pkg_name]
+                elif reg_type == "mcpb":
                     command = "npx"
                     args = ["-y", pkg_name]
                 else:
