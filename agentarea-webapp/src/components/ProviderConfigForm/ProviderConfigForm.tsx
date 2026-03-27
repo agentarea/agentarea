@@ -13,6 +13,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import {
   createModelInstanceAction as createModelInstance,
   createProviderConfigAction as createProviderConfig,
@@ -21,7 +22,6 @@ import {
   listProviderSpecsWithModelsAction as listProviderSpecsWithModels,
   updateProviderConfigAction as updateProviderConfig,
 } from "@/lib/server-actions";
-import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 import {
   ModelSpec,
@@ -69,9 +69,6 @@ export default function ProviderConfigForm({
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
-  const [createdProviderConfigId, setCreatedProviderConfigId] = useState<
-    string | null
-  >(null);
 
   // Load provider specs and model specs on component mount
   useEffect(() => {
@@ -333,11 +330,6 @@ export default function ProviderConfigForm({
         );
       }
 
-      // Set the created provider config ID for testing
-      if (!isEdit) {
-        setCreatedProviderConfigId(providerConfig.id);
-      }
-
       // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
       if (!isEdit && selectedModels.length > 0 && showModelSelection) {
         const modelCreationPromises = selectedModels.map(async (model) => {
@@ -548,9 +540,7 @@ export default function ProviderConfigForm({
               )}
             />
             {errors.provider_spec_id && (
-              <p className="form-error">
-                {errors.provider_spec_id.message}
-              </p>
+              <p className="form-error">{errors.provider_spec_id.message}</p>
             )}
             {preselectedProviderId && !isEdit && !initialData && (
               <p className="note">{t("providerIsPreSelected")}</p>
@@ -571,13 +561,6 @@ export default function ProviderConfigForm({
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
-              providerConfigId={
-                createdProviderConfigId ||
-                (isEdit && initialData ? initialData.id : undefined)
-              }
-              canTest={
-                !!createdProviderConfigId || (isEdit && !!initialData)
-              }
             />
           )}
         </div>
