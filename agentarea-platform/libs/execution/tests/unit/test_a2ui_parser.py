@@ -140,6 +140,25 @@ class TestParseA2UIResponse:
         result = parse_a2ui_response(content)
         assert len(result.a2ui_events) == 1
 
+    def test_event_count_within_limit(self):
+        events = [
+            {"type": "A2UIUpdateComponents", "surface_id": "s1", "components": []}
+            for _ in range(30)
+        ]
+        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps({"events": events})
+        result = parse_a2ui_response(content)
+        assert len(result.a2ui_events) == 30
+
+    def test_event_count_exceeds_limit_truncated(self):
+        events = [
+            {"type": "A2UIUpdateComponents", "surface_id": "s1", "components": []}
+            for _ in range(100)
+        ]
+        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps({"events": events})
+        result = parse_a2ui_response(content)
+        assert len(result.a2ui_events) == 50
+        assert result.parse_error is None
+
     def test_delete_surface_event(self):
         content = f"Removing UI.\n{A2UI_DELIMITER}\n" + json.dumps({
             "events": [{"type": "A2UIDeleteSurface", "surface_id": "s1"}]

@@ -21,9 +21,22 @@ from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class A2UIActionPayload(BaseModel):
+    """Validated A2UI action payload from the frontend."""
+
+    name: str = Field(..., max_length=128)
+    surface_id: str = Field(..., max_length=64)
+    source_component_id: str = Field("", max_length=128)
+    context: dict = Field(default_factory=dict)
+
+    model_config = {"extra": "forbid"}
+
+
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
 # Global tasks router (not agent-specific)
@@ -677,24 +690,12 @@ async def resume_agent_task(
 async def send_a2ui_action(
     agent_id: UUID,
     task_id: UUID,
-    action: dict,
+    action: A2UIActionPayload,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
-    """Send an A2UI user action to a running task workflow.
-
-    The action is signaled to the Temporal workflow, which injects it as a user
-    message so the agent can respond to the interaction.
-
-    Action payload follows A2UI v0.9 client-to-server action format:
-    {
-        "name": "submitForm",
-        "surface_id": "s1",
-        "source_component_id": "submit_button",
-        "context": {"email": "user@example.com"}
-    }
-    """
+    """Send an A2UI user action to a running task workflow."""
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -715,13 +716,13 @@ async def send_a2ui_action(
                 status_code=400, detail=f"Cannot send action to task in '{current_status}' state"
             )
 
-        success = await workflow_task_service.send_a2ui_action(execution_id, action)
+        success = await workflow_task_service.send_a2ui_action(execution_id, action.model_dump())
 
         if success:
             return {
                 "status": "accepted",
                 "task_id": str(task_id),
-                "action_name": action.get("name", "unknown"),
+                "action_name": action.name,
                 "message": "Action sent to workflow",
             }
         else:

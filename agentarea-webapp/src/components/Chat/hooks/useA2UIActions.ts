@@ -13,7 +13,6 @@ export interface A2UIActionPayload {
   name: string;
   surface_id: string;
   source_component_id: string;
-  timestamp: string;
   context: Record<string, any>;
 }
 
@@ -56,7 +55,6 @@ export function useA2UIActions(agentId: string, taskId: string | null) {
         name: action.event.name,
         surface_id: surfaceId,
         source_component_id: sourceComponentId,
-        timestamp: new Date().toISOString(),
         context: resolvedContext ?? {},
       };
 

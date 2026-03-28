@@ -53,6 +53,11 @@ export default function AgentCard({ agent }: AgentCardProps) {
                       modelDisplayName={agent.model_info?.model_display_name}
                       configName={agent.model_info?.config_name}
                     />
+                    {agent.a2ui_enabled && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        A2UI
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

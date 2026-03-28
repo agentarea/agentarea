@@ -153,6 +153,8 @@ class AgentExecutionWorkflow:
                 },
             )
 
+    _MAX_A2UI_QUEUE_SIZE = 50
+
     @workflow.signal
     async def handle_a2ui_action(self, action_data: dict) -> None:
         """Signal from frontend when user interacts with an A2UI surface.
@@ -160,6 +162,9 @@ class AgentExecutionWorkflow:
         The action is queued and injected as a user message on the next LLM call,
         so the agent can respond to the user's interaction.
         """
+        if len(self._a2ui_action_queue) >= self._MAX_A2UI_QUEUE_SIZE:
+            workflow.logger.warning("A2UI action queue full, dropping oldest")
+            self._a2ui_action_queue.pop(0)
         self._a2ui_action_queue.append(action_data)
         workflow.logger.info(
             f"A2UI action received: {action_data.get('name', 'unknown')} "

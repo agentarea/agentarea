@@ -489,17 +489,6 @@ export interface paths {
         /**
          * Send A2Ui Action
          * @description Send an A2UI user action to a running task workflow.
-         *
-         *     The action is signaled to the Temporal workflow, which injects it as a user
-         *     message so the agent can respond to the interaction.
-         *
-         *     Action payload follows A2UI v0.9 client-to-server action format:
-         *     {
-         *         "name": "submitForm",
-         *         "surface_id": "s1",
-         *         "source_component_id": "submit_button",
-         *         "context": {"email": "user@example.com"}
-         *     }
          */
         post: operations["send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post"];
         delete?: never;
@@ -2865,6 +2854,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * A2UIActionPayload
+         * @description Validated A2UI action payload from the frontend.
+         */
+        A2UIActionPayload: {
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Source Component Id
+             * @default
+             */
+            source_component_id: string;
+            /** Surface Id */
+            surface_id: string;
+        };
         /** APIKeyCreateRequest */
         APIKeyCreateRequest: {
             /**
@@ -5950,9 +5958,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["A2UIActionPayload"];
             };
         };
         responses: {

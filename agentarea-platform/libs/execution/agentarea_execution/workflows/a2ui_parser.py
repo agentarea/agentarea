@@ -25,6 +25,7 @@ VALID_A2UI_EVENT_TYPES = frozenset(
 )
 
 MAX_JSON_SIZE = 100 * 1024  # 100KB limit for A2UI JSON payloads
+MAX_A2UI_EVENTS = 50  # Maximum events per LLM response
 
 
 @dataclass
@@ -91,6 +92,12 @@ def parse_a2ui_response(content: str) -> A2UIParseResult:
             raw_json=json_part,
             parse_error="'events' must be a list",
         )
+
+    if len(events) > MAX_A2UI_EVENTS:
+        logger.warning(
+            f"A2UI event count {len(events)} exceeds limit {MAX_A2UI_EVENTS}, truncating"
+        )
+        events = events[:MAX_A2UI_EVENTS]
 
     valid_events = []
     for i, event in enumerate(events):

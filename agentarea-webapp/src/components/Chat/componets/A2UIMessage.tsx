@@ -31,7 +31,22 @@ function resolvePointer(obj: any, pointer: string): any {
   return parts.reduce((cur, key) => (cur != null ? cur[key] : undefined), obj);
 }
 
+// ── URL sanitization ─────────────────────────────────────────────────────────
+
+function sanitizeMediaUrl(url: string): string {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (!["https:", "http:", "data:"].includes(parsed.protocol)) return "";
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
 // ── Component renderer ────────────────────────────────────────────────────────
+
+const MAX_RENDER_DEPTH = 50;
 
 interface RenderCtx {
   components: Record<string, A2UIComponent>;
@@ -40,17 +55,30 @@ interface RenderCtx {
   onAction?: (action: A2UIAction, sourceComponentId: string) => void;
 }
 
-function renderById(id: string, ctx: RenderCtx): React.ReactNode {
+function renderById(
+  id: string,
+  ctx: RenderCtx,
+  depth = 0,
+  visited = new Set<string>()
+): React.ReactNode {
+  if (depth > MAX_RENDER_DEPTH || visited.has(id)) return null;
   const node = ctx.components[id];
   if (!node) return null;
-  return <A2UINode key={id} node={node} ctx={ctx} />;
+  const next = new Set(visited);
+  next.add(id);
+  return <A2UINode key={id} node={node} ctx={ctx} depth={depth} visited={next} />;
 }
 
-function renderChildren(ids: string[] | undefined, ctx: RenderCtx): React.ReactNode[] {
-  return (ids ?? []).map((id) => renderById(id, ctx));
+function renderChildren(
+  ids: string[] | undefined,
+  ctx: RenderCtx,
+  depth = 0,
+  visited = new Set<string>()
+): React.ReactNode[] {
+  return (ids ?? []).map((id) => renderById(id, ctx, depth, visited));
 }
 
-const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ctx }) => {
+const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({ node, ctx, depth = 0, visited = new Set() }) => {
   const tabs: Array<{ title: string; child: string }> = node.tabs ?? [];
   const [active, setActive] = React.useState(0);
   return (
@@ -70,17 +98,17 @@ const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ctx
           </button>
         ))}
       </div>
-      <div>{tabs[active] ? renderById(tabs[active].child, ctx) : null}</div>
+      <div>{tabs[active] ? renderById(tabs[active].child, ctx, depth + 1, visited) : null}</div>
     </div>
   );
 };
 
-const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ctx }) => {
+const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({ node, ctx, depth = 0, visited = new Set() }) => {
   const [open, setOpen] = React.useState(false);
   return (
     <>
       <div onClick={() => setOpen(true)} className="cursor-pointer">
-        {node.trigger ? renderById(node.trigger, ctx) : null}
+        {node.trigger ? renderById(node.trigger, ctx, depth + 1, visited) : null}
       </div>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -91,7 +119,7 @@ const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ct
             >
               ✕
             </button>
-            {node.content ? renderById(node.content, ctx) : null}
+            {node.content ? renderById(node.content, ctx, depth + 1, visited) : null}
           </div>
         </div>
       )}
@@ -99,9 +127,11 @@ const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ct
   );
 };
 
-const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
+const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({
   node,
   ctx,
+  depth = 0,
+  visited = new Set(),
 }) => {
   const { component: type, child, children } = node;
   const dm = ctx.dataModel;
@@ -130,7 +160,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
     case "Image":
       return (
         <img
-          src={resolveString(node.url, dm)}
+          src={sanitizeMediaUrl(resolveString(node.url, dm))}
           alt={resolveString(node.alt, dm) || ""}
           className="max-w-full rounded-md"
           style={{ objectFit: node.fit ?? "contain" }}
@@ -152,7 +182,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
     case "Video":
       return (
         <video
-          src={resolveString(node.url, dm)}
+          src={sanitizeMediaUrl(resolveString(node.url, dm))}
           controls
           className="max-w-full rounded-md"
         />
@@ -166,7 +196,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
               {resolveString(node.description, dm)}
             </span>
           )}
-          <audio src={resolveString(node.url, dm)} controls className="w-full" />
+          <audio src={sanitizeMediaUrl(resolveString(node.url, dm))} controls className="w-full" />
         </div>
       );
 
@@ -199,7 +229,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
         <div
           className={`flex flex-row flex-wrap gap-2 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
         >
-          {renderChildren(children, ctx)}
+          {renderChildren(children, ctx, depth + 1, visited)}
         </div>
       );
     }
@@ -224,7 +254,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
         <div
           className={`flex flex-col gap-2 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
         >
-          {renderChildren(children, ctx)}
+          {renderChildren(children, ctx, depth + 1, visited)}
         </div>
       );
     }
@@ -234,7 +264,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
         <ul
           className={`flex gap-1 ${node.direction === "horizontal" ? "flex-row flex-wrap" : "flex-col"}`}
         >
-          {renderChildren(children, ctx)}
+          {renderChildren(children, ctx, depth + 1, visited)}
         </ul>
       );
 
@@ -243,15 +273,15 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
     case "Card":
       return (
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          {child ? renderById(child, ctx) : null}
+          {child ? renderById(child, ctx, depth + 1, visited) : null}
         </div>
       );
 
     case "Tabs":
-      return <A2UITabs node={node} ctx={ctx} />;
+      return <A2UITabs node={node} ctx={ctx} depth={depth + 1} visited={visited} />;
 
     case "Modal":
-      return <A2UIModal node={node} ctx={ctx} />;
+      return <A2UIModal node={node} ctx={ctx} depth={depth + 1} visited={visited} />;
 
     // ── Interactive ──────────────────────────────────────────────────────────
 
@@ -273,7 +303,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
           title={resolveString(node.accessibility?.label, dm)}
           onClick={handleClick}
         >
-          {child ? renderById(child, ctx) : null}
+          {child ? renderById(child, ctx, depth + 1, visited) : null}
         </button>
       );
     }

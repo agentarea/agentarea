@@ -241,6 +241,45 @@ class TestA2UIActionEndpoint:
         assert "Internal server error" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_missing_required_field_returns_422(self, async_client, mock_agent_service):
+        """Action payload without required 'name' field → 422."""
+        agent = _make_agent(a2ui_enabled=True)
+        mock_agent_service.get.return_value = agent
+
+        response = await async_client.post(
+            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            json={"surface_id": "s1"},  # missing 'name'
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_oversized_name_returns_422(self, async_client, mock_agent_service):
+        """Action name exceeding 128 chars → 422."""
+        agent = _make_agent(a2ui_enabled=True)
+        mock_agent_service.get.return_value = agent
+
+        response = await async_client.post(
+            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            json={"name": "x" * 200, "surface_id": "s1"},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_extra_fields_rejected_returns_422(self, async_client, mock_agent_service):
+        """Extra fields in action payload → 422."""
+        agent = _make_agent(a2ui_enabled=True)
+        mock_agent_service.get.return_value = agent
+
+        response = await async_client.post(
+            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            json={**SAMPLE_ACTION, "evil_field": "injection"},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
     async def test_workspace_isolation_via_agent_service(
         self, async_client, mock_agent_service
     ):

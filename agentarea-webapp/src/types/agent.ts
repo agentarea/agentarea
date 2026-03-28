@@ -33,5 +33,6 @@ export interface Agent {
   } | null;
   events_config?: Record<string, any> | null;
   planning?: boolean | null;
+  a2ui_enabled?: boolean | null;
   skills?: Array<{ id: string; name: string; description?: string | null }> | null;
 }
