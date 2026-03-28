@@ -1,7 +1,7 @@
 """Event publisher utilities for activities."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from agentarea_common.events.base_events import DomainEvent
@@ -21,7 +21,7 @@ def create_event_publisher(event_broker, task_id: str):
             chunk_event = {
                 "event_type": "LLMCallChunk",
                 "event_id": str(uuid4()),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "data": {
                     "task_id": task_id,
                     "chunk": chunk,
@@ -77,7 +77,7 @@ async def publish_a2ui_event(
         a2ui_event = {
             "event_type": event_type,
             "event_id": str(uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "data": {"task_id": task_id, **data},
         }
 
@@ -145,7 +145,7 @@ async def publish_enriched_llm_error_event(
         error_event = {
             "event_type": "LLMCallFailed",
             "event_id": str(uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "data": error_data,
         }
 
