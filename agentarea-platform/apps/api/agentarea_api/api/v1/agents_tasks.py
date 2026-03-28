@@ -121,40 +121,34 @@ async def get_all_tasks(
         All users in the same workspace can see all workspace tasks.
     """
     try:
-        # Get all workspace agents
-        agents = await agent_service.list()
+        import asyncio
 
+        # Fetch agents and all workspace tasks in parallel (2 DB queries total)
+        agents_result, task_orms = await asyncio.gather(
+            agent_service.list(),
+            task_service.task_repository.list_all(limit=limit),
+        )
+
+        # Build agent lookup map
+        agent_map = {str(agent.id): agent.name for agent in agents_result}
+
+        # Convert ORM → domain → TaskWithAgent
         all_tasks: list[TaskWithAgent] = []
-
-        # For each agent, get their tasks from service
-        for agent in agents:
-            try:
-                # Get tasks with workflow status from service
-                agent_tasks = await task_service.list_agent_tasks_with_workflow_status(
-                    agent.id, limit=limit, creator_scoped=False
+        for task_orm in task_orms:
+            task = task_service.task_repository._orm_to_domain(task_orm)
+            all_tasks.append(
+                TaskWithAgent(
+                    id=task.id,
+                    agent_id=task.agent_id,
+                    agent_name=agent_map.get(str(task.agent_id), "Unknown"),
+                    description=task.description,
+                    parameters=task.parameters,
+                    status=task.status,
+                    result=task.result,
+                    created_at=task.created_at,
+                    execution_id=task.execution_id,
                 )
-
-                logger.info(f"Found {len(agent_tasks)} tasks for agent {agent.id} ({agent.name})")
-
-                # Convert service tasks to TaskWithAgent format
-                for task in agent_tasks:
-                    # Create TaskWithAgent from service task
-                    task_with_agent = TaskWithAgent(
-                        id=task.id,
-                        agent_id=task.agent_id,
-                        agent_name=agent.name,
-                        description=task.description,
-                        parameters=task.task_parameters,
-                        status=task.status,
-                        result=task.result,
-                        created_at=task.created_at,
-                        execution_id=task.execution_id,
-                    )
-                    all_tasks.append(task_with_agent)
-
-            except Exception as e:
-                logger.warning(f"Failed to get tasks for agent {agent.id}: {e}")
-                continue
+            )
 
         # Apply status filtering if specified
         if status:
@@ -172,6 +166,40 @@ async def get_all_tasks(
 
     except Exception as e:
         logger.error(f"Failed to get all tasks: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@global_tasks_router.get("/{task_id}", response_model=TaskWithAgent)
+async def get_task_by_id(
+    task_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
+):
+    """Get a single task by ID across all agents."""
+    try:
+        task_orm = await task_service.task_repository.get_by_id(task_id)
+        if not task_orm:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        task = task_service.task_repository._orm_to_domain(task_orm)
+        agent = await agent_service.get(task.agent_id)
+
+        return TaskWithAgent(
+            id=task.id,
+            agent_id=task.agent_id,
+            agent_name=agent.name if agent else "Unknown",
+            description=task.description,
+            parameters=task.parameters,
+            status=task.status,
+            result=task.result,
+            created_at=task.created_at,
+            execution_id=task.execution_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -408,8 +436,8 @@ async def list_agent_tasks(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        # Get tasks with workflow status from service
-        agent_tasks = await task_service.list_agent_tasks_with_workflow_status(
+        # Get tasks from DB only (no Temporal enrichment for list view)
+        agent_tasks = await task_service.list_agent_tasks(
             agent_id, limit=limit, creator_scoped=False
         )
 

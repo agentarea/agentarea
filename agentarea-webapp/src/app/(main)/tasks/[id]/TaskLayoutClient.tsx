@@ -7,6 +7,8 @@ import TaskSubheader from "./components/TaskSubheader";
 interface TaskLayoutClientProps {
   taskId: string;
   tasksTitle: string;
+  initialTask?: any;
+  initialError?: string | null;
   children: React.ReactNode;
 }
 
@@ -48,10 +50,12 @@ function TaskLayoutContent({
 export default function TaskLayoutClient({
   taskId,
   tasksTitle,
+  initialTask,
+  initialError,
   children,
 }: TaskLayoutClientProps) {
   return (
-    <TaskProvider taskId={taskId}>
+    <TaskProvider taskId={taskId} initialTask={initialTask} initialError={initialError}>
       <TaskLayoutContent taskId={taskId} tasksTitle={tasksTitle}>
         {children}
       </TaskLayoutContent>

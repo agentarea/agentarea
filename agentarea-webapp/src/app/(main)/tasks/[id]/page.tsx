@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
-import FullChat from "@/components/Chat/FullChat";
+import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
+import { parseEventToMessage, shouldDisplayEvent } from "@/components/Chat/EventParser";
+import { MessageRenderer } from "@/components/Chat/MessageComponents";
+import type { MessageComponentType } from "@/components/Chat/types";
+import { normalizeEventType } from "@/components/Chat/utils/eventNormalizer";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
@@ -34,15 +37,47 @@ export default function TaskDetailsPage() {
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  // Events hook for real-time events
-  const { refresh: refreshEvents } = useTaskEvents(
-    task?.agent_id || null,
-    task?.id || null,
-    {
-      includeHistory: true,
-      autoConnect: true,
+  // Events hook for real-time events + historical replay
+  const {
+    events: taskEvents,
+    loading: eventsLoading,
+    refresh: refreshEvents,
+  } = useTaskEvents(task?.agent_id || null, task?.id || null, {
+    includeHistory: true,
+    autoConnect: true,
+  });
+
+  // Convert historical events to chat message components for direct rendering
+  const executionMessages = useMemo((): MessageComponentType[] => {
+    if (!task) return [];
+
+    const messages: MessageComponentType[] = [];
+
+    for (const event of taskEvents) {
+      const eventType = normalizeEventType(event.type);
+      if (!shouldDisplayEvent(eventType)) continue;
+
+      const eventData = {
+        ...(event.data || {}),
+        task_id: task.id,
+        agent_id: task.agent_id,
+        timestamp: event.timestamp.toISOString(),
+      };
+
+      const message = parseEventToMessage(eventType, eventData);
+      if (message) {
+        messages.push(message);
+      }
     }
-  );
+
+    return messages;
+  }, [task, taskEvents]);
+
+  // Auto-scroll to bottom when new messages arrive
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [executionMessages.length]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -149,8 +184,8 @@ export default function TaskDetailsPage() {
   if (error || !task) {
     return (
       <EmptyState
-        title="Task Not Found"
-        description={"The requested task could not be found."}
+        title={error ? "Error Loading Task" : "Task Not Found"}
+        description={error || "The requested task could not be found."}
         iconsType="tasks"
         action={{ label: "Back to Tasks", href: "/tasks" }}
         additionAction={{ label: "Try Again", onClick: handleRefresh }}
@@ -167,35 +202,47 @@ export default function TaskDetailsPage() {
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
 
-  const welcomeComponent = (
-    <ChatWelcome
-      icon={Bot}
-      variant="neutral"
-      size="sm"
-      animate={false}
-      titleClassName="text-muted-foreground opacity-70"
-      title={`Chat with ${task.agent_name || "Agent"}`}
-    />
-  );
-
   return (
     <>
       <div className="flex h-full w-full">
-        {/* Left side - Chat (flexible) */}
-        <div className="flex-1">
-          <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
+        {/* Left side - Execution history */}
+        <div className="flex-1 flex flex-col h-full">
+          <div className="relative flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
-            <div className="relative z-1 h-full">
-              <FullChat
-                welcomeComponent={welcomeComponent}
-                agent={{
-                  id: task.agent_id,
-                  name: task.agent_name || `Agent ${task.agent_id}`,
-                  description: task.agent_description || undefined,
-                }}
-                taskId={task.id}
-                placeholder={`Chat with ${task.agent_name || `Agent ${task.agent_id}`}`}
-              />
+            <div className="relative z-1 space-y-3 px-3 py-5">
+              {/* Task description as user message */}
+              {task.description && (
+                <UserMessageComponent
+                  id={`task-${task.id}-desc`}
+                  content={task.description}
+                  timestamp={task.created_at || new Date().toISOString()}
+                />
+              )}
+
+              {/* Loading state */}
+              {eventsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner />
+                </div>
+              )}
+
+              {/* Execution events rendered directly */}
+              {executionMessages.map((message, index) => (
+                <MessageRenderer
+                  key={`${message.data.id}-${message.data.event_type}-${index}`}
+                  message={message}
+                  agent_name={task.agent_name || undefined}
+                />
+              ))}
+
+              {/* Empty state */}
+              {!eventsLoading && executionMessages.length === 0 && (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No execution events yet.
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
           </div>
         </div>

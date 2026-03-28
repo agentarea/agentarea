@@ -72,6 +72,7 @@ export const {
   getProviderConfig,
   updateProviderConfig,
   deleteProviderConfig,
+  discoverModels,
 
   // Model Spec API
   listModelSpecs,
@@ -156,6 +157,16 @@ export const {
   // Network API
   getNetworkTopology,
 
+  // Compound MCP API
+  listCompoundMCPs,
+  getCompoundMCP,
+  createCompoundMCP,
+  updateCompoundMCP,
+  deleteCompoundMCP,
+  listCompoundMCPMembers,
+  addCompoundMCPMember,
+  removeCompoundMCPMember,
+
   // Project API
   listProjects,
   getProject,
@@ -176,6 +187,9 @@ export const {
   uploadProjectFile,
   downloadProjectFile,
   deleteProjectFile,
+
+  // Audit Logs API
+  listAuditLogs,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -205,23 +219,11 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
 };
 
 export const getAllTasks = async () => {
-  const { data: agents, error: agentsError } = await listAgents();
-  if (agentsError || !agents) return { data: null, error: agentsError };
+  return await api.getAllTasks();
+};
 
-  const tasks = await Promise.all(
-    agents.map(async (agent: any) => {
-      const { data: agentTasks, error } = await listAgentTasks(agent.id);
-      if (error || !agentTasks) return [];
-
-      return agentTasks.map((task: any) => ({
-        ...task,
-        agent_name: agent.name,
-        agent_description: agent.description,
-      }));
-    })
-  );
-
-  return { data: tasks.flat(), error: null };
+export const getTask = async (taskId: string) => {
+  return await api.getTask(taskId);
 };
 
 export const listProviderConfigsWithModelInstances = async (params?: {

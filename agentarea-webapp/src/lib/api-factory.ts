@@ -476,6 +476,16 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    discoverModels: async (configId: string) => {
+      const { data, error } = await client.POST(
+        "/v1/provider-configs/{config_id}/discover" as any,
+        {
+          params: { path: { config_id: configId } },
+        }
+      );
+      return { data, error };
+    },
+
     // Model Spec API
     listModelSpecs: async (params?: {
       provider_spec_id?: string;
@@ -1028,6 +1038,61 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    // Compound MCP API
+    listCompoundMCPs: async () => {
+      const { data, error } = await client.GET("/v1/compound-mcps/", {});
+      return { data, error };
+    },
+
+    getCompoundMCP: async (compoundId: string) => {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    createCompoundMCP: async (body: components["schemas"]["CompoundMCPCreateRequest"]) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/", { body });
+      return { data, error };
+    },
+
+    updateCompoundMCP: async (compoundId: string, body: components["schemas"]["CompoundMCPUpdateRequest"]) => {
+      const { data, error } = await client.PUT("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    deleteCompoundMCP: async (compoundId: string) => {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    listCompoundMCPMembers: async (compoundId: string) => {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}/members", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    addCompoundMCPMember: async (compoundId: string, body: components["schemas"]["CompoundMCPMemberRequest"]) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/{compound_id}/members", {
+        params: { path: { compound_id: compoundId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    removeCompoundMCPMember: async (compoundId: string, instanceId: string) => {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}/members/{instance_id}", {
+        params: { path: { compound_id: compoundId, instance_id: instanceId } },
+      });
+      return { data, error };
+    },
+
     // Project API
     listProjects: async () => {
       const { data, error } = await client.GET("/v1/projects/");
@@ -1139,6 +1204,35 @@ export function createApiClient(client: Client) {
     deleteProjectFile: async (projectId: string, filePath: string) => {
       const { data, error } = await client.DELETE("/v1/projects/{project_id}/files/{file_path}" as any, {
         params: { path: { project_id: projectId, file_path: filePath } },
+      });
+      return { data, error };
+    },
+
+    getAllTasks: async () => {
+      const { data, error } = await client.GET("/v1/tasks/");
+      return { data, error };
+    },
+
+    getTask: async (taskId: string) => {
+      const { data, error } = await client.GET("/v1/tasks/{task_id}" as any, {
+        params: { path: { task_id: taskId } },
+      });
+      return { data, error };
+    },
+
+    // Audit Logs API
+    listAuditLogs: async (params?: {
+      action?: string;
+      actor_id?: string;
+      resource_type?: string;
+      resource_id?: string;
+      since?: string;
+      until?: string;
+      cursor?: string;
+      limit?: number;
+    }) => {
+      const { data, error } = await client.GET("/v1/audit-logs/", {
+        params: { query: params },
       });
       return { data, error };
     },

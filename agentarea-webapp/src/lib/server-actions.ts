@@ -11,6 +11,7 @@ import {
   resumeAgentTask,
   cancelAgentTask,
   getAllTasks,
+  getTask,
   getAgentTaskStatus,
   createSkill,
   getSkill,
@@ -33,6 +34,7 @@ import {
   updateProviderConfig,
   createModelInstance,
   deleteModelInstance,
+  discoverModels,
   listMCPAuthConfigs,
   createMCPAuthConfig,
   resolveEscalation,
@@ -54,6 +56,15 @@ import {
   testOpenAPIConnection,
   createOpenAPIConnection,
   previewOpenAPISpec,
+  listCompoundMCPs,
+  getCompoundMCP,
+  createCompoundMCP,
+  updateCompoundMCP,
+  deleteCompoundMCP,
+  listCompoundMCPMembers,
+  addCompoundMCPMember,
+  removeCompoundMCPMember,
+  listMCPServerInstances,
   listProjects,
   getProject,
   createProject,
@@ -119,6 +130,10 @@ export async function cancelAgentTaskAction(agentId: string, taskId: string) {
 
 export async function getAllTasksAction() {
   return await getAllTasks();
+}
+
+export async function getTaskAction(taskId: string) {
+  return await getTask(taskId);
 }
 
 export async function getAgentTaskStatusAction(
@@ -234,6 +249,10 @@ export async function createModelInstanceAction(
 
 export async function deleteModelInstanceAction(instanceId: string) {
   return await deleteModelInstance(instanceId);
+}
+
+export async function discoverModelsAction(configId: string) {
+  return await discoverModels(configId);
 }
 
 export async function listAgentsAction() {
@@ -368,6 +387,75 @@ export async function testOpenAPIConnectionAction(connectionId: string) {
 
 export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
   return await createOpenAPIConnection(body);
+}
+
+// Compound MCP Actions
+export async function listCompoundMCPsAction() {
+  return await listCompoundMCPs();
+}
+
+export async function getCompoundMCPAction(compoundId: string) {
+  return await getCompoundMCP(compoundId);
+}
+
+export async function createCompoundMCPAction(body: Parameters<typeof createCompoundMCP>[0]) {
+  return await createCompoundMCP(body);
+}
+
+export async function updateCompoundMCPAction(compoundId: string, body: Parameters<typeof updateCompoundMCP>[1]) {
+  return await updateCompoundMCP(compoundId, body);
+}
+
+export async function deleteCompoundMCPAction(compoundId: string) {
+  return await deleteCompoundMCP(compoundId);
+}
+
+export async function listCompoundMCPMembersAction(compoundId: string) {
+  return await listCompoundMCPMembers(compoundId);
+}
+
+export async function addCompoundMCPMemberAction(compoundId: string, body: Parameters<typeof addCompoundMCPMember>[1]) {
+  return await addCompoundMCPMember(compoundId, body);
+}
+
+export async function removeCompoundMCPMemberAction(compoundId: string, instanceId: string) {
+  return await removeCompoundMCPMember(compoundId, instanceId);
+}
+
+export async function listMCPServerInstancesAction() {
+  return await listMCPServerInstances();
+}
+
+export async function startBundleProxyAction(instanceId: string) {
+  const token = await getAuthToken();
+  const res = await fetch(
+    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/start-bundle`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return { data: null, error: text };
+  }
+  return { data: await res.json(), error: null };
+}
+
+export async function stopBundleProxyAction(instanceId: string) {
+  const token = await getAuthToken();
+  const res = await fetch(
+    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/stop-bundle`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return { data: null, error: text };
+  }
+  return { data: await res.json(), error: null };
 }
 
 // Project Actions
