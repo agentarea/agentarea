@@ -1,6 +1,7 @@
 import logging
 from uuid import UUID
 
+from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
@@ -40,6 +41,7 @@ class AgentService(BaseCrudService[Agent]):
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
 
+    @audited("agent.create", resource_type="agent")
     async def create_agent(
         self,
         name: str,
@@ -83,6 +85,7 @@ class AgentService(BaseCrudService[Agent]):
 
         return agent
 
+    @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(
         self,
         id: UUID,
@@ -140,11 +143,17 @@ class AgentService(BaseCrudService[Agent]):
 
         return agent
 
+    async def get_by_name(self, name: str) -> Agent | None:
+        """Get an agent by name."""
+        repo = self._get_agent_repository()
+        return await repo.get_agent_by_name(name)
+
     async def get_with_skills(self, id: UUID) -> Agent | None:
         """Get an agent with its skills loaded."""
         repo = self._get_agent_repository()
         return await repo.get_with_skills(id)
 
+    @audited("agent.delete", resource_type="agent", resource_id_param="id")
     async def delete_agent(self, id: UUID) -> bool:
         agent = await self.get(id)
         if not agent:

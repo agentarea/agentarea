@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Annotated
 
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_common.audit.service import AuditService
 from agentarea_agents.application.import_export_service import WorkspaceImportExportService
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
@@ -114,6 +115,18 @@ async def get_secret_manager(
 
 
 BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_secret_manager)]
+
+
+# Audit Service dependencies
+async def get_audit_service(
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
+) -> AuditService:
+    """Get an AuditService instance for the current request."""
+    return AuditService(db_session, user_context)
+
+
+AuditServiceDep = Annotated[AuditService, Depends(get_audit_service)]
 
 
 # Agent Service dependencies

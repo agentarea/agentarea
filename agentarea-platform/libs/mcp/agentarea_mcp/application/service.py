@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
@@ -44,6 +45,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.repository_factory = repository_factory
         self.event_broker = event_broker
 
+    @audited("mcp_server.create", resource_type="mcp_server")
     async def create_mcp_server(
         self,
         name: str,
@@ -75,6 +77,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
         return server
 
+    @audited("mcp_server.update", resource_type="mcp_server", resource_id_param="id")
     async def update_mcp_server(
         self,
         id: UUID,
@@ -121,6 +124,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
         return server
 
+    @audited("mcp_server.delete", resource_type="mcp_server", resource_id_param="id")
     async def delete_mcp_server(self, id: UUID) -> bool:
         success = await self.delete(id)
         if success and self.event_broker:
@@ -219,6 +223,7 @@ class MCPServerInstanceService:
         # It should return an instance of MCPServerInstance or None if the creation fails
         pass
 
+    @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(
         self,
         name: str,
@@ -262,6 +267,7 @@ class MCPServerInstanceService:
 
         return instance
 
+    @audited("mcp_instance.update", resource_type="mcp_instance", resource_id_param="id")
     async def update_instance(
         self,
         id: UUID,
@@ -315,6 +321,7 @@ class MCPServerInstanceService:
 
         return await self.env_service.get_instance_environment(instance_id, env_var_names)
 
+    @audited("mcp_instance.delete", resource_type="mcp_instance", resource_id_param="id")
     async def delete_instance(self, id: UUID) -> bool:
         instance = await self.repository.get_by_id(id)
         if not instance:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
+from agentarea_common.audit import audited
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 
@@ -72,6 +73,7 @@ class SkillService:
         """Get skill repository from factory."""
         return self.repository_factory.create_repository(SkillRepository)
 
+    @audited("skill.create", resource_type="skill")
     async def create_from_content(
         self,
         content: str,
@@ -110,6 +112,7 @@ class SkillService:
         logger.info(f"Created skill '{skill_name}' from content (id={skill.id})")
         return skill
 
+    @audited("skill.create", resource_type="skill")
     async def create_from_zip(
         self,
         zip_data: bytes | BinaryIO,
@@ -170,6 +173,7 @@ class SkillService:
         logger.info(f"Created skill '{skill_name}' from ZIP (id={skill.id})")
         return skill
 
+    @audited("skill.create", resource_type="skill")
     async def create_from_github(
         self,
         github_url: str,
@@ -232,6 +236,7 @@ class SkillService:
         logger.info(f"Created skill '{skill_name}' from GitHub: {github_url} (id={skill.id})")
         return skill
 
+    @audited("skill.create", resource_type="skill")
     async def create_from_path(
         self,
         path: str,
@@ -349,6 +354,7 @@ class SkillService:
         repo = self._get_repository()
         return await repo.list_all()
 
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def update(
         self,
         skill_id: UUID | str,
@@ -383,6 +389,7 @@ class SkillService:
 
         return await repo.update(str(skill_id), **update_data)
 
+    @audited("skill.delete", resource_type="skill", resource_id_param="skill_id")
     async def delete(self, skill_id: UUID | str) -> bool:
         """Delete a skill and clean up S3 storage.
 

@@ -14,6 +14,7 @@ from . import (
     agents_tasks,
     agents_well_known,
     api_keys,
+    audit,
     compound_mcps,
     mcp_auth_configs,
     mcp_oauth_links,
@@ -95,6 +96,9 @@ protected_v1_router.include_router(registries.router)
 # Compound MCPs - PROTECTED
 protected_v1_router.include_router(compound_mcps.router)
 
+# Compound MCP proxy + Bundle proxy registered directly on app in main.py
+# (routes already contain /v1 prefix so they cannot go through protected_v1_router)
+
 # OpenAPI connections - PROTECTED
 protected_v1_router.include_router(openapi_connections.router)
 
@@ -104,8 +108,5 @@ protected_v1_router.include_router(network.router)
 # Projects - PROTECTED
 protected_v1_router.include_router(projects.router)
 
-# ============================================================================
-# LEGACY: Keep old v1_router for backward compatibility during migration
-# TODO: Remove after all references are updated to use protected/public routers
-# ============================================================================
-v1_router = protected_v1_router  # Default to protected for safety
+# Audit logs - PROTECTED
+protected_v1_router.include_router(audit.router)

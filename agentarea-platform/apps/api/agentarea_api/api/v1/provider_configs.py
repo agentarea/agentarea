@@ -1,13 +1,18 @@
+import logging
 import re
 from datetime import datetime
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_provider_service  # type: ignore
+from agentarea_api.api.deps.services import get_model_spec_repository, get_provider_service  # type: ignore
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import ProviderConfig  # type: ignore
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/provider-configs", tags=["provider-configs"])
 
@@ -263,6 +268,97 @@ async def delete_provider_config(
     if not success:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
     return {"message": "Provider configuration deleted successfully"}
+
+
+# Discovery endpoint
+class DiscoveredModelResponse(BaseModel):
+    model_name: str
+    display_name: str
+    context_window: int
+    description: str | None = None
+    is_new: bool = False
+
+
+class DiscoveryResponse(BaseModel):
+    discovered: int
+    new_models: int
+    models: list[DiscoveredModelResponse]
+
+
+@router.post("/{config_id}/discover", response_model=DiscoveryResponse)
+async def discover_models(
+    config_id: UUID,
+    user_context: UserContextDep,
+    provider_service: ProviderService = Depends(get_provider_service),
+    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+):
+    """Discover available models from the provider API and sync to model specs."""
+    config = await provider_service.get_provider_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+
+    # Get API key from secret manager
+    secret_name = f"provider_config_{config.id}"
+    api_key = await provider_service.secret_manager.get_secret(secret_name)
+    if not api_key:
+        raise HTTPException(status_code=400, detail="No API key found for this configuration")
+
+    provider_key = config.provider_spec.provider_key
+    provider_spec_id = str(config.provider_spec_id)
+
+    discovery_service = ModelDiscoveryService()
+    discovered = await discovery_service.discover(
+        provider_key=provider_key,
+        api_key=api_key,
+        endpoint_url=config.endpoint_url,
+    )
+
+    if not discovered:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No models discovered for provider '{provider_key}'. "
+            "The provider may not support model listing or the API key may be invalid.",
+        )
+
+    # Upsert discovered models as ModelSpec entries
+    results = []
+    new_count = 0
+    for model in discovered:
+        # Check if model already exists
+        existing = await model_spec_repo.get_by_provider_and_model(
+            provider_spec_id, model.model_name
+        )
+        is_new = existing is None
+
+        spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+            provider_spec_id=provider_spec_id,
+            model_name=model.model_name,
+            display_name=model.display_name or model.model_name,
+            description=model.description or None,
+            context_window=model.context_window,
+        )
+
+        if is_new:
+            new_count += 1
+
+        results.append(DiscoveredModelResponse(
+            model_name=model.model_name,
+            display_name=model.display_name or model.model_name,
+            context_window=model.context_window,
+            description=model.description or None,
+            is_new=is_new,
+        ))
+
+    logger.info(
+        "Discovery for provider %s: %d found, %d new",
+        provider_key, len(results), new_count,
+    )
+
+    return DiscoveryResponse(
+        discovered=len(results),
+        new_models=new_count,
+        models=results,
+    )
 
 
 # Logo/Icon endpoints

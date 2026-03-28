@@ -20,7 +20,6 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
-# from fastapi_mcp import AuthConfig, FastApiMCP
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
@@ -160,6 +159,20 @@ bearer_scheme = HTTPBearer(bearerFormat="JWT", description="JWT Bearer token for
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    # Create MCP server — stateless_http=True means no session tracking,
+    # so no lifespan dance needed.  Each request is self-contained.
+    from agentarea_agents_sdk.mcp_server import create_mcp_server
+    from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
+    from agentarea_api.tools import get_platform_tools
+
+    _mcp_server = create_mcp_server(
+        toolsets=get_platform_tools(),
+        name="AgentArea",
+        description="AgentArea platform — agents, runs, MCP servers, providers, models, secrets",
+    )
+    _mcp_app = _mcp_server.streamable_http_app()
+    _mcp_app.add_middleware(MCPAuthMiddleware)
+
     app = FastAPI(
         title="AgentArea API",
         description=(
@@ -180,6 +193,11 @@ def create_app() -> FastAPI:
             {"name": "mcp", "description": "Operations with MCP servers"},
         ],
     )
+
+    # Add audit context middleware (runs before route handlers)
+    from agentarea_common.audit.middleware import AuditContextMiddleware
+
+    app.add_middleware(AuditContextMiddleware)
 
     # Add CORS middleware
     app.add_middleware(
@@ -209,26 +227,57 @@ def create_app() -> FastAPI:
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 
-    # Mount MCP Streamable HTTP server at /mcp
-    # Auth: Hydra OAuth tokens (Cursor/Claude Desktop) and API keys, with
-    # Kratos JWT fallback — all handled by get_user_context which tries
-    # Hydra when Kratos validation fails.
+    # Compound MCP proxy + Bundle proxy — routes already contain /v1 prefix,
+    # so we include directly on app (not on protected_v1_router which adds /v1).
     from agentarea_common.auth.dependencies import get_user_context
     from fastapi import Depends
-    from fastapi_mcp import AuthConfig, FastApiMCP
+    from agentarea_api.api.v1.compound_mcp_proxy import router as compound_mcp_proxy_router
 
-    mcp_server = FastApiMCP(
-        app,
-        name="AgentArea",
-        description="AgentArea platform — agents, tasks, MCP servers, tools",
-        auth_config=AuthConfig(
-            dependencies=[Depends(get_user_context)],
-        ),
-        headers=["authorization", "x-workspace-id"],
+    app.include_router(
+        compound_mcp_proxy_router,
+        dependencies=[Depends(get_user_context)],
+        tags=["compound-mcp-proxy"],
     )
-    mcp_server.mount_http()
 
-    logger.info("MCP Streamable HTTP server mounted at /mcp")
+    # Bundle MCP proxy routing — serves bundle instances at /bundle-mcp/{instance-id}
+    from starlette.types import ASGIApp as _ASGIApp, Receive as _Receive, Scope as _Scope, Send as _Send
+
+    class BundleMCPMiddleware:
+        """Routes /bundle-mcp/{instance-id} to registered bundle proxy ASGI apps."""
+
+        def __init__(self, inner_app: _ASGIApp) -> None:
+            self._inner = inner_app
+
+        async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
+            if scope["type"] in ("http", "websocket"):
+                path: str = scope.get("path", "")
+                if path.startswith("/bundle-mcp/"):
+                    parts = path[len("/bundle-mcp/"):].split("/", 1)
+                    instance_id = parts[0]
+                    key = f"bundle-{instance_id}"
+
+                    from agentarea_api.api.v1.compound_mcp_registry import registry
+
+                    proxy_app = registry.get(key)
+                    if proxy_app is not None:
+                        remainder = "/" + (parts[1] if len(parts) > 1 else "")
+                        scope = dict(scope)
+                        scope["path"] = remainder
+                        scope["raw_path"] = remainder.encode()
+                        await proxy_app(scope, receive, send)
+                        return
+
+            await self._inner(scope, receive, send)
+
+    app.add_middleware(BundleMCPMiddleware)  # type: ignore[arg-type]
+
+    # Mount native MCP server at /mcp — exposes platform tools via MCP protocol.
+    # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
+    # Session manager lifespan is run in _lifespan (above) so the task group
+    # is guaranteed to be initialised before any request reaches the handler.
+    app.mount("/mcp", _mcp_app)
+
+    logger.info("Native MCP server mounted at /mcp with %d platform tools", 23)
 
     # Register workspace error handlers
     register_workspace_error_handlers(app)

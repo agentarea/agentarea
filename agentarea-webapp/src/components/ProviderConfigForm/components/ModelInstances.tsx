@@ -1,9 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Brain } from "lucide-react";
+import { Brain, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { discoverModelsAction as discoverModels } from "@/lib/server-actions";
 import { ModelSpec } from "@/types/provider";
 import { ModelItemControl } from "./ModelItemControl";
 
@@ -34,6 +37,32 @@ export default function ModelInstances({
   canTest = false,
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncModels = async () => {
+    if (!providerConfigId) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await discoverModels(providerConfigId);
+      if (error) {
+        const message = (error as any)?.detail || "Failed to discover models";
+        toast.error(message);
+        return;
+      }
+      const result = data as any;
+      if (result?.new_models > 0) {
+        toast.success(
+          `Discovered ${result.discovered} models (${result.new_models} new). Reload the page to see them.`
+        );
+      } else {
+        toast.info(`${result?.discovered || 0} models found, all up to date`);
+      }
+    } catch {
+      toast.error("Failed to sync models");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   // Auto-select all models when component loads or availableModels changes (only for new configs)
   useEffect(() => {
     if (selectedProvider && availableModels.length > 0 && !isEdit) {
@@ -99,7 +128,23 @@ export default function ModelInstances({
   return (
     <div className="grid grid-cols-1 gap-4">
       <div className="space-y-1">
-        <FormLabel icon={Brain}>{t("modelInstances")}</FormLabel>
+        <div className="flex items-center justify-between">
+          <FormLabel icon={Brain}>{t("modelInstances")}</FormLabel>
+          {providerConfigId && (
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={handleSyncModels}
+              disabled={isSyncing}
+            >
+              <RefreshCw
+                className={`mr-1.5 h-3 w-3 ${isSyncing ? "animate-spin" : ""}`}
+              />
+              {isSyncing ? "Syncing..." : "Sync Models"}
+            </Button>
+          )}
+        </div>
         <p className="note">
           {t("selectModelsToCreateInstances", {
             providerName: selectedProvider.name,

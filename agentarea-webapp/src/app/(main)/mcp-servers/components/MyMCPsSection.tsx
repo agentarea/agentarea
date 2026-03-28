@@ -206,7 +206,9 @@ export function MyMCPsSection({
         accessor: "type",
         header: "Type",
         render: (value: string) => (
-          <Badge variant="outline" className={value === "OpenAPI" ? "border-orange-300 text-orange-600" : ""}>
+          <Badge variant="outline" className={
+            value === "OpenAPI" ? "border-orange-300 text-orange-600" : ""
+          }>
             {value}
           </Badge>
         ),

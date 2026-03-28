@@ -57,6 +57,7 @@ class CompoundMCPResponse(BaseModel):
     name: str
     description: str | None
     routing_mode: str
+    endpoint_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -64,6 +65,14 @@ class CompoundMCPResponse(BaseModel):
         """Pydantic config."""
 
         from_attributes = True
+
+
+def _with_endpoint_url(compound: Any) -> dict[str, Any]:
+    """Add computed endpoint_url to a compound MCP."""
+    data = CompoundMCPResponse.model_validate(compound).model_dump()
+    slug = compound.name.lower().replace(" ", "-").replace("_", "-")
+    data["endpoint_url"] = f"/mcp/compound-{slug}"
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +105,7 @@ async def create_compound_mcp(
             routing_mode=data.routing_mode,
             description=data.description,
         )
-        return CompoundMCPResponse.model_validate(compound)
+        return _with_endpoint_url(compound)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -107,7 +116,7 @@ async def list_compound_mcps(
     service: CompoundMCPService = Depends(get_compound_mcp_service),
 ):
     compounds = await service.list()
-    return [CompoundMCPResponse.model_validate(c) for c in compounds]
+    return [_with_endpoint_url(c) for c in compounds]
 
 
 @router.get("/{compound_id}", response_model=CompoundMCPResponse)

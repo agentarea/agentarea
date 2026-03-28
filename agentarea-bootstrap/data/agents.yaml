@@ -23,7 +23,15 @@ agents:
       Use them proactively to provide accurate, up-to-date answers.
     tools:
       - type: code
-        name: agentarea/calculator
+        name: agentarea/agents
       - type: code
-        name: agentarea/math
+        name: agentarea/runs
+      - type: code
+        name: agentarea/mcp_servers
+      - type: code
+        name: agentarea/providers
+      - type: code
+        name: agentarea/models
+      - type: code
+        name: agentarea/secrets
     planning: false

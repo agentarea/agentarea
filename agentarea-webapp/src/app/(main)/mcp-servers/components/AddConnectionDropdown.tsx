@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Plus, Server, FileJson2 } from "lucide-react";
+import { Plus, Server, FileJson2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,6 +29,10 @@ export function AddConnectionDropdown() {
         <DropdownMenuItem onClick={() => router.push("/mcp-servers/add-openapi")}>
           <FileJson2 className="mr-2 h-4 w-4" />
           OpenAPI Connection
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/mcp-servers/add-bundle")}>
+          <Layers className="mr-2 h-4 w-4" />
+          Bundle Servers
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

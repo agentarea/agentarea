@@ -41,9 +41,32 @@ export interface OpenAPIConnection {
 }
 
 /**
+ * Compound MCP type — virtual MCP grouping multiple instances
+ */
+export interface CompoundMCP {
+  id: string;
+  name: string;
+  description?: string | null;
+  routing_mode: "parallel" | "fallback" | "conditional";
+  endpoint_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Compound MCP member — links a compound to an MCP instance
+ */
+export interface CompoundMCPMember {
+  mcp_instance_id: string;
+  order: number;
+  config: Record<string, any>;
+  namespace: string;
+}
+
+/**
  * Unified connection item for the combined list
  */
-export type ConnectionType = "mcp" | "openapi";
+export type ConnectionType = "mcp" | "openapi" | "compound";
 
 export interface UnifiedConnection {
   id: string;
@@ -52,7 +75,7 @@ export interface UnifiedConnection {
   type: ConnectionType;
   status: string;
   toolCount: number;
-  original: MCPInstance | OpenAPIConnection;
+  original: MCPInstance | OpenAPIConnection | CompoundMCP;
 }
 
 /**

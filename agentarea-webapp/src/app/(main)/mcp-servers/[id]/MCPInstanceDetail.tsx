@@ -22,7 +22,11 @@ import Table from "@/components/Table/Table";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
-import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
+import {
+  discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
+  startBundleProxyAction,
+  stopBundleProxyAction,
+} from "@/lib/server-actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
@@ -76,6 +80,36 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const canStart = instance.status !== "running" && instance.status !== "starting";
   const canStop = instance.status === "running" || instance.status === "starting";
 
+  const [isBundleStarting, setIsBundleStarting] = useState(false);
+  const [isBundleStopping, setIsBundleStopping] = useState(false);
+
+  const handleStartBundle = async () => {
+    setIsBundleStarting(true);
+    try {
+      const { error } = await startBundleProxyAction(instance.id);
+      if (error) throw new Error(error);
+      toast.success("Bundle proxy started");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start bundle");
+    } finally {
+      setIsBundleStarting(false);
+    }
+  };
+
+  const handleStopBundle = async () => {
+    setIsBundleStopping(true);
+    try {
+      const { error } = await stopBundleProxyAction(instance.id);
+      if (error) throw new Error(error);
+      toast.success("Bundle proxy stopped");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to stop bundle");
+    } finally {
+      setIsBundleStopping(false);
+    }
+  };
+
   const handleRefreshTools = async () => {
     setIsRefreshingTools(true);
     try {
@@ -99,10 +133,10 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     return () => clearInterval(interval);
   }, [instance.status, router]);
 
-  // Fetch connection URL when instance is running (skip for URL-type — it has its own endpoint)
+  // Fetch connection URL when instance is running (skip for URL-type and bundle-type)
   const jsonSpecType = (instance.json_spec?.type as string) || "docker";
   useEffect(() => {
-    if (jsonSpecType === "url") return; // URL-type uses endpoint_url directly
+    if (jsonSpecType === "url" || jsonSpecType === "bundle") return;
     if (instance.status === "running" && instance.name) {
       setIsLoadingUrl(true);
       getMCPInstanceHealth(instance.name)
@@ -134,6 +168,8 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const specType = (instance.json_spec?.type as string) || "docker";
   const isUrlType = specType === "url";
   const isCommandType = specType === "command";
+  const isBundleType = specType === "bundle";
+  const bundleMembers = (instance.json_spec?.members ?? []) as string[];
 
   // Command-type fields
   const commandStr = instance.json_spec?.command as string | undefined;
@@ -144,8 +180,9 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
 
   // Generate SSE endpoint URL from connection URL
-  const effectiveConnectionUrl = isUrlType ? endpointUrl : connectionUrl;
-  const sseUrl = effectiveConnectionUrl ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
+  const bundleEndpointUrl = isBundleType ? `/bundle-mcp/${instance.id}` : null;
+  const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
+  const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
   const toolsTableData = tools.map((tool) => ({
     id: tool.name,
@@ -179,26 +216,28 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={true}
+                  disabled={!isBundleType || isBundleStarting}
+                  onClick={isBundleType ? handleStartBundle : undefined}
                 >
-                  <Play className="mr-1.5 h-3.5 w-3.5" />
-                  Start
+                  <Play className={`mr-1.5 h-3.5 w-3.5 ${isBundleStarting ? "animate-spin" : ""}`} />
+                  {isBundleStarting ? "Starting..." : "Start"}
                 </Button>
               )}
               {canStop && (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={true}
+                  disabled={!isBundleType || isBundleStopping}
+                  onClick={isBundleType ? handleStopBundle : undefined}
                 >
                   <Square className="mr-1.5 h-3.5 w-3.5" />
-                  Stop
+                  {isBundleStopping ? "Stopping..." : "Stop"}
                 </Button>
               )}
             </div>
 
-            {/* Connection URL - Show when running, or always for URL-type */}
-            {(instance.status === "running" || isUrlType) && (
+            {/* Connection URL - Show when running, or always for URL-type/bundle-type */}
+            {(instance.status === "running" || isUrlType || isBundleType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4 text-muted-foreground" />
@@ -365,6 +404,21 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 </div>
               )}
             </div>
+
+            {isBundleType && bundleMembers.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Bundled Servers
+                </div>
+                <div className="space-y-1">
+                  {bundleMembers.map((memberId: string) => (
+                    <div key={memberId} className="text-sm text-muted-foreground font-mono">
+                      {memberId}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {tools.length > 0 && (
               <div className="space-y-3">

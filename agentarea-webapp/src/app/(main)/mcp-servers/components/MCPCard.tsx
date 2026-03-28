@@ -14,9 +14,10 @@ import {
   Command,
   Box,
   FileJson2,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { MCPServer, MCPInstance, OpenAPIConnection } from "../types";
+import { MCPServer, MCPInstance, OpenAPIConnection, CompoundMCP } from "../types";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface MCPServerSpecCardProps {
@@ -90,6 +91,31 @@ export function OpenAPIConnectionCard({ connection }: OpenAPIConnectionCardProps
               {connection.available_tools.length} tools
             </span>
           )}
+        </div>
+      }
+    />
+  );
+}
+
+interface CompoundMCPCardProps {
+  compound: CompoundMCP;
+}
+
+export function CompoundMCPCard({ compound }: CompoundMCPCardProps) {
+  return (
+    <LinkedCard
+      href={`/mcp-servers/compound/${compound.id}`}
+      title={compound.name}
+      icon={Layers}
+      type="view"
+      subtitle={
+        <div className="flex items-center gap-1.5">
+          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal text-violet-600 border-violet-300">
+            Compound
+          </Badge>
+          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal">
+            {compound.routing_mode}
+          </Badge>
         </div>
       }
     />

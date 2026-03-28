@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
 
 from .domain.enums import ExecutionStatus, TriggerType
@@ -80,6 +81,7 @@ class TriggerService:
 
     # CRUD Operations
 
+    @audited("trigger.create", resource_type="trigger")
     async def create_trigger(self, trigger_data: TriggerCreate) -> Trigger:
         """Create a new trigger with validation.
 
@@ -172,6 +174,7 @@ class TriggerService:
         """
         return await self.trigger_repository.get_trigger(trigger_id)
 
+    @audited("trigger.update", resource_type="trigger", resource_id_param="trigger_id")
     async def update_trigger(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> Trigger:
         """Update an existing trigger with validation.
 
@@ -224,6 +227,7 @@ class TriggerService:
 
         return updated_trigger
 
+    @audited("trigger.delete", resource_type="trigger", resource_id_param="trigger_id")
     async def delete_trigger(self, trigger_id: UUID) -> bool:
         """Delete a trigger by ID.
 
