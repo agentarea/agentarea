@@ -2,8 +2,6 @@
 
 from uuid import uuid4
 
-import pytest
-
 from agentarea_common.events.event_models import (
     A2UICreateSurfaceEvent,
     A2UIDeleteSurfaceEvent,
