@@ -50,6 +50,55 @@ function renderChildren(ids: string[] | undefined, ctx: RenderCtx): React.ReactN
   return (ids ?? []).map((id) => renderById(id, ctx));
 }
 
+const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ctx }) => {
+  const tabs: Array<{ title: string; child: string }> = node.tabs ?? [];
+  const [active, setActive] = React.useState(0);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+        {tabs.map((tab, i) => (
+          <button
+            key={i}
+            onClick={() => setActive(i)}
+            className={`px-3 py-1.5 text-sm font-medium ${
+              active === i
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-600 hover:text-gray-900 dark:text-gray-400"
+            }`}
+          >
+            {tab.title}
+          </button>
+        ))}
+      </div>
+      <div>{tabs[active] ? renderById(tabs[active].child, ctx) : null}</div>
+    </div>
+  );
+};
+
+const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({ node, ctx }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <div onClick={() => setOpen(true)} className="cursor-pointer">
+        {node.trigger ? renderById(node.trigger, ctx) : null}
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="relative max-h-[80vh] w-full max-w-md overflow-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+            {node.content ? renderById(node.content, ctx) : null}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
   node,
   ctx,
@@ -198,54 +247,11 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
         </div>
       );
 
-    case "Tabs": {
-      const tabs: Array<{ title: string; child: string }> = node.tabs ?? [];
-      const [active, setActive] = React.useState(0);
-      return (
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-            {tabs.map((tab, i) => (
-              <button
-                key={i}
-                onClick={() => setActive(i)}
-                className={`px-3 py-1.5 text-sm font-medium ${
-                  active === i
-                    ? "border-b-2 border-blue-600 text-blue-600"
-                    : "text-gray-600 hover:text-gray-900 dark:text-gray-400"
-                }`}
-              >
-                {tab.title}
-              </button>
-            ))}
-          </div>
-          <div>{tabs[active] ? renderById(tabs[active].child, ctx) : null}</div>
-        </div>
-      );
-    }
+    case "Tabs":
+      return <A2UITabs node={node} ctx={ctx} />;
 
-    case "Modal": {
-      const [open, setOpen] = React.useState(false);
-      return (
-        <>
-          <div onClick={() => setOpen(true)} className="cursor-pointer">
-            {node.trigger ? renderById(node.trigger, ctx) : null}
-          </div>
-          {open && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-              <div className="relative max-h-[80vh] w-full max-w-md overflow-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
-                <button
-                  onClick={() => setOpen(false)}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-                {node.content ? renderById(node.content, ctx) : null}
-              </div>
-            </div>
-          )}
-        </>
-      );
-    }
+    case "Modal":
+      return <A2UIModal node={node} ctx={ctx} />;
 
     // ── Interactive ──────────────────────────────────────────────────────────
 

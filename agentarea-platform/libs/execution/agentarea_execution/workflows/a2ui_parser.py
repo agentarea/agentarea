@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 
 A2UI_DELIMITER = "---a2ui_JSON---"
 
-VALID_A2UI_EVENT_TYPES = frozenset({
-    "A2UICreateSurface",
-    "A2UIUpdateComponents",
-    "A2UIUpdateDataModel",
-    "A2UIDeleteSurface",
-})
+VALID_A2UI_EVENT_TYPES = frozenset(
+    {
+        "A2UICreateSurface",
+        "A2UIUpdateComponents",
+        "A2UIUpdateDataModel",
+        "A2UIDeleteSurface",
+    }
+)
 
 MAX_JSON_SIZE = 100 * 1024  # 100KB limit for A2UI JSON payloads
 
