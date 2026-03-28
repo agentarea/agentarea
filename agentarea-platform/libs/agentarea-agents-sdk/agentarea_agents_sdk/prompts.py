@@ -9,7 +9,7 @@ Prompt structure follows patterns from OpenCode, Claude Code, and ADK:
 - Guidelines and tone (how should you behave?)
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Final, TypedDict
 
 
@@ -173,7 +173,7 @@ class PromptBuilder:
             f"- {name}: {desc}" for name, desc in (get_tool_info(tool) for tool in available_tools)
         )
 
-        current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        current_date = datetime.now(UTC).strftime("%Y-%m-%d")
 
         prompt = MessageTemplates.SYSTEM_PROMPT.format(
             agent_name=agent_name,
