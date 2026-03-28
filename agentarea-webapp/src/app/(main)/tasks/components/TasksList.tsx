@@ -36,8 +36,9 @@ export default function TasksList({
     {
       accessor: "description",
       header: t("description"),
+      cellClassName: "max-w-[300px]",
       render: (value: string) => (
-        <span className="truncate font-medium">{value}</span>
+        <span className="block truncate font-medium">{value}</span>
       ),
     },
     {
@@ -57,10 +58,18 @@ export default function TasksList({
         const variant =
           statusVariants[value as keyof typeof statusVariants] || "secondary";
         // Check if translation exists, otherwise fallback to capitalized value
-        const label = ["running", "completed", "success", "failed", "error", "paused", "pending"].includes(value)
+        const label = [
+          "running",
+          "completed",
+          "success",
+          "failed",
+          "error",
+          "paused",
+          "pending",
+        ].includes(value)
           ? tStatus(value)
           : value.charAt(0).toUpperCase() + value.slice(1);
-          
+
         return (
           <Badge variant={variant} className="whitespace-nowrap">
             {label}

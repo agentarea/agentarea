@@ -54,8 +54,8 @@ const edgeTypes = {
   dataflow: DataFlowEdge,
 };
 const ZONE_PADDING = 50;
-const NODE_W = 240;
-const NODE_H = 90;
+const NODE_W = 320;
+const NODE_H = 120;
 const NODE_GAP_X = 40;
 const NODE_GAP_Y = 30;
 const SIDE_ZONE_W = 360;
@@ -85,19 +85,20 @@ function getZone(node: NetworkNodeData): ZoneKey {
 }
 export default function DataFlowView({ topology, onNodeClick }: Props) {
   const { nodes, edges } = useMemo(() => {
+    const agentNodes = topology.nodes.filter((n) => n.type === "agent");
     const zoneNodes: Record<ZoneKey, NetworkNodeData[]> = {
       gateway: [],
       internal: [],
       egress: [],
     };
-    for (const n of topology.nodes) {
+    for (const n of agentNodes) {
       zoneNodes[getZone(n)].push(n);
     }
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
     const nodeZoneMap: Record<string, ZoneKey> = {};
-    for (const n of topology.nodes) nodeZoneMap[n.id] = getZone(n);
-    const nodeIds = new Set(topology.nodes.map((n) => n.id));
+    for (const n of agentNodes) nodeZoneMap[n.id] = getZone(n);
+    const nodeIds = new Set(agentNodes.map((n) => n.id));
     const sourceToTargets: Record<string, string[]> = {};
     const targetToSources: Record<string, string[]> = {};
     for (const e of topology.edges) {
@@ -164,10 +165,6 @@ export default function DataFlowView({ topology, onNodeClick }: Props) {
       }
     }
     const maxZoneHeight = Math.max(...Object.values(zoneHeights));
-    const maxZoneWidth = Math.max(
-      ...Object.values(zoneHeights).map((z) => z.width),
-      INTERNAL_ZONE_W
-    );
     for (const [zone, zoneData] of Object.entries(ZONE_META) as [
       ZoneKey,
       (typeof ZONE_META)[ZoneKey],

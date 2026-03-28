@@ -197,6 +197,31 @@ async def get_network_topology(
     # --- Build agent nodes ---
     for agent in agents:
         agent_id = str(agent.id)
+        
+        skills_data = []
+        if hasattr(agent, "skills") and agent.skills:
+            skills_data = [
+                {"id": str(skill.id), "name": skill.name}
+                for skill in agent.skills
+            ]
+        
+        tools_config = None
+        if hasattr(agent, "tools_config") and agent.tools_config:
+            tools_config = agent.tools_config
+        elif hasattr(agent, "tools") and agent.tools:
+            tools_config = agent.tools if isinstance(agent.tools, dict) else None
+        
+        model_info = None
+        if hasattr(agent, "model_info") and agent.model_info:
+            model_info = {
+                "provider_name": getattr(agent.model_info, "provider_name", None),
+                "model_display_name": getattr(agent.model_info, "model_display_name", None),
+                "config_name": getattr(agent.model_info, "config_name", None),
+            }
+            model_info = {k: v for k, v in model_info.items() if v is not None}
+            if not model_info:
+                model_info = None
+        
         nodes.append(
             NetworkNode(
                 id=agent_id,
@@ -208,6 +233,9 @@ async def get_network_topology(
                     for k, v in {
                         "model_id": getattr(agent, "model_id", None),
                         "description": getattr(agent, "description", None),
+                        "skills": skills_data if skills_data else None,
+                        "tools_config": tools_config,
+                        "model_info": model_info,
                     }.items()
                     if v is not None
                 },
