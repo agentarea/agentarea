@@ -30,6 +30,20 @@ def get_base_url(request: Request) -> str:
 
 async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> AgentCard:
     """Create A2A AgentCard for specific agent."""
+    # Advertise A2UI extension if agent supports it
+    extensions = None
+    if getattr(agent, "a2ui_enabled", False):
+        extensions = [
+            {
+                "uri": "https://a2ui.org/a2a-extension/a2ui/v0.9",
+                "params": {
+                    "supportedCatalogIds": [
+                        "https://a2ui.org/specification/v0_9/basic_catalog.json"
+                    ],
+                },
+            }
+        ]
+
     return AgentCard(
         name=agent.name,
         description=agent.description,
@@ -40,6 +54,7 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
             streaming=True,
             push_notifications=False,
             state_transition_history=True,
+            extensions=extensions,
         ),
         provider=AgentProvider(organization="AgentArea"),
         security_schemes={

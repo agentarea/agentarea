@@ -328,6 +328,7 @@ class TestExportWorkspace:
         mock_agent.instruction = "You are a test agent"
         mock_agent.tools = [{"type": "code", "name": "agentarea/calculator"}]
         mock_agent.planning = True
+        mock_agent.a2ui_enabled = False
 
         mock_agent_service.list.return_value = [mock_agent]
 
@@ -353,6 +354,7 @@ class TestExportWorkspace:
         user_agent.instruction = "You are a user agent"
         user_agent.tools = None
         user_agent.planning = None
+        user_agent.a2ui_enabled = None
 
         system_agent = MagicMock()
         system_agent.workspace_id = "system"
@@ -473,6 +475,7 @@ provider_configs: []
         mock_agent.instruction = "You are testing"
         mock_agent.tools = [{"type": "code", "name": "agentarea/calculator"}]
         mock_agent.planning = False
+        mock_agent.a2ui_enabled = False
 
         mock_mcp = MagicMock()
         mock_mcp.workspace_id = "test-workspace"
@@ -923,6 +926,7 @@ provider_configs: []
         mock_agent.instruction = "Instructions"
         mock_agent.tools = None
         mock_agent.planning = None
+        mock_agent.a2ui_enabled = None
         mock_agent.skills = [mock_skill]
 
         mock_skill_service.list.return_value = [mock_skill]
@@ -972,6 +976,7 @@ provider_configs: []
         mock_agent.instruction = ""
         mock_agent.tools = None
         mock_agent.planning = None
+        mock_agent.a2ui_enabled = None
         mock_agent.skills = [mock_skill]
 
         mock_skill_service.create_from_content.return_value = mock_skill

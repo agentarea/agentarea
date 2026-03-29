@@ -477,6 +477,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send A2Ui Action
+         * @description Send an A2UI user action to a running task workflow.
+         */
+        post: operations["send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/{task_id}/events": {
         parameters: {
             query?: never;
@@ -2834,6 +2854,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * A2UIActionPayload
+         * @description Validated A2UI action payload from the frontend.
+         */
+        A2UIActionPayload: {
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Source Component Id
+             * @default
+             */
+            source_component_id: string;
+            /** Surface Id */
+            surface_id: string;
+        };
         /** APIKeyCreateRequest */
         APIKeyCreateRequest: {
             /**
@@ -2914,6 +2953,10 @@ export interface components {
         };
         /** AgentCapabilities */
         AgentCapabilities: {
+            /** Extensions */
+            extensions?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Pushnotifications
              * @default false
@@ -2987,6 +3030,8 @@ export interface components {
         };
         /** AgentCreate */
         AgentCreate: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
             /** Agent Type */
             agent_type: string;
             /** Description */
@@ -3014,6 +3059,8 @@ export interface components {
         };
         /** AgentResponse */
         AgentResponse: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
             /**
              * Agent Type
              * @default stateless
@@ -3062,6 +3109,8 @@ export interface components {
         };
         /** AgentUpdate */
         AgentUpdate: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
             /** Capabilities */
             capabilities?: string[] | null;
             /** Description */
@@ -5876,6 +5925,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2UIActionPayload"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

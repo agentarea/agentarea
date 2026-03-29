@@ -155,6 +155,7 @@ class MessageBuilder:
         goal_description: str,
         success_criteria: list[str],
         available_tools: list[dict[str, Any]],
+        a2ui_enabled: bool = False,
     ) -> str:
         """Build system prompt with ReAct framework instructions."""
         return PromptBuilder.build_react_system_prompt(
@@ -163,6 +164,7 @@ class MessageBuilder:
             goal_description=goal_description,
             success_criteria=success_criteria,
             available_tools=available_tools,
+            a2ui_enabled=a2ui_enabled,
         )
 
     @staticmethod

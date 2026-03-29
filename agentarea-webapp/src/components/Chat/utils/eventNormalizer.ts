@@ -15,6 +15,10 @@ import {
   EVENT_TOOL_CALL_STARTED,
   EVENT_TOOL_CALL_COMPLETED,
   EVENT_TOOL_CALL_FAILED,
+  EVENT_A2UI_CREATE_SURFACE,
+  EVENT_A2UI_UPDATE_COMPONENTS,
+  EVENT_A2UI_UPDATE_DATA_MODEL,
+  EVENT_A2UI_DELETE_SURFACE,
 } from "../constants/eventTypes";
 
 export const EVENT_TYPE_MAP: Record<string, string> = {
@@ -40,6 +44,15 @@ export const EVENT_TYPE_MAP: Record<string, string> = {
   taskcompleted: EVENT_WORKFLOW_COMPLETED,
   taskfailed: EVENT_WORKFLOW_FAILED,
   taskcancelled: EVENT_WORKFLOW_CANCELLED,
+  // a2ui (v0.9 protocol)
+  a2uicreatesurface: EVENT_A2UI_CREATE_SURFACE,
+  a2uiupdatecomponents: EVENT_A2UI_UPDATE_COMPONENTS,
+  a2uiupdatedatamodel: EVENT_A2UI_UPDATE_DATA_MODEL,
+  a2uideletesurface: EVENT_A2UI_DELETE_SURFACE,
+  workflowa2uicreatesurface: EVENT_A2UI_CREATE_SURFACE,
+  workflowa2uiupdatecomponents: EVENT_A2UI_UPDATE_COMPONENTS,
+  workflowa2uiupdatedatamodel: EVENT_A2UI_UPDATE_DATA_MODEL,
+  workflowa2uideletesurface: EVENT_A2UI_DELETE_SURFACE,
 };
 
 /**
@@ -54,6 +67,6 @@ export const EVENT_TYPE_MAP: Record<string, string> = {
  * normalizeEventType("task_completed") // "WorkflowCompleted"
  */
 export function normalizeEventType(type: string): string {
-  const key = (type || "").toLowerCase().replace(/[^a-z]/g, "");
+  const key = (type || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   return EVENT_TYPE_MAP[key] || type.replace("workflow.", "");
 }

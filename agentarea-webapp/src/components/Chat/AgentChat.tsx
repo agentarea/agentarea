@@ -24,6 +24,7 @@ import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { useChatMessages, type ChatMessage, type UserChatMessage } from "./hooks/useChatMessages";
+import { useA2UIActions } from "./hooks/useA2UIActions";
 
 interface AgentChatProps {
   agent: {
@@ -61,6 +62,8 @@ export default function AgentChat({
     initialTaskId: taskId,
     onTaskCreated,
   });
+
+  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(agent.id, currentTaskId);
 
   const {
     messagesContainerRef,
@@ -226,6 +229,7 @@ export default function AgentChat({
                   key={`${message.data.id}-${message.data.event_type}-${index}`}
                   message={message}
                   agent_name={agent.name}
+                  onA2UIAction={dispatchA2UIAction}
                   onResolveEscalation={handleResolveEscalation}
                 />
               );

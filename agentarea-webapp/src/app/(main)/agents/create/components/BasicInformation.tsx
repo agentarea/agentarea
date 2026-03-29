@@ -178,6 +178,19 @@ const BasicInformation = ({
             </p>
           )}
         </div>
+        <div className="flex items-center gap-3 pt-2">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              {...register("a2ui_enabled")}
+              className="rounded"
+            />
+            <span className="text-muted-foreground">Enable A2UI</span>
+          </label>
+          <span className="text-xs text-muted-foreground/60">
+            Allow agent to render interactive UI surfaces
+          </span>
+        </div>
       </div>
 
       {/* ConfigSheet rendered outside of SearchableSelect */}

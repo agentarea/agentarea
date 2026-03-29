@@ -176,6 +176,36 @@ class BudgetExceededEvent(BaseWorkflowEvent):
     message: str = ""
 
 
+class A2UICreateSurfaceEvent(BaseWorkflowEvent):
+    """Initialize an A2UI surface (v0.9). Must come before component/data updates."""
+
+    surface_id: str = ""
+    catalog_id: str = "https://a2ui.org/specification/v0_9/basic_catalog.json"
+    theme: dict[str, Any] | None = None
+    send_data_model: bool = False
+
+
+class A2UIUpdateComponentsEvent(BaseWorkflowEvent):
+    """Add or update components on an A2UI surface (flat adjacency-list, upsert by id)."""
+
+    surface_id: str = ""
+    components: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class A2UIUpdateDataModelEvent(BaseWorkflowEvent):
+    """Update the data model at a JSON Pointer path for an A2UI surface."""
+
+    surface_id: str = ""
+    path: str = "/"
+    value: Any = None
+
+
+class A2UIDeleteSurfaceEvent(BaseWorkflowEvent):
+    """Remove an A2UI surface and release all associated state."""
+
+    surface_id: str = ""
+
+
 # Event type mapping for easy conversion from legacy dict format
 EVENT_CLASS_MAPPING = {
     "WorkflowStarted": WorkflowStartedEvent,
@@ -193,6 +223,10 @@ EVENT_CLASS_MAPPING = {
     "ToolCallFailed": ToolCallFailedEvent,
     "BudgetWarning": BudgetWarningEvent,
     "BudgetExceeded": BudgetExceededEvent,
+    "A2UICreateSurface": A2UICreateSurfaceEvent,
+    "A2UIUpdateComponents": A2UIUpdateComponentsEvent,
+    "A2UIUpdateDataModel": A2UIUpdateDataModelEvent,
+    "A2UIDeleteSurface": A2UIDeleteSurfaceEvent,
 }
 
 

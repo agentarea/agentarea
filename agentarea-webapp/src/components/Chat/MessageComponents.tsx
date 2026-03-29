@@ -1,4 +1,5 @@
 import React from "react";
+import A2UIMessage from "./componets/A2UIMessage";
 import ApprovalRequestMessage from "./componets/ApprovalRequestMessage";
 import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
@@ -7,7 +8,7 @@ import SystemMessage from "./componets/SystemMessage";
 import ToolCallStartedMessage from "./componets/ToolCallStartedMessage";
 import ToolResultMessage from "./componets/ToolResultMessage";
 import WorkflowResultMessage from "./componets/WorkflowResultMessage";
-import { MessageComponentType } from "./types";
+import { A2UIAction, MessageComponentType } from "./types";
 
 // Export the type for use in other components
 export type { MessageComponentType };
@@ -16,8 +17,13 @@ export type { MessageComponentType };
 export const MessageRenderer: React.FC<{
   message: MessageComponentType;
   agent_name?: string;
+  onA2UIAction?: (
+    action: A2UIAction,
+    surfaceId: string,
+    sourceComponentId: string,
+  ) => void;
   onResolveEscalation?: (escalationId: string, approved: boolean, comment: string) => void;
-}> = ({ message, agent_name, onResolveEscalation }) => {
+}> = ({ message, agent_name, onA2UIAction, onResolveEscalation }) => {
   switch (message.type) {
     case "llm_response":
       return (
@@ -53,6 +59,19 @@ export const MessageRenderer: React.FC<{
       );
     case "system":
       return <SystemMessage data={message.data} key={message.data.id} />;
+    case "a2ui_surface":
+      return (
+        <A2UIMessage
+          data={message.data}
+          key={message.data.id}
+          onAction={
+            onA2UIAction
+              ? (action, sourceId) =>
+                  onA2UIAction(action, message.data.surfaceId, sourceId)
+              : undefined
+          }
+        />
+      );
     case "approval_request":
       return (
         <ApprovalRequestMessage
