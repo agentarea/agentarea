@@ -66,6 +66,10 @@ class EventTypes:
     BUDGET_WARNING: Final[str] = "BudgetWarning"
     BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
 
+    SERVICE_PAYMENT: Final[str] = "ServicePayment"
+    SERVICE_BUDGET_WARNING: Final[str] = "ServiceBudgetWarning"
+    SERVICE_BUDGET_EXCEEDED: Final[str] = "ServiceBudgetExceeded"
+
     CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
     CONTEXT_WARNING: Final[str] = "ContextWarning"
 

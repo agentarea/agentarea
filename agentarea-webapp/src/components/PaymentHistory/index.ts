@@ -1,0 +1,1 @@
+export { PaymentHistoryTable } from "./PaymentHistoryTable";

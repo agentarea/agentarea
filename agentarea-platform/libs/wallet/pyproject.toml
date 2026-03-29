@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-wallet"
+version = "0.0.8"
+description = "Agent wallet and payment management for AgentArea"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "agentarea-secrets",
+    "pydantic>=2.4.2",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+agentarea-secrets = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_wallet"]

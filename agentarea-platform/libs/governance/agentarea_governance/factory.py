@@ -15,6 +15,7 @@ from .interceptors.gates.capability_guard import CapabilityGuard
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
 from .interceptors.gates.escalation_guard import EscalationGuard
 from .interceptors.gates.semantic_guard import SemanticGuard
+from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
 from .interceptors.gates.token_budget_guard import TokenBudgetGuard
 from .interceptors.observers.audit_observer import AuditObserver
 from .interceptors.observers.metrics_observer import MetricsObserver
@@ -41,6 +42,7 @@ def create_governance_pipeline() -> InterceptorPipeline:
     registry.register(CostBudgetGuard(), Phase.PRE_LLM_CALL, priority=100)
     registry.register(CostBudgetGuard(), Phase.PRE_TOOL_CALL, priority=100)
     registry.register(TokenBudgetGuard(), Phase.PRE_LLM_CALL, priority=110)
+    registry.register(ServiceBudgetGuard(), Phase.PRE_TOOL_CALL, priority=105)
 
     # Plan entitlement gate — enterprise only, injected via ExtensionRegistry
     if ExtensionRegistry.has("entitlement_guard"):
