@@ -131,8 +131,8 @@ async def get_wallet_service(
     wallet_repo = WalletRepository(db_session, user_context)
     payment_repo = PaymentRecordRepository(db_session, user_context)
     return WalletService(
-        wallet_repo=wallet_repo,
-        payment_repo=payment_repo,
+        wallet_repository=wallet_repo,
+        payment_repository=payment_repo,
         secret_manager=secret_manager,
     )
 

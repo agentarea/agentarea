@@ -238,6 +238,16 @@ class WalletService:
         remaining = wallet.service_budget_usd - spent
         return max(remaining, 0.0)
 
+    async def get_total_spent_current_period(self, agent_id: UUID | str) -> float:
+        """Get total USD spent in the current budget period (no execution_id needed).
+
+        For execution-scoped budgets, returns total across all executions (use
+        get_service_budget_remaining for per-execution tracking).
+        """
+        wallet = await self.get_wallet(agent_id)
+        period = wallet.service_budget_period
+        return await self._payments.sum_by_period(str(agent_id), period)
+
     # ------------------------------------------------------------------
     # Payments
     # ------------------------------------------------------------------
@@ -308,7 +318,7 @@ class WalletService:
         to_date: datetime | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[PaymentRecord]:
+    ) -> tuple[list[PaymentRecord], int]:
         """Return paginated payment history for an agent.
 
         Args:
@@ -321,9 +331,9 @@ class WalletService:
             offset: Records to skip.
 
         Returns:
-            List of PaymentRecord objects.
+            Tuple of (list of PaymentRecord objects, total count).
         """
-        return await self._payments.list_by_agent(
+        records = await self._payments.list_by_agent(
             agent_id=agent_id,
             protocol=protocol,
             status=status,
@@ -332,6 +342,8 @@ class WalletService:
             limit=limit,
             offset=offset,
         )
+        total = await self._payments.count(agent_id=agent_id)
+        return records, total
 
     # ------------------------------------------------------------------
     # Internal helpers

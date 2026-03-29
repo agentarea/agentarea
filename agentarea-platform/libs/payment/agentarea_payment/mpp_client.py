@@ -87,19 +87,13 @@ class MPPPaymentClient:
                     error=f"Payment ${amount:.4f} exceeds session budget ${self._session_budget_usd:.2f}",
                 )
 
-            # Use MPP client to handle payment
+            # Use MPP client to handle payment — pympp handles the 402 flow automatically
             client = await self._get_client()
-
-            import httpx
-
-            async with httpx.AsyncClient() as http_client:
-                # The pympp client handles the 402 flow automatically
-                # We make the request through it
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                )
+            response = await client.request(
+                method=method,
+                url=url,
+                headers=headers,
+            )
 
             tx_hash = None
             receipt = response.headers.get("X-MPP-Receipt") or response.headers.get("x-mpp-receipt")
