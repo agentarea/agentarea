@@ -149,7 +149,7 @@ class X402PaymentClient:
                         pr_data = json.loads(base64.b64decode(payment_response))
                         tx_hash = pr_data.get("txHash") or pr_data.get("transaction_hash")
                     except Exception:
-                        pass
+                        logger.debug("Failed to parse x402 PAYMENT-RESPONSE header")
 
                 return PaymentResult(
                     success=True,

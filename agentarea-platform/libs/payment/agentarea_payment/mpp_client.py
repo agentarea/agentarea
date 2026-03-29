@@ -37,7 +37,7 @@ class MPPPaymentClient:
 
         try:
             from mpp.client import Client
-            from mpp.methods.tempo import TempoAccount, tempo, ChargeIntent
+            from mpp.methods.tempo import ChargeIntent, TempoAccount, tempo
 
             account = TempoAccount.from_key(self._tempo_key)
             client = Client(
@@ -102,7 +102,7 @@ class MPPPaymentClient:
                     receipt_data = json.loads(receipt)
                     tx_hash = receipt_data.get("txHash") or receipt_data.get("transactionHash")
                 except Exception:
-                    pass
+                    logger.debug("Failed to parse MPP receipt header")
 
             if response.status_code == 200:
                 return PaymentResult(

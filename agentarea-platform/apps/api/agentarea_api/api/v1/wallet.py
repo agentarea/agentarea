@@ -163,9 +163,9 @@ async def create_wallet(
         )
         return _wallet_to_response(wallet)
     except WalletAlreadyExistsError:
-        raise HTTPException(status_code=409, detail="Wallet already exists for this agent")
+        raise HTTPException(status_code=409, detail="Wallet already exists for this agent") from None
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 @router.get("", response_model=WalletResponse)
@@ -180,7 +180,7 @@ async def get_wallet(
         wallet = await wallet_service.get_wallet(str(agent_id))
         return _wallet_to_response(wallet)
     except WalletNotFoundError:
-        raise HTTPException(status_code=404, detail="No wallet configured for this agent")
+        raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
 @router.put("", response_model=WalletResponse)
@@ -209,9 +209,9 @@ async def update_wallet(
         )
         return _wallet_to_response(wallet)
     except WalletNotFoundError:
-        raise HTTPException(status_code=404, detail="No wallet configured for this agent")
+        raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 @router.delete("", status_code=204)
@@ -225,7 +225,7 @@ async def delete_wallet(
     try:
         await wallet_service.delete_wallet(str(agent_id))
     except WalletNotFoundError:
-        raise HTTPException(status_code=404, detail="No wallet configured for this agent")
+        raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
 @router.get("/balance", response_model=WalletBalanceResponse)
@@ -248,7 +248,7 @@ async def get_wallet_balance(
             remaining=remaining,
         )
     except WalletNotFoundError:
-        raise HTTPException(status_code=404, detail="No wallet configured for this agent")
+        raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
 @router.get("/payments", response_model=PaginatedPaymentsResponse)
@@ -298,7 +298,7 @@ async def fund_wallet(
         )
         return _wallet_to_response(wallet)
     except WalletNotFoundError:
-        raise HTTPException(status_code=404, detail="No wallet configured for this agent")
+        raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
 # ---------------------------------------------------------------------------
