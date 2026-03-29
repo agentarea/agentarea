@@ -14,7 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { exportWorkspace, importWorkspace } from "@/lib/browser-api";
+import { exportWorkspaceAction as exportWorkspace, importWorkspaceAction as importWorkspace } from "@/lib/server-actions";
 
 export default function WorkspaceConfigClient() {
   const t = useTranslations("WorkspacePage");

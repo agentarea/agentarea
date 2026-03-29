@@ -1,7 +1,7 @@
 """Event publisher utilities for activities."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from agentarea_common.events.base_events import DomainEvent
@@ -21,7 +21,7 @@ def create_event_publisher(event_broker, task_id: str):
             chunk_event = {
                 "event_type": "LLMCallChunk",
                 "event_id": str(uuid4()),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "data": {
                     "task_id": task_id,
                     "chunk": chunk,
@@ -50,6 +50,53 @@ def create_event_publisher(event_broker, task_id: str):
             logger.error(f"Failed to publish chunk event: {e}")
 
     return publish_chunk_event
+
+
+async def publish_a2ui_event(
+    event_type: str,
+    task_id: str,
+    data: dict,
+    event_broker,
+):
+    """Publish an A2UI v0.9 protocol event.
+
+    Args:
+        event_type: One of "A2UICreateSurface", "A2UIUpdateComponents",
+                    "A2UIUpdateDataModel", "A2UIDeleteSurface".
+        task_id: Associated task ID.
+        data: Event payload — must include "surface_id" and type-specific fields:
+              - A2UICreateSurface: catalog_id, theme, send_data_model
+              - A2UIUpdateComponents: components (flat adjacency-list)
+              - A2UIUpdateDataModel: path, value
+              - A2UIDeleteSurface: (no extra fields)
+        event_broker: FastStream event broker/router.
+    """
+    try:
+        redis_event_broker = create_event_broker_from_router(event_broker)
+
+        a2ui_event = {
+            "event_type": event_type,
+            "event_id": str(uuid4()),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "data": {"task_id": task_id, **data},
+        }
+
+        domain_event = DomainEvent(
+            event_id=a2ui_event["event_id"],
+            event_type=f"workflow.{event_type}",
+            timestamp=datetime.fromisoformat(a2ui_event["timestamp"].replace("Z", "+00:00")),
+            aggregate_id=task_id,
+            aggregate_type="task",
+            original_event_type=event_type,
+            original_timestamp=a2ui_event["timestamp"],
+            original_data=a2ui_event["data"],
+        )
+
+        await redis_event_broker.publish(domain_event)
+        logger.debug(f"Published {event_type} event for task {task_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to publish A2UI event {event_type}: {e}")
 
 
 async def publish_enriched_llm_error_event(
@@ -98,7 +145,7 @@ async def publish_enriched_llm_error_event(
         error_event = {
             "event_type": "LLMCallFailed",
             "event_id": str(uuid4()),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "data": error_data,
         }
 

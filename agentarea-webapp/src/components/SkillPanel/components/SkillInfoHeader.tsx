@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
-import { Skill } from "@/lib/browser-api";
+import { Skill } from "@/lib/api";
 import { InfoPanelHeader } from "@/components/InfoPanel";
 
 interface SkillInfoHeaderProps {

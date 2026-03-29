@@ -1,6 +1,6 @@
-"""Add mcp_access_tokens table for PAT-based MCP Bearer auth
+"""Add api_keys table for PAT-based Bearer auth
 
-Revision ID: 007_add_mcp_access_tokens
+Revision ID: 007_add_api_keys
 Revises: 006_add_mcp_auth_compound_tables
 Create Date: 2026-03-02 00:00:00.000000
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "007_add_mcp_access_tokens"
+revision: str = "007_add_api_keys"
 down_revision: str = "006_add_mcp_auth_compound_tables"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -21,7 +21,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.create_table(
-        "mcp_access_tokens",
+        "api_keys",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column("workspace_id", sa.String(255), nullable=False),
         sa.Column("created_by", sa.String(255), nullable=False, server_default="system"),
@@ -44,11 +44,11 @@ def upgrade() -> None:
             onupdate=sa.func.now(),
         ),
     )
-    op.create_index("ix_mcp_access_tokens_workspace_id", "mcp_access_tokens", ["workspace_id"])
-    op.create_index("ix_mcp_access_tokens_token_hash", "mcp_access_tokens", ["token_hash"])
+    op.create_index("ix_api_keys_workspace_id", "api_keys", ["workspace_id"])
+    op.create_index("ix_api_keys_token_hash", "api_keys", ["token_hash"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_mcp_access_tokens_token_hash", table_name="mcp_access_tokens")
-    op.drop_index("ix_mcp_access_tokens_workspace_id", table_name="mcp_access_tokens")
-    op.drop_table("mcp_access_tokens")
+    op.drop_index("ix_api_keys_token_hash", table_name="api_keys")
+    op.drop_index("ix_api_keys_workspace_id", table_name="api_keys")
+    op.drop_table("api_keys")

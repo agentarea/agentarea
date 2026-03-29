@@ -4,6 +4,17 @@ import { z } from "zod";
 import type { components } from "@/api/schema";
 import { createAgent } from "@/lib/api";
 
+// Type definitions for MCP tool configuration (previously from schema MCPConfig/MCPToolConfig)
+interface MCPToolConfig {
+  tool_name: string;
+  requires_user_confirmation?: boolean;
+}
+
+interface MCPConfig {
+  mcp_server_id: string;
+  allowed_tools?: MCPToolConfig[] | null;
+}
+
 // Define Zod schema for MCP Tool Config
 const MCPToolConfigSchema = z.object({
   tool_name: z.string().min(1, "Tool name is required"),
@@ -63,6 +74,7 @@ export interface AddAgentFormState {
       }> | null;
     } | null;
     planning?: boolean;
+    a2ui_enabled?: boolean;
     skill_ids?: string[] | null;
     id?: string;
   };
@@ -106,11 +118,11 @@ export async function addAgent(
   // Need to manually reconstruct the array/object structure for validation
   const mcpConfigs: Record<
     number,
-    Partial<components["schemas"]["MCPConfig"]>
+    Partial<MCPConfig>
   > = {};
   const mcpToolConfigs: Record<
     number,
-    Record<number, Partial<components["schemas"]["MCPToolConfig"]>>
+    Record<number, Partial<MCPToolConfig>>
   > = {};
   type BuiltinToolConfigMutable = {
     tool_name?: string;
@@ -141,7 +153,7 @@ export async function addAgent(
       const serverIndex = parseInt(toolMatch[1], 10);
       const toolIndex = parseInt(toolMatch[2], 10);
       const field =
-        toolMatch[3] as keyof components["schemas"]["MCPToolConfig"];
+        toolMatch[3] as keyof MCPToolConfig;
 
       if (!mcpToolConfigs[serverIndex]) {
         mcpToolConfigs[serverIndex] = {};
@@ -208,12 +220,12 @@ export async function addAgent(
     if (mcpToolConfigs[serverIndex]) {
       mcpConfigs[serverIndex].allowed_tools = Object.values(
         mcpToolConfigs[serverIndex]
-      ) as components["schemas"]["MCPToolConfig"][];
+      ) as MCPToolConfig[];
     }
   });
   // Convert the record back to an array, ensuring required fields are present or handled by Zod
   const mcpConfigsArray = Object.values(mcpConfigs).map(
-    (config) => config as components["schemas"]["MCPConfig"]
+    (config) => config as MCPConfig
   );
 
   // Convert builtin tools record to array

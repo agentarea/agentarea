@@ -4,7 +4,10 @@ import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useMentions } from "@/hooks/useMentions";
-import { pauseAgentTask, resolveEscalation } from "@/lib/browser-api";
+import {
+  pauseAgentTaskAction as pauseAgentTask,
+  resolveEscalationAction as resolveEscalation,
+} from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
@@ -27,6 +30,7 @@ import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
+import { useA2UIActions } from "./hooks/useA2UIActions";
 import { MessageRenderer } from "./MessageComponents";
 
 export interface Agent {
@@ -93,6 +97,8 @@ export default function FullChat({
       onTaskFinished,
     }
   );
+
+  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(agent.id, currentTaskId);
 
   const {
     messagesContainerRef,
@@ -406,6 +412,7 @@ export default function FullChat({
                   key={`${message.data.id}-${message.data.event_type}-${index}`}
                   message={message}
                   agent_name={agent.name}
+                  onA2UIAction={dispatchA2UIAction}
                   onResolveEscalation={handleResolveEscalation}
                 />
               );

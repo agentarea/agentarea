@@ -76,6 +76,76 @@ export interface WorkflowResultData extends BaseMessageData {
   total_cost?: number;
 }
 
+// A2UI v0.9 — 18 primitive component types from the basic catalog
+export type A2UIComponentType =
+  // Display
+  | "Text"
+  | "Image"
+  | "Icon"
+  | "Video"
+  | "AudioPlayer"
+  | "Divider"
+  // Layout
+  | "Row"
+  | "Column"
+  | "List"
+  // Container
+  | "Card"
+  | "Tabs"
+  | "Modal"
+  // Interactive
+  | "Button"
+  | "TextField"
+  | "CheckBox"
+  | "ChoicePicker"
+  | "Slider"
+  | "DateTimeInput";
+
+// DynamicString: literal value or JSON Pointer data binding
+export type DynamicString = string | { path: string };
+export type DynamicNumber = number | { path: string };
+export type DynamicBoolean = boolean | { path: string };
+export type DynamicStringList = string[] | { path: string };
+
+// A2UI Action (what happens when a user interacts)
+export interface A2UIAction {
+  event?: { name: string; context?: Record<string, DynamicString> };
+  functionCall?: { call: string; args?: Record<string, any> };
+}
+
+// Flat adjacency-list component node (children are ID strings, not nested objects)
+export interface A2UIComponent {
+  id: string;
+  component: A2UIComponentType;
+  // Layout children (Row, Column, List)
+  children?: string[];
+  // Single child (Card, Modal trigger/content, Button)
+  child?: string;
+  // Common props
+  accessibility?: { label?: string; description?: string };
+  weight?: number;
+  // Per-component props (open-ended to support all catalog props)
+  [key: string]: any;
+}
+
+// A2UI surface state — accumulated from lifecycle events
+export interface A2UISurface {
+  surfaceId: string;
+  catalogId: string;
+  theme?: Record<string, any>;
+  sendDataModel?: boolean;
+  /** Flat map of component id → component node */
+  components: Record<string, A2UIComponent>;
+  /** JSON data model for data bindings */
+  dataModel: Record<string, any>;
+}
+
+// The chat message type for a live A2UI surface
+export interface A2UISurfaceData extends BaseMessageData {
+  surfaceId: string;
+  surface: A2UISurface;
+}
+
 // System Message (for workflow events, debugging, etc.)
 export interface SystemData extends BaseMessageData {
   message: string;
@@ -104,6 +174,7 @@ export type MessageComponentType =
   | { type: "error"; data: ErrorData }
   | { type: "workflow_result"; data: WorkflowResultData }
   | { type: "system"; data: SystemData }
+  | { type: "a2ui_surface"; data: A2UISurfaceData }
   | { type: "approval_request"; data: ApprovalRequestData };
 
 // Chat Message Types

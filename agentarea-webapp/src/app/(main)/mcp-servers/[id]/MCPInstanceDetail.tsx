@@ -22,7 +22,7 @@ import Table from "@/components/Table/Table";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
-import { discoverMCPInstanceTools } from "@/lib/browser-api";
+import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {

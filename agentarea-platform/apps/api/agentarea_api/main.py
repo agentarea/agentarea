@@ -14,7 +14,7 @@ for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", 
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
@@ -27,91 +27,6 @@ from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 
 logger = logging.getLogger(__name__)
 container = get_container()
-
-# Cache auth provider to avoid recreating it on every request
-_mcp_auth_provider = None
-
-
-def _get_mcp_auth_provider():
-    """Get or create the MCP auth provider (cached singleton).
-
-    This avoids recreating the provider and decoding JWKS on every request.
-    """
-    global _mcp_auth_provider
-
-    if _mcp_auth_provider is not None:
-        return _mcp_auth_provider
-
-    from agentarea_common.auth.providers.factory import AuthProviderFactory
-    from agentarea_common.config.app import get_app_settings
-
-    settings = get_app_settings()
-    _mcp_auth_provider = AuthProviderFactory.create_provider(
-        "kratos",
-        config={
-            "jwks_b64": settings.KRATOS_JWKS_B64,
-            "issuer": settings.KRATOS_ISSUER,
-            "audience": settings.KRATOS_AUDIENCE,
-        },
-    )
-
-    logger.info("MCP auth provider initialized (cached for performance)")
-    return _mcp_auth_provider
-
-
-async def verify_mcp_auth(request: Request) -> None:
-    """Verify MCP authentication via JWT Bearer token.
-
-    Validates JWT tokens using the cached auth provider (e.g., Kratos).
-    Requires Authorization header with format: 'Bearer <jwt_token>'
-
-    Args:
-        request: FastAPI request object
-
-    Raises:
-        HTTPException: If authentication fails (missing token, invalid token, etc.)
-    """
-    auth_header = request.headers.get("Authorization", "")
-
-    # Check for Bearer token
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid Authorization header. Expected: 'Bearer <token>'",
-        )
-
-    token = auth_header[7:]  # Remove "Bearer " prefix
-
-    try:
-        # Get cached auth provider (avoids recreating on every request)
-        auth_provider = _get_mcp_auth_provider()
-
-        # Verify the JWT token
-        auth_result = await auth_provider.verify_token(token)
-
-        if not auth_result.is_authenticated or not auth_result.token:
-            logger.warning(f"MCP JWT validation failed: {auth_result.error}")
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired authentication token",
-            )
-
-        # Token is valid - add user info to request state for downstream use
-        request.state.user_id = auth_result.token.user_id
-        if auth_result.token.claims:
-            request.state.workspace_id = auth_result.token.claims.get("workspace_id")
-
-        logger.debug(f"MCP authentication successful for user: {auth_result.token.user_id}")
-
-    except HTTPException:
-        # Re-raise HTTPException as-is
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during MCP JWT validation: {e}")
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication validation failed",
-        ) from e
 
 
 async def initialize_services():
@@ -219,9 +134,14 @@ async def app_lifespan(app: FastAPI):
     try:
         yield
     finally:
-        # Shutdown - skip cleanup in reload mode for fast restarts
+        # Always stop the events router — Redis subscribers hold connections
+        # open and block uvicorn reload if not cancelled
+        from agentarea_api.api.events.events_router import stop_events_router
+
+        await stop_events_router()
+
         if is_reload_mode:
-            logger.info("Application shutting down (reload mode - skipping cleanup)")
+            logger.info("Application shutting down (reload mode - skipping full cleanup)")
         else:
             logger.info("Application shutting down (production mode - full cleanup)")
             await cleanup_all_connections()
@@ -290,7 +210,9 @@ def create_app() -> FastAPI:
     app.include_router(protected_v1_router, tags=["v1"])
 
     # Mount MCP Streamable HTTP server at /mcp
-    # Auto-exposes all FastAPI endpoints as MCP tools via fastapi-mcp
+    # Auth: Hydra OAuth tokens (Cursor/Claude Desktop) and API keys, with
+    # Kratos JWT fallback — all handled by get_user_context which tries
+    # Hydra when Kratos validation fails.
     from agentarea_common.auth.dependencies import get_user_context
     from fastapi import Depends
     from fastapi_mcp import AuthConfig, FastApiMCP
@@ -385,3 +307,6 @@ async def health_check():
         "connections": connection_health,
         "timestamp": datetime.now().isoformat(),
     }
+
+
+# reload test

@@ -42,6 +42,12 @@ export const {
 
   // OpenAPI Connections API
   listOpenAPIConnections,
+  createOpenAPIConnection,
+  deleteOpenAPIConnection,
+  getOpenAPIConnection,
+  discoverOpenAPITools,
+  testOpenAPIConnection,
+  previewOpenAPISpec,
 
   // MCP Server Instance API
   listMCPServerInstances,
@@ -103,6 +109,7 @@ export const {
   getSkill,
   getSkillContent,
   getSkillFiles,
+  getSkillFile,
   createSkill,
   uploadSkill,
   updateSkill,
@@ -148,6 +155,27 @@ export const {
 
   // Network API
   getNetworkTopology,
+
+  // Project API
+  listProjects,
+  getProject,
+  createProject,
+  updateProject,
+  deleteProject,
+
+  // Project Association API
+  addSkillToProject,
+  removeSkillFromProject,
+  addAgentToProject,
+  removeAgentFromProject,
+  addMcpInstanceToProject,
+  removeMcpInstanceFromProject,
+
+  // Project Files API
+  listProjectFiles,
+  uploadProjectFile,
+  downloadProjectFile,
+  deleteProjectFile,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -243,8 +271,7 @@ export const getProvidersAndConfigs = async () => {
   };
 };
 
-export type Agent =
-  components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+export type Agent = components["schemas"]["AgentResponse"];
 export type MCPServer = components["schemas"]["MCPServerResponse"];
 export type MCPServerInstance =
   components["schemas"]["MCPServerInstanceResponse"];
@@ -255,9 +282,8 @@ export type ProviderConfig = components["schemas"]["ProviderConfigResponse"];
 export type ModelSpec =
   components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
 export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
-export type ChatAgent =
-  components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
-export type ChatResponse = components["schemas"]["ChatResponse"];
+export type ChatAgent = components["schemas"]["AgentResponse"];
+export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = any;
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type AgentCard = components["schemas"]["AgentCard"];
@@ -268,3 +294,5 @@ export type TaskWithAgent = TaskResponse & {
 
 // Re-export skill types for convenience
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
+
+export type Project = components["schemas"]["ProjectResponse"];

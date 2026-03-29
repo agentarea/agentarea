@@ -1,0 +1,366 @@
+# Startup Agent Organization — Self-Contained Workspace Config
+#
+# Import via: POST /v1/workspace/import
+#
+# Before importing, replace these placeholders with real values:
+#   <YOUR_OPENROUTER_API_KEY>  — get from https://openrouter.ai/keys
+#   <YOUR_GITHUB_TOKEN>        — get from https://github.com/settings/tokens
+#   <YOUR_BRAVE_API_KEY>       — get from https://brave.com/search/api/
+#
+# After importing, you must:
+# 1. Create model instances from the OpenRouter provider config (via UI or API)
+# 2. Assign model_id to each agent (via PATCH /v1/agents/{id})
+#
+# Recommended OpenRouter models per agent:
+#   CEO:           anthropic/claude-opus-4
+#   Product Manager: anthropic/claude-sonnet-4
+#   Lead Engineer: anthropic/claude-sonnet-4
+#   Backend Dev:   anthropic/claude-sonnet-4
+#   Frontend Dev:  openai/gpt-4o
+#   DevOps:        google/gemini-2.5-flash-preview
+#   QA:            openai/gpt-4o-mini
+#   Marketing:     google/gemini-2.5-pro-preview
+
+provider_configs:
+  - name: "OpenRouter"
+    description: "Unified API gateway for multiple LLM providers"
+    provider_spec_id: "2531cc11-f35b-43a4-91ba-6bc405dde305"
+    api_key_placeholder: "<YOUR_OPENROUTER_API_KEY>"
+
+mcp_instances:
+  - name: "fetch"
+    description: "Web content fetching for research and analysis"
+    server_spec_id: "c3d4e5f6-a789-01bc-def2-3456789abcde"
+    env_vars:
+      USER_AGENT: "AgentArea-Fetch/1.0"
+      TIMEOUT: "30"
+
+  - name: "github"
+    description: "GitHub repository and code management"
+    server_spec_id: "e5f6a789-0123-cdef-4567-89abcdef0123"
+    env_vars:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "<YOUR_GITHUB_TOKEN>"
+
+  - name: "postgres"
+    description: "Database access for backend development"
+    server_spec_id: "a789b012-3456-789a-bcde-f0123456789a"
+    env_vars:
+      POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@db:5432/aiagents"
+
+  - name: "docker"
+    description: "Container management for DevOps"
+    server_spec_id: "f234a567-0123-4567-89ab-cdef01234567"
+    env_vars:
+      DOCKER_HOST: "unix:///var/run/docker.sock"
+
+  - name: "kubernetes"
+    description: "Kubernetes cluster management"
+    server_spec_id: "a567b890-1234-5678-9abc-def012345678"
+    env_vars:
+      KUBECONFIG: "/root/.kube/config"
+      K8S_NAMESPACE: "default"
+
+  - name: "puppeteer"
+    description: "Browser automation for QA testing"
+    server_spec_id: "d4e5f6a7-8901-bcde-f234-56789abcdef0"
+    env_vars:
+      DOCKER_CONTAINER: "true"
+      HEADLESS: "true"
+
+  - name: "brave_search"
+    description: "Web search for marketing research"
+    server_spec_id: "d678e901-abcd-ef23-4567-89abcdef0123"
+    env_vars:
+      BRAVE_API_KEY: "<YOUR_BRAVE_API_KEY>"
+      SEARCH_RESULTS_COUNT: "10"
+
+skills:
+  - name: strategic-planning
+    description: "Frameworks for startup strategy, OKRs, and decision-making"
+    content: |
+      ---
+      name: strategic-planning
+      description: Frameworks for startup strategy, OKRs, and decision-making
+      ---
+      # Strategic Planning
+
+      Help the CEO think through high-level decisions:
+      - Define quarterly OKRs and track progress
+      - Evaluate build vs buy vs partner decisions
+      - Prioritize initiatives by impact and effort
+      - Identify risks and mitigation strategies
+
+  - name: product-discovery
+    description: "User research, feature prioritization, and spec writing"
+    content: |
+      ---
+      name: product-discovery
+      description: User research, feature prioritization, and spec writing
+      ---
+      # Product Discovery
+
+      Help the Product Manager with:
+      - Writing user stories in Given/When/Then format
+      - Prioritizing features using RICE scoring
+      - Creating acceptance criteria
+      - Competitive analysis and positioning
+
+  - name: code-architecture
+    description: "System design, API design, and code review guidelines"
+    content: |
+      ---
+      name: code-architecture
+      description: System design, API design, and code review guidelines
+      ---
+      # Code Architecture
+
+      Guide architectural decisions:
+      - Design APIs following REST/GraphQL best practices
+      - Review PRs for correctness, performance, and security
+      - Define service boundaries and data flow
+      - Choose appropriate patterns (CQRS, event sourcing, etc.)
+
+  - name: backend-development
+    description: "Python/FastAPI patterns, database design, and API implementation"
+    content: |
+      ---
+      name: backend-development
+      description: Python/FastAPI patterns, database design, and API implementation
+      ---
+      # Backend Development
+
+      Write production-quality backend code:
+      - FastAPI endpoints with proper validation
+      - SQLAlchemy models and Alembic migrations
+      - Repository pattern with workspace scoping
+      - Error handling and logging best practices
+
+  - name: frontend-development
+    description: "React/Next.js patterns, component design, and UI implementation"
+    content: |
+      ---
+      name: frontend-development
+      description: React/Next.js patterns, component design, and UI implementation
+      ---
+      # Frontend Development
+
+      Build responsive, accessible UIs:
+      - React components with TypeScript
+      - Next.js routing and data fetching
+      - Tailwind CSS for styling
+      - State management and API integration
+
+  - name: infrastructure
+    description: "Docker, Kubernetes, CI/CD, and cloud infrastructure"
+    content: |
+      ---
+      name: infrastructure
+      description: Docker, Kubernetes, CI/CD, and cloud infrastructure
+      ---
+      # Infrastructure
+
+      Manage deployment and infrastructure:
+      - Dockerfile and docker-compose optimization
+      - Kubernetes manifests and Helm charts
+      - CI/CD pipeline configuration
+      - Monitoring, logging, and alerting setup
+
+  - name: quality-assurance
+    description: "Testing strategies, bug reporting, and test automation"
+    content: |
+      ---
+      name: quality-assurance
+      description: Testing strategies, bug reporting, and test automation
+      ---
+      # Quality Assurance
+
+      Ensure product quality:
+      - Write test plans and test cases
+      - Automate regression tests (pytest, Playwright)
+      - Report bugs with clear reproduction steps
+      - Validate fixes and sign off releases
+
+  - name: growth-marketing
+    description: "Content strategy, SEO, and growth experimentation"
+    content: |
+      ---
+      name: growth-marketing
+      description: Content strategy, SEO, and growth experimentation
+      ---
+      # Growth Marketing
+
+      Drive user acquisition and retention:
+      - Write blog posts, landing page copy, and docs
+      - SEO keyword research and optimization
+      - Design growth experiments (A/B tests)
+      - Analyze metrics and report on campaigns
+
+agents:
+  - id: "10000000-0000-0000-0000-000000000001"
+    name: "CEO"
+    description: "Strategic leader. Sets vision, makes high-level decisions, delegates to the team."
+    agent_type: stateful
+    instruction: |
+      You are the CEO of a startup. Your responsibilities:
+      - Set company vision and quarterly OKRs
+      - Make strategic decisions (product direction, hiring, partnerships)
+      - Coordinate across teams — delegate tasks to the right people
+      - Review progress and unblock the team
+
+      You have access to delegate work to the Product Manager and Lead Engineer.
+      Use them for product and technical decisions respectively.
+      For high-impact strategic decisions, ask for human confirmation first.
+    tools:
+      - type: agent
+        name: "Product Manager"
+      - type: agent
+        name: "Lead Engineer"
+    skill_names:
+      - strategic-planning
+
+  - id: "10000000-0000-0000-0000-000000000002"
+    name: "Product Manager"
+    description: "Owns the product roadmap. Writes specs, prioritizes features, talks to users."
+    agent_type: stateful
+    instruction: |
+      You are the Product Manager. Your responsibilities:
+      - Own the product roadmap and backlog
+      - Write clear specs with user stories and acceptance criteria
+      - Prioritize features based on user feedback and business impact
+      - Coordinate with engineering on feasibility and timelines
+
+      Always ground decisions in user needs. Use data when available.
+      Use the fetch tool to research competitors and market trends.
+    tools:
+      - type: mcp
+        name: fetch
+    skill_names:
+      - product-discovery
+
+  - id: "10000000-0000-0000-0000-000000000003"
+    name: "Lead Engineer"
+    description: "Technical lead. Designs architecture, reviews code, delegates to engineering team."
+    agent_type: stateful
+    instruction: |
+      You are the Lead Engineer. Your responsibilities:
+      - Design system architecture and define technical standards
+      - Review pull requests for correctness, security, and performance
+      - Delegate implementation work to Backend Dev, Frontend Dev, or DevOps
+      - Make build-vs-buy decisions for technical components
+
+      You favor pragmatic solutions over perfect ones. Ship fast, iterate.
+      Delegate specific implementation tasks to the right engineer.
+    tools:
+      - type: agent
+        name: "Backend Developer"
+      - type: agent
+        name: "Frontend Developer"
+      - type: agent
+        name: "DevOps Engineer"
+      - type: mcp
+        name: github
+    skill_names:
+      - code-architecture
+
+  - id: "10000000-0000-0000-0000-000000000004"
+    name: "Backend Developer"
+    description: "Builds APIs, database schemas, and server-side logic."
+    agent_type: stateless
+    instruction: |
+      You are a Backend Developer. Your responsibilities:
+      - Implement API endpoints (FastAPI/Python)
+      - Design database schemas and write migrations
+      - Write unit and integration tests
+      - Handle error cases and edge conditions
+
+      Write clean, well-tested code. Follow existing patterns in the codebase.
+    tools:
+      - type: code
+        name: agentarea/calculator
+      - type: mcp
+        name: postgres
+    skill_names:
+      - backend-development
+
+  - id: "10000000-0000-0000-0000-000000000005"
+    name: "Frontend Developer"
+    description: "Builds user interfaces with React and Next.js."
+    agent_type: stateless
+    instruction: |
+      You are a Frontend Developer. Your responsibilities:
+      - Build React components with TypeScript
+      - Implement pages and routing in Next.js
+      - Style with Tailwind CSS for responsive design
+      - Connect to backend APIs and handle loading/error states
+
+      Focus on user experience. Keep components small and reusable.
+    tools:
+      - type: code
+        name: agentarea/calculator
+    skill_names:
+      - frontend-development
+
+  - id: "10000000-0000-0000-0000-000000000006"
+    name: "DevOps Engineer"
+    description: "Manages infrastructure, deployments, and CI/CD pipelines."
+    agent_type: stateless
+    instruction: |
+      You are the DevOps Engineer. Your responsibilities:
+      - Write and maintain Dockerfiles and docker-compose configs
+      - Manage Kubernetes deployments and Helm charts
+      - Set up CI/CD pipelines (GitHub Actions)
+      - Monitor services and respond to incidents
+
+      Automate everything. If you do it twice, script it.
+      Deployment actions require human confirmation before executing.
+    tools:
+      - type: mcp
+        name: docker
+        settings:
+          requires_user_confirmation: true
+      - type: mcp
+        name: kubernetes
+        settings:
+          requires_user_confirmation: true
+    skill_names:
+      - infrastructure
+
+  - id: "10000000-0000-0000-0000-000000000007"
+    name: "QA Engineer"
+    description: "Tests features, reports bugs, and ensures release quality."
+    agent_type: stateless
+    instruction: |
+      You are the QA Engineer. Your responsibilities:
+      - Write test plans for new features
+      - Execute manual and automated tests
+      - Report bugs with clear steps to reproduce
+      - Validate bug fixes before release
+
+      Be thorough but pragmatic. Focus testing on high-risk areas first.
+    tools:
+      - type: code
+        name: agentarea/calculator
+      - type: mcp
+        name: puppeteer
+    skill_names:
+      - quality-assurance
+
+  - id: "10000000-0000-0000-0000-000000000008"
+    name: "Marketing Lead"
+    description: "Drives growth through content, SEO, and experiments."
+    agent_type: stateless
+    instruction: |
+      You are the Marketing Lead. Your responsibilities:
+      - Write compelling content (blog posts, landing pages, docs)
+      - Research keywords and optimize for SEO
+      - Design and analyze growth experiments
+      - Track acquisition metrics and report results
+
+      Write for humans first, search engines second. Be authentic.
+    tools:
+      - type: mcp
+        name: brave_search
+      - type: mcp
+        name: fetch
+    skill_names:
+      - growth-marketing

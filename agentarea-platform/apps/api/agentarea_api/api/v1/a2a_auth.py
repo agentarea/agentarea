@@ -87,10 +87,10 @@ async def extract_auth_from_request(request: Request) -> dict[str, Any]:
 async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
     """Authenticate bearer token using Kratos auth provider."""
     from agentarea_common.auth.providers.factory import AuthProviderFactory
-    from agentarea_common.config.app import get_app_settings
+    from agentarea_common.config.auth import get_auth_settings
 
     try:
-        settings = get_app_settings()
+        settings = get_auth_settings()
         auth_provider = AuthProviderFactory.create_provider(
             "kratos",
             config={

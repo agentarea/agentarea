@@ -4,7 +4,7 @@ Supports multiple entity types (mcp_servers, skills) via registry_type.
 Sync auto-creates specs; version updates require manual approval.
 
 Revision ID: 008_add_registries
-Revises: 007_add_mcp_access_tokens
+Revises: 007_add_api_keys
 Create Date: 2026-03-13 00:00:00.000000
 
 """
@@ -17,7 +17,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "008_add_registries"
-down_revision: str = "007_add_mcp_access_tokens"
+down_revision: str = "007_add_api_keys"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

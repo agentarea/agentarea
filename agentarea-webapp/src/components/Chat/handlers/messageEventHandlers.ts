@@ -11,6 +11,9 @@ import {
   hasToolCallStarted,
   hasToolCallCompleted,
   replaceToolCallStarted,
+  upsertA2UIComponents,
+  updateA2UIDataModel,
+  deleteA2UISurface,
   AnyMessage,
 } from "../utils/messageAccumulator";
 import {
@@ -161,4 +164,46 @@ export function handleTaskCreated(
  */
 export function handleError(setIsLoading: (loading: boolean) => void): void {
   setIsLoading(false);
+}
+
+/**
+ * Handle A2UI lifecycle events (v0.9 protocol).
+ * - A2UIUpdateComponents: upserts components into the surface message (flat adjacency-list)
+ * - A2UIUpdateDataModel: updates the data model at a JSON Pointer path
+ * - A2UIDeleteSurface: removes the surface message from the chat
+ *
+ * A2UICreateSurface is handled by parseEventToMessage (creates a new a2ui_surface message).
+ */
+export function handleA2UIEvent(
+  eventType: string,
+  event: any,
+  setMessages: React.Dispatch<React.SetStateAction<AnyMessage[]>>
+): void {
+  const d = event.data?.original_data || event.data || {};
+
+  if (eventType === "A2UIUpdateComponents") {
+    const surfaceId = d.surface_id;
+    const components = d.components || [];
+    if (surfaceId && components.length) {
+      setMessages((prev) => upsertA2UIComponents(prev, surfaceId, components));
+    }
+    return;
+  }
+
+  if (eventType === "A2UIUpdateDataModel") {
+    const surfaceId = d.surface_id;
+    const path = d.path ?? "/";
+    const value = d.value;
+    if (surfaceId) {
+      setMessages((prev) => updateA2UIDataModel(prev, surfaceId, path, value));
+    }
+    return;
+  }
+
+  if (eventType === "A2UIDeleteSurface") {
+    const surfaceId = d.surface_id;
+    if (surfaceId) {
+      setMessages((prev) => deleteA2UISurface(prev, surfaceId));
+    }
+  }
 }

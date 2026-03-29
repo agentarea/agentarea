@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
-    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\""
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "generate:schema": "npx openapi-typescript http://localhost:8000/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",

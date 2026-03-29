@@ -15,16 +15,14 @@ import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import SkillPanel from "@/components/SkillPanel/SkillPanel";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import {
-  getSkill,
-  getSkillContent,
-  getSkillFiles,
-  getSkillFile,
-  updateSkill,
-  deleteSkill,
-  type Skill,
-  type SkillContent,
-  type SkillFile,
-} from "@/lib/browser-api";
+  getSkillAction as getSkill,
+  getSkillContentAction as getSkillContent,
+  getSkillFilesAction as getSkillFiles,
+  getSkillFileAction as getSkillFile,
+  updateSkillAction as updateSkill,
+  deleteSkillAction as deleteSkill,
+} from "@/lib/server-actions";
+import type { Skill, SkillContent, SkillFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -34,12 +32,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  listSkillMembers,
-  addSkillMember,
-  removeSkillMember,
-  flattenSkill,
-  listSkills,
-} from "@/lib/browser-api";
+  listSkillMembersAction as listSkillMembers,
+  addSkillMemberAction as addSkillMember,
+  removeSkillMemberAction as removeSkillMember,
+  flattenSkillAction as flattenSkill,
+  listSkillsAction as listSkills,
+} from "@/lib/server-actions";
 import { Plus, Trash2, List } from "lucide-react";
 import YAML from "js-yaml";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";

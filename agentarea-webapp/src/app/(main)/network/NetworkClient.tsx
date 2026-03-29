@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { getNetworkTopology } from "@/lib/browser-api";
+import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-actions";
 import DataFlowView from "./views/DataFlowView";
 import OrgChartView from "./views/OrgChartView";
 import NodeDetailPanel from "./components/NodeDetailPanel";

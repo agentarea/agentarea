@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  createOpenAPIConnection,
-  discoverOpenAPITools,
-  previewOpenAPISpec,
-} from "@/lib/browser-api";
+  createOpenAPIConnectionAction as createOpenAPIConnection,
+  discoverOpenAPIToolsAction as discoverOpenAPITools,
+  previewOpenAPISpecAction as previewOpenAPISpec,
+} from "@/lib/server-actions";
 
 type SpecMode = "url" | "json";
 

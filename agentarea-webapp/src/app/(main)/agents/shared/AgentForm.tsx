@@ -88,6 +88,7 @@ export default function AgentForm({
       },
       events_config: initialData?.events_config || { events: [] },
       planning: initialData?.planning || false,
+      a2ui_enabled: initialData?.a2ui_enabled || false,
     },
   });
 

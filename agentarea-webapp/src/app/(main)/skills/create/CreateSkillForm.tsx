@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
-import { createSkill, uploadSkill } from "@/lib/browser-api";
+import { createSkillAction as createSkill, uploadSkillAction as uploadSkill } from "@/lib/server-actions";
 import { useToast } from "@/hooks/use-toast";
 
 export function CreateSkillForm() {

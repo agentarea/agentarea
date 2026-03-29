@@ -11,7 +11,7 @@ import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
 import { getMCPServerCategory, getCategoryColorClasses } from "../utils";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
-import { listMCPServers } from "@/lib/browser-api";
+import { listMCPServersAction as listMCPServers } from "@/lib/server-actions";
 
 interface MCPSpecsSectionProps {
   searchParams: { [key: string]: string | string[] | undefined };

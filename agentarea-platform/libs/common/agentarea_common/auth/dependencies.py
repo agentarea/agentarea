@@ -28,21 +28,31 @@ logger = logging.getLogger(__name__)
 _API_KEY_PREFIX = "aat_"
 
 
+def _www_authenticate_bearer() -> str:
+    """Return WWW-Authenticate header value with RFC 9728 resource_metadata.
+
+    MCP clients (Cursor, Claude Desktop) use the resource_metadata URL to
+    discover OAuth authorization server metadata and start the OAuth flow.
+    """
+    from agentarea_common.config import get_settings
+
+    api_base = get_settings().app.API_BASE_URL.rstrip("/")
+    return f'Bearer resource_metadata="{api_base}/.well-known/oauth-protected-resource"'
+
+
 async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
     """Populate accessible_workspaces on UserContext via AuthorizationService."""
     from agentarea_common.di.container import resolve
 
-    try:
-        authz = resolve(AuthorizationService)
-        user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
-    except (KeyError, TypeError, ValueError):
-        # Fallback: only own workspace (AuthorizationService not registered yet during startup)
-        user_context.accessible_workspaces = [user_context.workspace_id]
+    authz = resolve(AuthorizationService)
+    user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
 
 
 # Security schemes
-# Required authentication - raises 401 if no token
-security_required = HTTPBearer()
+# Required authentication - raises 401 with RFC 9728 resource_metadata if no token
+# NOTE: We use auto_error=False and raise manually so the WWW-Authenticate header
+# includes the resource_metadata URL that MCP clients need for OAuth discovery.
+security_required = HTTPBearer(auto_error=False)
 
 # Optional authentication - returns None if no token (doesn't raise error)
 security_optional = HTTPBearer(auto_error=False)
@@ -50,7 +60,7 @@ security_optional = HTTPBearer(auto_error=False)
 
 async def _validate_api_key(token: str, request: Request) -> UserContext | None:
     """Validate an API key and return UserContext, or None if invalid."""
-    from agentarea_mcp.domain.auth_models import MCPAccessToken
+    from agentarea_mcp.domain.auth_models import APIKey
     from sqlalchemy import select
     from sqlalchemy import update as sa_update
 
@@ -59,9 +69,7 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
     async with get_database().async_session_factory() as session:
-        result = await session.execute(
-            select(MCPAccessToken).where(MCPAccessToken.token_hash == token_hash)
-        )
+        result = await session.execute(select(APIKey).where(APIKey.token_hash == token_hash))
         record = result.scalar_one_or_none()
 
         if record is None or not record.is_active:
@@ -72,10 +80,10 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
         # Increment access count (best-effort)
         try:
             await session.execute(
-                sa_update(MCPAccessToken)
-                .where(MCPAccessToken.id == record.id)
+                sa_update(APIKey)
+                .where(APIKey.id == record.id)
                 .values(
-                    access_count=MCPAccessToken.access_count + 1,
+                    access_count=APIKey.access_count + 1,
                     last_accessed_at=datetime.utcnow(),
                 )
             )
@@ -98,9 +106,9 @@ def get_auth_provider():
 
     Returns configured Kratos auth provider from application settings.
     """
-    from agentarea_common.config.app import get_app_settings
+    from agentarea_common.config.auth import get_auth_settings
 
-    settings = get_app_settings()
+    settings = get_auth_settings()
 
     return AuthProviderFactory.create_provider(
         "kratos",
@@ -112,9 +120,71 @@ def get_auth_provider():
     )
 
 
+# ---------------------------------------------------------------------------
+# Hydra OAuth token validation (for MCP clients: Cursor, Claude Desktop)
+# ---------------------------------------------------------------------------
+_hydra_jwks_client = None
+
+
+def _get_hydra_jwks():
+    """Get or create Hydra JWKS client (cached)."""
+    global _hydra_jwks_client
+    if _hydra_jwks_client is not None:
+        return _hydra_jwks_client
+
+    import jwt as pyjwt
+
+    from agentarea_common.config import get_settings
+
+    settings = get_settings()
+    jwks_url = f"{settings.mcp.HYDRA_PUBLIC_URL.rstrip('/')}/.well-known/jwks.json"
+    _hydra_jwks_client = pyjwt.PyJWKClient(jwks_url, cache_keys=True)
+    logger.info(f"Hydra JWKS client initialized: {jwks_url}")
+    return _hydra_jwks_client
+
+
+async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
+    """Try to validate a JWT as a Hydra-issued OAuth token.
+
+    Returns UserContext if valid, None otherwise. Used as a fallback when
+    Kratos validation fails — MCP clients (Cursor, Claude Desktop) authenticate
+    via Hydra OAuth 2.1 and their tokens are signed with Hydra's keys.
+    """
+    import jwt as pyjwt
+
+    try:
+        jwks_client = _get_hydra_jwks()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+        payload = pyjwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+
+        subject = payload.get("sub", "")
+        if not subject:
+            return None
+
+        # workspace_id from token ext claims (set during consent) or header or subject
+        ext = payload.get("ext", {})
+        workspace_id = request.headers.get("X-Workspace-ID") or ext.get("workspace_id") or subject
+
+        return UserContext(
+            user_id=subject,
+            workspace_id=workspace_id,
+            roles=[],
+        )
+
+    except Exception as e:
+        logger.debug(f"Hydra token verification failed: {e}")
+        return None
+
+
 async def get_user_context(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security_required),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_required),
 ) -> UserContext:
     """FastAPI dependency to extract user context from JWT token (REQUIRED authentication).
 
@@ -138,6 +208,13 @@ async def get_user_context(
         async def protected_endpoint(user: UserContext = Depends(get_user_context)):
             return {"user_id": user.user_id}
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication credentials",
+            headers={"WWW-Authenticate": _www_authenticate_bearer()},
+        )
+
     token = credentials.credentials
 
     # Check if this is an API key (prefix-based routing)
@@ -147,7 +224,7 @@ async def get_user_context(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired API key",
-                headers={"WWW-Authenticate": "Bearer"},
+                headers={"WWW-Authenticate": _www_authenticate_bearer()},
             )
         await _resolve_accessible_workspaces(user_context)
         ContextManager.set_context(user_context)
@@ -156,7 +233,7 @@ async def get_user_context(
         )
         return user_context
 
-    # Otherwise, verify as JWT
+    # Try Kratos JWT first
     auth_provider = get_auth_provider()
 
     try:
@@ -164,11 +241,18 @@ async def get_user_context(
         auth_result: AuthResult = await auth_provider.verify_token(token)
 
         if not auth_result.is_authenticated or not auth_result.token:
+            # Kratos rejected — try Hydra OAuth token before failing
+            hydra_context = await _try_hydra_token(token, request)
+            if hydra_context is not None:
+                await _resolve_accessible_workspaces(hydra_context)
+                ContextManager.set_context(hydra_context)
+                return hydra_context
+
             logger.warning(f"Authentication failed: {auth_result.error}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=auth_result.error or "Invalid authentication token",
-                headers={"WWW-Authenticate": "Bearer"},
+                headers={"WWW-Authenticate": _www_authenticate_bearer()},
             )
 
         # Get workspace from header, fallback to user_id
@@ -196,6 +280,13 @@ async def get_user_context(
     except HTTPException:
         raise
     except Exception as e:
+        # Kratos threw an exception — try Hydra as last resort
+        hydra_context = await _try_hydra_token(token, request)
+        if hydra_context is not None:
+            await _resolve_accessible_workspaces(hydra_context)
+            ContextManager.set_context(hydra_context)
+            return hydra_context
+
         logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

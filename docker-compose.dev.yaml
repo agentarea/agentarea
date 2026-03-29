@@ -34,6 +34,10 @@ services:
       - MCP_OAUTH_SCOPES=openid offline_access
       # Public API base URL (used in OAuth AS metadata and WWW-Authenticate)
       - API_BASE_URL=http://localhost:8000
+      # Kratos JWT authentication
+      - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
+      - KRATOS_ISSUER=${KRATOS_ISSUER:-https://agentarea.dev}
+      - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}

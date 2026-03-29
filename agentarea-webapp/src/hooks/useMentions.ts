@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { listAgents } from '@/lib/browser-api';
+import { listAgentsAction } from '@/lib/server-actions';
 import {
   findMentionPosition,
   calculateMentionPosition,
@@ -49,7 +49,7 @@ export function useMentions({
   useEffect(() => {
     const fetchAgents = async () => {
       try {
-        const { data, error } = await listAgents();
+        const { data, error } = await listAgentsAction();
 
         if (error) {
           console.error('Failed to fetch agents:', error);

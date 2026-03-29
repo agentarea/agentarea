@@ -15,11 +15,11 @@ import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
 import {
-  checkMCPServerInstanceConfiguration,
-  createMCPServerInstance,
-  getMCPServerInstance,
-  updateMCPServerInstance,
-} from "@/lib/browser-api";
+  checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
+  createMCPServerInstanceAction as createMCPServerInstance,
+  getMCPServerInstanceAction as getMCPServerInstance,
+  updateMCPServerInstanceAction as updateMCPServerInstance,
+} from "@/lib/server-actions";
 import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { getNestedErrorMessage } from "../utils/formUtils";

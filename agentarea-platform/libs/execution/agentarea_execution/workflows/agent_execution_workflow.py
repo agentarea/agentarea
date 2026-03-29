@@ -109,6 +109,8 @@ class AgentExecutionWorkflow:
         self._pause_reason = ""
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
+        # A2UI action queue — frontend signals land here, workflow loop drains them
+        self._a2ui_action_queue: list[dict[str, Any]] = []
         self._skill_tool: SkillActivationTool | None = None
         self._tool_catalog: ToolCatalog | None = None
         self._pending_escalations: dict[str, PendingEscalation] = {}
@@ -150,6 +152,24 @@ class AgentExecutionWorkflow:
                     "iteration": self.state.current_iteration,
                 },
             )
+
+    _MAX_A2UI_QUEUE_SIZE = 50
+
+    @workflow.signal
+    async def handle_a2ui_action(self, action_data: dict) -> None:
+        """Signal from frontend when user interacts with an A2UI surface.
+
+        The action is queued and injected as a user message on the next LLM call,
+        so the agent can respond to the user's interaction.
+        """
+        if len(self._a2ui_action_queue) >= self._MAX_A2UI_QUEUE_SIZE:
+            workflow.logger.warning("A2UI action queue full, dropping oldest")
+            self._a2ui_action_queue.pop(0)
+        self._a2ui_action_queue.append(action_data)
+        workflow.logger.info(
+            f"A2UI action received: {action_data.get('name', 'unknown')} "
+            f"on surface {action_data.get('surface_id', 'unknown')}"
+        )
 
     @workflow.signal
     async def resolve_escalation(
@@ -501,6 +521,7 @@ class AgentExecutionWorkflow:
         result: ResolveAgentToolsResult = await workflow.execute_activity(
             Activities.RESOLVE_AGENT_TOOLS,
             args=[resolve_request],
+            result_type=ResolveAgentToolsResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
@@ -829,6 +850,7 @@ class AgentExecutionWorkflow:
                 goal_description=self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
+                a2ui_enabled=self.state.agent_config.get("a2ui_enabled", False),
             )
 
             # Add system message and user message if first iteration
@@ -868,6 +890,21 @@ class AgentExecutionWorkflow:
                 )
                 await self._publish_events_immediately()
                 self.context_manager.mark_warning_sent()
+
+        # Drain queued A2UI actions as user messages so the LLM can respond
+        if self._a2ui_action_queue:
+            import json as _json
+
+            for action in self._a2ui_action_queue:
+                action_msg = (
+                    f"[A2UI Action] The user interacted with the UI surface "
+                    f"'{action.get('surface_id', 'unknown')}': "
+                    f"action={action.get('name', 'unknown')}, "
+                    f"source={action.get('source_component_id', 'unknown')}, "
+                    f"context={_json.dumps(action.get('context', {}))}"
+                )
+                self.state.messages.append(Message(role="user", content=action_msg))
+            self._a2ui_action_queue.clear()
 
         # Call LLM
         llm_response = await self._call_llm()
@@ -968,6 +1005,14 @@ class AgentExecutionWorkflow:
                 if prompt_tokens > 0:
                     self.context_manager.update_usage(prompt_tokens)
 
+            # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
+            display_content = content_value
+            if self.state.agent_config.get("a2ui_enabled", False) and content_value:
+                from .a2ui_parser import A2UI_DELIMITER
+
+                if A2UI_DELIMITER in content_value:
+                    display_content = content_value.split(A2UI_DELIMITER, 1)[0].rstrip()
+
             self.event_manager.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
                 {
@@ -975,7 +1020,7 @@ class AgentExecutionWorkflow:
                     "cost": usage_info["cost"],
                     "total_cost": self.budget_tracker.cost,
                     "usage": usage_info,
-                    "content": content_value,
+                    "content": display_content,
                     "tool_calls": tool_calls_value or [],
                     "role": role_value,
                 },
@@ -1017,6 +1062,28 @@ class AgentExecutionWorkflow:
         # Only add non-empty messages to state
         content = response.get("content", "")
         tool_calls_raw = response.get("tool_calls")
+
+        # Parse and publish A2UI events if agent has A2UI enabled
+        if self.state.agent_config.get("a2ui_enabled", False) and content:
+            from .a2ui_parser import A2UI_DELIMITER, parse_a2ui_response
+
+            if A2UI_DELIMITER in content:
+                a2ui_result = parse_a2ui_response(content)
+                if a2ui_result.a2ui_events:
+                    # Replace content with text-only portion
+                    content = a2ui_result.text_content
+                    response["content"] = content
+
+                    # Publish each A2UI event through the existing pipeline
+                    for a2ui_event in a2ui_result.a2ui_events:
+                        event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
+                        event_data["task_id"] = str(self.state.task_id)
+                        self.event_manager.add_event(a2ui_event["type"], event_data)
+
+                    await self._publish_events_immediately()
+
+                if a2ui_result.parse_error:
+                    workflow.logger.warning(f"A2UI parse error: {a2ui_result.parse_error}")
 
         if content.strip() or tool_calls_raw:
             # Create Message directly from response dict

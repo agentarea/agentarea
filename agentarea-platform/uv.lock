@@ -230,7 +230,6 @@ dependencies = [
     { name = "agentarea-agents-sdk" },
     { name = "pydantic" },
     { name = "temporalio" },
-    { name = "tiktoken" },
 ]
 
 [package.optional-dependencies]
@@ -248,7 +247,6 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.10.0" },
     { name = "temporalio", specifier = ">=1.18.2" },
-    { name = "tiktoken", specifier = ">=0.7.0" },
 ]
 provides-extras = ["dev"]
 

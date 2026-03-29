@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { TaskItem, type TaskItemData } from "@/components/TaskItem";
 import {
-  getAgentTaskStatus,
-  listAgentTasks,
-} from "@/lib/browser-api";
+  getAgentTaskStatusAction as getAgentTaskStatus,
+  listAgentTasksAction as listAgentTasks,
+} from "@/lib/server-actions";
 import { TaskStatus, TaskWithStatus } from "../types";
 
 interface Task {
