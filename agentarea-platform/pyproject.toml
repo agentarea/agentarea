@@ -33,6 +33,8 @@ members = [
     "libs/mcp",
     "libs/tasks",
     "libs/secrets",
+    "libs/wallet",
+    "libs/payment",
     "libs/execution",
     "libs/context",
     "libs/triggers",
@@ -49,6 +51,8 @@ agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
+agentarea-wallet = { workspace = true }
+agentarea-payment = { workspace = true }
 agentarea-execution = { workspace = true }
 agentarea-context = { workspace = true }
 agentarea-triggers = { workspace = true }
@@ -75,6 +79,8 @@ dev = [
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "agentarea-wallet",
+    "agentarea-payment",
     "agentarea-execution",
     "agentarea-context[faiss]",
     "agentarea-triggers",
@@ -184,6 +190,8 @@ addopts = [
     "--cov=agentarea_mcp",
     "--cov=agentarea_tasks",
     "--cov=agentarea_secrets",
+    "--cov=agentarea_wallet",
+    "--cov=agentarea_payment",
     "--cov=agentarea_context",
     "--cov=agentarea_triggers",
     "--cov-report=term-missing",
@@ -229,6 +237,8 @@ source = [
     "libs/mcp/agentarea_mcp",
     "libs/tasks/agentarea_tasks",
     "libs/secrets/agentarea_secrets",
+    "libs/wallet/agentarea_wallet",
+    "libs/payment/agentarea_payment",
     "libs/execution/agentarea_execution",
     "libs/context/agentarea_context",
     "libs/triggers/agentarea_triggers",

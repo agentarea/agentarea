@@ -27,6 +27,9 @@ export type WorkflowEventType =
   | "ToolCallFailed"
   | "BudgetWarning"
   | "BudgetExceeded"
+  | "ServicePayment"
+  | "ServiceBudgetWarning"
+  | "ServiceBudgetExceeded"
   | "ContextWarning"
   | "ContextCompacted"
   | "HumanApprovalRequested"
@@ -293,6 +296,24 @@ export const EVENT_TYPE_CONFIG: Record<
     level: "info",
     icon: "x-square",
     color: "gray",
+  },
+  ServicePayment: {
+    title: "Service Payment",
+    level: "info",
+    icon: "credit-card",
+    color: "green",
+  },
+  ServiceBudgetWarning: {
+    title: "Service Budget Warning",
+    level: "warning",
+    icon: "alert-triangle",
+    color: "amber",
+  },
+  ServiceBudgetExceeded: {
+    title: "Service Budget Exceeded",
+    level: "error",
+    icon: "alert-circle",
+    color: "red",
   },
 };
 
