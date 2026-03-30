@@ -8,6 +8,7 @@ interface ModelBadgeProps {
   configName?: string;
   className?: string;
   isLoading?: boolean;
+  size?: "default" | "sm";
 }
 
 export default function ModelBadge({
@@ -16,6 +17,7 @@ export default function ModelBadge({
   configName,
   className,
   isLoading = false,
+  size = "default",
 }: ModelBadgeProps) {
   const getProviderIcon = () => {
     if (isLoading) {
@@ -33,10 +35,13 @@ export default function ModelBadge({
     return modelDisplayName || configName || providerName || "Unknown model";
   };
 
+  const isSm = size === "sm";
+
   return (
     <div
       className={cn(
-        "flex max-w-max items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-sm",
+        "flex max-w-max items-center gap-1 rounded-md bg-gray-100",
+        isSm ? "px-1.5 py-0.5" : "px-2 py-1",
         className
       )}
       title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ""}`}
@@ -44,14 +49,19 @@ export default function ModelBadge({
       <Image
         src={getProviderIcon()}
         alt={providerName || "Model"}
-        width={16}
-        height={16}
+        width={isSm ? 14 : 16}
+        height={isSm ? 14 : 16}
         className="rounded-sm"
       />
-      <span className="text-xs font-medium text-gray-700">
+      <span
+        className={cn(
+          "font-medium text-gray-700",
+          isSm ? "text-[10px]" : "text-xs"
+        )}
+      >
         {getModelName()}
       </span>
-      {providerName && (
+      {providerName && !isSm && (
         <span className="text-xs text-gray-500">({providerName})</span>
       )}
     </div>
