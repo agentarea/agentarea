@@ -62,6 +62,7 @@ export type AgentFormValues = {
     events: EventConfig[];
   };
   planning: boolean;
+  a2ui_enabled: boolean;
   skills?: AgentSkill[];
 };
 
@@ -77,5 +78,6 @@ export const initialState: AddAgentFormState = {
     tools_config: { mcp_server_configs: [] }, // Initialize as object with empty array
     events_config: { events: [] }, // Array of event config objects
     planning: false,
+    a2ui_enabled: false,
   },
 };

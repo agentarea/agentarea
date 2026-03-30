@@ -198,27 +198,30 @@ export function createApiClient(client: Client) {
       message: string;
       conversation_id?: string;
     }) => {
-      const { data, error } = await client.POST("/v1/chat/messages", {
-        body: message,
+      const { data, error } = await client.POST("/v1/chat/messages" as any, {
+        body: message as any,
       });
       return { data, error };
     },
 
     getChatAgents: async () => {
-      const { data, error } = await client.GET("/v1/chat/agents");
+      const { data, error } = await client.GET("/v1/chat/agents" as any, {});
       return { data, error };
     },
 
     getChatAgent: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/chat/agents/{agent_id}", {
-        params: { path: { agent_id: agentId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/chat/agents/{agent_id}" as any,
+        {
+          params: { path: { agent_id: agentId } },
+        }
+      );
       return { data, error };
     },
 
     getChatMessageStatus: async (taskId: string) => {
       const { data, error } = await client.GET(
-        "/v1/chat/messages/{task_id}/status",
+        "/v1/chat/messages/{task_id}/status" as any,
         {
           params: { path: { task_id: taskId } },
         }
@@ -238,9 +241,7 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.GET("/v1/mcp-servers/", {
         params: { query: params },
       });
-      // API returns paginated response; unwrap to items array for callers
-      const items = (data as any)?.items ?? data;
-      return { data: items, error };
+      return { data, error };
     },
 
     createMCPServer: async (
@@ -633,12 +634,12 @@ export function createApiClient(client: Client) {
 
     // Authentication API
     getCurrentUser: async () => {
-      const { data, error } = await client.GET("/v1/auth/users/me", {});
+      const { data, error } = await client.GET("/v1/auth/users/me" as any, {});
       return { data, error };
     },
 
     testProtectedEndpoint: async () => {
-      const { data, error } = await client.GET("/v1/protected/test", {});
+      const { data, error } = await client.GET("/v1/protected/test" as any, {});
       return { data, error };
     },
 
@@ -1092,14 +1093,9 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createOpenAPIConnection: async (body: {
-      name: string;
-      base_url: string;
-      description?: string;
-      spec_url?: string;
-      spec_content?: string;
-      custom_headers?: { name: string; value: string }[];
-    }) => {
+    createOpenAPIConnection: async (
+      body: components["schemas"]["OpenAPIConnectionCreate"]
+    ) => {
       const { data, error } = await client.POST(
         "/v1/openapi-connections/" as any,
         { body }
@@ -1146,6 +1142,166 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.POST(
         "/v1/openapi-connections/preview" as any,
         { body }
+      );
+      return { data, error };
+    },
+
+    // Project API
+    listProjects: async () => {
+      const { data, error } = await client.GET("/v1/projects/");
+      return { data, error };
+    },
+
+    getProject: async (projectId: string) => {
+      const { data, error } = await client.GET("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    createProject: async (project: components["schemas"]["ProjectCreate"]) => {
+      const { data, error } = await client.POST("/v1/projects/", {
+        body: project,
+      });
+      return { data, error };
+    },
+
+    updateProject: async (
+      projectId: string,
+      project: components["schemas"]["ProjectUpdate"]
+    ) => {
+      const { data, error } = await client.PATCH("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+        body: project,
+      });
+      return { data, error };
+    },
+
+    deleteProject: async (projectId: string) => {
+      const { data, error } = await client.DELETE("/v1/projects/{project_id}", {
+        params: { path: { project_id: projectId } },
+      });
+      return { data, error };
+    },
+
+    // Project Association API
+    addSkillToProject: async (projectId: string, skillId: string) => {
+      const { data, error } = await client.POST(
+        "/v1/projects/{project_id}/skills" as any,
+        {
+          params: { path: { project_id: projectId } },
+          body: { skill_id: skillId },
+        }
+      );
+      return { data, error };
+    },
+
+    removeSkillFromProject: async (projectId: string, skillId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/projects/{project_id}/skills/{skill_id}" as any,
+        {
+          params: { path: { project_id: projectId, skill_id: skillId } },
+        }
+      );
+      return { data, error };
+    },
+
+    addAgentToProject: async (projectId: string, agentId: string) => {
+      const { data, error } = await client.POST(
+        "/v1/projects/{project_id}/agents" as any,
+        {
+          params: { path: { project_id: projectId } },
+          body: { agent_id: agentId },
+        }
+      );
+      return { data, error };
+    },
+
+    removeAgentFromProject: async (projectId: string, agentId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/projects/{project_id}/agents/{agent_id}" as any,
+        {
+          params: { path: { project_id: projectId, agent_id: agentId } },
+        }
+      );
+      return { data, error };
+    },
+
+    addMcpInstanceToProject: async (
+      projectId: string,
+      mcpInstanceId: string
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/projects/{project_id}/mcp-instances" as any,
+        {
+          params: { path: { project_id: projectId } },
+          body: { mcp_instance_id: mcpInstanceId },
+        }
+      );
+      return { data, error };
+    },
+
+    removeMcpInstanceFromProject: async (
+      projectId: string,
+      mcpInstanceId: string
+    ) => {
+      const { data, error } = await client.DELETE(
+        "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}" as any,
+        {
+          params: {
+            path: { project_id: projectId, mcp_instance_id: mcpInstanceId },
+          },
+        }
+      );
+      return { data, error };
+    },
+
+    // Project Files API
+    listProjectFiles: async (projectId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/projects/{project_id}/files" as any,
+        {
+          params: { path: { project_id: projectId } },
+        }
+      );
+      return { data, error };
+    },
+
+    uploadProjectFile: async (projectId: string, formData: FormData) => {
+      const response = await fetch(
+        `/api/proxy/v1/projects/${projectId}/files`,
+        {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        }
+      );
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ detail: "Upload failed" }));
+        return { data: null, error };
+      }
+      const data = await response.json();
+      return { data, error: null };
+    },
+
+    downloadProjectFile: async (projectId: string, filePath: string) => {
+      const { data, error } = await client.GET(
+        "/v1/projects/{project_id}/files/{file_path}" as any,
+        {
+          params: { path: { project_id: projectId, file_path: filePath } },
+        }
+      );
+      return { data, error };
+    },
+
+    deleteProjectFile: async (projectId: string, filePath: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/projects/{project_id}/files/{file_path}" as any,
+        {
+          params: { path: { project_id: projectId, file_path: filePath } },
+        }
       );
       return { data, error };
     },

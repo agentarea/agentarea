@@ -33,6 +33,20 @@ class DatabaseSettings(BaseAppSettings):
     pool_timeout: int = 30  # Timeout for getting connection from pool
     pool_recycle: int = 3600  # Recycle connections every hour to prevent stale connections
     echo: bool = False
+    POSTGRES_READ_HOST: str | None = None
+    POSTGRES_READ_PORT: int | None = None
+    READ_POOL_SIZE: int = 15
+    READ_POOL_MAX_OVERFLOW: int = 20
+
+    @property
+    def read_url(self) -> str:
+        """Async database URL for the read replica (falls back to primary if not configured)."""
+        host = self.POSTGRES_READ_HOST or self.POSTGRES_HOST
+        port = self.POSTGRES_READ_PORT or self.POSTGRES_PORT
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{host}:{port}/{self.POSTGRES_DB}"
+        )
 
     @property
     def url(self) -> str:

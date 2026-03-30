@@ -26,49 +26,32 @@ const MCP_SERVER_ICONS: Record<string, string> = {
 };
 
 /**
- * Extract tools from agent's tools_config and convert to avatar format
+ * Extract tools from agent's tools array and convert to avatar format
  */
 export function getToolAvatars(agent: Agent): ToolAvatar[] {
   const toolAvatars: ToolAvatar[] = [];
 
-  if (!agent.tools_config) {
+  if (!agent.tools || !Array.isArray(agent.tools)) {
     return toolAvatars;
   }
 
-  // Add builtin tools
-  if (
-    agent.tools_config.builtin_tools &&
-    Array.isArray(agent.tools_config.builtin_tools)
-  ) {
-    for (const tool of agent.tools_config.builtin_tools) {
-      if (typeof tool === "object" && tool.tool_name) {
-        const iconUrl =
-          BUILTIN_TOOL_ICONS[tool.tool_name] || BUILTIN_TOOL_ICONS.calculator;
-        toolAvatars.push({
-          imageUrl: iconUrl,
-          name: tool.tool_name,
-          type: "builtin",
-        });
-      }
-    }
-  }
-
-  // Add MCP server tools
-  if (
-    agent.tools_config.mcp_server_configs &&
-    Array.isArray(agent.tools_config.mcp_server_configs)
-  ) {
-    for (const serverConfig of agent.tools_config.mcp_server_configs) {
-      if (typeof serverConfig === "object" && serverConfig.mcp_server_id) {
-        // Try to match server ID to known icons
-        const serverId = serverConfig.mcp_server_id.toLowerCase();
-        const iconUrl = MCP_SERVER_ICONS[serverId] || MCP_SERVER_ICONS.default;
-        toolAvatars.push({
-          imageUrl: iconUrl,
-          name: serverConfig.mcp_server_id,
-          type: "mcp",
-        });
-      }
+  for (const tool of agent.tools) {
+    if (tool.type === "code") {
+      const iconUrl =
+        BUILTIN_TOOL_ICONS[tool.name] || BUILTIN_TOOL_ICONS.calculator;
+      toolAvatars.push({
+        imageUrl: iconUrl,
+        name: tool.name,
+        type: "builtin",
+      });
+    } else if (tool.type === "mcp") {
+      const serverName = tool.name.toLowerCase();
+      const iconUrl = MCP_SERVER_ICONS[serverName] || MCP_SERVER_ICONS.default;
+      toolAvatars.push({
+        imageUrl: iconUrl,
+        name: tool.name,
+        type: "mcp",
+      });
     }
   }
 

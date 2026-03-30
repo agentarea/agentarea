@@ -199,7 +199,7 @@ class MCPOAuthLink(BaseModel, WorkspaceScopedMixin):
         self.last_accessed_at = None
 
 
-class MCPAccessToken(BaseModel, WorkspaceScopedMixin):
+class APIKey(BaseModel, WorkspaceScopedMixin):
     """Personal Access Token for Bearer-authenticated MCP proxy access.
 
     The raw token is shown once at creation and never stored — only its
@@ -210,7 +210,7 @@ class MCPAccessToken(BaseModel, WorkspaceScopedMixin):
     that belongs to the same workspace.
     """
 
-    __tablename__ = "mcp_access_tokens"
+    __tablename__ = "api_keys"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # SHA-256 hex digest of the raw token

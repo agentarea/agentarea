@@ -7,6 +7,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 from ..auth.context_manager import ContextManager
+from ..auth.dependencies import _www_authenticate_bearer
 from .workspace import (
     InvalidJWTToken,
     MissingWorkspaceContext,
@@ -182,7 +183,7 @@ async def invalid_jwt_token_handler(request: Request, exc: InvalidJWTToken) -> J
             "detail": "Invalid or missing authentication token",
             "error_code": "AUTHENTICATION_FAILED",
         },
-        headers={"WWW-Authenticate": "Bearer", **_get_workspace_headers()},
+        headers={"WWW-Authenticate": _www_authenticate_bearer(), **_get_workspace_headers()},
     )
 
 

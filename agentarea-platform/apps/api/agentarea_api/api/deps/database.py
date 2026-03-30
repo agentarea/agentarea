@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+from agentarea_common.infrastructure.database import get_read_db_session
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,3 +18,5 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 # Type alias for dependency injection
 DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
+
+ReadDatabaseSessionDep = Annotated[AsyncSession, Depends(get_read_db_session)]

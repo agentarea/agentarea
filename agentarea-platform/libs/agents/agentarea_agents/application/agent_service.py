@@ -18,7 +18,7 @@ class AgentService(BaseCrudService[Agent]):
         self,
         repository_factory: RepositoryFactory,
         event_broker: EventBroker,
-        authorization_service: AuthorizationService | None = None,
+        authorization_service: AuthorizationService,
     ):
         repository = repository_factory.create_repository(AgentRepository)
         super().__init__(repository)
@@ -33,13 +33,8 @@ class AgentService(BaseCrudService[Agent]):
         Raises:
             PermissionError: If the user cannot write to the agent's workspace.
         """
-        if self._authz:
-            if not await self._authz.can_write_workspace(self._user_context, agent.workspace_id):
-                raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
-        else:
-            # No AuthorizationService injected — fall back to workspace match
-            if agent.workspace_id != self._user_context.workspace_id:
-                raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
+        if not await self._authz.can_write_workspace(self._user_context, agent.workspace_id):
+            raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
 
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
@@ -54,7 +49,9 @@ class AgentService(BaseCrudService[Agent]):
         tools: dict | list | None = None,
         events_config: dict | None = None,
         planning: bool | None = None,
+        a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str = "stateless",
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -64,6 +61,8 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             events_config=events_config,
             planning=planning,
+            a2ui_enabled=a2ui_enabled,
+            agent_type=agent_type,
         )
         agent = await self.create(agent)
 
@@ -81,6 +80,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
+                a2ui_enabled=agent.a2ui_enabled,
             )
         )
 
@@ -96,7 +96,9 @@ class AgentService(BaseCrudService[Agent]):
         tools: dict | list | None = None,
         events_config: dict | None = None,
         planning: str | None = None,
+        a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str | None = None,
     ) -> Agent | None:
         agent = await self.get(id)
         if not agent:
@@ -118,6 +120,10 @@ class AgentService(BaseCrudService[Agent]):
             agent.events_config = events_config
         if planning is not None:
             agent.planning = planning
+        if a2ui_enabled is not None:
+            agent.a2ui_enabled = a2ui_enabled
+        if agent_type is not None:
+            agent.agent_type = agent_type
 
         agent = await self.update(agent)
 
@@ -135,6 +141,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
+                a2ui_enabled=agent.a2ui_enabled,
             )
         )
 

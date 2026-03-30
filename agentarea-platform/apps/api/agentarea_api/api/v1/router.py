@@ -13,8 +13,8 @@ from . import (
     agents_a2a,
     agents_tasks,
     agents_well_known,
+    api_keys,
     compound_mcps,
-    mcp_access_tokens,
     mcp_auth_configs,
     mcp_oauth_links,
     mcp_server_instances,
@@ -87,7 +87,7 @@ protected_v1_router.include_router(mcp_auth_configs.router)
 protected_v1_router.include_router(mcp_oauth_links.router)
 
 # MCP API Keys management - PROTECTED
-protected_v1_router.include_router(mcp_access_tokens.router)
+protected_v1_router.include_router(api_keys.router)
 
 # Registries (MCP catalog) - PROTECTED
 protected_v1_router.include_router(registries.router)

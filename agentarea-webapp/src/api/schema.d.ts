@@ -477,6 +477,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send A2Ui Action
+         * @description Send an A2UI user action to a running task workflow.
+         */
+        post: operations["send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/{task_id}/events": {
         parameters: {
             query?: never;
@@ -2834,6 +2854,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * A2UIActionPayload
+         * @description Validated A2UI action payload from the frontend.
+         */
+        A2UIActionPayload: {
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Source Component Id
+             * @default
+             */
+            source_component_id: string;
+            /** Surface Id */
+            surface_id: string;
+        };
         /** APIKeyCreateRequest */
         APIKeyCreateRequest: {
             /**
@@ -2914,6 +2953,10 @@ export interface components {
         };
         /** AgentCapabilities */
         AgentCapabilities: {
+            /** Extensions */
+            extensions?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Pushnotifications
              * @default false
@@ -2987,6 +3030,10 @@ export interface components {
         };
         /** AgentCreate */
         AgentCreate: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
+            /** Agent Type */
+            agent_type: string;
             /** Description */
             description: string;
             events_config?: components["schemas"]["EventsConfig"] | null;
@@ -3012,6 +3059,13 @@ export interface components {
         };
         /** AgentResponse */
         AgentResponse: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
+            /**
+             * Agent Type
+             * @default stateless
+             */
+            agent_type: string;
             /** Description */
             description?: string | null;
             /** Events Config */
@@ -3055,6 +3109,8 @@ export interface components {
         };
         /** AgentUpdate */
         AgentUpdate: {
+            /** A2Ui Enabled */
+            a2ui_enabled?: boolean | null;
             /** Capabilities */
             capabilities?: string[] | null;
             /** Description */
@@ -3995,6 +4051,16 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** ProjectAgentRef */
+        ProjectAgentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Description */
@@ -4006,13 +4072,48 @@ export interface components {
             /** Parent Project Id */
             parent_project_id?: string | null;
         };
+        /** ProjectFileDownloadResponse */
+        ProjectFileDownloadResponse: {
+            /** Key */
+            key: string;
+            /** Url */
+            url: string;
+        };
+        /** ProjectFileInfo */
+        ProjectFileInfo: {
+            /** Key */
+            key: string;
+            /** Last Modified */
+            last_modified: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** ProjectFileListResponse */
+        ProjectFileListResponse: {
+            /** Files */
+            files: components["schemas"]["ProjectFileInfo"][];
+            /** Prefix */
+            prefix: string;
+        };
+        /** ProjectMcpInstanceRef */
+        ProjectMcpInstanceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** ProjectResponse */
         ProjectResponse: {
             /**
              * Agents
              * @default []
              */
-            agents: unknown[];
+            agents: components["schemas"]["ProjectAgentRef"][];
             /** Created By */
             created_by: string;
             /** Description */
@@ -4028,7 +4129,7 @@ export interface components {
              * Mcp Instances
              * @default []
              */
-            mcp_instances: unknown[];
+            mcp_instances: components["schemas"]["ProjectMcpInstanceRef"][];
             /** Minio Prefix */
             minio_prefix: string;
             /** Name */
@@ -4039,9 +4140,19 @@ export interface components {
              * Skills
              * @default []
              */
-            skills: unknown[];
+            skills: components["schemas"]["ProjectSkillRef"][];
             /** Workspace Id */
             workspace_id: string;
+        };
+        /** ProjectSkillRef */
+        ProjectSkillRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** ProjectUpdate */
         ProjectUpdate: {
@@ -4591,7 +4702,7 @@ export interface components {
             /** Result */
             result?: {
                 [key: string]: unknown;
-            } | null;
+            } | string | null;
             /** Status */
             status: string;
         };
@@ -4628,7 +4739,7 @@ export interface components {
             /** Result */
             result?: {
                 [key: string]: unknown;
-            } | null;
+            } | string | null;
             /** Status */
             status: string;
         };
@@ -5814,6 +5925,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_a2ui_action_v1_agents__agent_id__tasks__task_id__a2ui_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["A2UIActionPayload"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8320,7 +8467,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectFileListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8385,7 +8532,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProjectFileDownloadResponse"];
                 };
             };
             /** @description Validation Error */

@@ -11,6 +11,8 @@ from agentarea_agents.application.temporal_workflow_service import (
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_event_stream_service,
+    get_read_agent_service,
+    get_read_task_service,
     get_task_service,
     get_temporal_workflow_service,
 )
@@ -19,9 +21,22 @@ from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class A2UIActionPayload(BaseModel):
+    """Validated A2UI action payload from the frontend."""
+
+    name: str = Field(..., max_length=128)
+    surface_id: str = Field(..., max_length=64)
+    source_component_id: str = Field("", max_length=128)
+    context: dict = Field(default_factory=dict)
+
+    model_config = {"extra": "forbid"}
+
+
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
 # Global tasks router (not agent-specific)
@@ -48,7 +63,7 @@ class TaskResponse(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None  # Workflow execution ID
 
@@ -83,7 +98,7 @@ class TaskWithAgent(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None
 
@@ -109,8 +124,8 @@ async def get_all_tasks(
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """Get all workspace tasks across all agents.
 
@@ -391,8 +406,8 @@ async def list_agent_tasks(
     status: str | None = Query(None, description="Filter by task status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """List all tasks for the specified agent.
 
@@ -454,7 +469,7 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get a specific task for the specified agent using workflow status."""
@@ -497,7 +512,7 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the execution status of a specific task workflow."""
@@ -671,6 +686,55 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+@router.post("/{task_id}/a2ui/action")
+async def send_a2ui_action(
+    agent_id: UUID,
+    task_id: UUID,
+    action: A2UIActionPayload,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Send an A2UI user action to a running task workflow."""
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if not getattr(agent, "a2ui_enabled", False):
+        raise HTTPException(status_code=400, detail="Agent does not have A2UI enabled")
+
+    try:
+        execution_id = f"agent-task-{task_id}"
+        status = await workflow_task_service.get_workflow_status(execution_id)
+
+        if status.get("status") == "unknown":
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        current_status = status.get("status", "").lower()
+        if current_status in ["completed", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400, detail=f"Cannot send action to task in '{current_status}' state"
+            )
+
+        success = await workflow_task_service.send_a2ui_action(execution_id, action.model_dump())
+
+        if success:
+            return {
+                "status": "accepted",
+                "task_id": str(task_id),
+                "action_name": action.name,
+                "message": "Action sent to workflow",
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send action to workflow")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
 @router.post("/{task_id}/resolve-escalation")
 async def resolve_task_escalation(
     agent_id: UUID,
@@ -716,7 +780,7 @@ async def get_task_events(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
-    agent_service: AgentService = Depends(get_agent_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """Get paginated task execution events for the specified task from database."""
     # Verify agent exists
@@ -805,8 +869,8 @@ async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
     event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
@@ -942,6 +1006,7 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
         if (
             original_event_type.startswith("ToolCall")
             or original_event_type.startswith("LLMCall")
+            or original_event_type.startswith("A2UI")
             or "tool_name" in str(data.get("original_data", {}))
         ):
             # Extract original_data and merge it with filtered domain fields

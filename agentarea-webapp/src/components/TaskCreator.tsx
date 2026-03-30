@@ -53,7 +53,7 @@ export default function TaskCreator() {
           description: agent.description || undefined,
           instruction: agent.instruction || undefined,
           model_id: agent.model_id || undefined,
-          tools_config: agent.tools_config || undefined,
+          tools_config: (agent as any).tools_config || undefined,
           events_config: agent.events_config || undefined,
           planning: agent.planning ?? undefined,
         }));
@@ -90,6 +90,7 @@ export default function TaskCreator() {
           timestamp: new Date().toISOString(),
         },
         enable_agent_communication: true,
+        requires_human_approval: null,
       };
 
       const { data: task, error } = await createTask(selectedAgentId, taskData);

@@ -32,6 +32,18 @@ class Database:
                 class_=AsyncSession,
                 expire_on_commit=False,
             )
+            self.read_engine: AsyncEngine = create_async_engine(
+                self.settings.read_url,
+                echo=self.settings.echo,
+                pool_size=self.settings.READ_POOL_SIZE,
+                max_overflow=self.settings.READ_POOL_MAX_OVERFLOW,
+                execution_options={"isolation_level": "AUTOCOMMIT"},
+            )
+            self.read_session_factory = async_sessionmaker(
+                self.read_engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
             Database._initialized = True
 
     def __new__(cls, settings: DatabaseSettings | None = None) -> "Database":
@@ -54,11 +66,45 @@ class Database:
             await session.close()
 
     async def get_db(self) -> AsyncGenerator[AsyncSession, None]:
-        """Dependency for FastAPI."""
-        async with self.session() as session:
+        """Dependency for FastAPI.
+
+        Uses a flat try/finally (not nested async-with) so that
+        session.close() runs even when the client disconnects
+        mid-response and FastAPI cancels the generator.
+        """
+        session = self.session_factory()
+        try:
             yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Get a read-only database session (AUTOCOMMIT — no transaction management)."""
+        session = self.read_session_factory()
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    async def get_read_db(self) -> AsyncGenerator[AsyncSession, None]:
+        """FastAPI dependency for read-only database sessions.
+
+        Uses a flat try/finally so that session.close() runs even when
+        the client disconnects mid-response and FastAPI cancels the generator.
+        """
+        session = self.read_session_factory()
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 # Create global instances
 db = Database()
 get_db_session = db.get_db
+get_read_db_session = db.get_read_db

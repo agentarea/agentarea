@@ -31,22 +31,31 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-export function NavMain({
-  items,
-}: {
-  items: {
+type NavItem = {
+  title: string;
+  titleKey?: string;
+  url: string;
+  icon?: LucideIcon;
+  isActive?: boolean;
+  items?: {
     title: string;
     titleKey?: string;
     url: string;
-    icon?: LucideIcon;
-    isActive?: boolean;
-    items?: {
-      title: string;
-      titleKey?: string;
-      url: string;
-    }[];
   }[];
+};
+
+type NavSection = {
+  label?: string;
+  labelKey?: string;
+  items: NavItem[];
+};
+
+export function NavMain({
+  sections,
+}: {
+  sections: NavSection[];
 }) {
+  const items = sections.flatMap((s) => s.items);
   const pathname = usePathname();
   const [openCollapsibles, setOpenCollapsibles] = useState<Set<string>>(
     new Set()
@@ -140,10 +149,12 @@ export function NavMain({
   const { state, isMobile } = useSidebar();
 
   return (
-    <SidebarGroup>
-      {/* <SidebarGroupLabel>Platform</SidebarGroupLabel> */}
+    <>
+    {sections.map((section, sectionIndex) => (
+    <SidebarGroup key={section.labelKey || section.label || sectionIndex}>
+      {section.label && <SidebarGroupLabel>{section.labelKey ? t(section.labelKey) : section.label}</SidebarGroupLabel>}
       <SidebarMenu>
-        {items.map((item) => {
+        {section.items.map((item) => {
           if (item.items) {
             // When collapsed, show a popout dropdown like TeamSwitcher/NavUser
             if (state === "collapsed" && !isMobile) {
@@ -294,5 +305,7 @@ export function NavMain({
         })}
       </SidebarMenu>
     </SidebarGroup>
+    ))}
+    </>
   );
 }

@@ -93,6 +93,8 @@
     }
   },
   "Sidebar": {
+    "home": "Home",
+    "inbox": "Inbox",
     "admin": "Admin",
     "workplace": "Workplace",
     "agents": "Agents",
@@ -102,11 +104,14 @@
     "llms": "LLM Models",
     "llmBrowse": "Browse",
     "mcp": "MCP Servers",
+    "projects": "Projects",
+    "platform": "Platform",
     "connections": "Connections",
     "providers": "Providers",
     "providerConfigs": "Models",
     "apiKeys": "API Keys",
     "workspace": "Workspace",
+    "importExport": "Import / Export",
     "modelSpecs": "Model Specs",
     "automation": "Automation",
     "network": "Network",

@@ -143,8 +143,8 @@ async def create_model_spec(
             detail=f"Model specification '{data.model_name}' already exists for this provider",
         )
 
-    model_spec = ModelSpec(
-        provider_spec_id=data.provider_spec_id,
+    created_spec = await model_spec_repo.create(
+        provider_spec_id=str(data.provider_spec_id),
         model_name=data.model_name,
         display_name=data.display_name,
         description=data.description,
@@ -152,8 +152,6 @@ async def create_model_spec(
         default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )
-
-    created_spec = await model_spec_repo.create(model_spec)
     return ModelSpecResponse.from_domain(created_spec)
 
 
@@ -208,8 +206,8 @@ async def upsert_model_spec(
 
     This endpoint is useful for bulk operations and bootstrapping.
     """
-    model_spec = ModelSpec(
-        provider_spec_id=data.provider_spec_id,
+    upserted_spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+        provider_spec_id=str(data.provider_spec_id),
         model_name=data.model_name,
         display_name=data.display_name,
         description=data.description,
@@ -217,6 +215,4 @@ async def upsert_model_spec(
         default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )
-
-    upserted_spec = await model_spec_repo.upsert_by_provider_and_model(model_spec)
     return ModelSpecResponse.from_domain(upserted_spec)

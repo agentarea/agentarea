@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ChevronsUpDown, Plus } from "lucide-react";
+import { ChevronsUpDown, Crown, Globe, Plus, Sparkles, Users, Zap } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +18,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -30,12 +38,60 @@ export function TeamSwitcher({
 }) {
   const { isMobile } = useSidebar();
   const [activeTeam, setActiveTeam] = React.useState(teams[0]);
+  const [proDialogOpen, setProDialogOpen] = React.useState(false);
 
   if (!activeTeam) {
     return null;
   }
 
+  const proFeatures = [
+    { icon: Globe, title: "Multiple Workspaces", description: "Isolate teams, clients, or environments" },
+    { icon: Users, title: "Team Collaboration", description: "Invite members with role-based access" },
+    { icon: Zap, title: "Priority Execution", description: "Faster agent runs with dedicated resources" },
+    { icon: Sparkles, title: "Advanced Analytics", description: "Deep insights into agent performance" },
+  ];
+
   return (
+    <>
+    <Dialog open={proDialogOpen} onOpenChange={setProDialogOpen}>
+      <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Crown className="h-5 w-5 text-primary" />
+              Upgrade to Pro
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Unlock powerful features to scale your agent organization
+            </p>
+          </DialogHeader>
+        </div>
+        <div className="px-6 pb-2">
+          <div className="space-y-1">
+            {proFeatures.map((feature) => (
+              <div key={feature.title} className="flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-muted/50">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <feature.icon className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{feature.title}</p>
+                  <p className="text-xs text-muted-foreground">{feature.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30">
+          <Button variant="outline" onClick={() => setProDialogOpen(false)}>
+            Maybe later
+          </Button>
+          <Button onClick={() => window.open("https://agentarea.ai/pricing", "_blank")}>
+            <Crown className="h-4 w-4 mr-2" />
+            Get AgentArea Pro
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -100,20 +156,25 @@ export function TeamSwitcher({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2" disabled>
-              <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                <Plus className="size-4" />
+            <DropdownMenuItem
+              className="gap-2 p-2 cursor-pointer"
+              onClick={() => setProDialogOpen(true)}
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-primary/10">
+                <Plus className="size-4 text-primary" />
               </div>
-              {/* <div className="text-muted-foreground font-medium">Add Workspace</div> */}
-              <div className="note">
-                Add Workspace.
-                <br />
-                Comming Soon...
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Add Workspace</span>
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Crown className="h-2.5 w-2.5" />
+                  Pro feature
+                </span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
+    </>
   );
 }

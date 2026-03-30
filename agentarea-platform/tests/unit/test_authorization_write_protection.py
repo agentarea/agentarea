@@ -116,9 +116,9 @@ async def test_can_delete_own_workspace_agent(
 
 
 @pytest.mark.asyncio
-async def test_fallback_when_no_authz_injected(regular_user_context, system_agent):
-    """Without AuthorizationService, fallback denies cross-workspace writes."""
-    service, mock_repo = _create_agent_service(regular_user_context, authz=None)
+async def test_authz_denies_cross_workspace_writes(regular_user_context, system_agent, authz):
+    """AuthorizationService denies cross-workspace writes."""
+    service, mock_repo = _create_agent_service(regular_user_context, authz=authz)
     mock_repo.get.return_value = system_agent
     mock_repo.get_by_id.return_value = system_agent
 
@@ -127,9 +127,9 @@ async def test_fallback_when_no_authz_injected(regular_user_context, system_agen
 
 
 @pytest.mark.asyncio
-async def test_fallback_allows_own_workspace(regular_user_context, regular_agent):
-    """Without AuthorizationService, own workspace writes are allowed."""
-    service, mock_repo = _create_agent_service(regular_user_context, authz=None)
+async def test_authz_allows_own_workspace(regular_user_context, regular_agent, authz):
+    """AuthorizationService allows own workspace writes."""
+    service, mock_repo = _create_agent_service(regular_user_context, authz=authz)
     mock_repo.get.return_value = regular_agent
     mock_repo.get_by_id.return_value = regular_agent
     mock_repo.update_from_entity.return_value = regular_agent

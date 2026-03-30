@@ -3,7 +3,10 @@
 import type { components } from "@/api/schema";
 import { env } from "@/env";
 import {
+  addAgentToProject,
+  addMcpInstanceToProject,
   addSkillMember,
+  addSkillToProject,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
   createMCPAuthConfig,
@@ -11,15 +14,19 @@ import {
   createMCPServerInstance,
   createModelInstance,
   createOpenAPIConnection,
+  createProject,
   createProviderConfig,
   createSkill,
   deleteModelInstance,
   deleteOpenAPIConnection,
+  deleteProject,
+  deleteProjectFile,
   deleteSkill,
   deleteTrigger,
   disableTrigger,
   discoverMCPInstanceTools,
   discoverOpenAPITools,
+  downloadProjectFile,
   enableTrigger,
   exportWorkspace,
   flattenSkill,
@@ -31,6 +38,7 @@ import {
   getModelSpec,
   getNetworkTopology,
   getOpenAPIConnection,
+  getProject,
   getSkill,
   getSkillContent,
   getSkillFile,
@@ -42,20 +50,27 @@ import {
   listMCPServers,
   listModelInstances,
   listModelSpecs,
+  listProjectFiles,
+  listProjects,
   listProviderSpecs,
   listProviderSpecsWithModels,
   listSkillMembers,
   listSkills,
   pauseAgentTask,
   previewOpenAPISpec,
+  removeAgentFromProject,
+  removeMcpInstanceFromProject,
+  removeSkillFromProject,
   removeSkillMember,
   resolveEscalation,
   resumeAgentTask,
   testModelInstance,
   testOpenAPIConnection,
   updateMCPServerInstance,
+  updateProject,
   updateProviderConfig,
   updateSkill,
+  uploadProjectFile,
 } from "@/lib/api";
 import { getAuthToken } from "@/lib/getAuthToken";
 
@@ -344,6 +359,9 @@ export async function listMCPServersAction(params?: {
   status?: string;
   is_public?: boolean;
   tag?: string;
+  page?: number;
+  page_size?: number;
+  search?: string;
 }) {
   return await listMCPServers(params);
 }
@@ -364,15 +382,135 @@ export async function testOpenAPIConnectionAction(connectionId: string) {
   return await testOpenAPIConnection(connectionId);
 }
 
-export async function createOpenAPIConnectionAction(body: {
-  name: string;
-  base_url: string;
-  description?: string;
-  spec_url?: string;
-  spec_content?: string;
-  custom_headers?: { name: string; value: string }[];
-}) {
+export async function createOpenAPIConnectionAction(
+  body: Parameters<typeof createOpenAPIConnection>[0]
+) {
   return await createOpenAPIConnection(body);
+}
+
+// Project Actions
+export async function listProjectsAction() {
+  return await listProjects();
+}
+
+export async function getProjectAction(projectId: string) {
+  return await getProject(projectId);
+}
+
+export async function createProjectAction(project: {
+  name: string;
+  description?: string | null;
+  instructions?: string | null;
+}) {
+  return await createProject(project as any);
+}
+
+export async function updateProjectAction(
+  projectId: string,
+  project: {
+    name?: string | null;
+    description?: string | null;
+    instructions?: string | null;
+  }
+) {
+  return await updateProject(projectId, project as any);
+}
+
+export async function deleteProjectAction(projectId: string) {
+  return await deleteProject(projectId);
+}
+
+export async function addSkillToProjectAction(
+  projectId: string,
+  skillId: string
+) {
+  return await addSkillToProject(projectId, skillId);
+}
+
+export async function removeSkillFromProjectAction(
+  projectId: string,
+  skillId: string
+) {
+  return await removeSkillFromProject(projectId, skillId);
+}
+
+export async function addAgentToProjectAction(
+  projectId: string,
+  agentId: string
+) {
+  return await addAgentToProject(projectId, agentId);
+}
+
+export async function removeAgentFromProjectAction(
+  projectId: string,
+  agentId: string
+) {
+  return await removeAgentFromProject(projectId, agentId);
+}
+
+export async function addMcpInstanceToProjectAction(
+  projectId: string,
+  mcpInstanceId: string
+) {
+  return await addMcpInstanceToProject(projectId, mcpInstanceId);
+}
+
+export async function removeMcpInstanceFromProjectAction(
+  projectId: string,
+  mcpInstanceId: string
+) {
+  return await removeMcpInstanceFromProject(projectId, mcpInstanceId);
+}
+
+export async function listProjectFilesAction(projectId: string) {
+  return await listProjectFiles(projectId);
+}
+
+export async function uploadProjectFileAction(
+  projectId: string,
+  formData: FormData
+) {
+  // Validate projectId as UUID to prevent path traversal / SSRF
+  if (!/^[a-f0-9-]{36}$/.test(projectId)) {
+    return { data: null, error: { detail: "Invalid project ID" } };
+  }
+
+  const authToken = await getAuthToken();
+  // Build URL safely via URL API — base is a trusted server-only env var
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/projects/${encodeURIComponent(projectId)}/files`;
+
+  const response = await fetch(base.href, {
+    method: "POST",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Upload failed" }));
+    return { data: null, error: errorData };
+  }
+
+  const data = await response.json();
+  return { data, error: null };
+}
+
+export async function downloadProjectFileAction(
+  projectId: string,
+  filePath: string
+) {
+  return await downloadProjectFile(projectId, filePath);
+}
+
+export async function deleteProjectFileAction(
+  projectId: string,
+  filePath: string
+) {
+  return await deleteProjectFile(projectId, filePath);
 }
 
 export async function previewOpenAPISpecAction(body: {
