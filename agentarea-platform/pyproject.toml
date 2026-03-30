@@ -79,6 +79,8 @@ dev = [
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "agentarea-wallet",
+    "agentarea-payment",
     "agentarea-execution",
     "agentarea-context[faiss]",
     "agentarea-triggers",
