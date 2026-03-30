@@ -40,9 +40,7 @@ class MPPPaymentClient:
             from mpp.methods.tempo import ChargeIntent, TempoAccount, tempo
 
             account = TempoAccount.from_key(self._tempo_key)
-            client = Client(
-                methods=[tempo(account=account, intents={"charge": ChargeIntent()})]
-            )
+            client = Client(methods=[tempo(account=account, intents={"charge": ChargeIntent()})])
             self._client = client
             return client
         except ImportError:
@@ -64,7 +62,11 @@ class MPPPaymentClient:
 
         try:
             # Parse MPP challenge from response
-            challenge_data = json.loads(response_body) if isinstance(response_body, (str, bytes)) else response_body
+            challenge_data = (
+                json.loads(response_body)
+                if isinstance(response_body, (str, bytes))
+                else response_body
+            )
 
             amount = float(challenge_data.get("amount", 0))
             recipient = challenge_data.get("recipient", challenge_data.get("payTo", ""))

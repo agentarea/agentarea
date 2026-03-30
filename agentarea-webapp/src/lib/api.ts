@@ -176,6 +176,15 @@ export const {
   uploadProjectFile,
   downloadProjectFile,
   deleteProjectFile,
+
+  // Wallet API
+  getAgentWallet,
+  createAgentWallet,
+  updateAgentWallet,
+  deleteAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  fundAgentWallet,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -296,3 +305,9 @@ export type TaskWithAgent = TaskResponse & {
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
+
+// Wallet types
+export type WalletResponse = components["schemas"]["WalletResponse"];
+export type WalletBalanceResponse = components["schemas"]["WalletBalanceResponse"];
+export type PaymentRecordResponse = components["schemas"]["PaymentRecordResponse"];
+export type PaginatedPaymentsResponse = components["schemas"]["PaginatedPaymentsResponse"];

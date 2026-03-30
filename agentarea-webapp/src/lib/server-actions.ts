@@ -54,6 +54,13 @@ import {
   testOpenAPIConnection,
   createOpenAPIConnection,
   previewOpenAPISpec,
+  getAgentWallet,
+  createAgentWallet,
+  updateAgentWallet,
+  deleteAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  fundAgentWallet,
   listProjects,
   getProject,
   createProject,
@@ -467,4 +474,33 @@ export async function previewOpenAPISpecAction(body: {
   spec_json?: string;
 }) {
   return await previewOpenAPISpec(body);
+}
+
+// Wallet actions
+export async function getAgentWalletAction(agentId: string) {
+  return await getAgentWallet(agentId);
+}
+
+export async function createAgentWalletAction(agentId: string, body: components["schemas"]["CreateWalletRequest"]) {
+  return await createAgentWallet(agentId, body);
+}
+
+export async function updateAgentWalletAction(agentId: string, body: components["schemas"]["UpdateWalletRequest"]) {
+  return await updateAgentWallet(agentId, body);
+}
+
+export async function deleteAgentWalletAction(agentId: string) {
+  return await deleteAgentWallet(agentId);
+}
+
+export async function getAgentWalletBalanceAction(agentId: string) {
+  return await getAgentWalletBalance(agentId);
+}
+
+export async function getAgentWalletPaymentsAction(agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) {
+  return await getAgentWalletPayments(agentId, params);
+}
+
+export async function fundAgentWalletAction(agentId: string, body: components["schemas"]["FundWalletRequest"]) {
+  return await fundAgentWallet(agentId, body);
 }

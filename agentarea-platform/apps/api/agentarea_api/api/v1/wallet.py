@@ -157,13 +157,17 @@ async def create_wallet(
             wallet_type=request.wallet_type,
             x402_config=request.x402_config.model_dump() if request.x402_config else None,
             mpp_config=request.mpp_config.model_dump() if request.mpp_config else None,
-            credentials=request.credentials.model_dump(exclude_none=True) if request.credentials else None,
+            credentials=request.credentials.model_dump(exclude_none=True)
+            if request.credentials
+            else None,
             service_budget_usd=request.service_budget_usd,
             service_budget_period=request.service_budget_period,
         )
         return _wallet_to_response(wallet)
     except WalletAlreadyExistsError:
-        raise HTTPException(status_code=409, detail="Wallet already exists for this agent") from None
+        raise HTTPException(
+            status_code=409, detail="Wallet already exists for this agent"
+        ) from None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
@@ -198,9 +202,17 @@ async def update_wallet(
 
         # Convert nested schemas to dicts
         if "x402_config" in updates and updates["x402_config"] is not None:
-            updates["x402_config"] = updates["x402_config"] if isinstance(updates["x402_config"], dict) else updates["x402_config"].model_dump()
+            updates["x402_config"] = (
+                updates["x402_config"]
+                if isinstance(updates["x402_config"], dict)
+                else updates["x402_config"].model_dump()
+            )
         if "mpp_config" in updates and updates["mpp_config"] is not None:
-            updates["mpp_config"] = updates["mpp_config"] if isinstance(updates["mpp_config"], dict) else updates["mpp_config"].model_dump()
+            updates["mpp_config"] = (
+                updates["mpp_config"]
+                if isinstance(updates["mpp_config"], dict)
+                else updates["mpp_config"].model_dump()
+            )
 
         wallet = await wallet_service.update_wallet(
             agent_id=str(agent_id),

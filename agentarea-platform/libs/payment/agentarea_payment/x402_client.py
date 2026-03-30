@@ -57,6 +57,7 @@ class X402PaymentClient:
         """Create a signer from the private key."""
         try:
             from eth_account import Account
+
             return Account.from_key(self._private_key)
         except ImportError:
             # Fallback: x402 SDK may provide its own signer
@@ -106,10 +107,16 @@ class X402PaymentClient:
                 payment_required = json.loads(base64.b64decode(payment_required_raw))
             except Exception:
                 # Try as raw JSON
-                payment_required = json.loads(payment_required_raw) if isinstance(payment_required_raw, str) else payment_required_raw
+                payment_required = (
+                    json.loads(payment_required_raw)
+                    if isinstance(payment_required_raw, str)
+                    else payment_required_raw
+                )
 
             # Extract amount and check against budget
-            amount = float(payment_required.get("maxAmountRequired", 0)) / 1_000_000  # USDC has 6 decimals
+            amount = (
+                float(payment_required.get("maxAmountRequired", 0)) / 1_000_000
+            )  # USDC has 6 decimals
             recipient = payment_required.get("payTo", "")
 
             if amount > budget_remaining:
@@ -128,9 +135,14 @@ class X402PaymentClient:
             # Retry request with payment
             import httpx
 
-            payment_headers = {**headers, "PAYMENT-SIGNATURE": base64.b64encode(
-                json.dumps(payload).encode() if isinstance(payload, dict) else str(payload).encode()
-            ).decode()}
+            payment_headers = {
+                **headers,
+                "PAYMENT-SIGNATURE": base64.b64encode(
+                    json.dumps(payload).encode()
+                    if isinstance(payload, dict)
+                    else str(payload).encode()
+                ).decode(),
+            }
 
             async with httpx.AsyncClient() as http_client:
                 response = await http_client.request(

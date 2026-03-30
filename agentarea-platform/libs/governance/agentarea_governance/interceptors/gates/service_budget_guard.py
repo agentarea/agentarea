@@ -46,7 +46,10 @@ class ServiceBudgetGuard:
                 action=InterceptorAction.DENY,
                 interceptor_name=self.name,
                 reason=f"service budget exhausted (${service_cost_used:.2f}/${service_budget_usd:.2f})",
-                metadata={"service_cost_used": service_cost_used, "service_budget_usd": service_budget_usd},
+                metadata={
+                    "service_cost_used": service_cost_used,
+                    "service_budget_usd": service_budget_usd,
+                },
             )
 
         if usage_ratio >= self._warning_threshold:

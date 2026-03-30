@@ -31,16 +31,20 @@ class UnifiedPaymentClient:
         # Initialize x402 client if configured
         if wallet_type in ("x402", "dual") and x402_private_key:
             from .x402_client import X402PaymentClient
+
             self._x402_client = X402PaymentClient(
                 private_key=x402_private_key,
                 network=self._x402_config.get("network", "eip155:8453"),
-                facilitator_url=self._x402_config.get("facilitator_url", "https://x402.org/facilitator"),
+                facilitator_url=self._x402_config.get(
+                    "facilitator_url", "https://x402.org/facilitator"
+                ),
                 signer_type=self._x402_config.get("signer_type", "evm"),
             )
 
         # Initialize MPP client if configured
         if wallet_type in ("mpp", "dual") and mpp_tempo_key:
             from .mpp_client import MPPPaymentClient
+
             self._mpp_client = MPPPaymentClient(
                 tempo_key=mpp_tempo_key,
                 session_budget_usd=self._mpp_config.get("session_budget_usd", 10.0),

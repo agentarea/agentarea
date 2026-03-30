@@ -66,9 +66,7 @@ class WalletService:
 
         existing = await self._wallets.get_by_agent_id(agent_id)
         if existing is not None:
-            raise WalletAlreadyExistsError(
-                f"A wallet already exists for agent {agent_id}"
-            )
+            raise WalletAlreadyExistsError(f"A wallet already exists for agent {agent_id}")
 
         credentials_secret_id: str | None = None
         if credentials is not None:
@@ -211,9 +209,7 @@ class WalletService:
     # Budget
     # ------------------------------------------------------------------
 
-    async def get_service_budget_remaining(
-        self, agent_id: UUID | str, execution_id: str
-    ) -> float:
+    async def get_service_budget_remaining(self, agent_id: UUID | str, execution_id: str) -> float:
         """Compute remaining budget for an agent based on its budget period.
 
         Args:
@@ -366,10 +362,6 @@ class WalletService:
             ValueError: If a required config is missing.
         """
         if wallet_type in ("x402", "dual") and x402_config is None:
-            raise ValueError(
-                f"x402_config is required for wallet_type '{wallet_type}'"
-            )
+            raise ValueError(f"x402_config is required for wallet_type '{wallet_type}'")
         if wallet_type in ("mpp", "dual") and mpp_config is None:
-            raise ValueError(
-                f"mpp_config is required for wallet_type '{wallet_type}'"
-            )
+            raise ValueError(f"mpp_config is required for wallet_type '{wallet_type}'")
