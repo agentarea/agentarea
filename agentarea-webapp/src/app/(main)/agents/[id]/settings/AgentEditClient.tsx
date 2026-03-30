@@ -32,14 +32,51 @@ export default function AgentEditClient({
   const handleSubmit = async (formData: AgentFormValues) => {
     try {
       // Call server action instead of direct API call
+      // Transform form tools_config into backend tools format
+      const tools: any[] = [];
+
+      // MCP tools
+      for (const mcpConfig of formData.tools_config.mcp_server_configs || []) {
+        const allowedToolNames = (mcpConfig.allowed_tools || []).map((t: any) => t.tool_name);
+        const toolsRequiringApproval = (mcpConfig.allowed_tools || [])
+          .filter((t: any) => t.requires_user_confirmation)
+          .map((t: any) => t.tool_name);
+
+        tools.push({
+          type: "mcp",
+          name: mcpConfig.mcp_server_id,
+          settings: {
+            mcp_server_id: mcpConfig.mcp_server_id,
+            allowed_tools: allowedToolNames.length > 0 ? allowedToolNames : null,
+            requires_user_confirmation: toolsRequiringApproval.length > 0 ? true : null,
+          },
+        });
+      }
+
+      // Builtin tools
+      for (const bt of (formData.tools_config as any).builtin_tools || []) {
+        const disabledMethods = bt.disabled_methods
+          ? Object.entries(bt.disabled_methods)
+              .filter(([, v]) => v === false)
+              .map(([k]) => k)
+          : null;
+
+        tools.push({
+          type: "code",
+          name: bt.tool_name,
+          settings: {
+            disabled_methods: disabledMethods?.length ? disabledMethods : null,
+            requires_user_confirmation: bt.requires_user_confirmation ?? null,
+          },
+        });
+      }
+
       const updateData: any = {
         name: formData.name,
         description: formData.description || undefined,
         instruction: formData.instruction,
         model_id: formData.model_id,
-        tools_config: {
-          mcp_server_configs: formData.tools_config.mcp_server_configs,
-        },
+        tools: tools.length > 0 ? tools : null,
         events_config: {
           events: formData.events_config.events,
         },

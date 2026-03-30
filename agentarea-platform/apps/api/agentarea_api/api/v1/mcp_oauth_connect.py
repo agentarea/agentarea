@@ -290,18 +290,53 @@ async def oauth_callback(
         },
     )
 
-    # Link auth config to the MCP instance
+    # Link auth config to the MCP instance and mark as running
     from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
-    await instance_repo.update(UUID(instance_id), auth_config_id=auth_config.id)
+    await instance_repo.update(UUID(instance_id), auth_config_id=auth_config.id, status="running")
     await db_session.commit()
 
     logger.info(
         "MCP OAuth connect complete: instance=%s auth_config=%s issuer=%s",
         instance_id, auth_config.id, as_metadata.issuer,
     )
+
+    # Trigger tool discovery in background — don't block the redirect
+    try:
+        from agentarea_mcp.application.service import MCPServerInstanceService
+        from agentarea_common.events.broker import EventBroker
+
+        # Build service with the same session context
+        from agentarea_common.base.repository_factory import RepositoryFactory
+        factory = RepositoryFactory(session=db_session, user_context=user_context)
+        # Event broker is optional for tool discovery
+        service = MCPServerInstanceService(
+            repository_factory=factory,
+            event_broker=None,
+            secret_manager=secret_manager,
+        )
+        # Fire and forget — don't block the user redirect
+        import asyncio
+        asyncio.ensure_future(_discover_after_oauth(service, UUID(instance_id), db_session))
+    except Exception as discover_err:
+        logger.warning("Failed to schedule tool discovery after OAuth: %s", discover_err)
+
     return RedirectResponse(
         url=f"{return_to}/mcp-servers/{instance_id}?oauth=success",
         status_code=302,
     )
+
+
+async def _discover_after_oauth(
+    service, instance_id: UUID, db_session,
+) -> None:
+    """Background task: discover tools after OAuth connect completes."""
+    try:
+        success = await service.discover_and_store_tools(instance_id)
+        if success:
+            logger.info("Post-OAuth tool discovery succeeded for %s", instance_id)
+        else:
+            logger.warning("Post-OAuth tool discovery returned False for %s", instance_id)
+    except Exception as e:
+        logger.warning("Post-OAuth tool discovery failed for %s: %s", instance_id, e)

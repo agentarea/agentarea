@@ -251,16 +251,36 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             logger.info("Tool discovery connecting to %s", mcp_url)
 
             from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
 
-            async with streamablehttp_client(
-                mcp_url,
-                timeout=timedelta(seconds=15),
-                headers=custom_headers if custom_headers else None,
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+            try:
+                from mcp.client.streamable_http import streamablehttp_client
+
+                async with streamablehttp_client(
+                    mcp_url,
+                    timeout=timedelta(seconds=15),
+                    headers=custom_headers if custom_headers else None,
+                ) as (read_stream, write_stream, _):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
+            except Exception as transport_err:
+                logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, transport_err)
+                from mcp.client.sse import sse_client
+
+                sse_url = mcp_url.rstrip("/")
+                if sse_url.endswith("/mcp"):
+                    sse_url = sse_url[:-4] + "/sse"
+                elif not sse_url.endswith("/sse"):
+                    sse_url = sse_url + "/sse"
+
+                async with sse_client(
+                    sse_url,
+                    timeout=timedelta(seconds=15),
+                    headers=custom_headers if custom_headers else None,
+                ) as (read_stream, write_stream):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
 
             tools = [
                 {

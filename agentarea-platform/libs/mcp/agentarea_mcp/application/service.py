@@ -244,28 +244,38 @@ class MCPServerInstanceService:
             if validation_errors:
                 raise MCPValidationError(validation_errors)
 
+        # URL-type instances connect to external servers — no container needed
+        is_url_type = spec.get("type") == "url"
+
         # Create instance using workspace-scoped repository
         create_kwargs: dict[str, Any] = {
             "name": name,
             "description": description,
             "server_spec_id": server_spec_id,
             "json_spec": spec,
-            "status": "pending",  # Will be updated by mcp-infrastructure
+            "status": "running" if is_url_type else "pending",
         }
         if auth_config_id:
             create_kwargs["auth_config_id"] = auth_config_id
 
         instance = await self.repository.create(**create_kwargs)
 
-        # Publish event for MCP Infrastructure to handle deployment
-        await self.event_broker.publish(
-            MCPServerInstanceCreated(
-                instance_id=str(instance.id),
-                server_spec_id=server_spec_id,
-                name=instance.name,
-                json_spec=spec,
+        if is_url_type:
+            # No container workflow needed — try discovering tools directly
+            try:
+                await self.discover_and_store_tools(instance.id)
+            except Exception as e:
+                logger.warning("Auto tool discovery failed for URL instance %s: %s", instance.id, e)
+        else:
+            # Publish event for MCP Infrastructure to handle container deployment
+            await self.event_broker.publish(
+                MCPServerInstanceCreated(
+                    instance_id=str(instance.id),
+                    server_spec_id=server_spec_id,
+                    name=instance.name,
+                    json_spec=spec,
+                )
             )
-        )
 
         return instance
 
@@ -494,15 +504,7 @@ class MCPServerInstanceService:
                 logger.warning("Failed to resolve auth headers for instance %s: %s", instance_id, e)
 
         try:
-            from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
-
-            async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10), headers=headers
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+            result = await self._list_tools_via_mcp(mcp_url, headers)
 
             tools = [
                 {
@@ -514,19 +516,18 @@ class MCPServerInstanceService:
             ]
 
             instance.set_available_tools(tools)
-            new_json_spec = dict(instance.json_spec)  # copy to ensure new object
+            new_json_spec = dict(instance.json_spec)
 
-            # Direct DB update to avoid SQLAlchemy JSON mutation detection issues
             from sqlalchemy import update as sa_update
 
-            session = self.repository.session
+            db_session = self.repository.session
             stmt = (
                 sa_update(type(instance))
                 .where(type(instance).id == instance_id)
                 .values(json_spec=new_json_spec)
             )
-            await session.execute(stmt)
-            await session.commit()
+            await db_session.execute(stmt)
+            await db_session.commit()
 
             logger.info("Discovered %d tools for instance %s", len(tools), instance_id)
             return True
@@ -534,3 +535,34 @@ class MCPServerInstanceService:
         except Exception as e:
             logger.error("Tool discovery failed for %s: %s", instance_id, e, exc_info=True)
             return False
+
+    async def _list_tools_via_mcp(self, mcp_url: str, headers: dict[str, str]):
+        """Connect to MCP server and list tools. Tries streamable HTTP first, falls back to SSE."""
+        from mcp import ClientSession
+
+        try:
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async with streamablehttp_client(
+                mcp_url, timeout=timedelta(seconds=10), headers=headers or None
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    return await session.list_tools()
+        except Exception as e:
+            logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, e)
+
+        from mcp.client.sse import sse_client
+
+        sse_url = mcp_url.rstrip("/")
+        if sse_url.endswith("/mcp"):
+            sse_url = sse_url[:-4] + "/sse"
+        elif not sse_url.endswith("/sse"):
+            sse_url = sse_url + "/sse"
+
+        async with sse_client(
+            sse_url, timeout=10, headers=headers or None
+        ) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await session.list_tools()

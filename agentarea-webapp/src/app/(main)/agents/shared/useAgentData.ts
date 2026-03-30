@@ -83,10 +83,28 @@ export async function loadAgentEditData(
     tools_config: {
       mcp_server_configs: (agent.tools || [])
         .filter((t: any) => t.type === "mcp")
-        .map((t: any) => ({ server_name: t.name, ...(t.settings || {}) })),
+        .map((t: any) => {
+          const settings = t.settings || {};
+          // Transform backend allowed_tools (string[]) to form format (MCPToolConfig[])
+          const allowedTools = (settings.allowed_tools || []).map((name: string) => ({
+            tool_name: name,
+            requires_user_confirmation: settings.requires_user_confirmation ?? false,
+          }));
+          return {
+            mcp_server_id: settings.mcp_server_id || t.name,
+            allowed_tools: allowedTools,
+          };
+        }),
       builtin_tools: (agent.tools || [])
         .filter((t: any) => t.type === "code")
-        .map((t: any) => t.name),
+        .map((t: any) => ({
+          tool_name: t.name,
+          disabled_methods: (t.settings?.disabled_methods || []).reduce(
+            (acc: Record<string, boolean>, m: string) => ({ ...acc, [m]: false }),
+            {}
+          ),
+          requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
+        })),
     },
     events_config: {
       events: agent.events_config?.events || [],

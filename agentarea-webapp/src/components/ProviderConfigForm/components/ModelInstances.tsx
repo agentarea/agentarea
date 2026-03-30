@@ -1,20 +1,10 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Brain, Eye, RefreshCw, Wrench } from "lucide-react";
+import { Brain, Check, Eye, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  TableBody,
-  TableCell,
-  Table as TableComponent,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { discoverModelsAction as discoverModels } from "@/lib/server-actions";
 import { ModelSpec } from "@/types/provider";
 
@@ -49,6 +39,21 @@ function formatTokens(tokens: number | null | undefined): string {
   return tokens.toLocaleString();
 }
 
+// Plain checkbox indicator — zero Radix, zero hooks
+function CheckIndicator({ checked }: { checked: boolean }) {
+  return (
+    <div
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border shadow-sm ${
+        checked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-primary"
+      }`}
+    >
+      {checked && <Check className="h-3 w-3" />}
+    </div>
+  );
+}
+
 export default function ModelInstances({
   selectedProvider,
   availableModels,
@@ -56,7 +61,6 @@ export default function ModelInstances({
   setSelectedModels,
   isEdit = false,
   providerConfigId,
-  canTest = false,
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -86,41 +90,43 @@ export default function ModelInstances({
     }
   };
 
-  const handleModelToggle = (modelSpec: ModelSpec, checked: boolean) => {
-    if (checked) {
-      const newModel: SelectedModel = {
-        modelSpecId: modelSpec.id,
-        instanceName: `${selectedProvider?.name} ${modelSpec.display_name}`,
-        description: modelSpec.description || "",
-        isPublic: false,
-      };
-      setSelectedModels([...selectedModels, newModel]);
+  const isAllSelected =
+    selectedModels.length === availableModels.length &&
+    availableModels.length > 0;
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedModels([]);
     } else {
       setSelectedModels(
-        selectedModels.filter(
-          (m: SelectedModel) => m.modelSpecId !== modelSpec.id
-        )
+        availableModels.map((model) => ({
+          modelSpecId: model.id,
+          instanceName: `${selectedProvider?.name} ${model.display_name}`,
+          description: model.description || "",
+          isPublic: false,
+        }))
       );
     }
   };
 
-  const handleSelectAllToggle = (checked: boolean) => {
-    if (checked) {
-      const allModels = availableModels.map((model: ModelSpec) => ({
-        modelSpecId: model.id,
-        instanceName: `${selectedProvider?.name} ${model.display_name}`,
-        description: model.description || "",
-        isPublic: false,
-      }));
-      setSelectedModels(allModels);
+  const handleRowClick = (model: ModelSpec) => {
+    const isSelected = selectedModels.some((m) => m.modelSpecId === model.id);
+    if (isSelected) {
+      setSelectedModels(
+        selectedModels.filter((m) => m.modelSpecId !== model.id)
+      );
     } else {
-      setSelectedModels([]);
+      setSelectedModels([
+        ...selectedModels,
+        {
+          modelSpecId: model.id,
+          instanceName: `${selectedProvider?.name} ${model.display_name}`,
+          description: model.description || "",
+          isPublic: false,
+        },
+      ]);
     }
   };
-
-  const isAllSelected =
-    selectedModels.length === availableModels.length &&
-    availableModels.length > 0;
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -154,9 +160,10 @@ export default function ModelInstances({
           {t("noModelsAvailableForThisProvider")}
         </div>
       ) : (
-        <TableComponent>
-          <TableHeader
-            className="relative"
+        <div className="overflow-hidden rounded-md border">
+          {/* Header */}
+          <div
+            className="grid grid-cols-[32px_1fr_80px_80px_80px_80px_140px] items-center gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-zinc-400"
             style={{
               backgroundImage: `repeating-linear-gradient(
                 -45deg,
@@ -167,127 +174,91 @@ export default function ModelInstances({
               )`,
             }}
           >
-            <TableRow className="pointer-events-none hover:bg-transparent">
-              <TableHead className="h-auto w-8 py-[4px] pl-3 pointer-events-auto">
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={(checked) => handleSelectAllToggle(!!checked)}
-                  aria-label={t("selectAllModels")}
-                  id="select-all-models"
-                />
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-[11px] font-medium uppercase text-zinc-400">
-                Model
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-right text-[11px] font-medium uppercase text-zinc-400">
-                Context
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-right text-[11px] font-medium uppercase text-zinc-400">
-                Max Output
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-right text-[11px] font-medium uppercase text-zinc-400">
-                Input $/1M
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-right text-[11px] font-medium uppercase text-zinc-400">
-                Output $/1M
-              </TableHead>
-              <TableHead className="h-auto py-[4px] text-[11px] font-medium uppercase text-zinc-400">
-                Capabilities
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {availableModels.map((model: ModelSpec) => {
-              const isSelected = selectedModels.some(
-                (m) => m.modelSpecId === model.id
-              );
-              return (
-                <TableRow
-                  key={model.id}
-                  className="cursor-pointer border-b border-zinc-100 transition-colors duration-200 hover:bg-primary/5 dark:border-zinc-800 dark:hover:bg-primary/10"
-                  onClick={() => handleModelToggle(model, !isSelected)}
-                >
-                  <TableCell className="w-8 py-[6px] pl-3">
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={(checked) =>
-                        handleModelToggle(model, checked as boolean)
-                      }
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </TableCell>
-                  <TableCell className="py-[6px]">
-                    <div className="text-sm font-medium">
-                      {model.display_name}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-[6px] text-right">
-                    <span className="text-xs text-muted-foreground">
-                      {formatTokens(model.context_window)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-[6px] text-right">
-                    <span className="text-xs text-muted-foreground">
-                      {formatTokens(model.max_output_tokens)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-[6px] text-right">
-                    <span className="text-xs text-muted-foreground">
-                      {formatCost(model.input_cost_per_token)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-[6px] text-right">
-                    <span className="text-xs text-muted-foreground">
-                      {formatCost(model.output_cost_per_token)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-[6px]">
-                    <div className="flex gap-1">
-                      {model.supports_function_calling && (
-                        <Badge
-                          variant="secondary"
-                          className="gap-0.5 px-1.5 py-0 text-[10px]"
-                        >
-                          <Wrench className="h-2.5 w-2.5" />
-                          Tools
-                        </Badge>
-                      )}
-                      {model.supports_vision && (
-                        <Badge
-                          variant="secondary"
-                          className="gap-0.5 px-1.5 py-0 text-[10px]"
-                        >
-                          <Eye className="h-2.5 w-2.5" />
-                          Vision
-                        </Badge>
-                      )}
-                      {model.supports_reasoning && (
-                        <Badge
-                          variant="secondary"
-                          className="gap-0.5 px-1.5 py-0 text-[10px]"
-                        >
-                          <Brain className="h-2.5 w-2.5" />
-                          Reasoning
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </TableComponent>
+            <div
+              className="flex cursor-pointer items-center justify-center"
+              onClick={handleSelectAll}
+            >
+              <CheckIndicator checked={isAllSelected} />
+            </div>
+            <div>Model</div>
+            <div className="text-right">Context</div>
+            <div className="text-right">Max Output</div>
+            <div className="text-right">Input $/1M</div>
+            <div className="text-right">Output $/1M</div>
+            <div>Capabilities</div>
+          </div>
+
+          {/* Rows */}
+          {availableModels.map((model) => {
+            const isSelected = selectedModels.some(
+              (m) => m.modelSpecId === model.id
+            );
+            return (
+              <div
+                key={model.id}
+                className="grid cursor-pointer grid-cols-[32px_1fr_80px_80px_80px_80px_140px] items-center gap-2 border-t border-zinc-100 px-3 py-1.5 transition-colors duration-200 hover:bg-primary/5 dark:border-zinc-800 dark:hover:bg-primary/10"
+                onClick={() => handleRowClick(model)}
+              >
+                <div className="flex items-center justify-center">
+                  <CheckIndicator checked={isSelected} />
+                </div>
+                <div className="text-sm font-medium">
+                  {model.display_name}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {formatTokens(model.context_window)}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {formatTokens(model.max_output_tokens)}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {formatCost(model.input_cost_per_token)}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {formatCost(model.output_cost_per_token)}
+                </div>
+                <div className="flex gap-1">
+                  {model.supports_function_calling && (
+                    <Badge
+                      variant="secondary"
+                      className="gap-0.5 px-1.5 py-0 text-[10px]"
+                    >
+                      <Wrench className="h-2.5 w-2.5" />
+                      Tools
+                    </Badge>
+                  )}
+                  {model.supports_vision && (
+                    <Badge
+                      variant="secondary"
+                      className="gap-0.5 px-1.5 py-0 text-[10px]"
+                    >
+                      <Eye className="h-2.5 w-2.5" />
+                      Vision
+                    </Badge>
+                  )}
+                  {model.supports_reasoning && (
+                    <Badge
+                      variant="secondary"
+                      className="gap-0.5 px-1.5 py-0 text-[10px]"
+                    >
+                      <Brain className="h-2.5 w-2.5" />
+                      Reasoning
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {availableModels.length > 0 && (
-        <div className="flex items-center">
-          <Label className="note cursor-pointer text-xs font-normal">
-            {t("selectedModelsCount", {
-              selectedCount: selectedModels.length,
-              totalCount: availableModels.length,
-            })}
-          </Label>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {t("selectedModelsCount", {
+            selectedCount: selectedModels.length,
+            totalCount: availableModels.length,
+          })}
+        </p>
       )}
     </div>
   );
