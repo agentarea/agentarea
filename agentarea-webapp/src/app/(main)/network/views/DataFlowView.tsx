@@ -114,6 +114,11 @@ export default function DataFlowView({ topology, onNodeClick }: Props) {
       internal: 200,
       egress: 200,
     };
+    const zoneWidths: Record<ZoneKey, number> = {
+      gateway: SIDE_ZONE_W,
+      internal: INTERNAL_ZONE_W,
+      egress: SIDE_ZONE_W,
+    };
     for (const zone of Object.keys(ZONE_META) as ZoneKey[]) {
       const members = zoneNodes[zone];
       members.sort((a, b) => {
@@ -142,6 +147,7 @@ export default function DataFlowView({ topology, onNodeClick }: Props) {
         const zoneHeight =
           rows * NODE_H + (rows - 1) * NODE_GAP_Y + ZONE_PADDING * 2;
         zoneHeights[zone] = Math.max(200, zoneHeight);
+        zoneWidths[zone] = zoneWidth;
         members.forEach((n, i) => {
           const col = i % cols;
           const row = Math.floor(i / cols);
@@ -165,16 +171,23 @@ export default function DataFlowView({ topology, onNodeClick }: Props) {
       }
     }
     const maxZoneHeight = Math.max(...Object.values(zoneHeights));
+    const egressX = SIDE_ZONE_W + ZONE_GAP + zoneWidths.internal + ZONE_GAP;
+    for (const n of zoneNodes.egress) {
+      if (nodePositions[n.id]) {
+        nodePositions[n.id].x = egressX + ZONE_PADDING;
+      }
+    }
     for (const [zone, zoneData] of Object.entries(ZONE_META) as [
       ZoneKey,
       (typeof ZONE_META)[ZoneKey],
     ][]) {
       const members = zoneNodes[zone];
-      const zoneWidth = zone === "internal" ? INTERNAL_ZONE_W : SIDE_ZONE_W;
+      const zoneWidth = zoneWidths[zone];
+      const zoneX = zone === "egress" ? egressX : ZONE_X[zone];
       flowNodes.push({
         id: `zone-${zone}`,
         type: "zone",
-        position: { x: ZONE_X[zone], y: 0 },
+        position: { x: zoneX, y: 0 },
         data: { label: zoneData.label, color: zoneData.color },
         style: { width: zoneWidth, height: maxZoneHeight },
         selectable: false,
