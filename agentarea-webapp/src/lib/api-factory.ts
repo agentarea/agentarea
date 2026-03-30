@@ -1358,6 +1358,59 @@ export function createApiClient(client: Client) {
       });
       return { data, error };
     },
+
+    // Wallet API
+    getAgentWallet: async (agentId: string) => {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet", {
+        params: { path: { agent_id: agentId } },
+      });
+      return { data, error };
+    },
+
+    createAgentWallet: async (agentId: string, body: components["schemas"]["CreateWalletRequest"]) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet", {
+        params: { path: { agent_id: agentId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    updateAgentWallet: async (agentId: string, body: components["schemas"]["UpdateWalletRequest"]) => {
+      const { data, error } = await client.PUT("/v1/agents/{agent_id}/wallet", {
+        params: { path: { agent_id: agentId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    deleteAgentWallet: async (agentId: string) => {
+      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/wallet", {
+        params: { path: { agent_id: agentId } },
+      });
+      return { data, error };
+    },
+
+    getAgentWalletBalance: async (agentId: string) => {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/balance", {
+        params: { path: { agent_id: agentId } },
+      });
+      return { data, error };
+    },
+
+    getAgentWalletPayments: async (agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) => {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/payments", {
+        params: { path: { agent_id: agentId }, query: params },
+      });
+      return { data, error };
+    },
+
+    fundAgentWallet: async (agentId: string, body: components["schemas"]["FundWalletRequest"]) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet/fund", {
+        params: { path: { agent_id: agentId } },
+        body,
+      });
+      return { data, error };
+    },
   };
 }
 

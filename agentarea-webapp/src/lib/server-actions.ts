@@ -65,6 +65,22 @@ import {
   pauseAgentTask,
   previewOpenAPISpec,
   removeAgentFromProject,
+  removeSkillFromProject,
+  removeAgentFromProject,
+  removeMcpInstanceFromProject,
+  removeSkillFromProject,
+  removeSkillMember,
+  resolveEscalation,
+  resumeAgentTask,
+  testModelInstance,
+  testOpenAPIConnection,
+  updateAgentWallet,
+  updateMCPServerInstance,
+  updateProject,
+  updateProviderConfig,
+  updateSkill,
+  uploadProjectFile,
+} from "@/lib/api";
   removeMcpInstanceFromProject,
   removeSkillFromProject,
   removeSkillMember,
@@ -532,6 +548,7 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
+<<<<<<< HEAD
 export async function createAgentWalletAction(
   agentId: string,
   body: components["schemas"]["CreateWalletRequest"]
@@ -543,6 +560,13 @@ export async function updateAgentWalletAction(
   agentId: string,
   body: components["schemas"]["UpdateWalletRequest"]
 ) {
+=======
+export async function createAgentWalletAction(agentId: string, body: components["schemas"]["CreateWalletRequest"]) {
+  return await createAgentWallet(agentId, body);
+}
+
+export async function updateAgentWalletAction(agentId: string, body: components["schemas"]["UpdateWalletRequest"]) {
+>>>>>>> main
   return await updateAgentWallet(agentId, body);
 }
 
@@ -554,6 +578,7 @@ export async function getAgentWalletBalanceAction(agentId: string) {
   return await getAgentWalletBalance(agentId);
 }
 
+<<<<<<< HEAD
 export async function getAgentWalletPaymentsAction(
   agentId: string,
   params?: {
@@ -570,5 +595,12 @@ export async function fundAgentWalletAction(
   agentId: string,
   body: components["schemas"]["FundWalletRequest"]
 ) {
+=======
+export async function getAgentWalletPaymentsAction(agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) {
+  return await getAgentWalletPayments(agentId, params);
+}
+
+export async function fundAgentWalletAction(agentId: string, body: components["schemas"]["FundWalletRequest"]) {
+>>>>>>> main
   return await fundAgentWallet(agentId, body);
 }
