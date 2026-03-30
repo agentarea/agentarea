@@ -14,7 +14,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
-    docker_image_url: Mapped[str] = mapped_column(String, nullable=False)
+    docker_image_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     version: Mapped[str] = mapped_column(String, nullable=False)
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String, nullable=False, default="draft")
@@ -23,6 +23,8 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     env_schema: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     # Custom command to override container CMD - useful for switching between stdio and HTTP modes
     cmd: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
+    # Remote URL for URL-type MCP servers (e.g. https://api.githubcopilot.com/mcp/)
+    remote_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     # Provenance: links back to the registry catalog item this spec was installed from
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
@@ -30,13 +32,14 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self,
         name: str,
         description: str,
-        docker_image_url: str,
-        version: str,
+        version: str = "1.0.0",
+        docker_image_url: str | None = None,
         tags: list[str] | None = None,
         status: str = "draft",
         is_public: bool = False,
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
+        remote_url: str | None = None,
         registry_item_id: str | None = None,
         # Note: user_id and workspace_id are now handled by BaseModel
         **kwargs,
@@ -51,4 +54,5 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self.is_public = is_public
         self.env_schema = env_schema or []
         self.cmd = cmd
+        self.remote_url = remote_url
         self.registry_item_id = registry_item_id

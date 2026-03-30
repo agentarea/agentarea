@@ -251,6 +251,7 @@ class RegistryService:
         spec = item.spec or {}
         conn_type = spec.get("connection_type", "url")
         docker_image_url, cmd = self._map_mcp_connection(conn_type, spec)
+        remote_url = spec.get("url") if conn_type == "url" else None
         tags = ["registry", conn_type]
         if spec.get("transport"):
             tags.append(spec["transport"])
@@ -264,6 +265,7 @@ class RegistryService:
             is_public=False,
             env_schema=spec.get("env_schema", []),
             cmd=cmd,
+            remote_url=remote_url,
             registry_item_id=item.id,
         )
         return str(server.id)
@@ -399,7 +401,7 @@ class RegistryService:
             if not identifier:
                 continue
 
-            title = server.get("title", identifier)
+            title = server.get("title") or _humanize_identifier(identifier)
             description = (server.get("description") or "")[:500]
             version = server.get("version", "latest")
 
@@ -605,3 +607,24 @@ class RegistryService:
                 }
             )
         return items
+
+
+def _humanize_identifier(identifier: str) -> str:
+    """Convert registry identifier to a human-readable name.
+
+    Examples:
+        'ai.aliengiraffe/spotdb'     → 'Spotdb'
+        'com.github/copilot-mcp'     → 'Copilot MCP'
+        'agency.lona/trading'        → 'Trading'
+    """
+    # Take the part after the last slash
+    if "/" in identifier:
+        name = identifier.rsplit("/", 1)[-1]
+    else:
+        name = identifier
+
+    # Known abbreviations to keep uppercase
+    _ABBREVS = {"mcp", "api", "ai", "db", "sql", "ssh", "aws", "gcp", "cli", "sdk", "llm"}
+
+    parts = name.replace("-", " ").replace("_", " ").split()
+    return " ".join(p.upper() if p.lower() in _ABBREVS else p.capitalize() for p in parts)

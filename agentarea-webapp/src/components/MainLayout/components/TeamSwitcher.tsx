@@ -163,13 +163,7 @@ export function TeamSwitcher({
               <div className="flex size-6 items-center justify-center rounded-md border bg-primary/10">
                 <Plus className="size-4 text-primary" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Add Workspace</span>
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Crown className="h-2.5 w-2.5" />
-                  Pro feature
-                </span>
-              </div>
+              <span className="text-sm font-medium">Add Workspace</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

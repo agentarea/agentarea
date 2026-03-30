@@ -159,8 +159,9 @@ bearer_scheme = HTTPBearer(bearerFormat="JWT", description="JWT Bearer token for
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    # Create MCP server — stateless_http=True means no session tracking,
-    # so no lifespan dance needed.  Each request is self-contained.
+    # Create MCP server — stateless_http=True means no session tracking
+    # between requests, but the task group still needs to be initialised
+    # via session_manager.run() in the lifespan.
     from agentarea_agents_sdk.mcp_server import create_mcp_server
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
     from agentarea_api.tools import get_platform_tools
@@ -173,6 +174,12 @@ def create_app() -> FastAPI:
     _mcp_app = _mcp_server.streamable_http_app()
     _mcp_app.add_middleware(MCPAuthMiddleware)
 
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        async with combined_lifespan(app):
+            async with _mcp_server.session_manager.run():
+                yield
+
     app = FastAPI(
         title="AgentArea API",
         description=(
@@ -183,7 +190,7 @@ def create_app() -> FastAPI:
             "/openapi.json."
         ),
         version="0.1.0",
-        lifespan=combined_lifespan,
+        lifespan=_lifespan,
         openapi_tags=[
             {"name": "agents", "description": "Operations with AI agents"},
             {"name": "tasks", "description": "Operations with agent tasks"},
@@ -243,7 +250,7 @@ def create_app() -> FastAPI:
     from starlette.types import ASGIApp as _ASGIApp, Receive as _Receive, Scope as _Scope, Send as _Send
 
     class BundleMCPMiddleware:
-        """Routes /bundle-mcp/{instance-id} to registered bundle proxy ASGI apps."""
+        """Routes /mcp/{instance-id} to registered bundle proxy ASGI apps, falling through to platform MCP."""
 
         def __init__(self, inner_app: _ASGIApp) -> None:
             self._inner = inner_app
@@ -251,14 +258,13 @@ def create_app() -> FastAPI:
         async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
             if scope["type"] in ("http", "websocket"):
                 path: str = scope.get("path", "")
-                if path.startswith("/bundle-mcp/"):
-                    parts = path[len("/bundle-mcp/"):].split("/", 1)
+                if path.startswith("/mcp/"):
+                    parts = path[len("/mcp/"):].split("/", 1)
                     instance_id = parts[0]
-                    key = f"bundle-{instance_id}"
 
                     from agentarea_api.api.v1.compound_mcp_registry import registry
 
-                    proxy_app = registry.get(key)
+                    proxy_app = registry.get(instance_id)
                     if proxy_app is not None:
                         remainder = "/" + (parts[1] if len(parts) > 1 else "")
                         scope = dict(scope)

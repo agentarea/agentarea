@@ -112,29 +112,29 @@ export interface paths {
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        get: operations["hydra_oauth2_proxy_oauth2__path__patch"];
+        get: operations["hydra_oauth2_proxy_oauth2__path__put"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        put: operations["hydra_oauth2_proxy_oauth2__path__patch"];
+        put: operations["hydra_oauth2_proxy_oauth2__path__put"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        post: operations["hydra_oauth2_proxy_oauth2__path__patch"];
+        post: operations["hydra_oauth2_proxy_oauth2__path__put"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        delete: operations["hydra_oauth2_proxy_oauth2__path__patch"];
+        delete: operations["hydra_oauth2_proxy_oauth2__path__put"];
         options?: never;
         head?: never;
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        patch: operations["hydra_oauth2_proxy_oauth2__path__patch"];
+        patch: operations["hydra_oauth2_proxy_oauth2__path__put"];
         trace?: never;
     };
     "/.well-known/jwks.json": {
@@ -188,37 +188,60 @@ export interface paths {
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        get: operations["handle_webhook_webhooks__webhook_id__patch"];
+        get: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        put: operations["handle_webhook_webhooks__webhook_id__patch"];
+        put: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        post: operations["handle_webhook_webhooks__webhook_id__patch"];
+        post: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        delete: operations["handle_webhook_webhooks__webhook_id__patch"];
+        delete: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        options: operations["handle_webhook_webhooks__webhook_id__patch"];
+        options: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        head: operations["handle_webhook_webhooks__webhook_id__patch"];
+        head: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        patch: operations["handle_webhook_webhooks__webhook_id__patch"];
+        patch: operations["handle_webhook_webhooks__webhook_id__options"];
+        trace?: never;
+    };
+    "/v1/mcp-oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Callback
+         * @description OAuth callback — exchange code for token and store in MCPAuthConfig.
+         *
+         *     This endpoint does NOT require auth (the user is mid-redirect from the
+         *     remote AS). The state token proves the flow was initiated by our /authorize.
+         */
+        get: operations["oauth_callback_v1_mcp_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/agents/": {
@@ -1147,6 +1170,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-configs/discover-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Models Preview
+         * @description Discover models from a provider API using the provided API key, without requiring a saved config.
+         */
+        post: operations["discover_models_preview_v1_provider_configs_discover_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/provider-configs/{config_id}": {
         parameters: {
             query?: never;
@@ -1170,6 +1213,26 @@ export interface paths {
          * @description Delete a provider configuration.
          */
         delete: operations["delete_provider_config_v1_provider_configs__config_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-configs/{config_id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Models
+         * @description Discover available models from the provider API and sync to model specs.
+         */
+        post: operations["discover_models_v1_provider_configs__config_id__discover_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2219,6 +2282,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Authorize
+         * @description Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.
+         *
+         *     1. Look up the MCP instance's remote URL
+         *     2. Discover the authorization server (RFC 9728 → RFC 8414)
+         *     3. Dynamically register as an OAuth client (RFC 7591)
+         *     4. Generate PKCE pair and state
+         *     5. Redirect user to the authorization endpoint
+         */
+        get: operations["oauth_authorize_v1_mcp_oauth_authorize_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-keys/": {
         parameters: {
             query?: never;
@@ -2850,6 +2939,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compound-mcps/{compound_id}/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Compound Endpoint Info
+         * @description Return the MCP endpoint URL for a compound MCP.
+         */
+        get: operations["get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compound-mcps/{compound_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Compound Proxy
+         * @description Build and register a compound MCP proxy server.
+         *
+         *     This discovers tools from all member instances and makes the compound
+         *     available as an MCP endpoint.  Call this after adding/removing members.
+         */
+        post: operations["start_compound_proxy_v1_compound_mcps__compound_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compound-mcps/{compound_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Compound Proxy
+         * @description Stop a running compound MCP proxy.
+         */
+        post: operations["stop_compound_proxy_v1_compound_mcps__compound_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/start-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Bundle Proxy
+         * @description Build and register a bundle MCP proxy server.
+         */
+        post: operations["start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/stop-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Bundle Proxy
+         * @description Stop a running bundle MCP proxy.
+         */
+        post: operations["stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -3353,6 +3545,127 @@ export interface components {
             /** Routing Mode */
             routing_mode?: string | null;
         };
+        /** DiscoverPreviewModelResponse */
+        DiscoverPreviewModelResponse: {
+            /** Id */
+            id: string;
+            /** Model Name */
+            model_name: string;
+            /** Display Name */
+            display_name: string;
+            /** Context Window */
+            context_window: number;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+        };
+        /** DiscoverPreviewRequest */
+        DiscoverPreviewRequest: {
+            /** Provider Key */
+            provider_key: string;
+            /** Api Key */
+            api_key: string;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
+        };
+        /** DiscoverPreviewResponse */
+        DiscoverPreviewResponse: {
+            /** Discovered */
+            discovered: number;
+            /** New Models */
+            new_models: number;
+            /** Models */
+            models: components["schemas"]["DiscoverPreviewModelResponse"][];
+        };
+        /** DiscoveredModelResponse */
+        DiscoveredModelResponse: {
+            /** Model Name */
+            model_name: string;
+            /** Display Name */
+            display_name: string;
+            /** Context Window */
+            context_window: number;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+        };
+        /** DiscoveryResponse */
+        DiscoveryResponse: {
+            /** Discovered */
+            discovered: number;
+            /** New Models */
+            new_models: number;
+            /** Models */
+            models: components["schemas"]["DiscoveredModelResponse"][];
+        };
         /** EscalationResolution */
         EscalationResolution: {
             /** Escalation Id */
@@ -3796,6 +4109,8 @@ export interface components {
             }[];
             /** Cmd */
             cmd: string[] | null;
+            /** Remote Url */
+            remote_url?: string | null;
             /** Status */
             status: string;
             /**
@@ -5200,6 +5515,36 @@ export interface components {
             description: string | null;
             /** Context Window */
             context_window: number;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number | null;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number | null;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number | null;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean | null;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean | null;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean | null;
             /** Default Context Strategy */
             default_context_strategy: string | null;
             /** Is Active */
@@ -5233,6 +5578,36 @@ export interface components {
             description: string | null;
             /** Context Window */
             context_window: number;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number | null;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number | null;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number | null;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean | null;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean | null;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean | null;
             /** Is Active */
             is_active: boolean;
             /**
@@ -5335,7 +5710,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__patch: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5366,7 +5741,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__patch: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5397,7 +5772,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__patch: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5428,7 +5803,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__patch: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5459,7 +5834,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__patch: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5532,7 +5907,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5563,7 +5938,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5594,7 +5969,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5625,7 +6000,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5656,7 +6031,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5687,7 +6062,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -5718,13 +6093,47 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__patch: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 webhook_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_v1_mcp_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+                error_description?: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -7490,6 +7899,39 @@ export interface operations {
             };
         };
     };
+    discover_models_preview_v1_provider_configs_discover_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_provider_config_v1_provider_configs__config_id__get: {
         parameters: {
             query?: never;
@@ -7574,6 +8016,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_models_v1_provider_configs__config_id__discover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9270,6 +9743,38 @@ export interface operations {
             };
         };
     };
+    oauth_authorize_v1_mcp_oauth_authorize_get: {
+        parameters: {
+            query: {
+                /** @description MCP instance to connect */
+                instance_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_api_keys_v1_api_keys__get: {
         parameters: {
             query?: never;
@@ -10768,6 +11273,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_compound_proxy_v1_compound_mcps__compound_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_compound_proxy_v1_compound_mcps__compound_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

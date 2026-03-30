@@ -295,6 +295,10 @@
     "createCustomButton": "Добавить свой сервер",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "filters": {
+      "type": "Тип",
+      "category": "Категория"
+    },
     "createInstance": {
       "breadcrumb": "Создать инстанс",
       "breadcrumbWithName": "Создать инстанс {serverName}",
@@ -317,6 +321,11 @@
       "warnings": {
         "validateFirst": "Сначала проверьте конфигурацию",
         "hasErrors": "В конфигурации ошибок: {count}"
+      },
+      "remoteConnect": {
+        "description": "Это удалённый MCP-сервер, требующий авторизации через OAuth. Нажмите «Подключить» — вы будете перенаправлены на страницу входа провайдера.",
+        "connect": "Подключить",
+        "connecting": "Подключение..."
       },
       "errors": {
         "nameRequired": "Имя обязательно",
@@ -354,7 +363,12 @@
       },
       "actions": {
         "start": "Запустить",
-        "stop": "Остановить"
+        "stop": "Остановить",
+        "connectOAuth": "Подключить через OAuth"
+      },
+      "oauth": {
+        "connectSuccess": "Успешно подключено через OAuth. Учётные данные сохранены.",
+        "connectError": "Ошибка подключения OAuth: {reason}"
       },
       "status": {
         "stopped": "Остановлен",

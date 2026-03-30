@@ -105,6 +105,12 @@ def upsert_model_spec(
     display_name = model.get("display_name", model_name)
     description = model.get("description", "")
     context_window = model.get("context_window", 4096)
+    max_output_tokens = model.get("max_output_tokens", 4096)
+    input_cost_per_token = model.get("input_cost_per_token", 0.0)
+    output_cost_per_token = model.get("output_cost_per_token", 0.0)
+    supports_function_calling = model.get("supports_function_calling", False)
+    supports_vision = model.get("supports_vision", False)
+    supports_reasoning = model.get("supports_reasoning", False)
 
     # Check if model spec already exists
     result = conn.execute(
@@ -122,7 +128,13 @@ def upsert_model_spec(
             text("""
                 UPDATE model_specs
                 SET display_name = :display_name, description = :description,
-                    context_window = :context_window, updated_at = now()
+                    context_window = :context_window, max_output_tokens = :max_output_tokens,
+                    input_cost_per_token = :input_cost_per_token,
+                    output_cost_per_token = :output_cost_per_token,
+                    supports_function_calling = :supports_function_calling,
+                    supports_vision = :supports_vision,
+                    supports_reasoning = :supports_reasoning,
+                    updated_at = now()
                 WHERE id = :id
             """),
             {
@@ -130,6 +142,12 @@ def upsert_model_spec(
                 "display_name": display_name,
                 "description": description,
                 "context_window": context_window,
+                "max_output_tokens": max_output_tokens,
+                "input_cost_per_token": input_cost_per_token,
+                "output_cost_per_token": output_cost_per_token,
+                "supports_function_calling": supports_function_calling,
+                "supports_vision": supports_vision,
+                "supports_reasoning": supports_reasoning,
             },
         )
         return existing_id
@@ -145,10 +163,15 @@ def upsert_model_spec(
         text("""
             INSERT INTO model_specs
             (id, provider_spec_id, model_name, display_name, description,
-             context_window, is_active, created_by, workspace_id,
+             context_window, max_output_tokens, input_cost_per_token,
+             output_cost_per_token, supports_function_calling, supports_vision,
+             supports_reasoning, is_active, created_by, workspace_id,
              created_at, updated_at)
             VALUES (:id, :provider_spec_id, :model_name, :display_name,
-                    :description, :context_window, true, :created_by,
+                    :description, :context_window, :max_output_tokens,
+                    :input_cost_per_token, :output_cost_per_token,
+                    :supports_function_calling, :supports_vision,
+                    :supports_reasoning, true, :created_by,
                     :workspace_id, now(), now())
         """),
         {
@@ -158,6 +181,12 @@ def upsert_model_spec(
             "display_name": display_name,
             "description": description,
             "context_window": context_window,
+            "max_output_tokens": max_output_tokens,
+            "input_cost_per_token": input_cost_per_token,
+            "output_cost_per_token": output_cost_per_token,
+            "supports_function_calling": supports_function_calling,
+            "supports_vision": supports_vision,
+            "supports_reasoning": supports_reasoning,
             "created_by": "system",  # Intentional: system-level bootstrap data
             "workspace_id": "system",  # Intentional: system-level bootstrap data
         },

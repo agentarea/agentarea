@@ -35,6 +35,7 @@ import {
   createModelInstance,
   deleteModelInstance,
   discoverModels,
+  discoverModelsPreview,
   listMCPAuthConfigs,
   createMCPAuthConfig,
   resolveEscalation,
@@ -253,6 +254,14 @@ export async function deleteModelInstanceAction(instanceId: string) {
 
 export async function discoverModelsAction(configId: string) {
   return await discoverModels(configId);
+}
+
+export async function discoverModelsPreviewAction(body: {
+  provider_key: string;
+  api_key: string;
+  endpoint_url?: string | null;
+}) {
+  return await discoverModelsPreview(body);
 }
 
 export async function listAgentsAction() {
@@ -555,4 +564,32 @@ export async function previewOpenAPISpecAction(body: {
   spec_json?: string;
 }) {
   return await previewOpenAPISpec(body);
+}
+
+export async function initMCPOAuthConnectAction(instanceId: string, returnTo: string = "") {
+  const { env } = await import("@/env");
+  const { getAuthToken } = await import("./getAuthToken");
+  const apiUrl = env.API_URL;
+  const authToken = await getAuthToken();
+
+  const params = new URLSearchParams({ instance_id: instanceId });
+  if (returnTo) params.set("return_to", returnTo);
+
+  const resp = await fetch(
+    `${apiUrl}/v1/mcp-oauth/authorize?${params}`,
+    {
+      headers: {
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      redirect: "manual",
+    }
+  );
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    return { error: body };
+  }
+
+  const data = await resp.json();
+  return { authorize_url: data.authorize_url };
 }

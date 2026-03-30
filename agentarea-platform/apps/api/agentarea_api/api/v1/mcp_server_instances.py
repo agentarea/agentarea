@@ -39,7 +39,7 @@ class MCPServerInstanceResponse(BaseModel):
     server_spec_id: str | None
     json_spec: dict[str, Any]
     status: str
-    auth_config_id: str | None = None
+    auth_config_id: UUID | str | None = None
     created_at: datetime
     updated_at: datetime
 

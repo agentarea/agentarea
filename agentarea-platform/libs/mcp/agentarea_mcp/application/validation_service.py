@@ -61,15 +61,17 @@ class MCPConfigurationValidator:
                             errors.append(f"Arg at index {i} must be a string")
         elif spec_type == "url":
             # URL type: remote MCP server, no container needed
-            if "endpoint_url" not in json_spec:
-                errors.append("Required field 'endpoint_url' is missing for type 'url'")
+            # Accept both "url" and "endpoint_url" for backward compatibility
+            url_field = "url" if "url" in json_spec else "endpoint_url"
+            if url_field not in json_spec:
+                errors.append("Required field 'url' is missing for type 'url'")
             elif (
-                not isinstance(json_spec["endpoint_url"], str)
-                or not json_spec["endpoint_url"].strip()
+                not isinstance(json_spec[url_field], str)
+                or not json_spec[url_field].strip()
             ):
-                errors.append("Field 'endpoint_url' must be a non-empty string")
+                errors.append("Field 'url' must be a non-empty string")
             else:
-                url = json_spec["endpoint_url"]
+                url = json_spec[url_field]
                 if not url.startswith(("http://", "https://")):
                     errors.append("Field 'endpoint_url' must start with http:// or https://")
 

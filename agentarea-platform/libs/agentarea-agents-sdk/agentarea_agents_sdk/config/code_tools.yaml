@@ -160,6 +160,9 @@ code_tools:
     enabled_by_default: false
     requires_user_confirmation: false
     available_methods:
+      - name: "create"
+        display_name: "Create MCP Server"
+        description: "Create a new MCP server instance"
       - name: "list"
         display_name: "List MCP Servers"
         description: "List all MCP server instances"

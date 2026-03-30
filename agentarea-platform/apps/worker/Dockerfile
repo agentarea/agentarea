@@ -15,7 +15,7 @@ COPY apps/ ./apps/
 
 # Use uv to install dependencies and project packages (exclude dev and test dependencies)
 # --all-packages ensures workspace packages and their dependencies are installed
-RUN uv sync --frozen --no-dev --no-group test --all-packages
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-group test --all-packages
 
 # Runtime stage
 FROM python:3.12-slim

@@ -40,6 +40,8 @@ export default async function MCPInstancePage({ params }: Props) {
             instanceId={instance.id}
             instanceName={instance.name}
             status={instance.status}
+            instanceType={(instance as any).json_spec?.type}
+            hasAuthConfig={!!(instance as any).auth_config_id}
           />
         ),
       }}

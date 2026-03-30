@@ -32,6 +32,14 @@ export default async function MCPServersPage({
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
       : "";
+  const typeFilter =
+    typeof resolvedSearchParams.type === "string"
+      ? resolvedSearchParams.type
+      : "";
+  const categoryFilter =
+    typeof resolvedSearchParams.category === "string"
+      ? resolvedSearchParams.category
+      : "";
 
   return (
     <ContentBlock
@@ -48,14 +56,14 @@ export default async function MCPServersPage({
       }
     >
       <Suspense
-        key={`${searchQuery}-${tab}`}
+        key={`${searchQuery}-${tab}-${typeFilter}-${categoryFilter}`}
         fallback={
           <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />
           </div>
         }
       >
-        <MCPServersContent searchQuery={searchQuery} viewMode={tab} />
+        <MCPServersContent searchQuery={searchQuery} viewMode={tab} typeFilter={typeFilter} categoryFilter={categoryFilter} />
       </Suspense>
     </ContentBlock>
   );

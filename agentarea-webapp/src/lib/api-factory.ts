@@ -486,6 +486,18 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    discoverModelsPreview: async (body: {
+      provider_key: string;
+      api_key: string;
+      endpoint_url?: string | null;
+    }) => {
+      const { data, error } = await client.POST(
+        "/v1/provider-configs/discover-preview" as any,
+        { body }
+      );
+      return { data, error };
+    },
+
     // Model Spec API
     listModelSpecs: async (params?: {
       provider_spec_id?: string;

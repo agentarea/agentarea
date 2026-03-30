@@ -14,6 +14,7 @@ export type MCPServerInstanceResponse =
  */
 export interface MCPServer extends MCPServerResponse {
   endpoint_url?: string;
+  remote_url?: string | null;
 }
 
 /**

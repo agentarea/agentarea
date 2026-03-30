@@ -3,6 +3,7 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_tasks.domain.models import SimpleTask
 
 from .base import platform_context
 
@@ -34,13 +35,15 @@ class RunsToolset(Toolset):
                 task_manager=task_manager,
                 workflow_service=workflow_service,
             )
-            task = await service.create_task_from_params(
+            task = SimpleTask(
                 title=message[:100],
                 description=message,
                 query=message,
                 user_id=user_ctx.user_id,
                 agent_id=UUID(agent_id),
                 workspace_id=user_ctx.workspace_id,
+                task_parameters={},
+                status="submitted",
             )
             submitted = await service.submit_task(task)
             return json.dumps(

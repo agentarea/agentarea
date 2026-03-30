@@ -334,6 +334,10 @@
     "myConnections": "My Connections",
     "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
+    "filters": {
+      "type": "Type",
+      "category": "Category"
+    },
     "createInstance": {
       "breadcrumb": "Create instance",
       "breadcrumbWithName": "Create {serverName} instance",
@@ -356,6 +360,11 @@
       "warnings": {
         "validateFirst": "Please validate the configuration first",
         "hasErrors": "Configuration has {count} error(s)"
+      },
+      "remoteConnect": {
+        "description": "This is a remote MCP server that requires OAuth authentication. Click Connect to authorize access — you will be redirected to the provider's login page.",
+        "connect": "Connect",
+        "connecting": "Connecting..."
       },
       "errors": {
         "nameRequired": "Name is required",
@@ -393,7 +402,12 @@
       },
       "actions": {
         "start": "Start",
-        "stop": "Stop"
+        "stop": "Stop",
+        "connectOAuth": "Connect with OAuth"
+      },
+      "oauth": {
+        "connectSuccess": "Successfully connected via OAuth. Credentials stored.",
+        "connectError": "OAuth connection failed: {reason}"
       },
       "status": {
         "stopped": "Stopped",

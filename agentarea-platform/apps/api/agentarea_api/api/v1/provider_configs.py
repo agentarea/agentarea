@@ -224,6 +224,114 @@ async def list_provider_configs_with_instances(
     return [ProviderConfigResponse.from_domain(config) for config in configs]
 
 
+# Discover preview endpoint (no saved config required)
+class DiscoverPreviewRequest(BaseModel):
+    provider_key: str
+    api_key: str
+    endpoint_url: str | None = None
+
+
+class DiscoverPreviewModelResponse(BaseModel):
+    id: str
+    model_name: str
+    display_name: str
+    context_window: int
+    max_output_tokens: int = 4096
+    input_cost_per_token: float = 0.0
+    output_cost_per_token: float = 0.0
+    supports_function_calling: bool = False
+    supports_vision: bool = False
+    supports_reasoning: bool = False
+    description: str | None = None
+    is_new: bool = False
+
+
+class DiscoverPreviewResponse(BaseModel):
+    discovered: int
+    new_models: int
+    models: list[DiscoverPreviewModelResponse]
+
+
+@router.post("/discover-preview", response_model=DiscoverPreviewResponse)
+async def discover_models_preview(
+    data: DiscoverPreviewRequest,
+    user_context: UserContextDep,
+    provider_service: ProviderService = Depends(get_provider_service),
+    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+):
+    """Discover models from a provider API using the provided API key, without requiring a saved config."""
+    provider_spec = await provider_service.get_provider_spec_by_key(data.provider_key)
+    if not provider_spec:
+        raise HTTPException(status_code=404, detail=f"Provider '{data.provider_key}' not found")
+
+    provider_spec_id = str(provider_spec.id)
+
+    discovery_service = ModelDiscoveryService()
+    discovered = await discovery_service.discover(
+        provider_key=data.provider_key,
+        api_key=data.api_key,
+        endpoint_url=data.endpoint_url,
+    )
+
+    if not discovered:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No models discovered for provider '{data.provider_key}'. "
+            "The provider may not support model listing or the API key may be invalid.",
+        )
+
+    results = []
+    new_count = 0
+    for model in discovered:
+        existing = await model_spec_repo.get_by_provider_and_model(
+            provider_spec_id, model.model_name
+        )
+        is_new = existing is None
+
+        spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+            provider_spec_id=provider_spec_id,
+            model_name=model.model_name,
+            display_name=model.display_name or model.model_name,
+            description=model.description or None,
+            context_window=model.context_window,
+            max_output_tokens=model.max_output_tokens,
+            input_cost_per_token=model.input_cost_per_token,
+            output_cost_per_token=model.output_cost_per_token,
+            supports_function_calling=model.supports_function_calling,
+            supports_vision=model.supports_vision,
+            supports_reasoning=model.supports_reasoning,
+        )
+
+        if is_new:
+            new_count += 1
+
+        results.append(DiscoverPreviewModelResponse(
+            id=str(spec.id),
+            model_name=model.model_name,
+            display_name=model.display_name or model.model_name,
+            context_window=model.context_window,
+            max_output_tokens=model.max_output_tokens,
+            input_cost_per_token=model.input_cost_per_token,
+            output_cost_per_token=model.output_cost_per_token,
+            supports_function_calling=model.supports_function_calling,
+            supports_vision=model.supports_vision,
+            supports_reasoning=model.supports_reasoning,
+            description=model.description or None,
+            is_new=is_new,
+        ))
+
+    logger.info(
+        "Discovery preview for provider %s: %d found, %d new",
+        data.provider_key, len(results), new_count,
+    )
+
+    return DiscoverPreviewResponse(
+        discovered=len(results),
+        new_models=new_count,
+        models=results,
+    )
+
+
 @router.get("/{config_id}", response_model=ProviderConfigResponse)
 async def get_provider_config(
     config_id: UUID,
@@ -275,6 +383,12 @@ class DiscoveredModelResponse(BaseModel):
     model_name: str
     display_name: str
     context_window: int
+    max_output_tokens: int = 4096
+    input_cost_per_token: float = 0.0
+    output_cost_per_token: float = 0.0
+    supports_function_calling: bool = False
+    supports_vision: bool = False
+    supports_reasoning: bool = False
     description: str | None = None
     is_new: bool = False
 
@@ -336,6 +450,12 @@ async def discover_models(
             display_name=model.display_name or model.model_name,
             description=model.description or None,
             context_window=model.context_window,
+            max_output_tokens=model.max_output_tokens,
+            input_cost_per_token=model.input_cost_per_token,
+            output_cost_per_token=model.output_cost_per_token,
+            supports_function_calling=model.supports_function_calling,
+            supports_vision=model.supports_vision,
+            supports_reasoning=model.supports_reasoning,
         )
 
         if is_new:
@@ -345,6 +465,12 @@ async def discover_models(
             model_name=model.model_name,
             display_name=model.display_name or model.model_name,
             context_window=model.context_window,
+            max_output_tokens=model.max_output_tokens,
+            input_cost_per_token=model.input_cost_per_token,
+            output_cost_per_token=model.output_cost_per_token,
+            supports_function_calling=model.supports_function_calling,
+            supports_vision=model.supports_vision,
+            supports_reasoning=model.supports_reasoning,
             description=model.description or None,
             is_new=is_new,
         ))

@@ -30,6 +30,7 @@ const inter = Inter({
 function getRuntimeConfig() {
   return {
     CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
+    CLIENT_API_URL: process.env.API_BROWSER_URL || process.env.API_URL || "http://localhost:8000",
   };
 }
 

@@ -10,11 +10,15 @@ import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 interface MCPServersContentProps {
   searchQuery?: string;
   viewMode?: string;
+  typeFilter?: string;
+  categoryFilter?: string;
 }
 
 export default async function MCPServersContent({
   searchQuery = "",
   viewMode = "grid",
+  typeFilter = "",
+  categoryFilter = "",
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
@@ -62,7 +66,7 @@ export default async function MCPServersContent({
       {/* Browse MCP Specifications Section — client-side with infinite scroll */}
       <div id="specs-section">
         <MCPSpecsSection
-          searchParams={{ search: searchQuery }}
+          searchParams={{ search: searchQuery, type: typeFilter, category: categoryFilter }}
           viewMode={viewMode}
         />
       </div>

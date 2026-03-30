@@ -29,6 +29,12 @@ class DiscoveredModel:
     display_name: str
     context_window: int = 4096
     description: str = ""
+    max_output_tokens: int = 4096
+    input_cost_per_token: float = 0.0
+    output_cost_per_token: float = 0.0
+    supports_function_calling: bool = False
+    supports_vision: bool = False
+    supports_reasoning: bool = False
 
 
 @dataclass

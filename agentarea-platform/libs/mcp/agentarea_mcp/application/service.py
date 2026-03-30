@@ -50,13 +50,14 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self,
         name: str,
         description: str,
-        docker_image_url: str,
-        version: str,
+        docker_image_url: str | None = None,
+        version: str = "1.0.0",
         tags: list[str] | None = None,
         is_public: bool = False,
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
         json_spec: dict[str, Any] | None = None,
+        remote_url: str | None = None,
     ) -> MCPServer:
         server = MCPServer(
             name=name,
@@ -67,6 +68,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
             is_public=is_public,
             env_schema=env_schema or [],
             cmd=cmd,
+            remote_url=remote_url,
         )
         server = await self.create(server)
 
@@ -168,7 +170,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         )
 
     async def get(self, id: UUID) -> MCPServer | None:
-        return await self.repository.get(id)
+        return await self.repository.get_by_id(id)
 
 
 class MCPServerInstanceService:
@@ -452,16 +454,16 @@ class MCPServerInstanceService:
             True if tools were successfully discovered and stored, False otherwise
         """
         instance = await self.repository.get_by_id(instance_id)
-        if not instance or instance.status != "running":
+        if not instance:
             return False
 
         # Determine the MCP URL based on instance type
         instance_type = (instance.json_spec or {}).get("type", "docker")
         if instance_type == "url":
             # External MCP — connect directly to the configured URL
-            mcp_url = (instance.json_spec or {}).get("url", "")
+            mcp_url = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get("url", "")
             if not mcp_url:
-                logger.warning("URL-type instance %s has no url in json_spec", instance_id)
+                logger.warning("URL-type instance %s has no endpoint_url in json_spec", instance_id)
                 return False
         else:
             # Docker or command-type — routed via Traefik gateway using instance ID
@@ -474,6 +476,22 @@ class MCPServerInstanceService:
         auth_value = (instance.json_spec or {}).get("auth_value")
         if auth_header and auth_value:
             headers[auth_header] = auth_value
+
+        # Resolve OAuth/bearer token from linked auth config
+        if not headers and instance.auth_config_id:
+            try:
+                from agentarea_mcp.application.auth_service import MCPAuthService
+                from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+
+                auth_repo = MCPAuthConfigRepository(
+                    self.repository.session, self.repository.user_context
+                )
+                auth_service = MCPAuthService(auth_repo, self.secret_manager)
+                auth_config = await auth_service.get(instance.auth_config_id)
+                if auth_config:
+                    headers = await auth_service.get_auth_headers(auth_config)
+            except Exception as e:
+                logger.warning("Failed to resolve auth headers for instance %s: %s", instance_id, e)
 
         try:
             from mcp import ClientSession
@@ -514,5 +532,5 @@ class MCPServerInstanceService:
             return True
 
         except Exception as e:
-            logger.warning("Tool discovery failed for %s: %s", instance_id, e)
+            logger.error("Tool discovery failed for %s: %s", instance_id, e, exc_info=True)
             return False

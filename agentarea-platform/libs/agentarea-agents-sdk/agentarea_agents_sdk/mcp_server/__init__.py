@@ -30,7 +30,7 @@ def create_mcp_server(
     """
     # streamable_http_path="/" so the route lives at the mount root.
     # When FastAPI mounts this at /mcp, the endpoint is /mcp (not /mcp/mcp).
-    server = FastMCP(name=name, instructions=description, streamable_http_path="/", stateless_http=True)
+    server = FastMCP(name=name, instructions=description, streamable_http_path="/")
     adapter = MCPToolAdapter(server)
 
     for tool in toolsets:

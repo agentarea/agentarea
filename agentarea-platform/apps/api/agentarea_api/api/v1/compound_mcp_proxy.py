@@ -130,15 +130,15 @@ async def start_bundle_proxy(
         proxy = await build_bundle_proxy(instance_id, db_session, user_context)
         await proxy.build_server()
 
-        key = f"bundle-{instance_id}"
+        key = str(instance_id)
         registry[key] = proxy.get_asgi_app()
-        logger.info("Bundle proxy started: %s at /bundle-mcp/%s", proxy.name, instance_id)
+        logger.info("Bundle proxy started: %s at /mcp/%s", proxy.name, instance_id)
 
         return JSONResponse({
             "status": "started",
             "instance_id": str(instance_id),
             "name": proxy.name,
-            "endpoint_url": f"/bundle-mcp/{instance_id}",
+            "endpoint_url": f"/mcp/{instance_id}",
         })
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -156,10 +156,10 @@ async def stop_bundle_proxy(
     """Stop a running bundle MCP proxy."""
     from agentarea_api.api.v1.compound_mcp_registry import registry
 
-    key = f"bundle-{instance_id}"
+    key = str(instance_id)
     if key in registry:
         del registry[key]
-        logger.info("Bundle proxy stopped: bundle-%s", instance_id)
+        logger.info("Bundle proxy stopped: %s", instance_id)
         return JSONResponse({"status": "stopped", "instance_id": str(instance_id)})
 
     return JSONResponse({"status": "not_running", "instance_id": str(instance_id)})

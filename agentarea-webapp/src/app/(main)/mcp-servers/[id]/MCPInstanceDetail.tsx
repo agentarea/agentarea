@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
@@ -88,10 +88,10 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     try {
       const { error } = await startBundleProxyAction(instance.id);
       if (error) throw new Error(error);
-      toast.success("Bundle proxy started");
+      toast.success("Server started");
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to start bundle");
+      toast.error(e instanceof Error ? e.message : "Failed to start server");
     } finally {
       setIsBundleStarting(false);
     }
@@ -102,9 +102,9 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     try {
       const { error } = await stopBundleProxyAction(instance.id);
       if (error) throw new Error(error);
-      toast.success("Bundle proxy stopped");
+      toast.success("Server stopped");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to stop bundle");
+      toast.error(e instanceof Error ? e.message : "Failed to stop server");
     } finally {
       setIsBundleStopping(false);
     }
@@ -123,6 +123,20 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
       setIsRefreshingTools(false);
     }
   };
+
+  // Handle OAuth redirect result
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const oauthResult = searchParams.get("oauth");
+    if (oauthResult === "success") {
+      toast.success(t("oauth.connectSuccess"));
+      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+    } else if (oauthResult === "error") {
+      const reason = searchParams.get("reason") || "unknown";
+      toast.error(t("oauth.connectError", { reason }));
+      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+    }
+  }, [searchParams, instance.id, router, t]);
 
   // Poll for status updates during transient states
   useEffect(() => {
@@ -180,7 +194,7 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
 
   // Generate SSE endpoint URL from connection URL
-  const bundleEndpointUrl = isBundleType ? `/bundle-mcp/${instance.id}` : null;
+  const bundleEndpointUrl = isBundleType ? `/mcp/${instance.id}` : null;
   const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
   const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
@@ -406,9 +420,9 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
             </div>
 
             {isBundleType && bundleMembers.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Bundled Servers
+                  Sources
                 </div>
                 <div className="space-y-1">
                   {bundleMembers.map((memberId: string) => (

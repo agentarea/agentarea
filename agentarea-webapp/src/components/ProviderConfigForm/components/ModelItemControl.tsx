@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle, Loader2, TestTube, XCircle } from "lucide-react";
+import { Brain, CheckCircle, Eye, Loader2, TestTube, Wrench, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,14 +95,41 @@ export const ModelItemControl = ({
               {model.description}
             </div>
           </div>
-          <div className="flex items-center justify-start gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3">
             <div className="note">
-              {model.context_window.toLocaleString()} tokens
+              {model.context_window.toLocaleString()} in
+            </div>
+            {(model.max_output_tokens ?? 0) > 0 && (
+              <>
+                <div className="h-[15px] w-[1px] bg-zinc-300 dark:bg-zinc-700" />
+                <div className="note">
+                  {(model.max_output_tokens ?? 0).toLocaleString()} out
+                </div>
+              </>
+            )}
+            <div className="h-[15px] w-[1px] bg-zinc-300 dark:bg-zinc-700" />
+            <div className="note">
+              ${((model.input_cost_per_token ?? 0) * 1_000_000).toFixed(2)}/M in
             </div>
             <div className="h-[15px] w-[1px] bg-zinc-300 dark:bg-zinc-700" />
-            <div className="note">$0/M input tokens</div>
-            <div className="h-[15px] w-[1px] bg-zinc-300 dark:bg-zinc-700" />
-            <div className="note">$0/M output tokens</div>
+            <div className="note">
+              ${((model.output_cost_per_token ?? 0) * 1_000_000).toFixed(2)}/M out
+            </div>
+            {model.supports_function_calling && (
+              <Badge variant="secondary" className="gap-0.5 px-1.5 py-0 text-[10px]">
+                <Wrench className="h-2.5 w-2.5" />Tools
+              </Badge>
+            )}
+            {model.supports_vision && (
+              <Badge variant="secondary" className="gap-0.5 px-1.5 py-0 text-[10px]">
+                <Eye className="h-2.5 w-2.5" />Vision
+              </Badge>
+            )}
+            {model.supports_reasoning && (
+              <Badge variant="secondary" className="gap-0.5 px-1.5 py-0 text-[10px]">
+                <Brain className="h-2.5 w-2.5" />Reasoning
+              </Badge>
+            )}
           </div>
         </Label>
       </div>

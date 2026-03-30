@@ -2,6 +2,67 @@
  * Utility functions for MCP server categorization and styling
  */
 
+export type MCPConnectionType = "docker" | "command" | "url";
+
+/**
+ * Classify an MCP server spec by its connection type based on available fields
+ */
+export function getConnectionType(server: {
+  docker_image_url?: string;
+  cmd?: string[] | null;
+  tags?: string[];
+  remote_url?: string | null;
+}): MCPConnectionType {
+  if (server.remote_url) return "url";
+  // Tags from registry sync are the most reliable source
+  if (server.tags?.includes("url")) return "url";
+  if (server.tags?.includes("docker")) return "docker";
+  if (server.tags?.includes("command")) return "command";
+  // Fallback to field-based detection
+  if (server.docker_image_url) return "docker";
+  if (server.cmd && server.cmd.length > 0) return "command";
+  return "url";
+}
+
+/**
+ * Get all connection types for a server (some may support multiple)
+ */
+export function getConnectionTypes(server: {
+  docker_image_url?: string;
+  cmd?: string[] | null;
+  tags?: string[];
+}): MCPConnectionType[] {
+  const types: MCPConnectionType[] = [];
+  if (server.tags?.includes("docker") || server.docker_image_url) types.push("docker");
+  if (server.tags?.includes("command") || (server.cmd && server.cmd.length > 0)) types.push("command");
+  if (server.tags?.includes("url") || types.length === 0) types.push("url");
+  return types;
+}
+
+/**
+ * Labels and colors for connection types
+ */
+export const CONNECTION_TYPE_CONFIG: Record<
+  MCPConnectionType,
+  { label: string; color: string }
+> = {
+  docker: {
+    label: "Docker",
+    color:
+      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
+  },
+  command: {
+    label: "Command",
+    color:
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",
+  },
+  url: {
+    label: "Remote",
+    color:
+      "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800",
+  },
+};
+
 export type MCPServerCategory =
   | "AI"
   | "Data"

@@ -73,6 +73,7 @@ export const {
   updateProviderConfig,
   deleteProviderConfig,
   discoverModels,
+  discoverModelsPreview,
 
   // Model Spec API
   listModelSpecs,

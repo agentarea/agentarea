@@ -5,6 +5,11 @@ unauthenticated requests through so the MCP protocol handshake (Initialize,
 Ping, etc.) can proceed.  Auth is enforced at tool execution time — if a
 tool calls ``get_mcp_user_context()`` and no valid token was provided, a
 ``RuntimeError`` is raised and the tool returns an error to the client.
+
+Session-aware: when a Bearer token is validated on the first request (Initialize),
+the resulting UserContext is cached by ``mcp-session-id``.  Subsequent requests
+in the same session (which carry only the session ID, no Bearer) restore the
+cached context automatically.
 """
 
 import logging
@@ -39,15 +44,17 @@ class MCPAuthMiddleware:
     Pure ASGI (not BaseHTTPMiddleware) so it correctly forwards lifespan events
     and does not buffer SSE streams.
 
-    Permissive: validates token when ``Authorization: Bearer ...`` is present,
-    stores the resulting ``UserContext`` in a ``ContextVar``, and lets the
-    request proceed regardless.  Unauthenticated protocol messages (Initialize,
-    Ping) pass through; tool handlers that need auth call
-    ``get_mcp_user_context()`` which raises if no context was set.
+    Session-aware: on the first request (Initialize) the client sends a Bearer
+    token.  The middleware validates it, stores the UserContext in a ContextVar,
+    and captures the ``mcp-session-id`` from the response.  On subsequent
+    requests the client sends only the session ID — the middleware restores
+    the cached UserContext for that session.
     """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # session_id → UserContext cache (lives for the process lifetime)
+        self._session_contexts: dict[str, object] = {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -56,14 +63,41 @@ class MCPAuthMiddleware:
             return
 
         token = _mcp_user_context_var.set(None)
+        captured_session_id: str | None = None
+
         try:
             request = Request(scope, receive)
+            session_id = request.headers.get("mcp-session-id")
             auth_header = request.headers.get("authorization", "")
+
+            print(f"[MCP-AUTH] method={request.method} has_auth={bool(auth_header)} session_id={session_id} cached_sessions={list(self._session_contexts.keys())}", flush=True)
+
             if auth_header.lower().startswith("bearer "):
+                # Fresh auth — validate token and set ContextVar
                 bearer_token = auth_header[len("bearer "):]
                 await self._try_authenticate(bearer_token, request)
-            await self.app(scope, receive, send)
+                print(f"[MCP-AUTH] token validated, ctx_set={_mcp_user_context_var.get(None) is not None}", flush=True)
+            elif session_id and session_id in self._session_contexts:
+                # No auth header but known session — restore cached context
+                _mcp_user_context_var.set(self._session_contexts[session_id])
+                print(f"[MCP-AUTH] restored from session cache", flush=True)
+
+            # Wrap send to capture mcp-session-id from response headers
+            async def send_wrapper(message):
+                nonlocal captured_session_id
+                if message["type"] == "http.response.start":
+                    for key, value in message.get("headers", []):
+                        if key == b"mcp-session-id":
+                            captured_session_id = value.decode()
+                            break
+                await send(message)
+
+            await self.app(scope, receive, send_wrapper)
         finally:
+            # Cache the context for this session if we authenticated
+            ctx = _mcp_user_context_var.get(None)
+            if ctx is not None and captured_session_id:
+                self._session_contexts[captured_session_id] = ctx
             _mcp_user_context_var.reset(token)
 
     async def _try_authenticate(self, bearer_token: str, request: Request) -> None:
