@@ -141,7 +141,9 @@ class BudgetTracker:
         """Check if service budget warning should be sent."""
         if self._service_limit <= 0:
             return False
-        return (self._service_cost / self._service_limit) >= self.warning_threshold and not self._service_warning_sent
+        return (
+            self._service_cost / self._service_limit
+        ) >= self.warning_threshold and not self._service_warning_sent
 
     def mark_service_warning_sent(self) -> None:
         """Mark that service budget warning has been sent."""

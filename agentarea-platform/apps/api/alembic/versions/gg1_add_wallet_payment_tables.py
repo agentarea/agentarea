@@ -21,7 +21,9 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column("workspace_id", sa.String(255), nullable=False, index=True),
         sa.Column("created_by", sa.String(255), nullable=False, index=True),
-        sa.Column("agent_id", UUID(as_uuid=True), sa.ForeignKey("agents.id"), nullable=False, index=True),
+        sa.Column(
+            "agent_id", UUID(as_uuid=True), sa.ForeignKey("agents.id"), nullable=False, index=True
+        ),
         sa.Column("wallet_type", sa.String(), nullable=False),
         sa.Column("x402_config", sa.JSON(), nullable=True),
         sa.Column("mpp_config", sa.JSON(), nullable=True),
@@ -39,7 +41,13 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
         sa.Column("workspace_id", sa.String(255), nullable=False, index=True),
         sa.Column("created_by", sa.String(255), nullable=False, index=True),
-        sa.Column("wallet_id", UUID(as_uuid=True), sa.ForeignKey("agent_wallets.id"), nullable=False, index=True),
+        sa.Column(
+            "wallet_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("agent_wallets.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("agent_id", sa.String(), nullable=False, index=True),
         sa.Column("execution_id", sa.String(), nullable=False, index=True),
         sa.Column("protocol", sa.String(), nullable=False),
