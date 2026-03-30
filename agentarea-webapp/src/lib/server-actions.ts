@@ -1,101 +1,85 @@
 "use server";
 
-import type { components } from "@/api/schema";
-import { env } from "@/env";
 import {
-  addAgentToProject,
-  addMcpInstanceToProject,
-  addSkillMember,
-  addSkillToProject,
-  cancelAgentTask,
-  checkMCPServerInstanceConfiguration,
-  createAgentWallet,
-  createMCPAuthConfig,
-  createMCPServer,
-  createMCPServerInstance,
-  createModelInstance,
-  createOpenAPIConnection,
-  createProject,
-  createProviderConfig,
-  createSkill,
-  deleteAgentWallet,
-  deleteModelInstance,
-  deleteOpenAPIConnection,
-  deleteProject,
-  deleteProjectFile,
-  deleteSkill,
-  deleteTrigger,
-  disableTrigger,
-  discoverMCPInstanceTools,
-  discoverOpenAPITools,
-  downloadProjectFile,
-  enableTrigger,
-  exportWorkspace,
-  flattenSkill,
-  fundAgentWallet,
   getAgent,
-  getAgentTaskStatus,
-  getAgentWallet,
-  getAgentWalletBalance,
-  getAgentWalletPayments,
-  getAllTasks,
-  getMCPHealthStatus,
-  getMCPServerInstance,
+  listAgents,
+  listModelInstances,
   getModelSpec,
-  getNetworkTopology,
-  getOpenAPIConnection,
-  getProject,
+  listModelSpecs,
+  testModelInstance,
+  pauseAgentTask,
+  resumeAgentTask,
+  cancelAgentTask,
+  getAllTasks,
+  getAgentTaskStatus,
+  createSkill,
   getSkill,
   getSkillContent,
-  getSkillFile,
   getSkillFiles,
-  importWorkspace,
-  listAgents,
+  getSkillFile,
+  updateSkill,
+  deleteSkill,
+  getMCPHealthStatus,
+  checkMCPServerInstanceConfiguration,
+  createMCPServer,
+  listSkills,
+  createMCPServerInstance,
+  getMCPServerInstance,
+  updateMCPServerInstance,
   listAgentTasks,
-  listMCPAuthConfigs,
-  listMCPServers,
-  listModelInstances,
-  listModelSpecs,
-  listProjectFiles,
-  listProjects,
   listProviderSpecs,
   listProviderSpecsWithModels,
+  createProviderConfig,
+  updateProviderConfig,
+  createModelInstance,
+  deleteModelInstance,
+  listMCPAuthConfigs,
+  createMCPAuthConfig,
+  resolveEscalation,
   listSkillMembers,
-  listSkills,
-  pauseAgentTask,
+  addSkillMember,
+  removeSkillMember,
+  flattenSkill,
+  discoverMCPInstanceTools,
+  getNetworkTopology,
+  exportWorkspace,
+  importWorkspace,
+  enableTrigger,
+  disableTrigger,
+  deleteTrigger,
+  listMCPServers,
+  getOpenAPIConnection,
+  deleteOpenAPIConnection,
+  discoverOpenAPITools,
+  testOpenAPIConnection,
+  createOpenAPIConnection,
   previewOpenAPISpec,
-  removeAgentFromProject,
-  removeSkillFromProject,
-  removeAgentFromProject,
-  removeMcpInstanceFromProject,
-  removeSkillFromProject,
-  removeSkillMember,
-  resolveEscalation,
-  resumeAgentTask,
-  testModelInstance,
-  testOpenAPIConnection,
+  getAgentWallet,
+  createAgentWallet,
   updateAgentWallet,
-  updateMCPServerInstance,
+  deleteAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  fundAgentWallet,
+  listProjects,
+  getProject,
+  createProject,
   updateProject,
-  updateProviderConfig,
-  updateSkill,
-  uploadProjectFile,
-} from "@/lib/api";
-  removeMcpInstanceFromProject,
+  deleteProject,
+  addSkillToProject,
   removeSkillFromProject,
-  removeSkillMember,
-  resolveEscalation,
-  resumeAgentTask,
-  testModelInstance,
-  testOpenAPIConnection,
-  updateAgentWallet,
-  updateMCPServerInstance,
-  updateProject,
-  updateProviderConfig,
-  updateSkill,
+  addAgentToProject,
+  removeAgentFromProject,
+  addMcpInstanceToProject,
+  removeMcpInstanceFromProject,
+  listProjectFiles,
   uploadProjectFile,
+  downloadProjectFile,
+  deleteProjectFile,
 } from "@/lib/api";
+import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
+import type { components } from "@/api/schema";
 
 export async function getAgentAction(agentId: string) {
   return await getAgent(agentId);
@@ -295,11 +279,7 @@ export async function getSkillFileAction(skillId: string, filePath: string) {
 
 export async function updateSkillAction(
   skillId: string,
-  skill: {
-    name?: string | null;
-    description?: string | null;
-    content?: string | null;
-  }
+  skill: { name?: string | null; description?: string | null; content?: string | null }
 ) {
   return await updateSkill(skillId, skill);
 }
@@ -315,30 +295,18 @@ export async function resolveEscalationAction(
   approved: boolean,
   comment: string = ""
 ) {
-  return await resolveEscalation(
-    agentId,
-    taskId,
-    escalationId,
-    approved,
-    comment
-  );
+  return await resolveEscalation(agentId, taskId, escalationId, approved, comment);
 }
 
 export async function listSkillMembersAction(skillId: string) {
   return await listSkillMembers(skillId);
 }
 
-export async function addSkillMemberAction(
-  skillId: string,
-  childSkillId: string
-) {
+export async function addSkillMemberAction(skillId: string, childSkillId: string) {
   return await addSkillMember(skillId, childSkillId);
 }
 
-export async function removeSkillMemberAction(
-  skillId: string,
-  childSkillId: string
-) {
+export async function removeSkillMemberAction(skillId: string, childSkillId: string) {
   return await removeSkillMember(skillId, childSkillId);
 }
 
@@ -405,9 +373,7 @@ export async function testOpenAPIConnectionAction(connectionId: string) {
   return await testOpenAPIConnection(connectionId);
 }
 
-export async function createOpenAPIConnectionAction(
-  body: Parameters<typeof createOpenAPIConnection>[0]
-) {
+export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
   return await createOpenAPIConnection(body);
 }
 
@@ -430,11 +396,7 @@ export async function createProjectAction(project: {
 
 export async function updateProjectAction(
   projectId: string,
-  project: {
-    name?: string | null;
-    description?: string | null;
-    instructions?: string | null;
-  }
+  project: { name?: string | null; description?: string | null; instructions?: string | null }
 ) {
   return await updateProject(projectId, project as any);
 }
@@ -443,45 +405,27 @@ export async function deleteProjectAction(projectId: string) {
   return await deleteProject(projectId);
 }
 
-export async function addSkillToProjectAction(
-  projectId: string,
-  skillId: string
-) {
+export async function addSkillToProjectAction(projectId: string, skillId: string) {
   return await addSkillToProject(projectId, skillId);
 }
 
-export async function removeSkillFromProjectAction(
-  projectId: string,
-  skillId: string
-) {
+export async function removeSkillFromProjectAction(projectId: string, skillId: string) {
   return await removeSkillFromProject(projectId, skillId);
 }
 
-export async function addAgentToProjectAction(
-  projectId: string,
-  agentId: string
-) {
+export async function addAgentToProjectAction(projectId: string, agentId: string) {
   return await addAgentToProject(projectId, agentId);
 }
 
-export async function removeAgentFromProjectAction(
-  projectId: string,
-  agentId: string
-) {
+export async function removeAgentFromProjectAction(projectId: string, agentId: string) {
   return await removeAgentFromProject(projectId, agentId);
 }
 
-export async function addMcpInstanceToProjectAction(
-  projectId: string,
-  mcpInstanceId: string
-) {
+export async function addMcpInstanceToProjectAction(projectId: string, mcpInstanceId: string) {
   return await addMcpInstanceToProject(projectId, mcpInstanceId);
 }
 
-export async function removeMcpInstanceFromProjectAction(
-  projectId: string,
-  mcpInstanceId: string
-) {
+export async function removeMcpInstanceFromProjectAction(projectId: string, mcpInstanceId: string) {
   return await removeMcpInstanceFromProject(projectId, mcpInstanceId);
 }
 
@@ -489,10 +433,7 @@ export async function listProjectFilesAction(projectId: string) {
   return await listProjectFiles(projectId);
 }
 
-export async function uploadProjectFileAction(
-  projectId: string,
-  formData: FormData
-) {
+export async function uploadProjectFileAction(projectId: string, formData: FormData) {
   // Validate projectId as UUID to prevent path traversal / SSRF
   if (!/^[a-f0-9-]{36}$/.test(projectId)) {
     return { data: null, error: { detail: "Invalid project ID" } };
@@ -512,9 +453,7 @@ export async function uploadProjectFileAction(
   });
 
   if (!response.ok) {
-    const errorData = await response
-      .json()
-      .catch(() => ({ detail: "Upload failed" }));
+    const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
     return { data: null, error: errorData };
   }
 
@@ -522,17 +461,11 @@ export async function uploadProjectFileAction(
   return { data, error: null };
 }
 
-export async function downloadProjectFileAction(
-  projectId: string,
-  filePath: string
-) {
+export async function downloadProjectFileAction(projectId: string, filePath: string) {
   return await downloadProjectFile(projectId, filePath);
 }
 
-export async function deleteProjectFileAction(
-  projectId: string,
-  filePath: string
-) {
+export async function deleteProjectFileAction(projectId: string, filePath: string) {
   return await deleteProjectFile(projectId, filePath);
 }
 
@@ -548,25 +481,11 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-<<<<<<< HEAD
-export async function createAgentWalletAction(
-  agentId: string,
-  body: components["schemas"]["CreateWalletRequest"]
-) {
-  return await createAgentWallet(agentId, body);
-}
-
-export async function updateAgentWalletAction(
-  agentId: string,
-  body: components["schemas"]["UpdateWalletRequest"]
-) {
-=======
 export async function createAgentWalletAction(agentId: string, body: components["schemas"]["CreateWalletRequest"]) {
   return await createAgentWallet(agentId, body);
 }
 
 export async function updateAgentWalletAction(agentId: string, body: components["schemas"]["UpdateWalletRequest"]) {
->>>>>>> main
   return await updateAgentWallet(agentId, body);
 }
 
@@ -578,29 +497,10 @@ export async function getAgentWalletBalanceAction(agentId: string) {
   return await getAgentWalletBalance(agentId);
 }
 
-<<<<<<< HEAD
-export async function getAgentWalletPaymentsAction(
-  agentId: string,
-  params?: {
-    protocol?: string;
-    status?: string;
-    page?: number;
-    page_size?: number;
-  }
-) {
-  return await getAgentWalletPayments(agentId, params);
-}
-
-export async function fundAgentWalletAction(
-  agentId: string,
-  body: components["schemas"]["FundWalletRequest"]
-) {
-=======
 export async function getAgentWalletPaymentsAction(agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) {
   return await getAgentWalletPayments(agentId, params);
 }
 
 export async function fundAgentWalletAction(agentId: string, body: components["schemas"]["FundWalletRequest"]) {
->>>>>>> main
   return await fundAgentWallet(agentId, body);
 }
