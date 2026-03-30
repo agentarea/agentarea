@@ -107,6 +107,10 @@ class ContinueAsNewState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # Service budget (wallet payments)
+    service_budget_usd: float | None = None
+    service_cost_used: float = 0.0
+    wallet_id: str | None = None
 
 
 class AgentExecutionState(BaseModel):

@@ -70,13 +70,17 @@ class EventManager:
 class BudgetTracker:
     """Tracks budget usage and provides warnings."""
 
-    def __init__(self, budget_usd: float | None = None):
+    def __init__(self, budget_usd: float | None = None, service_budget_usd: float | None = None):
         from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
 
         self.budget_limit = budget_usd or DEFAULT_BUDGET_USD
         self.cost = 0.0
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
+        # Service budget tracking
+        self._service_limit = service_budget_usd or 0.0
+        self._service_cost = 0.0
+        self._service_warning_sent = False
 
     def add_cost(self, amount: float) -> None:
         """Add cost to the current total."""
@@ -113,6 +117,42 @@ class BudgetTracker:
     def get_exceeded_message(self) -> str:
         """Get budget exceeded message."""
         return MessageTemplates.BUDGET_EXCEEDED.format(used=self.cost, total=self.budget_limit)
+
+    # --- Service budget tracking ---
+
+    def add_service_cost(self, amount: float) -> None:
+        """Track a service payment cost."""
+        self._service_cost += amount
+        workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost:.6f}")
+
+    def get_service_remaining(self) -> float:
+        """Get remaining service budget."""
+        if self._service_limit <= 0:
+            return float("inf")
+        return max(0.0, self._service_limit - self._service_cost)
+
+    def is_service_exceeded(self) -> bool:
+        """Check if service budget is exhausted."""
+        if self._service_limit <= 0:
+            return False
+        return self._service_cost >= self._service_limit
+
+    def should_warn_service(self) -> bool:
+        """Check if service budget warning should be sent."""
+        if self._service_limit <= 0:
+            return False
+        return (
+            self._service_cost / self._service_limit
+        ) >= self.warning_threshold and not self._service_warning_sent
+
+    def mark_service_warning_sent(self) -> None:
+        """Mark that service budget warning has been sent."""
+        self._service_warning_sent = True
+
+    @property
+    def service_cost(self) -> float:
+        """Get total service cost."""
+        return self._service_cost
 
 
 class MessageBuilder:

@@ -569,6 +569,9 @@ class AgentExecutionWorkflow:
         self.state.context_strategy = state.context_strategy
         self.state.history_chunk_counter = state.history_chunk_counter
         self.state.activated_tool_sources = state.activated_tool_sources
+        self.state.service_budget_usd = state.service_budget_usd
+        self.state.service_cost_used = state.service_cost_used
+        self.state.wallet_id = state.wallet_id
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -659,6 +662,9 @@ class AgentExecutionWorkflow:
             context_strategy=self.state.context_strategy,
             history_chunk_counter=self.state.history_chunk_counter,
             activated_tool_sources=self.state.activated_tool_sources,
+            service_budget_usd=self.state.service_budget_usd,
+            service_cost_used=self.state.service_cost_used,
+            wallet_id=self.state.wallet_id,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)

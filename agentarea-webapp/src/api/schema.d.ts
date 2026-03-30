@@ -617,6 +617,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wallet
+         * @description Get wallet configuration for an agent (no decrypted credentials).
+         */
+        get: operations["get_wallet_v1_agents__agent_id__wallet_get"];
+        /**
+         * Update Wallet
+         * @description Update wallet configuration.
+         */
+        put: operations["update_wallet_v1_agents__agent_id__wallet_put"];
+        /**
+         * Create Wallet
+         * @description Create a wallet for an agent.
+         */
+        post: operations["create_wallet_v1_agents__agent_id__wallet_post"];
+        /**
+         * Delete Wallet
+         * @description Delete wallet and associated credentials.
+         */
+        delete: operations["delete_wallet_v1_agents__agent_id__wallet_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wallet Balance
+         * @description Get current service budget status.
+         */
+        get: operations["get_wallet_balance_v1_agents__agent_id__wallet_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/fund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fund Wallet
+         * @description Update the service budget amount.
+         */
+        post: operations["fund_wallet_v1_agents__agent_id__wallet_fund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Payment History
+         * @description Get paginated payment history for an agent.
+         */
+        get: operations["get_payment_history_v1_agents__agent_id__wallet_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-keys/": {
         parameters: {
             query?: never;
@@ -3234,6 +3326,24 @@ export interface components {
             /** Routing Mode */
             routing_mode?: string | null;
         };
+        /** CreateWalletRequest */
+        CreateWalletRequest: {
+            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
+            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
+            /**
+             * Service Budget Period
+             * @default execution
+             */
+            service_budget_period: string;
+            /**
+             * Service Budget Usd
+             * @default 0
+             */
+            service_budget_usd: number;
+            /** Wallet Type */
+            wallet_type: string;
+            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
+        };
         /** EscalationResolution */
         EscalationResolution: {
             /** Approved */
@@ -3346,6 +3456,11 @@ export interface components {
              * Format: uuid
              */
             trigger_id: string;
+        };
+        /** FundWalletRequest */
+        FundWalletRequest: {
+            /** Service Budget Usd */
+            service_budget_usd: number;
         };
         /** GovernanceOverlay */
         GovernanceOverlay: {
@@ -3733,6 +3848,18 @@ export interface components {
              */
             version?: string | null;
         };
+        /** MPPConfigSchema */
+        MPPConfigSchema: {
+            /** Payment Method Types */
+            payment_method_types?: string[];
+            /**
+             * Session Budget Usd
+             * @default 10
+             */
+            session_budget_usd: number;
+            /** Stripe Profile Id */
+            stripe_profile_id?: string | null;
+        };
         /** ModelInstanceCreate */
         ModelInstanceCreate: {
             /** Description */
@@ -4038,6 +4165,17 @@ export interface components {
             /** Spec Url */
             spec_url?: string | null;
         };
+        /** PaginatedPaymentsResponse */
+        PaginatedPaymentsResponse: {
+            /** Items */
+            items: components["schemas"]["PaymentRecordResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedResponse[MCPServerResponse] */
         PaginatedResponse_MCPServerResponse_: {
             /** Has Next */
@@ -4050,6 +4188,37 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
+        };
+        /** PaymentRecordResponse */
+        PaymentRecordResponse: {
+            /** Agent Id */
+            agent_id: string;
+            /** Amount Usd */
+            amount_usd: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Execution Id */
+            execution_id: string;
+            /** Id */
+            id: string;
+            /** Protocol */
+            protocol: string;
+            /** Protocol Metadata */
+            protocol_metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Recipient */
+            recipient: string;
+            /** Status */
+            status: string;
+            /** Tool Call Id */
+            tool_call_id: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Tx Hash */
+            tx_hash?: string | null;
         };
         /** ProjectAgentRef */
         ProjectAgentRef: {
@@ -5054,6 +5223,20 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** UpdateWalletRequest */
+        UpdateWalletRequest: {
+            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
+            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
+            /** Service Budget Period */
+            service_budget_period?: string | null;
+            /** Service Budget Usd */
+            service_budget_usd?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Wallet Type */
+            wallet_type?: string | null;
+            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -5066,6 +5249,79 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WalletBalanceResponse */
+        WalletBalanceResponse: {
+            /** Remaining */
+            remaining: number;
+            /** Service Budget Period */
+            service_budget_period: string;
+            /** Service Budget Usd */
+            service_budget_usd: number;
+            /** Total Spent Current Period */
+            total_spent_current_period: number;
+        };
+        /** WalletCredentialsSchema */
+        WalletCredentialsSchema: {
+            /** Mpp Tempo Key */
+            mpp_tempo_key?: string | null;
+            /** X402 Private Key */
+            x402_private_key?: string | null;
+        };
+        /** WalletResponse */
+        WalletResponse: {
+            /** Agent Id */
+            agent_id: string;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Has Credentials
+             * @default false
+             */
+            has_credentials: boolean;
+            /** Id */
+            id: string;
+            /** Mpp Config */
+            mpp_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Service Budget Period */
+            service_budget_period: string;
+            /** Service Budget Usd */
+            service_budget_usd: number;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Wallet Type */
+            wallet_type: string;
+            /** X402 Config */
+            x402_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** X402ConfigSchema */
+        X402ConfigSchema: {
+            /**
+             * Facilitator Url
+             * @default https://x402.org/facilitator
+             */
+            facilitator_url: string;
+            /**
+             * Network
+             * @default eip155:8453
+             */
+            network: string;
+            /**
+             * Scheme
+             * @default exact
+             */
+            scheme: string;
+            /**
+             * Signer Type
+             * @default evm
+             */
+            signer_type: string;
         };
         /** ModelSpecResponse */
         agentarea_api__api__v1__model_specs__ModelSpecResponse: {
@@ -6172,6 +6428,244 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_wallet_v1_agents__agent_id__wallet_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_wallet_v1_agents__agent_id__wallet_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_wallet_v1_agents__agent_id__wallet_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_wallet_v1_agents__agent_id__wallet_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_wallet_balance_v1_agents__agent_id__wallet_balance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletBalanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fund_wallet_v1_agents__agent_id__wallet_fund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FundWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_payment_history_v1_agents__agent_id__wallet_payments_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by protocol (x402, mpp) */
+                protocol?: string | null;
+                /** @description Filter by status */
+                status?: string | null;
+                /** @description Filter from date */
+                from_date?: string | null;
+                /** @description Filter to date */
+                to_date?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPaymentsResponse"];
                 };
             };
             /** @description Validation Error */

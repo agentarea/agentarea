@@ -29,6 +29,7 @@ from . import (
     registries,
     skills,
     triggers,
+    wallet,
     workspace_config,
 )
 
@@ -103,6 +104,9 @@ protected_v1_router.include_router(network.router)
 
 # Projects - PROTECTED
 protected_v1_router.include_router(projects.router)
+
+# Agent Wallets & Payments - PROTECTED
+protected_v1_router.include_router(wallet.router)
 
 # ============================================================================
 # LEGACY: Keep old v1_router for backward compatibility during migration
