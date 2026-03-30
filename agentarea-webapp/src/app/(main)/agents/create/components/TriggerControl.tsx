@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Edit, Trash2 } from "lucide-react";
 import { Control, Controller } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
@@ -49,10 +50,12 @@ export const TriggerControl = ({
   selectedMethods = {},
   onMethodToggle,
 }: TriggerControlProps) => {
+  const t = useTranslations("TriggerControl");
+
   if (!trigger) {
     return (
       <div className="mt-1 flex items-center gap-2 text-red-500">
-        Something went wrong with the trigger
+        {t("error")}
       </div>
     );
   }
@@ -62,11 +65,12 @@ export const TriggerControl = ({
   const hasMethodToggle = !!onMethodToggle;
 
   // Calculate selected methods count for indicator
-  const selectedCount = hasMethods && hasMethodToggle
-    ? availableMethods.filter(
-        (method) => selectedMethods[method.name] === true
-      ).length
-    : 0;
+  const selectedCount =
+    hasMethods && hasMethodToggle
+      ? availableMethods.filter(
+          (method) => selectedMethods[method.name] === true
+        ).length
+      : 0;
   const totalCount = availableMethods.length;
 
   const handleSelectAllMethods = (checked: boolean) => {
@@ -76,7 +80,6 @@ export const TriggerControl = ({
       onMethodToggle(method.name, checked);
     });
   };
-
 
   const renderEnabledSwitch = () => (
     <Controller
@@ -89,7 +92,7 @@ export const TriggerControl = ({
             className="note hidden cursor-pointer select-none sm:block"
             onClick={() => field.onChange(!field.value)}
           >
-            {field.value ? "enabled" : "disabled"}
+            {field.value ? t("enabled") : t("disabled")}
           </span>
           <Switch
             size="xs"
@@ -183,7 +186,7 @@ export const TriggerControl = ({
     return (
       <div className="space-y-1">
         <p className="text-xs font-medium text-foreground">
-          Available Methods:
+          {t("availableMethods")}
         </p>
         <div className="space-y-1">
           {availableMethods.map((method) => (
@@ -211,7 +214,9 @@ export const TriggerControl = ({
 
     return (
       <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">Available Tools:</p>
+        <p className="text-xs font-medium text-foreground">
+          {t("availableTools")}
+        </p>
         <div className="space-y-1">
           {trigger.available_tools.map((tool) => (
             <div

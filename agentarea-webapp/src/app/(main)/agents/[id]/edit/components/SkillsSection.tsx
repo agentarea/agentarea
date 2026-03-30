@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Check, ChevronsUpDown, Plus, Sparkles, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -36,6 +37,7 @@ export default function SkillsSection({
   selectedSkills,
   onSkillsChange,
 }: SkillsSectionProps) {
+  const t = useTranslations("SkillsSection");
   const [open, setOpen] = useState(false);
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,36 +81,36 @@ export default function SkillsSection({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Skills</h3>
+          <h3 className="text-sm font-medium">{t("title")}</h3>
         </div>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
-              Add Skill
+              {t("addSkill")}
               <ChevronsUpDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[300px] p-0" align="end">
             <Command>
-              <CommandInput placeholder="Search skills..." />
+              <CommandInput placeholder={t("searchPlaceholder")} />
               <CommandList>
                 <CommandEmpty>
                   {loading ? (
-                    "Loading skills..."
+                    t("loading")
                   ) : availableSkills.length === 0 ? (
                     <div className="p-4 text-center">
                       <p className="text-sm text-muted-foreground">
-                        No skills available
+                        {t("noSkillsAvailable")}
                       </p>
                       <Link href="/skills">
                         <Button variant="link" size="sm" className="mt-2">
-                          Create a skill
+                          {t("createSkill")}
                         </Button>
                       </Link>
                     </div>
                   ) : (
-                    "No skills found"
+                    t("noSkillsFound")
                   )}
                 </CommandEmpty>
                 <CommandGroup>
@@ -146,8 +148,7 @@ export default function SkillsSection({
       {selectedSkills.length === 0 ? (
         <div className="rounded-md border border-dashed p-4 text-center">
           <p className="text-sm text-muted-foreground">
-            No skills assigned. Add skills to enhance this agent&apos;s
-            capabilities.
+            {t("noSkillsAssigned")}
           </p>
         </div>
       ) : (

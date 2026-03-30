@@ -1,42 +1,44 @@
 import React from "react";
-import AuthGuard from "@/components/auth/AuthGuard";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getAgents } from "@/components/actions";
-import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { getTranslations } from "next-intl/server";
+import { getAgents } from "@/components/actions";
+import AuthGuard from "@/components/auth/AuthGuard";
+import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkplacePage() {
   const t = await getTranslations("Workplace.suggestions");
+  const tPage = await getTranslations("WorkplacePage");
 
   const badgeSuggestions = [
-    { 
-      label: t("askSpecificAgent.label"), 
-      text: t("askSpecificAgent.text") 
+    {
+      label: t("askSpecificAgent.label"),
+      text: t("askSpecificAgent.text"),
     },
-    { 
-      label: t("analyzeProject.label"), 
-      text: t("analyzeProject.text") 
+    {
+      label: t("analyzeProject.label"),
+      text: t("analyzeProject.text"),
     },
-    { 
-      label: t("generateDocs.label"), 
-      text: t("generateDocs.text") 
+    {
+      label: t("generateDocs.label"),
+      text: t("generateDocs.text"),
     },
-    { 
-      label: t("debugIssue.label"), 
-      text: t("debugIssue.text") 
+    {
+      label: t("debugIssue.label"),
+      text: t("debugIssue.text"),
     },
   ];
 
   // Fetch agents server-side
   const { data: agentsData, error } = await getAgents();
 
-  const agents = agentsData?.map((agent: any) => ({
-    id: String(agent.id),
-    name: agent.name,
-    description: agent.description,
-  })) || [];
+  const agents =
+    agentsData?.map((agent: any) => ({
+      id: String(agent.id),
+      name: agent.name,
+      description: agent.description,
+    })) || [];
 
   // Select first agent as default
   const defaultAgent = agents.length > 0 ? agents[0] : null;
@@ -45,19 +47,32 @@ export default async function WorkplacePage() {
     <AuthGuard>
       <ContentBlock
         header={{
-          breadcrumb: [{ label: "Workplace", href: "/workplace" }],
+          breadcrumb: [{ label: tPage("workplace"), href: "/workplace" }],
         }}
         className="p-0"
       >
         {error ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-destructive">Failed to load agents</p>
+            <p className="text-destructive">{tPage("failedToLoadAgents")}</p>
+          </div>
+        ) : !defaultAgent ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground">
+                {tPage("noAgentsAvailable")}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {tPage("createFirstAgent")}
+              </p>
+            </div>
           </div>
         ) : !defaultAgent ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <p className="text-muted-foreground">No agents available.</p>
-              <p className="text-sm text-muted-foreground">Create your first agent to get started.</p>
+              <p className="text-sm text-muted-foreground">
+                Create your first agent to get started.
+              </p>
             </div>
           </div>
         ) : (

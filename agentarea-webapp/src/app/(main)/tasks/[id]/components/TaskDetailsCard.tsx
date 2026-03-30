@@ -1,11 +1,6 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+"use client";
+
+import { useTranslations } from "next-intl";
 import {
   Bot,
   CheckCircle2,
@@ -14,6 +9,14 @@ import {
   Pause,
   XCircle,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface TaskDetailsCardProps {
   task: {
@@ -36,6 +39,8 @@ export default function TaskDetailsCard({
   endTime,
   executionTime,
 }: TaskDetailsCardProps) {
+  const t = useTranslations("TaskDetailsCard");
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -44,9 +49,9 @@ export default function TaskDetailsCard({
             <Layers className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-base">Task Details</CardTitle>
+            <CardTitle className="text-base">{t("title")}</CardTitle>
             <CardDescription className="text-xs">
-              Core information
+              {t("description")}
             </CardDescription>
           </div>
         </div>
@@ -59,8 +64,7 @@ export default function TaskDetailsCard({
               className={`flex h-6 w-6 items-center justify-center rounded ${
                 currentStatus === "running"
                   ? "bg-blue-50 dark:bg-blue-900/30"
-                  : currentStatus === "completed" ||
-                      currentStatus === "success"
+                  : currentStatus === "completed" || currentStatus === "success"
                     ? "bg-green-50 dark:bg-green-900/30"
                     : currentStatus === "paused"
                       ? "bg-yellow-50 dark:bg-yellow-900/30"
@@ -80,7 +84,7 @@ export default function TaskDetailsCard({
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Status
+                {t("status")}
               </p>
             </div>
           </div>
@@ -88,16 +92,14 @@ export default function TaskDetailsCard({
             className={`px-2 py-0.5 text-xs ${
               currentStatus === "running"
                 ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                : currentStatus === "completed" ||
-                    currentStatus === "success"
+                : currentStatus === "completed" || currentStatus === "success"
                   ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                   : currentStatus === "paused"
                     ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                     : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
             }`}
           >
-            {currentStatus.charAt(0).toUpperCase() +
-              currentStatus.slice(1)}
+            {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
           </Badge>
         </div>
 
@@ -112,7 +114,7 @@ export default function TaskDetailsCard({
                 {task.agent_name || `Agent ${task.agent_id}`}
               </p>
               <p className="truncate text-xs text-gray-600 dark:text-gray-400">
-                {task.agent_description || "No description available"}
+                {task.agent_description || t("noDescription")}
               </p>
             </div>
           </div>
@@ -122,7 +124,7 @@ export default function TaskDetailsCard({
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-600 dark:text-gray-400">
-              Created
+              {t("created")}
             </span>
             <span className="font-medium text-gray-900 dark:text-gray-100">
               {new Date(task.created_at).toLocaleDateString()}
@@ -131,7 +133,7 @@ export default function TaskDetailsCard({
           {startTime && startTime !== task.created_at && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-600 dark:text-gray-400">
-                Started
+                {t("started")}
               </span>
               <span className="font-medium text-gray-900 dark:text-gray-100">
                 {new Date(startTime).toLocaleDateString()}
@@ -142,7 +144,7 @@ export default function TaskDetailsCard({
             <>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 dark:text-gray-400">
-                  Completed
+                  {t("completed")}
                 </span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
                   {new Date(endTime).toLocaleDateString()}
@@ -150,7 +152,7 @@ export default function TaskDetailsCard({
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 dark:text-gray-400">
-                  Duration
+                  {t("duration")}
                 </span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">
                   {executionTime}
@@ -160,11 +162,10 @@ export default function TaskDetailsCard({
           )}
         </div>
 
-        {/* Compact Execution ID */}
         {task.execution_id && (
           <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
             <p className="mb-0.5 text-xs text-gray-600 dark:text-gray-400">
-              Execution ID
+              {t("executionId")}
             </p>
             <code className="break-all font-mono text-xs text-gray-900 dark:text-gray-100">
               {task.execution_id}
@@ -175,4 +176,3 @@ export default function TaskDetailsCard({
     </Card>
   );
 }
-

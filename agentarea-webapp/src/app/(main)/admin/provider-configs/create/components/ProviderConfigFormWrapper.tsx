@@ -44,7 +44,7 @@ export default async function ProviderConfigFormWrapper({
       <ProviderConfigForm
         preselectedProviderId={preselectedProviderId}
         isEdit={isEdit}
-        isClear={!isEdit}
+        isClear={true}
         initialData={initialData}
         existingModelInstances={existingModelInstances}
       />

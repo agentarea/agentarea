@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import APIKeysContent from "./APIKeysContent";
-import CreateAPIKeyButton from "./components/CreateAPIKeyButton";
+import { Button } from "@/components/ui/button";
+import APIKeyForm from "./components/APIKeyForm";
 
 export const metadata: Metadata = {
-  title: "API Keys",
+  title: "Create API Key",
 };
 
-export default async function APIKeysPage() {
+export default async function CreateAPIKeyPage() {
   const t = await getTranslations("APIKeysPage");
 
   return (
@@ -18,20 +18,25 @@ export default async function APIKeysPage() {
       header={{
         breadcrumb: [
           { label: "Admin", href: "/admin/provider-configs" },
-          { label: t("title") },
+          { label: t("title"), href: "/admin/api-keys" },
+          { label: t("create.title") },
         ],
-        description: t("description"),
-        controls: <CreateAPIKeyButton />,
+        description: t("create.description"),
+        controls: (
+          <Button size="xs" type="submit" form="api-key-form">
+            {t("create.createButton")}
+          </Button>
+        ),
       }}
     >
       <Suspense
         fallback={
-          <div className="flex h-64 items-center justify-center">
+          <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />
           </div>
         }
       >
-        <APIKeysContent />
+        <APIKeyForm />
       </Suspense>
     </ContentBlock>
   );

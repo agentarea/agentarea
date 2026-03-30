@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { getAllTasks, type TaskWithAgent } from "@/lib/api";
 import TasksList from "./TasksList";
@@ -11,22 +12,22 @@ export async function TasksData({
   searchQuery = "",
   viewMode = "grid",
 }: TasksDataProps) {
-  // Fetch tasks on the server
+  const t = await getTranslations("TasksPage");
+
   let allTasks: TaskWithAgent[] = [];
   let error: string | null = null;
 
   try {
     const { data: tasksData, error: tasksError } = await getAllTasks();
     if (tasksError) {
-      error = "Failed to load tasks";
+      error = t("error.loadFailed");
     } else {
       allTasks = tasksData || [];
     }
   } catch {
-    error = "Failed to load tasks";
+    error = t("error.loadFailed");
   }
 
-  // Filter tasks based on search query
   let filteredTasks = allTasks;
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
@@ -42,14 +43,20 @@ export async function TasksData({
   const hasNoResults = filteredTasks.length === 0 && !hasNoTasks;
 
   if (hasNoTasks) {
-    return <EmptyState title="No tasks found" iconsType="tasks" />;
+    return (
+      <EmptyState
+        title={t("noTasks")}
+        description={t("noTasksDescription")}
+        iconsType="tasks"
+      />
+    );
   }
 
   if (hasNoResults) {
     return (
       <EmptyState
-        title="No matching tasks"
-        description={`No tasks match your search query: "${searchQuery}"`}
+        title={t("noMatchingTasks")}
+        description={t("noMatchingTasksDescription", { query: searchQuery })}
         iconsType="tasks"
       />
     );

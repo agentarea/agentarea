@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
-import { Task } from "../types";
-import Section from "./Section";
-import ActionLink from "./ActionLink";
-import ExpandableText from "./ExpandableText";
-import { getAgentAction as getAgent, listModelInstancesAction as listModelInstances } from "@/lib/server-actions";
-import { Agent } from "@/types/agent";
-import ModelBadge from "@/components/ui/model-badge";
 import ToolsDisplay from "@/components/ToolsDisplay";
 import { Badge } from "@/components/ui/badge";
+import ModelBadge from "@/components/ui/model-badge";
+import {
+  getAgentAction as getAgent,
+  listModelInstancesAction as listModelInstances,
+} from "@/lib/server-actions";
+import { Agent } from "@/types/agent";
+import { Task } from "../types";
+import ActionLink from "./ActionLink";
+import ExpandableText from "./ExpandableText";
+import Section from "./Section";
 
 interface ModelInfoProps {
   task?: Task | null;
@@ -31,14 +34,16 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
         setLoading(true);
         const { data } = await getAgent(targetAgentId);
         const agentData = data as Agent;
-        
+
         if (agentData) {
           // If model_info is missing but model_id exists, try to fetch model info
           if (!agentData.model_info && agentData.model_id) {
             try {
               const { data: instances } = await listModelInstances();
-              const model = instances?.find((m: any) => m.id === agentData.model_id);
-              
+              const model = instances?.find(
+                (m: any) => m.id === agentData.model_id
+              );
+
               if (model) {
                 agentData.model_info = {
                   provider_name: model.provider_name || undefined,
@@ -84,7 +89,8 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
     );
   }
 
-  const validTriggers = agent.events_config?.events?.filter((e: any) => e.source) || [];
+  const validTriggers =
+    agent.events_config?.events?.filter((e: any) => e.event_type) || [];
 
   return (
     <Section title={t("agentInfo")} contentClassName="space-y-4 text-xs">
@@ -140,8 +146,12 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {validTriggers.map((event: any, index: number) => (
-              <Badge key={index} variant="outline" className="text-[10px] font-normal px-2 py-0.5 h-auto">
-                {event.source}
+              <Badge
+                key={index}
+                variant="outline"
+                className="text-[10px] font-normal px-2 py-0.5 h-auto"
+              >
+                {event.event_type}
               </Badge>
             ))}
           </div>
@@ -166,9 +176,9 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {agent.skills.map((skill) => (
-              <Badge 
-                key={skill.id} 
-                variant="secondary" 
+              <Badge
+                key={skill.id}
+                variant="secondary"
                 className="text-[10px] font-normal px-2 py-0.5 h-auto bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 border-purple-200 dark:border-purple-800"
               >
                 {skill.name}

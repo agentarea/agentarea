@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-actions";
+import { AnimatedTabs } from "@/components/ui/animated-tabs";
+import { Button } from "@/components/ui/button";
+import NodeDetailPanel from "./components/NodeDetailPanel";
+import { useNetwork } from "./NetworkProvider";
 import DataFlowView from "./views/DataFlowView";
 import OrgChartView from "./views/OrgChartView";
-import NodeDetailPanel from "./components/NodeDetailPanel";
 
 interface NetworkNodeData {
   id: string;
@@ -17,39 +19,55 @@ interface NetworkNodeData {
   metadata: Record<string, any>;
 }
 
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: { id: string; source: string; target: string; relation: string }[];
-  governance: any[];
-  deployment_mode: string;
+export function NetworkHeaderTabs() {
+  const { loading, fetchTopology } = useNetwork();
+  const t = useTranslations("NetworkPage");
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const view = searchParams.get("view") || "dataflow";
+
+  const setView = (newView: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("view", newView);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
+  return (
+    <div className="inline-flex items-center gap-3 py-2">
+      <AnimatedTabs
+        tabs={[
+          { value: "dataflow", label: t("dataFlow") },
+          { value: "org", label: t("organization") },
+        ]}
+        activeTab={view}
+        onChange={setView}
+        size="sm"
+        className="w-auto"
+      />
+      <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={fetchTopology}
+        disabled={loading}
+        className="h-8 text-xs text-muted-foreground"
+      >
+        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+      </Button>
+    </div>
+  );
 }
 
 export default function NetworkClient() {
-  const [topology, setTopology] = useState<TopologyResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedNode, setSelectedNode] = useState<NetworkNodeData | null>(null);
-
-  const fetchTopology = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await getNetworkTopology();
-      if (error || !data) {
-        console.error("Failed to fetch topology:", error);
-        return;
-      }
-      setTopology(data as TopologyResponse);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchTopology();
-  }, [fetchTopology]);
+  const { topology, loading, view } = useNetwork();
+  const [selectedNode, setSelectedNode] = useState<NetworkNodeData | null>(
+    null
+  );
 
   if (loading && !topology) {
     return (
-      <div className="flex h-[calc(100vh-16rem)] items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
@@ -57,48 +75,28 @@ export default function NetworkClient() {
 
   if (!topology || topology.nodes.length === 0) {
     return (
-      <div className="flex h-[calc(100vh-16rem)] flex-col items-center justify-center gap-3 text-muted-foreground">
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
         <p className="text-sm font-medium">No entities found</p>
-        <p className="text-xs">Create agents, skills, or connections to see the network.</p>
-        <Button variant="outline" size="sm" onClick={fetchTopology}>
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Refresh
-        </Button>
+        <p className="text-xs">
+          Create agents, skills, or connections to see the network.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full">
-      <Tabs defaultValue="dataflow">
-        <div className="flex items-center justify-between mb-4">
-          <TabsList className="h-8">
-            <TabsTrigger value="dataflow" className="text-xs px-3">Data Flow</TabsTrigger>
-            <TabsTrigger value="org" className="text-xs px-3">Organization</TabsTrigger>
-          </TabsList>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchTopology}
-            disabled={loading}
-            className="h-8 text-xs text-muted-foreground"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-
-        <TabsContent value="dataflow" className="mt-0">
-          <DataFlowView topology={topology} onNodeClick={setSelectedNode} />
-        </TabsContent>
-
-        <TabsContent value="org" className="mt-0">
-          <OrgChartView topology={topology} onNodeClick={setSelectedNode} />
-        </TabsContent>
-      </Tabs>
+    <div className="relative h-full w-full">
+      {view === "dataflow" ? (
+        <DataFlowView topology={topology} onNodeClick={setSelectedNode} />
+      ) : (
+        <OrgChartView topology={topology} onNodeClick={setSelectedNode} />
+      )}
 
       {selectedNode && (
-        <NodeDetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+        <NodeDetailPanel
+          node={selectedNode}
+          onClose={() => setSelectedNode(null)}
+        />
       )}
     </div>
   );

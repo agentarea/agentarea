@@ -1,21 +1,21 @@
 "use client";
 
 import { useMemo } from "react";
+import dagre from "@dagrejs/dagre";
 import {
-  ReactFlow,
   Background,
   BackgroundVariant,
   Controls,
-  type Node,
+  ReactFlow,
   type Edge,
+  type Node,
 } from "@xyflow/react";
-import dagre from "@dagrejs/dagre";
 import "@xyflow/react/dist/style.css";
+import DataFlowEdge from "../components/edges/DataFlowEdge";
 import AgentNode from "../components/nodes/AgentNode";
 import MCPNode from "../components/nodes/MCPNode";
 import SkillNode from "../components/nodes/SkillNode";
 import TriggerNode from "../components/nodes/TriggerNode";
-import DataFlowEdge from "../components/edges/DataFlowEdge";
 
 interface NetworkNodeData {
   id: string;
@@ -63,13 +63,19 @@ const edgeTypes = {
   dataflow: DataFlowEdge,
 };
 
-function layout(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+function layout(
+  nodes: Node[],
+  edges: Edge[]
+): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 80 });
 
   nodes.forEach((n) => {
-    g.setNode(n.id, { width: NODE_W[n.type ?? "agent"] ?? 200, height: NODE_H });
+    g.setNode(n.id, {
+      width: NODE_W[n.type ?? "agent"] ?? 200,
+      height: NODE_H,
+    });
   });
   edges.forEach((e) => g.setEdge(e.source, e.target));
   dagre.layout(g);
@@ -109,7 +115,7 @@ export default function OrgChartView({ topology, onNodeClick }: Props) {
   }, [topology]);
 
   return (
-    <div className="h-[calc(100vh-16rem)] w-full">
+    <div className="h-full w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -124,7 +130,13 @@ export default function OrgChartView({ topology, onNodeClick }: Props) {
           if (networkNode) onNodeClick?.(networkNode);
         }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e4e4e7" className="dark:!bg-zinc-900" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1}
+          color="#e4e4e7"
+          className="dark:!bg-zinc-900"
+        />
         <Controls className="!shadow-sm !border !border-zinc-200 dark:!border-zinc-700 !rounded-xl overflow-hidden" />
       </ReactFlow>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export function TasksFilters({
   hasActiveFilters,
 }: TasksFiltersProps) {
   const router = useRouter();
+  const t = useTranslations("TasksFilters");
 
   const updateFilters = (newSearch?: string, newStatus?: string) => {
     const params = new URLSearchParams();
@@ -73,7 +75,7 @@ export function TasksFilters({
               <Search className="h-5 w-5 text-gray-400" />
             </div>
             <Input
-              placeholder="Search tasks by description, agent name, or task ID..."
+              placeholder={t("searchPlaceholder")}
               defaultValue={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="h-12 rounded-xl border-gray-200 bg-gray-50 pl-12 text-base transition-all duration-200 placeholder:text-gray-500 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-gray-700 dark:bg-gray-800"
@@ -87,14 +89,14 @@ export function TasksFilters({
             <SelectTrigger className="h-12 w-[200px] rounded-xl border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-gray-500" />
-                <SelectValue placeholder="Filter by status" />
+                <SelectValue placeholder={t("filterByStatus")} />
               </div>
             </SelectTrigger>
             <SelectContent className="rounded-xl border-gray-200 shadow-lg dark:border-gray-700">
               <SelectItem value="all" className="rounded-lg">
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-gray-400" />
-                  <span>All Statuses</span>
+                  <span>{t("allStatuses")}</span>
                 </div>
               </SelectItem>
               {TASK_STATUSES.map((status) => (
@@ -129,17 +131,16 @@ export function TasksFilters({
               className="h-12 gap-2 rounded-xl border-gray-200 px-4 transition-colors duration-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
             >
               <X className="h-4 w-4" />
-              <span className="hidden sm:inline">Clear Filters</span>
+              <span className="hidden sm:inline">{t("clearFilters")}</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* Active Filters Display */}
       {hasActiveFilters && (
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-gray-800">
           <span className="text-sm text-gray-600 dark:text-gray-400">
-            Active filters:
+            {t("activeFilters")}
           </span>
           {searchQuery && (
             <div className="flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">

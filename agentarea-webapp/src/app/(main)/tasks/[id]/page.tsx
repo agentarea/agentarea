@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Bot, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
@@ -29,6 +30,7 @@ import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
   const { task, taskStatus, loading, error, refresh } = useTaskContext();
+  const t = useTranslations("TaskDetailPage");
 
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
@@ -60,19 +62,18 @@ export default function TaskDetailsPage() {
       const { error } = await pauseAgentTask(task.agent_id, task.id);
 
       if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while pausing the task";
-        toast.error("Failed to pause task", {
+        const errorMessage = error.detail?.[0]?.msg || t("errorWhilePausing");
+        toast.error(t("failedToPause"), {
           description: errorMessage,
         });
       } else {
-        toast.success("Task paused successfully");
+        toast.success(t("pausedSuccessfully"));
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error("Failed to pause task", {
-        description: "An unexpected error occurred",
+      toast.error(t("failedToPause"), {
+        description: t("unexpectedError"),
       });
     } finally {
       setControlling(false);
@@ -87,19 +88,18 @@ export default function TaskDetailsPage() {
       const { error } = await resumeAgentTask(task.agent_id, task.id);
 
       if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while resuming the task";
-        toast.error("Failed to resume task", {
+        const errorMessage = error.detail?.[0]?.msg || t("errorWhileResuming");
+        toast.error(t("failedToResume"), {
           description: errorMessage,
         });
       } else {
-        toast.success("Task resumed successfully");
+        toast.success(t("resumedSuccessfully"));
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error("Failed to resume task", {
-        description: "An unexpected error occurred",
+      toast.error(t("failedToResume"), {
+        description: t("unexpectedError"),
       });
     } finally {
       setControlling(false);
@@ -117,18 +117,18 @@ export default function TaskDetailsPage() {
         const errorMessage =
           error.detail?.[0]?.msg ||
           (error as any).message ||
-          "An error occurred while cancelling the task";
-        toast.error("Failed to cancel task", {
+          t("errorWhileCancelling");
+        toast.error(t("failedToCancel"), {
           description: errorMessage,
         });
       } else {
-        toast.success("Task cancelled successfully");
+        toast.success(t("cancelledSuccessfully"));
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error("Failed to cancel task", {
-        description: "An unexpected error occurred",
+      toast.error(t("failedToCancel"), {
+        description: t("unexpectedError"),
       });
     } finally {
       setControlling(false);
@@ -149,11 +149,11 @@ export default function TaskDetailsPage() {
   if (error || !task) {
     return (
       <EmptyState
-        title="Task Not Found"
-        description={"The requested task could not be found."}
+        title={t("taskNotFound")}
+        description={t("taskNotFoundDescription")}
         iconsType="tasks"
-        action={{ label: "Back to Tasks", href: "/tasks" }}
-        additionAction={{ label: "Try Again", onClick: handleRefresh }}
+        action={{ label: t("backToTasks"), href: "/tasks" }}
+        additionAction={{ label: t("tryAgain"), onClick: handleRefresh }}
       />
     );
   }
@@ -174,7 +174,7 @@ export default function TaskDetailsPage() {
       size="sm"
       animate={false}
       titleClassName="text-muted-foreground opacity-70"
-      title={`Chat with ${task.agent_name || "Agent"}`}
+      title={t("chatWith", { agentName: task.agent_name || "Agent" })}
     />
   );
 
@@ -194,7 +194,9 @@ export default function TaskDetailsPage() {
                   description: task.agent_description || undefined,
                 }}
                 taskId={task.id}
-                placeholder={`Chat with ${task.agent_name || `Agent ${task.agent_id}`}`}
+                placeholder={t("chatWith", {
+                  agentName: task.agent_name || `Agent ${task.agent_id}`,
+                })}
               />
             </div>
           </div>
@@ -224,20 +226,16 @@ export default function TaskDetailsPage() {
         />
       </div>
 
-      {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel Task</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to cancel this task? This action cannot be
-              undone and will terminate the task execution immediately.
-            </DialogDescription>
+            <DialogTitle>{t("cancelTask")}</DialogTitle>
+            <DialogDescription>{t("cancelTaskDescription")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" disabled={controlling}>
-                Keep Running
+                {t("keepRunning")}
               </Button>
             </DialogClose>
             <Button
@@ -248,12 +246,12 @@ export default function TaskDetailsPage() {
               {controlling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Cancelling...
+                  {t("cancelling")}
                 </>
               ) : (
                 <>
                   <X className="mr-2 h-4 w-4" />
-                  Cancel Task
+                  {t("cancelTask")}
                 </>
               )}
             </Button>
