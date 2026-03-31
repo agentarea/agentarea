@@ -1,17 +1,15 @@
 "use client";
 
 import {
-  AlertCircle,
   Bot,
   Calendar,
-  CheckCircle2,
   Clock,
-  Loader2,
-  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { cn } from "@/lib/utils";
+import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { TaskWithAgent } from "@/lib/api";
 
 export interface TaskItemData {
   id: string;
@@ -30,37 +28,30 @@ interface TaskItemProps {
 
 const statusConfig = {
   running: {
-    icon: Loader2,
     badgeVariant: "default" as const,
     label: "Running",
   },
   completed: {
-    icon: CheckCircle2,
     badgeVariant: "success" as const,
     label: "Completed",
   },
   success: {
-    icon: CheckCircle2,
     badgeVariant: "success" as const,
     label: "Success",
   },
   failed: {
-    icon: XCircle,
     badgeVariant: "destructive" as const,
     label: "Failed",
   },
   error: {
-    icon: XCircle,
     badgeVariant: "destructive" as const,
     label: "Error",
   },
   paused: {
-    icon: AlertCircle,
     badgeVariant: "secondary" as const,
     label: "Paused",
   },
   pending: {
-    icon: Clock,
     badgeVariant: "secondary" as const,
     label: "Pending",
   },
@@ -73,7 +64,6 @@ export default function TaskItem({
   const status =
     statusConfig[task.status as keyof typeof statusConfig] ||
     statusConfig.pending;
-  const StatusIcon = status.icon;
 
   return (
     <LinkedCard
@@ -81,9 +71,13 @@ export default function TaskItem({
       title={task.description}
       type="view"
       topRight={
-        <Badge variant={status.badgeVariant} className="whitespace-nowrap">
-          <StatusIcon
-            className={cn("h-3 w-3", task.status === "running" && "animate-spin")}
+        <Badge 
+          variant={status.badgeVariant} 
+          className="whitespace-nowrap h-5 px-1.5 text-[10px] gap-1 bg-opacity-30 dark:bg-opacity-20 uppercase"
+        >
+          <TaskStatusIcon 
+            status={task.status as TaskWithAgent['status']} 
+            className="h-3 w-3" 
           />
           {status.label}
         </Badge>
