@@ -83,8 +83,8 @@ export default function TasksList({
       render: (value: string) => (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <Calendar className="h-3 w-3" />
-            <span>
+            <Calendar className="h-3 w-3 shrink-0" />
+            <span className="whitespace-nowrap">
               {new Date(value).toLocaleDateString("en", {
                 day: "numeric",
                 month: "short",
@@ -93,8 +93,8 @@ export default function TasksList({
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3" />
-            <span>
+            <Clock className="h-3 w-3 shrink-0" />
+            <span className="whitespace-nowrap">
               {new Date(value).toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
                 minute: "2-digit",
