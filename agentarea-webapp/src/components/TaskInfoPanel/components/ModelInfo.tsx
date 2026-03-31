@@ -17,9 +17,20 @@ import Section from "./Section";
 interface ModelInfoProps {
   task?: Task | null;
   agentId?: string;
+  hideAgentHeader?: boolean;
+  hideDescription?: boolean;
+  hideInstruction?: boolean;
+  hideOpenButton?: boolean;
 }
 
-export default function ModelInfo({ task, agentId }: ModelInfoProps) {
+export default function ModelInfo({
+  task,
+  agentId,
+  hideAgentHeader = false,
+  hideDescription = false,
+  hideInstruction = false,
+  hideOpenButton = false,
+}: ModelInfoProps) {
   const t = useTranslations("TaskInfoPanel");
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,14 +106,16 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
   return (
     <Section title={t("agentInfo")} contentClassName="space-y-4 text-xs">
       {/* Agent Name */}
-      <div className="space-y-1.5">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t("agent")}
+      {!hideAgentHeader && (
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("agent")}
+          </div>
+          <div className="text-sm font-semibold text-foreground">
+            {agent.name}
+          </div>
         </div>
-        <div className="text-sm font-semibold text-foreground">
-          {agent.name}
-        </div>
-      </div>
+      )}
 
       {/* Model */}
       <div className="space-y-1.5">
@@ -119,24 +132,28 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
       </div>
 
       {/* Description / Goal */}
-      {agent.description && agent.description.trim().length > 0 && (
-        <div className="space-y-1.5">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t("descriptionGoal")}
+      {agent.description &&
+        agent.description.trim().length > 0 &&
+        !hideDescription && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("descriptionGoal")}
+            </div>
+            <ExpandableText content={agent.description} />
           </div>
-          <ExpandableText content={agent.description} />
-        </div>
-      )}
+        )}
 
       {/* Instruction */}
-      {agent.instruction && agent.instruction.trim().length > 0 && (
-        <div className="space-y-1.5">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t("instruction")}
+      {agent.instruction &&
+        agent.instruction.trim().length > 0 &&
+        !hideInstruction && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("instruction")}
+            </div>
+            <ExpandableText content={agent.instruction} />
           </div>
-          <ExpandableText content={agent.instruction} />
-        </div>
-      )}
+        )}
 
       {/* Triggers */}
       {validTriggers.length > 0 && (
@@ -189,11 +206,13 @@ export default function ModelInfo({ task, agentId }: ModelInfoProps) {
       )}
 
       {/* Link to full details */}
-      <div className="pt-2">
-        <ActionLink href={`/agents/${targetAgentId}`}>
-          {t("openFullAgentDetails")}
-        </ActionLink>
-      </div>
+      {!hideOpenButton && (
+        <div className="pt-2">
+          <ActionLink href={`/agents/${targetAgentId}`}>
+            {t("openFullAgentDetails")}
+          </ActionLink>
+        </div>
+      )}
     </Section>
   );
 }
