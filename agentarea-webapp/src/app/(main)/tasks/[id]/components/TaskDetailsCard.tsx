@@ -3,13 +3,8 @@
 import { useTranslations } from "next-intl";
 import {
   Bot,
-  CheckCircle2,
   Layers,
-  Loader2,
-  Pause,
-  XCircle,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -17,6 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { TaskWithAgent } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface TaskDetailsCardProps {
   task: {
@@ -40,6 +38,31 @@ export default function TaskDetailsCard({
   executionTime,
 }: TaskDetailsCardProps) {
   const t = useTranslations("TaskDetailsCard");
+  const tStatus = useTranslations("TasksPage.status");
+  const status = currentStatus as TaskWithAgent['status'];
+
+  const label = [
+    "running",
+    "completed",
+    "success",
+    "failed",
+    "error",
+    "paused",
+    "pending",
+  ].includes(status)
+    ? tStatus(status)
+    : status.charAt(0).toUpperCase() + status.slice(1);
+
+  const colorClass = {
+    completed: "text-green-600 dark:text-green-500",
+    success: "text-green-600 dark:text-green-500",
+    failed: "text-red-600 dark:text-red-500",
+    error: "text-red-600 dark:text-red-500",
+    running: "text-primary",
+    in_progress: "text-primary",
+    pending: "text-muted-foreground",
+    paused: "text-muted-foreground",
+  }[status] || "text-muted-foreground";
 
   return (
     <Card className="shadow-sm">
@@ -60,47 +83,18 @@ export default function TaskDetailsCard({
         {/* Compact Status */}
         <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
           <div className="flex items-center gap-2">
-            <div
-              className={`flex h-6 w-6 items-center justify-center rounded ${
-                currentStatus === "running"
-                  ? "bg-blue-50 dark:bg-blue-900/30"
-                  : currentStatus === "completed" || currentStatus === "success"
-                    ? "bg-green-50 dark:bg-green-900/30"
-                    : currentStatus === "paused"
-                      ? "bg-yellow-50 dark:bg-yellow-900/30"
-                      : "bg-red-50 dark:bg-red-900/30"
-              }`}
-            >
-              {currentStatus === "running" ? (
-                <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
-              ) : currentStatus === "completed" ||
-                currentStatus === "success" ? (
-                <CheckCircle2 className="h-3 w-3 text-green-600" />
-              ) : currentStatus === "paused" ? (
-                <Pause className="h-3 w-3 text-yellow-600" />
-              ) : (
-                <XCircle className="h-3 w-3 text-red-600" />
-              )}
-            </div>
+            <TaskStatusIcon status={status} className="h-5 w-5 shrink-0" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t("status")}
               </p>
             </div>
           </div>
-          <Badge
-            className={`px-2 py-0.5 text-xs ${
-              currentStatus === "running"
-                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                : currentStatus === "completed" || currentStatus === "success"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                  : currentStatus === "paused"
-                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-            }`}
-          >
-            {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-1.5 ml-2">
+            <span className={cn("text-[11px] font-normal uppercase tracking-wider", colorClass)}>
+              {label}
+            </span>
+          </div>
         </div>
 
         {/* Compact Agent Info */}

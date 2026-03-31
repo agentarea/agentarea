@@ -3,6 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Bot, Clock, Database, Download, RefreshCw, Share2 } from "lucide-react";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
 import type { DisplayEvent } from "@/types/events";
+import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { TaskWithAgent } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 interface TaskHeaderProps {
   task: {
@@ -38,35 +42,39 @@ export default function TaskHeader({
   onRefresh,
   controlButtons,
 }: TaskHeaderProps) {
+  const tStatus = useTranslations("TasksPage.status");
+  const status = currentStatus as TaskWithAgent['status'];
+
+  const label = [
+    "running",
+    "completed",
+    "success",
+    "failed",
+    "error",
+    "paused",
+    "pending",
+  ].includes(status)
+    ? tStatus(status)
+    : status.charAt(0).toUpperCase() + status.slice(1);
+
+  const colorClass = {
+    completed: "text-green-600 dark:text-green-500",
+    success: "text-green-600 dark:text-green-500",
+    failed: "text-red-600 dark:text-red-500",
+    error: "text-red-600 dark:text-red-500",
+    running: "text-primary",
+    in_progress: "text-primary",
+    pending: "text-muted-foreground",
+    paused: "text-muted-foreground",
+  }[status] || "text-muted-foreground";
+
   return (
     <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
       <div className="flex items-start gap-4">
         {/* Smaller Status Indicator */}
         <div className="flex-shrink-0">
-          <div
-            className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-              currentStatus === "running"
-                ? "bg-blue-50 dark:bg-blue-900/30"
-                : currentStatus === "completed" ||
-                    currentStatus === "success"
-                  ? "bg-green-50 dark:bg-green-900/30"
-                  : currentStatus === "paused"
-                    ? "bg-yellow-50 dark:bg-yellow-900/30"
-                    : "bg-red-50 dark:bg-red-900/30"
-            }`}
-          >
-            <div
-              className={`h-4 w-4 rounded-full ${
-                currentStatus === "running"
-                  ? "animate-pulse bg-blue-500"
-                  : currentStatus === "completed" ||
-                      currentStatus === "success"
-                    ? "bg-green-500"
-                    : currentStatus === "paused"
-                      ? "bg-yellow-500"
-                      : "bg-red-500"
-              }`}
-            />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+            <TaskStatusIcon status={status} className="h-6 w-6" />
           </div>
         </div>
 
@@ -76,21 +84,11 @@ export default function TaskHeader({
             <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100">
               {task.description}
             </h1>
-            <Badge
-              className={`px-2 py-0.5 text-xs ${
-                currentStatus === "running"
-                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                  : currentStatus === "completed" ||
-                      currentStatus === "success"
-                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                    : currentStatus === "paused"
-                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                      : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-              }`}
-            >
-              {currentStatus.charAt(0).toUpperCase() +
-                currentStatus.slice(1)}
-            </Badge>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className={cn("text-[11px] font-normal uppercase tracking-wider", colorClass)}>
+                {label}
+              </span>
+            </div>
           </div>
 
           <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
