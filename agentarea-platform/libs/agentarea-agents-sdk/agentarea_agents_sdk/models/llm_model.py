@@ -481,11 +481,22 @@ class LLMModel:
                 # Extract usage and cost from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    # Calculate cost similar to non-streaming version
-                    if hasattr(usage_info, "completion_tokens_cost"):
+
+                    # Prefer LiteLLM's _hidden_params.response_cost (most accurate)
+                    chunk_cost = 0.0
+                    if hasattr(chunk, "_hidden_params"):
+                        hidden = chunk._hidden_params
+                        if isinstance(hidden, dict):
+                            chunk_cost = hidden.get("response_cost", 0.0) or 0.0
+                        elif hasattr(hidden, "response_cost"):
+                            chunk_cost = getattr(hidden, "response_cost", 0.0) or 0.0
+
+                    if chunk_cost > 0.0:
+                        cost = chunk_cost
+                    elif hasattr(usage_info, "completion_tokens_cost"):
                         cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                    if hasattr(usage_info, "prompt_tokens_cost"):
-                        cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        if hasattr(usage_info, "prompt_tokens_cost"):
+                            cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
                     elif hasattr(usage_info, "total_tokens"):
                         cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
@@ -684,11 +695,22 @@ class LLMModel:
                 # Extract usage and cost from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    # Calculate cost similar to non-streaming version
-                    if hasattr(usage_info, "completion_tokens_cost"):
+
+                    # Prefer LiteLLM's _hidden_params.response_cost (most accurate)
+                    chunk_cost = 0.0
+                    if hasattr(chunk, "_hidden_params"):
+                        hidden = chunk._hidden_params
+                        if isinstance(hidden, dict):
+                            chunk_cost = hidden.get("response_cost", 0.0) or 0.0
+                        elif hasattr(hidden, "response_cost"):
+                            chunk_cost = getattr(hidden, "response_cost", 0.0) or 0.0
+
+                    if chunk_cost > 0.0:
+                        cost = chunk_cost
+                    elif hasattr(usage_info, "completion_tokens_cost"):
                         cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                    if hasattr(usage_info, "prompt_tokens_cost"):
-                        cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        if hasattr(usage_info, "prompt_tokens_cost"):
+                            cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
                     elif hasattr(usage_info, "total_tokens"):
                         cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 

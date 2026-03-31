@@ -198,6 +198,12 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
   const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
+  // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea
+  const apiBaseUrl = typeof window !== "undefined"
+    ? (window as any).__ENV__?.CLIENT_API_URL || ""
+    : "";
+  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
+
   const toolsTableData = tools.map((tool) => ({
     id: tool.name,
     name: tool.name,
@@ -248,6 +254,29 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                   {isBundleStopping ? "Stopping..." : "Stop"}
                 </Button>
               )}
+            </div>
+
+            {/* AgentArea proxy URL - always shown so agents can connect through AgentArea */}
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  AgentArea Proxy URL
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs text-muted-foreground">
+                  Connect to this MCP server through AgentArea
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={agentareaProxyUrl}
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                  <CopyButton text={agentareaProxyUrl} label="proxy URL" />
+                </div>
+              </div>
             </div>
 
             {/* Connection URL - Show when running/connected, or always for URL-type/bundle-type */}

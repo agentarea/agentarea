@@ -58,6 +58,11 @@ export default function TaskDetailsPage() {
     autoConnect: true,
   });
 
+  // FIXME: Performance — this useMemo re-processes ALL events on every render whenever
+  // taskEvents or task changes. Each event goes through normalizeEventType → shouldDisplayEvent →
+  // parseEventToMessage (a large switch statement). For long-running tasks with many events
+  // this becomes O(n) per render. Should accumulate incrementally: keep a processed array
+  // and only parse newly appended events rather than replaying the full list each time.
   // Convert historical events to chat message components for direct rendering
   const executionMessages = useMemo((): MessageComponentType[] => {
     if (!task) return [];

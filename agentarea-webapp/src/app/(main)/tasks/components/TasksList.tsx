@@ -37,7 +37,7 @@ export default function TasksList({
       accessor: "description",
       header: t("description"),
       render: (value: string) => (
-        <span className="truncate font-medium">{value}</span>
+        <span className="line-clamp-2 max-w-[300px] font-medium">{value}</span>
       ),
     },
     {

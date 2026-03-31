@@ -1,4 +1,4 @@
-import { DollarSign, IterationCcw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, DollarSign, IterationCcw } from "lucide-react";
 import Section from "./Section";
 
 interface BudgetInfoProps {
@@ -6,6 +6,8 @@ interface BudgetInfoProps {
   budgetLimit: number | null;
   iterationsUsed: number;
   maxIterations: number | null;
+  paymentReceived?: number | null;
+  paymentSpent?: number | null;
 }
 
 export default function BudgetInfo({
@@ -13,6 +15,8 @@ export default function BudgetInfo({
   budgetLimit,
   iterationsUsed,
   maxIterations,
+  paymentReceived = null,
+  paymentSpent = null,
 }: BudgetInfoProps) {
   const costPct =
     budgetLimit && budgetLimit > 0
@@ -78,6 +82,30 @@ export default function BudgetInfo({
             />
           </div>
         )}
+      </div>
+      {/* Payment placeholders — actual payment logic not yet implemented */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ArrowDownLeft className="h-3 w-3 text-green-500" />
+            Received
+          </div>
+          <span className="text-sm font-semibold text-foreground">
+            {paymentReceived != null ? `$${paymentReceived.toFixed(4)}` : <span className="text-muted-foreground font-normal">—</span>}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ArrowUpRight className="h-3 w-3 text-orange-500" />
+            Spent
+          </div>
+          <span className="text-sm font-semibold text-foreground">
+            {paymentSpent != null ? `$${paymentSpent.toFixed(4)}` : <span className="text-muted-foreground font-normal">—</span>}
+          </span>
+        </div>
       </div>
     </Section>
   );

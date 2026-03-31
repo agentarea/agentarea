@@ -1,5 +1,9 @@
 import { MessageComponentType } from "./MessageComponents";
 
+// FIXME: Performance — this is a large switch statement that runs synchronously per-event
+// on every call from the useMemo chain in page.tsx. Adding new event types increases the
+// worst-case cost. Should be refactored to a dispatch map (Record<string, handler>) so
+// lookup is O(1) instead of O(n switch cases), and to avoid re-running for cached events.
 // Parse event data into appropriate message component type
 export const parseEventToMessage = (
   eventType: string,
