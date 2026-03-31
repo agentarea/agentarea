@@ -1,10 +1,28 @@
 "use server";
 
 import { listAuditLogs } from "@/lib/api";
-import type { components } from "@/api/schema";
 
-export type AuditEvent = components["schemas"]["AuditEventResponse"];
-export type AuditLogResponse = components["schemas"]["AuditLogListResponse"];
+export interface AuditChange {
+  field: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface AuditEvent {
+  id: string;
+  action: string;
+  actor_id: string;
+  resource_type: string;
+  resource_id?: string | null;
+  source_ip?: string | null;
+  created_at: string;
+  changes?: AuditChange[];
+}
+
+export interface AuditLogResponse {
+  events: AuditEvent[];
+  next_cursor: string | null;
+}
 
 export async function fetchAuditLogs(params?: {
   action?: string;
@@ -22,5 +40,5 @@ export async function fetchAuditLogs(params?: {
     return { data: null, error: "Failed to fetch audit logs" };
   }
 
-  return { data: data as AuditLogResponse, error: null };
+  return { data: data as unknown as AuditLogResponse, error: null };
 }

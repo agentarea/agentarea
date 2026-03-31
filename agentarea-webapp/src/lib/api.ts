@@ -89,6 +89,8 @@ export const {
   testModelInstance,
   getModelInstance,
   deleteModelInstance,
+  discoverModels,
+  discoverModelsPreview,
 
   // Utility API
   healthCheck,
@@ -139,6 +141,9 @@ export const {
   getTriggerTimeline,
   getTriggerCorrelations,
 
+  // Audit Logs API
+  listAuditLogs,
+
   // Workspace Import/Export API
   exportWorkspace,
   importWorkspace,
@@ -155,6 +160,19 @@ export const {
 
   // Network API
   getNetworkTopology,
+
+  // Global Tasks API
+  getTask,
+
+  // Compound MCP API
+  listCompoundMCPs,
+  getCompoundMCP,
+  createCompoundMCP,
+  updateCompoundMCP,
+  deleteCompoundMCP,
+  listCompoundMCPMembers,
+  addCompoundMCPMember,
+  removeCompoundMCPMember,
 
   // Project API
   listProjects,

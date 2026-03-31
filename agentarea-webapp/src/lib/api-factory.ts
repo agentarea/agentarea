@@ -1459,9 +1459,9 @@ export function createApiClient(client: Client) {
       cursor?: string;
       limit?: number;
     }) => {
-      const { data, error } = await client.GET("/v1/audit-logs/", {
+      const { data, error } = await client.GET("/v1/audit-logs/" as any, {
         params: { query: params },
-      });
+      } as any);
       return { data, error };
     },
   };

@@ -33,15 +33,20 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [denyComment, setDenyComment] = useState("");
   const [localResolved, setLocalResolved] = useState<{ approved: boolean } | null>(null);
+  const [resolving, setResolving] = useState(false);
 
   const handleApprove = async () => {
+    setResolving(true);
     setLocalResolved({ approved: true });
     data._onResolve?.(data.escalation_id, true, "");
+    setResolving(false);
   };
 
   const handleDeny = async () => {
+    setResolving(true);
     setLocalResolved({ approved: false });
     data._onResolve?.(data.escalation_id, false, denyComment);
+    setResolving(false);
   };
 
   const isResolved = data.resolved || localResolved !== null;
