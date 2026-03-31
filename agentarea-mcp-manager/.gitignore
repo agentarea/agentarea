@@ -20,6 +20,7 @@ go.work
 # Air live reload
 tmp/
 build-errors.log
+activation-service
 
 # IDE files
 .vscode/

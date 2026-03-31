@@ -131,7 +131,6 @@ class CompoundMCPProxy:
                     str(member.mcp_instance_id), "unknown"
                 )
                 full_desc = f"[{instance_name}] {tool_desc}"
-                input_schema = tool.get("inputSchema", {})
 
                 # Capture member + original_name in closure
                 _member = member

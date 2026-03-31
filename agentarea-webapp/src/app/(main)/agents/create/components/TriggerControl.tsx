@@ -1,5 +1,5 @@
 import { Edit, Trash2 } from "lucide-react";
-import { Control, Controller, useWatch } from "react-hook-form";
+import { Control, useWatch } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";

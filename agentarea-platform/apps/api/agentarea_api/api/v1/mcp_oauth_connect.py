@@ -19,7 +19,7 @@ import logging
 import urllib.parse
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from agentarea_api.api.deps.services import (
@@ -87,6 +87,34 @@ def _callback_uri(request: Request) -> str:
     settings = get_settings()
     api_base = settings.app.API_BASE_URL.rstrip("/")
     return f"{api_base}/v1/mcp-oauth/callback"
+
+
+def _safe_frontend_base(return_to: str) -> str:
+    """Validate and normalize frontend redirect base URL.
+
+    Allows:
+    - empty return_to (falls back to FRONTEND_BASE_URL)
+    - absolute URL with same origin as FRONTEND_BASE_URL
+    """
+    settings = get_settings()
+    default_base = settings.app.FRONTEND_BASE_URL.rstrip("/")
+    if not return_to:
+        return default_base
+
+    try:
+        parsed = urllib.parse.urlparse(return_to)
+        default_parsed = urllib.parse.urlparse(default_base)
+    except Exception:
+        return default_base
+
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return default_base
+
+    if parsed.scheme != default_parsed.scheme or parsed.netloc != default_parsed.netloc:
+        logger.warning("Rejected non-matching return_to origin: %s", return_to)
+        return default_base
+
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +254,7 @@ async def oauth_callback(
 
     instance_id = state_data["instance_id"]
     # return_to is the frontend origin stored during /authorize
-    return_to = state_data.get("return_to", "").rstrip("/")
+    frontend_base = _safe_frontend_base(state_data.get("return_to", ""))
     as_meta_dict = state_data["as_metadata"]
     as_metadata = AuthServerMetadata(
         issuer=as_meta_dict["issuer"],
@@ -250,14 +278,14 @@ async def oauth_callback(
     except Exception as exc:
         logger.error("OAuth token exchange failed: %s", exc)
         return RedirectResponse(
-            url=f"{return_to}/mcp-servers/{instance_id}?oauth=error&reason=token_exchange_failed",
+            url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=error&reason=token_exchange_failed",
             status_code=302,
         )
 
     access_token = tokens.get("access_token", "")
     if not access_token:
         return RedirectResponse(
-            url=f"{return_to}/mcp-servers/{instance_id}?oauth=error&reason=no_access_token",
+            url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=error&reason=no_access_token",
             status_code=302,
         )
 
@@ -323,7 +351,7 @@ async def oauth_callback(
         logger.warning("Failed to schedule tool discovery after OAuth: %s", discover_err)
 
     return RedirectResponse(
-        url=f"{return_to}/mcp-servers/{instance_id}?oauth=success",
+        url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=success",
         status_code=302,
     )
 

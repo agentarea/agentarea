@@ -6142,120 +6142,172 @@ providers:
     - name: claude-haiku-4.5
       context_window: 128000
       max_output_tokens: 16000
+      input_cost_per_token: 1e-06
+      output_cost_per_token: 5e-06
       supports_function_calling: true
       supports_vision: true
     - name: claude-opus-4.5
       context_window: 128000
       max_output_tokens: 16000
+      input_cost_per_token: 1.5e-05
+      output_cost_per_token: 7.5e-05
       supports_function_calling: true
       supports_vision: true
     - name: claude-opus-4.6-fast
       context_window: 128000
       max_output_tokens: 16000
+      input_cost_per_token: 1.5e-05
+      output_cost_per_token: 7.5e-05
       supports_function_calling: true
       supports_vision: true
     - name: claude-opus-41
       context_window: 80000
       max_output_tokens: 16000
+      input_cost_per_token: 1.5e-05
+      output_cost_per_token: 7.5e-05
       supports_vision: true
     - name: claude-sonnet-4
       context_window: 128000
       max_output_tokens: 16000
+      input_cost_per_token: 3e-06
+      output_cost_per_token: 1.5e-05
       supports_function_calling: true
       supports_vision: true
     - name: claude-sonnet-4.5
       context_window: 128000
       max_output_tokens: 16000
+      input_cost_per_token: 3e-06
+      output_cost_per_token: 1.5e-05
       supports_function_calling: true
       supports_vision: true
     - name: gemini-2.5-pro
       context_window: 128000
       max_output_tokens: 64000
+      input_cost_per_token: 1.25e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
       supports_vision: true
     - name: gemini-3-pro-preview
       context_window: 128000
       max_output_tokens: 64000
+      input_cost_per_token: 2e-06
+      output_cost_per_token: 1.2e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-3.5-turbo
       context_window: 16384
       max_output_tokens: 4096
+      input_cost_per_token: 5e-07
+      output_cost_per_token: 1.5e-06
       supports_function_calling: true
     - name: gpt-3.5-turbo-0613
       context_window: 16384
       max_output_tokens: 4096
+      input_cost_per_token: 1.5e-06
+      output_cost_per_token: 2e-06
       supports_function_calling: true
     - name: gpt-4
       context_window: 32768
       max_output_tokens: 4096
+      input_cost_per_token: 3e-05
+      output_cost_per_token: 6e-05
       supports_function_calling: true
     - name: gpt-4-0613
       context_window: 32768
       max_output_tokens: 4096
+      input_cost_per_token: 3e-05
+      output_cost_per_token: 6e-05
       supports_function_calling: true
     - name: gpt-4-o-preview
       context_window: 64000
       max_output_tokens: 4096
+      input_cost_per_token: 1e-05
+      output_cost_per_token: 3e-05
       supports_function_calling: true
     - name: gpt-4.1
       context_window: 128000
       max_output_tokens: 16384
+      input_cost_per_token: 2e-06
+      output_cost_per_token: 8e-06
       supports_function_calling: true
       supports_vision: true
     - name: gpt-4.1-2025-04-14
       context_window: 128000
       max_output_tokens: 16384
+      input_cost_per_token: 2e-06
+      output_cost_per_token: 8e-06
       supports_function_calling: true
       supports_vision: true
     - name: gpt-41-copilot
       context_window: 4096
       max_output_tokens: 4096
+      input_cost_per_token: 2e-06
+      output_cost_per_token: 8e-06
     - name: gpt-4o
       context_window: 64000
       max_output_tokens: 4096
+      input_cost_per_token: 2.5e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-4o-2024-05-13
       context_window: 64000
       max_output_tokens: 4096
+      input_cost_per_token: 5e-06
+      output_cost_per_token: 1.5e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-4o-2024-08-06
       context_window: 64000
       max_output_tokens: 16384
+      input_cost_per_token: 2.5e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
     - name: gpt-4o-2024-11-20
       context_window: 64000
       max_output_tokens: 16384
+      input_cost_per_token: 2.5e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-4o-mini
       context_window: 64000
       max_output_tokens: 4096
+      input_cost_per_token: 1.5e-07
+      output_cost_per_token: 6e-07
       supports_function_calling: true
     - name: gpt-4o-mini-2024-07-18
       context_window: 64000
       max_output_tokens: 4096
+      input_cost_per_token: 1.5e-07
+      output_cost_per_token: 6e-07
       supports_function_calling: true
     - name: gpt-5
       context_window: 128000
       max_output_tokens: 128000
+      input_cost_per_token: 1.25e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-5-mini
       context_window: 128000
       max_output_tokens: 64000
+      input_cost_per_token: 2.5e-07
+      output_cost_per_token: 2e-06
       supports_function_calling: true
       supports_vision: true
     - name: gpt-5.1
       context_window: 128000
       max_output_tokens: 64000
+      input_cost_per_token: 1.25e-06
+      output_cost_per_token: 1e-05
       supports_function_calling: true
       supports_vision: true
     - name: gpt-5.2
       context_window: 128000
       max_output_tokens: 64000
+      input_cost_per_token: 1.75e-06
+      output_cost_per_token: 1.4e-05
       supports_function_calling: true
       supports_vision: true
   deepseek:

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Code, Globe, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -101,7 +100,6 @@ interface AuthConfig {
 type AuthType = "api_key" | "bearer" | "oauth2";
 
 export function AddMCPServerForm() {
-  const router = useRouter();
   const [state, setState] = useState<MCPServerFormState>(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bundleInstances, setBundleInstances] = useState<Array<{ id: string; name: string }>>([]);

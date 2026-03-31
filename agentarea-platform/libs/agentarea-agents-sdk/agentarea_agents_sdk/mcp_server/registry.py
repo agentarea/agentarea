@@ -6,7 +6,6 @@ them all with an MCP server in one call.
 """
 
 import logging
-from typing import Any
 
 from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset

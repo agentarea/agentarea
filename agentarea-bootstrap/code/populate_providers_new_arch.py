@@ -98,7 +98,8 @@ def upsert_provider_spec(
 def upsert_model_spec(
     conn: Connection,
     model: Dict[str, Any],
-    provider_spec_id: str
+    provider_spec_id: str,
+    provider_key: str,
 ) -> str:
     """Upsert model specification"""
     model_name = model["name"]
@@ -106,6 +107,13 @@ def upsert_model_spec(
     description = model.get("description", "")
     context_window = model.get("context_window", 4096)
     max_output_tokens = model.get("max_output_tokens", 4096)
+    if provider_key == "github" and (
+        "input_cost_per_token" not in model or "output_cost_per_token" not in model
+    ):
+        raise ValueError(
+            f"GitHub model '{model_name}' is missing required cost fields "
+            "(input_cost_per_token and/or output_cost_per_token)"
+        )
     input_cost_per_token = model.get("input_cost_per_token", 0.0)
     output_cost_per_token = model.get("output_cost_per_token", 0.0)
     supports_function_calling = model.get("supports_function_calling", False)
@@ -208,7 +216,7 @@ def main() -> None:
 
             # Create/update model specs for this provider
             for model in provider_data.get("models", []):
-                upsert_model_spec(conn, model, provider_spec_id)
+                upsert_model_spec(conn, model, provider_spec_id, provider_key)
 
     print("Provider specs and model specs populated successfully.")
 

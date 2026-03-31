@@ -68,7 +68,7 @@ function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
     <div className="mt-2 space-y-1">
       {changes.map((change, i) => (
         <div key={i} className="text-xs font-mono">
-          <span className="text-muted-foreground">{change.field}:</span>{" "}
+          <span className="text-muted-foreground">{String(change.field ?? "unknown")}:</span>{" "}
           <span className="text-red-500 line-through">
             {String(change.before ?? "null")}
           </span>{" "}

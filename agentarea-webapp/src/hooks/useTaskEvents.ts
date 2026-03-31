@@ -19,7 +19,6 @@ import { useSSE } from "./useSSE";
  * Should be: normalize once on load into a single event model with status (pending/resolved),
  * merge related events server-side or in a single pass, and render directly.
  *
- * Also: events are mutated in place (e.metadata = {...}) which is a React anti-pattern.
  */
 function deduplicateHistoryEvents(events: any[]): any[] {
   // Index resolved escalations
@@ -52,22 +51,28 @@ function deduplicateHistoryEvents(events: any[]): any[] {
       .filter(Boolean)
   );
 
-  return events.filter((e) => {
+  const deduplicatedEvents: any[] = [];
+
+  for (const e of events) {
     // Remove ToolCallStarted if completed exists
     if (e.event_type === "ToolCallStarted") {
       const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
-      return !completedToolCallIds.has(tcId);
+      if (completedToolCallIds.has(tcId)) {
+        continue;
+      }
     }
 
     // Remove ToolCallCompleted if it was approval-gated (merged into approval entry)
     if (e.event_type === "ToolCallCompleted") {
       const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
-      if (approvalToolCallIds.has(tcId)) return false;
+      if (approvalToolCallIds.has(tcId)) {
+        continue;
+      }
     }
 
     // Remove standalone resolution events (merged into request)
     if (e.event_type === "HumanApprovalReceived" || e.event_type === "HumanApprovalDenied") {
-      return false;
+      continue;
     }
 
     // Merge resolution into HumanApprovalRequested
@@ -75,12 +80,23 @@ function deduplicateHistoryEvents(events: any[]): any[] {
       const eid = e.metadata?.escalation_id || "";
       const resolution = resolvedEscalations.get(eid);
       if (resolution) {
-        e.metadata = { ...e.metadata, resolved: true, approved: resolution.approved, deny_comment: resolution.comment };
+        deduplicatedEvents.push({
+          ...e,
+          metadata: {
+            ...e.metadata,
+            resolved: true,
+            approved: resolution.approved,
+            deny_comment: resolution.comment,
+          },
+        });
+        continue;
       }
     }
 
-    return true;
-  });
+    deduplicatedEvents.push(e);
+  }
+
+  return deduplicatedEvents;
 }
 
 export function useTaskEvents(

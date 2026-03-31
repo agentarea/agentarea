@@ -86,6 +86,10 @@ import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import type { components } from "@/api/schema";
 
+function isUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function getAgentAction(agentId: string) {
   return await getAgent(agentId);
 }
@@ -436,6 +440,9 @@ export async function listMCPServerInstancesAction() {
 }
 
 export async function startBundleProxyAction(instanceId: string) {
+  if (!isUUID(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
   const token = await getAuthToken();
   const res = await fetch(
     `${env.API_URL}/v1/mcp-server-instances/${instanceId}/start-bundle`,
@@ -452,6 +459,9 @@ export async function startBundleProxyAction(instanceId: string) {
 }
 
 export async function stopBundleProxyAction(instanceId: string) {
+  if (!isUUID(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
   const token = await getAuthToken();
   const res = await fetch(
     `${env.API_URL}/v1/mcp-server-instances/${instanceId}/stop-bundle`,

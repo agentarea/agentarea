@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Bot, Check, Plug, User, Wrench } from "lucide-react";
+import { Bot, User, Wrench } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 

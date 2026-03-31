@@ -1,6 +1,6 @@
 """Audit event ORM model."""
 
-from sqlalchemy import DateTime, Index, String, Text
+from sqlalchemy import Index, String, Text
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 

@@ -288,7 +288,7 @@ async def discover_models_preview(
         )
         is_new = existing is None
 
-        spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+        await model_spec_repo.upsert_by_provider_and_model_kwargs(
             provider_spec_id=provider_spec_id,
             model_name=model.model_name,
             display_name=model.display_name or model.model_name,
