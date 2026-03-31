@@ -620,6 +620,7 @@
     "agent": "Agent",
     "statusLabel": "Status",
     "created": "Created",
+    "cost": "Cost",
     "noTasks": "No tasks found",
     "noTasksDescription": "No tasks have been created yet",
     "noMatchingTasks": "No matching tasks",
