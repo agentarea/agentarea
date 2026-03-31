@@ -345,8 +345,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 # Update usage and cost information
                 if chunk_response.usage:
                     final_usage = chunk_response.usage
-                if chunk_response.cost:
-                    final_cost = chunk_response.cost
+                if chunk_response.cost and chunk_response.cost > 0:
+                    final_cost = max(final_cost, chunk_response.cost)
 
             # Publish final chunk event
             if event_publisher:

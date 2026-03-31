@@ -514,6 +514,35 @@ class LLMModel:
                     total_tokens=getattr(usage_info, "total_tokens", 0),
                 )
 
+            # Use litellm.completion_cost() for accurate cost calculation
+            if cost == 0.0:
+                try:
+                    import litellm
+                    prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
+                    completion_tokens = getattr(usage_info, "completion_tokens", 0) if usage_info else 0
+
+                    # If usage wasn't in chunks, estimate tokens from content
+                    if prompt_tokens == 0:
+                        prompt_tokens = litellm.token_counter(model=self.model_id, messages=messages)
+                    if completion_tokens == 0 and complete_content:
+                        completion_tokens = litellm.token_counter(model=self.model_id, text=complete_content)
+
+                    if prompt_tokens > 0 or completion_tokens > 0:
+                        cost = litellm.completion_cost(
+                            model=self.model_id,
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                        )
+                        # Update usage if it was estimated
+                        if usage_info is None:
+                            usage = LLMUsage(
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                total_tokens=prompt_tokens + completion_tokens,
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to calculate cost via litellm: {e}")
+
             # Return complete response
             result = LLMResponse(
                 content=complete_content,
@@ -732,20 +761,35 @@ class LLMModel:
                         content=delta_content if "delta_content" in locals() else "",
                         role="assistant",
                         tool_calls=delta_tool_calls,
-                        cost=cost if usage_delta else 0.0,
+                        cost=cost,
                         usage=usage_delta,
                     )
 
-            # After streaming ends, yield final message if any remaining content accumulated
-            if complete_content and False:  # Explicitly avoid yielding final full content here
+            # Calculate cost after streaming ends using litellm.completion_cost()
+            # _hidden_params.response_cost is NOT available on streaming chunks
+            if cost == 0.0:
+                try:
+                    model_str = f"{self.provider_type}/{self.model_name}" if self.provider_type else self.model_name
+                    prompt_str = "\n".join(
+                        m.get("content", "") if isinstance(m, dict) else str(m)
+                        for m in request.messages
+                    )
+                    cost = litellm.completion_cost(
+                        model=model_str,
+                        prompt=prompt_str,
+                        completion=complete_content,
+                    )
+                    logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
+                except Exception as e:
+                    logger.warning(f"Failed to calculate streaming cost: {e}")
+
+            # Yield final cost/usage
+            if cost > 0.0:
                 yield LLMResponse(
-                    content=complete_content,
+                    content="",
                     role="assistant",
-                    tool_calls=[tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
-                    if tool_calls_buffer
-                    else None,
                     cost=cost,
-                    usage=usage,
+                    usage=usage if usage and usage.total_tokens > 0 else None,
                 )
 
         except Exception as e:
