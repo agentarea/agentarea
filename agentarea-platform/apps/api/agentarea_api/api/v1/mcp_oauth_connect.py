@@ -294,7 +294,7 @@ async def oauth_callback(
     from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
-    await instance_repo.update(UUID(instance_id), auth_config_id=auth_config.id, status="running")
+    await instance_repo.update(UUID(instance_id), auth_config_id=auth_config.id, status="connected")
     await db_session.commit()
 
     logger.info(

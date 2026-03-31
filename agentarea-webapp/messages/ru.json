@@ -191,6 +191,7 @@
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",
+    "activeTasks": "Активные задачи",
     "browseAgents": "Агенты",
     "newAgent": "Новый агент",
     "mainDescriptionPage": "Обзор и управление вашими агентами",
@@ -462,6 +463,7 @@
     },
     "status": {
       "running": "Запущен",
+      "connected": "Подключён",
       "error": "Ошибка",
       "starting": "Запуск",
       "setup": "Настройка"
@@ -633,6 +635,7 @@
     "agent": "Агент",
     "statusLabel": "Статус",
     "created": "Создано",
+    "cost": "Стоимость",
     "status": {
       "running": "Выполняется",
       "completed": "Завершено",

@@ -229,6 +229,7 @@
     "noTools": "No tools",
     "createTask": "Create Task",
     "currentTasks": "Current Tasks",
+    "activeTasks": "Active Tasks",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
     "mainDescriptionPage": "Browse and manage your agents",
@@ -501,6 +502,7 @@
     },
     "status": {
       "running": "Running",
+      "connected": "Connected",
       "error": "Error",
       "starting": "Starting",
       "setup": "Setup"
@@ -634,6 +636,7 @@
     "agent": "Agent",
     "statusLabel": "Status",
     "created": "Created",
+    "cost": "Cost",
     "status": {
       "running": "Running",
       "completed": "Completed",

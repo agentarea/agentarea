@@ -35,20 +35,19 @@ export default function AgentEditClient({
       // Transform form tools_config into backend tools format
       const tools: any[] = [];
 
-      // MCP tools
+      // MCP tools — preserve per-tool approval settings
       for (const mcpConfig of formData.tools_config.mcp_server_configs || []) {
-        const allowedToolNames = (mcpConfig.allowed_tools || []).map((t: any) => t.tool_name);
-        const toolsRequiringApproval = (mcpConfig.allowed_tools || [])
-          .filter((t: any) => t.requires_user_confirmation)
-          .map((t: any) => t.tool_name);
+        const allowedTools = (mcpConfig.allowed_tools || []).map((t: any) => ({
+          tool_name: t.tool_name,
+          requires_user_confirmation: t.requires_user_confirmation || false,
+        }));
 
         tools.push({
           type: "mcp",
           name: mcpConfig.mcp_server_id,
           settings: {
             mcp_server_id: mcpConfig.mcp_server_id,
-            allowed_tools: allowedToolNames.length > 0 ? allowedToolNames : null,
-            requires_user_confirmation: toolsRequiringApproval.length > 0 ? true : null,
+            allowed_tools: allowedTools.length > 0 ? allowedTools : null,
           },
         });
       }

@@ -52,7 +52,8 @@ class ToolSettingsYAML(BaseModel):
     """Tool settings configuration in YAML format."""
 
     disabled_methods: list[str] | None = None  # For code tools
-    allowed_tools: list[str] | None = None  # For MCP tools
+    # FIXME: should be a proper typed model (e.g. MCPToolPermission) instead of Any
+    allowed_tools: list[Any] | None = None  # str (legacy) or {tool_name, requires_user_confirmation}
     a2a_url: str | None = None  # For agent tools — explicit A2A endpoint URL
     description_override: str | None = None  # For agent tools — custom description
     requires_user_confirmation: bool | None = None  # Require human approval before execution

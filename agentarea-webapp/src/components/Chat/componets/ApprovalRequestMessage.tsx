@@ -1,5 +1,8 @@
 "use client";
 
+// FIXME: ToolCallCompleted after approval should reference escalation_id
+// so the UI can merge approval + execution + result into a single entry.
+
 import React, { useState } from "react";
 import { ShieldAlert, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,46 +29,49 @@ interface Props {
 const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [denyComment, setDenyComment] = useState("");
-  const [resolving, setResolving] = useState(false);
+  const [localResolved, setLocalResolved] = useState<{ approved: boolean } | null>(null);
 
   const handleApprove = async () => {
-    setResolving(true);
+    setLocalResolved({ approved: true });
     data._onResolve?.(data.escalation_id, true, "");
   };
 
   const handleDeny = async () => {
-    setResolving(true);
+    setLocalResolved({ approved: false });
     data._onResolve?.(data.escalation_id, false, denyComment);
   };
 
-  const isResolved = data.resolved;
+  const isResolved = data.resolved || localResolved !== null;
+  const wasApproved = data.approved ?? localResolved?.approved;
 
   return (
-    <MessageWrapper type="tool-call">
+    <MessageWrapper type={isResolved ? "tool-result" : "tool-call"}>
       <BaseMessage
         headerLeft={
           <div className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-amber-500" />
-            <span>Approval Required: {data.tool_name}</span>
+            <ShieldAlert className={`h-4 w-4 ${isResolved ? (wasApproved ? "text-green-500" : "text-red-500") : "text-amber-500"}`} />
+            <span>{data.tool_name}</span>
           </div>
         }
         headerRight={
           isResolved ? (
-            <span className={data.approved ? "text-green-600" : "text-red-600"}>
-              {data.approved ? "Approved" : "Denied"}
+            <span className={wasApproved ? "text-green-600" : "text-red-600"}>
+              {wasApproved ? "Approved" : "Denied"}
             </span>
           ) : (
-            <span className="animate-pulse text-amber-600">Waiting...</span>
+            <span className="animate-pulse text-amber-600">Awaiting approval</span>
           )
         }
-        collapsed={false}
+        collapsed={isResolved}
       >
         <div className="space-y-3">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {data.message}
-          </p>
+          {!isResolved && (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {data.message}
+            </p>
+          )}
 
-          {Object.keys(data.arguments || {}).length > 0 && (
+          {!isResolved && Object.keys(data.arguments || {}).length > 0 && (
             <details className="cursor-pointer text-xs text-gray-500">
               <summary className="hover:text-gray-700 dark:hover:text-gray-300">
                 Arguments
@@ -76,7 +82,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
             </details>
           )}
 
-          {!isResolved && !resolving && (
+          {!isResolved && (
             <div className="flex items-start gap-2">
               <Button
                 size="sm"
@@ -127,11 +133,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
             </div>
           )}
 
-          {resolving && !isResolved && (
-            <p className="animate-pulse text-sm text-gray-500">Sending decision...</p>
-          )}
-
-          {isResolved && !data.approved && data.deny_comment && (
+          {isResolved && !wasApproved && data.deny_comment && (
             <p className="text-sm text-red-600">
               Reason: {data.deny_comment}
             </p>

@@ -85,11 +85,17 @@ export async function loadAgentEditData(
         .filter((t: any) => t.type === "mcp")
         .map((t: any) => {
           const settings = t.settings || {};
-          // Transform backend allowed_tools (string[]) to form format (MCPToolConfig[])
-          const allowedTools = (settings.allowed_tools || []).map((name: string) => ({
-            tool_name: name,
-            requires_user_confirmation: settings.requires_user_confirmation ?? false,
-          }));
+          // Transform backend allowed_tools to form format (MCPToolConfig[])
+          // Handles both string[] (legacy) and {tool_name, requires_user_confirmation}[] (new)
+          const allowedTools = (settings.allowed_tools || []).map((item: any) => {
+            if (typeof item === "string") {
+              return { tool_name: item, requires_user_confirmation: false };
+            }
+            return {
+              tool_name: item.tool_name || item,
+              requires_user_confirmation: item.requires_user_confirmation ?? false,
+            };
+          });
           return {
             mcp_server_id: settings.mcp_server_id || t.name,
             allowed_tools: allowedTools,

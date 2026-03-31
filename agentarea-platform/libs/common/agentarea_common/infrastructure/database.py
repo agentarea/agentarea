@@ -101,7 +101,10 @@ class Database:
         try:
             yield session
         finally:
-            await session.close()
+            try:
+                await session.close()
+            except Exception:
+                pass  # Session may be in inconsistent state on client disconnect
 
 
 # Create global instances

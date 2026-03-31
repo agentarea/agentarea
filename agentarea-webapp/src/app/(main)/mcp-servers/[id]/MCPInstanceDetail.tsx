@@ -77,7 +77,7 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     container_status: string;
   } | null>(null);
 
-  const canStart = instance.status !== "running" && instance.status !== "starting";
+  const canStart = instance.status !== "running" && instance.status !== "starting" && instance.status !== "connected";
   const canStop = instance.status === "running" || instance.status === "starting";
 
   const [isBundleStarting, setIsBundleStarting] = useState(false);
@@ -250,8 +250,8 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
               )}
             </div>
 
-            {/* Connection URL - Show when running, or always for URL-type/bundle-type */}
-            {(instance.status === "running" || isUrlType || isBundleType) && (
+            {/* Connection URL - Show when running/connected, or always for URL-type/bundle-type */}
+            {(instance.status === "running" || instance.status === "connected" || isUrlType || isBundleType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4 text-muted-foreground" />

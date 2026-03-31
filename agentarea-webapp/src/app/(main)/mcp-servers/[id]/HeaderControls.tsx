@@ -27,7 +27,7 @@ export default function MCPInstanceHeaderControls({
   const t = useTranslations("MCPServersPage.instanceDetail");
   const [isActioning, setIsActioning] = useState(false);
 
-  const canStart = status !== "running" && status !== "starting";
+  const canStart = status !== "running" && status !== "starting" && status !== "connected";
   const canStop = status === "running" || status === "starting";
 
   const handleStart = async () => {

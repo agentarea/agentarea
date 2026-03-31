@@ -11,6 +11,78 @@ import {
 import { getTaskEvents } from "./actions";
 import { useSSE } from "./useSSE";
 
+/**
+ * FIXME: This entire event pipeline needs a major refactor.
+ * Current flow: raw events → dedup (here) → mapTaskEventToDisplayEvent → EventParser → MessageRenderer
+ * That's 4 transformation layers, each creating new arrays, running on every render.
+ *
+ * Should be: normalize once on load into a single event model with status (pending/resolved),
+ * merge related events server-side or in a single pass, and render directly.
+ *
+ * Also: events are mutated in place (e.metadata = {...}) which is a React anti-pattern.
+ */
+function deduplicateHistoryEvents(events: any[]): any[] {
+  // Index resolved escalations
+  const resolvedEscalations = new Map<string, { approved: boolean; comment?: string }>();
+  for (const e of events) {
+    if (e.event_type === "HumanApprovalReceived" || e.event_type === "HumanApprovalDenied") {
+      const eid = e.metadata?.escalation_id || "";
+      if (eid) {
+        resolvedEscalations.set(eid, {
+          approved: e.event_type === "HumanApprovalReceived",
+          comment: e.metadata?.comment,
+        });
+      }
+    }
+  }
+
+  // Index completed tool calls
+  const completedToolCallIds = new Set(
+    events
+      .filter((e) => e.event_type === "ToolCallCompleted")
+      .map((e) => e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "")
+      .filter(Boolean)
+  );
+
+  // Index tool_call_ids that went through approval (so we can hide their ToolCallCompleted)
+  const approvalToolCallIds = new Set(
+    events
+      .filter((e) => e.event_type === "HumanApprovalRequested")
+      .map((e) => e.metadata?.tool_call_id || "")
+      .filter(Boolean)
+  );
+
+  return events.filter((e) => {
+    // Remove ToolCallStarted if completed exists
+    if (e.event_type === "ToolCallStarted") {
+      const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
+      return !completedToolCallIds.has(tcId);
+    }
+
+    // Remove ToolCallCompleted if it was approval-gated (merged into approval entry)
+    if (e.event_type === "ToolCallCompleted") {
+      const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
+      if (approvalToolCallIds.has(tcId)) return false;
+    }
+
+    // Remove standalone resolution events (merged into request)
+    if (e.event_type === "HumanApprovalReceived" || e.event_type === "HumanApprovalDenied") {
+      return false;
+    }
+
+    // Merge resolution into HumanApprovalRequested
+    if (e.event_type === "HumanApprovalRequested") {
+      const eid = e.metadata?.escalation_id || "";
+      const resolution = resolvedEscalations.get(eid);
+      if (resolution) {
+        e.metadata = { ...e.metadata, resolved: true, approved: resolution.approved, deny_comment: resolution.comment };
+      }
+    }
+
+    return true;
+  });
+}
+
 export function useTaskEvents(
   agentId: string | null,
   taskId: string | null,
@@ -82,7 +154,10 @@ export function useTaskEvents(
         throw new Error(error?.toString() || "Failed to load events");
       }
 
-      const historicalEvents = data.events.map(mapTaskEventToDisplayEvent);
+      // FIXME: Event dedup should be handled by a proper event model with
+      // status transitions, not client-side filtering. This is a temporary fix.
+      const dedupedEvents = deduplicateHistoryEvents(data.events);
+      const historicalEvents = dedupedEvents.map(mapTaskEventToDisplayEvent);
 
       eventsRef.current = historicalEvents;
       loadedHistory.current = true;
@@ -355,7 +430,10 @@ export function useTaskEvents(
           throw new Error(error?.toString() || "Failed to load events");
         }
 
-        const historicalEvents = data.events.map(mapTaskEventToDisplayEvent);
+        // FIXME: Event dedup should be handled by a proper event model with
+      // status transitions, not client-side filtering. This is a temporary fix.
+      const dedupedEvents = deduplicateHistoryEvents(data.events);
+      const historicalEvents = dedupedEvents.map(mapTaskEventToDisplayEvent);
 
         eventsRef.current = historicalEvents;
         loadedHistory.current = true;

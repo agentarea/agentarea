@@ -283,6 +283,9 @@ export const parseEventToMessage = (
           tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
           arguments: originalData.arguments || eventData.arguments || {},
           message: originalData.message || eventData.message || "Approval required",
+          resolved: eventData.resolved ?? originalData.resolved ?? false,
+          approved: eventData.approved ?? originalData.approved,
+          deny_comment: eventData.deny_comment ?? originalData.deny_comment,
         },
       };
     }
@@ -307,7 +310,6 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "ToolCallStarted",
     "ToolCallCompleted",
     "ToolCallFailed",
-    "WorkflowStarted",
     "WorkflowCompleted",
     "WorkflowFailed",
     "task_completed",

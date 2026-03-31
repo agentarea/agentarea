@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Table from "@/components/Table/Table";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
+import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
 import { Agent } from "@/types";
 import { getToolAvatars } from "@/utils/toolsDisplay";
@@ -52,6 +53,19 @@ export default function AgentsList({
           modelDisplayName={value?.model_display_name}
           configName={value?.config_name}
         />
+      ),
+    },
+    {
+      accessor: "active_task_count",
+      header: t("activeTasks") || "Active Tasks",
+      render: (value: number) => (
+        value > 0 ? (
+          <Badge variant="blue" className="text-xs">
+            {value}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )
       ),
     },
     {

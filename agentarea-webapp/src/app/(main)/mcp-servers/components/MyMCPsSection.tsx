@@ -92,6 +92,13 @@ export function MyMCPsSection({
   // Get status badge component
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "connected":
+        return (
+          <Badge variant="teal" className="w-fit">
+            <CheckCircle className="mr-1 h-3 w-3" />
+            {t("status.connected")}
+          </Badge>
+        );
       case "healthy":
       case "running":
         return (

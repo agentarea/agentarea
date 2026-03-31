@@ -53,6 +53,7 @@ class TaskResponse(BaseModel):
     result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None  # Workflow execution ID
+    total_cost: float | None = None  # LLM token cost in USD
 
     @classmethod
     def create_new(
@@ -88,6 +89,7 @@ class TaskWithAgent(BaseModel):
     result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None
+    total_cost: float | None = None  # LLM token cost in USD
 
     @classmethod
     def from_task_response(cls, task: TaskResponse, agent_name: str) -> "TaskWithAgent":
@@ -102,6 +104,7 @@ class TaskWithAgent(BaseModel):
             result=task.result,
             created_at=task.created_at,
             execution_id=task.execution_id,
+            total_cost=task.total_cost,
         )
 
 
@@ -136,6 +139,8 @@ async def get_all_tasks(
         all_tasks: list[TaskWithAgent] = []
         for task_orm in task_orms:
             task = task_service.task_repository._orm_to_domain(task_orm)
+            result_dict = task.result if isinstance(task.result, dict) else None
+            total_cost = result_dict.get("total_cost") if result_dict else None
             all_tasks.append(
                 TaskWithAgent(
                     id=task.id,
@@ -147,6 +152,7 @@ async def get_all_tasks(
                     result=task.result,
                     created_at=task.created_at,
                     execution_id=task.execution_id,
+                    total_cost=total_cost,
                 )
             )
 
@@ -184,6 +190,8 @@ async def get_task_by_id(
 
         task = task_service.task_repository._orm_to_domain(task_orm)
         agent = await agent_service.get(task.agent_id)
+        result_dict = task.result if isinstance(task.result, dict) else None
+        total_cost = result_dict.get("total_cost") if result_dict else None
 
         return TaskWithAgent(
             id=task.id,
@@ -195,6 +203,7 @@ async def get_task_by_id(
             result=task.result,
             created_at=task.created_at,
             execution_id=task.execution_id,
+            total_cost=total_cost,
         )
     except HTTPException:
         raise

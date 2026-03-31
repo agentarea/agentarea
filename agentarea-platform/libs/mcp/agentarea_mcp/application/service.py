@@ -253,7 +253,7 @@ class MCPServerInstanceService:
             "description": description,
             "server_spec_id": server_spec_id,
             "json_spec": spec,
-            "status": "running" if is_url_type else "pending",
+            "status": "connected" if is_url_type else "pending",
         }
         if auth_config_id:
             create_kwargs["auth_config_id"] = auth_config_id
@@ -517,6 +517,38 @@ class MCPServerInstanceService:
 
             instance.set_available_tools(tools)
             new_json_spec = dict(instance.json_spec)
+
+            # Compute tools hash for change detection
+            import hashlib
+            import json as _json
+            from datetime import datetime as _dt, timezone as _tz
+
+            sorted_sigs = sorted(
+                [
+                    {
+                        "name": tool["name"],
+                        "description": tool["description"],
+                        "inputSchema": tool["inputSchema"],
+                    }
+                    for tool in tools
+                ],
+                key=lambda x: x["name"],
+            )
+            tools_hash = hashlib.sha256(
+                _json.dumps(sorted_sigs, sort_keys=True).encode()
+            ).hexdigest()
+
+            previous_hash = new_json_spec.get("tools_hash")
+            tools_changed = previous_hash != tools_hash
+            if tools_changed and previous_hash is not None:
+                logger.info(
+                    "Tools changed for instance %s: %s -> %s",
+                    instance_id, previous_hash[:12], tools_hash[:12],
+                )
+
+            new_json_spec["tools_hash"] = tools_hash
+            new_json_spec["tools_updated_at"] = _dt.now(_tz.utc).isoformat()
+            new_json_spec["tools_changed"] = tools_changed
 
             from sqlalchemy import update as sa_update
 

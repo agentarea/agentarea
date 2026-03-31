@@ -28,6 +28,7 @@ import {
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
+import { resolveEscalationAction } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
@@ -36,6 +37,16 @@ export default function TaskDetailsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  const handleResolveEscalation = async (escalationId: string, approved: boolean, comment: string) => {
+    if (!task) return;
+    try {
+      await resolveEscalationAction(task.agent_id, task.id, escalationId, approved, comment);
+      refresh();
+    } catch (e) {
+      console.error("Failed to resolve escalation:", e);
+    }
+  };
 
   // Events hook for real-time events + historical replay
   const {
@@ -232,6 +243,7 @@ export default function TaskDetailsPage() {
                   key={`${message.data.id}-${message.data.event_type}-${index}`}
                   message={message}
                   agent_name={task.agent_name || undefined}
+                  onResolveEscalation={handleResolveEscalation}
                 />
               ))}
 

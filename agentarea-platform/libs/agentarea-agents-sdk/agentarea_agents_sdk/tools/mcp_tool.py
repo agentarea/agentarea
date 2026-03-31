@@ -171,33 +171,26 @@ class MCPToolFactory:
                 )
                 return []
 
-            # Try multiple discovery method names to maximize compatibility
-            discovery_method_names = [
-                "list_tools",
-                "get_tools",
-                "discover_tools",
-                "discover_available_tools",
-            ]
-            tools_data = None
-            for method_name in discovery_method_names:
-                fn = getattr(mcp_server_instance_service, method_name, None)
-                if callable(fn):
-                    logger.info(
-                        f"Discovering MCP tools via service.{method_name} for {server_instance_id}"
-                    )
-                    try:
-                        maybe_tools = await fn(server_instance_id)
-                        if maybe_tools:
-                            tools_data = maybe_tools
-                            break
-                    except Exception as e:  # continue trying other methods
-                        logger.warning(
-                            f"Service.{method_name} failed for {server_instance_id}: {e}"
-                        )
+            # Read discovered tools from instance's json_spec
+            json_spec = getattr(server_instance, "json_spec", None) or {}
+            tools_data = json_spec.get("available_tools")
 
-            if tools_data is None:
+            if not tools_data:
+                # Fallback: try service discovery methods
+                for method_name in ["list_tools", "get_tools", "discover_tools"]:
+                    fn = getattr(mcp_server_instance_service, method_name, None)
+                    if callable(fn):
+                        try:
+                            maybe_tools = await fn(server_instance_id)
+                            if maybe_tools:
+                                tools_data = maybe_tools
+                                break
+                        except Exception as e:
+                            logger.warning(f"Service.{method_name} failed for {server_instance_id}: {e}")
+
+            if not tools_data:
                 logger.warning(
-                    f"MCP tool discovery not implemented on service for server {server_instance_id}"
+                    f"No tools found for MCP server instance {server_instance_id}"
                 )
                 return []
 
@@ -226,7 +219,8 @@ class MCPToolFactory:
                     description = t.get("description", f"MCP tool: {name}")
                     # Support different schema keys
                     schema = (
-                        t.get("schema")
+                        t.get("inputSchema")
+                        or t.get("schema")
                         or t.get("parameters")
                         or {"parameters": {"type": "object", "properties": {}}}
                     )

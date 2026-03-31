@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Bot, Check, Settings, User } from "lucide-react";
+import { Bot, Check, Plug, User, Wrench } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -56,15 +56,9 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
           ) : type === "user" ? (
             <User className="h-4 w-4 text-primary dark:text-accent" />
           ) : type === "tool-call" ? (
-            <Settings
-              className="h-4 w-4 text-white dark:text-zinc-900"
-              style={{
-                animation: "spin 2.5s linear infinite",
-                transformOrigin: "center",
-              }}
-            />
+            <Wrench className="h-4 w-4 text-white dark:text-zinc-900 animate-pulse" />
           ) : type === "tool-result" ? (
-            <Check className="h-4 w-4 text-green-500" />
+            <Wrench className="h-4 w-4 text-green-500" />
           ) : (
             <Bot className="h-4 w-4 text-text" />
           )}

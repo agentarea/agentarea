@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Bot, Calendar, Clock } from "lucide-react";
+import { Bot, Calendar, Clock, DollarSign } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +67,22 @@ export default function TasksList({
           </Badge>
         );
       },
+    },
+    {
+      accessor: "total_cost",
+      header: t("cost"),
+      render: (value: number | null | undefined) => (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {value != null ? (
+            <>
+              <DollarSign className="h-3 w-3" />
+              <span className="font-mono">{value.toFixed(4)}</span>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
+      ),
     },
     {
       accessor: "created_at",
