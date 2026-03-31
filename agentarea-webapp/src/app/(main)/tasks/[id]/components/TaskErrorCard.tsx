@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -6,6 +9,8 @@ interface TaskErrorCardProps {
 }
 
 export default function TaskErrorCard({ errorMessage }: TaskErrorCardProps) {
+  const t = useTranslations("TaskErrorCard");
+
   if (!errorMessage) {
     return null;
   }
@@ -15,11 +20,10 @@ export default function TaskErrorCard({ errorMessage }: TaskErrorCardProps) {
       <CardContent className="pb-3 pt-3">
         <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-4 w-4" />
-          <span className="text-sm font-medium">Error</span>
+          <span className="text-sm font-medium">{t("error")}</span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{errorMessage}</p>
       </CardContent>
     </Card>
   );
 }
-

@@ -1,29 +1,32 @@
+"use client";
+
 import { Suspense } from "react";
-import ContentBlock from "@/components/ContentBlock";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import NetworkClient from "./NetworkClient";
+import NetworkClient, { NetworkHeaderTabs } from "./NetworkClient";
+import { NetworkProvider } from "./NetworkProvider";
 
-export const metadata = {
-  title: "Network",
-};
-
-export default async function NetworkPage() {
+export default function NetworkPage() {
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [{ label: "Network" }],
-        description: "Visual overview of your workspace topology",
-      }}
-    >
-      <Suspense
-        fallback={
-          <div className="flex h-[calc(100vh-12rem)] items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
+    <NetworkProvider>
+      <ContentBlock
+        header={{
+          breadcrumb: [{ label: "Network" }],
+          description: "Visual overview of your workspace topology",
+        }}
+        subheader={<NetworkHeaderTabs />}
+        className="p-0"
       >
-        <NetworkClient />
-      </Suspense>
-    </ContentBlock>
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          }
+        >
+          <NetworkClient />
+        </Suspense>
+      </ContentBlock>
+    </NetworkProvider>
   );
 }

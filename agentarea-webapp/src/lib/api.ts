@@ -72,8 +72,6 @@ export const {
   getProviderConfig,
   updateProviderConfig,
   deleteProviderConfig,
-  discoverModels,
-  discoverModelsPreview,
 
   // Model Spec API
   listModelSpecs,
@@ -158,16 +156,6 @@ export const {
   // Network API
   getNetworkTopology,
 
-  // Compound MCP API
-  listCompoundMCPs,
-  getCompoundMCP,
-  createCompoundMCP,
-  updateCompoundMCP,
-  deleteCompoundMCP,
-  listCompoundMCPMembers,
-  addCompoundMCPMember,
-  removeCompoundMCPMember,
-
   // Project API
   listProjects,
   getProject,
@@ -189,8 +177,14 @@ export const {
   downloadProjectFile,
   deleteProjectFile,
 
-  // Audit Logs API
-  listAuditLogs,
+  // Wallet API
+  getAgentWallet,
+  createAgentWallet,
+  updateAgentWallet,
+  deleteAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  fundAgentWallet,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -220,11 +214,23 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
 };
 
 export const getAllTasks = async () => {
-  return await api.getAllTasks();
-};
+  const { data: agents, error: agentsError } = await listAgents();
+  if (agentsError || !agents) return { data: null, error: agentsError };
 
-export const getTask = async (taskId: string) => {
-  return await api.getTask(taskId);
+  const tasks = await Promise.all(
+    agents.map(async (agent: any) => {
+      const { data: agentTasks, error } = await listAgentTasks(agent.id);
+      if (error || !agentTasks) return [];
+
+      return agentTasks.map((task: any) => ({
+        ...task,
+        agent_name: agent.name,
+        agent_description: agent.description,
+      }));
+    })
+  );
+
+  return { data: tasks.flat(), error: null };
 };
 
 export const listProviderConfigsWithModelInstances = async (params?: {
@@ -299,3 +305,9 @@ export type TaskWithAgent = TaskResponse & {
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
+
+// Wallet types
+export type WalletResponse = components["schemas"]["WalletResponse"];
+export type WalletBalanceResponse = components["schemas"]["WalletBalanceResponse"];
+export type PaymentRecordResponse = components["schemas"]["PaymentRecordResponse"];
+export type PaginatedPaymentsResponse = components["schemas"]["PaginatedPaymentsResponse"];

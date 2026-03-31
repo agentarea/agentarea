@@ -29,6 +29,12 @@ export const EVENT_HUMAN_APPROVAL_DENIED = "HumanApprovalDenied";
 export const EVENT_CONTEXT_WARNING = "ContextWarning";
 export const EVENT_CONTEXT_COMPACTED = "ContextCompacted";
 
+// A2UI events (v0.9 protocol)
+export const EVENT_A2UI_CREATE_SURFACE = "A2UICreateSurface";
+export const EVENT_A2UI_UPDATE_COMPONENTS = "A2UIUpdateComponents";
+export const EVENT_A2UI_UPDATE_DATA_MODEL = "A2UIUpdateDataModel";
+export const EVENT_A2UI_DELETE_SURFACE = "A2UIDeleteSurface";
+
 // System events
 export const EVENT_CONNECTED = "connected";
 export const EVENT_TASK_CREATED = "task_created";
@@ -65,6 +71,12 @@ export const CANONICAL_EVENT_TYPES = {
   // Context
   CONTEXT_WARNING: EVENT_CONTEXT_WARNING,
   CONTEXT_COMPACTED: EVENT_CONTEXT_COMPACTED,
+
+  // A2UI
+  A2UI_CREATE_SURFACE: EVENT_A2UI_CREATE_SURFACE,
+  A2UI_UPDATE_COMPONENTS: EVENT_A2UI_UPDATE_COMPONENTS,
+  A2UI_UPDATE_DATA_MODEL: EVENT_A2UI_UPDATE_DATA_MODEL,
+  A2UI_DELETE_SURFACE: EVENT_A2UI_DELETE_SURFACE,
 
   // System
   CONNECTED: EVENT_CONNECTED,

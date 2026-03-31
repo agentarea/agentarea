@@ -478,27 +478,24 @@ class LLMModel:
                                     tool_calls_buffer[index]["function"]["arguments"] = (
                                         current_args + new_args
                                     )
-                # Extract usage and cost from final chunk if available
+                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
+                if hasattr(chunk, "_hidden_params"):
+                    hidden = chunk._hidden_params
+                    rc = (hidden.get("response_cost", 0.0) if isinstance(hidden, dict)
+                          else getattr(hidden, "response_cost", 0.0)) or 0.0
+                    if rc > 0.0:
+                        cost = rc
+
+                # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-
-                    # Prefer LiteLLM's _hidden_params.response_cost (most accurate)
-                    chunk_cost = 0.0
-                    if hasattr(chunk, "_hidden_params"):
-                        hidden = chunk._hidden_params
-                        if isinstance(hidden, dict):
-                            chunk_cost = hidden.get("response_cost", 0.0) or 0.0
-                        elif hasattr(hidden, "response_cost"):
-                            chunk_cost = getattr(hidden, "response_cost", 0.0) or 0.0
-
-                    if chunk_cost > 0.0:
-                        cost = chunk_cost
-                    elif hasattr(usage_info, "completion_tokens_cost"):
-                        cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                        if hasattr(usage_info, "prompt_tokens_cost"):
-                            cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                    elif hasattr(usage_info, "total_tokens"):
-                        cost = getattr(usage_info, "total_tokens", 0) * 0.00001
+                    if cost == 0.0:
+                        if hasattr(usage_info, "completion_tokens_cost"):
+                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            if hasattr(usage_info, "prompt_tokens_cost"):
+                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        elif hasattr(usage_info, "total_tokens"):
+                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
             # Convert tool calls buffer to final format
             if tool_calls_buffer:
@@ -692,27 +689,24 @@ class LLMModel:
                                     )
                             tool_calls_updated = True
 
-                # Extract usage and cost from final chunk if available
+                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
+                if hasattr(chunk, "_hidden_params"):
+                    hidden = chunk._hidden_params
+                    rc = (hidden.get("response_cost", 0.0) if isinstance(hidden, dict)
+                          else getattr(hidden, "response_cost", 0.0)) or 0.0
+                    if rc > 0.0:
+                        cost = rc
+
+                # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-
-                    # Prefer LiteLLM's _hidden_params.response_cost (most accurate)
-                    chunk_cost = 0.0
-                    if hasattr(chunk, "_hidden_params"):
-                        hidden = chunk._hidden_params
-                        if isinstance(hidden, dict):
-                            chunk_cost = hidden.get("response_cost", 0.0) or 0.0
-                        elif hasattr(hidden, "response_cost"):
-                            chunk_cost = getattr(hidden, "response_cost", 0.0) or 0.0
-
-                    if chunk_cost > 0.0:
-                        cost = chunk_cost
-                    elif hasattr(usage_info, "completion_tokens_cost"):
-                        cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                        if hasattr(usage_info, "prompt_tokens_cost"):
-                            cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                    elif hasattr(usage_info, "total_tokens"):
-                        cost = getattr(usage_info, "total_tokens", 0) * 0.00001
+                    if cost == 0.0:
+                        if hasattr(usage_info, "completion_tokens_cost"):
+                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            if hasattr(usage_info, "prompt_tokens_cost"):
+                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        elif hasattr(usage_info, "total_tokens"):
+                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
                 # Provide current tool call state if updated this chunk
                 if tool_calls_updated:

@@ -74,6 +74,7 @@ export interface AddAgentFormState {
       }> | null;
     } | null;
     planning?: boolean;
+    a2ui_enabled?: boolean;
     skill_ids?: string[] | null;
     id?: string;
   };

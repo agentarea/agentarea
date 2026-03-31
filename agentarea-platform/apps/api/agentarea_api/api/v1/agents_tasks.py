@@ -21,9 +21,22 @@ from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class A2UIActionPayload(BaseModel):
+    """Validated A2UI action payload from the frontend."""
+
+    name: str = Field(..., max_length=128)
+    surface_id: str = Field(..., max_length=64)
+    source_component_id: str = Field("", max_length=128)
+    context: dict = Field(default_factory=dict)
+
+    model_config = {"extra": "forbid"}
+
+
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
 # Global tasks router (not agent-specific)
@@ -710,6 +723,55 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+@router.post("/{task_id}/a2ui/action")
+async def send_a2ui_action(
+    agent_id: UUID,
+    task_id: UUID,
+    action: A2UIActionPayload,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Send an A2UI user action to a running task workflow."""
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if not getattr(agent, "a2ui_enabled", False):
+        raise HTTPException(status_code=400, detail="Agent does not have A2UI enabled")
+
+    try:
+        execution_id = f"agent-task-{task_id}"
+        status = await workflow_task_service.get_workflow_status(execution_id)
+
+        if status.get("status") == "unknown":
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        current_status = status.get("status", "").lower()
+        if current_status in ["completed", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400, detail=f"Cannot send action to task in '{current_status}' state"
+            )
+
+        success = await workflow_task_service.send_a2ui_action(execution_id, action.model_dump())
+
+        if success:
+            return {
+                "status": "accepted",
+                "task_id": str(task_id),
+                "action_name": action.name,
+                "message": "Action sent to workflow",
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send action to workflow")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
 @router.post("/{task_id}/resolve-escalation")
 async def resolve_task_escalation(
     agent_id: UUID,
@@ -981,6 +1043,7 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
         if (
             original_event_type.startswith("ToolCall")
             or original_event_type.startswith("LLMCall")
+            or original_event_type.startswith("A2UI")
             or "tool_name" in str(data.get("original_data", {}))
         ):
             # Extract original_data and merge it with filtered domain fields

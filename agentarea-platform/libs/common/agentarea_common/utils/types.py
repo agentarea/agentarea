@@ -275,6 +275,7 @@ class AgentCapabilities(BaseModel):
     streaming: bool = False
     push_notifications: bool = Field(False, alias="pushNotifications")
     state_transition_history: bool = Field(False, alias="stateTransitionHistory")
+    extensions: list[dict[str, Any]] | None = None
 
 
 class AgentAuthentication(BaseModel):

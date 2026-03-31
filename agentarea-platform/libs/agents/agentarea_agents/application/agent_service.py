@@ -51,6 +51,7 @@ class AgentService(BaseCrudService[Agent]):
         tools: dict | list | None = None,
         events_config: dict | None = None,
         planning: bool | None = None,
+        a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
         agent_type: str = "stateless",
     ) -> Agent:
@@ -62,6 +63,7 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             events_config=events_config,
             planning=planning,
+            a2ui_enabled=a2ui_enabled,
             agent_type=agent_type,
         )
         agent = await self.create(agent)
@@ -80,6 +82,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
+                a2ui_enabled=agent.a2ui_enabled,
             )
         )
 
@@ -96,6 +99,7 @@ class AgentService(BaseCrudService[Agent]):
         tools: dict | list | None = None,
         events_config: dict | None = None,
         planning: str | None = None,
+        a2ui_enabled: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
         agent_type: str | None = None,
     ) -> Agent | None:
@@ -119,6 +123,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.events_config = events_config
         if planning is not None:
             agent.planning = planning
+        if a2ui_enabled is not None:
+            agent.a2ui_enabled = a2ui_enabled
         if agent_type is not None:
             agent.agent_type = agent_type
 
@@ -138,6 +144,7 @@ class AgentService(BaseCrudService[Agent]):
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
+                a2ui_enabled=agent.a2ui_enabled,
             )
         )
 

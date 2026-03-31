@@ -115,3 +115,89 @@ export function getToolsList(agent: Agent): string {
 export function getToolsForDisplay(agent: Agent): ToolAvatar[] {
   return getToolAvatars(agent);
 }
+
+/**
+ * Extract tools from agent's tools array (new format) or tools_config (legacy format)
+ * Used in network topology display
+ */
+export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
+  const toolAvatars: ToolAvatar[] = [];
+
+  if (!toolsConfig) {
+    return toolAvatars;
+  }
+
+  // New format: array of { type, name, settings }
+  if (Array.isArray(toolsConfig)) {
+    for (const tool of toolsConfig) {
+      if (typeof tool === "object" && tool.name) {
+        if (tool.type === "code" || tool.type === "builtin") {
+          const iconUrl =
+            BUILTIN_TOOL_ICONS[tool.name] || BUILTIN_TOOL_ICONS.calculator;
+          toolAvatars.push({
+            imageUrl: iconUrl,
+            name: tool.name,
+            type: "builtin",
+          });
+        } else if (tool.type === "mcp") {
+          const serverId = tool.name.toLowerCase();
+          const iconUrl =
+            MCP_SERVER_ICONS[serverId] || MCP_SERVER_ICONS.default;
+          toolAvatars.push({
+            imageUrl: iconUrl,
+            name: tool.name,
+            type: "mcp",
+          });
+        }
+      }
+    }
+    return toolAvatars;
+  }
+
+  // Legacy format: { builtin_tools: [], mcp_server_configs: [] }
+  if (typeof toolsConfig === "object") {
+    if (toolsConfig.builtin_tools && Array.isArray(toolsConfig.builtin_tools)) {
+      for (const tool of toolsConfig.builtin_tools) {
+        if (typeof tool === "object" && tool.tool_name) {
+          const iconUrl =
+            BUILTIN_TOOL_ICONS[tool.tool_name] || BUILTIN_TOOL_ICONS.calculator;
+          toolAvatars.push({
+            imageUrl: iconUrl,
+            name: tool.tool_name,
+            type: "builtin",
+          });
+        }
+      }
+    }
+
+    if (
+      toolsConfig.mcp_server_configs &&
+      Array.isArray(toolsConfig.mcp_server_configs)
+    ) {
+      for (const serverConfig of toolsConfig.mcp_server_configs) {
+        if (typeof serverConfig === "object" && serverConfig.mcp_server_id) {
+          const serverId = serverConfig.mcp_server_id.toLowerCase();
+          const iconUrl =
+            MCP_SERVER_ICONS[serverId] || MCP_SERVER_ICONS.default;
+          toolAvatars.push({
+            imageUrl: iconUrl,
+            name: serverConfig.mcp_server_id,
+            type: "mcp",
+          });
+        }
+      }
+    }
+  }
+
+  return toolAvatars;
+}
+
+/**
+ * Convert tools config to avatar URLs (for network topology)
+ */
+export function getToolAvatarUrlsFromConfig(
+  toolsConfig: any
+): { imageUrl: string }[] {
+  const toolAvatars = getToolsFromConfig(toolsConfig);
+  return toolAvatars.map((tool) => ({ imageUrl: tool.imageUrl }));
+}

@@ -1,5 +1,6 @@
 import React from "react";
 import { Streamdown } from "streamdown";
+import { stripA2UIFromStreamingContent } from "../utils/messageAccumulator";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
 
@@ -32,7 +33,7 @@ const LLMChunkMessage: React.FC<{
             } as any
           }
         >
-          {data.chunk}
+          {stripA2UIFromStreamingContent(data.chunk)}
         </Streamdown>
       </BaseMessage>
     </MessageWrapper>

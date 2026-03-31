@@ -65,6 +65,12 @@ class EventType(StrEnum):
     MCP_SERVER_UNHEALTHY = "mcp.server.unhealthy"
     MCP_SERVER_RECOVERED = "mcp.server.recovered"
 
+    # A2UI (Agent-to-User Interface) events — v0.9 protocol messages
+    A2UI_CREATE_SURFACE = "workflow.A2UICreateSurface"
+    A2UI_UPDATE_COMPONENTS = "workflow.A2UIUpdateComponents"
+    A2UI_UPDATE_DATA_MODEL = "workflow.A2UIUpdateDataModel"
+    A2UI_DELETE_SURFACE = "workflow.A2UIDeleteSurface"
+
     # System and heartbeat events
     HEARTBEAT = "heartbeat"
     SYSTEM_ERROR = "system.error"
@@ -319,6 +325,57 @@ class MCPServerFailedEvent(MCPEvent):
     retry_count: int = Field(default=0, description="Number of retry attempts")
 
 
+# --- A2UI Events (v0.9 protocol) ---
+
+
+class A2UICreateSurfaceEvent(WorkflowEvent):
+    """Initialize an A2UI surface. Must be sent before any component or data updates."""
+
+    event_type: Literal[EventType.A2UI_CREATE_SURFACE] = EventType.A2UI_CREATE_SURFACE
+    surface_id: str = Field(..., description="Unique surface identifier")
+    catalog_id: str = Field(
+        default="https://a2ui.org/specification/v0_9/basic_catalog.json",
+        description="URI of the component catalog the client must support",
+    )
+    theme: dict[str, Any] | None = Field(
+        None, description="Visual configuration (primaryColor, agentDisplayName, iconUrl)"
+    )
+    send_data_model: bool = Field(
+        default=False,
+        description="If true, client includes full data model with every action",
+    )
+
+
+class A2UIUpdateComponentsEvent(WorkflowEvent):
+    """Add or update components on an existing surface (upsert by id)."""
+
+    event_type: Literal[EventType.A2UI_UPDATE_COMPONENTS] = EventType.A2UI_UPDATE_COMPONENTS
+    surface_id: str = Field(..., description="Target surface identifier")
+    components: list[dict[str, Any]] = Field(
+        ...,
+        description=(
+            "Flat adjacency-list of components. Each item has 'id', 'component' (type name), "
+            "and type-specific props. Children are referenced by ID string, not nested."
+        ),
+    )
+
+
+class A2UIUpdateDataModelEvent(WorkflowEvent):
+    """Update the data model for a surface at a JSON Pointer path (RFC 6901)."""
+
+    event_type: Literal[EventType.A2UI_UPDATE_DATA_MODEL] = EventType.A2UI_UPDATE_DATA_MODEL
+    surface_id: str = Field(..., description="Target surface identifier")
+    path: str = Field(default="/", description="JSON Pointer path to update (RFC 6901)")
+    value: Any = Field(None, description="Value to set; omit to delete the key at path")
+
+
+class A2UIDeleteSurfaceEvent(WorkflowEvent):
+    """Remove a surface and release all associated state."""
+
+    event_type: Literal[EventType.A2UI_DELETE_SURFACE] = EventType.A2UI_DELETE_SURFACE
+    surface_id: str = Field(..., description="Surface identifier to delete")
+
+
 # --- System Events ---
 
 
@@ -360,6 +417,10 @@ DomainEventModel = (
     | ToolExecutionFailedEvent
     | AgentMessageSentEvent
     | AgentMessageReceivedEvent
+    | A2UICreateSurfaceEvent
+    | A2UIUpdateComponentsEvent
+    | A2UIUpdateDataModelEvent
+    | A2UIDeleteSurfaceEvent
     | MCPServerCreateRequestedEvent
     | MCPServerReadyEvent
     | MCPServerFailedEvent

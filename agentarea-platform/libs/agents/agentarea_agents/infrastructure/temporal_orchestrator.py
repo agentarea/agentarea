@@ -227,6 +227,20 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             logger.error(f"Failed to resume workflow: {e}")
             return False
 
+    async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
+        """Send an A2UI user action to a running workflow via signal."""
+        client = await self._get_client()
+
+        try:
+            handle = client.get_workflow_handle(execution_id)
+            await handle.signal("handle_a2ui_action", action_data)
+            logger.info(f"Sent A2UI action to workflow: {execution_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send A2UI action: {e}")
+            return False
+
     async def resolve_escalation_workflow(
         self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
     ) -> bool:

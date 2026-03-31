@@ -6,6 +6,7 @@ import {
   InfoPanelSection,
   InfoPanelValueBox,
 } from "@/components/InfoPanel";
+import { CopyableText } from "@/components/ui/copyable-text";
 
 interface MetadataProps {
   task: Task;
@@ -17,7 +18,10 @@ export default function Metadata({ task }: MetadataProps) {
   return (
     <InfoPanelSection title={t("metadata")} contentClassName="space-y-3 text-xs">
       <InfoPanelField label={t("taskId")} icon={Hash}>
-        <InfoPanelValueBox mono>{task.id}</InfoPanelValueBox>
+        <CopyableText 
+          text={task.id} 
+          displayValue={task.id.split('-')[0]} 
+        />
       </InfoPanelField>
 
       <InfoPanelField label={t("agent")} icon={Bot}>
@@ -28,7 +32,10 @@ export default function Metadata({ task }: MetadataProps) {
 
       {task.execution_id && (
         <InfoPanelField label={t("executionId")} icon={Activity}>
-          <InfoPanelValueBox mono>{task.execution_id}</InfoPanelValueBox>
+          <CopyableText 
+            text={task.execution_id} 
+            displayValue={task.execution_id.split('-').slice(0, 2).join('-')}
+          />
         </InfoPanelField>
       )}
     </InfoPanelSection>

@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import { CheckCircle2, FileText, Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -5,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CheckCircle2, FileText, Loader2 } from "lucide-react";
 
 interface TaskResultsCardProps {
   task: {
@@ -22,6 +25,8 @@ export default function TaskResultsCard({
   taskStatus,
   isActive,
 }: TaskResultsCardProps) {
+  const t = useTranslations("TaskResultsCard");
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -30,9 +35,9 @@ export default function TaskResultsCard({
             <FileText className="h-4 w-4 text-green-600" />
           </div>
           <div>
-            <CardTitle className="text-base">Task Results</CardTitle>
+            <CardTitle className="text-base">{t("title")}</CardTitle>
             <CardDescription className="text-xs">
-              Output data
+              {t("description")}
             </CardDescription>
           </div>
         </div>
@@ -44,7 +49,7 @@ export default function TaskResultsCard({
               <div className="mb-2 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
-                  Result
+                  {t("result")}
                 </h4>
               </div>
               <div className="max-h-32 overflow-y-auto rounded bg-white p-2 dark:bg-gray-800">
@@ -64,21 +69,18 @@ export default function TaskResultsCard({
               )}
             </div>
             <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {isActive ? "Task Running" : "No Results"}
+              {isActive ? t("taskRunning") : t("noResults")}
             </h3>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              {isActive
-                ? "Results will appear when complete"
-                : "No results produced"}
+              {isActive ? t("resultsWillAppear") : t("noResultsProduced")}
             </p>
           </div>
         )}
 
-        {/* Compact Session Information */}
         {taskStatus?.session_id && (
           <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
             <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
-              Session ID
+              {t("sessionId")}
             </p>
             <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
               {taskStatus.session_id}
@@ -89,4 +91,3 @@ export default function TaskResultsCard({
     </Card>
   );
 }
-

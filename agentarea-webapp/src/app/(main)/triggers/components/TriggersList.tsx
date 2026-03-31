@@ -1,11 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/EmptyState";
 import TriggerCard from "./TriggerCard";
 import TriggersTable from "./TriggersTable";
-import TriggersEmptyState from "./TriggersEmptyState";
 
 interface TriggersListProps {
   triggers: any[];
@@ -18,37 +16,30 @@ export default function TriggersList({
   viewMode,
   searchQuery,
 }: TriggersListProps) {
-  const router = useRouter();
   const t = useTranslations("TriggersPage");
 
   const hasTriggers = triggers.length > 0;
 
-  // No triggers at all (and no search query) -> Global empty state
   if (!hasTriggers && !searchQuery) {
     return (
-      <TriggersEmptyState onCreateClick={() => router.push("/triggers/create")} />
+      <EmptyState
+        title={t("noTriggers")}
+        description={t("noTriggersDescription")}
+        iconsType="triggers"
+      />
     );
   }
 
-  // No results found for search query
   if (!hasTriggers && searchQuery) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-center">
-        <p className="text-lg font-medium text-muted-foreground">
-          {t("noMatchingTriggers")}
-        </p>
-        <Button
-          variant="link"
-          onClick={() => router.push("/triggers")}
-          className="mt-2"
-        >
-          Clear search
-        </Button>
-      </div>
+      <EmptyState
+        title={t("noMatchingTriggers")}
+        description={t("noMatchingTriggersDescription", { query: searchQuery })}
+        iconsType="triggers"
+      />
     );
   }
 
-  // Render list/grid
   return (
     <>
       {viewMode === "grid" ? (

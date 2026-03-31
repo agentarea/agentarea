@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, Bot, Server } from "lucide-react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -13,16 +13,15 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import {
   createModelInstanceAction as createModelInstance,
   createProviderConfigAction as createProviderConfig,
   deleteModelInstanceAction as deleteModelInstance,
-  discoverModelsPreviewAction as discoverModelsPreview,
   listProviderSpecsAction as listProviderSpecs,
   listProviderSpecsWithModelsAction as listProviderSpecsWithModels,
   updateProviderConfigAction as updateProviderConfig,
 } from "@/lib/server-actions";
-import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 import {
   ModelSpec,
@@ -47,23 +46,6 @@ const providerConfigSchema = z.object({
 
 type ProviderConfigFormData = z.infer<typeof providerConfigSchema>;
 
-function generateConfigName(providerName: string): string {
-  const randomNumber = Math.floor(100000 + Math.random() * 900000);
-  return `${providerName} Config - ${randomNumber}`;
-}
-
-function modelsToSelection(
-  models: ModelSpec[],
-  providerName: string
-): SelectedModel[] {
-  return models.map((model) => ({
-    modelSpecId: model.id,
-    instanceName: `${providerName} ${model.display_name}`,
-    description: model.description || "",
-    isPublic: false,
-  }));
-}
-
 export default function ProviderConfigForm({
   initialData,
   className,
@@ -87,61 +69,8 @@ export default function ProviderConfigForm({
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
-  const [createdProviderConfigId, setCreatedProviderConfigId] = useState<
-    string | null
-  >(null);
 
-  // Discovery state
-  const [isDiscovering, setIsDiscovering] = useState(false);
-  const [discoverySuccess, setDiscoverySuccess] = useState(false);
-  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-
-  // Initialize react-hook-form (must be before any effects that use setValue)
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    formState: { errors, isValid },
-    reset,
-  } = useForm<ProviderConfigFormData>({
-    resolver: zodResolver(
-      isEdit
-        ? providerConfigSchema
-        : providerConfigSchema.extend({
-            api_key: z.string().min(1, "API key is required"),
-          })
-    ),
-    defaultValues: {
-      provider_spec_id:
-        preselectedProviderId || initialData?.provider_spec_id || "",
-      name: initialData?.name || "",
-      api_key: "",
-      endpoint_url: initialData?.endpoint_url || "",
-      is_public: initialData?.is_public || false,
-    },
-    mode: "onChange",
-  });
-
-  // useWatch instead of watch() — subscribes once, no re-render cascade
-  const watchedProviderId = useWatch({ control, name: "provider_spec_id" });
-  const apiKeyValue = useWatch({ control, name: "api_key" });
-  const endpointUrlValue = useWatch({ control, name: "endpoint_url" });
-
-  const selectedProvider = useMemo(
-    () => providerSpecs?.find?.((spec) => spec.id === watchedProviderId),
-    [providerSpecs, watchedProviderId]
-  );
-
-  const availableModels = useMemo(
-    () =>
-      modelSpecs?.filter?.(
-        (model) =>
-          selectedProvider && model.provider_spec_id === selectedProvider.id
-      ) || [],
-    [modelSpecs, selectedProvider]
-  );
-
-  // === SINGLE data-loading effect — handles ALL initialization ===
+  // Load provider specs and model specs on component mount
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -163,69 +92,27 @@ export default function ProviderConfigForm({
           );
         }
 
-        const specs = (providerSpecsResponse.data || []) as ProviderSpec[];
-        const specsWithModels =
-          providerSpecsWithModelsResponse.data || [];
+        const specs = providerSpecsResponse.data || [];
+        const specsWithModels = providerSpecsWithModelsResponse.data || [];
 
-        // Spread all fields from API (includes enriched cost/capability data)
-        const models: ModelSpec[] = specsWithModels.flatMap((spec: any) =>
-          spec.models.map((model: any) => ({
-            ...model,
+        // Extract and flatten model specs from the provider specs with models
+        const models = specsWithModels.flatMap((spec) =>
+          spec.models.map((model) => ({
+            id: model.id,
             provider_spec_id: spec.id,
+            model_name: model.model_name,
+            display_name: model.display_name,
+            description: model.description,
+            context_window: model.context_window,
+            is_active: model.is_active,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+            default_context_strategy: (model as any).default_context_strategy ?? null,
           }))
         );
 
         setProviderSpecs(specs);
         setModelSpecs(models);
-
-        // --- All initialization that previously lived in separate effects ---
-
-        const targetProviderId =
-          preselectedProviderId || initialData?.provider_spec_id;
-
-        if (isEdit && existingModelInstances.length > 0) {
-          // Edit mode: init selected models from existing instances
-          setSelectedModels(
-            existingModelInstances.map((instance) => ({
-              modelSpecId: instance.model_spec_id,
-              instanceName: instance.name,
-              description: instance.description || "",
-              isPublic: instance.is_public,
-            }))
-          );
-        } else if (
-          !isEdit &&
-          showModelSelection &&
-          targetProviderId
-        ) {
-          // Create mode with preselected provider: auto-select all models
-          const provider = specs.find(
-            (s: ProviderSpec) => s.id === targetProviderId
-          );
-          const available = models.filter(
-            (m) => m.provider_spec_id === targetProviderId
-          );
-          if (provider && available.length > 0) {
-            setSelectedModels(modelsToSelection(available, provider.name));
-          }
-        }
-
-        // Generate name for preselected provider in create mode
-        if (targetProviderId && !isEdit && !initialData) {
-          const provider = specs.find(
-            (s: ProviderSpec) => s.id === targetProviderId
-          );
-          if (provider) {
-            setValue("name", generateConfigName(provider.name));
-          }
-        }
-
-        // Set initial values for edit mode
-        if (initialData && isEdit) {
-          setValue("provider_spec_id", initialData.provider_spec_id);
-          setValue("name", initialData.name);
-          setValue("endpoint_url", initialData.endpoint_url || "");
-        }
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : t("error.failedToLoadData");
@@ -237,60 +124,129 @@ export default function ProviderConfigForm({
     };
 
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Discovery handler (useCallback so BaseInfo gets a stable reference)
-  const handleDiscoverModels = useCallback(
-    async (apiKey: string, endpointUrl?: string) => {
-      if (!selectedProvider) return;
-      setIsDiscovering(true);
-      setDiscoveryError(null);
-      setDiscoverySuccess(false);
-      try {
-        const { data, error } = await discoverModelsPreview({
-          provider_key: (selectedProvider as any).provider_key,
-          api_key: apiKey,
-          endpoint_url: endpointUrl,
-        });
-        if (error) {
-          setDiscoveryError(
-            (error as any)?.detail || "Discovery failed"
-          );
-          return;
-        }
-        const result = data as any;
-        if (result?.models) {
-          const newModels: ModelSpec[] = result.models.map((m: any) => ({
-            ...m,
-            provider_spec_id: selectedProvider.id,
-          }));
-          // Merge: replace models for this provider, keep others
-          setModelSpecs((prev) => {
-            const others = prev.filter(
-              (m) => m.provider_spec_id !== selectedProvider.id
-            );
-            return [...others, ...newModels];
-          });
-          setDiscoverySuccess(true);
-          toast.success(`Discovered ${result.models.length} models`);
-        }
-      } catch {
-        setDiscoveryError("Discovery failed");
-      } finally {
-        setIsDiscovering(false);
-      }
+  // Initialize react-hook-form
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isValid },
+    reset,
+  } = useForm<ProviderConfigFormData>({
+    resolver: zodResolver(
+      isEdit
+        ? providerConfigSchema
+        : providerConfigSchema.extend({
+            api_key: z.string().min(1, "API key is required"),
+          })
+    ),
+    defaultValues: {
+      provider_spec_id:
+        preselectedProviderId || initialData?.provider_spec_id || "",
+      name: initialData?.name || "",
+      api_key: "", // API key is not returned in responses for security
+      endpoint_url: initialData?.endpoint_url || "",
+      is_public: initialData?.is_public || false,
     },
-    [selectedProvider]
+    mode: "onChange",
+  });
+
+  const watchedProviderId = watch("provider_spec_id");
+  const watchedName = watch("name");
+
+  const selectedProvider = providerSpecs?.find?.(
+    (spec) => spec.id === watchedProviderId
   );
 
-  // --- All hooks are above. Early returns below. ---
+  // Memoize availableModels to prevent infinite re-renders
+  const availableModels = useMemo(() => {
+    return (
+      modelSpecs?.filter?.(
+        (model) =>
+          selectedProvider && model.provider_spec_id === selectedProvider.id
+      ) || []
+    );
+  }, [modelSpecs, selectedProvider]);
 
+  // Auto-select all models when provider changes
+  useEffect(() => {
+    if (
+      selectedProvider &&
+      availableModels.length > 0 &&
+      !isEdit &&
+      showModelSelection
+    ) {
+      const allModels = availableModels.map((model) => ({
+        modelSpecId: model.id,
+        instanceName: `${selectedProvider.name} ${model.display_name}`,
+        description: model.description || "",
+        isPublic: false,
+      }));
+      setSelectedModels(allModels);
+    }
+  }, [selectedProvider, availableModels, isEdit, showModelSelection]);
+
+  // Generate name for preselected provider
+  useEffect(() => {
+    if (
+      preselectedProviderId &&
+      selectedProvider &&
+      !isEdit &&
+      !initialData &&
+      !watchedName
+    ) {
+      const providerName = selectedProvider.name || "";
+      const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
+      setValue("name", `${providerName} Config - ${randomNumber}`);
+    }
+  }, [
+    preselectedProviderId,
+    selectedProvider,
+    isEdit,
+    initialData,
+    watchedName,
+    setValue,
+  ]);
+
+  // Set initial values when initialData is loaded
+  useEffect(() => {
+    if (initialData && isEdit) {
+      setValue("provider_spec_id", initialData.provider_spec_id);
+      setValue("name", initialData.name);
+      setValue("endpoint_url", initialData.endpoint_url || "");
+    }
+  }, [initialData, isEdit, setValue]);
+
+  // Initialize selected models from existing model instances when in edit mode
+  useEffect(() => {
+    if (isEdit && existingModelInstances.length > 0 && modelSpecs.length > 0) {
+      const existingModels = existingModelInstances.map((instance) => {
+        // Find the corresponding model spec
+        const modelSpec = modelSpecs.find(
+          (spec) => spec.id === instance.model_spec_id
+        );
+
+        return {
+          modelSpecId: instance.model_spec_id,
+          instanceName: instance.name,
+          description: instance.description || "",
+          isPublic: instance.is_public,
+        };
+      });
+
+      setSelectedModels(existingModels);
+    }
+  }, [isEdit, existingModelInstances, modelSpecs]);
+
+  // Handle loading state
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (error && !providerSpecs.length) {
+  // Handle error state
+  if (error) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
@@ -299,27 +255,17 @@ export default function ProviderConfigForm({
     );
   }
 
-  // Event handler — no effect needed
   const handleProviderChange = (providerId: string | number) => {
-    const provider = providerSpecs.find((spec) => spec.id === providerId);
-    const providerName = provider?.name || "";
+    const selectedProvider = providerSpecs.find(
+      (spec) => spec.id === providerId
+    );
+    const providerName = selectedProvider?.name || "";
+    const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
 
     setValue("provider_spec_id", providerId.toString());
-    setValue("name", generateConfigName(providerName));
+    setValue("name", `${providerName} Config - ${randomNumber}`);
 
-    // Auto-select all models for this provider (replaces useEffect)
-    if (showModelSelection) {
-      const available = modelSpecs.filter(
-        (m) => m.provider_spec_id === providerId
-      );
-      setSelectedModels(modelsToSelection(available, providerName));
-    } else {
-      setSelectedModels([]);
-    }
-
-    // Reset discovery state on provider switch
-    setDiscoverySuccess(false);
-    setDiscoveryError(null);
+    setSelectedModels([]); // Reset selected models when provider changes
   };
 
   const updateSelectedModel = (
@@ -349,9 +295,10 @@ export default function ProviderConfigForm({
         const updateData: any = {
           name: data.name,
           endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
-          is_active: data.is_public,
+          is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
         };
 
+        // Only include api_key if it's provided (not empty)
         if (data.api_key && data.api_key.trim() !== "") {
           updateData.api_key = data.api_key;
         }
@@ -363,7 +310,7 @@ export default function ProviderConfigForm({
         const result = await createProviderConfig({
           provider_spec_id: data.provider_spec_id,
           name: data.name,
-          api_key: data.api_key || "",
+          api_key: data.api_key || "", // API key is required for creation, so this should never be undefined
           endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
           is_public: data.is_public,
         });
@@ -384,11 +331,7 @@ export default function ProviderConfigForm({
         );
       }
 
-      if (!isEdit) {
-        setCreatedProviderConfigId(providerConfig.id);
-      }
-
-      // Step 2: Create model instances if any are selected
+      // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
       if (!isEdit && selectedModels.length > 0 && showModelSelection) {
         const modelCreationPromises = selectedModels.map(async (model) => {
           const { data, error } = await createModelInstance({
@@ -422,6 +365,7 @@ export default function ProviderConfigForm({
           )
         );
       } else if (isEdit && showModelSelection) {
+        // Handle model instances for edit mode
         const existingModelSpecIds = existingModelInstances.map(
           (instance) => instance.model_spec_id
         );
@@ -429,14 +373,17 @@ export default function ProviderConfigForm({
           (model) => model.modelSpecId
         );
 
+        // Find models to create (new selections)
         const modelsToCreate = selectedModels.filter(
           (model) => !existingModelSpecIds.includes(model.modelSpecId)
         );
 
+        // Find models to delete (removed selections)
         const modelsToDelete = existingModelInstances.filter(
           (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
         );
 
+        // Create new model instances
         if (modelsToCreate.length > 0) {
           const createPromises = modelsToCreate.map(async (model) => {
             const { data, error } = await createModelInstance({
@@ -461,6 +408,7 @@ export default function ProviderConfigForm({
           await Promise.all(createPromises);
         }
 
+        // Delete removed model instances
         if (modelsToDelete.length > 0) {
           const deletePromises = modelsToDelete.map(async (instance) => {
             const { error } = await deleteModelInstance(instance.id);
@@ -498,10 +446,12 @@ export default function ProviderConfigForm({
         );
       }
 
+      // Call custom after submit handler if provided
       if (onAfterSubmit) {
         await onAfterSubmit(providerConfig);
       }
 
+      // Reset form only if creating and no custom handler
       if (!isEdit && !onAfterSubmit) {
         reset({
           provider_spec_id: "",
@@ -513,6 +463,7 @@ export default function ProviderConfigForm({
         setSelectedModels([]);
       }
 
+      // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
         router.push("/admin/provider-configs");
         router.refresh();
@@ -590,9 +541,7 @@ export default function ProviderConfigForm({
               )}
             />
             {errors.provider_spec_id && (
-              <p className="form-error">
-                {errors.provider_spec_id.message}
-              </p>
+              <p className="form-error">{errors.provider_spec_id.message}</p>
             )}
             {preselectedProviderId && !isEdit && !initialData && (
               <p className="note">{t("providerIsPreSelected")}</p>
@@ -604,12 +553,6 @@ export default function ProviderConfigForm({
             errors={errors}
             providerSpecId={watchedProviderId}
             isEdit={isEdit}
-            onDiscoverModels={handleDiscoverModels}
-            isDiscovering={isDiscovering}
-            discoverySuccess={discoverySuccess}
-            discoveryError={discoveryError}
-            apiKeyValue={apiKeyValue}
-            endpointUrlValue={endpointUrlValue}
           />
 
           {selectedProvider && showModelSelection && (
@@ -619,13 +562,6 @@ export default function ProviderConfigForm({
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
-              providerConfigId={
-                createdProviderConfigId ||
-                (isEdit && initialData ? initialData.id : undefined)
-              }
-              canTest={
-                !!createdProviderConfigId || (isEdit && !!initialData)
-              }
             />
           )}
         </div>

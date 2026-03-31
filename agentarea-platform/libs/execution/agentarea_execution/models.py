@@ -169,6 +169,7 @@ class AgentConfigResult(BaseModel):
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False
+    a2ui_enabled: bool = False
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     skills: list[SkillInfo] = Field(default_factory=list)

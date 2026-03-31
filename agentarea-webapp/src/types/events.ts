@@ -27,11 +27,18 @@ export type WorkflowEventType =
   | "ToolCallFailed"
   | "BudgetWarning"
   | "BudgetExceeded"
+  | "ServicePayment"
+  | "ServiceBudgetWarning"
+  | "ServiceBudgetExceeded"
   | "ContextWarning"
   | "ContextCompacted"
   | "HumanApprovalRequested"
   | "HumanApprovalReceived"
-  | "HumanApprovalDenied";
+  | "HumanApprovalDenied"
+  | "A2UICreateSurface"
+  | "A2UIUpdateComponents"
+  | "A2UIUpdateDataModel"
+  | "A2UIDeleteSurface";
 
 // SSE message format (what we receive over SSE) - matches protocol structure
 export interface SSEMessage {
@@ -266,6 +273,48 @@ export const EVENT_TYPE_CONFIG: Record<
     icon: "user-x",
     color: "red",
   },
+  A2UICreateSurface: {
+    title: "UI Surface Created",
+    level: "info",
+    icon: "layout",
+    color: "blue",
+  },
+  A2UIUpdateComponents: {
+    title: "UI Components Updated",
+    level: "info",
+    icon: "layout",
+    color: "blue",
+  },
+  A2UIUpdateDataModel: {
+    title: "UI Data Updated",
+    level: "info",
+    icon: "database",
+    color: "blue",
+  },
+  A2UIDeleteSurface: {
+    title: "UI Surface Removed",
+    level: "info",
+    icon: "x-square",
+    color: "gray",
+  },
+  ServicePayment: {
+    title: "Service Payment",
+    level: "info",
+    icon: "credit-card",
+    color: "green",
+  },
+  ServiceBudgetWarning: {
+    title: "Service Budget Warning",
+    level: "warning",
+    icon: "alert-triangle",
+    color: "amber",
+  },
+  ServiceBudgetExceeded: {
+    title: "Service Budget Exceeded",
+    level: "error",
+    icon: "alert-circle",
+    color: "red",
+  },
 };
 
 // Utility functions
@@ -319,12 +368,20 @@ export const mapSSEToDisplayEvent = (
     taskcompleted: "WorkflowCompleted",
     task_failed: "WorkflowFailed",
     taskfailed: "WorkflowFailed",
+    a2uicreatesurface: "A2UICreateSurface",
+    a2ui_create_surface: "A2UICreateSurface",
+    a2uiupdatecomponents: "A2UIUpdateComponents",
+    a2ui_update_components: "A2UIUpdateComponents",
+    a2uiupdatedatamodel: "A2UIUpdateDataModel",
+    a2ui_update_data_model: "A2UIUpdateDataModel",
+    a2uideletesurface: "A2UIDeleteSurface",
+    a2ui_delete_surface: "A2UIDeleteSurface",
   };
 
   // Get the mapped event type - try event name first, then event_type field
-  const eventKey = sseEvent.event.toLowerCase().replace(/[^a-z]/g, "");
+  const eventKey = sseEvent.event.toLowerCase().replace(/[^a-z0-9]/g, "");
   const eventTypeKey =
-    sseEvent.data.event_type?.toLowerCase().replace(/[^a-z]/g, "") || "";
+    sseEvent.data.event_type?.toLowerCase().replace(/[^a-z0-9]/g, "") || "";
 
   const mappedEventType =
     eventTypeMap[eventKey] ||

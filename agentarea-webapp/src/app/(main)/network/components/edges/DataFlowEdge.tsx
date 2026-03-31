@@ -1,6 +1,6 @@
 "use client";
 
-import { getBezierPath, type EdgeProps } from "@xyflow/react";
+import { getSmoothStepPath, type EdgeProps } from "@xyflow/react";
 
 export default function DataFlowEdge({
   id,
@@ -12,7 +12,15 @@ export default function DataFlowEdge({
   targetPosition,
   data,
 }: EdgeProps) {
-  const [edgePath] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const [edgePath] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    borderRadius: 16,
+  });
   const isRisk = data?.isRisk as boolean | undefined;
   const isInactive = data?.isInactive as boolean | undefined;
 

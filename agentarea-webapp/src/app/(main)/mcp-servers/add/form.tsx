@@ -101,7 +101,6 @@ type AuthType = "api_key" | "bearer" | "oauth2";
 
 export function AddMCPServerForm() {
   const [state, setState] = useState<MCPServerFormState>(initialState);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [bundleInstances, setBundleInstances] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [authConfigs, setAuthConfigs] = useState<AuthConfig[]>([]);
@@ -235,7 +234,6 @@ export function AddMCPServerForm() {
 
   // Build FormData from validated form values and call the server action
   const onSubmit = async (data: FormValues) => {
-    setIsSubmitting(true);
     dispatchSubmitting(true);
     setState(initialState);
 
@@ -283,7 +281,6 @@ export function AddMCPServerForm() {
         errors: { _form: [e instanceof Error ? e.message : "Unknown error"] },
       });
     } finally {
-      setIsSubmitting(false);
       dispatchSubmitting(false);
     }
   };

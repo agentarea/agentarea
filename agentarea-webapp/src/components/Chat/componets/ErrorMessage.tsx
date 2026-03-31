@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { useTranslations } from "next-intl";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
 
@@ -17,6 +20,8 @@ interface ErrorData {
 }
 
 const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
+  const t = useTranslations("ErrorMessage");
+
   const getErrorIcon = () => {
     if (data.is_auth_error) return "\ud83d\udd11";
     if (data.is_rate_limit_error) return "\u23f1\ufe0f";
@@ -49,14 +54,18 @@ const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
           <span className="">
             {getErrorIcon()}
             <span className="ml-2 text-red-700 dark:text-red-300">
-              {data.error_type || "Error"}
+              {data.error_type || t("error")}
             </span>
           </span>
         }
       >
         {data.error}
         <br />
-        {data.error_type && <span>Type: {data.error_type}</span>}
+        {data.error_type && (
+          <span>
+            {t("type")} {data.error_type}
+          </span>
+        )}
         <br />
         {data.retryable !== undefined && (
           <span
@@ -66,7 +75,7 @@ const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
                 : "text-red-600 dark:text-red-400"
             }
           >
-            {data.retryable ? "Retryable" : "Non-retryable"}
+            {data.retryable ? t("retryable") : t("nonRetryable")}
           </span>
         )}
       </BaseMessage>

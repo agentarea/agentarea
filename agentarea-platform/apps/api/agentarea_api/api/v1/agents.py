@@ -111,6 +111,7 @@ class AgentCreate(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
     agent_type: str
 
@@ -124,6 +125,7 @@ class AgentUpdate(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
 
 
@@ -137,19 +139,25 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
     agent_type: str = "stateless"
+    skills: list[dict] | None = None
 
     @classmethod
-    def from_domain(cls, agent: Agent) -> "AgentResponse":
-        # Convert raw dict/list from database to Pydantic models
+    def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
         tools = None
         if agent.tools:
             if isinstance(agent.tools, list):
-                # New format - already a list of tool configs
                 tools = [ToolConfigYAML(**tool) for tool in agent.tools]
             elif isinstance(agent.tools, dict):
-                # Could be legacy format or empty dict
                 tools = []
+
+        skills = None
+        if include_skills and hasattr(agent, "skills") and agent.skills:
+            skills = [
+                {"id": str(skill.id), "name": skill.name, "description": skill.description}
+                for skill in agent.skills
+            ]
 
         return cls(
             id=agent.id,
@@ -161,7 +169,9 @@ class AgentResponse(BaseModel):
             tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
+            a2ui_enabled=agent.a2ui_enabled,
             agent_type=agent.agent_type,
+            skills=skills,
         )
 
 
@@ -200,6 +210,7 @@ async def create_agent(
         tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        a2ui_enabled=data.a2ui_enabled,
         skill_ids=data.skill_ids,
         agent_type=data.agent_type,
     )
@@ -302,10 +313,10 @@ async def get_agent(
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """Get an agent by ID."""
-    agent = await agent_service.get(agent_id)
+    agent = await agent_service.get_with_skills(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent)
+    return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.get("", response_model=list[AgentResponse])
@@ -348,11 +359,13 @@ async def update_agent(
         tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        a2ui_enabled=data.a2ui_enabled,
         skill_ids=data.skill_ids,
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent)
+    agent = await agent_service.get_with_skills(agent_id)
+    return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.delete("/{agent_id}")

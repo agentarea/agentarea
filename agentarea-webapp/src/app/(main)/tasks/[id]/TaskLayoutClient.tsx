@@ -23,21 +23,29 @@ function TaskLayoutContent({
 }) {
   const { task } = useTaskContext();
 
-  // Use fallback values during loading
-  const agentName = task?.agent_name || `Agent ${task?.agent_id || "..."}`;
-  const taskLabel = task?.description || `Task ${taskId.slice(0, 8)}...`;
+  // Create breadcrumbs dynamically
+  const breadcrumb: { label: string; href?: string }[] = [
+    { label: tasksTitle, href: "/tasks" },
+  ];
+
+  // Only add agent name and task description if they are available
+  if (task?.agent_name) {
+    breadcrumb.push({
+      label: task.agent_name,
+      href: `/agents/${task.agent_id}`,
+    });
+  }
+
+  if (task?.description) {
+    breadcrumb.push({
+      label: task.description,
+    });
+  }
 
   return (
     <ContentBlock
       header={{
-        breadcrumb: [
-          { label: tasksTitle, href: "/tasks" },
-          {
-            label: agentName,
-            href: task?.agent_id ? `/agents/${task.agent_id}` : undefined,
-          },
-          { label: taskLabel },
-        ],
+        breadcrumb,
       }}
       subheader={<TaskSubheader taskId={taskId} />}
       className="p-0"
