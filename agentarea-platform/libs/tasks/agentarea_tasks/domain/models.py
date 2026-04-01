@@ -232,7 +232,9 @@ class SimpleTask(BaseModel):
         # Automatically set timestamps based on status
         if new_status == "running" and not self.started_at:
             self.started_at = self.updated_at
-        elif new_status in ["completed", "failed", "blocked", "cancelled"] and not self.completed_at:
+        elif (
+            new_status in ["completed", "failed", "blocked", "cancelled"] and not self.completed_at
+        ):
             self.completed_at = self.updated_at
 
         # Update any additional fields provided

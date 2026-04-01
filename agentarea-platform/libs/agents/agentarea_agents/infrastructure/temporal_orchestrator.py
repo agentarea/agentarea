@@ -173,7 +173,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 "status": mapped_status,
                 "success": True if mapped_status == "completed" else None,
                 "result": None,
-                "start_time": description.start_time.isoformat() if description.start_time else None,
+                "start_time": description.start_time.isoformat()
+                if description.start_time
+                else None,
                 "end_time": description.close_time.isoformat() if description.close_time else None,
                 "execution_time": (
                     description.execution_time.total_seconds()

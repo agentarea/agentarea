@@ -113,7 +113,7 @@ class MCPAuthMiddleware:
         try:
             # ---------- attempt authentication ----------
             if auth_header.lower().startswith("bearer "):
-                bearer_token = auth_header[len("bearer "):]
+                bearer_token = auth_header[len("bearer ") :]
                 await self._try_authenticate(bearer_token, request)
             elif session_id and session_id in self._session_contexts:
                 _mcp_user_context_var.set(self._session_contexts[session_id])
