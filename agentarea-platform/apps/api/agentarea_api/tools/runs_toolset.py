@@ -17,7 +17,7 @@ class RunsToolset(Toolset):
         from uuid import UUID
 
         async with platform_context() as (
-            session,
+            _session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -25,7 +25,10 @@ class RunsToolset(Toolset):
         ):
             from agentarea_tasks.task_service import TaskService
 
-            from agentarea_api.api.deps.services import _create_task_manager, get_temporal_workflow_service
+            from agentarea_api.api.deps.services import (
+                _create_task_manager,
+                get_temporal_workflow_service,
+            )
 
             task_manager = await _create_task_manager(repo_factory)
             workflow_service = await get_temporal_workflow_service()
@@ -55,7 +58,7 @@ class RunsToolset(Toolset):
     async def list(self, agent_id: str = "", limit: int = 20) -> str:
         """List recent runs, optionally filtered by agent ID."""
         async with platform_context() as (
-            session,
+            _session,
             user_ctx,
             repo_factory,
             event_broker,
@@ -63,7 +66,10 @@ class RunsToolset(Toolset):
         ):
             from agentarea_tasks.task_service import TaskService
 
-            from agentarea_api.api.deps.services import _create_task_manager, get_temporal_workflow_service
+            from agentarea_api.api.deps.services import (
+                _create_task_manager,
+                get_temporal_workflow_service,
+            )
 
             task_manager = await _create_task_manager(repo_factory)
             workflow_service = await get_temporal_workflow_service()
@@ -93,15 +99,18 @@ class RunsToolset(Toolset):
         from uuid import UUID
 
         async with platform_context() as (
-            session,
-            user_ctx,
+            _session,
+            _user_ctx,
             repo_factory,
             event_broker,
             _,
         ):
             from agentarea_tasks.task_service import TaskService
 
-            from agentarea_api.api.deps.services import _create_task_manager, get_temporal_workflow_service
+            from agentarea_api.api.deps.services import (
+                _create_task_manager,
+                get_temporal_workflow_service,
+            )
 
             task_manager = await _create_task_manager(repo_factory)
             workflow_service = await get_temporal_workflow_service()
@@ -131,15 +140,18 @@ class RunsToolset(Toolset):
         from uuid import UUID
 
         async with platform_context() as (
-            session,
-            user_ctx,
+            _session,
+            _user_ctx,
             repo_factory,
             event_broker,
             _,
         ):
             from agentarea_tasks.task_service import TaskService
 
-            from agentarea_api.api.deps.services import _create_task_manager, get_temporal_workflow_service
+            from agentarea_api.api.deps.services import (
+                _create_task_manager,
+                get_temporal_workflow_service,
+            )
 
             task_manager = await _create_task_manager(repo_factory)
             workflow_service = await get_temporal_workflow_service()

@@ -624,7 +624,7 @@ def _humanize_identifier(identifier: str) -> str:
         name = identifier
 
     # Known abbreviations to keep uppercase
-    _ABBREVS = {"mcp", "api", "ai", "db", "sql", "ssh", "aws", "gcp", "cli", "sdk", "llm"}
+    abbrevs = {"mcp", "api", "ai", "db", "sql", "ssh", "aws", "gcp", "cli", "sdk", "llm"}
 
     parts = name.replace("-", " ").replace("_", " ").split()
-    return " ".join(p.upper() if p.lower() in _ABBREVS else p.capitalize() for p in parts)
+    return " ".join(p.upper() if p.lower() in abbrevs else p.capitalize() for p in parts)

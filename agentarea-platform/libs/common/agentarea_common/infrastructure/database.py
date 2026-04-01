@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from agentarea_common.config import DatabaseSettings, get_db_settings
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -103,8 +106,8 @@ class Database:
         finally:
             try:
                 await session.close()
-            except Exception:
-                pass  # Session may be in inconsistent state on client disconnect
+            except Exception as exc:
+                logger.debug("Failed to close read DB session cleanly: %s", exc)
 
 
 # Create global instances

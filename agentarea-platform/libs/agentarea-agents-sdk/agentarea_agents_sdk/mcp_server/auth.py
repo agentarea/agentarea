@@ -80,7 +80,7 @@ class MCPAuthMiddleware:
             elif session_id and session_id in self._session_contexts:
                 # No auth header but known session — restore cached context
                 _mcp_user_context_var.set(self._session_contexts[session_id])
-                print(f"[MCP-AUTH] restored from session cache", flush=True)
+                print("[MCP-AUTH] restored from session cache", flush=True)
 
             # Wrap send to capture mcp-session-id from response headers
             async def send_wrapper(message):
@@ -111,10 +111,10 @@ class MCPAuthMiddleware:
                 get_auth_provider,
             )
 
-            _API_KEY_PREFIX = "aa_"
+            api_key_prefix = "aa_"
 
             # --- API key path ---
-            if bearer_token.startswith(_API_KEY_PREFIX):
+            if bearer_token.startswith(api_key_prefix):
                 user_context = await _validate_api_key(bearer_token, request)
                 if user_context:
                     await _resolve_accessible_workspaces(user_context)

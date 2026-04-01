@@ -9,11 +9,11 @@ from datetime import datetime
 from typing import Annotated
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_common.audit.service import AuditService
 from agentarea_agents.application.import_export_service import WorkspaceImportExportService
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
+from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
 from agentarea_common.config import get_settings

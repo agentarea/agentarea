@@ -13,11 +13,15 @@ class ProvidersToolset(Toolset):
     @tool_method
     async def list_specs(self) -> str:
         """List available LLM provider specifications (e.g. OpenAI, Anthropic)."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
             from agentarea_llm.application.provider_service import ProviderService
-            from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+            from agentarea_llm.infrastructure.model_instance_repository import (
+                ModelInstanceRepository,
+            )
             from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-            from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+            from agentarea_llm.infrastructure.provider_config_repository import (
+                ProviderConfigRepository,
+            )
             from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
             service = ProviderService(
@@ -37,11 +41,15 @@ class ProvidersToolset(Toolset):
     @tool_method
     async def list_configs(self) -> str:
         """List configured LLM provider connections."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
             from agentarea_llm.application.provider_service import ProviderService
-            from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+            from agentarea_llm.infrastructure.model_instance_repository import (
+                ModelInstanceRepository,
+            )
             from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-            from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+            from agentarea_llm.infrastructure.provider_config_repository import (
+                ProviderConfigRepository,
+            )
             from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
             service = ProviderService(
@@ -77,11 +85,15 @@ class ProvidersToolset(Toolset):
         """Create a new LLM provider configuration with API key."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
             from agentarea_llm.application.provider_service import ProviderService
-            from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+            from agentarea_llm.infrastructure.model_instance_repository import (
+                ModelInstanceRepository,
+            )
             from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-            from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+            from agentarea_llm.infrastructure.provider_config_repository import (
+                ProviderConfigRepository,
+            )
             from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
             service = ProviderService(
@@ -106,11 +118,15 @@ class ProvidersToolset(Toolset):
         """Delete a provider configuration."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
             from agentarea_llm.application.provider_service import ProviderService
-            from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+            from agentarea_llm.infrastructure.model_instance_repository import (
+                ModelInstanceRepository,
+            )
             from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-            from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+            from agentarea_llm.infrastructure.provider_config_repository import (
+                ProviderConfigRepository,
+            )
             from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
             service = ProviderService(

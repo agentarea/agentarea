@@ -523,7 +523,10 @@ class LLMModel:
 
                     # If usage wasn't in chunks, estimate tokens from content
                     if prompt_tokens == 0:
-                        prompt_tokens = litellm.token_counter(model=self.model_id, messages=messages)
+                        prompt_tokens = litellm.token_counter(
+                            model=self.model_id,
+                            messages=[m.model_dump(mode="json") for m in request.messages],
+                        )
                     if completion_tokens == 0 and complete_content:
                         completion_tokens = litellm.token_counter(model=self.model_id, text=complete_content)
 

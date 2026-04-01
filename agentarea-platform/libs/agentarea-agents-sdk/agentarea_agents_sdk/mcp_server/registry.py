@@ -34,7 +34,7 @@ class MCPToolRegistry:
             category_filter: If set, only load tools matching this category
                              (e.g. "platform", "utility").
         """
-        from ..tools.code_tools_loader import get_code_tools_metadata, create_code_tool_instance
+        from ..tools.code_tools_loader import create_code_tool_instance, get_code_tools_metadata
 
         metadata = get_code_tools_metadata()
 

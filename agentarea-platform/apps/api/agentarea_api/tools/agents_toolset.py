@@ -13,7 +13,7 @@ class AgentsToolset(Toolset):
     @tool_method
     async def list(self, limit: int = 50, offset: int = 0) -> str:
         """List all agents in the workspace."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
@@ -31,7 +31,7 @@ class AgentsToolset(Toolset):
         """Get agent details by ID."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
@@ -63,7 +63,7 @@ class AgentsToolset(Toolset):
         agent_type: str = "stateless",
     ) -> str:
         """Create a new agent."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
@@ -91,7 +91,7 @@ class AgentsToolset(Toolset):
         """Update an existing agent."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
@@ -117,7 +117,7 @@ class AgentsToolset(Toolset):
         """Delete an agent by ID."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _):
             from agentarea_agents.application.agent_service import AgentService
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve

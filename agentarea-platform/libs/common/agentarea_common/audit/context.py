@@ -13,11 +13,9 @@ class AuditContext:
     request_id: str | None = None
 
 
-audit_context: ContextVar[AuditContext] = ContextVar(
-    "audit_context", default=AuditContext()
-)
+audit_context: ContextVar[AuditContext] = ContextVar("audit_context")
 
 
 def get_audit_context() -> AuditContext:
     """Get the current request's audit context."""
-    return audit_context.get()
+    return audit_context.get(AuditContext())

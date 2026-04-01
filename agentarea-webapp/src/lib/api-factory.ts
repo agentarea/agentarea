@@ -1385,54 +1385,54 @@ export function createApiClient(client: Client) {
 
     // Wallet API
     getAgentWallet: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
-    createAgentWallet: async (agentId: string, body: components["schemas"]["CreateWalletRequest"]) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet", {
+    createAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
         body,
-      });
+      } as any);
       return { data, error };
     },
 
-    updateAgentWallet: async (agentId: string, body: components["schemas"]["UpdateWalletRequest"]) => {
-      const { data, error } = await client.PUT("/v1/agents/{agent_id}/wallet", {
+    updateAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.PUT("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
         body,
-      });
+      } as any);
       return { data, error };
     },
 
     deleteAgentWallet: async (agentId: string) => {
-      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/wallet", {
+      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
     getAgentWalletBalance: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/balance", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/balance" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
     getAgentWalletPayments: async (agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/payments", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/payments" as any, {
         params: { path: { agent_id: agentId }, query: params },
-      });
+      } as any);
       return { data, error };
     },
 
-    fundAgentWallet: async (agentId: string, body: components["schemas"]["FundWalletRequest"]) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet/fund", {
+    fundAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet/fund" as any, {
         params: { path: { agent_id: agentId } },
         body,
-      });
+      } as any);
       return { data, error };
     },
 

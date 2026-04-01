@@ -164,6 +164,7 @@ def create_app() -> FastAPI:
     # via session_manager.run() in the lifespan.
     from agentarea_agents_sdk.mcp_server import create_mcp_server
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
+
     from agentarea_api.tools import get_platform_tools
 
     _mcp_server = create_mcp_server(
@@ -238,6 +239,7 @@ def create_app() -> FastAPI:
     # so we include directly on app (not on protected_v1_router which adds /v1).
     from agentarea_common.auth.dependencies import get_user_context
     from fastapi import Depends
+
     from agentarea_api.api.v1.compound_mcp_proxy import router as compound_mcp_proxy_router
 
     app.include_router(
@@ -247,7 +249,10 @@ def create_app() -> FastAPI:
     )
 
     # Bundle MCP proxy routing — serves bundle instances at /bundle-mcp/{instance-id}
-    from starlette.types import ASGIApp as _ASGIApp, Receive as _Receive, Scope as _Scope, Send as _Send
+    from starlette.types import ASGIApp as _ASGIApp
+    from starlette.types import Receive as _Receive
+    from starlette.types import Scope as _Scope
+    from starlette.types import Send as _Send
 
     class BundleMCPMiddleware:
         """Routes /mcp/{instance-id} to registered bundle proxy ASGI apps, falling through to platform MCP."""

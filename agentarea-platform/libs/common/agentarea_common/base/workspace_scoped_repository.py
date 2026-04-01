@@ -215,7 +215,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
                 return None
 
             # Store original data for reference
-            original_data = {
+            {
                 field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)
             }
 

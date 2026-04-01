@@ -5,15 +5,12 @@ Revises: aa1b2c3d4e5f, gg1_add_icon_to_mcp_servers
 Create Date: 2026-03-27 10:17:29.725661
 
 """
-from typing import Sequence, Union
-
-from alembic import op
-
+from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = '0235e2291c9c'
-down_revision: Union[str, None] = ('aa1b2c3d4e5f', 'gg1_add_icon_to_mcp_servers')
-branch_labels: Union[str, Sequence[str], None] = None
+down_revision: str | None = ('aa1b2c3d4e5f', 'gg1_add_icon_to_mcp_servers')
+branch_labels: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -1,6 +1,6 @@
 import builtins
 import logging
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -521,7 +521,7 @@ class MCPServerInstanceService:
             # Compute tools hash for change detection
             import hashlib
             import json as _json
-            from datetime import datetime as _dt, timezone as _tz
+            from datetime import datetime as _dt
 
             sorted_sigs = sorted(
                 [
@@ -547,7 +547,7 @@ class MCPServerInstanceService:
                 )
 
             new_json_spec["tools_hash"] = tools_hash
-            new_json_spec["tools_updated_at"] = _dt.now(_tz.utc).isoformat()
+            new_json_spec["tools_updated_at"] = _dt.now(UTC).isoformat()
             new_json_spec["tools_changed"] = tools_changed
 
             from sqlalchemy import update as sa_update

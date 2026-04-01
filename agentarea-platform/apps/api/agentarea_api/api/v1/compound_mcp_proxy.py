@@ -123,8 +123,8 @@ async def start_bundle_proxy(
     user_context: UserContextDep,
 ):
     """Build and register a bundle MCP proxy server."""
-    from agentarea_mcp.application.compound_proxy import build_bundle_proxy
     from agentarea_api.api.v1.compound_mcp_registry import registry
+    from agentarea_mcp.application.compound_proxy import build_bundle_proxy
 
     try:
         proxy = await build_bundle_proxy(instance_id, db_session, user_context)

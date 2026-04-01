@@ -9,15 +9,17 @@ Creates a FastMCP server that:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.config import get_settings
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 
-from agentarea_common.config import get_settings
 from agentarea_mcp.domain.auth_models import CompoundMCPMember
 
 logger = logging.getLogger(__name__)
@@ -164,10 +166,6 @@ class CompoundMCPProxy:
             raise RuntimeError("Call build_server() first")
         return self._server.streamable_http_app()
 
-
-from dataclasses import dataclass, field as dataclass_field
-
-
 @dataclass
 class BundleMember:
     """Lightweight member descriptor for bundle proxies."""
@@ -181,7 +179,7 @@ async def build_bundle_proxy(
     instance_id: UUID,
     db_session: Any,
     user_context: Any,
-) -> "CompoundMCPProxy":
+) -> CompoundMCPProxy:
     """Build a CompoundMCPProxy from an MCPServerInstance with json_spec.type='bundle'."""
     from agentarea_mcp.infrastructure.auth_repository import MCPServerInstanceRepository
 

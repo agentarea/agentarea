@@ -3,7 +3,10 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_model_spec_repository, get_provider_service  # type: ignore
+from agentarea_api.api.deps.services import (  # type: ignore
+    get_model_spec_repository,
+    get_provider_service,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
@@ -288,7 +291,7 @@ async def discover_models_preview(
         )
         is_new = existing is None
 
-        await model_spec_repo.upsert_by_provider_and_model_kwargs(
+        spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
             provider_spec_id=provider_spec_id,
             model_name=model.model_name,
             display_name=model.display_name or model.model_name,

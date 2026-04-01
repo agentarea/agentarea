@@ -616,11 +616,11 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-export async function createAgentWalletAction(agentId: string, body: components["schemas"]["CreateWalletRequest"]) {
+export async function createAgentWalletAction(agentId: string, body: any) {
   return await createAgentWallet(agentId, body);
 }
 
-export async function updateAgentWalletAction(agentId: string, body: components["schemas"]["UpdateWalletRequest"]) {
+export async function updateAgentWalletAction(agentId: string, body: any) {
   return await updateAgentWallet(agentId, body);
 }
 
@@ -639,6 +639,6 @@ export async function getAgentWalletPaymentsAction(
   return await getAgentWalletPayments(agentId, params);
 }
 
-export async function fundAgentWalletAction(agentId: string, body: components["schemas"]["FundWalletRequest"]) {
+export async function fundAgentWalletAction(agentId: string, body: any) {
   return await fundAgentWallet(agentId, body);
 }

@@ -99,8 +99,8 @@ def audited(
                     existing = await self.repository.get(resource_id)
                     if existing and hasattr(existing, "to_dict"):
                         before_state = existing.to_dict()
-                except Exception:
-                    pass  # best-effort snapshot
+                except Exception as exc:
+                    logger.debug("Failed to snapshot resource state for %s: %s", action, exc)
 
             # Execute the actual method
             result = await fn(self, *args, **kwargs)

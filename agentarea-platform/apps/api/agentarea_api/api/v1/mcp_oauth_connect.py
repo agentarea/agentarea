@@ -19,15 +19,13 @@ import logging
 import urllib.parse
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
-
 from agentarea_api.api.deps.services import (
     DatabaseSessionDep,
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
     MCPOAuthClientService,
@@ -35,9 +33,11 @@ from agentarea_mcp.application.oauth_client_service import (
     PKCEPair,
 )
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
-from agentarea_mcp.application.auth_service import MCPAuthService
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 
 logger = logging.getLogger(__name__)
+_background_tasks: set = set()
 
 # Protected router (requires auth) — /authorize needs user context
 router = APIRouter(prefix="/mcp-oauth", tags=["mcp-oauth-connect"])
@@ -332,11 +332,9 @@ async def oauth_callback(
 
     # Trigger tool discovery in background — don't block the redirect
     try:
-        from agentarea_mcp.application.service import MCPServerInstanceService
-        from agentarea_common.events.broker import EventBroker
-
         # Build service with the same session context
         from agentarea_common.base.repository_factory import RepositoryFactory
+        from agentarea_mcp.application.service import MCPServerInstanceService
         factory = RepositoryFactory(session=db_session, user_context=user_context)
         # Event broker is optional for tool discovery
         service = MCPServerInstanceService(
@@ -346,7 +344,11 @@ async def oauth_callback(
         )
         # Fire and forget — don't block the user redirect
         import asyncio
-        asyncio.ensure_future(_discover_after_oauth(service, UUID(instance_id), db_session))
+        task = asyncio.create_task(
+            _discover_after_oauth(service, UUID(instance_id), db_session)
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     except Exception as discover_err:
         logger.warning("Failed to schedule tool discovery after OAuth: %s", discover_err)
 

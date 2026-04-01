@@ -13,7 +13,7 @@ class SecretsToolset(Toolset):
     @tool_method
     async def list(self) -> str:
         """List all secret names in the workspace (values are not returned)."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (_session, _user_ctx, _repo_factory, _event_broker, secret_mgr):
             secrets = await secret_mgr.list_secrets()
             return json.dumps(
                 [{"name": s.name, "id": str(s.id)} for s in secrets],
@@ -23,13 +23,13 @@ class SecretsToolset(Toolset):
     @tool_method
     async def create(self, name: str, value: str) -> str:
         """Create or update a secret."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (_session, _user_ctx, _repo_factory, _event_broker, secret_mgr):
             await secret_mgr.set_secret(name, value)
             return json.dumps({"created": True, "name": name})
 
     @tool_method
     async def delete(self, name: str) -> str:
         """Delete a secret by name."""
-        async with platform_context() as (session, user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (_session, _user_ctx, _repo_factory, _event_broker, secret_mgr):
             await secret_mgr.delete_secret(name)
             return json.dumps({"deleted": True, "name": name})
