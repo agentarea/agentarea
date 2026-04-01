@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -92,6 +93,7 @@ export function TeamSwitcher({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -158,7 +160,9 @@ export function TeamSwitcher({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="gap-2 p-2 cursor-pointer"
-              onClick={() => setProDialogOpen(true)}
+              onSelect={() => {
+                setTimeout(() => setProDialogOpen(true), 0);
+              }}
             >
               <div className="flex size-6 items-center justify-center rounded-md border bg-primary/10">
                 <Plus className="size-4 text-primary" />
