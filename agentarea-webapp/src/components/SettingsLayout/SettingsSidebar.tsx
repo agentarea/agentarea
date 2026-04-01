@@ -7,6 +7,7 @@ import {
   CreditCard,
   Download,
   Key,
+  ScrollText,
   User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,11 +38,12 @@ const settingsNav = [
     items: [
       { title: "API Keys", href: "/admin/api-keys", icon: Key },
       { title: "Import / Export", href: "/admin/workspace", icon: Download },
+      { title: "Audit Log", href: "/settings/audit", icon: ScrollText },
     ],
   },
 ];
 
-export default function SettingsSidebar() {
+export function SettingsSidebarContent() {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -50,7 +52,7 @@ export default function SettingsSidebar() {
       : pathname.startsWith(href);
 
   return (
-    <Sidebar collapsible="icon">
+    <>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -95,6 +97,14 @@ export default function SettingsSidebar() {
         <NavUser />
       </SidebarFooter>
       <SidebarRail />
+    </>
+  );
+}
+
+export default function SettingsSidebar() {
+  return (
+    <Sidebar collapsible="icon">
+      <SettingsSidebarContent />
     </Sidebar>
   );
 }
