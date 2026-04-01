@@ -232,7 +232,7 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
 };
 
 // Uses the global /v1/tasks/ endpoint which returns total_cost and agent_name
-export { getAllTasks } from "@/lib/api-factory";
+export const getAllTasks = api.getAllTasks;
 
 export const listProviderConfigsWithModelInstances = async (params?: {
   provider_spec_id?: string;
