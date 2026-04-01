@@ -44,4 +44,27 @@ async def platform_context() -> AsyncIterator[
 
         yield session, user_context, repo_factory, event_broker, secret_manager
 
-        await session.commit()
+
+@asynccontextmanager
+async def platform_read_context() -> AsyncIterator[
+    tuple[AsyncSession, UserContext, RepositoryFactory, EventBroker, BaseSecretManager]
+]:
+    """Create a per-request read-only platform context for tool execution.
+
+    Uses AUTOCOMMIT read sessions to avoid transaction lifecycle coupling in
+    tool calls that only read data.
+    """
+    from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
+    from agentarea_common.infrastructure.connection_manager import get_connection_manager
+    from agentarea_common.infrastructure.database import db
+    from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+
+    user_context = get_mcp_user_context()
+    connection_manager = get_connection_manager()
+    event_broker = await connection_manager.get_event_broker()
+
+    async with db.read_session() as session:
+        repo_factory = RepositoryFactory(session, user_context)
+        secret_manager = get_real_secret_manager(session=session, user_context=user_context)
+
+        yield session, user_context, repo_factory, event_broker, secret_manager

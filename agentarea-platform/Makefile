@@ -1,4 +1,4 @@
-.PHONY: help install sync run-api run-worker test lint format build-apps
+.PHONY: help install sync run-api run-worker test test-smoke lint format build-apps
 
 help:
 	@echo "Available commands:"
@@ -7,6 +7,7 @@ help:
 	@echo "  run-api     - Run the API application"
 	@echo "  run-worker  - Run the worker application"
 	@echo "  test        - Run tests"
+	@echo "  test-smoke  - Run smoke integration tests (real infra)"
 	@echo "  lint        - Run linting"
 	@echo "  format      - Format code"
 	@echo "  build-apps  - Build both applications"
@@ -26,6 +27,9 @@ run-worker:
 
 test:
 	uv run python -m pytest tests/unit tests/functional apps/api/tests libs/common/tests libs/tasks/tests -m "not integration"
+
+test-smoke:
+	uv run python -m pytest tests/integration/test_smoke_infra_paths.py -m "smoke" -x --tb=short
 
 lint:
 	uv run ruff check

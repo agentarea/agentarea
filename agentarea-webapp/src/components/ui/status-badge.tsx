@@ -53,6 +53,8 @@ const getStatusBadgeVariant = (status: string, variant: string = "default") => {
       case "error":
       case "cancelled":
         return "destructive";
+      case "blocked":
+        return "orange";
       case "paused":
       case "suspended":
         return "orange";
@@ -77,6 +79,8 @@ const getStatusBadgeVariant = (status: string, variant: string = "default") => {
     case "failed":
     case "cancelled":
       return "destructive";
+    case "blocked":
+      return "orange";
     case "info":
     case "processing":
     case "in_progress":

@@ -20,6 +20,7 @@ const TASK_STATUSES = [
   "completed",
   "success",
   "failed",
+  "blocked",
   "error",
   "paused",
   "pending",
@@ -110,6 +111,8 @@ export function TasksFilters({
                             ? "bg-green-500"
                             : status === "paused"
                               ? "bg-yellow-500"
+                              : status === "blocked"
+                                ? "bg-orange-500"
                               : status === "failed" || status === "error"
                                 ? "bg-red-500"
                                 : "bg-gray-400"

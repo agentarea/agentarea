@@ -156,30 +156,60 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
         try:
             handle = client.get_workflow_handle(execution_id)
+            description = await handle.describe()
+            temporal_status = description.status.name.lower()
 
-            # Check if workflow is complete
-            try:
+            status_map = {
+                "running": "running",
+                "completed": "completed",
+                "failed": "failed",
+                "canceled": "cancelled",
+                "terminated": "failed",
+                "timed_out": "failed",
+                "continued_as_new": "running",
+            }
+            mapped_status = status_map.get(temporal_status, temporal_status)
+
+            response: dict[str, Any] = {
+                "status": mapped_status,
+                "success": True if mapped_status == "completed" else None,
+                "result": None,
+                "start_time": description.start_time.isoformat() if description.start_time else None,
+                "end_time": description.close_time.isoformat() if description.close_time else None,
+                "execution_time": (
+                    description.execution_time.total_seconds()
+                    if getattr(description, "execution_time", None)
+                    and hasattr(description.execution_time, "total_seconds")
+                    else None
+                ),
+            }
+
+            if mapped_status == "completed":
                 result = await handle.result()
-
-                return {
-                    "status": "completed",
-                    "success": True,
-                    "result": {
-                        "response": getattr(result, "final_response", str(result)),
-                        "conversation_history": getattr(result, "conversation_history", []),
-                        "execution_metrics": getattr(result, "execution_metrics", {}),
-                    },
-                    "start_time": None,  # TODO: Get from Temporal
-                    "end_time": datetime.now().isoformat(),
+                response["result"] = {
+                    "response": getattr(result, "final_response", str(result)),
+                    "conversation_history": getattr(result, "conversation_history", []),
+                    "execution_metrics": getattr(result, "execution_metrics", {}),
                 }
+                response["success"] = True
+            elif mapped_status in {"failed", "cancelled"}:
+                # Best-effort extraction of terminal failure details.
+                try:
+                    await handle.result()
+                except Exception as e:
+                    response["error"] = str(e)
+                    response["success"] = False
 
-            except Exception:
-                # Workflow still running or failed
-                return {
-                    "status": "running",
-                    "success": None,
-                    "result": None,
-                }
+                    error_text = str(e).lower()
+                    if (
+                        "insufficient balance" in error_text
+                        or "no resource package" in error_text
+                        or "quota exceeded" in error_text
+                    ):
+                        response["status"] = "blocked"
+                        response["error_type"] = "provider_quota_exceeded"
+
+            return response
 
         except Exception as e:
             logger.error(f"Failed to get workflow status: {e}")

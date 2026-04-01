@@ -120,6 +120,7 @@ class ExecutionStatus:
     PLANNING: Final[str] = "planning"
     EXECUTING: Final[str] = "executing"
     WAITING_FOR_APPROVAL: Final[str] = "waiting_for_approval"
+    BLOCKED: Final[str] = "blocked"
     TOOL_EXECUTION: Final[str] = "tool_execution"
     EVALUATING: Final[str] = "evaluating"
     COMPLETED: Final[str] = "completed"

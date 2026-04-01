@@ -87,6 +87,7 @@ dev = [
     "agentarea-api",
     "agentarea-worker",
     "pytest-env>=1.1.5",
+    "greenlet>=3.3.2",
 ]
 
 test = [
@@ -202,6 +203,7 @@ addopts = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "smoke: marks tests as smoke tests",
     "unit: marks tests as unit tests",
 ]
 asyncio_mode = "auto"
