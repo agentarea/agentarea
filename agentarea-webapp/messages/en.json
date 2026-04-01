@@ -228,6 +228,7 @@
     "tools": "Tools",
     "noTools": "No tools",
     "createTask": "Create Task",
+    "activeTasks": "Active Tasks",
     "currentTasks": "Current Tasks",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
