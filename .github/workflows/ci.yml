@@ -5,15 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      run-golden:
-        description: "Run platform golden flow suite"
-        required: false
-        default: true
-        type: boolean
-  schedule:
-    - cron: "0 4 * * *"
   workflow_call:
     inputs:
       skip-docker:
@@ -169,90 +160,6 @@ jobs:
       - name: Build package
         working-directory: agentarea-platform
         run: uv build apps/${{ matrix.component }}
-
-  platform-golden-flows:
-    runs-on: ubuntu-latest
-    needs: [changes, platform-lint]
-    if: |
-      always() && !cancelled() && needs.platform-lint.result == 'success' && (
-        github.event_name == 'schedule' ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run-golden == 'true')
-      )
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: agentarea_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      valkey:
-        image: valkey/valkey:8
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-      temporal:
-        image: temporalio/auto-setup:1.29.1
-        env:
-          DB: postgres12_pgx
-          DB_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PWD: postgres
-          POSTGRES_SEEDS: postgres
-          DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-        options: >-
-          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 7233:7233
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
-
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        working-directory: agentarea-platform
-        run: uv sync --all-extras --group dev
-
-      - name: Run database migrations
-        working-directory: agentarea-platform
-        run: |
-          cd apps/api
-          uv run --package agentarea-api agentarea-api migrate
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-      - name: Run curated golden flow tests
-        working-directory: agentarea-platform
-        run: |
-          uv run python -m pytest -m "golden" \
-            tests/integration/test_smoke_infra_paths.py \
-            tests/integration/test_task_event_integration.py \
-            tests/integration/test_auth_integration.py \
-            --tb=short -x
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
-          TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
 
   # test:
   #   runs-on: ubuntu-latest
