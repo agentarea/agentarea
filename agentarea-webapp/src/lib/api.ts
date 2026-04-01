@@ -231,25 +231,8 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   return { data: messages, error: null };
 };
 
-export const getAllTasks = async () => {
-  const { data: agents, error: agentsError } = await listAgents();
-  if (agentsError || !agents) return { data: null, error: agentsError };
-
-  const tasks = await Promise.all(
-    agents.map(async (agent: any) => {
-      const { data: agentTasks, error } = await listAgentTasks(agent.id);
-      if (error || !agentTasks) return [];
-
-      return agentTasks.map((task: any) => ({
-        ...task,
-        agent_name: agent.name,
-        agent_description: agent.description,
-      }));
-    })
-  );
-
-  return { data: tasks.flat(), error: null };
-};
+// Uses the global /v1/tasks/ endpoint which returns total_cost and agent_name
+export { getAllTasks } from "@/lib/api-factory";
 
 export const listProviderConfigsWithModelInstances = async (params?: {
   provider_spec_id?: string;

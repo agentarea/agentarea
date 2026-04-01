@@ -113,16 +113,29 @@ export default function TasksList({
     },
   ];
 
+  const totalCost = initialTasks.reduce((sum, t) => sum + ((t as any).total_cost || 0), 0);
+
   // Render table view
   if (viewMode === "table") {
     return (
-      <Table
-        data={initialTasks}
-        columns={taskColumns}
-        onRowClick={(task) => {
-          router.push(`/tasks/${task.id}`);
-        }}
-      />
+      <div>
+        <Table
+          data={initialTasks}
+          columns={taskColumns}
+          onRowClick={(task) => {
+            router.push(`/tasks/${task.id}`);
+          }}
+        />
+        {totalCost > 0 && (
+          <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-sm">
+            <span className="text-muted-foreground">Total:</span>
+            <span className="flex items-center gap-1 font-mono font-semibold">
+              <DollarSign className="h-3.5 w-3.5" />
+              {totalCost.toFixed(4)}
+            </span>
+          </div>
+        )}
+      </div>
     );
   }
 

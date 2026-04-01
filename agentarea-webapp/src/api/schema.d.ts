@@ -617,98 +617,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agents/{agent_id}/wallet": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Wallet
-         * @description Get wallet configuration for an agent (no decrypted credentials).
-         */
-        get: operations["get_wallet_v1_agents__agent_id__wallet_get"];
-        /**
-         * Update Wallet
-         * @description Update wallet configuration.
-         */
-        put: operations["update_wallet_v1_agents__agent_id__wallet_put"];
-        /**
-         * Create Wallet
-         * @description Create a wallet for an agent.
-         */
-        post: operations["create_wallet_v1_agents__agent_id__wallet_post"];
-        /**
-         * Delete Wallet
-         * @description Delete wallet and associated credentials.
-         */
-        delete: operations["delete_wallet_v1_agents__agent_id__wallet_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/wallet/balance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Wallet Balance
-         * @description Get current service budget status.
-         */
-        get: operations["get_wallet_balance_v1_agents__agent_id__wallet_balance_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/wallet/fund": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Fund Wallet
-         * @description Update the service budget amount.
-         */
-        post: operations["fund_wallet_v1_agents__agent_id__wallet_fund_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/wallet/payments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Payment History
-         * @description Get paginated payment history for an agent.
-         */
-        get: operations["get_payment_history_v1_agents__agent_id__wallet_payments_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/api-keys/": {
         parameters: {
             query?: never;
@@ -757,6 +665,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audit-logs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audit Logs
+         * @description List audit events for the current workspace.
+         */
+        get: operations["list_audit_logs_v1_audit_logs__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compound-mcps/": {
         parameters: {
             query?: never;
@@ -794,6 +722,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compound-mcps/{compound_id}/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Compound Endpoint Info
+         * @description Return the MCP endpoint URL for a compound MCP.
+         */
+        get: operations["get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compound-mcps/{compound_id}/members": {
         parameters: {
             query?: never;
@@ -824,6 +772,49 @@ export interface paths {
         post?: never;
         /** Remove Compound Mcp Member */
         delete: operations["remove_compound_mcp_member_v1_compound_mcps__compound_id__members__instance_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compound-mcps/{compound_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Compound Proxy
+         * @description Build and register a compound MCP proxy server.
+         *
+         *     This discovers tools from all member instances and makes the compound
+         *     available as an MCP endpoint.  Call this after adding/removing members.
+         */
+        post: operations["start_compound_proxy_v1_compound_mcps__compound_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compound-mcps/{compound_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Compound Proxy
+         * @description Stop a running compound MCP proxy.
+         */
+        post: operations["stop_compound_proxy_v1_compound_mcps__compound_id__stop_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -928,6 +919,55 @@ export interface paths {
          * @description Immediately revoke an OAuth-protected link.
          */
         delete: operations["revoke_oauth_link_v1_mcp_oauth_links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Authorize
+         * @description Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.
+         *
+         *     1. Look up the MCP instance's remote URL
+         *     2. Discover the authorization server (RFC 9728 → RFC 8414)
+         *     3. Dynamically register as an OAuth client (RFC 7591)
+         *     4. Generate PKCE pair and state
+         *     5. Redirect user to the authorization endpoint
+         */
+        get: operations["oauth_authorize_v1_mcp_oauth_authorize_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Callback
+         * @description OAuth callback — exchange code for token and store in MCPAuthConfig.
+         *
+         *     This endpoint does NOT require auth (the user is mid-redirect from the
+         *     remote AS). The state token proves the flow was initiated by our /authorize.
+         */
+        get: operations["oauth_callback_v1_mcp_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1117,6 +1157,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-server-instances/{instance_id}/start-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Bundle Proxy
+         * @description Build and register a bundle MCP proxy server.
+         */
+        post: operations["start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/{instance_id}/stop": {
         parameters: {
             query?: never;
@@ -1128,6 +1188,26 @@ export interface paths {
         put?: never;
         /** Stop Mcp Server Instance */
         post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/stop-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Bundle Proxy
+         * @description Stop a running bundle MCP proxy.
+         */
+        post: operations["stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1837,6 +1917,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-configs/discover-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Models Preview
+         * @description Discover models from a provider API using the provided API key, without requiring a saved config.
+         */
+        post: operations["discover_models_preview_v1_provider_configs_discover_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/provider-configs/with-instances": {
         parameters: {
             query?: never;
@@ -1880,6 +1980,26 @@ export interface paths {
          * @description Delete a provider configuration.
          */
         delete: operations["delete_provider_config_v1_provider_configs__config_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-configs/{config_id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Models
+         * @description Discover available models from the provider API and sync to model specs.
+         */
+        post: operations["discover_models_v1_provider_configs__config_id__discover_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2331,6 +2451,26 @@ export interface paths {
          *         All users in the same workspace can see all workspace tasks.
          */
         get: operations["get_all_tasks_v1_tasks__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task By Id
+         * @description Get a single task by ID across all agents.
+         */
+        get: operations["get_task_by_id_v1_tasks__task_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3177,6 +3317,10 @@ export interface components {
             name: string;
             /** Planning */
             planning?: boolean | null;
+            /** Skills */
+            skills?: {
+                [key: string]: unknown;
+            }[] | null;
             /** Status */
             status: string;
             /** Tools */
@@ -3225,6 +3369,58 @@ export interface components {
         AssociationBody: {
             /** Id */
             id: string;
+        };
+        /**
+         * AuditEventResponse
+         * @description Audit event response schema.
+         */
+        AuditEventResponse: {
+            /** Action */
+            action: string;
+            /** Actor Id */
+            actor_id: string;
+            /** Actor Type */
+            actor_type: string;
+            /** Changes */
+            changes: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Metadata */
+            event_metadata: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Request Id */
+            request_id: string | null;
+            /** Resource Id */
+            resource_id: string | null;
+            /** Resource Type */
+            resource_type: string;
+            /** Source Ip */
+            source_ip: string | null;
+            /** User Agent */
+            user_agent: string | null;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /**
+         * AuditLogListResponse
+         * @description Paginated audit log response.
+         */
+        AuditLogListResponse: {
+            /** Events */
+            events: components["schemas"]["AuditEventResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** Body_import_workspace_config_file_v1_workspace_import_file_post */
         Body_import_workspace_config_file_v1_workspace_import_file_post: {
@@ -3302,6 +3498,8 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
             /**
              * Id
              * Format: uuid
@@ -3326,23 +3524,126 @@ export interface components {
             /** Routing Mode */
             routing_mode?: string | null;
         };
-        /** CreateWalletRequest */
-        CreateWalletRequest: {
-            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
-            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
+        /** DiscoverPreviewModelResponse */
+        DiscoverPreviewModelResponse: {
+            /** Context Window */
+            context_window: number;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
             /**
-             * Service Budget Period
-             * @default execution
-             */
-            service_budget_period: string;
-            /**
-             * Service Budget Usd
+             * Input Cost Per Token
              * @default 0
              */
-            service_budget_usd: number;
-            /** Wallet Type */
-            wallet_type: string;
-            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
+            input_cost_per_token: number;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number;
+            /** Model Name */
+            model_name: string;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean;
+        };
+        /** DiscoverPreviewRequest */
+        DiscoverPreviewRequest: {
+            /** Api Key */
+            api_key: string;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
+            /** Provider Key */
+            provider_key: string;
+        };
+        /** DiscoverPreviewResponse */
+        DiscoverPreviewResponse: {
+            /** Discovered */
+            discovered: number;
+            /** Models */
+            models: components["schemas"]["DiscoverPreviewModelResponse"][];
+            /** New Models */
+            new_models: number;
+        };
+        /** DiscoveredModelResponse */
+        DiscoveredModelResponse: {
+            /** Context Window */
+            context_window: number;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number;
+            /** Model Name */
+            model_name: string;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean;
+        };
+        /** DiscoveryResponse */
+        DiscoveryResponse: {
+            /** Discovered */
+            discovered: number;
+            /** Models */
+            models: components["schemas"]["DiscoveredModelResponse"][];
+            /** New Models */
+            new_models: number;
         };
         /** EscalationResolution */
         EscalationResolution: {
@@ -3456,11 +3757,6 @@ export interface components {
              * Format: uuid
              */
             trigger_id: string;
-        };
-        /** FundWalletRequest */
-        FundWalletRequest: {
-            /** Service Budget Usd */
-            service_budget_usd: number;
         };
         /** GovernanceOverlay */
         GovernanceOverlay: {
@@ -3659,9 +3955,9 @@ export interface components {
             description: string;
             /**
              * Docker Image Url
-             * @description Docker image URL
+             * @description Docker image URL (for container-based servers)
              */
-            docker_image_url: string;
+            docker_image_url?: string | null;
             /**
              * Env Schema
              * @description Environment variable schema
@@ -3680,6 +3976,11 @@ export interface components {
              * @description Name of the MCP server
              */
             name: string;
+            /**
+             * Remote Url
+             * @description Remote URL (for HTTP-based servers like GitHub Copilot)
+             */
+            remote_url?: string | null;
             /**
              * Tags
              * @description Tags for categorization
@@ -3793,6 +4094,8 @@ export interface components {
             is_public: boolean;
             /** Name */
             name: string;
+            /** Remote Url */
+            remote_url?: string | null;
             /** Status */
             status: string;
             /** Tags */
@@ -3847,18 +4150,6 @@ export interface components {
              * @description Version of the MCP server
              */
             version?: string | null;
-        };
-        /** MPPConfigSchema */
-        MPPConfigSchema: {
-            /** Payment Method Types */
-            payment_method_types?: string[];
-            /**
-             * Session Budget Usd
-             * @default 10
-             */
-            session_budget_usd: number;
-            /** Stripe Profile Id */
-            stripe_profile_id?: string | null;
         };
         /** ModelInstanceCreate */
         ModelInstanceCreate: {
@@ -4165,17 +4456,6 @@ export interface components {
             /** Spec Url */
             spec_url?: string | null;
         };
-        /** PaginatedPaymentsResponse */
-        PaginatedPaymentsResponse: {
-            /** Items */
-            items: components["schemas"]["PaymentRecordResponse"][];
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Total */
-            total: number;
-        };
         /** PaginatedResponse[MCPServerResponse] */
         PaginatedResponse_MCPServerResponse_: {
             /** Has Next */
@@ -4188,37 +4468,6 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
-        };
-        /** PaymentRecordResponse */
-        PaymentRecordResponse: {
-            /** Agent Id */
-            agent_id: string;
-            /** Amount Usd */
-            amount_usd: number;
-            /** Created At */
-            created_at?: string | null;
-            /** Error Message */
-            error_message?: string | null;
-            /** Execution Id */
-            execution_id: string;
-            /** Id */
-            id: string;
-            /** Protocol */
-            protocol: string;
-            /** Protocol Metadata */
-            protocol_metadata?: {
-                [key: string]: unknown;
-            } | null;
-            /** Recipient */
-            recipient: string;
-            /** Status */
-            status: string;
-            /** Tool Call Id */
-            tool_call_id: string;
-            /** Tool Name */
-            tool_name: string;
-            /** Tx Hash */
-            tx_hash?: string | null;
         };
         /** ProjectAgentRef */
         ProjectAgentRef: {
@@ -4874,6 +5123,8 @@ export interface components {
             } | string | null;
             /** Status */
             status: string;
+            /** Total Cost */
+            total_cost?: number | null;
         };
         /**
          * TaskWithAgent
@@ -4911,6 +5162,8 @@ export interface components {
             } | string | null;
             /** Status */
             status: string;
+            /** Total Cost */
+            total_cost?: number | null;
         };
         /**
          * ToolConfigYAML
@@ -4957,7 +5210,7 @@ export interface components {
             /** A2A Url */
             a2a_url?: string | null;
             /** Allowed Tools */
-            allowed_tools?: string[] | null;
+            allowed_tools?: unknown[] | null;
             /** Description Override */
             description_override?: string | null;
             /** Disabled Methods */
@@ -5223,20 +5476,6 @@ export interface components {
             /** Updated */
             updated: number;
         };
-        /** UpdateWalletRequest */
-        UpdateWalletRequest: {
-            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
-            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
-            /** Service Budget Period */
-            service_budget_period?: string | null;
-            /** Service Budget Usd */
-            service_budget_usd?: number | null;
-            /** Status */
-            status?: string | null;
-            /** Wallet Type */
-            wallet_type?: string | null;
-            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
-        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -5249,79 +5488,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /** WalletBalanceResponse */
-        WalletBalanceResponse: {
-            /** Remaining */
-            remaining: number;
-            /** Service Budget Period */
-            service_budget_period: string;
-            /** Service Budget Usd */
-            service_budget_usd: number;
-            /** Total Spent Current Period */
-            total_spent_current_period: number;
-        };
-        /** WalletCredentialsSchema */
-        WalletCredentialsSchema: {
-            /** Mpp Tempo Key */
-            mpp_tempo_key?: string | null;
-            /** X402 Private Key */
-            x402_private_key?: string | null;
-        };
-        /** WalletResponse */
-        WalletResponse: {
-            /** Agent Id */
-            agent_id: string;
-            /** Created At */
-            created_at?: string | null;
-            /**
-             * Has Credentials
-             * @default false
-             */
-            has_credentials: boolean;
-            /** Id */
-            id: string;
-            /** Mpp Config */
-            mpp_config?: {
-                [key: string]: unknown;
-            } | null;
-            /** Service Budget Period */
-            service_budget_period: string;
-            /** Service Budget Usd */
-            service_budget_usd: number;
-            /** Status */
-            status: string;
-            /** Updated At */
-            updated_at?: string | null;
-            /** Wallet Type */
-            wallet_type: string;
-            /** X402 Config */
-            x402_config?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** X402ConfigSchema */
-        X402ConfigSchema: {
-            /**
-             * Facilitator Url
-             * @default https://x402.org/facilitator
-             */
-            facilitator_url: string;
-            /**
-             * Network
-             * @default eip155:8453
-             */
-            network: string;
-            /**
-             * Scheme
-             * @default exact
-             */
-            scheme: string;
-            /**
-             * Signer Type
-             * @default evm
-             */
-            signer_type: string;
         };
         /** ModelSpecResponse */
         agentarea_api__api__v1__model_specs__ModelSpecResponse: {
@@ -5340,16 +5506,46 @@ export interface components {
             display_name: string;
             /** Id */
             id: string;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number | null;
             /** Is Active */
             is_active: boolean;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number | null;
             /** Model Name */
             model_name: string;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number | null;
             /** Provider Key */
             provider_key?: string | null;
             /** Provider Name */
             provider_name?: string | null;
             /** Provider Spec Id */
             provider_spec_id: string;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean | null;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean | null;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean | null;
             /**
              * Updated At
              * Format: date-time
@@ -5371,12 +5567,42 @@ export interface components {
             display_name: string;
             /** Id */
             id: string;
+            /**
+             * Input Cost Per Token
+             * @default 0
+             */
+            input_cost_per_token: number | null;
             /** Is Active */
             is_active: boolean;
+            /**
+             * Max Output Tokens
+             * @default 4096
+             */
+            max_output_tokens: number | null;
             /** Model Name */
             model_name: string;
+            /**
+             * Output Cost Per Token
+             * @default 0
+             */
+            output_cost_per_token: number | null;
             /** Provider Spec Id */
             provider_spec_id: string;
+            /**
+             * Supports Function Calling
+             * @default false
+             */
+            supports_function_calling: boolean | null;
+            /**
+             * Supports Reasoning
+             * @default false
+             */
+            supports_reasoning: boolean | null;
+            /**
+             * Supports Vision
+             * @default false
+             */
+            supports_vision: boolean | null;
             /**
              * Updated At
              * Format: date-time
@@ -6441,244 +6667,6 @@ export interface operations {
             };
         };
     };
-    get_wallet_v1_agents__agent_id__wallet_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WalletResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_wallet_v1_agents__agent_id__wallet_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateWalletRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WalletResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_wallet_v1_agents__agent_id__wallet_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateWalletRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WalletResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_wallet_v1_agents__agent_id__wallet_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_wallet_balance_v1_agents__agent_id__wallet_balance_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WalletBalanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    fund_wallet_v1_agents__agent_id__wallet_fund_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FundWalletRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WalletResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_payment_history_v1_agents__agent_id__wallet_payments_get: {
-        parameters: {
-            query?: {
-                /** @description Filter by protocol (x402, mpp) */
-                protocol?: string | null;
-                /** @description Filter by status */
-                status?: string | null;
-                /** @description Filter from date */
-                from_date?: string | null;
-                /** @description Filter to date */
-                to_date?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedPaymentsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_api_keys_v1_api_keys__get: {
         parameters: {
             query?: never;
@@ -6780,6 +6768,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_audit_logs_v1_audit_logs__get: {
+        parameters: {
+            query?: {
+                /** @description Filter by action (e.g. agent.create) */
+                action?: string | null;
+                /** @description Filter by actor ID */
+                actor_id?: string | null;
+                /** @description Filter by resource type */
+                resource_type?: string | null;
+                /** @description Filter by resource ID */
+                resource_id?: string | null;
+                /** @description Events after this time (ISO 8601) */
+                since?: string | null;
+                /** @description Events before this time (ISO 8601) */
+                until?: string | null;
+                /** @description Cursor for pagination */
+                cursor?: string | null;
+                /** @description Max events to return */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogListResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -6940,6 +6974,37 @@ export interface operations {
             };
         };
     };
+    get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_compound_mcp_members_v1_compound_mcps__compound_id__members_get: {
         parameters: {
             query?: never;
@@ -7024,6 +7089,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_compound_proxy_v1_compound_mcps__compound_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_compound_proxy_v1_compound_mcps__compound_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                compound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7296,6 +7423,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_authorize_v1_mcp_oauth_authorize_get: {
+        parameters: {
+            query: {
+                /** @description MCP instance to connect */
+                instance_id: string;
+                /** @description Frontend URL to redirect after OAuth completes */
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_v1_mcp_oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+                error_description?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7674,7 +7869,69 @@ export interface operations {
             };
         };
     };
+    start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -9292,6 +9549,39 @@ export interface operations {
             };
         };
     };
+    discover_models_preview_v1_provider_configs_discover_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_provider_configs_with_instances_v1_provider_configs_with_instances_get: {
         parameters: {
             query?: {
@@ -9408,6 +9698,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_models_v1_provider_configs__config_id__discover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10337,6 +10658,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskWithAgent"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_by_id_v1_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskWithAgent"];
                 };
             };
             /** @description Validation Error */

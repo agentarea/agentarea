@@ -1,16 +1,16 @@
 """Unit tests for audit decorator behavior."""
 
+from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from agentarea_common.audit.decorator import audited
 
 
 class _FakeAuditService:
     """Captures audit calls for assertions."""
 
-    calls: list[dict] = []
+    calls: ClassVar[list[dict]] = []
 
     def __init__(self, session, user_context):
         self.session = session
