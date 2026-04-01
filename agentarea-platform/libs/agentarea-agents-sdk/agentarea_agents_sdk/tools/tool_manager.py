@@ -91,8 +91,7 @@ class ToolManager:
                 # Normalize allowed_tools: can be str[] or {tool_name, ...}[]
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t)
-                    for t in raw_allowed
+                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
                     tool_name, allowed_names, mcp_server_instance_service
@@ -171,6 +170,7 @@ class ToolManager:
             instance = None
             try:
                 from uuid import UUID as _UUID
+
                 instance_uuid = _UUID(instance_name)
                 instance = await mcp_server_instance_service.get(instance_uuid)
             except (ValueError, TypeError):
@@ -196,7 +196,9 @@ class ToolManager:
             logger.info(f"Discovered {len(mcp_tools)} tools from MCP instance: {instance_name}")
 
         except Exception as e:
-            logger.error(f"Failed to get tools from MCP instance {instance_name}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to get tools from MCP instance {instance_name}: {e}", exc_info=True
+            )
 
         return all_mcp_tools
 

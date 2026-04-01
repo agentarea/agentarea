@@ -308,24 +308,28 @@ async def discover_models_preview(
         if is_new:
             new_count += 1
 
-        results.append(DiscoverPreviewModelResponse(
-            id=str(spec.id),
-            model_name=model.model_name,
-            display_name=model.display_name or model.model_name,
-            context_window=model.context_window,
-            max_output_tokens=model.max_output_tokens,
-            input_cost_per_token=model.input_cost_per_token,
-            output_cost_per_token=model.output_cost_per_token,
-            supports_function_calling=model.supports_function_calling,
-            supports_vision=model.supports_vision,
-            supports_reasoning=model.supports_reasoning,
-            description=model.description or None,
-            is_new=is_new,
-        ))
+        results.append(
+            DiscoverPreviewModelResponse(
+                id=str(spec.id),
+                model_name=model.model_name,
+                display_name=model.display_name or model.model_name,
+                context_window=model.context_window,
+                max_output_tokens=model.max_output_tokens,
+                input_cost_per_token=model.input_cost_per_token,
+                output_cost_per_token=model.output_cost_per_token,
+                supports_function_calling=model.supports_function_calling,
+                supports_vision=model.supports_vision,
+                supports_reasoning=model.supports_reasoning,
+                description=model.description or None,
+                is_new=is_new,
+            )
+        )
 
     logger.info(
         "Discovery preview for provider %s: %d found, %d new",
-        data.provider_key, len(results), new_count,
+        data.provider_key,
+        len(results),
+        new_count,
     )
 
     return DiscoverPreviewResponse(
@@ -464,23 +468,27 @@ async def discover_models(
         if is_new:
             new_count += 1
 
-        results.append(DiscoveredModelResponse(
-            model_name=model.model_name,
-            display_name=model.display_name or model.model_name,
-            context_window=model.context_window,
-            max_output_tokens=model.max_output_tokens,
-            input_cost_per_token=model.input_cost_per_token,
-            output_cost_per_token=model.output_cost_per_token,
-            supports_function_calling=model.supports_function_calling,
-            supports_vision=model.supports_vision,
-            supports_reasoning=model.supports_reasoning,
-            description=model.description or None,
-            is_new=is_new,
-        ))
+        results.append(
+            DiscoveredModelResponse(
+                model_name=model.model_name,
+                display_name=model.display_name or model.model_name,
+                context_window=model.context_window,
+                max_output_tokens=model.max_output_tokens,
+                input_cost_per_token=model.input_cost_per_token,
+                output_cost_per_token=model.output_cost_per_token,
+                supports_function_calling=model.supports_function_calling,
+                supports_vision=model.supports_vision,
+                supports_reasoning=model.supports_reasoning,
+                description=model.description or None,
+                is_new=is_new,
+            )
+        )
 
     logger.info(
         "Discovery for provider %s: %d found, %d new",
-        provider_key, len(results), new_count,
+        provider_key,
+        len(results),
+        new_count,
     )
 
     return DiscoveryResponse(

@@ -96,9 +96,7 @@ class MCPOAuthClientService:
             resp = await client.get(mcp_url, follow_redirects=True)
 
             if resp.status_code != 401:
-                raise MCPOAuthDiscoveryError(
-                    f"Expected 401 from {mcp_url}, got {resp.status_code}"
-                )
+                raise MCPOAuthDiscoveryError(f"Expected 401 from {mcp_url}, got {resp.status_code}")
 
             www_auth = resp.headers.get("www-authenticate", "")
             logger.info("WWW-Authenticate header: %s", www_auth)
@@ -110,8 +108,7 @@ class MCPOAuthClientService:
                 parsed = urlparse(mcp_url)
                 path = parsed.path.rstrip("/")
                 resource_metadata_url = (
-                    f"{parsed.scheme}://{parsed.netloc}"
-                    f"/.well-known/oauth-protected-resource{path}"
+                    f"{parsed.scheme}://{parsed.netloc}/.well-known/oauth-protected-resource{path}"
                 )
             logger.info("Using resource_metadata_url: %s", resource_metadata_url)
 
@@ -181,9 +178,7 @@ class MCPOAuthClientService:
             except (httpx.HTTPError, KeyError):
                 continue
 
-        raise MCPOAuthDiscoveryError(
-            f"Could not fetch AS metadata from {as_base}"
-        )
+        raise MCPOAuthDiscoveryError(f"Could not fetch AS metadata from {as_base}")
 
     async def register_client(
         self,

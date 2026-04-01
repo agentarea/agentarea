@@ -85,9 +85,7 @@ async def start_compound_proxy(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Failed to start compound proxy for %s", compound_id)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start proxy: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Failed to start proxy: {exc}") from exc
 
 
 @router.post("/v1/compound-mcps/{compound_id}/stop")
@@ -134,12 +132,14 @@ async def start_bundle_proxy(
         registry[key] = proxy.get_asgi_app()
         logger.info("Bundle proxy started: %s at /mcp/%s", proxy.name, instance_id)
 
-        return JSONResponse({
-            "status": "started",
-            "instance_id": str(instance_id),
-            "name": proxy.name,
-            "endpoint_url": f"/mcp/{instance_id}",
-        })
+        return JSONResponse(
+            {
+                "status": "started",
+                "instance_id": str(instance_id),
+                "name": proxy.name,
+                "endpoint_url": f"/mcp/{instance_id}",
+            }
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

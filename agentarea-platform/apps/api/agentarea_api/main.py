@@ -264,7 +264,7 @@ def create_app() -> FastAPI:
             if scope["type"] in ("http", "websocket"):
                 path: str = scope.get("path", "")
                 if path.startswith("/mcp/"):
-                    parts = path[len("/mcp/"):].split("/", 1)
+                    parts = path[len("/mcp/") :].split("/", 1)
                     instance_id = parts[0]
 
                     from agentarea_api.api.v1.compound_mcp_registry import registry

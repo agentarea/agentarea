@@ -32,8 +32,7 @@ def get_mcp_user_context():
     ctx = _mcp_user_context_var.get(None)
     if ctx is None:
         raise RuntimeError(
-            "Authentication required. Provide a valid Bearer token "
-            "in the Authorization header."
+            "Authentication required. Provide a valid Bearer token in the Authorization header."
         )
     return ctx
 
@@ -70,13 +69,19 @@ class MCPAuthMiddleware:
             session_id = request.headers.get("mcp-session-id")
             auth_header = request.headers.get("authorization", "")
 
-            print(f"[MCP-AUTH] method={request.method} has_auth={bool(auth_header)} session_id={session_id} cached_sessions={list(self._session_contexts.keys())}", flush=True)
+            print(
+                f"[MCP-AUTH] method={request.method} has_auth={bool(auth_header)} session_id={session_id} cached_sessions={list(self._session_contexts.keys())}",
+                flush=True,
+            )
 
             if auth_header.lower().startswith("bearer "):
                 # Fresh auth — validate token and set ContextVar
-                bearer_token = auth_header[len("bearer "):]
+                bearer_token = auth_header[len("bearer ") :]
                 await self._try_authenticate(bearer_token, request)
-                print(f"[MCP-AUTH] token validated, ctx_set={_mcp_user_context_var.get(None) is not None}", flush=True)
+                print(
+                    f"[MCP-AUTH] token validated, ctx_set={_mcp_user_context_var.get(None) is not None}",
+                    flush=True,
+                )
             elif session_id and session_id in self._session_contexts:
                 # No auth header but known session — restore cached context
                 _mcp_user_context_var.set(self._session_contexts[session_id])
@@ -126,10 +131,7 @@ class MCPAuthMiddleware:
             auth_result = await auth_provider.verify_token(bearer_token)
 
             if auth_result.is_authenticated and auth_result.token:
-                workspace_id = (
-                    request.headers.get("X-Workspace-ID")
-                    or auth_result.token.user_id
-                )
+                workspace_id = request.headers.get("X-Workspace-ID") or auth_result.token.user_id
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,

@@ -58,9 +58,7 @@ class AuditRepository:
             # Cursor-based pagination: fetch events older than cursor
             cursor_event = await self._session.get(AuditEventORM, cursor)
             if cursor_event:
-                stmt = stmt.where(
-                    AuditEventORM.created_at < cursor_event.created_at
-                )
+                stmt = stmt.where(AuditEventORM.created_at < cursor_event.created_at)
 
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

@@ -16,9 +16,7 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
     the request context via ``get_audit_context()``.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Use X-Forwarded-For behind reverse proxy, fall back to direct client
         forwarded = request.headers.get("x-forwarded-for")
         source_ip = (

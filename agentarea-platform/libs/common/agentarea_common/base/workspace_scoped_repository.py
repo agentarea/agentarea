@@ -215,9 +215,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
                 return None
 
             # Store original data for reference
-            {
-                field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)
-            }
+            {field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)}
 
             # Remove immutable fields from updates
             kwargs.pop("created_by", None)

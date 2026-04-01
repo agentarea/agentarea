@@ -183,7 +183,9 @@ class AgentExecutionWorkflow:
             esc.deny_comment = comment if not approved else None
 
             # Emit resolved event so history load knows the outcome
-            event_type = EventTypes.HUMAN_APPROVAL_RECEIVED if approved else EventTypes.HUMAN_APPROVAL_DENIED
+            event_type = (
+                EventTypes.HUMAN_APPROVAL_RECEIVED if approved else EventTypes.HUMAN_APPROVAL_DENIED
+            )
             self.event_manager.add_event(
                 event_type,
                 {
@@ -1238,9 +1240,10 @@ class AgentExecutionWorkflow:
             f"Tool '{tool_name}' approval check: requires_approval={requires_approval}, "
             f"agent_config tools={len((self.state.agent_config or {}).get('tools', []))}"
         )
-        approval_required = bool(
-            self.state.goal and getattr(self.state.goal, "requires_human_approval", False)
-        ) or requires_approval
+        approval_required = (
+            bool(self.state.goal and getattr(self.state.goal, "requires_human_approval", False))
+            or requires_approval
+        )
 
         if approval_required:
             escalation_id = str(workflow.uuid4())
@@ -2416,7 +2419,9 @@ class AgentExecutionWorkflow:
 
             # MCP tools: check per-tool approval in allowed_tools
             if tool_config.get("type") == "mcp":
-                allowed_tools = settings.get("allowed_tools") if isinstance(settings, dict) else None
+                allowed_tools = (
+                    settings.get("allowed_tools") if isinstance(settings, dict) else None
+                )
                 if isinstance(allowed_tools, list):
                     for at in allowed_tools:
                         if isinstance(at, dict) and at.get("tool_name") == tool_name:

@@ -59,9 +59,7 @@ class CompoundMCPProxy:
             return name.lower().replace(" ", "_").replace("-", "_")
         return str(member.mcp_instance_id)[:8]
 
-    async def _discover_member_tools(
-        self, member: CompoundMCPMember
-    ) -> list[dict[str, Any]]:
+    async def _discover_member_tools(self, member: CompoundMCPMember) -> list[dict[str, Any]]:
         """Connect to a member MCP instance and list its tools."""
         instance_id = str(member.mcp_instance_id)
         mcp_url = self.instance_urls.get(instance_id)
@@ -70,9 +68,11 @@ class CompoundMCPProxy:
             return []
 
         try:
-            async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10)
-            ) as (read_stream, write_stream, _):
+            async with streamablehttp_client(mcp_url, timeout=timedelta(seconds=10)) as (
+                read_stream,
+                write_stream,
+                _,
+            ):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
                     result = await session.list_tools()
@@ -101,9 +101,11 @@ class CompoundMCPProxy:
         if not mcp_url:
             raise ValueError(f"No URL for member instance {instance_id}")
 
-        async with streamablehttp_client(
-            mcp_url, timeout=timedelta(seconds=30)
-        ) as (read_stream, write_stream, _):
+        async with streamablehttp_client(mcp_url, timeout=timedelta(seconds=30)) as (
+            read_stream,
+            write_stream,
+            _,
+        ):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 result = await session.call_tool(tool_name, arguments)
@@ -129,9 +131,7 @@ class CompoundMCPProxy:
                 original_name = tool["name"]
                 namespaced_name = f"{namespace}{NS_SEP}{original_name}"
                 tool_desc = tool.get("description", "")
-                instance_name = self.instance_names.get(
-                    str(member.mcp_instance_id), "unknown"
-                )
+                instance_name = self.instance_names.get(str(member.mcp_instance_id), "unknown")
                 full_desc = f"[{instance_name}] {tool_desc}"
 
                 # Capture member + original_name in closure
@@ -165,6 +165,7 @@ class CompoundMCPProxy:
         if not self._server:
             raise RuntimeError("Call build_server() first")
         return self._server.streamable_http_app()
+
 
 @dataclass
 class BundleMember:

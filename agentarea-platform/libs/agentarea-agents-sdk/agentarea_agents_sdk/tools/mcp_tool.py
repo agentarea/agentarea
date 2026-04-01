@@ -186,12 +186,12 @@ class MCPToolFactory:
                                 tools_data = maybe_tools
                                 break
                         except Exception as e:
-                            logger.warning(f"Service.{method_name} failed for {server_instance_id}: {e}")
+                            logger.warning(
+                                f"Service.{method_name} failed for {server_instance_id}: {e}"
+                            )
 
             if not tools_data:
-                logger.warning(
-                    f"No tools found for MCP server instance {server_instance_id}"
-                )
+                logger.warning(f"No tools found for MCP server instance {server_instance_id}")
                 return []
 
             # Normalize tools list shape

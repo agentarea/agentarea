@@ -382,8 +382,6 @@ async def delete_agent(
     return {"status": "success"}
 
 
-
-
 # Include A2A protocol subroutes
 router.include_router(agents_a2a.router, prefix="/{agent_id}", tags=["agents-a2a"])
 

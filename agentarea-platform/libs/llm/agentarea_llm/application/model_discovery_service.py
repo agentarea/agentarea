@@ -80,22 +80,26 @@ class ModelDiscoveryService:
         if provider_key == "ollama":
             for m in data.get("models", []):
                 name = m.get("name", "")
-                models.append(DiscoveredModel(
-                    model_name=name,
-                    display_name=name,
-                ))
+                models.append(
+                    DiscoveredModel(
+                        model_name=name,
+                        display_name=name,
+                    )
+                )
             return models
 
         for m in data.get("data", []):
             model_id = m.get("id", "")
             if not model_id:
                 continue
-            models.append(DiscoveredModel(
-                model_name=model_id,
-                display_name=m.get("name", model_id),
-                context_window=m.get("context_length", 4096),
-                description=m.get("description", ""),
-            ))
+            models.append(
+                DiscoveredModel(
+                    model_name=model_id,
+                    display_name=m.get("name", model_id),
+                    context_window=m.get("context_length", 4096),
+                    description=m.get("description", ""),
+                )
+            )
         return models
 
     async def discover(

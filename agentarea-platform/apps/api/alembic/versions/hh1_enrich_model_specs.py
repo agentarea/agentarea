@@ -18,12 +18,30 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("model_specs", sa.Column("max_output_tokens", sa.Integer(), nullable=True, server_default="4096"))
-    op.add_column("model_specs", sa.Column("input_cost_per_token", sa.Float(), nullable=True, server_default="0.0"))
-    op.add_column("model_specs", sa.Column("output_cost_per_token", sa.Float(), nullable=True, server_default="0.0"))
-    op.add_column("model_specs", sa.Column("supports_function_calling", sa.Boolean(), nullable=True, server_default="false"))
-    op.add_column("model_specs", sa.Column("supports_vision", sa.Boolean(), nullable=True, server_default="false"))
-    op.add_column("model_specs", sa.Column("supports_reasoning", sa.Boolean(), nullable=True, server_default="false"))
+    op.add_column(
+        "model_specs",
+        sa.Column("max_output_tokens", sa.Integer(), nullable=True, server_default="4096"),
+    )
+    op.add_column(
+        "model_specs",
+        sa.Column("input_cost_per_token", sa.Float(), nullable=True, server_default="0.0"),
+    )
+    op.add_column(
+        "model_specs",
+        sa.Column("output_cost_per_token", sa.Float(), nullable=True, server_default="0.0"),
+    )
+    op.add_column(
+        "model_specs",
+        sa.Column("supports_function_calling", sa.Boolean(), nullable=True, server_default="false"),
+    )
+    op.add_column(
+        "model_specs",
+        sa.Column("supports_vision", sa.Boolean(), nullable=True, server_default="false"),
+    )
+    op.add_column(
+        "model_specs",
+        sa.Column("supports_reasoning", sa.Boolean(), nullable=True, server_default="false"),
+    )
 
 
 def downgrade() -> None:

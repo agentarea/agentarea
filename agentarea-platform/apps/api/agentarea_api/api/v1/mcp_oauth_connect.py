@@ -174,6 +174,7 @@ async def oauth_authorize(
     if client_creds is None:
         # Fall back to pre-registered credentials from env vars
         import os
+
         client_id = os.environ.get("MCP_OAUTH_CLIENT_ID", "")
         client_secret = os.environ.get("MCP_OAUTH_CLIENT_SECRET", "")
         if not client_id:
@@ -187,31 +188,37 @@ async def oauth_authorize(
                 ),
             )
         from agentarea_mcp.application.oauth_client_service import OAuthClientCredentials
+
         client_creds = OAuthClientCredentials(client_id=client_id, client_secret=client_secret)
 
     # Generate PKCE pair and state token
     pkce = PKCEPair.generate()
     import secrets
+
     state = secrets.token_urlsafe(32)
 
     # Store everything in Redis so the callback can complete the flow
     redis = await _get_redis()
-    await _store_state(redis, state, {
-        "instance_id": str(instance_id),
-        "workspace_id": str(user_context.workspace_id),
-        "user_id": str(user_context.user_id),
-        "mcp_url": mcp_url,
-        "code_verifier": pkce.verifier,
-        "client_id": client_creds.client_id,
-        "client_secret": client_creds.client_secret,
-        "return_to": return_to,
-        "as_metadata": {
-            "issuer": as_metadata.issuer,
-            "authorization_endpoint": as_metadata.authorization_endpoint,
-            "token_endpoint": as_metadata.token_endpoint,
-            "resource": as_metadata.resource,
+    await _store_state(
+        redis,
+        state,
+        {
+            "instance_id": str(instance_id),
+            "workspace_id": str(user_context.workspace_id),
+            "user_id": str(user_context.user_id),
+            "mcp_url": mcp_url,
+            "code_verifier": pkce.verifier,
+            "client_id": client_creds.client_id,
+            "client_secret": client_creds.client_secret,
+            "return_to": return_to,
+            "as_metadata": {
+                "issuer": as_metadata.issuer,
+                "authorization_endpoint": as_metadata.authorization_endpoint,
+                "token_endpoint": as_metadata.token_endpoint,
+                "resource": as_metadata.resource,
+            },
         },
-    })
+    )
 
     # Build authorization URL
     auth_url = oauth_client.build_authorize_url(
@@ -298,6 +305,7 @@ async def oauth_callback(
     )
     auth_repo = MCPAuthConfigRepository(db_session, user_context)
     from agentarea_api.api.deps.services import get_real_secret_manager
+
     secret_manager = get_real_secret_manager(session=db_session, user_context=user_context)
     auth_service = MCPAuthService(auth_repo, secret_manager)
 
@@ -327,7 +335,9 @@ async def oauth_callback(
 
     logger.info(
         "MCP OAuth connect complete: instance=%s auth_config=%s issuer=%s",
-        instance_id, auth_config.id, as_metadata.issuer,
+        instance_id,
+        auth_config.id,
+        as_metadata.issuer,
     )
 
     # Trigger tool discovery in background — don't block the redirect
@@ -335,6 +345,7 @@ async def oauth_callback(
         # Build service with the same session context
         from agentarea_common.base.repository_factory import RepositoryFactory
         from agentarea_mcp.application.service import MCPServerInstanceService
+
         factory = RepositoryFactory(session=db_session, user_context=user_context)
         # Event broker is optional for tool discovery
         service = MCPServerInstanceService(
@@ -344,9 +355,8 @@ async def oauth_callback(
         )
         # Fire and forget — don't block the user redirect
         import asyncio
-        task = asyncio.create_task(
-            _discover_after_oauth(service, UUID(instance_id), db_session)
-        )
+
+        task = asyncio.create_task(_discover_after_oauth(service, UUID(instance_id), db_session))
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
     except Exception as discover_err:
@@ -359,7 +369,9 @@ async def oauth_callback(
 
 
 async def _discover_after_oauth(
-    service, instance_id: UUID, db_session,
+    service,
+    instance_id: UUID,
+    db_session,
 ) -> None:
     """Background task: discover tools after OAuth connect completes."""
     try:

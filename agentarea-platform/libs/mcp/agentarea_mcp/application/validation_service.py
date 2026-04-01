@@ -65,10 +65,7 @@ class MCPConfigurationValidator:
             url_field = "url" if "url" in json_spec else "endpoint_url"
             if url_field not in json_spec:
                 errors.append("Required field 'url' is missing for type 'url'")
-            elif (
-                not isinstance(json_spec[url_field], str)
-                or not json_spec[url_field].strip()
-            ):
+            elif not isinstance(json_spec[url_field], str) or not json_spec[url_field].strip():
                 errors.append("Field 'url' must be a non-empty string")
             else:
                 url = json_spec[url_field]

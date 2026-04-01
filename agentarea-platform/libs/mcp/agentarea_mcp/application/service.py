@@ -471,7 +471,9 @@ class MCPServerInstanceService:
         instance_type = (instance.json_spec or {}).get("type", "docker")
         if instance_type == "url":
             # External MCP — connect directly to the configured URL
-            mcp_url = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get("url", "")
+            mcp_url = (instance.json_spec or {}).get("endpoint_url") or (
+                instance.json_spec or {}
+            ).get("url", "")
             if not mcp_url:
                 logger.warning("URL-type instance %s has no endpoint_url in json_spec", instance_id)
                 return False
@@ -543,7 +545,9 @@ class MCPServerInstanceService:
             if tools_changed and previous_hash is not None:
                 logger.info(
                     "Tools changed for instance %s: %s -> %s",
-                    instance_id, previous_hash[:12], tools_hash[:12],
+                    instance_id,
+                    previous_hash[:12],
+                    tools_hash[:12],
                 )
 
             new_json_spec["tools_hash"] = tools_hash
@@ -592,9 +596,10 @@ class MCPServerInstanceService:
         elif not sse_url.endswith("/sse"):
             sse_url = sse_url + "/sse"
 
-        async with sse_client(
-            sse_url, timeout=10, headers=headers or None
-        ) as (read_stream, write_stream):
+        async with sse_client(sse_url, timeout=10, headers=headers or None) as (
+            read_stream,
+            write_stream,
+        ):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 return await session.list_tools()

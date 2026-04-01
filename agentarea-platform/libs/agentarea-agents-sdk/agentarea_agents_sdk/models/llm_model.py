@@ -481,8 +481,11 @@ class LLMModel:
                 # Extract cost from _hidden_params (LiteLLM sets this per chunk)
                 if hasattr(chunk, "_hidden_params"):
                     hidden = chunk._hidden_params
-                    rc = (hidden.get("response_cost", 0.0) if isinstance(hidden, dict)
-                          else getattr(hidden, "response_cost", 0.0)) or 0.0
+                    rc = (
+                        hidden.get("response_cost", 0.0)
+                        if isinstance(hidden, dict)
+                        else getattr(hidden, "response_cost", 0.0)
+                    ) or 0.0
                     if rc > 0.0:
                         cost = rc
 
@@ -518,8 +521,11 @@ class LLMModel:
             if cost == 0.0:
                 try:
                     import litellm
+
                     prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
-                    completion_tokens = getattr(usage_info, "completion_tokens", 0) if usage_info else 0
+                    completion_tokens = (
+                        getattr(usage_info, "completion_tokens", 0) if usage_info else 0
+                    )
 
                     # If usage wasn't in chunks, estimate tokens from content
                     if prompt_tokens == 0:
@@ -528,7 +534,9 @@ class LLMModel:
                             messages=[m.model_dump(mode="json") for m in request.messages],
                         )
                     if completion_tokens == 0 and complete_content:
-                        completion_tokens = litellm.token_counter(model=self.model_id, text=complete_content)
+                        completion_tokens = litellm.token_counter(
+                            model=self.model_id, text=complete_content
+                        )
 
                     if prompt_tokens > 0 or completion_tokens > 0:
                         cost = litellm.completion_cost(
@@ -724,8 +732,11 @@ class LLMModel:
                 # Extract cost from _hidden_params (LiteLLM sets this per chunk)
                 if hasattr(chunk, "_hidden_params"):
                     hidden = chunk._hidden_params
-                    rc = (hidden.get("response_cost", 0.0) if isinstance(hidden, dict)
-                          else getattr(hidden, "response_cost", 0.0)) or 0.0
+                    rc = (
+                        hidden.get("response_cost", 0.0)
+                        if isinstance(hidden, dict)
+                        else getattr(hidden, "response_cost", 0.0)
+                    ) or 0.0
                     if rc > 0.0:
                         cost = rc
 
@@ -772,7 +783,11 @@ class LLMModel:
             # _hidden_params.response_cost is NOT available on streaming chunks
             if cost == 0.0:
                 try:
-                    model_str = f"{self.provider_type}/{self.model_name}" if self.provider_type else self.model_name
+                    model_str = (
+                        f"{self.provider_type}/{self.model_name}"
+                        if self.provider_type
+                        else self.model_name
+                    )
                     prompt_str = "\n".join(
                         m.get("content", "") if isinstance(m, dict) else str(m)
                         for m in request.messages

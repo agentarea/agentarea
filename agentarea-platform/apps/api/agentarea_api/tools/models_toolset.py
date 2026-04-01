@@ -13,7 +13,13 @@ class ModelsToolset(Toolset):
     @tool_method
     async def list_specs(self) -> str:
         """List available model specifications (e.g. gpt-4o, claude-sonnet)."""
-        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            session,
+            user_ctx,
+            _repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_llm.application.provider_service import ProviderService
             from agentarea_llm.infrastructure.model_instance_repository import (
                 ModelInstanceRepository,
@@ -48,7 +54,13 @@ class ModelsToolset(Toolset):
     @tool_method
     async def list_instances(self) -> str:
         """List configured model instances (models connected to provider configs)."""
-        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            session,
+            user_ctx,
+            _repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_llm.application.provider_service import ProviderService
             from agentarea_llm.infrastructure.model_instance_repository import (
                 ModelInstanceRepository,
@@ -87,7 +99,13 @@ class ModelsToolset(Toolset):
         """Get details of a model instance."""
         from uuid import UUID
 
-        async with platform_context() as (session, user_ctx, _repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            session,
+            user_ctx,
+            _repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_llm.application.provider_service import ProviderService
             from agentarea_llm.infrastructure.model_instance_repository import (
                 ModelInstanceRepository,

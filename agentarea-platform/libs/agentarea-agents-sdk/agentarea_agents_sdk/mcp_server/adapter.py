@@ -39,8 +39,7 @@ class MCPToolAdapter:
             logger.debug(f"Registered MCP tool: {tool_name}")
 
         logger.info(
-            f"Registered toolset '{toolset.name}' with "
-            f"{len(toolset._tool_methods)} MCP tools"
+            f"Registered toolset '{toolset.name}' with {len(toolset._tool_methods)} MCP tools"
         )
 
     def register_tool(self, tool: BaseTool) -> None:

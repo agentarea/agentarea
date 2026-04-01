@@ -19,8 +19,12 @@ router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 class MCPServerCreate(BaseModel):
     name: str = Field(..., description="Name of the MCP server")
     description: str = Field(..., description="Description of the MCP server")
-    docker_image_url: str | None = Field(default=None, description="Docker image URL (for container-based servers)")
-    remote_url: str | None = Field(default=None, description="Remote URL (for HTTP-based servers like GitHub Copilot)")
+    docker_image_url: str | None = Field(
+        default=None, description="Docker image URL (for container-based servers)"
+    )
+    remote_url: str | None = Field(
+        default=None, description="Remote URL (for HTTP-based servers like GitHub Copilot)"
+    )
     version: str = Field(default="1.0.0", description="Version of the MCP server")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     is_public: bool = Field(default=False, description="Whether the server is public")

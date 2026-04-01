@@ -28,7 +28,13 @@ class MCPServersToolset(Toolset):
         For remote HTTP servers: provide remote_url.
         For docker-based servers: provide docker_image_url.
         """
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, _secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            _secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerService
 
             service = MCPServerService(
@@ -71,7 +77,13 @@ class MCPServersToolset(Toolset):
             server_spec_id: Optional ID of an MCP server spec template
             auth_config_id: Optional ID of an auth config for OAuth servers
         """
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             service = MCPServerInstanceService(
@@ -102,7 +114,13 @@ class MCPServersToolset(Toolset):
     @tool_method
     async def list(self) -> str:
         """List all MCP server instances in the workspace."""
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             service = MCPServerInstanceService(
@@ -129,7 +147,13 @@ class MCPServersToolset(Toolset):
         """Get details of an MCP server instance."""
         from uuid import UUID
 
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             service = MCPServerInstanceService(
@@ -155,7 +179,13 @@ class MCPServersToolset(Toolset):
         """Start an MCP server instance."""
         from uuid import UUID
 
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             service = MCPServerInstanceService(
@@ -171,7 +201,13 @@ class MCPServersToolset(Toolset):
         """Stop a running MCP server instance."""
         from uuid import UUID
 
-        async with platform_context() as (_session, _user_ctx, repo_factory, event_broker, secret_mgr):
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             service = MCPServerInstanceService(

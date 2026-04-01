@@ -264,7 +264,11 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                         await session.initialize()
                         result = await session.list_tools()
             except Exception as transport_err:
-                logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, transport_err)
+                logger.info(
+                    "Streamable HTTP failed for %s (%s), trying SSE fallback",
+                    mcp_url,
+                    transport_err,
+                )
                 from mcp.client.sse import sse_client
 
                 sse_url = mcp_url.rstrip("/")
