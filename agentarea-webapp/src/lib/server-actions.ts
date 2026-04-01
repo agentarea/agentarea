@@ -451,8 +451,10 @@ export async function startBundleProxyAction(instanceId: string) {
     return { data: null, error: "Invalid instance ID" };
   }
   const token = await getAuthToken();
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/start-bundle`;
   const res = await fetch(
-    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/start-bundle`,
+    base.href,
     {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -470,8 +472,10 @@ export async function stopBundleProxyAction(instanceId: string) {
     return { data: null, error: "Invalid instance ID" };
   }
   const token = await getAuthToken();
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/stop-bundle`;
   const res = await fetch(
-    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/stop-bundle`,
+    base.href,
     {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -584,16 +588,21 @@ export async function previewOpenAPISpecAction(body: {
 }
 
 export async function initMCPOAuthConnectAction(instanceId: string, returnTo: string = "") {
+  if (!isUUID(instanceId)) {
+    return { error: "Invalid instance ID" };
+  }
   const { env } = await import("@/env");
   const { getAuthToken } = await import("./getAuthToken");
-  const apiUrl = env.API_URL;
   const authToken = await getAuthToken();
 
   const params = new URLSearchParams({ instance_id: instanceId });
   if (returnTo) params.set("return_to", returnTo);
+  const base = new URL(env.API_URL);
+  base.pathname = "/v1/mcp-oauth/authorize";
+  base.search = params.toString();
 
   const resp = await fetch(
-    `${apiUrl}/v1/mcp-oauth/authorize?${params}`,
+    base.href,
     {
       headers: {
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
