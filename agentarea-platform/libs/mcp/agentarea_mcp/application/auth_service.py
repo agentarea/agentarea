@@ -193,7 +193,7 @@ class MCPAuthService:
         return created
 
     async def get(self, config_id: UUID) -> MCPAuthConfig | None:
-        return await self._repo.get(config_id)
+        return await self._repo.get_by_id(config_id)
 
     async def list(self) -> list[MCPAuthConfig]:
         return await self._repo.list_all()

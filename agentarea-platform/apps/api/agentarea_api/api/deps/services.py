@@ -13,6 +13,7 @@ from agentarea_agents.application.import_export_service import WorkspaceImportEx
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
+from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
 from agentarea_common.config import get_settings
@@ -114,6 +115,18 @@ async def get_secret_manager(
 
 
 BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_secret_manager)]
+
+
+# Audit Service dependencies
+async def get_audit_service(
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
+) -> AuditService:
+    """Get an AuditService instance for the current request."""
+    return AuditService(db_session, user_context)
+
+
+AuditServiceDep = Annotated[AuditService, Depends(get_audit_service)]
 
 
 # Agent Service dependencies

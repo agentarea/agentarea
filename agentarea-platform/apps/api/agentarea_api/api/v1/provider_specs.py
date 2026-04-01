@@ -54,6 +54,12 @@ class ModelSpecResponse(BaseModel):
     display_name: str
     description: str | None
     context_window: int
+    max_output_tokens: int | None = 4096
+    input_cost_per_token: float | None = 0.0
+    output_cost_per_token: float | None = 0.0
+    supports_function_calling: bool | None = False
+    supports_vision: bool | None = False
+    supports_reasoning: bool | None = False
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -67,6 +73,12 @@ class ModelSpecResponse(BaseModel):
             display_name=model_spec.display_name,
             description=model_spec.description,
             context_window=model_spec.context_window,
+            max_output_tokens=model_spec.max_output_tokens,
+            input_cost_per_token=model_spec.input_cost_per_token,
+            output_cost_per_token=model_spec.output_cost_per_token,
+            supports_function_calling=model_spec.supports_function_calling,
+            supports_vision=model_spec.supports_vision,
+            supports_reasoning=model_spec.supports_reasoning,
             is_active=model_spec.is_active,
             created_at=model_spec.created_at,
             updated_at=model_spec.updated_at,

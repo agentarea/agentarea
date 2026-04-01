@@ -87,9 +87,14 @@ class ToolManager:
                     logger.warning(f"Unknown code tool requested: {tool_name}")
 
             elif tool_type == "mcp":
-                # MCP tool - find instance by name
+                # MCP tool - find instance by ID or name
+                # Normalize allowed_tools: can be str[] or {tool_name, ...}[]
+                raw_allowed = settings.get("allowed_tools") or []
+                allowed_names = [
+                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
-                    tool_name, settings.get("allowed_tools", []), mcp_server_instance_service
+                    tool_name, allowed_names, mcp_server_instance_service
                 )
                 for mcp_tool in mcp_tools:
                     all_tools.append(mcp_tool.get_openai_function_definition())
@@ -161,8 +166,19 @@ class ToolManager:
         all_mcp_tools = []
 
         try:
-            # Find instance by name
-            instance = await mcp_server_instance_service.get_by_name(instance_name)
+            # Find instance by ID (UUID) or by name
+            instance = None
+            try:
+                from uuid import UUID as _UUID
+
+                instance_uuid = _UUID(instance_name)
+                instance = await mcp_server_instance_service.get(instance_uuid)
+            except (ValueError, TypeError):
+                pass  # Not a UUID — fall through to name lookup
+
+            if not instance:
+                instance = await mcp_server_instance_service.get_by_name(instance_name)
+
             if not instance:
                 logger.warning(f"MCP server instance not found: {instance_name}")
                 return all_mcp_tools
@@ -180,7 +196,9 @@ class ToolManager:
             logger.info(f"Discovered {len(mcp_tools)} tools from MCP instance: {instance_name}")
 
         except Exception as e:
-            logger.error(f"Failed to get tools from MCP instance {instance_name}: {e}")
+            logger.error(
+                f"Failed to get tools from MCP instance {instance_name}: {e}", exc_info=True
+            )
 
         return all_mcp_tools
 

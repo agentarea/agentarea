@@ -32,14 +32,50 @@ export default function AgentEditClient({
   const handleSubmit = async (formData: AgentFormValues) => {
     try {
       // Call server action instead of direct API call
+      // Transform form tools_config into backend tools format
+      const tools: any[] = [];
+
+      // MCP tools — preserve per-tool approval settings
+      for (const mcpConfig of formData.tools_config.mcp_server_configs || []) {
+        const allowedTools = (mcpConfig.allowed_tools || []).map((t: any) => ({
+          tool_name: t.tool_name,
+          requires_user_confirmation: t.requires_user_confirmation || false,
+        }));
+
+        tools.push({
+          type: "mcp",
+          name: mcpConfig.mcp_server_id,
+          settings: {
+            mcp_server_id: mcpConfig.mcp_server_id,
+            allowed_tools: allowedTools.length > 0 ? allowedTools : null,
+          },
+        });
+      }
+
+      // Builtin tools
+      for (const bt of (formData.tools_config as any).builtin_tools || []) {
+        const disabledMethods = bt.disabled_methods
+          ? Object.entries(bt.disabled_methods)
+              .filter(([, v]) => v === false)
+              .map(([k]) => k)
+          : null;
+
+        tools.push({
+          type: "code",
+          name: bt.tool_name,
+          settings: {
+            disabled_methods: disabledMethods?.length ? disabledMethods : null,
+            requires_user_confirmation: bt.requires_user_confirmation ?? null,
+          },
+        });
+      }
+
       const updateData: any = {
         name: formData.name,
         description: formData.description || undefined,
         instruction: formData.instruction,
         model_id: formData.model_id,
-        tools_config: {
-          mcp_server_configs: formData.tools_config.mcp_server_configs,
-        },
+        tools: tools.length > 0 ? tools : null,
         events_config: {
           events: formData.events_config.events,
         },

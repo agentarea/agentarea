@@ -8,7 +8,7 @@ interface TaskInfoTabsProps {
 
 export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsProps) {
   const t = useTranslations("TaskInfoPanel");
-  
+
   const tabs = [
     { value: "overview", label: t("overview") },
     { value: "model", label: t("modelInfo") },

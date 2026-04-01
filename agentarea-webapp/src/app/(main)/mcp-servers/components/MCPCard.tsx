@@ -14,10 +14,12 @@ import {
   Command,
   Box,
   FileJson2,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { MCPServer, MCPInstance, OpenAPIConnection } from "../types";
+import { MCPServer, MCPInstance, OpenAPIConnection, CompoundMCP } from "../types";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
+import { getConnectionTypes, CONNECTION_TYPE_CONFIG } from "../utils";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
@@ -96,6 +98,31 @@ export function OpenAPIConnectionCard({ connection }: OpenAPIConnectionCardProps
   );
 }
 
+interface CompoundMCPCardProps {
+  compound: CompoundMCP;
+}
+
+export function CompoundMCPCard({ compound }: CompoundMCPCardProps) {
+  return (
+    <LinkedCard
+      href={`/mcp-servers/compound/${compound.id}`}
+      title={compound.name}
+      icon={Layers}
+      type="view"
+      subtitle={
+        <div className="flex items-center gap-1.5">
+          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal text-violet-600 border-violet-300">
+            Compound
+          </Badge>
+          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal">
+            {compound.routing_mode}
+          </Badge>
+        </div>
+      }
+    />
+  );
+}
+
 export function MCPServerSpecCard({
   server,
   onConfigure,
@@ -108,7 +135,7 @@ export function MCPServerSpecCard({
       icon={getMCPIcon(server.name)}
       type="config"
       subtitle={
-        <>
+        <div className="flex items-center gap-1">
           {server.version && (
             <Badge
               size="sm"
@@ -118,12 +145,17 @@ export function MCPServerSpecCard({
               v{server.version}
             </Badge>
           )}
-          {server.docker_image_url && (
-            <div title="Docker-based" className="flex items-center">
-              <Container className="h-4 w-4 text-blue-500" />
-            </div>
-          )}
-        </>
+          {getConnectionTypes(server).map((type) => (
+            <Badge
+              key={type}
+              size="sm"
+              variant="outline"
+              className={`h-5 px-1.5 font-normal border text-[10px] ${CONNECTION_TYPE_CONFIG[type].color}`}
+            >
+              {CONNECTION_TYPE_CONFIG[type].label}
+            </Badge>
+          ))}
+        </div>
       }
     />
   );

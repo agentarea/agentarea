@@ -478,16 +478,27 @@ class LLMModel:
                                     tool_calls_buffer[index]["function"]["arguments"] = (
                                         current_args + new_args
                                     )
-                # Extract usage and cost from final chunk if available
+                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
+                if hasattr(chunk, "_hidden_params"):
+                    hidden = chunk._hidden_params
+                    rc = (
+                        hidden.get("response_cost", 0.0)
+                        if isinstance(hidden, dict)
+                        else getattr(hidden, "response_cost", 0.0)
+                    ) or 0.0
+                    if rc > 0.0:
+                        cost = rc
+
+                # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    # Calculate cost similar to non-streaming version
-                    if hasattr(usage_info, "completion_tokens_cost"):
-                        cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                    if hasattr(usage_info, "prompt_tokens_cost"):
-                        cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                    elif hasattr(usage_info, "total_tokens"):
-                        cost = getattr(usage_info, "total_tokens", 0) * 0.00001
+                    if cost == 0.0:
+                        if hasattr(usage_info, "completion_tokens_cost"):
+                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            if hasattr(usage_info, "prompt_tokens_cost"):
+                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        elif hasattr(usage_info, "total_tokens"):
+                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
             # Convert tool calls buffer to final format
             if tool_calls_buffer:
@@ -505,6 +516,43 @@ class LLMModel:
                     completion_tokens=getattr(usage_info, "completion_tokens", 0),
                     total_tokens=getattr(usage_info, "total_tokens", 0),
                 )
+
+            # Use litellm.completion_cost() for accurate cost calculation
+            if cost == 0.0:
+                try:
+                    import litellm
+
+                    prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
+                    completion_tokens = (
+                        getattr(usage_info, "completion_tokens", 0) if usage_info else 0
+                    )
+
+                    # If usage wasn't in chunks, estimate tokens from content
+                    if prompt_tokens == 0:
+                        prompt_tokens = litellm.token_counter(
+                            model=self.model_id,
+                            messages=[m.model_dump(mode="json") for m in request.messages],
+                        )
+                    if completion_tokens == 0 and complete_content:
+                        completion_tokens = litellm.token_counter(
+                            model=self.model_id, text=complete_content
+                        )
+
+                    if prompt_tokens > 0 or completion_tokens > 0:
+                        cost = litellm.completion_cost(
+                            model=self.model_id,
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                        )
+                        # Update usage if it was estimated
+                        if usage_info is None:
+                            usage = LLMUsage(
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                total_tokens=prompt_tokens + completion_tokens,
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to calculate cost via litellm: {e}")
 
             # Return complete response
             result = LLMResponse(
@@ -681,16 +729,27 @@ class LLMModel:
                                     )
                             tool_calls_updated = True
 
-                # Extract usage and cost from final chunk if available
+                # Extract cost from _hidden_params (LiteLLM sets this per chunk)
+                if hasattr(chunk, "_hidden_params"):
+                    hidden = chunk._hidden_params
+                    rc = (
+                        hidden.get("response_cost", 0.0)
+                        if isinstance(hidden, dict)
+                        else getattr(hidden, "response_cost", 0.0)
+                    ) or 0.0
+                    if rc > 0.0:
+                        cost = rc
+
+                # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    # Calculate cost similar to non-streaming version
-                    if hasattr(usage_info, "completion_tokens_cost"):
-                        cost += getattr(usage_info, "completion_tokens_cost", 0.0)
-                    if hasattr(usage_info, "prompt_tokens_cost"):
-                        cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                    elif hasattr(usage_info, "total_tokens"):
-                        cost = getattr(usage_info, "total_tokens", 0) * 0.00001
+                    if cost == 0.0:
+                        if hasattr(usage_info, "completion_tokens_cost"):
+                            cost += getattr(usage_info, "completion_tokens_cost", 0.0)
+                            if hasattr(usage_info, "prompt_tokens_cost"):
+                                cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
+                        elif hasattr(usage_info, "total_tokens"):
+                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
                 # Provide current tool call state if updated this chunk
                 if tool_calls_updated:
@@ -716,20 +775,39 @@ class LLMModel:
                         content=delta_content if "delta_content" in locals() else "",
                         role="assistant",
                         tool_calls=delta_tool_calls,
-                        cost=cost if usage_delta else 0.0,
+                        cost=cost,
                         usage=usage_delta,
                     )
 
-            # After streaming ends, yield final message if any remaining content accumulated
-            if complete_content and False:  # Explicitly avoid yielding final full content here
+            # Calculate cost after streaming ends using litellm.completion_cost()
+            # _hidden_params.response_cost is NOT available on streaming chunks
+            if cost == 0.0:
+                try:
+                    model_str = (
+                        f"{self.provider_type}/{self.model_name}"
+                        if self.provider_type
+                        else self.model_name
+                    )
+                    prompt_str = "\n".join(
+                        m.get("content", "") if isinstance(m, dict) else str(m)
+                        for m in request.messages
+                    )
+                    cost = litellm.completion_cost(
+                        model=model_str,
+                        prompt=prompt_str,
+                        completion=complete_content,
+                    )
+                    logger.info(f"Calculated streaming cost via litellm: ${cost:.6f}")
+                except Exception as e:
+                    logger.warning(f"Failed to calculate streaming cost: {e}")
+
+            # Yield final cost/usage
+            if cost > 0.0:
                 yield LLMResponse(
-                    content=complete_content,
+                    content="",
                     role="assistant",
-                    tool_calls=[tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
-                    if tool_calls_buffer
-                    else None,
                     cost=cost,
-                    usage=usage,
+                    usage=usage if usage and usage.total_tokens > 0 else None,
                 )
 
         except Exception as e:

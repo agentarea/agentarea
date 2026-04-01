@@ -33,6 +33,11 @@ const PROTECTED_ROUTES = [
   "/settings",
   "/chat",
   "/home",
+  "/skills",
+  "/triggers",
+  "/network",
+  "/projects",
+  "/inbox",
 ];
 
 export default function ConditionalLayout({

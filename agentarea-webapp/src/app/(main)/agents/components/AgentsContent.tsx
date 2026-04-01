@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
-import { listAgents, listModelInstances } from "@/lib/api";
+import { listAgents, listModelInstances, getAllTasks } from "@/lib/api";
 import AgentsList from "./AgentsList";
 
 interface AgentsContentProps {
@@ -14,8 +14,17 @@ export default async function AgentsContent({
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
 
-  const [{ data: agents = [] }, { data: modelInstances = [] }] =
-    await Promise.all([listAgents(), listModelInstances()]);
+  const [{ data: agents = [] }, { data: modelInstances = [] }, { data: tasks = [] }] =
+    await Promise.all([listAgents(), listModelInstances(), getAllTasks()]);
+
+  // Count active (running) tasks per agent
+  const activeTaskCountByAgent: Record<string, number> = {};
+  for (const task of (tasks as any[])) {
+    if (task.status === "running") {
+      const agentId = String(task.agent_id);
+      activeTaskCountByAgent[agentId] = (activeTaskCountByAgent[agentId] ?? 0) + 1;
+    }
+  }
 
   const enrichedAgents = (agents as any[]).map((agent) => {
     const model = (modelInstances as any[]).find(
@@ -28,7 +37,8 @@ export default async function AgentsContent({
           config_name: model.config_name || undefined,
         }
       : undefined;
-    return { ...agent, model_info };
+    const active_task_count = activeTaskCountByAgent[String(agent.id)] ?? 0;
+    return { ...agent, model_info, active_task_count };
   });
 
   // Filter agents based on search query

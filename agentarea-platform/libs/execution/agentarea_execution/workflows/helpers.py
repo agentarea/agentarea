@@ -443,14 +443,25 @@ class ToolCallExtractor:
             }
         )
 
-        # Calculate cost
+        # Calculate cost — try multiple sources
         cost = 0.0
-        if hasattr(usage, "completion_tokens_cost"):
-            cost += getattr(usage, "completion_tokens_cost", 0.0)
-        if hasattr(usage, "prompt_tokens_cost"):
-            cost += getattr(usage, "prompt_tokens_cost", 0.0)
-        elif hasattr(usage, "total_tokens"):
-            # Fallback estimate: $0.01 per 1K tokens
+
+        # LiteLLM stores cost in _hidden_params.response_cost
+        if hasattr(response, "_hidden_params"):
+            hidden = response._hidden_params
+            if isinstance(hidden, dict):
+                cost = hidden.get("response_cost", 0.0) or 0.0
+            elif hasattr(hidden, "response_cost"):
+                cost = getattr(hidden, "response_cost", 0.0) or 0.0
+
+        # Try usage-level cost attributes
+        if cost == 0.0 and hasattr(usage, "completion_tokens_cost"):
+            cost += getattr(usage, "completion_tokens_cost", 0.0) or 0.0
+        if cost == 0.0 and hasattr(usage, "prompt_tokens_cost"):
+            cost += getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
+
+        # Fallback estimate: $0.01 per 1K tokens
+        if cost == 0.0 and getattr(usage, "total_tokens", 0):
             cost = getattr(usage, "total_tokens", 0) * 0.00001
 
         usage_info["cost"] = cost

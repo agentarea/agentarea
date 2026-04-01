@@ -19,6 +19,11 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
         """Get an agent by ID. Delegates to get_by_id for compatibility."""
         return await self.get_by_id(id)
 
+    async def get_agent_by_name(self, name: str) -> Agent | None:
+        """Get agent by name."""
+        agents = await self.list_all(name=name)
+        return agents[0] if agents else None
+
     async def get_by_workspace_id(
         self, workspace_id: str, limit: int = 100, offset: int = 0
     ) -> list[Agent]:

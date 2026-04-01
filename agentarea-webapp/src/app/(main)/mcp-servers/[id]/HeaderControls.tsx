@@ -2,27 +2,32 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Play, Square } from "lucide-react";
+import { ExternalLink, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { Button } from "@/components/ui/button";
 import { deleteInstance, startInstance, stopInstance } from "./actions";
+import { initMCPOAuthConnectAction } from "@/lib/server-actions";
 
 export default function MCPInstanceHeaderControls({
   instanceId,
   instanceName,
   status,
+  instanceType,
+  hasAuthConfig,
 }: {
   instanceId: string;
   instanceName: string;
   status: string;
+  instanceType?: string;
+  hasAuthConfig?: boolean;
 }) {
   const router = useRouter();
   const t = useTranslations("MCPServersPage.instanceDetail");
   const [isActioning, setIsActioning] = useState(false);
 
-  const canStart = status !== "running" && status !== "starting";
+  const canStart = status !== "running" && status !== "starting" && status !== "connected";
   const canStop = status === "running" || status === "starting";
 
   const handleStart = async () => {
@@ -63,8 +68,40 @@ export default function MCPInstanceHeaderControls({
     }
   };
 
+  const isUrlType = instanceType === "url";
+  const showOAuthConnect = isUrlType && !hasAuthConfig;
+
+  const handleOAuthConnect = async () => {
+    setIsActioning(true);
+    try {
+      const result = await initMCPOAuthConnectAction(instanceId, window.location.origin);
+      if (result.error) {
+        toast.error(`OAuth connect failed: ${result.error}`);
+        return;
+      }
+      if (result.authorize_url) {
+        window.location.href = result.authorize_url;
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "OAuth connect failed");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 py-1 sm:flex-nowrap">
+      {showOAuthConnect && (
+        <Button
+          size="xs"
+          variant="outline"
+          type="button"
+          onClick={handleOAuthConnect}
+        >
+          <ExternalLink />
+          {t("actions.connectOAuth")}
+        </Button>
+      )}
       {canStart && (
         <Button
           size="xs"

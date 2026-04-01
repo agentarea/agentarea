@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ExternalLink, Globe } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
 } from "@/lib/server-actions";
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
-import { MCP_CONSTANTS } from "../../utils";
+import { getConnectionType, MCP_CONSTANTS } from "../../utils";
 
 export default function CreateMCPInstanceClient({
   server,
@@ -112,6 +114,80 @@ export default function CreateMCPInstanceClient({
       form.removeEventListener("mcp-force-create", handler as EventListener);
     };
   }, [createInstance]);
+
+  // Remote URL type — show simplified connect flow instead of Docker form
+  const connType = getConnectionType(server);
+  if (connType === "url") {
+    const handleConnectOAuth = async () => {
+      setIsCreating(true);
+      try {
+        // Create the instance first as URL type
+        const instanceResult = await createMCPServerInstance({
+          name: instanceName,
+          description: instanceDescription,
+          server_spec_id: server.id,
+          json_spec: {
+            type: "url",
+            endpoint_url: server.remote_url || "",
+          },
+        });
+
+        if (instanceResult.error) {
+          const errorDetail = instanceResult.error.detail;
+          const errorMessage =
+            typeof errorDetail === "string"
+              ? errorDetail
+              : Array.isArray(errorDetail) && errorDetail[0]?.msg
+                ? errorDetail[0].msg
+                : t("errors.createFailed");
+          throw new Error(errorMessage);
+        }
+
+        const created = instanceResult.data as any;
+        toast.success(t("success.created", { instanceName }));
+
+        // Start OAuth flow for the new instance
+        const apiBase = (window as any).__ENV__?.CLIENT_API_URL || "http://localhost:8000";
+        window.location.href = `${apiBase}/v1/mcp-oauth/authorize?instance_id=${created.id}`;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : t("errors.createFailed");
+        toast.error(errorMessage);
+        setIsCreating(false);
+      }
+    };
+
+    return (
+      <div className="mx-auto w-full max-w-md space-y-6 py-8">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <Globe className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold">{server.name}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {server.description}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-muted/50 p-4 text-sm text-muted-foreground">
+          <p>{t("remoteConnect.description")}</p>
+        </div>
+
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={handleConnectOAuth}
+          isLoading={isCreating}
+          disabled={isCreating}
+        >
+          <ExternalLink className="mr-2 h-4 w-4" />
+          {isCreating ? t("remoteConnect.connecting") : t("remoteConnect.connect")}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-xl">

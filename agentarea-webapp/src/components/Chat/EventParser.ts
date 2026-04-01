@@ -1,5 +1,9 @@
 import { A2UISurface, MessageComponentType } from "./types";
 
+// FIXME: Performance — this is a large switch statement that runs synchronously per-event
+// on every call from the useMemo chain in page.tsx. Adding new event types increases the
+// worst-case cost. Should be refactored to a dispatch map (Record<string, handler>) so
+// lookup is O(1) instead of O(n switch cases), and to avoid re-running for cached events.
 // Parse event data into appropriate message component type
 export const parseEventToMessage = (
   eventType: string,
@@ -307,6 +311,9 @@ export const parseEventToMessage = (
           tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
           arguments: originalData.arguments || eventData.arguments || {},
           message: originalData.message || eventData.message || "Approval required",
+          resolved: eventData.resolved ?? originalData.resolved ?? false,
+          approved: eventData.approved ?? originalData.approved,
+          deny_comment: eventData.deny_comment ?? originalData.deny_comment,
         },
       };
     }
@@ -336,7 +343,6 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "ToolCallStarted",
     "ToolCallCompleted",
     "ToolCallFailed",
-    "WorkflowStarted",
     "WorkflowCompleted",
     "WorkflowFailed",
     "task_completed",

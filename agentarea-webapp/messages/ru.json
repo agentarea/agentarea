@@ -621,6 +621,7 @@
     "agent": "Агент",
     "statusLabel": "Статус",
     "created": "Создано",
+    "cost": "Стоимость",
     "noTasks": "Задач не найдено",
     "noTasksDescription": "Задачи ещё не были созданы",
     "noMatchingTasks": "Нет подходящих задач",

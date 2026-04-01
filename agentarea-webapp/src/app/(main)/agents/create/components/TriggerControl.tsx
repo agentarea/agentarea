@@ -1,10 +1,9 @@
-import { useTranslations } from "next-intl";
 import { Edit, Trash2 } from "lucide-react";
-import { Control, Controller } from "react-hook-form";
+import { Control, useWatch } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import type { AgentFormValues } from "../types";
+import type { AgentFormValues, MCPToolConfig } from "../types";
 import { MethodsList } from "./MethodsList";
 
 interface Method {
@@ -27,6 +26,8 @@ interface Trigger {
   }>;
 }
 
+type ToolState = "disabled" | "enabled" | "approval_required";
+
 interface TriggerControlProps {
   trigger: Trigger | undefined;
   index: number;
@@ -35,8 +36,12 @@ interface TriggerControlProps {
   control: Control<AgentFormValues>;
   removeEvent?: (index: number) => void;
   editEvent?: (index: number) => void;
+  // Builtin tool methods
   selectedMethods?: Record<string, boolean>;
   onMethodToggle?: (methodName: string, checked: boolean) => void;
+  // MCP tool-level control
+  allowedToolsFieldName?: string;
+  onToolStateChange?: (toolName: string, state: ToolState) => void;
 }
 
 export const TriggerControl = ({
@@ -49,13 +54,20 @@ export const TriggerControl = ({
   enabledName,
   selectedMethods = {},
   onMethodToggle,
+  allowedToolsFieldName,
+  onToolStateChange,
 }: TriggerControlProps) => {
-  const t = useTranslations("TriggerControl");
+  // Reactively watch allowed_tools so checkboxes update on change
+  const allowedTools: MCPToolConfig[] = useWatch({
+    control,
+    name: allowedToolsFieldName as any,
+    defaultValue: [],
+  }) || [];
 
   if (!trigger) {
     return (
       <div className="mt-1 flex items-center gap-2 text-red-500">
-        {t("error")}
+        Something went wrong with the trigger
       </div>
     );
   }
@@ -64,50 +76,62 @@ export const TriggerControl = ({
   const hasMethods = availableMethods.length > 0;
   const hasMethodToggle = !!onMethodToggle;
 
-  // Calculate selected methods count for indicator
-  const selectedCount =
-    hasMethods && hasMethodToggle
-      ? availableMethods.filter(
-          (method) => selectedMethods[method.name] === true
-        ).length
-      : 0;
-  const totalCount = availableMethods.length;
+  const availableTools = trigger.available_tools || [];
+  const hasTools = availableTools.length > 0;
+  const hasToolControl = !!onToolStateChange;
+
+  // Compute selected counts for badge
+  const selectedMethodCount = hasMethods && hasMethodToggle
+    ? availableMethods.filter((m) => selectedMethods[m.name] === true).length
+    : 0;
+
+  const getToolEnabled = (toolName: string): boolean => {
+    if (!allowedTools || allowedTools.length === 0) return true;
+    return allowedTools.some((t) => t.tool_name === toolName);
+  };
+
+  const getToolApproval = (toolName: string): boolean => {
+    if (!allowedTools) return false;
+    const config = allowedTools.find((t) => t.tool_name === toolName);
+    return config?.requires_user_confirmation ?? false;
+  };
+
+  const enabledToolCount = hasTools && hasToolControl
+    ? availableTools.filter((t) => getToolEnabled(t.name)).length
+    : availableTools.length;
+
+  // Build selectedMethods-style map for tools
+  const toolSelectionMap: Record<string, boolean> = {};
+  const toolApprovalMap: Record<string, boolean> = {};
+  for (const tool of availableTools) {
+    toolSelectionMap[tool.name] = getToolEnabled(tool.name);
+    toolApprovalMap[tool.name] = getToolApproval(tool.name);
+  }
 
   const handleSelectAllMethods = (checked: boolean) => {
     if (!onMethodToggle || !hasMethods) return;
-
-    availableMethods.forEach((method) => {
-      onMethodToggle(method.name, checked);
-    });
+    availableMethods.forEach((method) => onMethodToggle(method.name, checked));
   };
 
-  const renderEnabledSwitch = () => (
-    <Controller
-      name={enabledName as any}
-      control={control}
-      defaultValue={true}
-      render={({ field }) => (
-        <div className="flex items-center gap-1">
-          <span
-            className="note hidden cursor-pointer select-none sm:block"
-            onClick={() => field.onChange(!field.value)}
-          >
-            {field.value ? t("enabled") : t("disabled")}
-          </span>
-          <Switch
-            size="xs"
-            checked={field.value ?? true}
-            onCheckedChange={field.onChange}
-            aria-label="Toggle tool"
-          />
-        </div>
-      )}
-    />
-  );
+  const handleToolToggle = (toolName: string, checked: boolean) => {
+    if (!onToolStateChange) return;
+    onToolStateChange(toolName, checked ? "enabled" : "disabled");
+  };
+
+  const handleToolApprovalToggle = (toolName: string, requiresApproval: boolean) => {
+    if (!onToolStateChange) return;
+    onToolStateChange(toolName, requiresApproval ? "approval_required" : "enabled");
+  };
+
+  const handleSelectAllTools = (checked: boolean) => {
+    if (!onToolStateChange) return;
+    availableTools.forEach((tool) =>
+      onToolStateChange(tool.name, checked ? "enabled" : "disabled")
+    );
+  };
 
   const renderEditButton = () => {
     if (!editEvent) return null;
-
     return (
       <Button
         type="button"
@@ -124,7 +148,6 @@ export const TriggerControl = ({
 
   const renderRemoveButton = () => {
     if (!removeEvent) return null;
-
     return (
       <Button
         type="button"
@@ -139,12 +162,17 @@ export const TriggerControl = ({
     );
   };
 
+  const badgeCount = hasMethods && hasMethodToggle
+    ? `${selectedMethodCount}/${availableMethods.length}`
+    : hasTools && hasToolControl
+      ? `${enabledToolCount}/${availableTools.length}`
+      : null;
+
   const controls = (
     <div className="flex flex-row items-center gap-3">
-      {/* {renderEnabledSwitch()} */}
-      {hasMethods && hasMethodToggle && totalCount > 0 && (
+      {badgeCount && (
         <span className="min-w-[50px] rounded-full bg-primary/15 px-2 py-0.5 text-center text-xs text-muted-foreground">
-          {selectedCount}/{totalCount}
+          {badgeCount}
         </span>
       )}
       {renderEditButton()}
@@ -156,83 +184,12 @@ export const TriggerControl = ({
     if (!trigger.icon) {
       return trigger.label || trigger.name;
     }
-
     return (
       <div className="flex flex-row items-center gap-1 px-[7px] py-[7px]">
         <trigger.icon className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
           {trigger.label || trigger.name}
         </h3>
-      </div>
-    );
-  };
-
-  const renderMethodsSection = () => {
-    if (!hasMethods) return null;
-
-    if (hasMethodToggle) {
-      return (
-        <MethodsList
-          methods={availableMethods}
-          selectedMethods={selectedMethods}
-          onMethodToggle={onMethodToggle!}
-          toolName={trigger.name || trigger.id || `trigger-${index}`}
-          showSelectAll={true}
-          onSelectAll={handleSelectAllMethods}
-        />
-      );
-    }
-
-    return (
-      <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">
-          {t("availableMethods")}
-        </p>
-        <div className="space-y-1">
-          {availableMethods.map((method) => (
-            <div
-              key={method.name}
-              className="flex items-center gap-2 rounded bg-muted/30 p-1"
-            >
-              <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-              <span className="text-xs text-foreground">
-                {method.display_name || method.name}
-              </span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {method.description}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderToolsSection = () => {
-    if (!trigger.available_tools || trigger.available_tools.length === 0)
-      return null;
-
-    return (
-      <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">
-          {t("availableTools")}
-        </p>
-        <div className="space-y-1">
-          {trigger.available_tools.map((tool) => (
-            <div
-              key={tool.name}
-              className="flex items-center gap-2 rounded bg-muted/30 p-1"
-            >
-              <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-              <span className="text-xs text-foreground">
-                {tool.display_name || tool.name}
-              </span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {tool.description}
-              </span>
-            </div>
-          ))}
-        </div>
       </div>
     );
   };
@@ -248,8 +205,34 @@ export const TriggerControl = ({
         <p className="text-xs text-muted-foreground">
           {trigger.description || trigger.label || trigger.name}
         </p>
-        {renderMethodsSection()}
-        {renderToolsSection()}
+
+        {/* Builtin tool methods */}
+        {hasMethods && (
+          <MethodsList
+            methods={availableMethods}
+            selectedMethods={hasMethodToggle ? selectedMethods : Object.fromEntries(availableMethods.map((m) => [m.name, true]))}
+            onMethodToggle={onMethodToggle || (() => {})}
+            toolName={trigger.name || trigger.id || `trigger-${index}`}
+            showSelectAll={hasMethodToggle}
+            onSelectAll={hasMethodToggle ? handleSelectAllMethods : undefined}
+            label="Available Methods:"
+          />
+        )}
+
+        {/* MCP tools — same component, with approval toggle */}
+        {hasTools && (
+          <MethodsList
+            methods={availableTools}
+            selectedMethods={toolSelectionMap}
+            onMethodToggle={hasToolControl ? handleToolToggle : () => {}}
+            toolName={trigger.name || trigger.id || `trigger-${index}`}
+            showSelectAll={hasToolControl}
+            onSelectAll={hasToolControl ? handleSelectAllTools : undefined}
+            approvalStates={hasToolControl ? toolApprovalMap : undefined}
+            onApprovalToggle={hasToolControl ? handleToolApprovalToggle : undefined}
+            label={`Available Tools (${enabledToolCount}/${availableTools.length}):`}
+          />
+        )}
       </div>
     </CardAccordionItem>
   );

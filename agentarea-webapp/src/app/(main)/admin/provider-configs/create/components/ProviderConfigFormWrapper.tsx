@@ -40,7 +40,7 @@ export default async function ProviderConfigFormWrapper({
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className="mx-auto w-full max-w-4xl">
       <ProviderConfigForm
         preselectedProviderId={preselectedProviderId}
         isEdit={isEdit}

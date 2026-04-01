@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Bot, Check, Settings, User } from "lucide-react";
+import { Bot, User, Wrench } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -15,12 +15,17 @@ interface MessageWrapperProps {
     | "tool-call"
     | "tool-result"
     | "info";
+  /** Optional MCP server icon URL. When provided, replaces the default tool icon. */
+  iconUrl?: string;
+  // FIXME: iconUrl is passed through but the lookup from server_instance_id → icon is not yet
+  // implemented. See EventParser.ts ToolCallCompleted case where server_instance_id is available.
 }
 
 export const MessageWrapper: React.FC<MessageWrapperProps> = ({
   children,
   className = "",
   type = "assistant",
+  iconUrl,
 }) => {
   return (
     <div
@@ -51,20 +56,16 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
             type === "tool-call" ? "bg-zinc-900 dark:bg-zinc-300" : "bg-white"
           )}
         >
-          {type === "error" ? (
+          {iconUrl && (type === "tool-call" || type === "tool-result") ? (
+            <img src={iconUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
+          ) : type === "error" ? (
             <span className="inline-block h-3 w-3 rounded-full bg-red-700" />
           ) : type === "user" ? (
             <User className="h-4 w-4 text-primary dark:text-accent" />
           ) : type === "tool-call" ? (
-            <Settings
-              className="h-4 w-4 text-white dark:text-zinc-900"
-              style={{
-                animation: "spin 2.5s linear infinite",
-                transformOrigin: "center",
-              }}
-            />
+            <Wrench className="h-4 w-4 text-white dark:text-zinc-900 animate-pulse" />
           ) : type === "tool-result" ? (
-            <Check className="h-4 w-4 text-green-500" />
+            <Wrench className="h-4 w-4 text-green-500" />
           ) : (
             <Bot className="h-4 w-4 text-text" />
           )}

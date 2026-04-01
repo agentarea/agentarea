@@ -19,7 +19,12 @@ router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 class MCPServerCreate(BaseModel):
     name: str = Field(..., description="Name of the MCP server")
     description: str = Field(..., description="Description of the MCP server")
-    docker_image_url: str = Field(..., description="Docker image URL")
+    docker_image_url: str | None = Field(
+        default=None, description="Docker image URL (for container-based servers)"
+    )
+    remote_url: str | None = Field(
+        default=None, description="Remote URL (for HTTP-based servers like GitHub Copilot)"
+    )
     version: str = Field(default="1.0.0", description="Version of the MCP server")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     is_public: bool = Field(default=False, description="Whether the server is public")
@@ -54,6 +59,7 @@ class MCPServerResponse(BaseModel):
     is_public: bool
     env_schema: list[dict[str, Any]]
     cmd: list[str] | None
+    remote_url: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -70,6 +76,7 @@ class MCPServerResponse(BaseModel):
             is_public=server.is_public,
             env_schema=server.env_schema or [],
             cmd=server.cmd,
+            remote_url=server.remote_url,
             status=server.status,
             created_at=server.created_at,
             updated_at=server.updated_at,
@@ -91,6 +98,7 @@ async def create_mcp_server(
         is_public=data.is_public,
         env_schema=data.env_schema,
         cmd=data.cmd,
+        remote_url=data.remote_url,
     )
     return MCPServerResponse.from_domain(server)
 

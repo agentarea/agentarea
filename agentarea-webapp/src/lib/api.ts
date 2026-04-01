@@ -89,6 +89,8 @@ export const {
   testModelInstance,
   getModelInstance,
   deleteModelInstance,
+  discoverModels,
+  discoverModelsPreview,
 
   // Utility API
   healthCheck,
@@ -139,6 +141,9 @@ export const {
   getTriggerTimeline,
   getTriggerCorrelations,
 
+  // Audit Logs API
+  listAuditLogs,
+
   // Workspace Import/Export API
   exportWorkspace,
   importWorkspace,
@@ -155,6 +160,19 @@ export const {
 
   // Network API
   getNetworkTopology,
+
+  // Global Tasks API
+  getTask,
+
+  // Compound MCP API
+  listCompoundMCPs,
+  getCompoundMCP,
+  createCompoundMCP,
+  updateCompoundMCP,
+  deleteCompoundMCP,
+  listCompoundMCPMembers,
+  addCompoundMCPMember,
+  removeCompoundMCPMember,
 
   // Project API
   listProjects,
@@ -213,25 +231,8 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   return { data: messages, error: null };
 };
 
-export const getAllTasks = async () => {
-  const { data: agents, error: agentsError } = await listAgents();
-  if (agentsError || !agents) return { data: null, error: agentsError };
-
-  const tasks = await Promise.all(
-    agents.map(async (agent: any) => {
-      const { data: agentTasks, error } = await listAgentTasks(agent.id);
-      if (error || !agentTasks) return [];
-
-      return agentTasks.map((task: any) => ({
-        ...task,
-        agent_name: agent.name,
-        agent_description: agent.description,
-      }));
-    })
-  );
-
-  return { data: tasks.flat(), error: null };
-};
+// Uses the global /v1/tasks/ endpoint which returns total_cost and agent_name
+export const getAllTasks = api.getAllTasks;
 
 export const listProviderConfigsWithModelInstances = async (params?: {
   provider_spec_id?: string;
@@ -305,9 +306,3 @@ export type TaskWithAgent = TaskResponse & {
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
-
-// Wallet types
-export type WalletResponse = components["schemas"]["WalletResponse"];
-export type WalletBalanceResponse = components["schemas"]["WalletBalanceResponse"];
-export type PaymentRecordResponse = components["schemas"]["PaymentRecordResponse"];
-export type PaginatedPaymentsResponse = components["schemas"]["PaginatedPaymentsResponse"];

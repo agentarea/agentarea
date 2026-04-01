@@ -2,12 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Bot, Calendar, Clock } from "lucide-react";
+import { Bot, Calendar, Clock, DollarSign } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
-import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { Badge } from "@/components/ui/badge";
 import { TaskWithAgent } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
@@ -37,12 +36,8 @@ export default function TasksList({
     {
       accessor: "description",
       header: t("description"),
-      cellClassName: "max-w-[300px]",
-      render: (value: string, task: TaskWithAgent) => (
-        <div className="flex items-center gap-2">
-          <TaskStatusIcon status={task.status} className="h-4 w-4 shrink-0" />
-          <span className="block truncate font-medium">{value}</span>
-        </div>
+      render: (value: string) => (
+        <span className="line-clamp-2 max-w-[300px] font-medium">{value}</span>
       ),
     },
     {
@@ -58,36 +53,36 @@ export default function TasksList({
     {
       accessor: "status",
       header: t("statusLabel"),
-      render: (value: TaskWithAgent['status']) => {
-        const label = [
-          "running",
-          "completed",
-          "success",
-          "failed",
-          "error",
-          "paused",
-          "pending",
-        ].includes(value)
+      render: (value: string) => {
+        const variant =
+          statusVariants[value as keyof typeof statusVariants] || "secondary";
+        // Check if translation exists, otherwise fallback to capitalized value
+        const label = ["running", "completed", "success", "failed", "error", "paused", "pending"].includes(value)
           ? tStatus(value)
           : value.charAt(0).toUpperCase() + value.slice(1);
-
-        const colorClass = {
-          completed: "text-green-600 dark:text-green-500",
-          success: "text-green-600 dark:text-green-500",
-          failed: "text-red-600 dark:text-red-500",
-          error: "text-red-600 dark:text-red-500",
-          running: "text-primary",
-          in_progress: "text-primary",
-          pending: "text-muted-foreground",
-          paused: "text-muted-foreground",
-        }[value] || "text-muted-foreground";
-
+          
         return (
-          <span className={cn("text-[10px] font-normal uppercase tracking-wider", colorClass)}>
+          <Badge variant={variant} className="whitespace-nowrap">
             {label}
-          </span>
+          </Badge>
         );
       },
+    },
+    {
+      accessor: "total_cost",
+      header: t("cost"),
+      render: (value: number | null | undefined) => (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {value != null ? (
+            <>
+              <DollarSign className="h-3 w-3" />
+              <span className="font-mono">{value.toFixed(4)}</span>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
+      ),
     },
     {
       accessor: "created_at",
@@ -95,8 +90,8 @@ export default function TasksList({
       render: (value: string) => (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <Calendar className="h-3 w-3 shrink-0" />
-            <span className="whitespace-nowrap">
+            <Calendar className="h-3 w-3" />
+            <span>
               {new Date(value).toLocaleDateString("en", {
                 day: "numeric",
                 month: "short",
@@ -105,8 +100,8 @@ export default function TasksList({
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span className="whitespace-nowrap">
+            <Clock className="h-3 w-3" />
+            <span>
               {new Date(value).toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -118,16 +113,29 @@ export default function TasksList({
     },
   ];
 
+  const totalCost = initialTasks.reduce((sum, t) => sum + ((t as any).total_cost || 0), 0);
+
   // Render table view
   if (viewMode === "table") {
     return (
-      <Table
-        data={initialTasks}
-        columns={taskColumns}
-        onRowClick={(task) => {
-          router.push(`/tasks/${task.id}`);
-        }}
-      />
+      <div>
+        <Table
+          data={initialTasks}
+          columns={taskColumns}
+          onRowClick={(task) => {
+            router.push(`/tasks/${task.id}`);
+          }}
+        />
+        {totalCost > 0 && (
+          <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-sm">
+            <span className="text-muted-foreground">Total:</span>
+            <span className="flex items-center gap-1 font-mono font-semibold">
+              <DollarSign className="h-3.5 w-3.5" />
+              {totalCost.toFixed(4)}
+            </span>
+          </div>
+        )}
+      </div>
     );
   }
 

@@ -244,6 +244,17 @@ const ToolConfig = ({
       disabled_methods: field.disabled_methods || {},
     })) || [];
 
+  const resolveInstanceTrigger = (mcpServerId: string) => {
+    const inst = activeInstances.find((o: any) => o.id === mcpServerId);
+    if (inst) {
+      return {
+        ...inst,
+        available_tools: inst.json_spec?.available_tools || inst.available_tools || [],
+      };
+    }
+    return mcpServers.find((o) => o.id === mcpServerId);
+  };
+
   const handleAddTools = (servers: MCPServer[]) => {
     if (!servers?.length) return;
 
@@ -465,14 +476,13 @@ const ToolConfig = ({
                       <p className="text-xs text-muted-foreground">
                         Active MCP Server Instance
                       </p>
-                      {instance.available_tools &&
-                        instance.available_tools.length > 0 && (
+                      {(instance.json_spec?.available_tools ?? instance.available_tools)?.length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-foreground">
                               Available Tools:
                             </p>
                             <div className="space-y-1">
-                              {instance.available_tools.map((tool: any) => (
+                              {(instance.json_spec?.available_tools ?? instance.available_tools)?.map((tool: any) => (
                                 <div
                                   key={tool.name}
                                   className="flex items-center gap-2 rounded bg-muted/30 p-1"
@@ -536,32 +546,6 @@ const ToolConfig = ({
                       <p className="text-xs text-muted-foreground">
                         {server.description || "Available MCP Server"}
                       </p>
-                      {(server as any).available_tools &&
-                        (server as any).available_tools.length > 0 && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-foreground">
-                              Available Tools:
-                            </p>
-                            <div className="space-y-1">
-                              {(server as any).available_tools.map(
-                                (tool: any) => (
-                                  <div
-                                    key={tool.name}
-                                    className="flex items-center gap-2 rounded bg-muted/30 p-1"
-                                  >
-                                    <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-                                    <span className="text-xs text-foreground">
-                                      {tool.display_name || tool.name}
-                                    </span>
-                                    <span className="ml-auto text-xs text-muted-foreground">
-                                      {tool.description}
-                                    </span>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
                     </div>
                   )}
                 />
@@ -649,19 +633,42 @@ const ToolConfig = ({
                     name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
                     enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
                     key={`tool-${index}`}
-                    trigger={
-                      activeInstances.find(
-                        (option: any) => option.id === item.mcp_server_id
-                      ) ||
-                      mcpServers.find(
-                        (option) => option.id === item.mcp_server_id
-                      ) ||
-                      undefined
-                    }
+                    trigger={resolveInstanceTrigger(item.mcp_server_id)}
                     index={index}
                     control={control}
                     removeEvent={() => removeTool(index)}
                     editEvent={() => editTool(index)}
+                    allowedToolsFieldName={`tools_config.mcp_server_configs.${index}.allowed_tools`}
+                    onToolStateChange={(toolName, state) => {
+                      const trigger = resolveInstanceTrigger(item.mcp_server_id);
+                      const allTools = trigger?.available_tools || [];
+                      let currentAllowed: any[] = (item as any).allowed_tools || [];
+
+                      // Empty means "all enabled" — initialize with all tools on first toggle
+                      if (currentAllowed.length === 0 && allTools.length > 0) {
+                        currentAllowed = allTools.map((t: any) => ({ tool_name: t.name }));
+                      }
+
+                      let newAllowed: any[];
+                      if (state === "disabled") {
+                        newAllowed = currentAllowed.filter((t: any) => t.tool_name !== toolName);
+                      } else {
+                        const existing = currentAllowed.find((t: any) => t.tool_name === toolName);
+                        if (existing) {
+                          newAllowed = currentAllowed.map((t: any) =>
+                            t.tool_name === toolName
+                              ? { ...t, requires_user_confirmation: state === "approval_required" }
+                              : t
+                          );
+                        } else {
+                          newAllowed = [
+                            ...currentAllowed,
+                            { tool_name: toolName, requires_user_confirmation: state === "approval_required" },
+                          ];
+                        }
+                      }
+                      setValue(`tools_config.mcp_server_configs.${index}.allowed_tools`, newAllowed);
+                    }}
                   />
                 ))}
               </Accordion>

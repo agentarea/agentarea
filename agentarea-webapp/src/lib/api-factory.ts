@@ -481,6 +481,28 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    discoverModels: async (configId: string) => {
+      const { data, error } = await client.POST(
+        "/v1/provider-configs/{config_id}/discover" as any,
+        {
+          params: { path: { config_id: configId } },
+        }
+      );
+      return { data, error };
+    },
+
+    discoverModelsPreview: async (body: {
+      provider_key: string;
+      api_key: string;
+      endpoint_url?: string | null;
+    }) => {
+      const { data, error } = await client.POST(
+        "/v1/provider-configs/discover-preview" as any,
+        { body }
+      );
+      return { data, error };
+    },
+
     // Model Spec API
     listModelSpecs: async (params?: {
       provider_spec_id?: string;
@@ -1146,6 +1168,61 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    // Compound MCP API
+    listCompoundMCPs: async () => {
+      const { data, error } = await client.GET("/v1/compound-mcps/", {});
+      return { data, error };
+    },
+
+    getCompoundMCP: async (compoundId: string) => {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    createCompoundMCP: async (body: components["schemas"]["CompoundMCPCreateRequest"]) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/", { body });
+      return { data, error };
+    },
+
+    updateCompoundMCP: async (compoundId: string, body: components["schemas"]["CompoundMCPUpdateRequest"]) => {
+      const { data, error } = await client.PUT("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    deleteCompoundMCP: async (compoundId: string) => {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    listCompoundMCPMembers: async (compoundId: string) => {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}/members", {
+        params: { path: { compound_id: compoundId } },
+      });
+      return { data, error };
+    },
+
+    addCompoundMCPMember: async (compoundId: string, body: components["schemas"]["CompoundMCPMemberRequest"]) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/{compound_id}/members", {
+        params: { path: { compound_id: compoundId } },
+        body,
+      });
+      return { data, error };
+    },
+
+    removeCompoundMCPMember: async (compoundId: string, instanceId: string) => {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}/members/{instance_id}", {
+        params: { path: { compound_id: compoundId, instance_id: instanceId } },
+      });
+      return { data, error };
+    },
+
     // Project API
     listProjects: async () => {
       const { data, error } = await client.GET("/v1/projects/");
@@ -1308,54 +1385,83 @@ export function createApiClient(client: Client) {
 
     // Wallet API
     getAgentWallet: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
-    createAgentWallet: async (agentId: string, body: components["schemas"]["CreateWalletRequest"]) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet", {
+    createAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
         body,
-      });
+      } as any);
       return { data, error };
     },
 
-    updateAgentWallet: async (agentId: string, body: components["schemas"]["UpdateWalletRequest"]) => {
-      const { data, error } = await client.PUT("/v1/agents/{agent_id}/wallet", {
+    updateAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.PUT("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
         body,
-      });
+      } as any);
       return { data, error };
     },
 
     deleteAgentWallet: async (agentId: string) => {
-      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/wallet", {
+      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/wallet" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
     getAgentWalletBalance: async (agentId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/balance", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/balance" as any, {
         params: { path: { agent_id: agentId } },
-      });
+      } as any);
       return { data, error };
     },
 
     getAgentWalletPayments: async (agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/payments", {
+      const { data, error } = await client.GET("/v1/agents/{agent_id}/wallet/payments" as any, {
         params: { path: { agent_id: agentId }, query: params },
+      } as any);
+      return { data, error };
+    },
+
+    fundAgentWallet: async (agentId: string, body: any) => {
+      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet/fund" as any, {
+        params: { path: { agent_id: agentId } },
+        body,
+      } as any);
+      return { data, error };
+    },
+
+    getAllTasks: async () => {
+      const { data, error } = await client.GET("/v1/tasks/");
+      return { data, error };
+    },
+
+    getTask: async (taskId: string) => {
+      const { data, error } = await client.GET("/v1/tasks/{task_id}" as any, {
+        params: { path: { task_id: taskId } },
       });
       return { data, error };
     },
 
-    fundAgentWallet: async (agentId: string, body: components["schemas"]["FundWalletRequest"]) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/wallet/fund", {
-        params: { path: { agent_id: agentId } },
-        body,
-      });
+    // Audit Logs API
+    listAuditLogs: async (params?: {
+      action?: string;
+      actor_id?: string;
+      resource_type?: string;
+      resource_id?: string;
+      since?: string;
+      until?: string;
+      cursor?: string;
+      limit?: number;
+    }) => {
+      const { data, error } = await client.GET("/v1/audit-logs/" as any, {
+        params: { query: params },
+      } as any);
       return { data, error };
     },
   };

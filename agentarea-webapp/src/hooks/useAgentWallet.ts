@@ -55,6 +55,31 @@ export interface PaginatedPayments {
   page_size: number;
 }
 
+function isAgentWallet(value: unknown): value is AgentWallet {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    typeof v.agent_id === "string" &&
+    typeof v.wallet_type === "string" &&
+    typeof v.has_credentials === "boolean" &&
+    typeof v.service_budget_usd === "number" &&
+    typeof v.service_budget_period === "string" &&
+    typeof v.status === "string"
+  );
+}
+
+function isPaginatedPayments(value: unknown): value is PaginatedPayments {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    Array.isArray(v.items) &&
+    typeof v.total === "number" &&
+    typeof v.page === "number" &&
+    typeof v.page_size === "number"
+  );
+}
+
 export function useAgentWallet(agentId: string) {
   const [wallet, setWallet] = useState<AgentWallet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +93,7 @@ export function useAgentWallet(agentId: string) {
       if (err) {
         setWallet(null);
       } else {
-        setWallet(data as AgentWallet);
+        setWallet(isAgentWallet(data) ? data : null);
       }
     } catch {
       setError("Failed to fetch wallet");
@@ -92,7 +117,8 @@ export function useCreateWallet(agentId: string) {
     try {
       const { data: result, error } = await createAgentWalletAction(agentId, data as any);
       if (error) throw new Error("Failed to create wallet");
-      return result as AgentWallet;
+      if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
+      return result;
     } finally {
       setLoading(false);
     }
@@ -109,7 +135,8 @@ export function useUpdateWallet(agentId: string) {
     try {
       const { data: result, error } = await updateAgentWalletAction(agentId, data as any);
       if (error) throw new Error("Failed to update wallet");
-      return result as AgentWallet;
+      if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
+      return result;
     } finally {
       setLoading(false);
     }
@@ -149,8 +176,8 @@ export function useWalletPayments(
     try {
       setLoading(true);
       const { data: result } = await getAgentWalletPaymentsAction(agentId, filters);
-      if (result) {
-        setData(result as PaginatedPayments);
+      if (isPaginatedPayments(result)) {
+        setData(result);
       }
     } finally {
       setLoading(false);

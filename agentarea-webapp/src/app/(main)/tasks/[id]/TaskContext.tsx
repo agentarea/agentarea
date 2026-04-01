@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { getAllTasksAction as getAllTasks, getAgentTaskStatusAction as getAgentTaskStatus } from "@/lib/server-actions";
+import { getTaskAction as getTask, getAgentTaskStatusAction as getAgentTaskStatus } from "@/lib/server-actions";
 import type { TaskWithAgent } from "@/lib/api";
 
 interface TaskData {
@@ -42,16 +42,33 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
+function parseTaskData(raw: any): TaskData | null {
+  if (!raw) return null;
+  return {
+    id: String(raw.id),
+    agent_id: String(raw.agent_id),
+    description: raw.description,
+    status: raw.status,
+    created_at: raw.created_at,
+    execution_id: raw.execution_id || undefined,
+    agent_name: raw.agent_name,
+    agent_description: raw.agent_description || undefined,
+    result: typeof raw.result === "object" && raw.result !== null ? raw.result as Record<string, unknown> : undefined,
+  };
+}
+
 interface TaskProviderProps {
   taskId: string;
+  initialTask?: any;
+  initialError?: string | null;
   children: React.ReactNode;
 }
 
-export function TaskProvider({ taskId, children }: TaskProviderProps) {
-  const [task, setTask] = useState<TaskData | null>(null);
+export function TaskProvider({ taskId, initialTask, initialError, children }: TaskProviderProps) {
+  const [task, setTask] = useState<TaskData | null>(() => parseTaskData(initialTask));
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!initialTask && !initialError);
+  const [error, setError] = useState<string | null>(initialError ?? null);
 
   const loadTask = useCallback(async () => {
     if (!taskId) {
@@ -63,49 +80,12 @@ export function TaskProvider({ taskId, children }: TaskProviderProps) {
       setLoading(true);
       setError(null);
 
-      // Find task from all tasks
-      const { data: allTasks, error: tasksError } = await getAllTasks();
-      if (tasksError || !allTasks?.length) {
-        throw new Error(
-          (tasksError as unknown) instanceof Error
-            ? (tasksError as unknown as Error).message
-            : "No tasks found"
-        );
-      }
-
-      const foundTask = allTasks.find(
-        (t: TaskWithAgent) => t.id?.toString() === taskId
-      ) as TaskWithAgent | undefined;
-
-      if (!foundTask) {
+      const { data: foundTask, error: taskError } = await getTask(taskId);
+      if (taskError || !foundTask) {
         throw new Error("Task not found");
       }
 
-      const agentId = foundTask.agent_id.toString();
-      const taskIdStr = foundTask.id.toString();
-
-      // Load task and status in parallel
-      const [statusResponse] = await Promise.all([
-        getAgentTaskStatus(agentId, taskIdStr),
-      ]);
-
-      // Set task data
-      setTask({
-        id: taskIdStr,
-        agent_id: agentId,
-        description: foundTask.description,
-        status: foundTask.status,
-        created_at: foundTask.created_at,
-        execution_id: foundTask.execution_id || undefined,
-        agent_name: foundTask.agent_name,
-        agent_description: foundTask.agent_description || undefined,
-        result: typeof foundTask.result === "object" && foundTask.result !== null ? foundTask.result as Record<string, unknown> : undefined,
-      });
-
-      // Set status if available
-      setTaskStatus(
-        statusResponse.error ? null : (statusResponse.data as TaskStatus)
-      );
+      setTask(parseTaskData(foundTask));
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load task";
@@ -117,9 +97,26 @@ export function TaskProvider({ taskId, children }: TaskProviderProps) {
     }
   }, [taskId]);
 
+  // Load status in background (non-blocking, uses Temporal)
   useEffect(() => {
-    loadTask();
-  }, [loadTask]);
+    if (!task) return;
+    const loadStatus = async () => {
+      try {
+        const res = await getAgentTaskStatus(task.agent_id, task.id);
+        if (!res.error) setTaskStatus(res.data as TaskStatus);
+      } catch {
+        // Status is optional — page works without it
+      }
+    };
+    loadStatus();
+  }, [task?.id]);
+
+  // Only fetch client-side if no server data was provided
+  useEffect(() => {
+    if (!initialTask && !initialError) {
+      loadTask();
+    }
+  }, []);
 
   return (
     <TaskContext.Provider
@@ -137,4 +134,3 @@ export function useTaskContext() {
   }
   return context;
 }
-

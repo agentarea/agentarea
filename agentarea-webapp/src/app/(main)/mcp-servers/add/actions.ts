@@ -14,7 +14,7 @@ const HeaderSchema = z.object({
 // Define the schema for validation
 const MCPServerSchema = z
   .object({
-    type: z.enum(["docker", "command", "external"], {
+    type: z.enum(["docker", "command", "external", "bundle"], {
       required_error: "Server type is required",
     }),
     name: z.string().min(1, "Server name is required"),
@@ -31,6 +31,7 @@ const MCPServerSchema = z
     // Common fields
     tags: z.string().optional(),
     isPublic: z.boolean(),
+    members: z.string().optional(), // JSON-stringified array of instance IDs
   })
   .refine(
     (data) => {
@@ -42,6 +43,14 @@ const MCPServerSchema = z
       }
       if (data.type === "external") {
         return data.endpointUrl && data.endpointUrl.length > 0;
+      }
+      if (data.type === "bundle") {
+        try {
+          const ids = JSON.parse(data.members || "[]");
+          return Array.isArray(ids) && ids.length > 0;
+        } catch {
+          return false;
+        }
       }
       return true;
     },
@@ -68,10 +77,11 @@ export interface MCPServerFormState {
     }>;
     tags?: string[];
     isPublic?: string[];
+    members?: string[];
     _form?: string[]; // General form errors
   };
   fieldValues?: {
-    type: "docker" | "command" | "external";
+    type: "docker" | "command" | "external" | "bundle";
     name: string;
     description: string;
     dockerImageUrl?: string;
@@ -85,6 +95,7 @@ export interface MCPServerFormState {
     }>;
     tags: string[];
     isPublic: boolean;
+    members?: string;
   };
 }
 
@@ -111,7 +122,7 @@ export async function addMCPServer(
   }));
 
   const rawFormData = {
-    type: formData.get("type") as "docker" | "command" | "external",
+    type: formData.get("type") as "docker" | "command" | "external" | "bundle",
     name: formData.get("name") as string,
     description: formData.get("description") as string,
     dockerImageUrl: formData.get("dockerImageUrl") as string,
@@ -122,6 +133,7 @@ export async function addMCPServer(
     headers,
     tags: formData.get("tags") as string,
     isPublic: formData.get("isPublic") === "true",
+    members: formData.get("members") as string | undefined,
   };
 
   // Extract auth config ID (not part of Zod validation, optional)
@@ -200,6 +212,18 @@ export async function addMCPServer(
         description: validatedFields.data.description,
         server_spec_id: null,
         json_spec: jsonSpec,
+      });
+    } else if (validatedFields.data.type === "bundle") {
+      // Create Bundle MCP Server Instance
+      const memberIds = JSON.parse(validatedFields.data.members || "[]");
+      if (!memberIds.length) {
+        return { message: "Select at least one server to bundle", errors: {} };
+      }
+      response = await createMCPServerInstance({
+        name: validatedFields.data.name,
+        description: validatedFields.data.description,
+        server_spec_id: null,
+        json_spec: { type: "bundle", members: memberIds },
       });
     } else {
       // Create External URL MCP Server Instance

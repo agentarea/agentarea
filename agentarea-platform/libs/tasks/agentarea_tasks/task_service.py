@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
 
 from .domain.base_service import BaseTaskService
@@ -72,6 +73,7 @@ class TaskService(BaseTaskService):
         if not agent:
             raise ValueError(f"Agent with ID {agent_id} does not exist")
 
+    @audited("task.create", resource_type="task")
     async def create_task_from_params(
         self,
         title: str,

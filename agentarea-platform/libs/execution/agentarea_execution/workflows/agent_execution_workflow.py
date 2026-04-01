@@ -181,6 +181,22 @@ class AgentExecutionWorkflow:
             esc.resolved = True
             esc.approved = approved
             esc.deny_comment = comment if not approved else None
+
+            # Emit resolved event so history load knows the outcome
+            event_type = (
+                EventTypes.HUMAN_APPROVAL_RECEIVED if approved else EventTypes.HUMAN_APPROVAL_DENIED
+            )
+            self.event_manager.add_event(
+                event_type,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_name": esc.tool_name,
+                    "tool_call_id": esc.tool_call_id,
+                    "approved": approved,
+                    "comment": comment,
+                    "iteration": self.state.current_iteration,
+                },
+            )
             workflow.logger.info(
                 f"Escalation {escalation_id} resolved: approved={approved}"
                 + (f" comment='{comment}'" if comment else "")
@@ -1219,14 +1235,18 @@ class AgentExecutionWorkflow:
             tool_args = {}
 
         # Approval gating before starting the tool activity
-        approval_required = bool(
-            self.state.goal and getattr(self.state.goal, "requires_human_approval", False)
-        ) or self._tool_requires_approval(tool_name)
+        requires_approval = self._tool_requires_approval(tool_name)
+        workflow.logger.info(
+            f"Tool '{tool_name}' approval check: requires_approval={requires_approval}, "
+            f"agent_config tools={len((self.state.agent_config or {}).get('tools', []))}"
+        )
+        approval_required = (
+            bool(self.state.goal and getattr(self.state.goal, "requires_human_approval", False))
+            or requires_approval
+        )
 
         if approval_required:
-            import uuid as _uuid
-
-            escalation_id = str(_uuid.uuid4())
+            escalation_id = str(workflow.uuid4())
             escalation = PendingEscalation(
                 escalation_id=escalation_id,
                 tool_call_id=tool_call.id,
@@ -2266,6 +2286,7 @@ class AgentExecutionWorkflow:
                     if self.state.final_response
                     else None,
                     workspace_id=self.state.workspace_id,
+                    total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -2372,26 +2393,46 @@ class AgentExecutionWorkflow:
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:
-        """Check agent tools for per-tool user confirmation requirement."""
+        """Check agent tools for per-tool user confirmation requirement.
+
+        Checks both:
+        - Top-level requires_user_confirmation on the tool config (code/agent tools)
+        - Per-tool requires_user_confirmation in allowed_tools (MCP tools)
+        """
         try:
             tools = (self.state.agent_config or {}).get("tools") or []
         except Exception:
             tools = []
 
-        # Check each tool in the list
         for tool_config in tools:
             if not isinstance(tool_config, dict):
                 continue
 
-            # Check if this is the tool we're looking for
-            if tool_config.get("name") != tool_name:
-                continue
+            settings = tool_config.get("settings", {}) or {}
 
-            # Check settings for requires_user_confirmation
-            settings = tool_config.get("settings", {})
-            if isinstance(settings, dict) and bool(
-                settings.get("requires_user_confirmation", False)
-            ):
-                return True
+            # Direct match by name (code tools, agent tools)
+            if tool_config.get("name") == tool_name:
+                if isinstance(settings, dict) and bool(
+                    settings.get("requires_user_confirmation", False)
+                ):
+                    return True
+
+            # MCP tools: check per-tool approval in allowed_tools
+            if tool_config.get("type") == "mcp":
+                allowed_tools = (
+                    settings.get("allowed_tools") if isinstance(settings, dict) else None
+                )
+                if isinstance(allowed_tools, list):
+                    for at in allowed_tools:
+                        if isinstance(at, dict) and at.get("tool_name") == tool_name:
+                            if bool(at.get("requires_user_confirmation", False)):
+                                return True
+                elif isinstance(allowed_tools, dict):
+                    # Dict format: {tool_name: {requires_user_confirmation: bool}}
+                    tool_settings = allowed_tools.get(tool_name)
+                    if isinstance(tool_settings, dict) and bool(
+                        tool_settings.get("requires_user_confirmation", False)
+                    ):
+                        return True
 
         return False

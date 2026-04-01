@@ -345,8 +345,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 # Update usage and cost information
                 if chunk_response.usage:
                     final_usage = chunk_response.usage
-                if chunk_response.cost:
-                    final_cost = chunk_response.cost
+                if chunk_response.cost and chunk_response.cost > 0:
+                    final_cost = max(final_cost, chunk_response.cost)
 
             # Publish final chunk event
             if event_publisher:
@@ -418,8 +418,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
             tool_executor = ToolExecutor()
 
             # Register code tools from configuration (new schema)
-            if request.tools_config and isinstance(request.tools_config, list):
-                for tool_config in request.tools_config:
+            if request.tools and isinstance(request.tools, list):
+                for tool_config in request.tools:
                     if not isinstance(tool_config, dict):
                         continue
 
@@ -720,9 +720,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 if request.result:
                     # Task model expects result as dict, but request carries it as JSON string
                     try:
-                        additional_fields["result"] = json.loads(request.result)
+                        result_dict = json.loads(request.result)
                     except (json.JSONDecodeError, TypeError):
-                        additional_fields["result"] = {"response": request.result}
+                        result_dict = {"response": request.result}
+                    if request.total_cost:
+                        result_dict["total_cost"] = request.total_cost
+                    additional_fields["result"] = result_dict
+                elif request.total_cost:
+                    additional_fields["result"] = {"total_cost": request.total_cost}
                 if request.error_message:
                     additional_fields["error_message"] = request.error_message
 

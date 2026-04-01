@@ -1,5 +1,5 @@
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -78,6 +78,14 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     context_window: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=4096)
+    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    supports_function_calling: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, default=False
+    )
+    supports_vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    supports_reasoning: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     default_context_strategy: Mapped[str | None] = mapped_column(
         String, nullable=True, default=None
     )  # "static", "hybrid", "dynamic" — resolved per agent execution

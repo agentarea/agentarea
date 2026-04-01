@@ -30,6 +30,7 @@ export default function TaskInfoPanel({
   executionTime = "N/A",
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
+
   const formattedStart = startTime
     ? new Date(startTime).toLocaleString()
     : "N/A";

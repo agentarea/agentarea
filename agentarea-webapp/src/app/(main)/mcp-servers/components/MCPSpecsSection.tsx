@@ -9,9 +9,10 @@ import Table from "@/components/Table/Table";
 import EmptyState from "@/components/EmptyState";
 import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
-import { getMCPServerCategory, getCategoryColorClasses } from "../utils";
+import { getMCPServerCategory, getCategoryColorClasses, getConnectionType } from "../utils";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { listMCPServersAction as listMCPServers } from "@/lib/server-actions";
+import { FilterChips } from "./FilterChips";
 
 interface MCPSpecsSectionProps {
   searchParams: { [key: string]: string | string[] | undefined };
@@ -28,6 +29,7 @@ export function MCPSpecsSection({
 
   const searchQuery = (searchParams.search as string) || "";
   const selectedCategory = (searchParams.category as string) || "All";
+  const selectedType = (searchParams.type as string) || "All";
 
   const fetchPage = useCallback(
     async (params: { page: number; page_size: number; search?: string }) => {
@@ -60,13 +62,21 @@ export function MCPSpecsSection({
     search: searchQuery || undefined,
   });
 
-  // Client-side category filtering (applied on top of server-side search)
+  // Client-side category + type filtering (applied on top of server-side search)
   const filteredServers = useMemo(() => {
-    if (selectedCategory === "All") return servers;
-    return servers.filter(
-      (server) => getMCPServerCategory(server.tags || []) === selectedCategory
-    );
-  }, [servers, selectedCategory]);
+    let result = servers;
+    if (selectedCategory !== "All") {
+      result = result.filter(
+        (server) => getMCPServerCategory(server.tags || []) === selectedCategory
+      );
+    }
+    if (selectedType !== "All") {
+      result = result.filter(
+        (server) => getConnectionType(server) === selectedType
+      );
+    }
+    return result;
+  }, [servers, selectedCategory, selectedType]);
 
   const handleConfigureInstance = (server: MCPServer) => {
     router.push(`/mcp-servers/create/${server.id}`);
@@ -148,6 +158,10 @@ export function MCPSpecsSection({
       <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
         {tPage("browseSpecifications")} ({total})
       </h4>
+
+      <div className="mb-4">
+        <FilterChips />
+      </div>
 
       {filteredServers.length === 0 ? (
         <EmptyState

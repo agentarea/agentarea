@@ -8,7 +8,6 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
-from ..logging.audit_logger import get_audit_logger
 from .models import WorkspaceScopedMixin
 
 
@@ -30,7 +29,6 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
         self.session = session
         self.model_class = model_class
         self.user_context = user_context
-        self.audit_logger = get_audit_logger()
         self.resource_type = model_class.__name__.lower().replace("orm", "").replace("model", "")
 
     def _get_workspace_filter(self):
@@ -73,24 +71,8 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             result = await self.session.execute(query)
             record = result.scalar_one_or_none()
 
-            # Log read access
-            self.audit_logger.log_read(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                resource_id=id,
-                creator_scoped=creator_scoped,
-                found=record is not None,
-            )
-
             return record
-        except Exception as e:
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                resource_id=id,
-                operation="get_by_id",
-            )
+        except Exception:
             raise
 
     async def get_by_id_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> T:
@@ -150,26 +132,8 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             result = await self.session.execute(query)
             records = list(result.scalars().all())
 
-            # Log list access
-            self.audit_logger.log_list(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                count=len(records),
-                filters=filters,
-                creator_scoped=False,  # No longer used, kept for audit log compatibility
-                limit=limit,
-                offset=offset,
-            )
-
             return records
-        except Exception as e:
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                operation="list_all",
-                filters=filters,
-            )
+        except Exception:
             raise
 
     async def count(self, creator_scoped: bool = False, **filters: Any) -> int:
@@ -220,24 +184,9 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             await self.session.commit()
             await self.session.refresh(record)
 
-            # Log creation
-            self.audit_logger.log_create(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                resource_id=record.id,
-                resource_data=kwargs,
-            )
-
             return record
-        except Exception as e:
+        except Exception:
             await self.session.rollback()
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                operation="create",
-                resource_data=kwargs,
-            )
             raise
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
@@ -252,7 +201,6 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             The updated record if found, None otherwise
         """
         try:
-            # Get record without logging (get_by_id already logs)
             query = select(self.model_class).where(self.model_class.id == id)
 
             if creator_scoped:
@@ -266,10 +214,8 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             if record is None:
                 return None
 
-            # Store original data for audit
-            original_data = {
-                field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)
-            }
+            # Store original data for reference
+            {field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)}
 
             # Remove immutable fields from updates
             kwargs.pop("created_by", None)
@@ -283,27 +229,9 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             await self.session.commit()
             await self.session.refresh(record)
 
-            # Log update
-            self.audit_logger.log_update(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                resource_id=id,
-                resource_data=kwargs,
-                original_data=original_data,
-                creator_scoped=creator_scoped,
-            )
-
             return record
-        except Exception as e:
+        except Exception:
             await self.session.rollback()
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                resource_id=id,
-                operation="update",
-                resource_data=kwargs,
-            )
             raise
 
     async def update_from_entity(self, entity: T, creator_scoped: bool = False) -> T:
@@ -376,7 +304,6 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             True if record was deleted, False if not found
         """
         try:
-            # Get record without logging (get_by_id already logs)
             query = select(self.model_class).where(self.model_class.id == id)
 
             if creator_scoped:
@@ -393,24 +320,9 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             await self.session.delete(record)
             await self.session.commit()
 
-            # Log deletion
-            self.audit_logger.log_delete(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                resource_id=id,
-                creator_scoped=creator_scoped,
-            )
-
             return True
-        except Exception as e:
+        except Exception:
             await self.session.rollback()
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                resource_id=id,
-                operation="delete",
-            )
             raise
 
     async def delete_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> None:

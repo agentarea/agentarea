@@ -1,7 +1,7 @@
 """Projects CRUD API endpoints."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_common.auth.dependencies import UserContextDep
@@ -9,7 +9,7 @@ from agentarea_common.base import RepositoryFactoryDep
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,11 @@ class ProjectResponse(BaseModel):
     agents: list[ProjectAgentRef] = []
 
     model_config = {"from_attributes": True}
+
+    @field_validator("skills", "mcp_instances", "agents", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v: Any) -> Any:
+        return v if v is not None else []
 
 
 # ---------------------------------------------------------------------------

@@ -103,6 +103,136 @@ code_tools:
         display_name: "Extract Text"
         description: "Extract text content from HTML"
 
+  # ── Platform Tools ─────────────────────────────────────────────
+  # These wrap platform services and are available both to internal
+  # agents (via ToolManager) and external clients (via /mcp).
+
+  agentarea/agents:
+    display_name: "Agent Management"
+    description: "Create, list, update, and delete agents in the workspace"
+    class_path: "agentarea_api.tools.agents_toolset.AgentsToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "list"
+        display_name: "List Agents"
+        description: "List all agents in the workspace"
+      - name: "get"
+        display_name: "Get Agent"
+        description: "Get agent details by ID"
+      - name: "create"
+        display_name: "Create Agent"
+        description: "Create a new agent"
+      - name: "update"
+        display_name: "Update Agent"
+        description: "Update an existing agent"
+      - name: "delete"
+        display_name: "Delete Agent"
+        description: "Delete an agent"
+
+  agentarea/runs:
+    display_name: "Agent Runs"
+    description: "Start, monitor, and manage agent execution runs"
+    class_path: "agentarea_api.tools.runs_toolset.RunsToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "start"
+        display_name: "Start Run"
+        description: "Start a new agent run"
+      - name: "list"
+        display_name: "List Runs"
+        description: "List recent runs"
+      - name: "get"
+        display_name: "Get Run"
+        description: "Get run status and details"
+      - name: "cancel"
+        display_name: "Cancel Run"
+        description: "Cancel a running execution"
+
+  agentarea/mcp_servers:
+    display_name: "MCP Server Management"
+    description: "Start, stop, and manage MCP server instances"
+    class_path: "agentarea_api.tools.mcp_servers_toolset.MCPServersToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "create"
+        display_name: "Create MCP Server"
+        description: "Create a new MCP server instance"
+      - name: "list"
+        display_name: "List MCP Servers"
+        description: "List all MCP server instances"
+      - name: "get"
+        display_name: "Get MCP Server"
+        description: "Get MCP server instance details"
+      - name: "start"
+        display_name: "Start MCP Server"
+        description: "Start an MCP server instance"
+      - name: "stop"
+        display_name: "Stop MCP Server"
+        description: "Stop a running MCP server"
+
+  agentarea/providers:
+    display_name: "LLM Providers"
+    description: "Manage LLM provider specs and configurations"
+    class_path: "agentarea_api.tools.providers_toolset.ProvidersToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "list_specs"
+        display_name: "List Provider Specs"
+        description: "List available LLM providers"
+      - name: "list_configs"
+        display_name: "List Provider Configs"
+        description: "List configured provider connections"
+      - name: "create_config"
+        display_name: "Create Provider Config"
+        description: "Create a new provider configuration"
+      - name: "delete_config"
+        display_name: "Delete Provider Config"
+        description: "Delete a provider configuration"
+
+  agentarea/models:
+    display_name: "Models"
+    description: "List and inspect model specifications and instances"
+    class_path: "agentarea_api.tools.models_toolset.ModelsToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "list_specs"
+        display_name: "List Model Specs"
+        description: "List available model specifications"
+      - name: "list_instances"
+        display_name: "List Model Instances"
+        description: "List configured model instances"
+      - name: "get"
+        display_name: "Get Model Instance"
+        description: "Get model instance details"
+
+  agentarea/secrets:
+    display_name: "Secrets Management"
+    description: "Manage workspace secrets (names only, values are encrypted)"
+    class_path: "agentarea_api.tools.secrets_toolset.SecretsToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: true
+    available_methods:
+      - name: "list"
+        display_name: "List Secrets"
+        description: "List secret names in the workspace"
+      - name: "create"
+        display_name: "Create Secret"
+        description: "Create or update a secret"
+      - name: "delete"
+        display_name: "Delete Secret"
+        description: "Delete a secret"
+
 # Categories help organize tools in the UI
 categories:
   - id: "utility"
@@ -117,3 +247,6 @@ categories:
   - id: "communication"
     name: "Communication Tools"
     description: "Tools for external communication"
+  - id: "platform"
+    name: "Platform Tools"
+    description: "AgentArea platform management capabilities"

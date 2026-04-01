@@ -1,9 +1,10 @@
 import builtins
 import logging
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
@@ -44,17 +45,19 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.repository_factory = repository_factory
         self.event_broker = event_broker
 
+    @audited("mcp_server.create", resource_type="mcp_server")
     async def create_mcp_server(
         self,
         name: str,
         description: str,
-        docker_image_url: str,
-        version: str,
+        docker_image_url: str | None = None,
+        version: str = "1.0.0",
         tags: list[str] | None = None,
         is_public: bool = False,
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
         json_spec: dict[str, Any] | None = None,
+        remote_url: str | None = None,
     ) -> MCPServer:
         server = MCPServer(
             name=name,
@@ -65,6 +68,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
             is_public=is_public,
             env_schema=env_schema or [],
             cmd=cmd,
+            remote_url=remote_url,
         )
         server = await self.create(server)
 
@@ -75,6 +79,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
         return server
 
+    @audited("mcp_server.update", resource_type="mcp_server", resource_id_param="id")
     async def update_mcp_server(
         self,
         id: UUID,
@@ -121,6 +126,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
         return server
 
+    @audited("mcp_server.delete", resource_type="mcp_server", resource_id_param="id")
     async def delete_mcp_server(self, id: UUID) -> bool:
         success = await self.delete(id)
         if success and self.event_broker:
@@ -164,7 +170,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         )
 
     async def get(self, id: UUID) -> MCPServer | None:
-        return await self.repository.get(id)
+        return await self.repository.get_by_id(id)
 
 
 class MCPServerInstanceService:
@@ -219,6 +225,7 @@ class MCPServerInstanceService:
         # It should return an instance of MCPServerInstance or None if the creation fails
         pass
 
+    @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(
         self,
         name: str,
@@ -237,31 +244,42 @@ class MCPServerInstanceService:
             if validation_errors:
                 raise MCPValidationError(validation_errors)
 
+        # URL-type instances connect to external servers — no container needed
+        is_url_type = spec.get("type") == "url"
+
         # Create instance using workspace-scoped repository
         create_kwargs: dict[str, Any] = {
             "name": name,
             "description": description,
             "server_spec_id": server_spec_id,
             "json_spec": spec,
-            "status": "pending",  # Will be updated by mcp-infrastructure
+            "status": "connected" if is_url_type else "pending",
         }
         if auth_config_id:
             create_kwargs["auth_config_id"] = auth_config_id
 
         instance = await self.repository.create(**create_kwargs)
 
-        # Publish event for MCP Infrastructure to handle deployment
-        await self.event_broker.publish(
-            MCPServerInstanceCreated(
-                instance_id=str(instance.id),
-                server_spec_id=server_spec_id,
-                name=instance.name,
-                json_spec=spec,
+        if is_url_type:
+            # No container workflow needed — try discovering tools directly
+            try:
+                await self.discover_and_store_tools(instance.id)
+            except Exception as e:
+                logger.warning("Auto tool discovery failed for URL instance %s: %s", instance.id, e)
+        else:
+            # Publish event for MCP Infrastructure to handle container deployment
+            await self.event_broker.publish(
+                MCPServerInstanceCreated(
+                    instance_id=str(instance.id),
+                    server_spec_id=server_spec_id,
+                    name=instance.name,
+                    json_spec=spec,
+                )
             )
-        )
 
         return instance
 
+    @audited("mcp_instance.update", resource_type="mcp_instance", resource_id_param="id")
     async def update_instance(
         self,
         id: UUID,
@@ -315,6 +333,7 @@ class MCPServerInstanceService:
 
         return await self.env_service.get_instance_environment(instance_id, env_var_names)
 
+    @audited("mcp_instance.delete", resource_type="mcp_instance", resource_id_param="id")
     async def delete_instance(self, id: UUID) -> bool:
         instance = await self.repository.get_by_id(id)
         if not instance:
@@ -445,16 +464,18 @@ class MCPServerInstanceService:
             True if tools were successfully discovered and stored, False otherwise
         """
         instance = await self.repository.get_by_id(instance_id)
-        if not instance or instance.status != "running":
+        if not instance:
             return False
 
         # Determine the MCP URL based on instance type
         instance_type = (instance.json_spec or {}).get("type", "docker")
         if instance_type == "url":
             # External MCP — connect directly to the configured URL
-            mcp_url = (instance.json_spec or {}).get("url", "")
+            mcp_url = (instance.json_spec or {}).get("endpoint_url") or (
+                instance.json_spec or {}
+            ).get("url", "")
             if not mcp_url:
-                logger.warning("URL-type instance %s has no url in json_spec", instance_id)
+                logger.warning("URL-type instance %s has no endpoint_url in json_spec", instance_id)
                 return False
         else:
             # Docker or command-type — routed via Traefik gateway using instance ID
@@ -468,16 +489,24 @@ class MCPServerInstanceService:
         if auth_header and auth_value:
             headers[auth_header] = auth_value
 
-        try:
-            from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
+        # Resolve OAuth/bearer token from linked auth config
+        if not headers and instance.auth_config_id:
+            try:
+                from agentarea_mcp.application.auth_service import MCPAuthService
+                from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 
-            async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10), headers=headers
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+                auth_repo = MCPAuthConfigRepository(
+                    self.repository.session, self.repository.user_context
+                )
+                auth_service = MCPAuthService(auth_repo, self.secret_manager)
+                auth_config = await auth_service.get(instance.auth_config_id)
+                if auth_config:
+                    headers = await auth_service.get_auth_headers(auth_config)
+            except Exception as e:
+                logger.warning("Failed to resolve auth headers for instance %s: %s", instance_id, e)
+
+        try:
+            result = await self._list_tools_via_mcp(mcp_url, headers)
 
             tools = [
                 {
@@ -489,23 +518,88 @@ class MCPServerInstanceService:
             ]
 
             instance.set_available_tools(tools)
-            new_json_spec = dict(instance.json_spec)  # copy to ensure new object
+            new_json_spec = dict(instance.json_spec)
 
-            # Direct DB update to avoid SQLAlchemy JSON mutation detection issues
+            # Compute tools hash for change detection
+            import hashlib
+            import json as _json
+            from datetime import datetime as _dt
+
+            sorted_sigs = sorted(
+                [
+                    {
+                        "name": tool["name"],
+                        "description": tool["description"],
+                        "inputSchema": tool["inputSchema"],
+                    }
+                    for tool in tools
+                ],
+                key=lambda x: x["name"],
+            )
+            tools_hash = hashlib.sha256(
+                _json.dumps(sorted_sigs, sort_keys=True).encode()
+            ).hexdigest()
+
+            previous_hash = new_json_spec.get("tools_hash")
+            tools_changed = previous_hash != tools_hash
+            if tools_changed and previous_hash is not None:
+                logger.info(
+                    "Tools changed for instance %s: %s -> %s",
+                    instance_id,
+                    previous_hash[:12],
+                    tools_hash[:12],
+                )
+
+            new_json_spec["tools_hash"] = tools_hash
+            new_json_spec["tools_updated_at"] = _dt.now(UTC).isoformat()
+            new_json_spec["tools_changed"] = tools_changed
+
             from sqlalchemy import update as sa_update
 
-            session = self.repository.session
+            db_session = self.repository.session
             stmt = (
                 sa_update(type(instance))
                 .where(type(instance).id == instance_id)
                 .values(json_spec=new_json_spec)
             )
-            await session.execute(stmt)
-            await session.commit()
+            await db_session.execute(stmt)
+            await db_session.commit()
 
             logger.info("Discovered %d tools for instance %s", len(tools), instance_id)
             return True
 
         except Exception as e:
-            logger.warning("Tool discovery failed for %s: %s", instance_id, e)
+            logger.error("Tool discovery failed for %s: %s", instance_id, e, exc_info=True)
             return False
+
+    async def _list_tools_via_mcp(self, mcp_url: str, headers: dict[str, str]):
+        """Connect to MCP server and list tools. Tries streamable HTTP first, falls back to SSE."""
+        from mcp import ClientSession
+
+        try:
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async with streamablehttp_client(
+                mcp_url, timeout=timedelta(seconds=10), headers=headers or None
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    return await session.list_tools()
+        except Exception as e:
+            logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, e)
+
+        from mcp.client.sse import sse_client
+
+        sse_url = mcp_url.rstrip("/")
+        if sse_url.endswith("/mcp"):
+            sse_url = sse_url[:-4] + "/sse"
+        elif not sse_url.endswith("/sse"):
+            sse_url = sse_url + "/sse"
+
+        async with sse_client(sse_url, timeout=10, headers=headers or None) as (
+            read_stream,
+            write_stream,
+        ):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await session.list_tools()

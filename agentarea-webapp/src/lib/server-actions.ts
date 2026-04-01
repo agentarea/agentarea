@@ -11,6 +11,7 @@ import {
   resumeAgentTask,
   cancelAgentTask,
   getAllTasks,
+  getTask,
   getAgentTaskStatus,
   createSkill,
   getSkill,
@@ -33,6 +34,8 @@ import {
   updateProviderConfig,
   createModelInstance,
   deleteModelInstance,
+  discoverModels,
+  discoverModelsPreview,
   listMCPAuthConfigs,
   createMCPAuthConfig,
   resolveEscalation,
@@ -54,13 +57,15 @@ import {
   testOpenAPIConnection,
   createOpenAPIConnection,
   previewOpenAPISpec,
-  getAgentWallet,
-  createAgentWallet,
-  updateAgentWallet,
-  deleteAgentWallet,
-  getAgentWalletBalance,
-  getAgentWalletPayments,
-  fundAgentWallet,
+  listCompoundMCPs,
+  getCompoundMCP,
+  createCompoundMCP,
+  updateCompoundMCP,
+  deleteCompoundMCP,
+  listCompoundMCPMembers,
+  addCompoundMCPMember,
+  removeCompoundMCPMember,
+  listMCPServerInstances,
   listProjects,
   getProject,
   createProject,
@@ -76,10 +81,21 @@ import {
   uploadProjectFile,
   downloadProjectFile,
   deleteProjectFile,
+  getAgentWallet,
+  createAgentWallet,
+  updateAgentWallet,
+  deleteAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  fundAgentWallet,
 } from "@/lib/api";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import type { components } from "@/api/schema";
+
+function isUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
 
 export async function getAgentAction(agentId: string) {
   return await getAgent(agentId);
@@ -126,6 +142,10 @@ export async function cancelAgentTaskAction(agentId: string, taskId: string) {
 
 export async function getAllTasksAction() {
   return await getAllTasks();
+}
+
+export async function getTaskAction(taskId: string) {
+  return await getTask(taskId);
 }
 
 export async function getAgentTaskStatusAction(
@@ -241,6 +261,18 @@ export async function createModelInstanceAction(
 
 export async function deleteModelInstanceAction(instanceId: string) {
   return await deleteModelInstance(instanceId);
+}
+
+export async function discoverModelsAction(configId: string) {
+  return await discoverModels(configId);
+}
+
+export async function discoverModelsPreviewAction(body: {
+  provider_key: string;
+  api_key: string;
+  endpoint_url?: string | null;
+}) {
+  return await discoverModelsPreview(body);
 }
 
 export async function listAgentsAction() {
@@ -377,6 +409,85 @@ export async function createOpenAPIConnectionAction(body: Parameters<typeof crea
   return await createOpenAPIConnection(body);
 }
 
+// Compound MCP Actions
+export async function listCompoundMCPsAction() {
+  return await listCompoundMCPs();
+}
+
+export async function getCompoundMCPAction(compoundId: string) {
+  return await getCompoundMCP(compoundId);
+}
+
+export async function createCompoundMCPAction(body: Parameters<typeof createCompoundMCP>[0]) {
+  return await createCompoundMCP(body);
+}
+
+export async function updateCompoundMCPAction(compoundId: string, body: Parameters<typeof updateCompoundMCP>[1]) {
+  return await updateCompoundMCP(compoundId, body);
+}
+
+export async function deleteCompoundMCPAction(compoundId: string) {
+  return await deleteCompoundMCP(compoundId);
+}
+
+export async function listCompoundMCPMembersAction(compoundId: string) {
+  return await listCompoundMCPMembers(compoundId);
+}
+
+export async function addCompoundMCPMemberAction(compoundId: string, body: Parameters<typeof addCompoundMCPMember>[1]) {
+  return await addCompoundMCPMember(compoundId, body);
+}
+
+export async function removeCompoundMCPMemberAction(compoundId: string, instanceId: string) {
+  return await removeCompoundMCPMember(compoundId, instanceId);
+}
+
+export async function listMCPServerInstancesAction() {
+  return await listMCPServerInstances();
+}
+
+export async function startBundleProxyAction(instanceId: string) {
+  if (!isUUID(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
+  const token = await getAuthToken();
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/start-bundle`;
+  const res = await fetch(
+    base.href,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return { data: null, error: text };
+  }
+  return { data: await res.json(), error: null };
+}
+
+export async function stopBundleProxyAction(instanceId: string) {
+  if (!isUUID(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
+  const token = await getAuthToken();
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/stop-bundle`;
+  const res = await fetch(
+    base.href,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return { data: null, error: text };
+  }
+  return { data: await res.json(), error: null };
+}
+
 // Project Actions
 export async function listProjectsAction() {
   return await listProjects();
@@ -476,16 +587,49 @@ export async function previewOpenAPISpecAction(body: {
   return await previewOpenAPISpec(body);
 }
 
+export async function initMCPOAuthConnectAction(instanceId: string, returnTo: string = "") {
+  if (!isUUID(instanceId)) {
+    return { error: "Invalid instance ID" };
+  }
+  const { env } = await import("@/env");
+  const { getAuthToken } = await import("./getAuthToken");
+  const authToken = await getAuthToken();
+
+  const params = new URLSearchParams({ instance_id: instanceId });
+  if (returnTo) params.set("return_to", returnTo);
+  const base = new URL(env.API_URL);
+  base.pathname = "/v1/mcp-oauth/authorize";
+  base.search = params.toString();
+
+  const resp = await fetch(
+    base.href,
+    {
+      headers: {
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      redirect: "manual",
+    }
+  );
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    return { error: body };
+  }
+
+  const data = await resp.json();
+  return { authorize_url: data.authorize_url };
+}
+
 // Wallet actions
 export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-export async function createAgentWalletAction(agentId: string, body: components["schemas"]["CreateWalletRequest"]) {
+export async function createAgentWalletAction(agentId: string, body: any) {
   return await createAgentWallet(agentId, body);
 }
 
-export async function updateAgentWalletAction(agentId: string, body: components["schemas"]["UpdateWalletRequest"]) {
+export async function updateAgentWalletAction(agentId: string, body: any) {
   return await updateAgentWallet(agentId, body);
 }
 
@@ -497,10 +641,13 @@ export async function getAgentWalletBalanceAction(agentId: string) {
   return await getAgentWalletBalance(agentId);
 }
 
-export async function getAgentWalletPaymentsAction(agentId: string, params?: { protocol?: string; status?: string; page?: number; page_size?: number }) {
+export async function getAgentWalletPaymentsAction(
+  agentId: string,
+  params?: { protocol?: string; status?: string; page?: number; page_size?: number }
+) {
   return await getAgentWalletPayments(agentId, params);
 }
 
-export async function fundAgentWalletAction(agentId: string, body: components["schemas"]["FundWalletRequest"]) {
+export async function fundAgentWalletAction(agentId: string, body: any) {
   return await fundAgentWallet(agentId, body);
 }

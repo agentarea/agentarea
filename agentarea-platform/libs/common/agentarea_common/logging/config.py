@@ -116,19 +116,6 @@ def setup_logging(
         "root": {"level": level, "handlers": ["console"]},
     }
 
-    # Add audit file handler if audit logging is enabled
-    if enable_audit_logging:
-        config["handlers"]["audit_file"] = {
-            "class": "logging.handlers.RotatingFileHandler",
-            "level": "INFO",
-            "formatter": "structured",
-            "filename": "audit.log",
-            "maxBytes": 10485760,  # 10MB
-            "backupCount": 5,
-            "filters": ["workspace_context"] if user_context else [],
-        }
-        config["loggers"]["agentarea.audit"]["handlers"].append("audit_file")
-
     logging.config.dictConfig(config)
 
 

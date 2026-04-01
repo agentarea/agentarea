@@ -3,7 +3,6 @@
 import {
   LayoutDashboard,
   Activity,
-  FileText,
   Package,
   Brain,
   BarChart3,
@@ -23,10 +22,6 @@ export default function TaskSubheader({ taskId }: { taskId: string }) {
       <ActiveLink href={`/tasks/${taskId}/events`}>
         <Activity className="h-4 w-4" />
         {t("events")}
-      </ActiveLink>
-      <ActiveLink href={`/tasks/${taskId}/task-logs`}>
-        <FileText className="h-4 w-4" />
-        {t("logs")}
       </ActiveLink>
       <ActiveLink href={`/tasks/${taskId}/artifacts`}>
         <Package className="h-4 w-4" />

@@ -32,22 +32,28 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
   const t = useTranslations("ApprovalRequestMessage");
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [denyComment, setDenyComment] = useState("");
+  const [localResolved, setLocalResolved] = useState<{ approved: boolean } | null>(null);
   const [resolving, setResolving] = useState(false);
 
   const handleApprove = async () => {
     setResolving(true);
+    setLocalResolved({ approved: true });
     data._onResolve?.(data.escalation_id, true, "");
+    setResolving(false);
   };
 
   const handleDeny = async () => {
     setResolving(true);
+    setLocalResolved({ approved: false });
     data._onResolve?.(data.escalation_id, false, denyComment);
+    setResolving(false);
   };
 
-  const isResolved = data.resolved;
+  const isResolved = data.resolved || localResolved !== null;
+  const wasApproved = data.approved ?? localResolved?.approved;
 
   return (
-    <MessageWrapper type="tool-call">
+    <MessageWrapper type={isResolved ? "tool-result" : "tool-call"}>
       <BaseMessage
         headerLeft={
           <div className="flex items-center gap-2">
@@ -59,14 +65,14 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
         }
         headerRight={
           isResolved ? (
-            <span className={data.approved ? "text-green-600" : "text-red-600"}>
-              {data.approved ? t("approved") : t("denied")}
+            <span className={wasApproved ? "text-green-600" : "text-red-600"}>
+              {wasApproved ? t("approved") : t("denied")}
             </span>
           ) : (
             <span className="animate-pulse text-amber-600">{t("waiting")}</span>
           )
         }
-        collapsed={false}
+        collapsed={isResolved}
       >
         <div className="space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-300">
@@ -135,13 +141,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
             </div>
           )}
 
-          {resolving && !isResolved && (
-            <p className="animate-pulse text-sm text-gray-500">
-              {t("sendingDecision")}
-            </p>
-          )}
-
-          {isResolved && !data.approved && data.deny_comment && (
+          {isResolved && !wasApproved && data.deny_comment && (
             <p className="text-sm text-red-600">
               {t("reason")} {data.deny_comment}
             </p>

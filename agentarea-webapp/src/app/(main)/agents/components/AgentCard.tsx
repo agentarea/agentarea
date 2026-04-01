@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
 import ModelBadge from "@/components/ui/model-badge";
@@ -8,7 +9,7 @@ import { Agent } from "@/types";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 type AgentCardProps = {
-  agent: Agent;
+  agent: Agent & { active_task_count?: number };
 };
 
 export default function AgentCard({ agent }: AgentCardProps) {
@@ -44,9 +45,16 @@ export default function AgentCard({ agent }: AgentCardProps) {
             <div className="flex flex-col gap-2 px-[16px] py-[16px] md:px-[20px] lg:px-[24px]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 transition-colors duration-300 group-hover:text-primary dark:text-zinc-100 dark:group-hover:text-zinc-50">
-                    {agent.name}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 transition-colors duration-300 group-hover:text-primary dark:text-zinc-100 dark:group-hover:text-zinc-50">
+                      {agent.name}
+                    </h3>
+                    {agent.active_task_count != null && agent.active_task_count > 0 && (
+                      <Badge variant="blue" className="shrink-0 text-xs">
+                        {agent.active_task_count}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <ModelBadge
                       providerName={agent.model_info?.provider_name}

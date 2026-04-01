@@ -306,6 +306,7 @@ class UpdateTaskStatusRequest(BaseModel):
     result: str | None = None
     error_message: str | None = None
     workspace_id: str
+    total_cost: float = 0.0
 
 
 class UpdateTaskStatusResult(BaseModel):

@@ -14,8 +14,10 @@ from . import (
     agents_tasks,
     agents_well_known,
     api_keys,
+    audit,
     compound_mcps,
     mcp_auth_configs,
+    mcp_oauth_connect,
     mcp_oauth_links,
     mcp_server_instances,
     mcp_servers_specifications,
@@ -29,7 +31,6 @@ from . import (
     registries,
     skills,
     triggers,
-    wallet,
     workspace_config,
 )
 
@@ -37,6 +38,9 @@ from . import (
 # PUBLIC ROUTER - No authentication required
 # ============================================================================
 public_v1_router = APIRouter(prefix="/v1", tags=["public"])
+
+# MCP OAuth callback (public — user is mid-redirect from external AS)
+public_v1_router.include_router(mcp_oauth_connect.public_router)
 
 # Webhook receiver is mounted directly on app (not under /v1) to avoid auth conflicts
 # See main.py: app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
@@ -87,6 +91,9 @@ protected_v1_router.include_router(mcp_auth_configs.router)
 # MCP OAuth Links management - PROTECTED
 protected_v1_router.include_router(mcp_oauth_links.router)
 
+# MCP OAuth Connect (client-side) - PROTECTED for /authorize, callback is public
+protected_v1_router.include_router(mcp_oauth_connect.router)
+
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)
 
@@ -95,6 +102,9 @@ protected_v1_router.include_router(registries.router)
 
 # Compound MCPs - PROTECTED
 protected_v1_router.include_router(compound_mcps.router)
+
+# Compound MCP proxy + Bundle proxy registered directly on app in main.py
+# (routes already contain /v1 prefix so they cannot go through protected_v1_router)
 
 # OpenAPI connections - PROTECTED
 protected_v1_router.include_router(openapi_connections.router)
@@ -105,11 +115,5 @@ protected_v1_router.include_router(network.router)
 # Projects - PROTECTED
 protected_v1_router.include_router(projects.router)
 
-# Agent Wallets & Payments - PROTECTED
-protected_v1_router.include_router(wallet.router)
-
-# ============================================================================
-# LEGACY: Keep old v1_router for backward compatibility during migration
-# TODO: Remove after all references are updated to use protected/public routers
-# ============================================================================
-v1_router = protected_v1_router  # Default to protected for safety
+# Audit logs - PROTECTED
+protected_v1_router.include_router(audit.router)

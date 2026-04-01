@@ -249,7 +249,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
         try:
             handle = client.get_workflow_handle(execution_id)
-            await handle.signal("resolve_escalation", escalation_id, approved, comment)
+            await handle.signal("resolve_escalation", args=[escalation_id, approved, comment])
             logger.info(f"Resolved escalation {escalation_id} in workflow: {execution_id}")
             return True
 

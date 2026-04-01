@@ -217,6 +217,95 @@ async def create_agent(
     return AgentResponse.from_domain(agent)
 
 
+class ToolResponse(BaseModel):
+    """Unified tool response format."""
+
+    name: str
+    type: Literal["code", "mcp"]
+    description: str
+    input_schema: dict[str, Any]
+    mcp_instance_id: UUID | None = None
+    mcp_instance_name: str | None = None
+
+
+@router.get("/tools", response_model=list[ToolResponse])
+async def get_all_tools(
+    user_context: UserContextDep,
+    include: str = Query(
+        "code,mcp", description="Comma-separated list of tool types to include (code, mcp)"
+    ),
+    mcp_instance_id: UUID | None = Query(
+        None, description="Filter MCP tools by specific instance ID"
+    ),
+    mcp_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Get all available tools across all types.
+
+    Returns a unified list of tools from:
+    - Code tools (static, YAML-based)
+    - MCP tools (dynamic, from running instances)
+
+    Query Parameters:
+        include: Comma-separated tool types (default: "code,mcp")
+        mcp_instance_id: Filter MCP tools by instance (optional)
+
+    Example:
+        GET /v1/agents/tools?include=code,mcp
+        GET /v1/agents/tools?include=code
+        GET /v1/agents/tools?include=mcp&mcp_instance_id={uuid}
+    """
+    tools = []
+    include_types = {t.strip() for t in include.split(",")}
+
+    # Add code tools if requested
+    if "code" in include_types:
+        code_tools = get_code_tools_metadata()
+        for tool_name, tool_meta in code_tools.items():
+            tools.append(
+                ToolResponse(
+                    name=tool_name,
+                    type="code",
+                    description=tool_meta.get("description", ""),
+                    input_schema=tool_meta.get("input_schema", {}),
+                )
+            )
+
+    # Add MCP tools if requested
+    if "mcp" in include_types:
+        if mcp_instance_id:
+            instance = await mcp_service.get(mcp_instance_id)
+            if instance:
+                mcp_tools = instance.get_available_tools()
+                for tool in mcp_tools:
+                    tools.append(
+                        ToolResponse(
+                            name=tool["function"]["name"],
+                            type="mcp",
+                            description=tool["function"].get("description", ""),
+                            input_schema=tool["function"].get("parameters", {}),
+                            mcp_instance_id=instance.id,
+                            mcp_instance_name=instance.name,
+                        )
+                    )
+        else:
+            instances = await mcp_service.list()
+            for instance in instances:
+                mcp_tools = instance.get_available_tools()
+                for tool in mcp_tools:
+                    tools.append(
+                        ToolResponse(
+                            name=tool["function"]["name"],
+                            type="mcp",
+                            description=tool["function"].get("description", ""),
+                            input_schema=tool["function"].get("parameters", {}),
+                            mcp_instance_id=instance.id,
+                            mcp_instance_name=instance.name,
+                        )
+                    )
+
+    return tools
+
+
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: UUID,
@@ -291,99 +380,6 @@ async def delete_agent(
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}
-
-
-class ToolResponse(BaseModel):
-    """Unified tool response format."""
-
-    name: str
-    type: Literal["code", "mcp"]
-    description: str
-    input_schema: dict[str, Any]
-    mcp_instance_id: UUID | None = None
-    mcp_instance_name: str | None = None
-
-
-@router.get("/tools", response_model=list[ToolResponse])
-async def get_all_tools(
-    user_context: UserContextDep,
-    include: str = Query(
-        "code,mcp", description="Comma-separated list of tool types to include (code, mcp)"
-    ),
-    mcp_instance_id: UUID | None = Query(
-        None, description="Filter MCP tools by specific instance ID"
-    ),
-    mcp_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
-):
-    """Get all available tools across all types.
-
-    Returns a unified list of tools from:
-    - Code tools (static, YAML-based)
-    - MCP tools (dynamic, from running instances)
-
-    Query Parameters:
-        include: Comma-separated tool types (default: "code,mcp")
-        mcp_instance_id: Filter MCP tools by instance (optional)
-
-    Example:
-        GET /v1/agents/tools?include=code,mcp
-        GET /v1/agents/tools?include=code
-        GET /v1/agents/tools?include=mcp&mcp_instance_id={uuid}
-    """
-    tools = []
-    include_types = {t.strip() for t in include.split(",")}
-
-    # Add code tools if requested
-    if "code" in include_types:
-        code_tools = get_code_tools_metadata()
-        for tool_name, tool_meta in code_tools.items():
-            # Convert code tool format to unified format
-            tools.append(
-                ToolResponse(
-                    name=tool_name,
-                    type="code",
-                    description=tool_meta.get("description", ""),
-                    input_schema=tool_meta.get("input_schema", {}),
-                )
-            )
-
-    # Add MCP tools if requested
-    if "mcp" in include_types:
-        if mcp_instance_id:
-            # Get tools for specific instance
-            instance = await mcp_service.get(mcp_instance_id)
-            if instance:
-                mcp_tools = instance.get_available_tools()
-                for tool in mcp_tools:
-                    # Convert OpenAI function format to unified format
-                    tools.append(
-                        ToolResponse(
-                            name=tool["function"]["name"],
-                            type="mcp",
-                            description=tool["function"].get("description", ""),
-                            input_schema=tool["function"].get("parameters", {}),
-                            mcp_instance_id=instance.id,
-                            mcp_instance_name=instance.name,
-                        )
-                    )
-        else:
-            # Get tools from all MCP instances
-            instances = await mcp_service.list()
-            for instance in instances:
-                mcp_tools = instance.get_available_tools()
-                for tool in mcp_tools:
-                    tools.append(
-                        ToolResponse(
-                            name=tool["function"]["name"],
-                            type="mcp",
-                            description=tool["function"].get("description", ""),
-                            input_schema=tool["function"].get("parameters", {}),
-                            mcp_instance_id=instance.id,
-                            mcp_instance_name=instance.name,
-                        )
-                    )
-
-    return tools
 
 
 # Include A2A protocol subroutes

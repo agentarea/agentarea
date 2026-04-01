@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { Bot, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
-import FullChat from "@/components/Chat/FullChat";
+import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
+import { parseEventToMessage, shouldDisplayEvent } from "@/components/Chat/EventParser";
+import { MessageRenderer } from "@/components/Chat/MessageComponents";
+import type { MessageComponentType } from "@/components/Chat/types";
+import { normalizeEventType } from "@/components/Chat/utils/eventNormalizer";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
@@ -26,25 +28,72 @@ import {
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
+import { resolveEscalationAction } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
   const { task, taskStatus, loading, error, refresh } = useTaskContext();
-  const t = useTranslations("TaskDetailPage");
 
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  // Events hook for real-time events
-  const { refresh: refreshEvents } = useTaskEvents(
-    task?.agent_id || null,
-    task?.id || null,
-    {
-      includeHistory: true,
-      autoConnect: true,
+  const handleResolveEscalation = async (escalationId: string, approved: boolean, comment: string) => {
+    if (!task) return;
+    try {
+      await resolveEscalationAction(task.agent_id, task.id, escalationId, approved, comment);
+      refresh();
+    } catch (e) {
+      console.error("Failed to resolve escalation:", e);
     }
-  );
+  };
+
+  // Events hook for real-time events + historical replay
+  const {
+    events: taskEvents,
+    loading: eventsLoading,
+    refresh: refreshEvents,
+  } = useTaskEvents(task?.agent_id || null, task?.id || null, {
+    includeHistory: true,
+    autoConnect: true,
+  });
+
+  // FIXME: Performance — this useMemo re-processes ALL events on every render whenever
+  // taskEvents or task changes. Each event goes through normalizeEventType → shouldDisplayEvent →
+  // parseEventToMessage (a large switch statement). For long-running tasks with many events
+  // this becomes O(n) per render. Should accumulate incrementally: keep a processed array
+  // and only parse newly appended events rather than replaying the full list each time.
+  // Convert historical events to chat message components for direct rendering
+  const executionMessages = useMemo((): MessageComponentType[] => {
+    if (!task) return [];
+
+    const messages: MessageComponentType[] = [];
+
+    for (const event of taskEvents) {
+      const eventType = normalizeEventType(event.type);
+      if (!shouldDisplayEvent(eventType)) continue;
+
+      const eventData = {
+        ...(event.data || {}),
+        task_id: task.id,
+        agent_id: task.agent_id,
+        timestamp: event.timestamp.toISOString(),
+      };
+
+      const message = parseEventToMessage(eventType, eventData);
+      if (message) {
+        messages.push(message);
+      }
+    }
+
+    return messages;
+  }, [task, taskEvents]);
+
+  // Auto-scroll to bottom when new messages arrive
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [executionMessages.length]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -62,18 +111,19 @@ export default function TaskDetailsPage() {
       const { error } = await pauseAgentTask(task.agent_id, task.id);
 
       if (error) {
-        const errorMessage = error.detail?.[0]?.msg || t("errorWhilePausing");
-        toast.error(t("failedToPause"), {
+        const errorMessage =
+          error.detail?.[0]?.msg || "An error occurred while pausing the task";
+        toast.error("Failed to pause task", {
           description: errorMessage,
         });
       } else {
-        toast.success(t("pausedSuccessfully"));
+        toast.success("Task paused successfully");
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error(t("failedToPause"), {
-        description: t("unexpectedError"),
+      toast.error("Failed to pause task", {
+        description: "An unexpected error occurred",
       });
     } finally {
       setControlling(false);
@@ -88,18 +138,19 @@ export default function TaskDetailsPage() {
       const { error } = await resumeAgentTask(task.agent_id, task.id);
 
       if (error) {
-        const errorMessage = error.detail?.[0]?.msg || t("errorWhileResuming");
-        toast.error(t("failedToResume"), {
+        const errorMessage =
+          error.detail?.[0]?.msg || "An error occurred while resuming the task";
+        toast.error("Failed to resume task", {
           description: errorMessage,
         });
       } else {
-        toast.success(t("resumedSuccessfully"));
+        toast.success("Task resumed successfully");
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error(t("failedToResume"), {
-        description: t("unexpectedError"),
+      toast.error("Failed to resume task", {
+        description: "An unexpected error occurred",
       });
     } finally {
       setControlling(false);
@@ -117,18 +168,18 @@ export default function TaskDetailsPage() {
         const errorMessage =
           error.detail?.[0]?.msg ||
           (error as any).message ||
-          t("errorWhileCancelling");
-        toast.error(t("failedToCancel"), {
+          "An error occurred while cancelling the task";
+        toast.error("Failed to cancel task", {
           description: errorMessage,
         });
       } else {
-        toast.success(t("cancelledSuccessfully"));
+        toast.success("Task cancelled successfully");
         // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
-      toast.error(t("failedToCancel"), {
-        description: t("unexpectedError"),
+      toast.error("Failed to cancel task", {
+        description: "An unexpected error occurred",
       });
     } finally {
       setControlling(false);
@@ -149,11 +200,11 @@ export default function TaskDetailsPage() {
   if (error || !task) {
     return (
       <EmptyState
-        title={t("taskNotFound")}
-        description={t("taskNotFoundDescription")}
+        title={error ? "Error Loading Task" : "Task Not Found"}
+        description={error || "The requested task could not be found."}
         iconsType="tasks"
-        action={{ label: t("backToTasks"), href: "/tasks" }}
-        additionAction={{ label: t("tryAgain"), onClick: handleRefresh }}
+        action={{ label: "Back to Tasks", href: "/tasks" }}
+        additionAction={{ label: "Try Again", onClick: handleRefresh }}
       />
     );
   }
@@ -167,37 +218,48 @@ export default function TaskDetailsPage() {
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
 
-  const welcomeComponent = (
-    <ChatWelcome
-      icon={Bot}
-      variant="neutral"
-      size="sm"
-      animate={false}
-      titleClassName="text-muted-foreground opacity-70"
-      title={t("chatWith", { agentName: task.agent_name || "Agent" })}
-    />
-  );
-
   return (
     <>
       <div className="flex h-full w-full">
-        {/* Left side - Chat (flexible) */}
-        <div className="flex-1">
-          <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
+        {/* Left side - Execution history */}
+        <div className="flex-1 flex flex-col h-full">
+          <div className="relative flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
-            <div className="relative z-1 h-full">
-              <FullChat
-                welcomeComponent={welcomeComponent}
-                agent={{
-                  id: task.agent_id,
-                  name: task.agent_name || `Agent ${task.agent_id}`,
-                  description: task.agent_description || undefined,
-                }}
-                taskId={task.id}
-                placeholder={t("chatWith", {
-                  agentName: task.agent_name || `Agent ${task.agent_id}`,
-                })}
-              />
+            <div className="relative z-1 space-y-3 px-3 py-5">
+              {/* Task description as user message */}
+              {task.description && (
+                <UserMessageComponent
+                  id={`task-${task.id}-desc`}
+                  content={task.description}
+                  timestamp={task.created_at || new Date().toISOString()}
+                />
+              )}
+
+              {/* Loading state */}
+              {eventsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner />
+                </div>
+              )}
+
+              {/* Execution events rendered directly */}
+              {executionMessages.map((message, index) => (
+                <MessageRenderer
+                  key={`${message.data.id}-${message.data.event_type}-${index}`}
+                  message={message}
+                  agent_name={task.agent_name || undefined}
+                  onResolveEscalation={handleResolveEscalation}
+                />
+              ))}
+
+              {/* Empty state */}
+              {!eventsLoading && executionMessages.length === 0 && (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No execution events yet.
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
           </div>
         </div>
@@ -226,16 +288,20 @@ export default function TaskDetailsPage() {
         />
       </div>
 
+      {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("cancelTask")}</DialogTitle>
-            <DialogDescription>{t("cancelTaskDescription")}</DialogDescription>
+            <DialogTitle>Cancel Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this task? This action cannot be
+              undone and will terminate the task execution immediately.
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" disabled={controlling}>
-                {t("keepRunning")}
+                Keep Running
               </Button>
             </DialogClose>
             <Button
@@ -246,12 +312,12 @@ export default function TaskDetailsPage() {
               {controlling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("cancelling")}
+                  Cancelling...
                 </>
               ) : (
                 <>
                   <X className="mr-2 h-4 w-4" />
-                  {t("cancelTask")}
+                  Cancel Task
                 </>
               )}
             </Button>

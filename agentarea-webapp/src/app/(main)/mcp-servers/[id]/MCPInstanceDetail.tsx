@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
@@ -22,7 +22,11 @@ import Table from "@/components/Table/Table";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
-import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
+import {
+  discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
+  startBundleProxyAction,
+  stopBundleProxyAction,
+} from "@/lib/server-actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
@@ -73,8 +77,38 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     container_status: string;
   } | null>(null);
 
-  const canStart = instance.status !== "running" && instance.status !== "starting";
+  const canStart = instance.status !== "running" && instance.status !== "starting" && instance.status !== "connected";
   const canStop = instance.status === "running" || instance.status === "starting";
+
+  const [isBundleStarting, setIsBundleStarting] = useState(false);
+  const [isBundleStopping, setIsBundleStopping] = useState(false);
+
+  const handleStartBundle = async () => {
+    setIsBundleStarting(true);
+    try {
+      const { error } = await startBundleProxyAction(instance.id);
+      if (error) throw new Error(error);
+      toast.success("Server started");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start server");
+    } finally {
+      setIsBundleStarting(false);
+    }
+  };
+
+  const handleStopBundle = async () => {
+    setIsBundleStopping(true);
+    try {
+      const { error } = await stopBundleProxyAction(instance.id);
+      if (error) throw new Error(error);
+      toast.success("Server stopped");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to stop server");
+    } finally {
+      setIsBundleStopping(false);
+    }
+  };
 
   const handleRefreshTools = async () => {
     setIsRefreshingTools(true);
@@ -90,6 +124,20 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     }
   };
 
+  // Handle OAuth redirect result
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const oauthResult = searchParams.get("oauth");
+    if (oauthResult === "success") {
+      toast.success(t("oauth.connectSuccess"));
+      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+    } else if (oauthResult === "error") {
+      const reason = searchParams.get("reason") || "unknown";
+      toast.error(t("oauth.connectError", { reason }));
+      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+    }
+  }, [searchParams, instance.id, router, t]);
+
   // Poll for status updates during transient states
   useEffect(() => {
     const transient = ["starting", "stopping", "pending", "validating"];
@@ -99,10 +147,10 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     return () => clearInterval(interval);
   }, [instance.status, router]);
 
-  // Fetch connection URL when instance is running (skip for URL-type — it has its own endpoint)
+  // Fetch connection URL when instance is running (skip for URL-type and bundle-type)
   const jsonSpecType = (instance.json_spec?.type as string) || "docker";
   useEffect(() => {
-    if (jsonSpecType === "url") return; // URL-type uses endpoint_url directly
+    if (jsonSpecType === "url" || jsonSpecType === "bundle") return;
     if (instance.status === "running" && instance.name) {
       setIsLoadingUrl(true);
       getMCPInstanceHealth(instance.name)
@@ -134,6 +182,8 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const specType = (instance.json_spec?.type as string) || "docker";
   const isUrlType = specType === "url";
   const isCommandType = specType === "command";
+  const isBundleType = specType === "bundle";
+  const bundleMembers = (instance.json_spec?.members ?? []) as string[];
 
   // Command-type fields
   const commandStr = instance.json_spec?.command as string | undefined;
@@ -144,8 +194,15 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
 
   // Generate SSE endpoint URL from connection URL
-  const effectiveConnectionUrl = isUrlType ? endpointUrl : connectionUrl;
-  const sseUrl = effectiveConnectionUrl ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
+  const bundleEndpointUrl = isBundleType ? `/mcp/${instance.id}` : null;
+  const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
+  const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
+
+  // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea
+  const apiBaseUrl = typeof window !== "undefined"
+    ? (window as any).__ENV__?.CLIENT_API_URL || ""
+    : "";
+  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
 
   const toolsTableData = tools.map((tool) => ({
     id: tool.name,
@@ -179,26 +236,51 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={true}
+                  disabled={!isBundleType || isBundleStarting}
+                  onClick={isBundleType ? handleStartBundle : undefined}
                 >
-                  <Play className="mr-1.5 h-3.5 w-3.5" />
-                  Start
+                  <Play className={`mr-1.5 h-3.5 w-3.5 ${isBundleStarting ? "animate-spin" : ""}`} />
+                  {isBundleStarting ? "Starting..." : "Start"}
                 </Button>
               )}
               {canStop && (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={true}
+                  disabled={!isBundleType || isBundleStopping}
+                  onClick={isBundleType ? handleStopBundle : undefined}
                 >
                   <Square className="mr-1.5 h-3.5 w-3.5" />
-                  Stop
+                  {isBundleStopping ? "Stopping..." : "Stop"}
                 </Button>
               )}
             </div>
 
-            {/* Connection URL - Show when running, or always for URL-type */}
-            {(instance.status === "running" || isUrlType) && (
+            {/* AgentArea proxy URL - always shown so agents can connect through AgentArea */}
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  AgentArea Proxy URL
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs text-muted-foreground">
+                  Connect to this MCP server through AgentArea
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={agentareaProxyUrl}
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                  <CopyButton text={agentareaProxyUrl} label="proxy URL" />
+                </div>
+              </div>
+            </div>
+
+            {/* Connection URL - Show when running/connected, or always for URL-type/bundle-type */}
+            {(instance.status === "running" || instance.status === "connected" || isUrlType || isBundleType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4 text-muted-foreground" />
@@ -365,6 +447,21 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 </div>
               )}
             </div>
+
+            {isBundleType && bundleMembers.length > 0 && (
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Sources
+                </div>
+                <div className="space-y-1">
+                  {bundleMembers.map((memberId: string) => (
+                    <div key={memberId} className="text-sm text-muted-foreground font-mono">
+                      {memberId}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {tools.length > 0 && (
               <div className="space-y-3">

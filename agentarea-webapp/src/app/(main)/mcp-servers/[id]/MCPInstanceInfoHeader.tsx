@@ -15,29 +15,33 @@ export default function MCPInstanceInfoHeader({
 
   const status = instance.status;
   const statusVariant =
-    status === "running" || status === "healthy"
-      ? "success"
-      : status === "starting" ||
-          status === "pending" ||
-          status === "validating" ||
-          status === "stopping"
-        ? "yellow"
-        : status === "stopped"
-          ? "secondary"
-          : status === "error" || status === "unhealthy"
-            ? "destructive"
-            : "zinc";
+    status === "connected"
+      ? "teal"
+      : status === "running" || status === "healthy"
+        ? "success"
+        : status === "starting" ||
+            status === "pending" ||
+            status === "validating" ||
+            status === "stopping"
+          ? "yellow"
+          : status === "stopped"
+            ? "secondary"
+            : status === "error" || status === "unhealthy"
+              ? "destructive"
+              : "zinc";
 
   const statusLabel =
-    status === "running" || status === "healthy"
-      ? tPage("status.running")
-      : status === "starting"
-        ? tPage("status.starting")
-        : status === "stopped"
-          ? t("status.stopped")
-          : status === "error" || status === "unhealthy"
-            ? tPage("status.error")
-            : status || t("status.unknown");
+    status === "connected"
+      ? tPage("status.connected")
+      : status === "running" || status === "healthy"
+        ? tPage("status.running")
+        : status === "starting"
+          ? tPage("status.starting")
+          : status === "stopped"
+            ? t("status.stopped")
+            : status === "error" || status === "unhealthy"
+              ? tPage("status.error")
+              : status || t("status.unknown");
 
   return (
     <InfoPanelHeader

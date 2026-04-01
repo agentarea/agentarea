@@ -1,7 +1,8 @@
 import { useTranslations } from "next-intl";
-import { Key, Link, Settings } from "lucide-react";
+import { CheckCircle2, Key, Link, RefreshCw, Settings } from "lucide-react";
 import { Control, Controller, FieldErrors } from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ApiKeyEditInput from "./ApiKeyEditInput";
 
@@ -10,6 +11,12 @@ interface BaseInfoProps {
   errors: FieldErrors<any>;
   providerSpecId?: string;
   isEdit?: boolean;
+  onDiscoverModels?: (apiKey: string, endpointUrl?: string) => Promise<void>;
+  isDiscovering?: boolean;
+  discoverySuccess?: boolean;
+  discoveryError?: string | null;
+  apiKeyValue?: string;
+  endpointUrlValue?: string;
 }
 
 export default function BaseInfo({
@@ -17,6 +24,12 @@ export default function BaseInfo({
   errors,
   providerSpecId,
   isEdit,
+  onDiscoverModels,
+  isDiscovering,
+  discoverySuccess,
+  discoveryError,
+  apiKeyValue,
+  endpointUrlValue,
 }: BaseInfoProps) {
   const t = useTranslations("ProviderConfigForm");
   return (
@@ -72,6 +85,31 @@ export default function BaseInfo({
               <p className="form-error">
                 {String(errors.api_key.message)}
               </p>
+            )}
+            {!isEdit && onDiscoverModels && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => onDiscoverModels(apiKeyValue || "", endpointUrlValue || undefined)}
+                  disabled={!apiKeyValue || isDiscovering}
+                >
+                  <RefreshCw
+                    className={`mr-1.5 h-3 w-3 ${isDiscovering ? "animate-spin" : ""}`}
+                  />
+                  {isDiscovering ? "Discovering..." : "Test & Discover"}
+                </Button>
+                {discoverySuccess && (
+                  <span className="flex items-center gap-1 text-xs text-green-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Models discovered
+                  </span>
+                )}
+                {discoveryError && (
+                  <span className="text-xs text-red-500">{discoveryError}</span>
+                )}
+              </div>
             )}
           </div>
 
