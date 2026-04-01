@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { PaymentHistoryTable } from "@/components/PaymentHistory";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 
 export const metadata: Metadata = {
   title: "Agent Payments",
@@ -15,16 +17,12 @@ export default async function AgentPaymentsPage({
   params,
 }: AgentPaymentsPageProps) {
   const resolvedParams = await params;
+  const t = await getTranslations("AgentPaymentsPage");
+  const t_sidebar = await getTranslations("Sidebar");
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Payment History</h2>
-        <p className="text-sm text-muted-foreground">
-          All service payments made by this agent via x402 and MPP protocols.
-        </p>
-      </div>
+    <div className="h-full space-y-2 overflow-auto px-4 py-5">
       <PaymentHistoryTable agentId={resolvedParams.id} />
-    </div>
+    </div>  
   );
 }

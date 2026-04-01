@@ -217,6 +217,21 @@
     }
   },
 
+  "AgentPaymentsPage": {
+    "title": "Payment History",
+    "description": "All service payments made by this agent via x402 and MPP protocols.",
+    "noPayments": "No payments yet",
+    "noPaymentsDescription": "This agent hasn't made any service payments yet.",
+    "table": {
+      "time": "Time",
+      "protocol": "Protocol",
+      "amount": "Amount",
+      "recipient": "Recipient",
+      "tool": "Tool",
+      "txHash": "Tx Hash",
+      "status": "Status"
+    }
+  },
   "AgentsPage": {
     "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
