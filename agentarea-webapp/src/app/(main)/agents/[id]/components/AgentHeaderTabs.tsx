@@ -9,7 +9,7 @@ import {
   List,
   MessagesSquare,
   Settings,
-  Wallet,
+  // Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ const TABS = [
   { key: "new-task", icon: MessagesSquare, labelKey: "createTask" },
   { key: "tasks", icon: List, labelKey: "currentTasks" },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
-  { key: "wallet", icon: Wallet, labelKey: "wallet" },
+  // { key: "wallet", icon: Wallet, labelKey: "wallet" },
   { key: "settings", icon: Settings, labelKey: "settings" },
 ];
 
