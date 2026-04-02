@@ -5,7 +5,6 @@ import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { TaskStatusIcon } from "@/components/ui/task-status-icon";
 import { TaskWithAgent } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 export interface TaskItemData {
   id: string;
