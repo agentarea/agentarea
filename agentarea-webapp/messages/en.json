@@ -352,6 +352,10 @@
     "myConnections": "My Connections",
     "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
+    "filters": {
+      "type": "Type",
+      "category": "Category"
+    },
     "createInstance": {
       "breadcrumb": "Create instance",
       "breadcrumbWithName": "Create {serverName} instance",
