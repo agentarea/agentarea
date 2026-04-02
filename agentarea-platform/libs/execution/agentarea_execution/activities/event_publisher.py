@@ -202,6 +202,9 @@ def _is_quota_error(error: Exception) -> bool:
         or "billing" in error_str
         or "exceeded" in error_str
         or "insufficient funds" in error_str
+        or "insufficient balance" in error_str
+        or "no resource package" in error_str
+        or "please recharge" in error_str
     )
 
 

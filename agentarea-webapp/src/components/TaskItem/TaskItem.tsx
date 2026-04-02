@@ -43,6 +43,10 @@ const statusConfig = {
     badgeVariant: "destructive" as const,
     label: "Failed",
   },
+  blocked: {
+    badgeVariant: "secondary" as const,
+    label: "Blocked",
+  },
   error: {
     badgeVariant: "destructive" as const,
     label: "Error",

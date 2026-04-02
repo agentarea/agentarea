@@ -18,6 +18,7 @@ const statusVariants = {
   completed: "success",
   success: "success",
   failed: "destructive",
+  blocked: "secondary",
   error: "destructive",
   paused: "secondary",
   pending: "secondary",
@@ -57,7 +58,7 @@ export default function TasksList({
         const variant =
           statusVariants[value as keyof typeof statusVariants] || "secondary";
         // Check if translation exists, otherwise fallback to capitalized value
-        const label = ["running", "completed", "success", "failed", "error", "paused", "pending"].includes(value)
+        const label = ["running", "completed", "success", "failed", "blocked", "error", "paused", "pending"].includes(value)
           ? tStatus(value)
           : value.charAt(0).toUpperCase() + value.slice(1);
           

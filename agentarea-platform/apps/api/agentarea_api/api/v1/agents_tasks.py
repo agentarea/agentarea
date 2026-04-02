@@ -697,10 +697,10 @@ async def resume_agent_task(
                 status_code=400, detail=f"Cannot resume task in '{current_status}' state"
             )
 
-        if current_status != "paused":
+        if current_status not in ["paused", "blocked"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot resume task that is not paused (current status: {current_status})",
+                detail=f"Cannot resume task that is not paused/blocked (current status: {current_status})",
             )
 
         # Resume the workflow

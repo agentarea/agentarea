@@ -380,6 +380,7 @@ class BaseTaskService(ABC):
             "working",
             "completed",
             "failed",
+            "blocked",
             "cancelled",
         }
         if task.status not in valid_statuses:

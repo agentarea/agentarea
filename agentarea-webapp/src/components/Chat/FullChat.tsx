@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useMentions } from "@/hooks/useMentions";
 import {
   pauseAgentTaskAction as pauseAgentTask,
+  resumeAgentTaskAction as resumeAgentTask,
   resolveEscalationAction as resolveEscalation,
 } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
@@ -133,6 +134,8 @@ export default function FullChat({
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
   const [isPausing, setIsPausing] = React.useState(false);
+  const [isResuming, setIsResuming] = React.useState(false);
+  const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<string | null>(null);
   const [input, setInput] = React.useState(""); // Stores @[agentId:agentName] format
   const [inputDisplay, setInputDisplay] = React.useState(""); // Stores @agentName for display
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -234,6 +237,7 @@ export default function FullChat({
       currentTaskId,
       setMessages,
       setIsLoading,
+      setTaskLifecycleStatus,
       setCurrentTaskId,
       onTaskCreated: callbacks.onTaskCreated.current,
       onTaskStarted: callbacks.onTaskStarted.current,
@@ -341,6 +345,33 @@ export default function FullChat({
       });
     } finally {
       setIsPausing(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!currentTaskId || isResuming) return;
+
+    try {
+      setIsResuming(true);
+      const { error } = await resumeAgentTask(agent.id, currentTaskId);
+
+      if (error) {
+        const errorMessage =
+          error.detail?.[0]?.msg || "An error occurred while resuming the task";
+        toast.error("Failed to resume task", {
+          description: errorMessage,
+        });
+      } else {
+        setTaskLifecycleStatus("running");
+        setIsLoading(true);
+        toast.success("Task resumed successfully");
+      }
+    } catch (err) {
+      toast.error("Failed to resume task", {
+        description: "An unexpected error occurred",
+      });
+    } finally {
+      setIsResuming(false);
     }
   };
 
@@ -499,6 +530,9 @@ export default function FullChat({
             onAgentChange={onAgentChange}
             onStop={isLoading && currentTaskId ? handlePause : undefined}
             isStopping={isPausing}
+            onResume={currentTaskId ? handleResume : undefined}
+            isResuming={isResuming}
+            canResume={taskLifecycleStatus === "paused" || taskLifecycleStatus === "blocked"}
           />
         </div>
       </div>

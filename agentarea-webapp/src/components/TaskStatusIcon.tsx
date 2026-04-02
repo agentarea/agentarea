@@ -24,6 +24,12 @@ export const TaskStatusIcon = ({ status, className }: TaskStatusIconProps) => {
           <X className="h-3/4 w-3/4 text-destructive/80 dark:text-destructive" strokeWidth={3} />
         </div>
       );
+    case 'blocked':
+      return (
+        <div className={cn('flex items-center justify-center rounded-full bg-orange-500/40 dark:bg-orange-700/50', className)}>
+          <X className="h-3/4 w-3/4 text-orange-600 dark:text-orange-300" strokeWidth={3} />
+        </div>
+      );
     case 'in_progress':
     case 'running':
       return (

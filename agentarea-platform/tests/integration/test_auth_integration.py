@@ -19,6 +19,8 @@ from agentarea_common.auth.middleware import AuthMiddleware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+pytestmark = [pytest.mark.integration, pytest.mark.golden]
+
 
 @pytest.fixture
 def test_app():
