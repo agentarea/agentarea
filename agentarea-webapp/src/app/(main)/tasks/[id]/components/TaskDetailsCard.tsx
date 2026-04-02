@@ -1,10 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  Bot,
-  Layers,
-} from "lucide-react";
+import { Bot, Layers } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { TaskStatusIcon } from "@/components/ui/task-status-icon";
 import { TaskWithAgent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +36,7 @@ export default function TaskDetailsCard({
 }: TaskDetailsCardProps) {
   const t = useTranslations("TaskDetailsCard");
   const tStatus = useTranslations("TasksPage.status");
-  const status = currentStatus as TaskWithAgent['status'];
+  const status = currentStatus as TaskWithAgent["status"];
 
   const label = [
     "running",
@@ -53,16 +50,17 @@ export default function TaskDetailsCard({
     ? tStatus(status)
     : status.charAt(0).toUpperCase() + status.slice(1);
 
-  const colorClass = {
-    completed: "text-green-600 dark:text-green-500",
-    success: "text-green-600 dark:text-green-500",
-    failed: "text-red-600 dark:text-red-500",
-    error: "text-red-600 dark:text-red-500",
-    running: "text-primary",
-    in_progress: "text-primary",
-    pending: "text-muted-foreground",
-    paused: "text-muted-foreground",
-  }[status] || "text-muted-foreground";
+  const colorClass =
+    {
+      completed: "text-green-600 dark:text-green-500",
+      success: "text-green-600 dark:text-green-500",
+      failed: "text-red-600 dark:text-red-500",
+      error: "text-red-600 dark:text-red-500",
+      running: "text-primary",
+      in_progress: "text-primary",
+      pending: "text-muted-foreground",
+      paused: "text-muted-foreground",
+    }[status] || "text-muted-foreground";
 
   return (
     <Card className="shadow-sm">
@@ -91,7 +89,12 @@ export default function TaskDetailsCard({
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-2">
-            <span className={cn("text-[11px] font-normal uppercase tracking-wider", colorClass)}>
+            <span
+              className={cn(
+                "text-[11px] font-normal uppercase tracking-wider",
+                colorClass
+              )}
+            >
               {label}
             </span>
           </div>

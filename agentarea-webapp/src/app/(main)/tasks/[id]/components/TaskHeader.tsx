@@ -1,12 +1,19 @@
+import { useTranslations } from "next-intl";
+import {
+  Bot,
+  Clock,
+  Database,
+  Download,
+  RefreshCw,
+  Share2,
+} from "lucide-react";
+import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, Clock, Database, Download, RefreshCw, Share2 } from "lucide-react";
-import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
-import type { DisplayEvent } from "@/types/events";
-import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { TaskStatusIcon } from "@/components/ui/task-status-icon";
 import { TaskWithAgent } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useTranslations } from "next-intl";
+import type { DisplayEvent } from "@/types/events";
 
 interface TaskHeaderProps {
   task: {
@@ -43,7 +50,7 @@ export default function TaskHeader({
   controlButtons,
 }: TaskHeaderProps) {
   const tStatus = useTranslations("TasksPage.status");
-  const status = currentStatus as TaskWithAgent['status'];
+  const status = currentStatus as TaskWithAgent["status"];
 
   const label = [
     "running",
@@ -57,16 +64,17 @@ export default function TaskHeader({
     ? tStatus(status)
     : status.charAt(0).toUpperCase() + status.slice(1);
 
-  const colorClass = {
-    completed: "text-green-600 dark:text-green-500",
-    success: "text-green-600 dark:text-green-500",
-    failed: "text-red-600 dark:text-red-500",
-    error: "text-red-600 dark:text-red-500",
-    running: "text-primary",
-    in_progress: "text-primary",
-    pending: "text-muted-foreground",
-    paused: "text-muted-foreground",
-  }[status] || "text-muted-foreground";
+  const colorClass =
+    {
+      completed: "text-green-600 dark:text-green-500",
+      success: "text-green-600 dark:text-green-500",
+      failed: "text-red-600 dark:text-red-500",
+      error: "text-red-600 dark:text-red-500",
+      running: "text-primary",
+      in_progress: "text-primary",
+      pending: "text-muted-foreground",
+      paused: "text-muted-foreground",
+    }[status] || "text-muted-foreground";
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
@@ -85,7 +93,12 @@ export default function TaskHeader({
               {task.description}
             </h1>
             <div className="flex items-center gap-1.5 ml-2">
-              <span className={cn("text-[11px] font-normal uppercase tracking-wider", colorClass)}>
+              <span
+                className={cn(
+                  "text-[11px] font-normal uppercase tracking-wider",
+                  colorClass
+                )}
+              >
                 {label}
               </span>
             </div>
@@ -131,7 +144,9 @@ export default function TaskHeader({
             <div className="flex items-center gap-2 text-xs">
               <LiveEventIndicator
                 connected={eventsConnected}
-                latestEvent={events.length > 0 ? events[events.length - 1] : undefined}
+                latestEvent={
+                  events.length > 0 ? events[events.length - 1] : undefined
+                }
                 eventCount={events.length}
               />
             </div>
@@ -168,4 +183,3 @@ export default function TaskHeader({
     </div>
   );
 }
-
