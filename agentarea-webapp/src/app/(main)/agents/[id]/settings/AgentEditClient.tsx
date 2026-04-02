@@ -1,8 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { components } from "@/api/schema";
+import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import type { AgentFormValues } from "../../create/types";
 import AgentForm from "../../shared/AgentForm";
 import { updateAgentSettings } from "./actions";
@@ -12,6 +15,7 @@ type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
 interface AgentEditClientProps {
   agentId: string;
+  agentName: string;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: any[];
@@ -21,6 +25,7 @@ interface AgentEditClientProps {
 
 export default function AgentEditClient({
   agentId,
+  agentName,
   mcpServers,
   llmModelInstances,
   mcpInstanceList,
@@ -116,6 +121,19 @@ export default function AgentEditClient({
     }
   };
 
+  const t = useTranslations("AgentsPage.descriptionPage");
+
+  const welcomeComponent = (
+    <ChatWelcome
+      icon={Sparkles}
+      variant="neutral"
+      size="sm"
+      animate={false}
+      titleClassName="text-muted-foreground opacity-70"
+      title={t("titleNewTask", { agentName })}
+    />
+  );
+
   return (
     <AgentForm
       className="pl-5"
@@ -129,6 +147,8 @@ export default function AgentEditClient({
       submitButtonText="Save Changes"
       submitButtonLoadingText="Saving..."
       isLoading={false}
+      placeholder={t("placeholderNewTask", { agentName })}
+      welcomeComponent={welcomeComponent}
     />
   );
 }
