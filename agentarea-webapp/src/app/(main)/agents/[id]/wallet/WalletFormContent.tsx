@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Badge } from "@/components/ui/badge";
 import Divider from "@/components/ui/divider";
@@ -147,10 +148,8 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-4 bg-muted rounded w-1/3" />
-        <div className="h-10 bg-muted rounded" />
-        <div className="h-10 bg-muted rounded" />
+      <div className="flex h-32 items-center justify-center">
+        <LoadingSpinner />
       </div>
     );
   }
@@ -339,50 +338,50 @@ export default function WalletFormContent({ agentId }: WalletFormContentProps) {
           </div>
         )}
 
-      <Divider className="my-4" />
+        <Divider className="my-4" />
 
-      <div className="grid gap-4">
-        <div className="gap-1 flex flex-col">
-          <FormLabel icon={DollarSign}>Service Budget</FormLabel>
-          <p className="text-xs text-muted-foreground">
-            Maximum amount the agent can spend on paid external services per
-            period.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <FormLabel htmlFor="service-budget" icon={DollarSign}>
-              Budget (USD)
-            </FormLabel>
-            <Input
-              id="service-budget"
-              type="number"
-              value={serviceBudget}
-              onChange={(e) => setServiceBudget(e.target.value)}
-              min="0"
-              step="0.01"
-            />
+        <div className="grid gap-4">
+          <div className="gap-1 flex flex-col">
+            <FormLabel icon={DollarSign}>Service Budget</FormLabel>
+            <p className="text-xs text-muted-foreground">
+              Maximum amount the agent can spend on paid external services per
+              period.
+            </p>
           </div>
-          <div className="grid gap-2">
-            <FormLabel htmlFor="budget-period" icon={Clock}>
-              Period
-            </FormLabel>
-            <Select value={budgetPeriod} onValueChange={setBudgetPeriod}>
-              <SelectTrigger id="budget-period">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BUDGET_PERIODS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <FormLabel htmlFor="service-budget" icon={DollarSign}>
+                Budget (USD)
+              </FormLabel>
+              <Input
+                id="service-budget"
+                type="number"
+                value={serviceBudget}
+                onChange={(e) => setServiceBudget(e.target.value)}
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div className="grid gap-2">
+              <FormLabel htmlFor="budget-period" icon={Clock}>
+                Period
+              </FormLabel>
+              <Select value={budgetPeriod} onValueChange={setBudgetPeriod}>
+                <SelectTrigger id="budget-period">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUDGET_PERIODS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
-    </div>
       {wallet && (
         <div className="flex justify-start">
           <button
