@@ -71,64 +71,64 @@ export default function ProviderConfigForm({
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
 
   // Load provider specs and model specs on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const [providerSpecsResponse, providerSpecsWithModelsResponse] =
-          await Promise.all([
-            listProviderSpecs(),
-            listProviderSpecsWithModels(),
-          ]);
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [providerSpecsResponse, providerSpecsWithModelsResponse] =
+        await Promise.all([
+          listProviderSpecs(),
+          listProviderSpecsWithModels(),
+        ]);
 
-        if (
-          providerSpecsResponse.error ||
-          providerSpecsWithModelsResponse.error
-        ) {
-          throw new Error(
-            providerSpecsResponse.error?.detail?.[0]?.msg ||
-              providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
-              "Failed to load provider specifications"
-          );
-        }
-
-        const specs = providerSpecsResponse.data || [];
-        const specsWithModels = providerSpecsWithModelsResponse.data || [];
-
-        // Extract and flatten model specs from the provider specs with models
-        const models = specsWithModels.flatMap((spec) =>
-            spec.models.map((model) => ({
-              id: model.id,
-              provider_spec_id: spec.id,
-              model_name: model.model_name,
-              display_name: model.display_name,
-              description: model.description,
-              context_window: model.context_window,
-              max_output_tokens: model.max_output_tokens ?? null,
-              input_cost_per_token: model.input_cost_per_token ?? null,
-              output_cost_per_token: model.output_cost_per_token ?? null,
-              supports_function_calling: model.supports_function_calling ?? false,
-              supports_vision: model.supports_vision ?? false,
-              supports_reasoning: model.supports_reasoning ?? false,
-              is_active: model.is_active,
-              created_at: model.created_at,
-              updated_at: model.updated_at,
-              default_context_strategy: (model as any).default_context_strategy ?? null,
-            }))
+      if (
+        providerSpecsResponse.error ||
+        providerSpecsWithModelsResponse.error
+      ) {
+        throw new Error(
+          providerSpecsResponse.error?.detail?.[0]?.msg ||
+            providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
+            "Failed to load provider specifications"
         );
-
-        setProviderSpecs(specs);
-        setModelSpecs(models);
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : t("error.failedToLoadData");
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setIsLoading(false);
       }
-    };
 
+      const specs = providerSpecsResponse.data || [];
+      const specsWithModels = providerSpecsWithModelsResponse.data || [];
+
+      // Extract and flatten model specs from the provider specs with models
+      const models = specsWithModels.flatMap((spec) =>
+          spec.models.map((model) => ({
+            id: model.id,
+            provider_spec_id: spec.id,
+            model_name: model.model_name,
+            display_name: model.display_name,
+            description: model.description,
+            context_window: model.context_window,
+            max_output_tokens: model.max_output_tokens ?? null,
+            input_cost_per_token: model.input_cost_per_token ?? null,
+            output_cost_per_token: model.output_cost_per_token ?? null,
+            supports_function_calling: model.supports_function_calling ?? false,
+            supports_vision: model.supports_vision ?? false,
+            supports_reasoning: model.supports_reasoning ?? false,
+            is_active: model.is_active,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+            default_context_strategy: (model as any).default_context_strategy ?? null,
+          }))
+      );
+
+      setProviderSpecs(specs);
+      setModelSpecs(models);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : t("error.failedToLoadData");
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -568,6 +568,8 @@ export default function ProviderConfigForm({
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
+              providerConfigId={isEdit && initialData ? initialData.id : undefined}
+              onModelsDiscovered={loadData}
             />
           )}
         </div>

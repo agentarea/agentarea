@@ -729,7 +729,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 elif request.total_cost:
                     additional_fields["result"] = {"total_cost": request.total_cost}
                 if request.error_message:
-                    additional_fields["error_message"] = request.error_message
+                    # Tasks table stores this as `error`, not `error_message`.
+                    additional_fields["error"] = request.error_message
 
                 updated = await task_repo.update_status(
                     _UUID(request.task_id), request.status, **additional_fields

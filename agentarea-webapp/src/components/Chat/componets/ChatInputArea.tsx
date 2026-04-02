@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Paperclip, ArrowUp, Send, Pause, Square } from "lucide-react";
+import { Paperclip, ArrowUp, Send, Pause, Play } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,9 +155,24 @@ export interface ChatInputAreaProps {
   onStop?: () => void;
 
   /**
+   * Continue/Resume handler
+   */
+  onResume?: () => void;
+
+  /**
    * Is stopping state
    */
   isStopping?: boolean;
+
+  /**
+   * Is resuming state
+   */
+  isResuming?: boolean;
+
+  /**
+   * Render resume button instead of stop
+   */
+  canResume?: boolean;
 }
 
 /**
@@ -213,7 +228,10 @@ export function ChatInputArea({
   availableAgents,
   onAgentChange,
   onStop,
+  onResume,
   isStopping = false,
+  isResuming = false,
+  canResume = false,
 }: ChatInputAreaProps) {
   const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
 
@@ -278,7 +296,22 @@ export function ChatInputArea({
 
             {showSendButton && (
               <>
-                {isLoading && onStop ? (
+                {canResume && onResume ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={onResume}
+                    disabled={isResuming}
+                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    {isResuming ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                  </Button>
+                ) : isLoading && onStop ? (
                   <Button
                     type="button"
                     size="icon"

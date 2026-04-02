@@ -52,6 +52,11 @@ export interface SSEEventHandlerOptions {
   setIsLoading: (loading: boolean) => void;
 
   /**
+   * Optional callback to track task lifecycle status from SSE events
+   */
+  setTaskLifecycleStatus?: (status: string) => void;
+
+  /**
    * Set current task ID
    */
   setCurrentTaskId: (id: string | null) => void;
@@ -106,6 +111,7 @@ export function createSSEEventHandler(
     currentTaskId,
     setMessages,
     setIsLoading,
+    setTaskLifecycleStatus,
     setCurrentTaskId,
     onTaskCreated,
     onTaskStarted,
@@ -208,6 +214,26 @@ export function createSSEEventHandler(
         onTaskFinished,
         currentTaskId,
       });
+    }
+
+    if (cleanEventType === EVENT_WORKFLOW_COMPLETED) {
+      setTaskLifecycleStatus?.("completed");
+    } else if (cleanEventType === EVENT_WORKFLOW_FAILED || cleanEventType === EVENT_TASK_FAILED) {
+      const errorText =
+        String(event.data?.error || event.data?.message || event.data?.result?.error || "").toLowerCase();
+      if (
+        errorText.includes("insufficient balance") ||
+        errorText.includes("no resource package") ||
+        errorText.includes("quota exceeded")
+      ) {
+        setTaskLifecycleStatus?.("blocked");
+      } else {
+        setTaskLifecycleStatus?.("failed");
+      }
+    } else if (cleanEventType === "execution_paused") {
+      setTaskLifecycleStatus?.("paused");
+    } else if (cleanEventType === "execution_resumed") {
+      setTaskLifecycleStatus?.("running");
     }
 
     // Handle special system events FIRST, before checking if they create visible messages

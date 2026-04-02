@@ -210,7 +210,7 @@ export default function TaskDetailsPage() {
   }
 
   // Determine if task is active based on status
-  const isActive = ["running", "paused"].includes(task.status);
+  const isActive = ["running", "paused", "blocked"].includes(task.status);
 
   // Get current status from taskStatus or fallback to task.status
   const currentStatus = taskStatus?.status || task.status;

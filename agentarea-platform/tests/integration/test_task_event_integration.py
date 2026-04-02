@@ -10,6 +10,8 @@ from agentarea_tasks.application.task_event_service import TaskEventService
 from agentarea_tasks.domain.models import TaskEvent
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 
+pytestmark = [pytest.mark.integration, pytest.mark.golden]
+
 
 @pytest.fixture
 async def db_session():

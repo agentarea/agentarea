@@ -123,6 +123,8 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
         "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800",
       paused:
         "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800",
+      blocked:
+        "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800",
     };
 
     return (
@@ -138,7 +140,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     );
   };
 
-  const isActiveTask = ["running", "paused"].includes(
+  const isActiveTask = ["running", "paused", "blocked"].includes(
     task?.status || taskStatus?.status || ""
   );
 
@@ -185,7 +187,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     Pause
                   </Button>
                 )}
-                {task?.status === "paused" && (
+                {(task?.status === "paused" || task?.status === "blocked") && (
                   <Button
                     size="sm"
                     variant="outline"

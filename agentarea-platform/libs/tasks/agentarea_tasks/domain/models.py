@@ -14,7 +14,7 @@ class Task(BaseModel):
     agent_id: UUID
     description: str
     parameters: dict[str, Any]
-    status: str  # pending, running, completed, failed, cancelled
+    status: str  # pending, running, blocked, completed, failed, cancelled
     result: dict[str, Any] | None = None
     error: str | None = None
     created_at: datetime
@@ -211,7 +211,7 @@ class SimpleTask(BaseModel):
 
     def is_completed(self) -> bool:
         """Check if the task is in a completed state."""
-        return self.status in ["completed", "failed", "cancelled"]
+        return self.status in ["completed", "failed", "blocked", "cancelled"]
 
     def is_running(self) -> bool:
         """Check if the task is currently running."""
@@ -232,7 +232,9 @@ class SimpleTask(BaseModel):
         # Automatically set timestamps based on status
         if new_status == "running" and not self.started_at:
             self.started_at = self.updated_at
-        elif new_status in ["completed", "failed", "cancelled"] and not self.completed_at:
+        elif (
+            new_status in ["completed", "failed", "blocked", "cancelled"] and not self.completed_at
+        ):
             self.completed_at = self.updated_at
 
         # Update any additional fields provided

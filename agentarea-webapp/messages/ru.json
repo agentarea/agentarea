@@ -206,6 +206,7 @@
     "tools": "Инструменты",
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
+    "activeTasks": "Активные задачи",
     "currentTasks": "Текущие задачи",
     "browseAgents": "Агенты",
     "newAgent": "Новый агент",

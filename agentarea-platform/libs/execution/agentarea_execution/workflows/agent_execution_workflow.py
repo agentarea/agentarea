@@ -3,7 +3,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ApplicationError
+from temporalio.exceptions import ActivityError, ApplicationError
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
@@ -828,9 +828,14 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
-            workflow.logger.error(f"Iteration {iteration} failed: {e}")
+            error_details = self._extract_temporal_error_details(e)
+            workflow.logger.error(
+                f"Iteration {iteration} failed: {error_details}",
+                exc_info=True,
+            )
             self.event_manager.add_event(
-                EventTypes.LLM_CALL_FAILED, {"iteration": iteration, "error": str(e)}
+                EventTypes.LLM_CALL_FAILED,
+                {"iteration": iteration, "error": error_details},
             )
             raise
 
@@ -1057,7 +1062,14 @@ class AgentExecutionWorkflow:
         except Exception as e:
             # Simplified error handling - enriched error events are now published by the activity
             error_type = getattr(e, "type", type(e).__name__)
-            error_message = str(e)
+            error_message = self._extract_temporal_error_details(e)
+            error_lower = error_message.lower()
+
+            is_provider_quota_block = (
+                "insufficient balance" in error_lower
+                or "no resource package" in error_lower
+                or "quota exceeded" in error_lower
+            )
 
             # Generic LLM error event for workflow tracking
             self.event_manager.add_event(
@@ -1069,6 +1081,20 @@ class AgentExecutionWorkflow:
                     "model_id": self.state.agent_config.get("model_id"),
                 },
             )
+
+            if is_provider_quota_block:
+                self.state.status = ExecutionStatus.BLOCKED
+                self.state.blocked_reason = error_message
+                self.event_manager.add_event(
+                    EventTypes.WORKFLOW_FAILED,
+                    {
+                        "error": error_message,
+                        "error_type": "ProviderQuotaExceeded",
+                        "blocked": True,
+                        "blocked_reason": error_message,
+                        "retryable": False,
+                    },
+                )
 
             await self._publish_events_immediately()
             raise
@@ -1149,7 +1175,7 @@ class AgentExecutionWorkflow:
 
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
-            if tool_name == "completion":
+            if tool_name in {"completion", "task_complete"}:
                 completion_call = tool_call
             elif tool_name == "recall_history":
                 recall_calls.append(tool_call)
@@ -2257,7 +2283,8 @@ class AgentExecutionWorkflow:
             self.state.status = ExecutionStatus.COMPLETED
             event_type = EventTypes.WORKFLOW_COMPLETED
         else:
-            self.state.status = ExecutionStatus.FAILED
+            if self.state.status != ExecutionStatus.BLOCKED:
+                self.state.status = ExecutionStatus.FAILED
             event_type = EventTypes.WORKFLOW_FAILED
 
         # Add final event
@@ -2268,6 +2295,8 @@ class AgentExecutionWorkflow:
                 "iterations_completed": self.state.current_iteration,
                 "total_cost": self.budget_tracker.cost,
                 "final_response": self.state.final_response,
+                "status": self.state.status,
+                "blocked_reason": self.state.blocked_reason,
             },
         )
 
@@ -2275,7 +2304,12 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         # Update task status in the database
-        final_status = "completed" if self.state.success else "failed"
+        if self.state.success:
+            final_status = "completed"
+        elif self.state.status == ExecutionStatus.BLOCKED:
+            final_status = "blocked"
+        else:
+            final_status = "failed"
         await workflow.execute_activity(
             Activities.UPDATE_TASK_STATUS,
             args=[
@@ -2285,6 +2319,7 @@ class AgentExecutionWorkflow:
                     result=json.dumps({"response": self.state.final_response})
                     if self.state.final_response
                     else None,
+                    error_message=self.state.blocked_reason if final_status == "blocked" else None,
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
                 )
@@ -2317,32 +2352,66 @@ class AgentExecutionWorkflow:
 
     async def _handle_workflow_error(self, error: Exception) -> None:
         """Handle workflow-level errors."""
+        error_details = self._extract_temporal_error_details(error)
+
         if self.event_manager:
             self.event_manager.add_event(
                 EventTypes.WORKFLOW_FAILED,
                 {
-                    "error": str(error),
+                    "error": error_details,
                     "error_type": type(error).__name__,
                     "iterations_completed": self.state.current_iteration,
+                    "status": self.state.status,
+                    "blocked_reason": self.state.blocked_reason,
                 },
             )
             await self._publish_events_immediately()
 
         # Update task status to failed
         if self.state and self.state.task_id:
+            status = "blocked" if self.state.status == ExecutionStatus.BLOCKED else "failed"
             await workflow.execute_activity(
                 Activities.UPDATE_TASK_STATUS,
                 args=[
                     UpdateTaskStatusRequest(
                         task_id=self.state.task_id,
-                        status="failed",
-                        error_message=str(error),
+                        status=status,
+                        error_message=self.state.blocked_reason or error_details,
                         workspace_id=self.state.workspace_id,
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
+
+    def _extract_temporal_error_details(self, error: Exception) -> str:
+        """Extract actionable details from Temporal errors (Activity/ApplicationError)."""
+        if isinstance(error, ActivityError):
+            parts = [str(error)]
+            if error.activity_type:
+                parts.append(f"activity={error.activity_type}")
+            if error.retry_state:
+                parts.append(f"retry_state={error.retry_state}")
+
+            cause = error.cause
+            if cause is not None:
+                parts.append(f"cause={cause!s}")
+                if isinstance(cause, ApplicationError):
+                    if cause.type:
+                        parts.append(f"cause_type={cause.type}")
+                    if cause.details:
+                        parts.append(f"cause_details={cause.details}")
+            return " | ".join(parts)
+
+        if isinstance(error, ApplicationError):
+            parts = [str(error)]
+            if error.type:
+                parts.append(f"type={error.type}")
+            if error.details:
+                parts.append(f"details={error.details}")
+            return " | ".join(parts)
+
+        return str(error)
 
     def _build_goal_from_request(self, request: AgentExecutionRequest) -> AgentGoal:
         """Build goal from execution request."""
@@ -2381,6 +2450,7 @@ class AgentExecutionWorkflow:
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,
+            "blocked_reason": self.state.blocked_reason,
             "pending_escalations": {
                 eid: {
                     "tool_name": e.tool_name,

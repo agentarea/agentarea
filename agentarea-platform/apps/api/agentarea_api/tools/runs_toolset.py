@@ -5,7 +5,7 @@ import json
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_tasks.domain.models import SimpleTask
 
-from .base import platform_context
+from .base import platform_context, platform_read_context
 
 
 class RunsToolset(Toolset):
@@ -57,7 +57,7 @@ class RunsToolset(Toolset):
     @tool_method
     async def list(self, agent_id: str = "", limit: int = 20) -> str:
         """List recent runs, optionally filtered by agent ID."""
-        async with platform_context() as (
+        async with platform_read_context() as (
             _session,
             user_ctx,
             repo_factory,
@@ -98,7 +98,7 @@ class RunsToolset(Toolset):
         """Get status and details of a specific run."""
         from uuid import UUID
 
-        async with platform_context() as (
+        async with platform_read_context() as (
             _session,
             _user_ctx,
             repo_factory,
