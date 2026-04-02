@@ -208,6 +208,8 @@
     "createTask": "Создать задачу",
     "activeTasks": "Активные задачи",
     "currentTasks": "Текущие задачи",
+    "payments": "Платежи",
+    "wallet": "Кошелек и платежи",
     "browseAgents": "Агенты",
     "newAgent": "Новый агент",
     "mainDescriptionPage": "Обзор и управление вашими агентами",

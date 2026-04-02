@@ -245,6 +245,8 @@
     "createTask": "Create Task",
     "activeTasks": "Active Tasks",
     "currentTasks": "Current Tasks",
+    "payments": "Payments",
+    "wallet": "Wallet & Payments",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
     "mainDescriptionPage": "Browse and manage your agents",
