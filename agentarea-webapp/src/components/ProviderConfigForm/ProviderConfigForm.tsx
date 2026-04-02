@@ -508,7 +508,7 @@ export default function ProviderConfigForm({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className={cn("mx-auto", isClear ? "max-w-xl" : "max-w-4xl")}>
+      <div className={cn("mx-auto", "max-w-4xl")}>
         <div
           className={cn(
             "grid grid-cols-1 form-content",
