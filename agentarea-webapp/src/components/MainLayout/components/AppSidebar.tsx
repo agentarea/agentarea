@@ -17,21 +17,15 @@ import { TeamSwitcher } from "./TeamSwitcher";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.8";
 
-export function AppSidebar({
-  ...props
-}: React.ComponentProps<typeof Sidebar> & { data: any }) {
+export function AppSidebarContent({ data }: { data: any }) {
   const { open } = useSidebar();
   return (
-    <Sidebar
-      collapsible="icon"
-      {...props}
-      className=""
-    >
+    <>
       <SidebarHeader>
-        <TeamSwitcher teams={props.data.workspaces} />
+        <TeamSwitcher teams={data.workspaces} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain sections={props.data.navSections} />
+        <NavMain sections={data.navSections} />
       </SidebarContent>
       <SidebarFooter
         className={cn(
@@ -61,6 +55,20 @@ export function AppSidebar({
         )}
       </SidebarFooter>
       <SidebarRail />
+    </>
+  );
+}
+
+export function AppSidebar({
+  ...props
+}: React.ComponentProps<typeof Sidebar> & { data: any }) {
+  return (
+    <Sidebar
+      collapsible="icon"
+      {...props}
+      className=""
+    >
+      <AppSidebarContent data={props.data} />
     </Sidebar>
   );
 }

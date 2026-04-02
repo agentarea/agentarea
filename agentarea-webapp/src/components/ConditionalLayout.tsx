@@ -1,44 +1,36 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
-import MainLayout from "@/components/MainLayout";
-import SettingsLayout from "@/components/SettingsLayout";
+import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
+import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSidebar";
+import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
+import { navData } from "@/lib/nav-data";
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
 }
 
-// Routes that should NOT use the main layout (auth pages, etc.)
-const NO_LAYOUT_ROUTES = [
-  "/auth/login",
-  "/auth/logout",
-  "/auth/registration",
-  "/auth/consent",
-  "/auth/verification",
-  "/auth/recovery",
-  "/auth/error",
-];
-
-// Known protected routes that should use main layout when authenticated
+const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
 const PROTECTED_ROUTES = [
-  "/agents",
-  "/mcp-servers",
-  "/tasks",
   "/workplace",
-  "/dashboard",
-  "/admin",
+  "/agents",
+  "/tasks",
+  "/mcp-servers",
   "/settings",
-  "/chat",
-  "/home",
+  "/admin",
   "/skills",
   "/triggers",
-  "/network",
-  "/projects",
   "/inbox",
+  "/projects",
+  "/network",
 ];
+
+const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
 
 export default function ConditionalLayout({
   children,
@@ -66,22 +58,43 @@ export default function ConditionalLayout({
     return <>{children}</>;
   }
 
-  // Use SettingsLayout for settings routes and settings-related admin pages
-  const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
-  if (SETTINGS_ROUTES.some((route) => pathname.startsWith(route))) {
-    return (
-      <AuthGuard>
-        <SettingsLayout>{children}</SettingsLayout>
-      </AuthGuard>
-    );
-  }
+  const isSettings = SETTINGS_ROUTES.some((route) => pathname.startsWith(route));
 
-  // Use MainLayout for known protected routes
   return (
     <AuthGuard>
-      <MainLayout sidebarDefaultOpen={sidebarDefaultOpen}>
-        {children}
-      </MainLayout>
+      <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+        <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
+          <Sidebar collapsible="icon">
+            <div className="relative h-full w-full overflow-hidden">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.div
+                  key={isSettings ? "settings-sidebar" : "main-sidebar"}
+                  initial={{ x: -10, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -10, opacity: 0 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 260,
+                    damping: 30,
+                    mass: 1,
+                  }}
+                  className="absolute inset-0 flex flex-col h-full w-full"
+                >
+                  {isSettings ? (
+                    <SettingsSidebarContent />
+                  ) : (
+                    <AppSidebarContent data={navData} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </Sidebar>
+          <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full overflow-y-auto border border-sidebar-border relative">
+            {children}
+          </main>
+        </div>
+        <ThemeToggle className="fixed bottom-2 right-2 z-50" />
+      </SidebarProvider>
     </AuthGuard>
   );
 }
