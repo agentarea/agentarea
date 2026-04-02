@@ -11,15 +11,18 @@ import {
   ChevronsLeftRightEllipsis,
   Clock,
   Cpu,
+  DollarSign,
   Key,
   Link,
   List,
   Network,
+  Receipt,
   Server,
   Shield,
   Sparkles,
   Timer,
   Unplug,
+  Wallet,
   Zap,
 } from "lucide-react";
 import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
@@ -27,7 +30,15 @@ import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
 type EmptyStateProps = {
   title: string;
   description?: string;
-  iconsType?: "404" | "agent" | "apiKey" | "llm" | "mcp" | "tasks" | "triggers";
+  iconsType?:
+    | "404"
+    | "agent"
+    | "apiKey"
+    | "llm"
+    | "mcp"
+    | "payments"
+    | "tasks"
+    | "triggers";
   action?: {
     label: string;
     href?: string;
@@ -57,13 +68,15 @@ export default function EmptyState({
           ? [Key, Shield, Zap]
           : iconsType === "llm"
             ? [Sparkles, Cpu, Brain]
-            : iconsType === "tasks"
-              ? [List, Bot, Blocks]
-              : iconsType === "mcp"
-                ? [Server, Network, Link]
-                : iconsType === "triggers"
-                  ? [Zap, Clock, Timer]
-                  : [Bot, Blocks, ChevronsLeftRightEllipsis]
+            : iconsType === "mcp"
+              ? [Server, Network, Link]
+              : iconsType === "payments"
+                ? [DollarSign, Wallet, Receipt]
+                : iconsType === "tasks"
+                  ? [List, Bot, Blocks]
+                  : iconsType === "triggers"
+                    ? [Zap, Clock, Timer]
+                    : [Bot, Blocks, ChevronsLeftRightEllipsis]
     : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
   return (

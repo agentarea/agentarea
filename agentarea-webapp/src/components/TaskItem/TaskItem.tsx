@@ -1,15 +1,11 @@
 "use client";
 
-import {
-  Bot,
-  Calendar,
-  Clock,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Bot, Calendar, Clock } from "lucide-react";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
-import { cn } from "@/lib/utils";
-import { TaskStatusIcon } from "@/components/TaskStatusIcon";
+import { Badge } from "@/components/ui/badge";
+import { TaskStatusIcon } from "@/components/ui/task-status-icon";
 import { TaskWithAgent } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export interface TaskItemData {
   id: string;
@@ -71,13 +67,13 @@ export default function TaskItem({
       title={task.description}
       type="view"
       topRight={
-        <Badge 
-          variant={status.badgeVariant} 
+        <Badge
+          variant={status.badgeVariant}
           className="whitespace-nowrap h-5 px-1.5 text-[10px] gap-1 bg-opacity-30 dark:bg-opacity-20 uppercase"
         >
-          <TaskStatusIcon 
-            status={task.status as TaskWithAgent['status']} 
-            className="h-3 w-3" 
+          <TaskStatusIcon
+            status={task.status as TaskWithAgent["status"]}
+            className="h-3 w-3"
           />
           {status.label}
         </Badge>
@@ -87,7 +83,9 @@ export default function TaskItem({
         {showAgentName && (
           <div className="flex items-center gap-1.5">
             <Bot className="h-3 w-3" />
-            <span className="truncate">{task.agent_name || "Unknown Agent"}</span>
+            <span className="truncate">
+              {task.agent_name || "Unknown Agent"}
+            </span>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
