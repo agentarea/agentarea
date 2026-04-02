@@ -1,5 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { CreditCard, List, MessagesSquare, Settings } from "lucide-react";
+import {
+  CreditCard,
+  List,
+  MessagesSquare,
+  Settings,
+  Wallet,
+} from "lucide-react";
 import { ActiveLink } from "@/components/ui/active-link";
 
 export default async function AgentHeaderTabs({
@@ -21,6 +27,10 @@ export default async function AgentHeaderTabs({
       <ActiveLink href={`/agents/${agentId}/payments`}>
         <CreditCard className="h-4 w-4" />
         Payments
+      </ActiveLink>
+      <ActiveLink href={`/agents/${agentId}/wallet`}>
+        <Wallet className="h-4 w-4" />
+        Wallet &amp; Payments
       </ActiveLink>
       <ActiveLink href={`/agents/${agentId}/settings`}>
         <Settings className="h-4 w-4" />
