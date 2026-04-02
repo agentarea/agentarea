@@ -5,15 +5,32 @@ import { Calendar, Clock } from "lucide-react";
 interface TableDateDisplayProps {
   dateString: string;
   oneRow?: boolean;
+  onlyDate?: boolean;
 }
 
 export function TableDateDisplay({
   dateString,
   oneRow,
+  onlyDate,
 }: TableDateDisplayProps) {
   if (!dateString) return "-";
 
   const date = new Date(dateString);
+
+  if (onlyDate) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Calendar className="h-3 w-3" />
+        <span className="whitespace-nowrap">
+          {date.toLocaleDateString("en", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      </div>
+    );
+  }
 
   if (oneRow) {
     return (
