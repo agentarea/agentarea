@@ -868,7 +868,11 @@
       "namePlaceholder": "напр., CI/CD Pipeline",
       "expiresInDays": "Истекает через (дней)",
       "expiresInDaysPlaceholder": "Оставьте пустым для бессрочного ключа",
-      "createButton": "Создать ключ"
+      "createButton": "Создать ключ",
+      "cancel": "Отмена",
+      "creating": "Создание...",
+      "success": "API ключ создан",
+      "successDescription": "Ваш API ключ успешно создан."
     },
     "created": {
       "title": "API ключ создан",

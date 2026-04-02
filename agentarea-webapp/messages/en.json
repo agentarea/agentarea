@@ -863,7 +863,11 @@
       "namePlaceholder": "e.g., CI/CD Pipeline",
       "expiresInDays": "Expires In (Days)",
       "expiresInDaysPlaceholder": "Leave empty for no expiration",
-      "createButton": "Create Key"
+      "createButton": "Create Key",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "success": "API Key Created",
+      "successDescription": "Your API key has been created successfully."
     },
     "created": {
       "title": "API Key Created",
