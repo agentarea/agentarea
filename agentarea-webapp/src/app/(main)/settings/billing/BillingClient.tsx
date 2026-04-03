@@ -1,15 +1,9 @@
 "use client";
 
 import { Check, CreditCard, Crown, Sparkles, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import ContentBlock from "@/components/ContentBlock";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const plans = [
   {
@@ -72,145 +66,253 @@ export default function BillingClient() {
         description: "Manage your subscription and billing",
       }}
     >
-      <div className="p-6 space-y-8">
-        {/* Current Plan */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/5 p-2.5">
-                <CreditCard className="h-5 w-5 text-primary/70" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Current Plan</CardTitle>
-                <CardDescription>You are on the Free plan</CardDescription>
-              </div>
+      <div className="mx-auto max-w-4xl">
+        <div className="space-y-4">
+          <section id="current-plan" className="border-0 p-0">
+            <div className="px-4 pt-3">
+              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Current Plan
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Your active subscription
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <p className="font-medium">Free Plan</p>
-                <p className="text-sm text-muted-foreground">1 workspace, 3 agents, 1,000 task runs / month</p>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                Active
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Plans */}
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Available Plans</h3>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {plans.map((plan) => (
-              <Card
-                key={plan.name}
-                className={
-                  plan.highlighted
-                    ? "border-primary/50 shadow-md relative overflow-hidden"
-                    : "relative overflow-hidden"
-                }
-              >
-                {plan.highlighted && (
-                  <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-3 py-1 rounded-bl-lg">
-                    RECOMMENDED
-                  </div>
+            <div className="p-4">
+              <div
+                className={cn(
+                  "group relative flex items-start gap-3 w-full p-4",
+                  "bg-white dark:bg-zinc-900",
+                  "border border-zinc-200/60 dark:border-zinc-800",
+                  "rounded-md transition-all duration-300 ease-out",
+                  "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
+                  "relative overflow-hidden"
                 )}
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {plan.highlighted && <Crown className="h-4 w-4 text-primary" />}
-                    {plan.name}
-                  </CardTitle>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold">{plan.price}</span>
-                    {plan.period && (
-                      <span className="text-sm text-muted-foreground">/ {plan.period}</span>
+              >
+                <div
+                  className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(
+                      -45deg,
+                      currentColor,
+                      currentColor 1px,
+                      transparent 1px,
+                      transparent 10px
+                    )`,
+                  }}
+                />
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
+                  <CreditCard className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0 z-10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        Free Plan
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        1 workspace, 3 agents, 1,000 task runs / month
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      Active
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="plans" className="border-0 p-0">
+            <div className="px-4 pt-3">
+              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Available Plans
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Choose the plan that fits your needs
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
+              {plans.map((plan) => (
+                <div
+                  key={plan.name}
+                  className={cn(
+                    "group relative flex flex-col w-full",
+                    "bg-white dark:bg-zinc-900",
+                    "border rounded-md transition-all duration-300 ease-out",
+                    "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
+                    "relative overflow-hidden",
+                    plan.highlighted
+                      ? "border-primary/50"
+                      : "border-zinc-200/60 dark:border-zinc-800"
+                  )}
+                >
+                  <div
+                    className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(
+                        -45deg,
+                        currentColor,
+                        currentColor 1px,
+                        transparent 1px,
+                        transparent 10px
+                      )`,
+                    }}
+                  />
+                  {plan.highlighted && (
+                    <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-1 rounded-bl-md z-20">
+                      RECOMMENDED
+                    </div>
+                  )}
+                  <div className="p-4 z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                      {plan.highlighted && (
+                        <Crown className="h-3.5 w-3.5 text-primary" />
+                      )}
+                      <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        {plan.name}
+                      </h3>
+                    </div>
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                        {plan.price}
+                      </span>
+                      {plan.period && (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          / {plan.period}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+                      {plan.description}
+                    </p>
+                    <ul className="space-y-1.5 mb-4">
+                      {plan.features.map((feature) => (
+                        <li
+                          key={feature}
+                          className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300"
+                        >
+                          <Check className="h-3 w-3 text-primary shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    {plan.current ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        disabled
+                      >
+                        Current Plan
+                      </Button>
+                    ) : plan.name === "Enterprise" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          window.open("mailto:sales@agentarea.ai", "_blank")
+                        }
+                      >
+                        Contact Sales
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          window.open("https://agentarea.ai/pricing", "_blank")
+                        }
+                      >
+                        <Sparkles className="h-3 w-3 mr-1.5" />
+                        Upgrade to {plan.name}
+                      </Button>
                     )}
                   </div>
-                  <CardDescription>{plan.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ul className="space-y-2">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-primary shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  {plan.current ? (
-                    <Button variant="outline" className="w-full" disabled>
-                      Current Plan
-                    </Button>
-                  ) : plan.name === "Enterprise" ? (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => window.open("mailto:sales@agentarea.ai", "_blank")}
-                    >
-                      Contact Sales
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full"
-                      onClick={() => window.open("https://agentarea.ai/pricing", "_blank")}
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Upgrade to {plan.name}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Usage */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/5 p-2.5">
-                <Zap className="h-5 w-5 text-primary/70" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Usage</CardTitle>
-                <CardDescription>Current billing period</CardDescription>
-              </div>
+                </div>
+              ))}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <UsageRow label="Workspaces" used={1} limit={1} />
-            <UsageRow label="Agents" used={0} limit={3} />
-            <UsageRow label="MCP Connections" used={0} limit={5} />
-            <UsageRow label="Task Runs" used={0} limit={1000} />
-          </CardContent>
-        </Card>
+          </section>
+
+          <section id="usage" className="border-0 p-0">
+            <div className="px-4 pt-3">
+              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Usage
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Current billing period
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+              <UsageCard label="Workspaces" used={1} limit={1} />
+              <UsageCard label="Agents" used={0} limit={3} />
+              <UsageCard label="MCP Connections" used={0} limit={5} />
+              <UsageCard label="Task Runs" used={0} limit={1000} />
+            </div>
+          </section>
+        </div>
       </div>
     </ContentBlock>
   );
 }
 
-function UsageRow({ label, used, limit }: { label: string; used: number; limit: number }) {
+function UsageCard({
+  label,
+  used,
+  limit,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+}) {
   const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const isNearLimit = percentage >= 80;
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span>{label}</span>
-        <span className="text-muted-foreground">
-          {used} / {limit.toLocaleString()}
-        </span>
+    <div
+      className={cn(
+        "group relative flex items-start gap-3 w-full p-4",
+        "bg-white dark:bg-zinc-900",
+        "border border-zinc-200/60 dark:border-zinc-800",
+        "rounded-md transition-all duration-300 ease-out",
+        "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
+        "relative overflow-hidden"
+      )}
+    >
+      <div
+        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            -45deg,
+            currentColor,
+            currentColor 1px,
+            transparent 1px,
+            transparent 10px
+          )`,
+        }}
+      />
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
+        <Zap className="h-4 w-4" />
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${
-            isNearLimit ? "bg-orange-500" : "bg-primary"
-          }`}
-          style={{ width: `${percentage}%` }}
-        />
+      <div className="flex-1 min-w-0 z-10">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            {label}
+          </span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {used} / {limit.toLocaleString()}
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              isNearLimit ? "bg-orange-500" : "bg-primary"
+            )}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
       </div>
     </div>
   );
