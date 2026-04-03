@@ -31,10 +31,7 @@ export default function ProfileForm(defaultValues: {
             <Mail className="h-4 w-4 shrink-0" />
             <span className="truncate text-sm">{defaultValues.email}</span>
           </div>
-          <Note>
-            Account information is managed by your authentication provider and
-            cannot be edited here.
-          </Note>
+          <Note>{t("profile.accountInfoManaged")}</Note>
         </div>
       </div>
 

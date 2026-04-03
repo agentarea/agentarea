@@ -60,7 +60,7 @@ export default function SettingsClient() {
                 <div></div>
                 <div className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
                   <Shield className="h-2.5 w-2.5" />
-                  Auth Provider Managed
+                  {t("authProviderManaged")}
                 </div>
               </div>
             </div>
@@ -71,7 +71,7 @@ export default function SettingsClient() {
                 <div className="py-6 text-center">
                   <UserIcon className="mx-auto mb-2 h-8 w-8 text-gray-400" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    No user data available
+                    {t("noUserData")}
                   </p>
                 </div>
               )}

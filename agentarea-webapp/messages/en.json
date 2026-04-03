@@ -195,6 +195,8 @@
     "title": "Settings",
     "description": "Manage your settings and preferences",
     "logout": "Logout",
+    "authProviderManaged": "Auth Provider Managed",
+    "noUserData": "No user data available",
     "profile": {
       "title": "Profile",
       "description": "Update your personal information",
@@ -214,6 +216,81 @@
     "subscription": {
       "title": "Subscription",
       "description": "Manage your subscription and billing"
+    }
+  },
+
+  "BillingPage": {
+    "title": "Billing",
+    "description": "Manage your subscription and billing",
+    "currentPlan": {
+      "title": "Current Plan",
+      "subtitle": "Your active subscription",
+      "freePlan": "Free Plan",
+      "freePlanDescription": "1 workspace, 3 agents, 1,000 task runs / month",
+      "active": "Active"
+    },
+    "availablePlans": {
+      "title": "Available Plans",
+      "subtitle": "Choose the plan that fits your needs",
+      "recommended": "RECOMMENDED",
+      "currentPlan": "Current Plan",
+      "contactSales": "Contact Sales",
+      "upgradeTo": "Upgrade to {planName}"
+    },
+    "usage": {
+      "title": "Usage",
+      "subtitle": "Current billing period",
+      "workspaces": "Workspaces",
+      "agents": "Agents",
+      "mcpConnections": "MCP Connections",
+      "taskRuns": "Task Runs"
+    },
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "period": "forever",
+        "description": "For individuals getting started",
+        "features": {
+          "workspace": "1 workspace",
+          "agents": "Up to 3 agents",
+          "mcpConnections": "5 MCP connections",
+          "support": "Community support",
+          "taskRuns": "1,000 task runs / month"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$49",
+        "period": "per month",
+        "description": "For teams building agent organizations",
+        "features": {
+          "workspaces": "Unlimited workspaces",
+          "agents": "Unlimited agents",
+          "mcpConnections": "Unlimited MCP connections",
+          "support": "Priority support",
+          "taskRuns": "50,000 task runs / month",
+          "collaboration": "Team collaboration",
+          "analytics": "Advanced analytics",
+          "execution": "Priority execution"
+        }
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "price": "Custom",
+        "period": "",
+        "description": "For organizations with advanced needs",
+        "features": {
+          "everything": "Everything in Pro",
+          "sso": "SSO / SAML",
+          "sla": "Custom SLA",
+          "infrastructure": "Dedicated infrastructure",
+          "taskRuns": "Unlimited task runs",
+          "compliance": "Audit logs & compliance",
+          "deployment": "On-premise deployment",
+          "support": "Dedicated support engineer"
+        }
+      }
     }
   },
 
