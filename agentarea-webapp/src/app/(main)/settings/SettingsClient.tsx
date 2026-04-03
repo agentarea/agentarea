@@ -35,7 +35,7 @@ export default function SettingsClient() {
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: t("title") }, {label: t("profile.title")}],
+        breadcrumb: [{ label: t("title") }, { label: t("profile.title") }],
         description: t("description"),
         controls: (
           <Button
@@ -80,11 +80,11 @@ export default function SettingsClient() {
 
           {/* Compact Preferences Section */}
           <section id="preferences" className="border-0 p-0">
-            <div className="px-4 py-3">
-              <h2 className="text-base font-medium text-gray-900 dark:text-white">
+            <div className="px-4 pt-3">
+              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                 {t("preferences.title")}
               </h2>
-              <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {t("preferences.description")}
               </p>
             </div>
