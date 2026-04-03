@@ -84,6 +84,13 @@ class ExecutionServiceInterface(ABC):
         """Resolve a tool escalation."""
         pass
 
+    @abstractmethod
+    async def send_workflow_command(
+        self, execution_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a generic command signal to a running workflow."""
+        pass
+
 
 class WorkflowServiceInterface(ABC):
     """Interface for workflow orchestration."""

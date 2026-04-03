@@ -111,6 +111,8 @@ class ContinueAsNewState(BaseModel):
     service_budget_usd: float | None = None
     service_cost_used: float = 0.0
     wallet_id: str | None = None
+    # Cached model resolution — preserved across continue-as-new
+    resolved_model: dict | None = None
 
 
 class AgentExecutionState(BaseModel):
@@ -138,3 +140,5 @@ class AgentExecutionState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # Cached model resolution — resolved once at workflow start
+    resolved_model: dict | None = None

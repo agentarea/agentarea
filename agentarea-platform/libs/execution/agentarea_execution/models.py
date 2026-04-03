@@ -9,6 +9,52 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class ResolvedModelInfo(BaseModel):
+    """Cached model resolution info stored in workflow state.
+
+    api_key_secret is the SECRET MANAGER KEY NAME (e.g. "provider_123_api_key"),
+    NOT the actual API key. The actual key is decrypted inside activities only.
+    """
+
+    model_id: str
+    provider_type: str
+    model_name: str
+    api_key_secret: str | None = None  # secret manager key name, not the actual key
+    endpoint_url: str | None = None
+    context_window: int = 128000
+    display_name: str | None = None
+    provider_display_name: str | None = None
+    resolved_at: str | None = None  # ISO timestamp for staleness debugging
+
+
+class ResolveModelRequest(BaseModel):
+    """Request to resolve model info for caching."""
+
+    model_id: str
+    workspace_id: str
+
+
+class WorkflowCommand(BaseModel):
+    """Generic workflow command sent via signal."""
+
+    command: str  # "change_model", "update_budget", etc.
+    payload: dict[str, Any]
+
+
+class ChangeModelPayload(BaseModel):
+    """Typed payload for change_model command."""
+
+    model_id: str
+    provider_type: str
+    model_name: str
+    api_key_secret: str | None = None
+    endpoint_url: str | None = None
+    context_window: int = 128000
+    display_name: str | None = None
+    provider_display_name: str | None = None
+    resolved_at: str | None = None
+
+
 class AgentExecutionRequest(BaseModel):
     """Request to execute an agent task via Temporal workflow."""
 
@@ -208,6 +254,7 @@ class LLMCallRequest(BaseModel):
     task_id: str | None = None
     agent_id: str | None = None
     execution_id: str | None = None
+    resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
 
 
 class LLMUsage(BaseModel):
@@ -323,6 +370,7 @@ class CompactMessagesRequest(BaseModel):
     model_id: str
     workspace_id: str
     user_context_data: dict[str, Any] | None = None
+    resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
 
 
 class CompactMessagesResult(BaseModel):

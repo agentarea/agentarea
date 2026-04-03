@@ -83,6 +83,11 @@ class EventTypes:
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
     HUMAN_APPROVAL_DENIED: Final[str] = "HumanApprovalDenied"
 
+    MODEL_CHANGED: Final[str] = "ModelChanged"
+    MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
+    MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
+    WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
+
 
 # Activity names
 class Activities:
@@ -110,6 +115,8 @@ class Activities:
     READ_CONTEXT_OUTPUT: Final[str] = "read_context_output"
     STORE_HISTORY_CHUNK: Final[str] = "store_history_chunk"
     SEARCH_HISTORY: Final[str] = "search_history"
+    # Model resolution
+    RESOLVE_MODEL: Final[str] = "resolve_model_activity"
 
 
 # Execution statuses

@@ -228,6 +228,21 @@ class TestAgentExecutionWorkflowIntegration:
                     "progress_indicators": {},
                 }
 
+            @activity.defn(name="resolve_model_activity")
+            async def mock_resolve_model_activity(request: dict[str, Any]) -> dict[str, Any]:
+                """Mock resolve_model_activity returning minimal cached model info."""
+                return {
+                    "model_id": request.get("model_id", "test-model"),
+                    "provider_type": "openai",
+                    "model_name": "gpt-4",
+                    "api_key_secret": None,
+                    "endpoint_url": None,
+                    "context_window": 128000,
+                    "display_name": "GPT-4",
+                    "provider_display_name": "OpenAI",
+                    "resolved_at": "2026-01-01T00:00:00+00:00",
+                }
+
             @activity.defn(name="publish_workflow_events_activity")
             async def mock_publish_workflow_events_activity(events_json: list[str]) -> bool:
                 """Mock activity that just returns True for existing tests."""
@@ -241,6 +256,7 @@ class TestAgentExecutionWorkflowIntegration:
                     activities=[
                         mock_build_agent_config_activity,
                         mock_discover_available_tools_activity,
+                        mock_resolve_model_activity,
                         mock_call_llm_activity,
                         mock_execute_mcp_tool_activity,
                         mock_check_task_completion_activity,
@@ -399,6 +415,21 @@ class TestAgentExecutionWorkflowIntegration:
                     "progress_indicators": {},
                 }
 
+            @activity.defn(name="resolve_model_activity")
+            async def mock_resolve_model_activity(request: dict[str, Any]) -> dict[str, Any]:
+                """Mock resolve_model_activity returning minimal cached model info."""
+                return {
+                    "model_id": request.get("model_id", "test-model"),
+                    "provider_type": "openai",
+                    "model_name": "gpt-4",
+                    "api_key_secret": None,
+                    "endpoint_url": None,
+                    "context_window": 128000,
+                    "display_name": "GPT-4",
+                    "provider_display_name": "OpenAI",
+                    "resolved_at": "2026-01-01T00:00:00+00:00",
+                }
+
             @activity.defn(name="publish_workflow_events_activity")
             async def mock_publish_workflow_events_activity(events_json: list[str]) -> bool:
                 """Mock activity that just returns True for existing tests."""
@@ -412,6 +443,7 @@ class TestAgentExecutionWorkflowIntegration:
                     activities=[
                         mock_build_agent_config_activity,
                         mock_discover_available_tools_activity,
+                        mock_resolve_model_activity,
                         mock_call_llm_activity,
                         mock_execute_mcp_tool_activity,
                         mock_check_task_completion_activity,

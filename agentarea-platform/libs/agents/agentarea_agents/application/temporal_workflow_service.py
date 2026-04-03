@@ -101,3 +101,14 @@ class TemporalWorkflowService:
         except Exception as e:
             logger.error(f"Failed to resolve escalation: {e}")
             return False
+
+    async def send_workflow_command(
+        self, execution_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        try:
+            return await self._execution_service.send_workflow_command(
+                execution_id, command, payload
+            )
+        except Exception as e:
+            logger.error(f"Failed to send workflow command '{command}': {e}")
+            return False
