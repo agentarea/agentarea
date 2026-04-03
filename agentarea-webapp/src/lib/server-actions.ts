@@ -9,6 +9,7 @@ import {
   testModelInstance,
   pauseAgentTask,
   resumeAgentTask,
+  sendTaskCommand,
   cancelAgentTask,
   getAllTasks,
   getTask,
@@ -134,6 +135,14 @@ export async function pauseAgentTaskAction(agentId: string, taskId: string) {
 
 export async function resumeAgentTaskAction(agentId: string, taskId: string) {
   return await resumeAgentTask(agentId, taskId);
+}
+
+export async function sendTaskCommandAction(
+  agentId: string,
+  taskId: string,
+  payload: { command: string; [key: string]: any }
+) {
+  return await sendTaskCommand(agentId, taskId, payload);
 }
 
 export async function cancelAgentTaskAction(agentId: string, taskId: string) {

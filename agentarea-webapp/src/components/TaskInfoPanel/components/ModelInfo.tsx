@@ -12,11 +12,13 @@ import { Agent } from "@/types/agent";
 import { Task } from "../types";
 import ActionLink from "./ActionLink";
 import ExpandableText from "./ExpandableText";
+import ModelPicker from "./ModelPicker";
 import Section from "./Section";
 
 interface ModelInfoProps {
   task?: Task | null;
   agentId?: string;
+  isActive?: boolean;
   hideAgentHeader?: boolean;
   hideDescription?: boolean;
   hideInstruction?: boolean;
@@ -26,6 +28,7 @@ interface ModelInfoProps {
 export default function ModelInfo({
   task,
   agentId,
+  isActive = false,
   hideAgentHeader = false,
   hideDescription = false,
   hideInstruction = false,
@@ -129,6 +132,14 @@ export default function ModelInfo({
             configName={agent.model_info?.config_name}
           />
         </div>
+        {task && (
+          <ModelPicker
+            agentId={task.agent_id}
+            taskId={task.id}
+            currentModelId={agent.model_id ?? undefined}
+            isActive={isActive}
+          />
+        )}
       </div>
 
       {/* Description / Goal */}

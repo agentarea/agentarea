@@ -11,6 +11,7 @@ from agentarea_agents.application.temporal_workflow_service import (
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_event_stream_service,
+    get_model_instance_service,
     get_read_agent_service,
     get_read_task_service,
     get_task_service,
@@ -18,6 +19,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.events.event_stream_service import EventStreamService
+from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -55,6 +57,14 @@ class EscalationResolution(BaseModel):
     escalation_id: str
     approved: bool
     comment: str = ""
+
+
+class TaskCommandPayload(BaseModel):
+    command: str
+    model_instance_id: str | None = None
+    budget_usd: float | None = None
+    message: str | None = None
+    message_id: str | None = None
 
 
 class TaskResponse(BaseModel):
@@ -769,6 +779,92 @@ async def send_a2ui_action(
         raise
     except Exception as e:
         logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+async def _resolve_model_info(
+    model_instance_id: str,
+    model_instance_service: ModelInstanceService,
+) -> dict:
+    """Resolve model instance from DB and return a ResolvedModelInfo-compatible dict.
+
+    The api_key_secret field is the secret manager key name stored in
+    provider_config.api_key (NOT the actual decrypted key).
+    """
+    instance = await model_instance_service.get(UUID(model_instance_id))
+    if not instance:
+        raise HTTPException(status_code=404, detail="Model instance not found")
+
+    provider_config = instance.provider_config
+    model_spec = instance.model_spec
+    provider_spec = provider_config.provider_spec if provider_config else None
+
+    return {
+        "model_id": str(instance.id),
+        "provider_type": provider_spec.provider_type if provider_spec else "",
+        "model_name": model_spec.model_name if model_spec else "",
+        "api_key_secret": provider_config.api_key if provider_config else None,
+        "endpoint_url": provider_config.endpoint_url if provider_config else None,
+        "context_window": model_spec.context_window if model_spec else 128000,
+        "display_name": model_spec.display_name if model_spec else None,
+        "provider_display_name": provider_spec.name if provider_spec else None,
+        "resolved_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.post("/{task_id}/command")
+async def send_task_command(
+    agent_id: UUID,
+    task_id: UUID,
+    payload: TaskCommandPayload,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+    model_instance_service: ModelInstanceService = Depends(get_model_instance_service),
+):
+    """Send a command to a running task workflow."""
+    # Verify agent exists
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    execution_id = f"task-{task_id}"
+
+    try:
+        if payload.command == "change_model":
+            if not payload.model_instance_id:
+                raise HTTPException(status_code=400, detail="model_instance_id is required for change_model")
+            resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
+            await workflow_task_service.send_workflow_command(execution_id, "change_model", resolved)
+
+        elif payload.command == "queue_message":
+            if not payload.message:
+                raise HTTPException(status_code=400, detail="message is required for queue_message")
+            await workflow_task_service.send_workflow_command(
+                execution_id, "queue_message", {"message": payload.message}
+            )
+
+        elif payload.command == "remove_message":
+            if not payload.message_id:
+                raise HTTPException(status_code=400, detail="message_id is required for remove_message")
+            await workflow_task_service.send_workflow_command(
+                execution_id, "remove_message", {"message_id": payload.message_id}
+            )
+
+        elif payload.command == "update_budget":
+            await workflow_task_service.send_workflow_command(
+                execution_id, "update_budget", {"budget_usd": payload.budget_usd}
+            )
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown command: {payload.command}")
+
+        return {"status": "accepted", "command": payload.command}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

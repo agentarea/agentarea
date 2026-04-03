@@ -23,6 +23,7 @@ export const {
   getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
+  sendTaskCommand,
   resolveEscalation,
   getAgentTaskEvents,
 

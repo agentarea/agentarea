@@ -150,6 +150,18 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    sendTaskCommand: async (
+      agentId: string,
+      taskId: string,
+      payload: { command: string; [key: string]: any }
+    ) => {
+      const { data, error } = await client.POST(
+        `/v1/agents/${agentId}/tasks/${taskId}/command` as any,
+        { body: payload } as any
+      );
+      return { data, error };
+    },
+
     resolveEscalation: async (
       agentId: string,
       taskId: string,
