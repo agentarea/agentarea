@@ -180,6 +180,21 @@
     }
   },
 
+  "AgentPaymentsPage": {
+    "title": "История платежей",
+    "description": "Все платежи за сервисы, совершенные этим агентом по протоколам x402 и MPP.",
+    "noPayments": "Нет платежей",
+    "noPaymentsDescription": "Этот агент еще не совершал платежей за сервисы.",
+    "table": {
+      "time": "Время",
+      "protocol": "Протокол",
+      "amount": "Сумма",
+      "recipient": "Получатель",
+      "tool": "Инструмент",
+      "txHash": "Транзакция",
+      "status": "Статус"
+    }
+  },
   "AgentsPage": {
     "createAgent": "Создать агента",
     "noToolsConf": "Нет настроенных инструментов",
@@ -193,6 +208,8 @@
     "createTask": "Создать задачу",
     "activeTasks": "Активные задачи",
     "currentTasks": "Текущие задачи",
+    "payments": "Платежи",
+    "wallet": "Кошелек и платежи",
     "browseAgents": "Агенты",
     "newAgent": "Новый агент",
     "mainDescriptionPage": "Обзор и управление вашими агентами",
@@ -298,6 +315,10 @@
     "myConnections": "Мои соединения",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "filters": {
+      "type": "Тип",
+      "category": "Категория"
+    },
     "createInstance": {
       "breadcrumb": "Создать инстанс",
       "breadcrumbWithName": "Создать инстанс {serverName}",
@@ -847,7 +868,11 @@
       "namePlaceholder": "напр., CI/CD Pipeline",
       "expiresInDays": "Истекает через (дней)",
       "expiresInDaysPlaceholder": "Оставьте пустым для бессрочного ключа",
-      "createButton": "Создать ключ"
+      "createButton": "Создать ключ",
+      "cancel": "Отмена",
+      "creating": "Создание...",
+      "success": "API ключ создан",
+      "successDescription": "Ваш API ключ успешно создан."
     },
     "created": {
       "title": "API ключ создан",

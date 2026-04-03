@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getAgent } from "@/lib/api";
 import { ChatProvider } from "../shared/ChatContext";
-import AgentHeaderTabs from "./components/AgentHeaderTabs";
 import AgentHeaderControls from "./components/AgentHeaderControls";
+import AgentHeaderTabs from "./components/AgentHeaderTabs";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -31,7 +31,7 @@ export default async function AgentLayout({ params, children }: Props) {
           ],
           controls: <AgentHeaderControls />,
         }}
-        className="p-0"
+        className="p-0 h-full"
         subheader={<AgentHeaderTabs agentId={agent.id} />}
       >
         {children}

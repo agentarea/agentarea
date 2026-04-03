@@ -217,6 +217,21 @@
     }
   },
 
+  "AgentPaymentsPage": {
+    "title": "Payment History",
+    "description": "All service payments made by this agent via x402 and MPP protocols.",
+    "noPayments": "No payments yet",
+    "noPaymentsDescription": "This agent hasn't made any service payments yet.",
+    "table": {
+      "time": "Time",
+      "protocol": "Protocol",
+      "amount": "Amount",
+      "recipient": "Recipient",
+      "tool": "Tool",
+      "txHash": "Tx Hash",
+      "status": "Status"
+    }
+  },
   "AgentsPage": {
     "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
@@ -230,6 +245,8 @@
     "createTask": "Create Task",
     "activeTasks": "Active Tasks",
     "currentTasks": "Current Tasks",
+    "payments": "Payments",
+    "wallet": "Wallet & Payments",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
     "mainDescriptionPage": "Browse and manage your agents",
@@ -335,6 +352,10 @@
     "myConnections": "My Connections",
     "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
+    "filters": {
+      "type": "Type",
+      "category": "Category"
+    },
     "createInstance": {
       "breadcrumb": "Create instance",
       "breadcrumbWithName": "Create {serverName} instance",
@@ -842,7 +863,11 @@
       "namePlaceholder": "e.g., CI/CD Pipeline",
       "expiresInDays": "Expires In (Days)",
       "expiresInDaysPlaceholder": "Leave empty for no expiration",
-      "createButton": "Create Key"
+      "createButton": "Create Key",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "success": "API Key Created",
+      "successDescription": "Your API key has been created successfully."
     },
     "created": {
       "title": "API Key Created",

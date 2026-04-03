@@ -1,7 +1,7 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSidebar";
@@ -58,7 +58,9 @@ export default function ConditionalLayout({
     return <>{children}</>;
   }
 
-  const isSettings = SETTINGS_ROUTES.some((route) => pathname.startsWith(route));
+  const isSettings = SETTINGS_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
 
   return (
     <AuthGuard>
@@ -89,7 +91,7 @@ export default function ConditionalLayout({
               </AnimatePresence>
             </div>
           </Sidebar>
-          <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full overflow-y-auto border border-sidebar-border relative">
+          <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative">
             {children}
           </main>
         </div>

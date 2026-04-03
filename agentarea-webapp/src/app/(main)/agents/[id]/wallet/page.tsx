@@ -1,21 +1,21 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import AgentEditContent from "./AgentEditContent";
+import WalletFormContent from "./WalletFormContent";
 
 export const metadata: Metadata = {
-  title: "Agent Settings",
+  title: "Agent Wallet & Payments",
 };
 
-interface AgentSettingsPageProps {
+interface AgentWalletPageProps {
   params: Promise<{
     id: string;
   }>;
 }
 
-export default async function AgentSettingsPage({
+export default async function AgentWalletPage({
   params,
-}: AgentSettingsPageProps) {
+}: AgentWalletPageProps) {
   const resolvedParams = await params;
 
   return (
@@ -26,7 +26,9 @@ export default async function AgentSettingsPage({
         </div>
       }
     >
-      <AgentEditContent agentId={resolvedParams.id} />
+      <div className="h-full space-y-8 px-4 py-5 overflow-auto">
+        <WalletFormContent agentId={resolvedParams.id} />
+      </div>
     </Suspense>
   );
 }

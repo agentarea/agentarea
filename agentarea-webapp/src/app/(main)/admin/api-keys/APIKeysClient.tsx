@@ -5,16 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
-import {
-  Calendar,
-  Check,
-  CheckCircle,
-  Copy,
-  Loader2,
-  Trash2,
-} from "lucide-react";
+import { Check, CheckCircle, Copy, Loader2, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -226,18 +220,7 @@ export default function APIKeysClient({
       header: t("table.created"),
       cellClassName: "w-[15%]",
       render: (value: string) => (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Calendar className="h-3 w-3" />
-          <span>
-            {value
-              ? new Date(value).toLocaleDateString("ru-RU", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                })
-              : "-"}
-          </span>
-        </div>
+        <TableDateDisplay dateString={value} onlyDate />
       ),
     },
     {
