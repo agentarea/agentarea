@@ -118,6 +118,22 @@
     "settings": "Settings",
     "logout": "Logout"
   },
+  "NavUser": {
+    "settings": "Settings",
+    "billing": "Billing",
+    "logout": "Log out"
+  },
+  "SettingsSidebar": {
+    "title": "Settings",
+    "backToApp": "Back to app",
+    "account": "Account",
+    "profile": "Profile",
+    "billing": "Billing",
+    "workspace": "Workspace",
+    "apiKeys": "API Keys",
+    "importExport": "Import / Export",
+    "auditLog": "Audit Log"
+  },
 
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -202,7 +218,8 @@
       "description": "Update your personal information",
       "name": "Full Name",
       "email": "Email Address",
-      "save": "Save Changes"
+      "save": "Save Changes",
+      "accountInfoManaged": "Account information is managed by your authentication provider and cannot be edited here."
     },
     "preferences": {
       "title": "Preferences",
@@ -1074,7 +1091,7 @@
   },
 
   "WorkspacePage": {
-    "title": "Workspace",
+    "title": "Import / Export",
     "description": "Import and export your workspace configuration",
     "export": {
       "title": "Export Configuration",

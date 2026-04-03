@@ -120,6 +120,22 @@
     "settings": "Настройки",
     "logout": "Выйти"
   },
+  "NavUser": {
+    "settings": "Настройки",
+    "billing": "Оплата",
+    "logout": "Выйти"
+  },
+  "SettingsSidebar": {
+    "title": "Настройки",
+    "backToApp": "Назад к приложению",
+    "account": "Аккаунт",
+    "profile": "Профиль",
+    "billing": "Оплата",
+    "workspace": "Рабочее пространство",
+    "apiKeys": "API Ключи",
+    "importExport": "Импорт / Экспорт",
+    "auditLog": "Журнал аудита"
+  },
 
   "LlmBrowsePage": {
     "title": "Модели LLM",
@@ -184,7 +200,7 @@
   },
 
   "BillingPage": {
-    "title": "Платежи",
+    "title": "Оплата",
     "description": "Управление подпиской и оплатой",
     "currentPlan": {
       "title": "Текущий план",
@@ -1080,7 +1096,7 @@
   },
 
   "WorkspacePage": {
-    "title": "Рабочее пространство",
+    "title": "Импорт / Экспорт",
     "description": "Импорт и экспорт конфигурации рабочего пространства",
     "export": {
       "title": "Экспорт конфигурации",

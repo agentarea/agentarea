@@ -1,7 +1,17 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Check, CreditCard, Crown, Sparkles, Zap } from "lucide-react";
+import {
+  Bot,
+  Check,
+  CreditCard,
+  Crown,
+  LayoutDashboard,
+  ListChecks,
+  Plug,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -125,11 +135,31 @@ export default function BillingClient() {
                 {t("usage.subtitle")}
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
-              <UsageCard label={t("usage.workspaces")} used={1} limit={1} />
-              <UsageCard label={t("usage.agents")} used={0} limit={3} />
-              <UsageCard label={t("usage.mcpConnections")} used={0} limit={5} />
-              <UsageCard label={t("usage.taskRuns")} used={0} limit={1000} />
+            <div className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">
+              <UsageCard
+                label={t("usage.workspaces")}
+                used={1}
+                limit={1}
+                icon={LayoutDashboard}
+              />
+              <UsageCard
+                label={t("usage.agents")}
+                used={0}
+                limit={3}
+                icon={Bot}
+              />
+              <UsageCard
+                label={t("usage.mcpConnections")}
+                used={0}
+                limit={5}
+                icon={Plug}
+              />
+              <UsageCard
+                label={t("usage.taskRuns")}
+                used={0}
+                limit={1000}
+                icon={ListChecks}
+              />
             </div>
           </section>
         </div>
@@ -207,14 +237,14 @@ function PlanCard({
         }}
       />
       {highlighted && (
-        <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-1 rounded-bl-md z-20">
+        <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-normal px-2.5 py-1 rounded-bl-md z-20">
           {t("availablePlans.recommended")}
         </div>
       )}
       <div className="p-4 z-10">
         <div className="flex items-center gap-2 mb-2">
           {highlighted && <Crown className="h-3.5 w-3.5 text-primary" />}
-          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          <h3 className="text-xs font-thin uppercase tracking-wider text-zinc-700 dark:text-zinc-200">
             {t(`plans.${planKey}.name`)}
           </h3>
         </div>
@@ -278,10 +308,12 @@ function UsageCard({
   label,
   used,
   limit,
+  icon: Icon,
 }: {
   label: string;
   used: number;
   limit: number;
+  icon: React.ComponentType<{ className?: string }>;
 }) {
   const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const isNearLimit = percentage >= 80;
@@ -310,7 +342,7 @@ function UsageCard({
         }}
       />
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
-        <Zap className="h-4 w-4" />
+        <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0 z-10">
         <div className="flex items-center justify-between mb-2">

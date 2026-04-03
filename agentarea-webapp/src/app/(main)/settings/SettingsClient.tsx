@@ -92,7 +92,7 @@ export default function SettingsClient() {
               {/* Language Setting */}
               <div
                 className={cn(
-                  "group relative flex items-start gap-3 w-full p-4",
+                  "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
                   "bg-white dark:bg-zinc-900",
                   "border border-zinc-200/60 dark:border-zinc-800",
                   "rounded-md transition-all duration-300 ease-out",
@@ -112,20 +112,21 @@ export default function SettingsClient() {
                      )`,
                   }}
                 />
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
-                  <Globe className="h-4 w-4" />
+                <div className="flex items-center gap-3 z-10">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10">
+                    <Globe className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      {t("preferences.language")}
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {t("preferences.languageDescription")}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-0.5 flex-1 min-w-0 z-10">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    {t("preferences.language")}
-                  </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {t("preferences.languageDescription")}
-                  </span>
-                </div>
-
-                <div className="shrink-0 z-10">
+                <div className="z-10 ml-11 md:ml-auto">
                   <LanguageSelect />
                 </div>
               </div>
@@ -133,7 +134,7 @@ export default function SettingsClient() {
               {/* Theme Setting */}
               <div
                 className={cn(
-                  "group relative flex items-start gap-3 w-full p-4",
+                  "group relative flex flex-col md:flex-row md:items-start gap-3 w-full p-4",
                   "bg-white dark:bg-zinc-900",
                   "border border-zinc-200/60 dark:border-zinc-800",
                   "rounded-md transition-all duration-300 ease-out",
@@ -153,20 +154,21 @@ export default function SettingsClient() {
                      )`,
                   }}
                 />
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
-                  <Moon className="h-4 w-4" />
+                <div className="flex items-center gap-3 z-10">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10">
+                    <Moon className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      {t("preferences.theme")}
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {t("preferences.themeDescription")}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-0.5 flex-1 min-w-0 z-10">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    {t("preferences.theme")}
-                  </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {t("preferences.themeDescription")}
-                  </span>
-                </div>
-
-                <div className="shrink-0 z-10">
+                <div className="z-10 ml-11 md:ml-auto">
                   <ThemeToggle />
                 </div>
               </div>

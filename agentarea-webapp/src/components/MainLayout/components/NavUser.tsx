@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,6 +22,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 
 export function NavUser() {
+  const t = useTranslations("NavUser");
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser
@@ -59,8 +61,12 @@ export function NavUser() {
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{user.name}</span>
-                <span className="truncate text-xs text-zinc-500">{user.email}</span>
+                <span className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                  {user.name}
+                </span>
+                <span className="truncate text-xs text-zinc-500">
+                  {user.email}
+                </span>
               </div>
               {/* <ChevronsUpDown className="ml-auto size-4" /> */}
             </SidebarMenuButton>
@@ -97,20 +103,23 @@ export function NavUser() {
               <DropdownMenuItem asChild className="cursor-pointer">
                 <Link href="/settings" className="flex w-full items-center">
                   <Settings className="mr-2 size-4" />
-                  Settings
+                  {t("settings")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/settings/billing" className="flex w-full items-center">
+                <Link
+                  href="/settings/billing"
+                  className="flex w-full items-center"
+                >
                   <CreditCard className="mr-2 size-4" />
-                  Billing
+                  {t("billing")}
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 size-4" />
-              Log out
+              {t("logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
