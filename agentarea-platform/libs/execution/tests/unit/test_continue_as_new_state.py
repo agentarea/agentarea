@@ -1,5 +1,7 @@
 """Tests for ContinueAsNewState model and serialization."""
 
+from decimal import Decimal
+
 import pytest
 
 from agentarea_execution.workflows.models import (
@@ -58,7 +60,7 @@ class TestContinueAsNewState:
 
         assert restored.execution_id == sample_state.execution_id
         assert restored.current_iteration == 5
-        assert restored.total_cost == 0.05
+        assert restored.total_cost == Decimal("0.05")
         assert len(restored.messages) == 2
         assert restored.goal.description == "Test goal"
 

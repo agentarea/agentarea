@@ -72,18 +72,21 @@ export default function TasksList({
     {
       accessor: "total_cost",
       header: t("cost"),
-      render: (value: number | null | undefined) => (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          {value != null ? (
-            <>
-              <DollarSign className="h-3 w-3" />
-              <span className="font-mono">{value.toFixed(4)}</span>
-            </>
-          ) : (
-            <span>—</span>
-          )}
-        </div>
-      ),
+      render: (value: string | number | null | undefined) => {
+        const num = value != null ? Number(value) : null;
+        return (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            {num != null && !isNaN(num) ? (
+              <>
+                <DollarSign className="h-3 w-3" />
+                <span className="font-mono">{num.toFixed(4)}</span>
+              </>
+            ) : (
+              <span>—</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessor: "created_at",
@@ -114,7 +117,7 @@ export default function TasksList({
     },
   ];
 
-  const totalCost = initialTasks.reduce((sum, t) => sum + ((t as any).total_cost || 0), 0);
+  const totalCost = initialTasks.reduce((sum, t) => sum + (Number((t as any).total_cost) || 0), 0);
 
   // Render table view
   if (viewMode === "table") {

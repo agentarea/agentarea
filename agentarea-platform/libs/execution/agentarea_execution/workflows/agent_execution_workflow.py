@@ -30,6 +30,8 @@ with workflow.unsafe.imports_passed_through():
         allows_tool_progressive_disclosure,
         resolve_context_strategy,
     )
+    from agentarea_common.money import serialize_money
+
     from .helpers import (
         BudgetTracker,
         EventManager,
@@ -332,7 +334,7 @@ class AgentExecutionWorkflow:
             {
                 "goal_description": self.state.goal.description,
                 "max_iterations": self.state.goal.max_iterations,
-                "budget_limit": self.budget_tracker.budget_limit,
+                "budget_limit": serialize_money(self.budget_tracker.budget_limit),
             },
         )
 
@@ -771,7 +773,7 @@ class AgentExecutionWorkflow:
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
-            total_cost=self.budget_tracker.cost,
+            total_cost=serialize_money(self.budget_tracker.cost),
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
@@ -792,7 +794,7 @@ class AgentExecutionWorkflow:
             EventTypes.WORKFLOW_CONTINUED_AS_NEW,
             {
                 "iteration": self.state.current_iteration,
-                "total_cost": self.budget_tracker.cost,
+                "total_cost": serialize_money(self.budget_tracker.cost),
                 "messages_carried": len(self.state.messages),
                 "continued_from_run_id": workflow.info().run_id,
                 "reason": "Temporal event history size limit approaching",
@@ -915,7 +917,7 @@ class AgentExecutionWorkflow:
             EventTypes.ITERATION_STARTED,
             {
                 "iteration": iteration,
-                "budget_remaining": self.budget_tracker.get_remaining(),
+                "budget_remaining": serialize_money(self.budget_tracker.get_remaining()),
             },
         )
         await self._publish_events_immediately()
@@ -928,7 +930,7 @@ class AgentExecutionWorkflow:
 
             self.event_manager.add_event(
                 EventTypes.ITERATION_COMPLETED,
-                {"iteration": iteration, "total_cost": self.budget_tracker.cost},
+                {"iteration": iteration, "total_cost": serialize_money(self.budget_tracker.cost)},
             )
 
         except Exception as e:
@@ -1150,7 +1152,7 @@ class AgentExecutionWorkflow:
                 {
                     "iteration": self.state.current_iteration,
                     "cost": usage_info["cost"],
-                    "total_cost": self.budget_tracker.cost,
+                    "total_cost": serialize_money(self.budget_tracker.cost),
                     "usage": usage_info,
                     "content": display_content,
                     "tool_calls": tool_calls_value or [],
@@ -2308,8 +2310,8 @@ class AgentExecutionWorkflow:
                 EventTypes.BUDGET_WARNING,
                 {
                     "usage_percentage": self.budget_tracker.get_usage_percentage(),
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
+                    "cost": serialize_money(self.budget_tracker.cost),
+                    "limit": serialize_money(self.budget_tracker.budget_limit),
                     "message": self.budget_tracker.get_warning_message(),
                 },
             )
@@ -2320,8 +2322,8 @@ class AgentExecutionWorkflow:
             self.event_manager.add_event(
                 EventTypes.BUDGET_EXCEEDED,
                 {
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
+                    "cost": serialize_money(self.budget_tracker.cost),
+                    "limit": serialize_money(self.budget_tracker.budget_limit),
                     "message": self.budget_tracker.get_exceeded_message(),
                 },
             )
@@ -2405,7 +2407,7 @@ class AgentExecutionWorkflow:
             {
                 "success": self.state.success,
                 "iterations_completed": self.state.current_iteration,
-                "total_cost": self.budget_tracker.cost,
+                "total_cost": serialize_money(self.budget_tracker.cost),
                 "final_response": self.state.final_response,
                 "status": self.state.status,
                 "blocked_reason": self.state.blocked_reason,
@@ -2433,7 +2435,7 @@ class AgentExecutionWorkflow:
                     else None,
                     error_message=self.state.blocked_reason if final_status == "blocked" else None,
                     workspace_id=self.state.workspace_id,
-                    total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
+                    total_cost=serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -2457,7 +2459,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             success=self.state.success,
             final_response=self.state.final_response,
-            total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
+            total_cost=serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
             reasoning_iterations_used=self.state.current_iteration,
             conversation_history=conversation_history,
         )
@@ -2556,9 +2558,9 @@ class AgentExecutionWorkflow:
             "status": self.state.status,
             "current_iteration": self.state.current_iteration,
             "success": self.state.success,
-            "cost": self.budget_tracker.cost if self.budget_tracker else 0.0,
+            "cost": serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
             "budget_remaining": (
-                self.budget_tracker.get_remaining() if self.budget_tracker else 0.0
+                serialize_money(self.budget_tracker.get_remaining()) if self.budget_tracker else "0"
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,

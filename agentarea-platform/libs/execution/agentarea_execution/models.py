@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from agentarea_common.money import ZERO, Money
+
 
 class ResolvedModelInfo(BaseModel):
     """Cached model resolution info stored in workflow state.
@@ -73,7 +75,7 @@ class AgentExecutionRequest(BaseModel):
     max_reasoning_iterations: int = 10
     enable_agent_communication: bool = False
     requires_human_approval: bool = False
-    budget_usd: float | None = None  # Optional budget limit in USD
+    budget_usd: Money | None = None  # Optional budget limit in USD
 
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -98,7 +100,7 @@ class AgentExecutionResult(BaseModel):
     reasoning_iterations_used: int = 0
     total_tool_calls: int = 0
     execution_duration_seconds: float | None = None
-    total_cost: float = 0.0
+    total_cost: Money = ZERO
 
     # Error handling
     error_message: str | None = None
@@ -271,7 +273,7 @@ class LLMCallResult(BaseModel):
     role: str = "assistant"
     content: str = ""
     tool_calls: list[dict[str, Any]] | None = None
-    cost: float = 0.0
+    cost: Money = ZERO
     usage: LLMUsage | None = None
 
 
@@ -353,7 +355,7 @@ class UpdateTaskStatusRequest(BaseModel):
     result: str | None = None
     error_message: str | None = None
     workspace_id: str
-    total_cost: float = 0.0
+    total_cost: Money = ZERO
 
 
 class UpdateTaskStatusResult(BaseModel):

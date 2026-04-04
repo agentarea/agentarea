@@ -48,6 +48,7 @@ agentarea-platform/
 - **Events**: Extend `DomainEvent`, publish via `EventBroker`
 - **Audit system**: Use `agentarea_common.audit` (`AuditService`, `@audited`) for DB-backed audit events
 - **Audit decorator**: Prefer `@audited(action, resource_type, resource_id_param=...)` on service mutation methods
+- **Money type**: All monetary values (costs, budgets, balances) use `Money` from `agentarea_common.money`. `Money` is `Decimal` with Pydantic str serialization — use it for model fields, arithmetic, and function args. Use `to_money()` to construct, `serialize_money()` for raw dicts/events. Never use `float` for money.
 
 ## ANTI-PATTERNS (THIS DIR)
 
@@ -56,6 +57,7 @@ agentarea-platform/
 - Never create service without DI registration
 - Never import from `apps/` in `libs/`
 - Never add new usages of legacy `agentarea_common.logging.audit_logger`; use `agentarea_common.audit` instead
+- Never use `float` for monetary values — use `Money` from `agentarea_common.money` (Decimal, serializes to str)
 
 ## COMMANDS
 

@@ -1,13 +1,14 @@
 """Helper classes and utilities for agent execution workflows."""
 
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
+
+    from agentarea_common.money import ZERO, Money, serialize_money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
@@ -70,36 +71,40 @@ class EventManager:
 
 
 class BudgetTracker:
-    """Tracks budget usage and provides warnings."""
+    """Tracks budget usage and provides warnings.
+
+    All monetary values use the Money type (Decimal) internally.
+    Use serialize_money() when putting values into dicts/events.
+    """
 
     def __init__(self, budget_usd: float | None = None, service_budget_usd: float | None = None):
         from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
 
-        self.budget_limit = budget_usd or DEFAULT_BUDGET_USD
-        self.cost = Decimal("0")
+        self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
+        self.cost: Money = ZERO
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
         # Service budget tracking
-        self._service_limit = service_budget_usd or 0.0
-        self._service_cost = Decimal("0")
+        self._service_limit: Money = to_money(service_budget_usd or 0)
+        self._service_cost: Money = ZERO
         self._service_warning_sent = False
 
     def add_cost(self, amount: float) -> None:
         """Add cost to the current total."""
-        self.cost += Decimal(str(amount))
-        workflow.logger.info(f"Added cost: ${amount:.6f}, total: ${float(self.cost):.6f}")
+        self.cost += to_money(amount)
+        workflow.logger.info(f"Added cost: ${amount:.6f}, total: ${self.cost}")
 
-    def get_remaining(self) -> float:
+    def get_remaining(self) -> Money:
         """Get remaining budget."""
-        return max(0.0, self.budget_limit - float(self.cost))
+        return max(ZERO, self.budget_limit - self.cost)
 
     def get_usage_percentage(self) -> float:
         """Get budget usage as percentage."""
-        return (float(self.cost) / self.budget_limit) * 100 if self.budget_limit > 0 else 0
+        return float(self.cost / self.budget_limit) * 100 if self.budget_limit > 0 else 0
 
     def is_exceeded(self) -> bool:
         """Check if budget is exceeded."""
-        return float(self.cost) >= self.budget_limit
+        return self.cost >= self.budget_limit
 
     def should_warn(self) -> bool:
         """Check if budget warning should be sent."""
@@ -113,38 +118,38 @@ class BudgetTracker:
     def get_warning_message(self) -> str:
         """Get budget warning message."""
         return MessageTemplates.BUDGET_WARNING.format(
-            percentage=self.get_usage_percentage(), used=float(self.cost), total=self.budget_limit
+            percentage=self.get_usage_percentage(), used=self.cost, total=self.budget_limit
         )
 
     def get_exceeded_message(self) -> str:
         """Get budget exceeded message."""
-        return MessageTemplates.BUDGET_EXCEEDED.format(used=float(self.cost), total=self.budget_limit)
+        return MessageTemplates.BUDGET_EXCEEDED.format(used=self.cost, total=self.budget_limit)
 
     # --- Service budget tracking ---
 
     def add_service_cost(self, amount: float) -> None:
         """Track a service payment cost."""
-        self._service_cost += Decimal(str(amount))
-        workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${float(self._service_cost):.6f}")
+        self._service_cost += to_money(amount)
+        workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost}")
 
-    def get_service_remaining(self) -> float:
+    def get_service_remaining(self) -> Money:
         """Get remaining service budget."""
         if self._service_limit <= 0:
-            return float("inf")
-        return max(0.0, self._service_limit - float(self._service_cost))
+            return to_money("Infinity")
+        return max(ZERO, self._service_limit - self._service_cost)
 
     def is_service_exceeded(self) -> bool:
         """Check if service budget is exhausted."""
         if self._service_limit <= 0:
             return False
-        return float(self._service_cost) >= self._service_limit
+        return self._service_cost >= self._service_limit
 
     def should_warn_service(self) -> bool:
         """Check if service budget warning should be sent."""
         if self._service_limit <= 0:
             return False
         return (
-            float(self._service_cost) / self._service_limit
+            float(self._service_cost / self._service_limit)
         ) >= self.warning_threshold and not self._service_warning_sent
 
     def mark_service_warning_sent(self) -> None:
@@ -152,9 +157,9 @@ class BudgetTracker:
         self._service_warning_sent = True
 
     @property
-    def service_cost(self) -> float:
+    def service_cost(self) -> Money:
         """Get total service cost."""
-        return float(self._service_cost)
+        return self._service_cost
 
 
 class MessageBuilder:
