@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Filter,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-} from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ChevronDown, ChevronRight, Filter, Loader2 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,28 +14,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { fetchAuditLogs, type AuditEvent } from "./actions";
 
 const ACTION_COLORS: Record<string, string> = {
   create:
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  update:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  delete:
-    "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  update: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  delete: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
 function getActionColor(action: string): string {
   const verb = action.split(".").pop() || "";
-  return ACTION_COLORS[verb] || "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300";
+  return (
+    ACTION_COLORS[verb] ||
+    "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300"
+  );
 }
 
 function formatTime(dateString: string): string {
@@ -68,7 +59,9 @@ function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
     <div className="mt-2 space-y-1">
       {changes.map((change, i) => (
         <div key={i} className="text-xs font-mono">
-          <span className="text-muted-foreground">{String(change.field ?? "unknown")}:</span>{" "}
+          <span className="text-muted-foreground">
+            {String(change.field ?? "unknown")}:
+          </span>{" "}
           <span className="text-red-500 line-through">
             {String(change.before ?? "null")}
           </span>{" "}
@@ -81,16 +74,6 @@ function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
   );
 }
 
-const RESOURCE_TYPES = [
-  { value: "all", label: "All resources" },
-  { value: "agent", label: "Agents" },
-  { value: "mcp_server", label: "MCP Servers" },
-  { value: "mcp_instance", label: "MCP Instances" },
-  { value: "task", label: "Tasks" },
-  { value: "trigger", label: "Triggers" },
-  { value: "skill", label: "Skills" },
-];
-
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
@@ -102,11 +85,22 @@ export default function AuditLogClient({
   initialCursor,
   initialError,
 }: Props) {
+  const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [resourceFilter, setResourceFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const resourceTypes = [
+    { value: "all", label: t("filter.all") },
+    { value: "agent", label: t("filter.agent") },
+    { value: "mcp_server", label: t("filter.mcp_server") },
+    { value: "mcp_instance", label: t("filter.mcp_instance") },
+    { value: "task", label: t("filter.task") },
+    { value: "trigger", label: t("filter.trigger") },
+    { value: "skill", label: t("filter.skill") },
+  ];
 
   const applyFilter = (resourceType: string) => {
     setResourceFilter(resourceType);
@@ -139,149 +133,128 @@ export default function AuditLogClient({
 
   if (initialError) {
     return (
-      <div className="p-6">
-        <h2 className="text-lg font-semibold mb-4">Audit Log</h2>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-8 text-center text-muted-foreground">
-          <p>Audit logging is available on Enterprise plans.</p>
-          <p className="text-sm mt-1">
-            Track who did what, when, and from where across your workspace.
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        title={t("enterpriseFeature")}
+        description={t("enterpriseDescription")}
+        iconsType="audit"
+      />
     );
   }
 
-  return (
-    <div className="p-6 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
+  if (events.length === 0) {
+    return <EmptyState title={t("noEvents")} iconsType="audit" />;
+  }
+
+  const columns = [
+    {
+      accessor: "expand",
+      header: "",
+      cellClassName: "w-8 pr-0",
+      render: (_: unknown, event: AuditEvent) => {
+        const isExpanded = expandedId === event.id;
+        const hasChanges = event.changes && event.changes.length > 0;
+        return hasChanges ? (
+          isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )
+        ) : null;
+      },
+    },
+    {
+      accessor: "action",
+      header: t("table.action"),
+      cellClassName: "w-[140px]",
+      render: (value: string) => (
+        <Badge
+          variant="secondary"
+          className={`text-xs font-mono ${getActionColor(value)}`}
+        >
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      accessor: "resource",
+      header: t("table.resource"),
+      cellClassName: "",
+      render: (_: unknown, event: AuditEvent) => (
         <div>
-          <h2 className="text-lg font-semibold">Audit Log</h2>
-          <p className="text-sm text-muted-foreground">
-            Track changes across your workspace
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={resourceFilter} onValueChange={applyFilter}>
-            <SelectTrigger className="w-[160px] h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RESOURCE_TYPES.map((rt) => (
-                <SelectItem key={rt.value} value={rt.value}>
-                  {rt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {events.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-8 text-center text-muted-foreground">
-          No audit events found.
-        </div>
-      ) : (
-        <>
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-zinc-50 dark:bg-zinc-900/50">
-                  <TableHead className="w-8" />
-                  <TableHead className="w-[140px]">Action</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead className="w-[120px]">Actor</TableHead>
-                  <TableHead className="w-[100px]">IP</TableHead>
-                  <TableHead className="w-[100px] text-right">When</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map((event) => {
-                  const isExpanded = expandedId === event.id;
-                  const hasChanges =
-                    event.changes && event.changes.length > 0;
-
-                  return (
-                    <TableRow
-                      key={event.id}
-                      className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                      onClick={() =>
-                        setExpandedId(isExpanded ? null : event.id)
-                      }
-                    >
-                      <TableCell className="pr-0">
-                        {hasChanges &&
-                          (isExpanded ? (
-                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                          ))}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs font-mono ${getActionColor(event.action)}`}
-                        >
-                          {event.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="text-sm">
-                            {event.resource_type}
-                          </span>
-                          {event.resource_id && (
-                            <span className="text-xs text-muted-foreground ml-1.5 font-mono">
-                              {event.resource_id.slice(0, 8)}
-                            </span>
-                          )}
-                        </div>
-                        {isExpanded && hasChanges && (
-                          <ChangesDetail changes={event.changes} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm truncate max-w-[120px] block">
-                          {event.actor_id.length > 12
-                            ? event.actor_id.slice(0, 12) + "..."
-                            : event.actor_id}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {event.source_ip || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(event.created_at)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {cursor && (
-            <div className="flex justify-center mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadMore}
-                disabled={isPending}
-              >
-                {isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : null}
-                Load more
-              </Button>
-            </div>
+          <span className="text-sm">{event.resource_type}</span>
+          {event.resource_id && (
+            <span className="text-xs text-muted-foreground ml-1.5 font-mono">
+              {event.resource_id.slice(0, 8)}
+            </span>
           )}
-        </>
+          {expandedId === event.id &&
+            event.changes &&
+            event.changes.length > 0 && (
+              <ChangesDetail changes={event.changes} />
+            )}
+        </div>
+      ),
+    },
+    {
+      accessor: "actor_id",
+      header: t("table.actor"),
+      cellClassName: "w-[120px]",
+      render: (value: string) => (
+        <span className="text-sm truncate max-w-[120px] block">
+          {value.length > 12 ? value.slice(0, 12) + "..." : value}
+        </span>
+      ),
+    },
+    {
+      accessor: "source_ip",
+      header: t("table.ip"),
+      cellClassName: "w-[100px]",
+      render: (value: string | null) => (
+        <span className="text-xs text-muted-foreground font-mono">
+          {value || "-"}
+        </span>
+      ),
+    },
+    {
+      accessor: "created_at",
+      header: t("table.when"),
+      cellClassName: "w-[100px] text-right",
+      render: (value: string) => (
+        <span className="text-xs text-muted-foreground">
+          {formatTime(value)}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <Table
+        data={events.map((event) => ({
+          ...event,
+          className: "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+        }))}
+        columns={columns}
+        onRowClick={(event: AuditEvent) =>
+          setExpandedId(expandedId === event.id ? null : event.id)
+        }
+      />
+
+      {cursor && (
+        <div className="flex justify-center mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMore}
+            disabled={isPending}
+          >
+            {isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : null}
+            {t("loadMore")}
+          </Button>
+        </div>
       )}
-    </div>
+    </>
   );
 }

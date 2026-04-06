@@ -17,6 +17,7 @@ import {
   List,
   Network,
   Receipt,
+  ScrollText,
   Server,
   Shield,
   Sparkles,
@@ -34,6 +35,7 @@ type EmptyStateProps = {
     | "404"
     | "agent"
     | "apiKey"
+    | "audit"
     | "llm"
     | "mcp"
     | "payments"
@@ -76,7 +78,9 @@ export default function EmptyState({
                   ? [List, Bot, Blocks]
                   : iconsType === "triggers"
                     ? [Zap, Clock, Timer]
-                    : [Bot, Blocks, ChevronsLeftRightEllipsis]
+                    : iconsType === "audit"
+                      ? [ScrollText, Shield, Clock]
+                      : [Bot, Blocks, ChevronsLeftRightEllipsis]
     : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
   return (

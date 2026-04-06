@@ -1094,25 +1094,33 @@
     "title": "Import / Export",
     "description": "Import and export your workspace configuration",
     "export": {
+      "tabLabel": "Export",
       "title": "Export Configuration",
       "description": "Download your workspace configuration as YAML",
       "button": "Export YAML",
+      "exporting": "Exporting...",
       "success": "Workspace configuration exported successfully",
       "error": "Failed to export workspace configuration"
     },
     "import": {
+      "tabLabel": "Import",
       "title": "Import Configuration",
       "description": "Import a workspace configuration from YAML",
       "pasteLabel": "Paste YAML Configuration",
+      "pasteHint": "Paste or type your YAML configuration below",
       "pastePlaceholder": "Paste your YAML configuration here...",
-      "uploadLabel": "Or upload a YAML file",
+      "uploadLabel": "Upload YAML File",
+      "uploadHint": "Drag and drop or browse to select a file",
       "dragDrop": "Drag and drop a YAML file, or",
       "browse": "browse",
+      "options": "Import Options",
+      "optionsDescription": "Configure how the import should handle existing resources",
       "skipMissing": "Skip missing dependencies",
       "skipMissingDescription": "Continue import even if some dependencies are not found",
       "overrideExisting": "Override existing",
       "overrideExistingDescription": "Replace existing resources with imported ones",
       "button": "Import",
+      "importing": "Importing...",
       "success": "Workspace configuration imported successfully",
       "error": "Failed to import workspace configuration"
     }
@@ -1255,5 +1263,30 @@
     "type": "Type:",
     "retryable": "Retryable",
     "nonRetryable": "Non-retryable"
+  },
+
+  "AuditLogPage": {
+    "title": "Audit Log",
+    "description": "Track who did what, when, and from where across your workspace",
+    "enterpriseFeature": "Audit logging is available on Enterprise plans.",
+    "enterpriseDescription": "Track who did what, when, and from where across your workspace.",
+    "noEvents": "No audit events found.",
+    "loadMore": "Load more",
+    "filter": {
+      "all": "All resources",
+      "agent": "Agents",
+      "mcp_server": "MCP Servers",
+      "mcp_instance": "MCP Instances",
+      "task": "Tasks",
+      "trigger": "Triggers",
+      "skill": "Skills"
+    },
+    "table": {
+      "action": "Action",
+      "resource": "Resource",
+      "actor": "Actor",
+      "ip": "IP",
+      "when": "When"
+    }
   }
 }

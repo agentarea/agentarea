@@ -1,14 +1,36 @@
-import { fetchAuditLogs } from "./actions";
-import AuditLogClient from "./AuditLogClient";
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import AuditLogContent from "./AuditLogContent";
+
+export const metadata: Metadata = {
+  title: "Audit Log",
+};
 
 export default async function AuditLogPage() {
-  const { data, error } = await fetchAuditLogs({ limit: 50 });
+  const t = await getTranslations("AuditLogPage");
 
   return (
-    <AuditLogClient
-      initialEvents={data?.events ?? []}
-      initialCursor={data?.next_cursor ?? null}
-      initialError={error}
-    />
+    <ContentBlock
+      header={{
+        breadcrumb: [
+          { label: "Settings", href: "/settings" },
+          { label: t("title") },
+        ],
+        description: t("description"),
+      }}
+    >
+      <Suspense
+        fallback={
+          <div className="flex h-64 items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        }
+      >
+        <AuditLogContent />
+      </Suspense>
+    </ContentBlock>
   );
 }
