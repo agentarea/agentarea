@@ -178,6 +178,8 @@ export default function WorkspaceConfigClient() {
               size="md"
               animate={false}
               subtitleClassName="font-extralight"
+              iconWrapperClassName="bg-primary/5 dark:bg-primary/10"
+              iconColorClassName="text-primary dark:text-primary"
             />
             <Button
               onClick={handleExport}
@@ -195,7 +197,7 @@ export default function WorkspaceConfigClient() {
           <div className="grid gap-4">
             {/* Paste YAML */}
             <div className="grid gap-2">
-              <FormLabel htmlFor="yaml-paste">
+              <FormLabel htmlFor="yaml-paste" icon={FileUp}>
                 {t("import.pasteLabel")}
               </FormLabel>
               <Textarea
@@ -203,63 +205,58 @@ export default function WorkspaceConfigClient() {
                 value={yamlContent}
                 onChange={(e) => setYamlContent(e.target.value)}
                 placeholder={t("import.pastePlaceholder")}
-                className="min-h-[160px] font-mono text-xs"
+                className="min-h-[160px] font-mono text-sm"
               />
             </div>
 
             {/* File Upload Dropzone */}
-            <div className="grid gap-2">
-              <FormLabel>{t("import.uploadLabel")}</FormLabel>
-              <div
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-                  isDragging
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25 hover:border-primary/50"
-                )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <FileUp className="h-8 w-8 text-muted-foreground" />
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-semibold">
-                      {t("import.dragDrop")}
-                    </span>{" "}
-                    <label
-                      htmlFor="file-upload"
-                      className="text-primary hover:underline cursor-pointer"
-                    >
-                      {t("import.browse")}
-                    </label>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      accept=".yaml,.yml"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                  </div>
-                  {uploadedFileName && (
-                    <div className="mt-2 flex items-center gap-2 text-sm font-medium bg-secondary px-3 py-1 rounded-full">
-                      <FileUp className="h-4 w-4" />
-                      {uploadedFileName}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-4 w-4 ml-1 rounded-full hover:bg-destructive/20"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setUploadedFileName(null);
-                          setYamlContent("");
-                        }}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  )}
+            <div
+              className={cn(
+                "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/25 hover:border-primary/50"
+              )}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className="flex flex-col items-center justify-center gap-2">
+                <FileUp className="h-8 w-8 text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">
+                  <span className="font-semibold">{t("import.dragDrop")}</span>{" "}
+                  <label
+                    htmlFor="file-upload"
+                    className="text-primary hover:underline cursor-pointer"
+                  >
+                    {t("import.browse")}
+                  </label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".yaml,.yml"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
                 </div>
+                {uploadedFileName && (
+                  <div className="mt-2 flex items-center gap-2 text-sm font-medium bg-secondary px-3 py-1 rounded-full">
+                    <FileUp className="h-4 w-4" />
+                    {uploadedFileName}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 ml-1 rounded-full hover:bg-destructive/20"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setUploadedFileName(null);
+                        setYamlContent("");
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -309,17 +306,15 @@ export default function WorkspaceConfigClient() {
             </div>
 
             {/* Import Button */}
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={handleImport}
-                disabled={isImporting || !yamlContent.trim()}
-                size="sm"
-                className="gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                {isImporting ? t("import.importing") : t("import.button")}
-              </Button>
-            </div>
+            <Button
+              onClick={handleImport}
+              disabled={isImporting || !yamlContent.trim()}
+              size="sm"
+              className="gap-2 w-fit"
+            >
+              <Upload className="h-4 w-4" />
+              {isImporting ? t("import.importing") : t("import.button")}
+            </Button>
           </div>
         </TabsContent>
       </Tabs>
