@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Download, FileUp, Upload } from "lucide-react";
+import { Download, FileUp, Upload } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";

@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import { Mail, Shield } from "lucide-react";
+import { Mail } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Note from "@/components/ui/note";
 
