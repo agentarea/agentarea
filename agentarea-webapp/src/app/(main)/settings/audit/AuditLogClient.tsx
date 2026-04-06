@@ -92,16 +92,6 @@ export default function AuditLogClient({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const resourceTypes = [
-    { value: "all", label: t("filter.all") },
-    { value: "agent", label: t("filter.agent") },
-    { value: "mcp_server", label: t("filter.mcp_server") },
-    { value: "mcp_instance", label: t("filter.mcp_instance") },
-    { value: "task", label: t("filter.task") },
-    { value: "trigger", label: t("filter.trigger") },
-    { value: "skill", label: t("filter.skill") },
-  ];
-
   const applyFilter = (resourceType: string) => {
     setResourceFilter(resourceType);
     startTransition(async () => {
