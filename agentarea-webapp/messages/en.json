@@ -118,6 +118,22 @@
     "settings": "Settings",
     "logout": "Logout"
   },
+  "NavUser": {
+    "settings": "Settings",
+    "billing": "Billing",
+    "logout": "Log out"
+  },
+  "SettingsSidebar": {
+    "title": "Settings",
+    "backToApp": "Back to app",
+    "account": "Account",
+    "profile": "Profile",
+    "billing": "Billing",
+    "workspace": "Workspace",
+    "apiKeys": "API Keys",
+    "importExport": "Import / Export",
+    "auditLog": "Audit Log"
+  },
 
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -195,12 +211,15 @@
     "title": "Settings",
     "description": "Manage your settings and preferences",
     "logout": "Logout",
+    "authProviderManaged": "Auth Provider Managed",
+    "noUserData": "No user data available",
     "profile": {
       "title": "Profile",
       "description": "Update your personal information",
       "name": "Full Name",
       "email": "Email Address",
-      "save": "Save Changes"
+      "save": "Save Changes",
+      "accountInfoManaged": "Account information is managed by your authentication provider and cannot be edited here."
     },
     "preferences": {
       "title": "Preferences",
@@ -214,6 +233,81 @@
     "subscription": {
       "title": "Subscription",
       "description": "Manage your subscription and billing"
+    }
+  },
+
+  "BillingPage": {
+    "title": "Billing",
+    "description": "Manage your subscription and billing",
+    "currentPlan": {
+      "title": "Current Plan",
+      "subtitle": "Your active subscription",
+      "freePlan": "Free Plan",
+      "freePlanDescription": "1 workspace, 3 agents, 1,000 task runs / month",
+      "active": "Active"
+    },
+    "availablePlans": {
+      "title": "Available Plans",
+      "subtitle": "Choose the plan that fits your needs",
+      "recommended": "RECOMMENDED",
+      "currentPlan": "Current Plan",
+      "contactSales": "Contact Sales",
+      "upgradeTo": "Upgrade to {planName}"
+    },
+    "usage": {
+      "title": "Usage",
+      "subtitle": "Current billing period",
+      "workspaces": "Workspaces",
+      "agents": "Agents",
+      "mcpConnections": "MCP Connections",
+      "taskRuns": "Task Runs"
+    },
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "period": "forever",
+        "description": "For individuals getting started",
+        "features": {
+          "workspace": "1 workspace",
+          "agents": "Up to 3 agents",
+          "mcpConnections": "5 MCP connections",
+          "support": "Community support",
+          "taskRuns": "1,000 task runs / month"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$49",
+        "period": "per month",
+        "description": "For teams building agent organizations",
+        "features": {
+          "workspaces": "Unlimited workspaces",
+          "agents": "Unlimited agents",
+          "mcpConnections": "Unlimited MCP connections",
+          "support": "Priority support",
+          "taskRuns": "50,000 task runs / month",
+          "collaboration": "Team collaboration",
+          "analytics": "Advanced analytics",
+          "execution": "Priority execution"
+        }
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "price": "Custom",
+        "period": "",
+        "description": "For organizations with advanced needs",
+        "features": {
+          "everything": "Everything in Pro",
+          "sso": "SSO / SAML",
+          "sla": "Custom SLA",
+          "infrastructure": "Dedicated infrastructure",
+          "taskRuns": "Unlimited task runs",
+          "compliance": "Audit logs & compliance",
+          "deployment": "On-premise deployment",
+          "support": "Dedicated support engineer"
+        }
+      }
     }
   },
 
@@ -997,28 +1091,36 @@
   },
 
   "WorkspacePage": {
-    "title": "Workspace",
+    "title": "Import / Export",
     "description": "Import and export your workspace configuration",
     "export": {
+      "tabLabel": "Export",
       "title": "Export Configuration",
       "description": "Download your workspace configuration as YAML",
       "button": "Export YAML",
+      "exporting": "Exporting...",
       "success": "Workspace configuration exported successfully",
       "error": "Failed to export workspace configuration"
     },
     "import": {
+      "tabLabel": "Import",
       "title": "Import Configuration",
       "description": "Import a workspace configuration from YAML",
       "pasteLabel": "Paste YAML Configuration",
+      "pasteHint": "Paste or type your YAML configuration below",
       "pastePlaceholder": "Paste your YAML configuration here...",
-      "uploadLabel": "Or upload a YAML file",
+      "uploadLabel": "Upload YAML File",
+      "uploadHint": "Drag and drop or browse to select a file",
       "dragDrop": "Drag and drop a YAML file, or",
       "browse": "browse",
+      "options": "Import Options",
+      "optionsDescription": "Configure how the import should handle existing resources",
       "skipMissing": "Skip missing dependencies",
       "skipMissingDescription": "Continue import even if some dependencies are not found",
       "overrideExisting": "Override existing",
       "overrideExistingDescription": "Replace existing resources with imported ones",
       "button": "Import",
+      "importing": "Importing...",
       "success": "Workspace configuration imported successfully",
       "error": "Failed to import workspace configuration"
     }
@@ -1161,5 +1263,30 @@
     "type": "Type:",
     "retryable": "Retryable",
     "nonRetryable": "Non-retryable"
+  },
+
+  "AuditLogPage": {
+    "title": "Audit Log",
+    "description": "Track who did what, when, and from where across your workspace",
+    "enterpriseFeature": "Audit logging is available on Enterprise plans.",
+    "enterpriseDescription": "Track who did what, when, and from where across your workspace.",
+    "noEvents": "No audit events found.",
+    "loadMore": "Load more",
+    "filter": {
+      "all": "All resources",
+      "agent": "Agents",
+      "mcp_server": "MCP Servers",
+      "mcp_instance": "MCP Instances",
+      "task": "Tasks",
+      "trigger": "Triggers",
+      "skill": "Skills"
+    },
+    "table": {
+      "action": "Action",
+      "resource": "Resource",
+      "actor": "Actor",
+      "ip": "IP",
+      "when": "When"
+    }
   }
 }
