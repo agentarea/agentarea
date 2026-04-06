@@ -217,6 +217,30 @@ func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secret
 	return secret.SecretValue, nil
 }
 
+// ResolveInstanceEnvVars resolves secret env vars by name from Infisical.
+func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, envVarNames []string) (map[string]string, error) {
+	resolved := make(map[string]string)
+
+	for _, envName := range envVarNames {
+		secretValue, err := sr.resolveSecretFromInfisical(instanceID, envName)
+		if err != nil {
+			sr.logger.Warn("Failed to resolve env var from Infisical",
+				slog.String("instance_id", instanceID),
+				slog.String("env_var", envName),
+				slog.String("error", err.Error()))
+			continue
+		}
+		resolved[envName] = secretValue
+	}
+
+	sr.logger.Info("Resolved instance env vars from Infisical",
+		slog.String("instance_id", instanceID),
+		slog.Int("requested", len(envVarNames)),
+		slog.Int("resolved", len(resolved)))
+
+	return resolved, nil
+}
+
 // Close closes the secret resolver
 func (sr *InfisicalSecretResolver) Close() error {
 	sr.logger.Info("Closing Infisical secret resolver")

@@ -43,10 +43,46 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		resolvedSpec[key] = value
 	}
 
-	// Resolve environment variables (including secrets)
+	// Resolve secret env vars from secret store using env_vars name list
+	if envVarsInterface, exists := resolvedSpec["env_vars"]; exists {
+		if envVarsList, ok := envVarsInterface.([]interface{}); ok && len(envVarsList) > 0 {
+			envVarNames := make([]string, 0, len(envVarsList))
+			for _, v := range envVarsList {
+				if name, ok := v.(string); ok {
+					envVarNames = append(envVarNames, name)
+				}
+			}
+
+			if len(envVarNames) > 0 {
+				secretEnvVars, err := p.secretResolver.ResolveInstanceEnvVars(instance.InstanceID, envVarNames)
+				if err != nil {
+					p.logger.Error("Failed to resolve secret env vars",
+						slog.String("instance_id", instance.InstanceID),
+						slog.String("error", err.Error()))
+					return fmt.Errorf("failed to resolve secret env vars: %w", err)
+				}
+
+				// Merge resolved secrets into environment
+				envInterface, _ := resolvedSpec["environment"]
+				envMap, _ := envInterface.(map[string]interface{})
+				if envMap == nil {
+					envMap = make(map[string]interface{})
+				}
+				for key, value := range secretEnvVars {
+					envMap[key] = value
+				}
+				resolvedSpec["environment"] = envMap
+
+				p.logger.Info("Resolved secret env vars for instance",
+					slog.String("instance_id", instance.InstanceID),
+					slog.Int("count", len(secretEnvVars)))
+			}
+		}
+	}
+
+	// Also handle legacy secret_ref: prefix in environment values
 	if envInterface, exists := resolvedSpec["environment"]; exists {
 		if envMap, ok := envInterface.(map[string]interface{}); ok {
-			// Convert map[string]interface{} to map[string]string
 			stringEnvMap := make(map[string]string)
 			for key, value := range envMap {
 				stringEnvMap[key] = fmt.Sprintf("%v", value)
@@ -60,7 +96,6 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 				return fmt.Errorf("failed to resolve secrets: %w", err)
 			}
 
-			// Convert back to map[string]interface{} for json_spec
 			resolvedEnvInterface := make(map[string]interface{})
 			for key, value := range resolvedEnv {
 				resolvedEnvInterface[key] = value

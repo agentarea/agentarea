@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -9,8 +10,13 @@ import {
   Container,
   Copy,
   Link as LinkIcon,
+  Pencil,
   Play,
+  ExternalLink,
+  Github,
+  Globe,
   RefreshCw,
+  Server,
   Square,
   Trash2,
   XCircle,
@@ -19,19 +25,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Table from "@/components/Table/Table";
+import { ToolsTable } from "../components/ToolsTable";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
-  startBundleProxyAction,
-  stopBundleProxyAction,
 } from "@/lib/server-actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
   instance: MCPInstance;
   serverSpec: MCPServer | null;
+  memberNames?: Record<string, string>;
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -64,7 +70,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
+export default function MCPInstanceDetail({ instance, serverSpec, memberNames = {} }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const router = useRouter();
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
@@ -80,33 +86,30 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const canStart = instance.status !== "running" && instance.status !== "starting" && instance.status !== "connected";
   const canStop = instance.status === "running" || instance.status === "starting";
 
-  const [isBundleStarting, setIsBundleStarting] = useState(false);
-  const [isBundleStopping, setIsBundleStopping] = useState(false);
 
-  const handleStartBundle = async () => {
-    setIsBundleStarting(true);
+  // Editable config state
+  const [isEditingConfig, setIsEditingConfig] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [editHeaders, setEditHeaders] = useState<Record<string, string>>(
+    (instance.json_spec?.headers ?? {}) as Record<string, string>
+  );
+
+  const handleSaveConfig = async () => {
+    setIsSavingConfig(true);
     try {
-      const { error } = await startBundleProxyAction(instance.id);
-      if (error) throw new Error(error);
-      toast.success("Server started");
+      const { updateMCPServerInstanceAction } = await import("@/lib/server-actions");
+      await updateMCPServerInstanceAction(instance.id, {
+        json_spec: {
+          ...instance.json_spec,
+          headers: editHeaders,
+        },
+      });
+      setIsEditingConfig(false);
       router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to start server");
+    } catch {
+      // Error is visible through unchanged config on page
     } finally {
-      setIsBundleStarting(false);
-    }
-  };
-
-  const handleStopBundle = async () => {
-    setIsBundleStopping(true);
-    try {
-      const { error } = await stopBundleProxyAction(instance.id);
-      if (error) throw new Error(error);
-      toast.success("Server stopped");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to stop server");
-    } finally {
-      setIsBundleStopping(false);
+      setIsSavingConfig(false);
     }
   };
 
@@ -173,7 +176,15 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     }
   }, [instance.status, instance.name, jsonSpecType]);
 
-  const envVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
+  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
+  const secretEnvNames = (instance.json_spec?.env_vars ?? []) as string[];
+  // Merge non-secret env vars with secret env vars (masked)
+  const envVars: Record<string, string> = { ...plainEnvVars };
+  for (const name of secretEnvNames) {
+    if (!(name in envVars)) {
+      envVars[name] = "******";
+    }
+  }
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
   const tools = (instance.json_spec?.available_tools ?? []) as Array<{name: string; description: string}>;
@@ -204,12 +215,6 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     : "";
   const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
 
-  const toolsTableData = tools.map((tool) => ({
-    id: tool.name,
-    name: tool.name,
-    description: tool.description,
-  }));
-
   const envTableData = Object.entries(envVars).map(([key, value]) => ({
     id: key,
     key,
@@ -232,29 +237,66 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
                 Refresh Tools
               </Button>
-              {canStart && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!isBundleType || isBundleStarting}
-                  onClick={isBundleType ? handleStartBundle : undefined}
-                >
-                  <Play className={`mr-1.5 h-3.5 w-3.5 ${isBundleStarting ? "animate-spin" : ""}`} />
-                  {isBundleStarting ? "Starting..." : "Start"}
+              {canStart && !isUrlType && !isBundleType && (
+                <Button size="sm" variant="outline" disabled>
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Start
                 </Button>
               )}
-              {canStop && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!isBundleType || isBundleStopping}
-                  onClick={isBundleType ? handleStopBundle : undefined}
-                >
+              {canStop && !isUrlType && !isBundleType && (
+                <Button size="sm" variant="outline" disabled>
                   <Square className="mr-1.5 h-3.5 w-3.5" />
-                  {isBundleStopping ? "Stopping..." : "Stop"}
+                  Stop
                 </Button>
               )}
             </div>
+
+            {/* Spec info — repo, website, description from server spec */}
+            {serverSpec && (() => {
+              const spec = (serverSpec as any).json_spec as Record<string, any> | undefined;
+              const repoUrl = spec?.repository?.url as string | undefined;
+              const repoSource = spec?.repository?.source as string | undefined;
+              const websiteUrl = spec?.websiteUrl as string | undefined;
+              const specTitle = spec?.title || serverSpec.name;
+              const specIcon = spec?.icons?.[0]?.src as string | undefined;
+              const specDesc = serverSpec.description;
+
+              if (!repoUrl && !websiteUrl && !specDesc) return null;
+
+              return (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
+                  <div className="flex items-center gap-3">
+                    {specIcon && (
+                      <img src={specIcon} alt="" className="h-8 w-8 rounded object-contain shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm">{specTitle}</div>
+                      {specDesc && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{specDesc}</p>
+                      )}
+                    </div>
+                  </div>
+                  {(repoUrl || websiteUrl) && (
+                    <div className="flex items-center gap-3 pt-1">
+                      {repoUrl && (
+                        <a href={repoUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                          {repoSource === "github" ? <Github className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                          {repoSource === "github" ? "GitHub" : "Repository"}
+                        </a>
+                      )}
+                      {websiteUrl && (
+                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Website
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* AgentArea proxy URL - always shown so agents can connect through AgentArea */}
             <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
@@ -424,26 +466,67 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
 
               {isUrlType && (
                 <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("external.title")}
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    {endpointUrl && (
-                      <div className="rounded bg-muted/40 p-2 font-mono break-all">
-                        {endpointUrl}
-                      </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t("external.title")}
+                    </div>
+                    {!isEditingConfig && (
+                      <Button variant="ghost" size="xs" onClick={() => setIsEditingConfig(true)}>
+                        <Pencil className="h-3 w-3 mr-1" /> Edit
+                      </Button>
                     )}
-                    {Object.keys(customHeaders).length > 0 && (
-                      <div>
-                        <p className="note mb-1">{t("external.customHeaders")}</p>
-                        {Object.entries(customHeaders).map(([key]) => (
-                          <div key={key} className="font-mono text-xs">
-                            {key}: ••••••
+                  </div>
+                  {isEditingConfig ? (
+                    <div className="space-y-3">
+                      {Object.entries(editHeaders).map(([key, val]) => {
+                        const fieldMeta = (
+                          (serverSpec as any)?.json_spec?.remotes?.[0]?.headers ||
+                          (serverSpec?.env_schema as any[]) ||
+                          []
+                        ).find((h: any) => h.name === key);
+                        return (
+                          <div key={key} className="space-y-1">
+                            <label className="text-xs font-medium">{key}</label>
+                            {fieldMeta?.description && (
+                              <p className="text-xs text-muted-foreground">{fieldMeta.description}</p>
+                            )}
+                            <Input
+                              type={fieldMeta?.isSecret !== false ? "password" : "text"}
+                              value={val}
+                              placeholder={fieldMeta?.placeholder || ""}
+                              onChange={(e) => setEditHeaders((prev) => ({ ...prev, [key]: e.target.value }))}
+                            />
                           </div>
-                        ))}
+                        );
+                      })}
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveConfig} disabled={isSavingConfig}>
+                          {isSavingConfig ? "Saving..." : "Save"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setIsEditingConfig(false); setEditHeaders(customHeaders); }}>
+                          Cancel
+                        </Button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 text-sm">
+                      {endpointUrl && (
+                        <div className="rounded bg-muted/40 p-2 font-mono break-all">
+                          {endpointUrl}
+                        </div>
+                      )}
+                      {Object.keys(customHeaders).length > 0 && (
+                        <div>
+                          <p className="note mb-1">{t("external.customHeaders")}</p>
+                          {Object.entries(customHeaders).map(([key]) => (
+                            <div key={key} className="font-mono text-xs">
+                              {key}: ••••••
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -451,47 +534,25 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
             {isBundleType && bundleMembers.length > 0 && (
               <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Sources
+                  {t("bundle.members")}
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {bundleMembers.map((memberId: string) => (
-                    <div key={memberId} className="text-sm text-muted-foreground font-mono">
-                      {memberId}
-                    </div>
+                    <Link
+                      key={memberId}
+                      href={`/mcp-servers/${memberId}`}
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Server className="h-3.5 w-3.5 shrink-0" />
+                      <span>{memberNames[memberId] || memberId}</span>
+                    </Link>
                   ))}
                 </div>
               </div>
             )}
 
             {tools.length > 0 && (
-              <div className="space-y-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("tools.title", { count: tools.length })}
-                </div>
-                <Table
-                  data={toolsTableData}
-                  columns={[
-                    {
-                      header: t("tools.columns.name"),
-                      accessor: "name",
-                      render: (value: string) => (
-                        <span className="font-mono text-sm font-medium">
-                          {value}
-                        </span>
-                      ),
-                    },
-                    {
-                      header: t("tools.columns.description"),
-                      accessor: "description",
-                      render: (value: string) => (
-                        <span className="text-sm text-muted-foreground">
-                          {value || "-"}
-                        </span>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
+              <ToolsTable tools={tools} label={t("tools.title", { count: tools.length })} />
             )}
 
             {Object.keys(envVars).length > 0 && (

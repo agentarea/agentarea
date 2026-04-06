@@ -21,6 +21,11 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// SecretResolverInterface allows the manager to resolve secrets without importing the secrets package directly
+type SecretResolverInterface interface {
+	ResolveInstanceEnvVars(instanceID string, envVarNames []string) (map[string]string, error)
+}
+
 // Manager manages container lifecycle for MCP servers
 type Manager struct {
 	config          *config.Config
@@ -33,6 +38,7 @@ type Manager struct {
 	eventPublisher  *events.EventPublisher
 	healthCtx       context.Context
 	healthCancel    context.CancelFunc
+	secretResolver  SecretResolverInterface // Optional: resolves secrets from encrypted_secrets table
 }
 
 // NewManager creates a new container manager
@@ -58,6 +64,11 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	manager.validator = NewContainerValidator(logger, manager, cfg.Container.Runtime)
 
 	return manager
+}
+
+// SetSecretResolver sets the secret resolver for resolving env vars from encrypted_secrets table
+func (m *Manager) SetSecretResolver(resolver SecretResolverInterface) {
+	m.secretResolver = resolver
 }
 
 // Initialize initializes the container manager
@@ -874,8 +885,12 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 		port = 8000
 	}
 
-	// Optional entrypoint override
-	if cmdInterface, ok := jsonSpec["cmd"]; ok {
+	// Optional command override (supports both "cmd" and "command" keys)
+	cmdInterface, ok := jsonSpec["cmd"]
+	if !ok {
+		cmdInterface, ok = jsonSpec["command"]
+	}
+	if ok {
 		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
 			for _, cmdItem := range cmdSlice {
 				if cmdStr, ok := cmdItem.(string); ok {
@@ -1369,6 +1384,31 @@ func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 				slog.String("instance_id", instance.InstanceID))
 			continue
 		}
+
+		// Resolve secret env vars from encrypted_secrets table
+		if m.secretResolver != nil {
+			if envVarsRaw, ok := instance.JSONSpec["env_vars"].([]interface{}); ok && len(envVarsRaw) > 0 {
+				envVarNames := make([]string, 0, len(envVarsRaw))
+				for _, v := range envVarsRaw {
+					if name, ok := v.(string); ok {
+						envVarNames = append(envVarNames, name)
+					}
+				}
+				if len(envVarNames) > 0 {
+					secretEnvVars, err := m.secretResolver.ResolveInstanceEnvVars(instance.InstanceID, envVarNames)
+					if err != nil {
+						m.logger.Error("Failed to resolve secrets for instance",
+							slog.String("instance_id", instance.InstanceID),
+							slog.String("error", err.Error()))
+					} else {
+						for k, v := range secretEnvVars {
+							environment[k] = v
+						}
+					}
+				}
+			}
+		}
+
 		environment["MCP_INSTANCE_ID"] = instance.InstanceID
 
 		req := models.CreateContainerRequest{
