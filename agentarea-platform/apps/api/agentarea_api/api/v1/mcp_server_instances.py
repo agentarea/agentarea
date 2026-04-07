@@ -57,10 +57,7 @@ class MCPServerInstanceResponse(BaseModel):
             # Inject masked values for secret keys into environment
             env = json_spec.get("environment")
             if isinstance(env, dict):
-                masked_env = {
-                    k: (masked_value if k in secret_names else v)
-                    for k, v in env.items()
-                }
+                masked_env = {k: (masked_value if k in secret_names else v) for k, v in env.items()}
                 # Add missing secret keys (stripped during creation)
                 for name in secret_names:
                     if name not in masked_env:
@@ -70,8 +67,7 @@ class MCPServerInstanceResponse(BaseModel):
             headers = json_spec.get("headers")
             if isinstance(headers, dict):
                 masked_headers = {
-                    k: (masked_value if k in secret_names else v)
-                    for k, v in headers.items()
+                    k: (masked_value if k in secret_names else v) for k, v in headers.items()
                 }
                 for name in secret_names:
                     if name not in masked_headers:
@@ -123,7 +119,9 @@ async def create_mcp_server_instance(
 
 class ValidateConnectionRequest(BaseModel):
     url: str = Field(..., description="MCP server endpoint URL to test")
-    headers: dict[str, str] = Field(default_factory=dict, description="HTTP headers to send (e.g. Authorization)")
+    headers: dict[str, str] = Field(
+        default_factory=dict, description="HTTP headers to send (e.g. Authorization)"
+    )
 
 
 @router.post("/validate-connection")
@@ -657,4 +655,3 @@ async def list_oauth_links(
         status_code=501,
         detail="Use the /v1/mcp-oauth-links endpoint to list OAuth links",
     )
-

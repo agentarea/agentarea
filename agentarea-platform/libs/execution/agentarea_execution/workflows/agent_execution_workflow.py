@@ -2434,7 +2434,9 @@ class AgentExecutionWorkflow:
                     else None,
                     error_message=self.state.blocked_reason if final_status == "blocked" else None,
                     workspace_id=self.state.workspace_id,
-                    total_cost=serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
+                    total_cost=serialize_money(self.budget_tracker.cost)
+                    if self.budget_tracker
+                    else "0",
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,

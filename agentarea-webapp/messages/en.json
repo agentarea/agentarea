@@ -118,7 +118,6 @@
     "settings": "Settings",
     "logout": "Logout"
   },
-
   "LlmBrowsePage": {
     "title": "LLM Models",
     "addNewLlm": "Add New LLM",
@@ -151,7 +150,6 @@
       "selectContextSize": "Select context size"
     }
   },
-
   "ProvidersPage": {
     "title": "Providers",
     "description": "Manage AI provider specifications and their available models",
@@ -170,7 +168,6 @@
       "custom": "Custom"
     }
   },
-
   "ProviderConfigsPage": {
     "title": "Provider Configurations",
     "noConfigs": "No provider configurations",
@@ -183,14 +180,12 @@
       "error": "Failed to create provider configuration"
     }
   },
-
   "ModelSpecsPage": {
     "title": "Model Specifications",
     "noSpecs": "No model specifications",
     "addSpec": "Add Model Spec",
     "emptyDescription": "Add a new model specification to define available AI models"
   },
-
   "SettingsPage": {
     "title": "Settings",
     "description": "Manage your settings and preferences",
@@ -216,7 +211,6 @@
       "description": "Manage your subscription and billing"
     }
   },
-
   "AgentsPage": {
     "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
@@ -324,7 +318,6 @@
       "createConfiguration": "Create Configuration"
     }
   },
-
   "MCPServersPage": {
     "title": "Connections",
     "description": "Connect MCP servers and OpenAPI services that provide tools and capabilities to your agents",
@@ -398,7 +391,8 @@
       },
       "status": {
         "stopped": "Stopped",
-        "unknown": "Unknown"
+        "unknown": "Unknown",
+        "connected": "Connected"
       },
       "fields": {
         "name": "Name",
@@ -415,6 +409,7 @@
         "loading": "Loading connection details...",
         "externalEndpoint": "External Endpoint",
         "mcpEndpoint": "MCP Endpoint",
+        "mcpEndpointNote": "Share this URL with clients to connect",
         "sseEndpoint": "SSE Endpoint (for MCP clients)",
         "note": "Use these URLs to connect your MCP client to this server instance.",
         "noteExternal": "This MCP server is hosted externally at the URL above.",
@@ -442,10 +437,14 @@
       },
       "tools": {
         "title": "Available Tools ({count})",
+        "count": "{count} tools",
         "columns": {
           "name": "Name",
           "description": "Description"
         }
+      },
+      "bundle": {
+        "members": "Sources"
       },
       "env": {
         "title": "Environment Variables",
@@ -490,7 +489,8 @@
       "running": "Running",
       "error": "Error",
       "starting": "Starting",
-      "setup": "Setup"
+      "setup": "Setup",
+      "connected": "Connected"
     },
     "tools": {
       "title": "Tools",
@@ -513,7 +513,6 @@
       }
     }
   },
-
   "Models": {
     "title": "Provider Management",
     "description": "Manage AI provider configurations and discover available providers",
@@ -547,7 +546,6 @@
       "unexpectedErrorWhileDeleting": "An unexpected error occurred while deleting the configuration"
     }
   },
-
   "ProviderConfigForm": {
     "title": "Provider Configuration",
     "description": "Configure your provider",
@@ -602,7 +600,6 @@
       "unexpectedError": "An unexpected error occurred"
     }
   },
-
   "Chat": {
     "writeNewTaskFor": "Write new task for {agentName}...",
     "Messages": {
@@ -614,7 +611,6 @@
       "result": "Result"
     }
   },
-
   "TasksPage": {
     "title": "Tasks",
     "description": "Description",
@@ -651,7 +647,6 @@
       "metrics": "Metrics"
     }
   },
-
   "SkillsPage": {
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
@@ -813,7 +808,6 @@
       }
     }
   },
-
   "APIKeysPage": {
     "title": "API Keys",
     "description": "Manage API keys for programmatic access to your workspace",
@@ -866,7 +860,6 @@
       "revoked": "API key revoked successfully"
     }
   },
-
   "TriggersPage": {
     "title": "Automation",
     "description": "Configure triggers to automate agent task execution",
@@ -963,14 +956,12 @@
       "disabled": "Trigger disabled successfully"
     }
   },
-
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
     "dataFlow": "Data Flow",
     "organization": "Organization"
   },
-
   "WorkspacePage": {
     "title": "Workspace",
     "description": "Import and export your workspace configuration",
@@ -998,7 +989,6 @@
       "error": "Failed to import workspace configuration"
     }
   },
-
   "SkillsSection": {
     "title": "Skills",
     "addSkill": "Add Skill",
@@ -1009,7 +999,6 @@
     "noSkillsFound": "No skills found",
     "noSkillsAssigned": "No skills assigned. Add skills to enhance this agent's capabilities."
   },
-
   "TriggerControl": {
     "error": "Something went wrong with the trigger",
     "enabled": "enabled",
@@ -1017,7 +1006,6 @@
     "availableMethods": "Available Methods:",
     "availableTools": "Available Tools:"
   },
-
   "OpenAPIForm": {
     "openApiSpec": "OpenAPI Spec",
     "url": "URL",
@@ -1045,7 +1033,6 @@
     "invalidJsonHint": "Invalid JSON. Please check the spec content.",
     "failedToCreate": "Failed to create connection"
   },
-
   "TaskDetailsCard": {
     "title": "Task Details",
     "description": "Core information",
@@ -1057,11 +1044,9 @@
     "duration": "Duration",
     "executionId": "Execution ID"
   },
-
   "TaskErrorCard": {
     "error": "Error"
   },
-
   "TaskResultsCard": {
     "title": "Task Results",
     "description": "Output data",
@@ -1072,7 +1057,6 @@
     "noResultsProduced": "No results produced",
     "sessionId": "Session ID"
   },
-
   "TasksFilters": {
     "searchPlaceholder": "Search tasks by description, agent name, or task ID...",
     "filterByStatus": "Filter by status",
@@ -1080,7 +1064,6 @@
     "clearFilters": "Clear Filters",
     "activeFilters": "Active filters:"
   },
-
   "TaskDetailPage": {
     "taskNotFound": "Task Not Found",
     "taskNotFoundDescription": "The requested task could not be found.",
@@ -1102,21 +1085,18 @@
     "errorWhileCancelling": "An error occurred while cancelling the task",
     "unexpectedError": "An unexpected error occurred"
   },
-
   "WorkplacePage": {
     "workplace": "Workplace",
     "failedToLoadAgents": "Failed to load agents",
     "noAgentsAvailable": "No agents available.",
     "createFirstAgent": "Create your first agent to get started."
   },
-
   "BuiltinToolIconGrid": {
     "title": "Built-in Tools",
     "loading": "Loading tools...",
     "hint": "Tap to enable tools for your agent",
     "toolsEnabled": "{count, plural, =1 {# tool enabled} other {# tools enabled}}"
   },
-
   "ApprovalRequestMessage": {
     "approvalRequired": "Approval Required:",
     "approved": "Approved",
@@ -1130,7 +1110,6 @@
     "sendingDecision": "Sending decision...",
     "reason": "Reason:"
   },
-
   "ErrorMessage": {
     "error": "Error",
     "type": "Type:",

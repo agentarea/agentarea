@@ -107,29 +107,13 @@ func (v *ContainerValidator) imageExistsLocally(ctx context.Context, imageName s
 	return err == nil, nil
 }
 
-// canPullImage checks if an image can be pulled from a registry
+// canPullImage checks if an image can be pulled from a registry.
+// Attempts an actual pull to verify — "search" only works with Docker Hub,
+// "manifest inspect" fails on OCI manifests. A real pull is the only reliable check.
 func (v *ContainerValidator) canPullImage(ctx context.Context, imageName string) (bool, error) {
-	// Use runtime search to check if image is available in registries
-	cmd := exec.CommandContext(ctx, v.runtime, "search", "--limit", "1", imageName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, nil // If search fails, assume image cannot be pulled
-	}
-
-	// Check if the output contains results
-	outputStr := string(output)
-	lines := strings.Split(outputStr, "\n")
-
-	// Skip header line and check if there are any results
-	for i, line := range lines {
-		if i == 0 || strings.TrimSpace(line) == "" {
-			continue
-		}
-		// If we have at least one result line, image can be pulled
-		return true, nil
-	}
-
-	return false, nil
+	cmd := exec.CommandContext(ctx, v.runtime, "pull", "--quiet", imageName)
+	_, err := cmd.CombinedOutput()
+	return err == nil, nil
 }
 
 // getImageSize gets the size of a local image

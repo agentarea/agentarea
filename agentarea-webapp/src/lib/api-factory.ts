@@ -1155,27 +1155,19 @@ export function createApiClient(client: Client) {
 
     discoverOpenAPITools: async (connectionId: string) => {
       const { data, error } = await client.POST(
-        `/v1/openapi-connections/${connectionId}/discover` as any,
-        {}
-      );
-      return { data, error };
-    },
-
-    testOpenAPIConnection: async (connectionId: string) => {
-      const { data, error } = await client.POST(
-        `/v1/openapi-connections/${connectionId}/test` as any,
-        {}
+        "/v1/openapi-connections/{connection_id}/discover-tools",
+        { params: { path: { connection_id: connectionId } } }
       );
       return { data, error };
     },
 
     previewOpenAPISpec: async (body: {
       spec_url?: string;
-      spec_json?: string;
+      spec_content?: Record<string, unknown>;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/openapi-connections/preview" as any,
-        { body }
+        "/v1/openapi-connections/preview-spec",
+        { body: body as any }
       );
       return { data, error };
     },

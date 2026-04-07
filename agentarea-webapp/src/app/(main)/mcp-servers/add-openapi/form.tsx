@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createOpenAPIConnectionAction as createOpenAPIConnection,
-  discoverOpenAPIToolsAction as discoverOpenAPITools,
   previewOpenAPISpecAction as previewOpenAPISpec,
 } from "@/lib/server-actions";
 
@@ -243,7 +242,7 @@ export function AddOpenAPIForm() {
     const nonEmptyHeaders = headers.filter((h) => h.name.trim());
 
     try {
-      const { data, error: createError } = await createOpenAPIConnection({
+      const { error: createError } = await createOpenAPIConnection({
         name,
         base_url: baseUrl,
         description: description || undefined,
@@ -258,20 +257,13 @@ export function AddOpenAPIForm() {
         return;
       }
 
-      const hasSpec =
-        (specMode === "url" && specUrl) || (specMode === "json" && specContent);
-      if (hasSpec && data?.id) {
-        try {
-          await discoverOpenAPITools(data.id);
-        } catch {
-          // Non-fatal
-        }
-      }
-
       router.push("/mcp-servers");
       router.refresh();
     } catch (err) {
-      setError(t("failedToCreate"));
+      console.error("Failed to create OpenAPI connection", err);
+      setError(
+        err instanceof Error ? err.message : t("failedToCreate")
+      );
     } finally {
       setLoading(false);
     }

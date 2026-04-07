@@ -243,11 +243,7 @@ class MCPServerInstanceService:
 
     def _get_secret_env_names(self, env_schema: list[dict[str, Any]]) -> set[str]:
         """Get names of env vars marked as secret in the schema."""
-        return {
-            e["name"]
-            for e in env_schema
-            if isinstance(e, dict) and e.get("isSecret")
-        }
+        return {e["name"] for e in env_schema if isinstance(e, dict) and e.get("isSecret")}
 
     async def _extract_secrets_from_spec(
         self,
@@ -349,9 +345,7 @@ class MCPServerInstanceService:
         # Store extracted secrets in secret manager (never in DB)
         if secret_env_vars:
             try:
-                await self.env_service.set_instance_environment(
-                    instance.id, secret_env_vars
-                )
+                await self.env_service.set_instance_environment(instance.id, secret_env_vars)
                 logger.info(
                     "Stored %d secret env vars for instance %s",
                     len(secret_env_vars),
@@ -619,9 +613,9 @@ class MCPServerInstanceService:
         if instance_type != "url":
             return {"status": "error", "message": "Probe is only supported for URL-type instances"}
 
-        mcp_url = (instance.json_spec or {}).get("endpoint_url") or (
-            instance.json_spec or {}
-        ).get("url", "")
+        mcp_url = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get(
+            "url", ""
+        )
         if not mcp_url:
             return {"status": "error", "message": "No endpoint URL configured"}
 
@@ -638,7 +632,9 @@ class MCPServerInstanceService:
                     www_auth = resp.headers.get("www-authenticate", "")
 
                     # Check for OAuth metadata in WWW-Authenticate header
-                    has_oauth = "resource_metadata" in www_auth.lower() or "bearer" in www_auth.lower()
+                    has_oauth = (
+                        "resource_metadata" in www_auth.lower() or "bearer" in www_auth.lower()
+                    )
 
                     if has_oauth:
                         # Try to discover OAuth metadata
@@ -652,7 +648,10 @@ class MCPServerInstanceService:
                             }
                         except Exception:
                             # OAuth discovery failed, fall back to credentials only
-                            logger.debug("OAuth discovery failed for %s, falling back to credentials", mcp_url)
+                            logger.debug(
+                                "OAuth discovery failed for %s, falling back to credentials",
+                                mcp_url,
+                            )
 
                     # No OAuth metadata or discovery failed — needs credentials
                     # Get hints from the server spec's env_schema if available
@@ -660,18 +659,23 @@ class MCPServerInstanceService:
                     if instance.server_spec_id:
                         try:
                             from agentarea_mcp.infrastructure.repository import MCPServerRepository
+
                             server_repo = MCPServerRepository(
                                 self.repository.session, self.repository.user_context
                             )
                             spec = await server_repo.get_by_id(instance.server_spec_id)
                             if spec and spec.env_schema:
                                 for env_var in spec.env_schema:
-                                    if isinstance(env_var, dict) and env_var.get("name", "").upper() in ("AUTHORIZATION", "API_KEY", "TOKEN"):
-                                        hints.append({
-                                            "name": env_var.get("name", ""),
-                                            "description": env_var.get("description", ""),
-                                            "required": env_var.get("required", True),
-                                        })
+                                    if isinstance(env_var, dict) and env_var.get(
+                                        "name", ""
+                                    ).upper() in ("AUTHORIZATION", "API_KEY", "TOKEN"):
+                                        hints.append(
+                                            {
+                                                "name": env_var.get("name", ""),
+                                                "description": env_var.get("description", ""),
+                                                "required": env_var.get("required", True),
+                                            }
+                                        )
                         except Exception:
                             logger.debug("Failed to load spec env_schema for hints", exc_info=True)
 
@@ -730,6 +734,7 @@ class MCPServerInstanceService:
             # Docker or command-type — connect directly to container by name
             # Must match Go manager's generateSlug: lowercase, replace non-alnum with '-', trim
             import re
+
             slug = re.sub(r"[^a-z0-9]+", "-", instance.name.lower()).strip("-")
             container_name = f"mcp-{slug}"
             container_port = (instance.json_spec or {}).get("port", 8080)
@@ -893,7 +898,9 @@ class MCPServerInstanceService:
                 try:
                     await self.discover_and_store_tools(member.id)
                     member = await self.repository.get_by_id(mid)
-                    member_tools = (member.json_spec or {}).get("available_tools", []) if member else []
+                    member_tools = (
+                        (member.json_spec or {}).get("available_tools", []) if member else []
+                    )
                 except Exception as e:
                     logger.warning("Failed to discover tools for bundle member %s: %s", mid, e)
                     continue
@@ -902,13 +909,15 @@ class MCPServerInstanceService:
             namespace = member.name.lower().replace(" ", "_").replace("-", "_")
 
             for tool in member_tools:
-                all_tools.append({
-                    "name": f"{namespace}{ns_sep}{tool['name']}",
-                    "description": f"[{member.name}] {tool.get('description', '')}",
-                    "inputSchema": tool.get("inputSchema", {}),
-                    "member_instance_id": str(member.id),
-                    "original_tool_name": tool["name"],
-                })
+                all_tools.append(
+                    {
+                        "name": f"{namespace}{ns_sep}{tool['name']}",
+                        "description": f"[{member.name}] {tool.get('description', '')}",
+                        "inputSchema": tool.get("inputSchema", {}),
+                        "member_instance_id": str(member.id),
+                        "original_tool_name": tool["name"],
+                    }
+                )
 
         # Store aggregated tools
         new_json_spec = dict(json_spec)
@@ -918,9 +927,7 @@ class MCPServerInstanceService:
             [{"name": t["name"], "description": t["description"]} for t in all_tools],
             key=lambda x: x["name"],
         )
-        tools_hash = hashlib.sha256(
-            _json.dumps(sorted_sigs, sort_keys=True).encode()
-        ).hexdigest()
+        tools_hash = hashlib.sha256(_json.dumps(sorted_sigs, sort_keys=True).encode()).hexdigest()
 
         new_json_spec["tools_hash"] = tools_hash
         new_json_spec["tools_updated_at"] = _dt.now(UTC).isoformat()
@@ -934,11 +941,17 @@ class MCPServerInstanceService:
         await db_session.execute(stmt)
         await db_session.commit()
 
-        logger.info("Discovered %d tools across %d members for bundle %s",
-                     len(all_tools), len(member_ids), instance.id)
+        logger.info(
+            "Discovered %d tools across %d members for bundle %s",
+            len(all_tools),
+            len(member_ids),
+            instance.id,
+        )
         return True
 
-    async def validate_connection(self, url: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
+    async def validate_connection(
+        self, url: str, headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Test a connection to an MCP server without creating an instance.
 
         Returns:
@@ -950,10 +963,7 @@ class MCPServerInstanceService:
 
         try:
             result = await self._list_tools_via_mcp(url, headers or {})
-            tools = [
-                {"name": t.name, "description": t.description or ""}
-                for t in result.tools
-            ]
+            tools = [{"name": t.name, "description": t.description or ""} for t in result.tools]
             return {
                 "status": "ok",
                 "tool_count": len(tools),
@@ -969,9 +979,15 @@ class MCPServerInstanceService:
             combined = " ".join(all_msgs)
 
             if "401" in combined:
-                return {"status": "auth_error", "message": "Authentication failed — check your credentials"}
+                return {
+                    "status": "auth_error",
+                    "message": "Authentication failed — check your credentials",
+                }
             if "403" in combined:
-                return {"status": "auth_error", "message": "Access denied — insufficient permissions"}
+                return {
+                    "status": "auth_error",
+                    "message": "Access denied — insufficient permissions",
+                }
             logger.warning("validate_connection failed for %s: %s", url, e, exc_info=True)
             return {
                 "status": "error",

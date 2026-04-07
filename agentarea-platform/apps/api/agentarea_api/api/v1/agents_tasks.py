@@ -833,9 +833,13 @@ async def send_task_command(
     try:
         if payload.command == "change_model":
             if not payload.model_instance_id:
-                raise HTTPException(status_code=400, detail="model_instance_id is required for change_model")
+                raise HTTPException(
+                    status_code=400, detail="model_instance_id is required for change_model"
+                )
             resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
-            await workflow_task_service.send_workflow_command(execution_id, "change_model", resolved)
+            await workflow_task_service.send_workflow_command(
+                execution_id, "change_model", resolved
+            )
 
         elif payload.command == "queue_message":
             if not payload.message:
@@ -846,7 +850,9 @@ async def send_task_command(
 
         elif payload.command == "remove_message":
             if not payload.message_id:
-                raise HTTPException(status_code=400, detail="message_id is required for remove_message")
+                raise HTTPException(
+                    status_code=400, detail="message_id is required for remove_message"
+                )
             await workflow_task_service.send_workflow_command(
                 execution_id, "remove_message", {"message_id": payload.message_id}
             )
@@ -864,7 +870,9 @@ async def send_task_command(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

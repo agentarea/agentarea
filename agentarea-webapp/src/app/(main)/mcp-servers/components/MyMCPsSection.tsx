@@ -78,8 +78,24 @@ export function MyMCPsSection({
     return healthCheck;
   };
 
+  const STATUS_TO_HEALTH: Record<string, HealthStatus> = {
+    connected: "connected",
+    running: "healthy",
+    failed: "unhealthy",
+    stopped: "unknown",
+    pending: "starting",
+    starting: "starting",
+  };
+
   // Get health status for instance
   const getHealthStatus = (instance: MCPInstance): HealthStatus => {
+    const instanceType = (instance.json_spec?.type as string) || "docker";
+
+    // URL-type and bundle have no container health checks — map instance status directly
+    if (instanceType === "url" || instanceType === "bundle") {
+      return STATUS_TO_HEALTH[instance.status] ?? "unknown";
+    }
+
     const healthCheck = getHealthCheck(instance.name);
 
     if (healthLoading) return "unknown";
@@ -156,10 +172,20 @@ export function MyMCPsSection({
       ),
     },
     {
+      accessor: "tools",
+      header: "Tools",
+      render: (_: unknown, item: any) => {
+        const inst = item._instance || item;
+        const count = (inst.json_spec?.available_tools as any[])?.length ?? 0;
+        return count > 0 ? <span className="text-sm text-muted-foreground">{count}</span> : <span className="text-sm text-gray-400">-</span>;
+      },
+    },
+    {
       accessor: "status",
       header: t("table.status"),
-      render: (_: string, item: MCPInstance) => {
-        const healthStatus = getHealthStatus(item);
+      render: (_: string, item: any) => {
+        const inst = item._instance || item;
+        const healthStatus = getHealthStatus(inst);
         return getStatusBadge(healthStatus);
       },
     },

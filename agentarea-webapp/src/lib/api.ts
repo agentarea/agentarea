@@ -47,7 +47,6 @@ export const {
   deleteOpenAPIConnection,
   getOpenAPIConnection,
   discoverOpenAPITools,
-  testOpenAPIConnection,
   previewOpenAPISpec,
 
   // MCP Server Instance API

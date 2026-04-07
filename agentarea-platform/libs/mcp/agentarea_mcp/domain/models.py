@@ -27,6 +27,10 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     remote_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     # Provenance: links back to the registry catalog item this spec was installed from
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
+    # Raw ServerJSON spec from MCP registry — source of truth for icons, headers, variables, etc.
+    json_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
+    # Source registry URL (e.g. https://registry.modelcontextprotocol.io)
+    registry_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
     def __init__(
         self,
@@ -41,6 +45,8 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         cmd: list[str] | None = None,
         remote_url: str | None = None,
         registry_item_id: str | None = None,
+        json_spec: dict[str, Any] | None = None,
+        registry_url: str | None = None,
         # Note: user_id and workspace_id are now handled by BaseModel
         **kwargs,
     ):
@@ -56,3 +62,5 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self.cmd = cmd
         self.remote_url = remote_url
         self.registry_item_id = registry_item_id
+        self.json_spec = json_spec
+        self.registry_url = registry_url

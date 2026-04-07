@@ -55,17 +55,8 @@ import {
   getOpenAPIConnection,
   deleteOpenAPIConnection,
   discoverOpenAPITools,
-  testOpenAPIConnection,
   createOpenAPIConnection,
   previewOpenAPISpec,
-  listCompoundMCPs,
-  getCompoundMCP,
-  createCompoundMCP,
-  updateCompoundMCP,
-  deleteCompoundMCP,
-  listCompoundMCPMembers,
-  addCompoundMCPMember,
-  removeCompoundMCPMember,
   listMCPServerInstances,
   listProjects,
   getProject,
@@ -410,60 +401,18 @@ export async function discoverOpenAPIToolsAction(connectionId: string) {
   return await discoverOpenAPITools(connectionId);
 }
 
-export async function testOpenAPIConnectionAction(connectionId: string) {
-  return await testOpenAPIConnection(connectionId);
-}
-
 export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
   return await createOpenAPIConnection(body);
-}
-
-// Compound MCP Actions
-export async function listCompoundMCPsAction() {
-  return await listCompoundMCPs();
-}
-
-export async function getCompoundMCPAction(compoundId: string) {
-  return await getCompoundMCP(compoundId);
-}
-
-export async function createCompoundMCPAction(body: Parameters<typeof createCompoundMCP>[0]) {
-  return await createCompoundMCP(body);
-}
-
-export async function updateCompoundMCPAction(compoundId: string, body: Parameters<typeof updateCompoundMCP>[1]) {
-  return await updateCompoundMCP(compoundId, body);
-}
-
-export async function deleteCompoundMCPAction(compoundId: string) {
-  return await deleteCompoundMCP(compoundId);
-}
-
-export async function listCompoundMCPMembersAction(compoundId: string) {
-  return await listCompoundMCPMembers(compoundId);
-}
-
-export async function addCompoundMCPMemberAction(compoundId: string, body: Parameters<typeof addCompoundMCPMember>[1]) {
-  return await addCompoundMCPMember(compoundId, body);
-}
-
-export async function removeCompoundMCPMemberAction(compoundId: string, instanceId: string) {
-  return await removeCompoundMCPMember(compoundId, instanceId);
 }
 
 export async function listMCPServerInstancesAction() {
   return await listMCPServerInstances();
 }
 
-export async function startBundleProxyAction(instanceId: string) {
-  if (!isUUID(instanceId)) {
-    return { data: null, error: "Invalid instance ID" };
-  }
+export async function probeInstanceAuthAction(instanceId: string) {
   const token = await getAuthToken();
-  const base = new URL(env.API_URL);
-  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/start-bundle`;
   const res = await fetch(
-    base.href,
+    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/probe`,
     {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -476,18 +425,33 @@ export async function startBundleProxyAction(instanceId: string) {
   return { data: await res.json(), error: null };
 }
 
-export async function stopBundleProxyAction(instanceId: string) {
-  if (!isUUID(instanceId)) {
-    return { data: null, error: "Invalid instance ID" };
-  }
+export async function oauthAuthorizeAction(instanceId: string) {
   const token = await getAuthToken();
-  const base = new URL(env.API_URL);
-  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/stop-bundle`;
   const res = await fetch(
-    base.href,
+    `${env.API_URL}/v1/mcp-oauth/authorize?instance_id=${instanceId}`,
+    {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return { data: null, error: text };
+  }
+  return { data: await res.json(), error: null };
+}
+
+export async function validateConnectionAction(url: string, headers: Record<string, string>) {
+  const token = await getAuthToken();
+  const res = await fetch(
+    `${env.API_URL}/v1/mcp-server-instances/validate-connection`,
     {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ url, headers }),
     }
   );
   if (!res.ok) {

@@ -151,6 +151,14 @@ class RegistryService:
 
                     await self.item_repo.session.commit()
                     await self.item_repo.session.refresh(existing)
+
+                    # Backfill json_spec on linked entity if missing
+                    if existing.installed_entity_id:
+                        raw_spec = (existing.spec or {}).get("raw_spec")
+                        if raw_spec:
+                            await self._backfill_entity(
+                                registry.registry_type, existing, registry_url=registry.source_url
+                            )
                 else:
                     item = await self.item_repo.create(
                         registry_id=registry_id,
@@ -161,7 +169,9 @@ class RegistryService:
                         spec=item_data.get("spec", {}),
                         tags=item_data.get("tags", []),
                     )
-                    entity_id = await self._create_entity(registry.registry_type, item)
+                    entity_id = await self._create_entity(
+                        registry.registry_type, item, registry_url=registry.source_url
+                    )
                     await self.item_repo.update(
                         item.id,
                         installed_entity_id=entity_id,
@@ -205,7 +215,9 @@ class RegistryService:
         if not registry:
             raise ValueError(f"Registry {item.registry_id} not found")
 
-        entity = await self._update_entity(registry.registry_type, item)
+        entity = await self._update_entity(
+            registry.registry_type, item, registry_url=registry.source_url
+        )
         await self.item_repo.update(
             item_id,
             update_available=False,
@@ -231,27 +243,32 @@ class RegistryService:
 
     # ── Entity dispatchers ──
 
-    async def _create_entity(self, registry_type: str, item: RegistryItem) -> str:
+    async def _create_entity(
+        self, registry_type: str, item: RegistryItem, registry_url: str | None = None
+    ) -> str:
         if registry_type == "mcp_servers":
-            return await self._create_mcp_server(item)
+            return await self._create_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._create_skill(item)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
-    async def _update_entity(self, registry_type: str, item: RegistryItem) -> Any:
+    async def _update_entity(
+        self, registry_type: str, item: RegistryItem, registry_url: str | None = None
+    ) -> Any:
         if registry_type == "mcp_servers":
-            return await self._update_mcp_server(item)
+            return await self._update_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._update_skill(item)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     # ── MCP Server handlers ──
 
-    async def _create_mcp_server(self, item: RegistryItem) -> str:
+    async def _create_mcp_server(self, item: RegistryItem, registry_url: str | None = None) -> str:
         spec = item.spec or {}
         conn_type = spec.get("connection_type", "url")
         docker_image_url, cmd = self._map_mcp_connection(conn_type, spec)
         remote_url = spec.get("url") if conn_type == "url" else None
+        raw_spec = spec.get("raw_spec")
         tags = ["registry", conn_type]
         if spec.get("transport"):
             tags.append(spec["transport"])
@@ -267,13 +284,17 @@ class RegistryService:
             cmd=cmd,
             remote_url=remote_url,
             registry_item_id=item.id,
+            json_spec=raw_spec,
+            registry_url=registry_url,
         )
         return str(server.id)
 
-    async def _update_mcp_server(self, item: RegistryItem) -> Any:
+    async def _update_mcp_server(self, item: RegistryItem, registry_url: str | None = None) -> Any:
         spec = item.spec or {}
         conn_type = spec.get("connection_type", "url")
         docker_image_url, cmd = self._map_mcp_connection(conn_type, spec)
+        remote_url = spec.get("url") if conn_type == "url" else None
+        raw_spec = spec.get("raw_spec")
         tags = ["registry", conn_type]
         if spec.get("transport"):
             tags.append(spec["transport"])
@@ -286,7 +307,33 @@ class RegistryService:
             tags=tags,
             env_schema=spec.get("env_schema", []),
             cmd=cmd,
+            remote_url=remote_url,
+            json_spec=raw_spec,
+            registry_url=registry_url,
         )
+
+    async def _backfill_entity(
+        self, registry_type: str, item: RegistryItem, registry_url: str | None = None
+    ):
+        """Update entity with json_spec/remote_url if missing."""
+        if registry_type != "mcp_servers":
+            return
+        spec = item.spec or {}
+        raw_spec = spec.get("raw_spec")
+        if not raw_spec or not item.installed_entity_id:
+            return
+        conn_type = spec.get("connection_type", "url")
+        remote_url = spec.get("url") if conn_type == "url" else None
+        try:
+            await self.server_repo.update(
+                item.installed_entity_id,
+                json_spec=raw_spec,
+                remote_url=remote_url,
+                registry_url=registry_url,
+                env_schema=spec.get("env_schema", []),
+            )
+        except Exception:
+            logger.debug("Backfill failed for %s", item.installed_entity_id, exc_info=True)
 
     @staticmethod
     def _map_mcp_connection(conn_type: str, spec: dict) -> tuple[str, list[str] | None]:
@@ -412,27 +459,16 @@ class RegistryService:
                 if not url:
                     continue
 
-                raw_headers = remote.get("headers", {})
+                # Store headers as-is (raw KeyValueInput format from registry)
+                raw_headers = remote.get("headers", [])
+                env_schema: list[dict[str, Any]] = []
                 if isinstance(raw_headers, list):
-                    headers = {}
-                    for h in raw_headers:
-                        if isinstance(h, dict):
-                            headers.update(h)
-                else:
-                    headers = raw_headers or {}
+                    env_schema = [h for h in raw_headers if isinstance(h, dict)]
 
-                requires_auth = bool(headers.get("Authorization"))
-                env_schema = []
-                if requires_auth:
-                    auth_info = headers["Authorization"]
-                    if isinstance(auth_info, dict):
-                        env_schema.append(
-                            {
-                                "name": "AUTHORIZATION",
-                                "description": auth_info.get("description", "Authorization header"),
-                                "required": auth_info.get("isRequired", True),
-                            }
-                        )
+                requires_auth = any(
+                    h.get("name", "").lower() in ("authorization", "api_key", "x-api-key", "token")
+                    for h in env_schema
+                )
 
                 tags = [transport]
                 if requires_auth:
@@ -449,6 +485,7 @@ class RegistryService:
                             "url": url,
                             "transport": transport,
                             "env_schema": env_schema,
+                            "raw_spec": server,
                         },
                         "tags": tags,
                     }
@@ -463,13 +500,9 @@ class RegistryService:
                 if not image:
                     continue
 
+                # Store raw KeyValueInput as-is from registry
                 env_schema = [
-                    {
-                        "name": ev.get("name", ""),
-                        "description": ev.get("description", ""),
-                        "required": ev.get("isRequired", False),
-                    }
-                    for ev in pkg.get("environmentVariables", [])
+                    ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
                 ]
 
                 items.append(
@@ -483,6 +516,7 @@ class RegistryService:
                             "image": f"{image}:{pkg_version}" if ":" not in image else image,
                             "transport": "stdio",
                             "env_schema": env_schema,
+                            "raw_spec": server,
                         },
                         "tags": ["docker", "oci"],
                     }
@@ -515,13 +549,9 @@ class RegistryService:
                     command = "uvx"
                     args = [pkg_name]
 
+                # Store raw KeyValueInput as-is from registry
                 env_schema = [
-                    {
-                        "name": ev.get("name", ""),
-                        "description": ev.get("description", ""),
-                        "required": ev.get("isRequired", False),
-                    }
-                    for ev in pkg.get("environmentVariables", [])
+                    ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
                 ]
 
                 items.append(
@@ -538,6 +568,7 @@ class RegistryService:
                             "package_registry": reg_type,
                             "package_name": pkg_name,
                             "env_schema": env_schema,
+                            "raw_spec": server,
                         },
                         "tags": ["command", reg_type],
                     }

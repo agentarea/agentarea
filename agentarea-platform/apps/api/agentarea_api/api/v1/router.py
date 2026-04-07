@@ -15,7 +15,6 @@ from . import (
     agents_well_known,
     api_keys,
     audit,
-    compound_mcps,
     mcp_auth_configs,
     mcp_oauth_connect,
     mcp_oauth_links,
@@ -100,11 +99,7 @@ protected_v1_router.include_router(api_keys.router)
 # Registries (MCP catalog) - PROTECTED
 protected_v1_router.include_router(registries.router)
 
-# Compound MCPs - PROTECTED
-protected_v1_router.include_router(compound_mcps.router)
-
-# Compound MCP proxy + Bundle proxy registered directly on app in main.py
-# (routes already contain /v1 prefix so they cannot go through protected_v1_router)
+# Bundle proxy start/stop is part of mcp_server_instances router (above)
 
 # OpenAPI connections - PROTECTED
 protected_v1_router.include_router(openapi_connections.router)

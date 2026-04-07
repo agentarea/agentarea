@@ -1,4 +1,4 @@
-"""Domain models for MCP authentication, OAuth links, and compound structures."""
+"""Domain models for MCP authentication and OAuth links."""
 
 from datetime import datetime
 from typing import Any
@@ -15,12 +15,6 @@ AUTH_TYPE_API_KEY = "api_key"
 AUTH_TYPE_BEARER = "bearer"
 AUTH_TYPE_OAUTH2 = "oauth2"
 VALID_AUTH_TYPES = {AUTH_TYPE_API_KEY, AUTH_TYPE_BEARER, AUTH_TYPE_OAUTH2}
-
-# Routing mode constants for compound MCPs
-ROUTING_MODE_PARALLEL = "parallel"
-ROUTING_MODE_FALLBACK = "fallback"
-ROUTING_MODE_CONDITIONAL = "conditional"
-VALID_ROUTING_MODES = {ROUTING_MODE_PARALLEL, ROUTING_MODE_FALLBACK, ROUTING_MODE_CONDITIONAL}
 
 # Access control constants for OAuth links
 ACCESS_CONTROL_WORKSPACE = "workspace"
@@ -73,83 +67,6 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
             for field in ("client_id", "token_url"):
                 if not self.config.get(field):
                     raise ValueError(f"oauth2 auth requires '{field}' in config")
-
-
-class CompoundMCP(BaseModel, WorkspaceScopedMixin):
-    """A virtual MCP that proxies requests to multiple underlying MCP instances."""
-
-    __tablename__ = "compound_mcps"
-
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # routing_mode: parallel | fallback | conditional
-    routing_mode: Mapped[str] = mapped_column(
-        String(50), nullable=False, default=ROUTING_MODE_PARALLEL
-    )
-
-    def __init__(
-        self,
-        name: str,
-        routing_mode: str = ROUTING_MODE_PARALLEL,
-        description: str | None = None,
-        **kwargs: Any,
-    ) -> None:
-        if routing_mode not in VALID_ROUTING_MODES:
-            raise ValueError(
-                f"Invalid routing_mode '{routing_mode}'. Must be one of {VALID_ROUTING_MODES}"
-            )
-        super().__init__(**kwargs)
-        self.name = name
-        self.routing_mode = routing_mode
-        self.description = description
-
-
-class CompoundMCPMember(BaseModel):
-    """Association between a CompoundMCP and its member MCPServerInstances.
-
-    Uses composite primary key (compound_id, mcp_instance_id) instead of
-    the default ``id`` column from BaseModel.
-    """
-
-    __tablename__ = "compound_mcp_members"
-
-    # Override BaseModel's id — this table uses a composite PK instead
-    id = None  # type: ignore[assignment]
-    # Override updated_at — not in the migration
-    updated_at = None  # type: ignore[assignment]
-
-    compound_id: Mapped[str] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("compound_mcps.id", ondelete="CASCADE"),
-        primary_key=True,
-        nullable=False,
-    )
-    mcp_instance_id: Mapped[str] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("mcp_server_instances.id", ondelete="CASCADE"),
-        primary_key=True,
-        nullable=False,
-    )
-    order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # Per-member config: namespace_prefix, aliases, condition_expression
-    config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-
-    def __init__(
-        self,
-        compound_id: Any,
-        mcp_instance_id: Any,
-        order: int = 0,
-        config: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(**kwargs)
-        self.compound_id = compound_id
-        self.mcp_instance_id = mcp_instance_id
-        self.order = order
-        self.config = config or {}
-
-    def __repr__(self) -> str:  # noqa: D105
-        return f"<CompoundMCPMember compound={self.compound_id} instance={self.mcp_instance_id}>"
 
 
 class MCPOAuthLink(BaseModel, WorkspaceScopedMixin):

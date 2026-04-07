@@ -28,6 +28,20 @@ export default async function MCPInstancePage({ params }: Props) {
       ? (await getMCPServer(instance.server_spec_id)).data ?? null
       : null;
 
+  // Resolve bundle member names
+  let memberNames: Record<string, string> = {};
+  const jsonSpec = (instance as any).json_spec;
+  if (jsonSpec?.type === "bundle" && Array.isArray(jsonSpec.members)) {
+    const results = await Promise.all(
+      jsonSpec.members.map((memberId: string) => getMCPServerInstance(memberId))
+    );
+    for (let i = 0; i < jsonSpec.members.length; i++) {
+      const memberId = jsonSpec.members[i];
+      const memberData = results[i]?.data;
+      memberNames[memberId] = memberData?.name ?? memberId;
+    }
+  }
+
   return (
     <ContentBlock
       header={{
@@ -50,6 +64,7 @@ export default async function MCPInstancePage({ params }: Props) {
       <MCPInstanceDetail
         instance={instance as any}
         serverSpec={serverSpec as any}
+        memberNames={memberNames}
       />
     </ContentBlock>
   );

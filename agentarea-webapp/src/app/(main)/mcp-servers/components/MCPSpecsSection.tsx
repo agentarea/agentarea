@@ -88,9 +88,14 @@ export function MCPSpecsSection({
       header: t("name"),
       render: (value: string, item: MCPServer) => {
         const category = getMCPServerCategory(item.tags || []);
+        const iconSrc = (item as any).json_spec?.icons?.[0]?.src as string | undefined;
+        const title = (item as any).json_spec?.title || value;
         return (
           <div className="flex items-center gap-2">
-            <span className="truncate font-semibold">{value}</span>
+            {iconSrc && (
+              <img src={iconSrc} alt="" className="h-5 w-5 rounded object-contain shrink-0" />
+            )}
+            <span className="truncate font-semibold">{title}</span>
             {!item.is_public && (
               <Badge
                 variant="outline"
@@ -159,9 +164,12 @@ export function MCPSpecsSection({
         {tPage("browseSpecifications")} ({total})
       </h4>
 
+      {/* FilterChips disabled — client-side filtering on paginated data is unreliable.
+         TODO: move filtering to server-side API params.
       <div className="mb-4">
         <FilterChips />
       </div>
+      */}
 
       {filteredServers.length === 0 ? (
         <EmptyState
