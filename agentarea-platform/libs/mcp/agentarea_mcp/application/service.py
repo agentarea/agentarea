@@ -523,6 +523,18 @@ class MCPServerInstanceService:
         """Get an MCP server instance by ID."""
         return await self.repository.get_by_id(id)
 
+    async def get_by_name(self, name: str) -> MCPServerInstance | None:
+        """Get an MCP server instance by name within the current workspace.
+
+        Used by tool discovery when an agent's tools_config references an MCP
+        instance by display name (e.g. {"type": "mcp", "name": "Dev Bundle"}).
+        """
+        instances = await self.repository.list_all()
+        for instance in instances:
+            if instance.name == name:
+                return instance
+        return None
+
     async def list(
         self,
         server_spec_id: str | None = None,
