@@ -8,7 +8,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
-    from agentarea_common.money import ZERO, Money, serialize_money, to_money
+    from agentarea_common.money import ZERO, Money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 

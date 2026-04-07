@@ -9,8 +9,6 @@ from temporalio.workflow import ParentClosePolicy
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
-    import agentarea_common  # noqa: F401 — must be imported before any module that depends on it
-
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
     from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
     from agentarea_agents_sdk.tools.tool_provider import (
@@ -19,6 +17,7 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
+    from agentarea_common.money import serialize_money
 
     from .context_manager import (
         ContextWindowManager,
@@ -32,8 +31,6 @@ with workflow.unsafe.imports_passed_through():
         allows_tool_progressive_disclosure,
         resolve_context_strategy,
     )
-    from agentarea_common.money import serialize_money
-
     from .helpers import (
         BudgetTracker,
         EventManager,

@@ -16,7 +16,7 @@ from pydantic import BeforeValidator, PlainSerializer
 Money = Annotated[
     Decimal,
     BeforeValidator(lambda v: Decimal(str(v)) if not isinstance(v, Decimal) else v),
-    PlainSerializer(lambda v: str(v), return_type=str),
+    PlainSerializer(str, return_type=str),
 ]
 
 ZERO: Decimal = Decimal("0")

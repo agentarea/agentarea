@@ -249,7 +249,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         This is called once during _initialize_agent_config and the result is cached
         in workflow state to avoid repeated DB lookups on every LLM call.
         """
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
         from uuid import UUID as _UUID
 
         user_context = create_system_context(request.workspace_id)
@@ -278,7 +278,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             context_window=context_window,
             display_name=display_name,
             provider_display_name=provider_display_name,
-            resolved_at=datetime.now(timezone.utc).isoformat(),
+            resolved_at=datetime.now(UTC).isoformat(),
         )
         return resolved.model_dump()
 

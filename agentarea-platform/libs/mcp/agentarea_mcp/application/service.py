@@ -6,7 +6,7 @@ from uuid import UUID
 
 from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
-from agentarea_common.config import get_database, get_settings
+from agentarea_common.config import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
@@ -32,12 +32,13 @@ from agentarea_mcp.infrastructure.repository import (
 from agentarea_mcp.schemas import MCPServerStatus
 
 from .mcp_env_service import MCPEnvironmentService
+from .oauth_client_service import MCPOAuthClientService
 from .validation_service import MCPConfigurationValidator, MCPValidationError
 
 logger = logging.getLogger(__name__)
 
 # Sentinel value for masked secrets — must match across backend and frontend
-SECRET_MASKED_VALUE = "******"
+SECRET_MASKED_VALUE = "*" * 6
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
@@ -416,9 +417,9 @@ class MCPServerInstanceService:
                     json_spec, instance.server_spec_id
                 )
                 # Filter out masked placeholder values — don't overwrite real secrets
-                _MASKED_PLACEHOLDERS = {SECRET_MASKED_VALUE, "\u2022" * 6}  # "******" and "••••••"
+                masked_placeholders = {SECRET_MASKED_VALUE, "\u2022" * 6}  # "******" and "••••••"
                 real_secrets = {
-                    k: v for k, v in secret_env_vars.items() if v not in _MASKED_PLACEHOLDERS
+                    k: v for k, v in secret_env_vars.items() if v not in masked_placeholders
                 }
                 if real_secrets:
                     await self.env_service.set_instance_environment(id, real_secrets)
@@ -642,7 +643,6 @@ class MCPServerInstanceService:
                     if has_oauth:
                         # Try to discover OAuth metadata
                         try:
-                            from agentarea_mcp.application.oauth_client_service import MCPOAuthClientService
                             oauth_service = MCPOAuthClientService()
                             await oauth_service.discover_auth_server(mcp_url)
                             # If discovery succeeds, OAuth is supported
@@ -653,7 +653,6 @@ class MCPServerInstanceService:
                         except Exception:
                             # OAuth discovery failed, fall back to credentials only
                             logger.debug("OAuth discovery failed for %s, falling back to credentials", mcp_url)
-                            pass
 
                     # No OAuth metadata or discovery failed — needs credentials
                     # Get hints from the server spec's env_schema if available
@@ -688,13 +687,13 @@ class MCPServerInstanceService:
                     "message": f"Unexpected response: {resp.status_code}",
                 }
 
-        except httpx.ConnectError as e:
-            return {"status": "error", "message": f"Cannot connect to {mcp_url}: {e}"}
+        except httpx.ConnectError:
+            return {"status": "error", "message": "Cannot connect to the configured endpoint"}
         except httpx.TimeoutException:
             return {"status": "error", "message": f"Connection to {mcp_url} timed out"}
         except Exception as e:
             logger.warning("Probe failed for instance %s: %s", instance_id, e, exc_info=True)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Probe failed due to an internal error"}
 
     async def discover_and_store_tools(self, instance_id: UUID) -> bool:
         """Discover available tools from MCP server instance and store them.
@@ -875,7 +874,7 @@ class MCPServerInstanceService:
             logger.warning("Bundle %s has no members", instance.id)
             return False
 
-        NS_SEP = "__"
+        ns_sep = "__"
         all_tools: list[dict[str, Any]] = []
 
         for mid in member_ids:
@@ -904,7 +903,7 @@ class MCPServerInstanceService:
 
             for tool in member_tools:
                 all_tools.append({
-                    "name": f"{namespace}{NS_SEP}{tool['name']}",
+                    "name": f"{namespace}{ns_sep}{tool['name']}",
                     "description": f"[{member.name}] {tool.get('description', '')}",
                     "inputSchema": tool.get("inputSchema", {}),
                     "member_instance_id": str(member.id),
@@ -960,10 +959,10 @@ class MCPServerInstanceService:
                 "tool_count": len(tools),
                 "tools": tools,
             }
-        except BaseException as e:
+        except Exception as e:
             # Flatten ExceptionGroup sub-exceptions to inspect root causes
             all_msgs: list[str] = []
-            if isinstance(e, BaseExceptionGroup):
+            if isinstance(e, ExceptionGroup):
                 for sub in e.exceptions:
                     all_msgs.append(str(sub))
             all_msgs.append(str(e))
@@ -974,4 +973,7 @@ class MCPServerInstanceService:
             if "403" in combined:
                 return {"status": "auth_error", "message": "Access denied — insufficient permissions"}
             logger.warning("validate_connection failed for %s: %s", url, e, exc_info=True)
-            return {"status": "error", "message": f"Connection failed: {combined}"}
+            return {
+                "status": "error",
+                "message": "Connection failed. Verify the URL, headers, and server availability.",
+            }

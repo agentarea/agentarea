@@ -8,9 +8,12 @@ from agentarea_api.api.deps.services import get_mcp_server_instance_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import MCPServerRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import update as sa_update
 
 logger = logging.getLogger(__name__)
 
@@ -50,29 +53,29 @@ class MCPServerInstanceResponse(BaseModel):
         # Mask secret env var values — env_vars list holds names of secrets
         secret_names = set(json_spec.get("env_vars", []))
         if secret_names:
-            MASKED = "******"
+            masked_value = "*" * 6
             # Inject masked values for secret keys into environment
             env = json_spec.get("environment")
             if isinstance(env, dict):
                 masked_env = {
-                    k: (MASKED if k in secret_names else v)
+                    k: (masked_value if k in secret_names else v)
                     for k, v in env.items()
                 }
                 # Add missing secret keys (stripped during creation)
                 for name in secret_names:
                     if name not in masked_env:
-                        masked_env[name] = MASKED
+                        masked_env[name] = masked_value
                 json_spec["environment"] = masked_env
             # Inject masked values for secret keys into headers
             headers = json_spec.get("headers")
             if isinstance(headers, dict):
                 masked_headers = {
-                    k: (MASKED if k in secret_names else v)
+                    k: (masked_value if k in secret_names else v)
                     for k, v in headers.items()
                 }
                 for name in secret_names:
                     if name not in masked_headers:
-                        masked_headers[name] = MASKED
+                        masked_headers[name] = masked_value
                 json_spec["headers"] = masked_headers
 
         return cls.model_validate(
@@ -529,7 +532,6 @@ async def probe_instance_auth(
         try:
             instance = await mcp_server_instance_service.repository.get_by_id(instance_id)
             if instance and instance.server_spec_id:
-                from agentarea_mcp.infrastructure.repository import MCPServerRepository
                 server_repo = MCPServerRepository(
                     mcp_server_instance_service.repository.session,
                     mcp_server_instance_service.repository.user_context,
@@ -538,8 +540,6 @@ async def probe_instance_auth(
                 if spec:
                     new_json_spec = dict(spec.json_spec or {})
                     new_json_spec["auth_methods"] = result["methods"]
-                    from sqlalchemy import update as sa_update
-                    from agentarea_mcp.domain.models import MCPServer
                     db_session = mcp_server_instance_service.repository.session
                     stmt = (
                         sa_update(MCPServer)
@@ -549,7 +549,10 @@ async def probe_instance_auth(
                     await db_session.execute(stmt)
                     await db_session.commit()
         except Exception:
-            pass  # Caching is best-effort
+            logger.warning(
+                "Failed to cache auth methods for MCP server spec after probe",
+                exc_info=True,
+            )
 
     return result
 
@@ -654,5 +657,4 @@ async def list_oauth_links(
         status_code=501,
         detail="Use the /v1/mcp-oauth-links endpoint to list OAuth links",
     )
-
 

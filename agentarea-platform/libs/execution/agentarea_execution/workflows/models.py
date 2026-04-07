@@ -5,9 +5,8 @@ This module contains all dataclasses and type definitions used by the agent exec
 
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 from agentarea_common.money import ZERO, Money
+from pydantic import BaseModel, Field
 
 
 # Define a simple Message class to avoid SDK imports in workflows

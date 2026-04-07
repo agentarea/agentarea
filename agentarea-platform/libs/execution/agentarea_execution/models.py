@@ -6,9 +6,8 @@ Integrates with existing AgentArea domain models and uses proper UUID types.
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
-
 from agentarea_common.money import ZERO, Money
+from pydantic import BaseModel, Field
 
 
 class ResolvedModelInfo(BaseModel):
