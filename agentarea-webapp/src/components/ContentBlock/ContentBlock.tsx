@@ -42,7 +42,7 @@ export default function ContentBlock({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {header && (
-        <div className="flex min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-2 sm:px-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="flex shrink-0 min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-2 sm:px-4 dark:border-zinc-700 dark:bg-zinc-800">
           {"title" in header ? (
             <>
               <div className="flex flex-col gap-1">
@@ -117,7 +117,7 @@ export default function ContentBlock({
         </div>
       )}
       {subheader && (
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10">
           {subheader}
         </div>
       )}

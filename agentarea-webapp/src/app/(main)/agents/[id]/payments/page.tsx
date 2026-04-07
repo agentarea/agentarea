@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PaymentHistoryTable } from "@/components/PaymentHistory";
+import { PaymentHistoryTable } from "./components/PaymentHistoryTable";
 
 export const metadata: Metadata = {
   title: "Agent Payments",
@@ -17,13 +17,7 @@ export default async function AgentPaymentsPage({
   const resolvedParams = await params;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Payment History</h2>
-        <p className="text-sm text-muted-foreground">
-          All service payments made by this agent via x402 and MPP protocols.
-        </p>
-      </div>
+    <div className="h-full space-y-2 overflow-auto px-4 py-5">
       <PaymentHistoryTable agentId={resolvedParams.id} />
     </div>
   );

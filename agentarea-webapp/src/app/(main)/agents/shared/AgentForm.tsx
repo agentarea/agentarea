@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { components } from "@/api/schema";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import FullChat from "@/components/Chat/FullChat";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import Divider from "@/components/ui/divider";
 import {
-  ResizablePanelGroup,
-  ResizablePanel,
   ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import {
   Sheet,
@@ -21,14 +21,14 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { useChat } from "./ChatContext";
 import {
   AgentTriggers,
   BasicInformation,
-  ToolConfig,
   SkillsConfig,
+  ToolConfig,
 } from "../create/components";
 import type { AgentFormValues, AgentSkill } from "../create/types";
+import { useChat } from "./ChatContext";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -47,6 +47,8 @@ interface AgentFormProps {
   onError?: (error: any) => void;
   isLoading?: boolean;
   className?: string;
+  placeholder?: string;
+  welcomeComponent?: React.ReactNode;
 }
 
 export default function AgentForm({
@@ -63,6 +65,8 @@ export default function AgentForm({
   onSuccess,
   onError,
   isLoading = false,
+  placeholder,
+  welcomeComponent,
 }: AgentFormProps) {
   const [_, startTransition] = useTransition();
   const router = useRouter();
@@ -148,7 +152,9 @@ export default function AgentForm({
 
     // Set form data attribute and dispatch event SYNCHRONOUSLY before async operations
     form.setAttribute("data-submitting", "true");
-    form.dispatchEvent(new CustomEvent("form-submitting", { detail: { isSubmitting: true } }));
+    form.dispatchEvent(
+      new CustomEvent("form-submitting", { detail: { isSubmitting: true } })
+    );
 
     // Include skills in the submission data
     const dataWithSkills = {
@@ -209,7 +215,9 @@ export default function AgentForm({
         if (!shouldKeepSubmitting && formRef.current) {
           formRef.current.removeAttribute("data-submitting");
           formRef.current.dispatchEvent(
-            new CustomEvent("form-submitting", { detail: { isSubmitting: false } })
+            new CustomEvent("form-submitting", {
+              detail: { isSubmitting: false },
+            })
           );
         }
       }
@@ -220,14 +228,20 @@ export default function AgentForm({
   const chatContent = (
     <>
       <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
-        Test {agentName ? <span className="font-bold">{agentName}</span> : "New Agent"}
+        Test{" "}
+        {agentName ? (
+          <span className="font-bold">{agentName}</span>
+        ) : (
+          "New Agent"
+        )}
       </div>
       <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
         <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
         <div className="relative z-1 h-full">
-          <FullChat 
-            agent={{ id: agentId || "new", name: agentName }} 
-            placeholder={`Write a new task for ${agentName}`}
+          <FullChat
+            agent={{ id: agentId || "new", name: agentName }}
+            placeholder={placeholder || `Write a new task for ${agentName}`}
+            welcomeComponent={welcomeComponent}
           />
         </div>
       </div>
@@ -240,7 +254,10 @@ export default function AgentForm({
         direction="horizontal"
         className={cn("h-full w-full", className)}
       >
-        <ResizablePanel defaultSize={isMobile ? 100 : 60} minSize={isMobile ? 100 : 30}>
+        <ResizablePanel
+          defaultSize={isMobile ? 100 : 60}
+          minSize={isMobile ? 100 : 30}
+        >
           <form
             ref={formRef}
             id="agent-form"
@@ -300,7 +317,10 @@ export default function AgentForm({
       </ResizablePanelGroup>
 
       {/* Mobile chat sheet */}
-      <Sheet open={isMobile ? isChatSheetOpen : false} onOpenChange={setIsChatSheetOpen}>
+      <Sheet
+        open={isMobile ? isChatSheetOpen : false}
+        onOpenChange={setIsChatSheetOpen}
+      >
         <SheetContent
           side="right"
           className="w-full sm:max-w-lg flex flex-col p-0"
