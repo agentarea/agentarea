@@ -17,6 +17,7 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
+    from agentarea_common.money import serialize_money
 
     from .context_manager import (
         ContextWindowManager,
@@ -52,6 +53,7 @@ from ..models import (
     AgentConfigResult,
     AgentExecutionRequest,
     AgentExecutionResult,
+    ChangeModelPayload,
     CompactMessagesRequest,
     CompactMessagesResult,
     DiscoverToolProvidersResult,
@@ -66,6 +68,7 @@ from ..models import (
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    ResolveModelRequest,
     SearchHistoryRequest,
     SearchHistoryResult,
     SkillFileRequest,
@@ -114,6 +117,8 @@ class AgentExecutionWorkflow:
         self._skill_tool: SkillActivationTool | None = None
         self._tool_catalog: ToolCatalog | None = None
         self._pending_escalations: dict[str, PendingEscalation] = {}
+        # Generic message queue — queued user messages drained before each LLM call
+        self._message_queue: list[dict[str, Any]] = []
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -202,6 +207,81 @@ class AgentExecutionWorkflow:
                 + (f" comment='{comment}'" if comment else "")
             )
 
+    @workflow.signal
+    async def workflow_command(self, command: str, payload: dict) -> None:
+        """Generic command signal for mid-execution control."""
+        handlers = {
+            "change_model": self._handle_change_model,
+            "update_budget": self._handle_update_budget,
+            "queue_message": self._handle_queue_message,
+            "remove_message": self._handle_remove_message,
+        }
+        handler = handlers.get(command)
+        if handler:
+            handler(payload)
+            if self.event_manager:
+                self.event_manager.add_event(
+                    EventTypes.WORKFLOW_COMMAND_RECEIVED,
+                    {
+                        "command": command,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
+        else:
+            workflow.logger.warning(f"Unknown workflow command: {command}")
+
+    def _handle_change_model(self, payload: dict) -> None:
+        """Handle a change_model command: update cached model info and agent config."""
+        info = ChangeModelPayload(**payload)
+        old = self.state.resolved_model
+        self.state.resolved_model = info.model_dump()
+        self.state.agent_config["model_id"] = info.model_id
+        if info.context_window != self.state.context_window:
+            self.state.context_window = info.context_window
+            if self.context_manager:
+                self.context_manager = ContextWindowManager(info.context_window)
+        if self.event_manager:
+            self.event_manager.add_event(
+                EventTypes.MODEL_CHANGED,
+                {
+                    "old_model": old.get("model_name") if old else None,
+                    "new_model": info.model_name,
+                    "new_model_id": info.model_id,
+                },
+            )
+        workflow.logger.info(
+            f"Model changed: {old.get('model_name') if old else 'none'} -> {info.model_name}"
+        )
+
+    def _handle_update_budget(self, payload: dict) -> None:
+        """Handle an update_budget command (stub for future use)."""
+        pass
+
+    def _handle_queue_message(self, payload: dict) -> None:
+        """Queue a user message for the agent's next iteration."""
+        msg_id = str(workflow.uuid4())
+        self._message_queue.append({"id": msg_id, "content": payload["message"]})
+        if self.event_manager:
+            self.event_manager.add_event(
+                "MessageQueued",
+                {
+                    "message_id": msg_id,
+                    "content": payload["message"][:200],
+                },
+            )
+        workflow.logger.info(f"Message queued: {msg_id}")
+
+    def _handle_remove_message(self, payload: dict) -> None:
+        """Remove a queued message by ID before the agent sees it."""
+        msg_id = payload["message_id"]
+        self._message_queue = [m for m in self._message_queue if m["id"] != msg_id]
+        if self.event_manager:
+            self.event_manager.add_event(
+                "MessageRemoved",
+                {"message_id": msg_id},
+            )
+        workflow.logger.info(f"Message removed from queue: {msg_id}")
+
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
         """Main workflow execution method."""
@@ -253,7 +333,7 @@ class AgentExecutionWorkflow:
             {
                 "goal_description": self.state.goal.description,
                 "max_iterations": self.state.goal.max_iterations,
-                "budget_limit": self.budget_tracker.budget_limit,
+                "budget_limit": serialize_money(self.budget_tracker.budget_limit),
             },
         )
 
@@ -294,6 +374,29 @@ class AgentExecutionWorkflow:
         # Store context window in state and initialize context manager
         self.state.context_window = self.state.agent_config.get("context_window", 128000)
         self.context_manager = ContextWindowManager(self.state.context_window)
+
+        # Resolve model info once and cache in state to avoid per-call DB lookups
+        model_id = self.state.agent_config.get("model_id")
+        if model_id:
+            try:
+                resolve_model_request = ResolveModelRequest(
+                    model_id=model_id,
+                    workspace_id=self.state.workspace_id,
+                )
+                self.state.resolved_model = await workflow.execute_activity(
+                    Activities.RESOLVE_MODEL,
+                    args=[resolve_model_request],
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                )
+                workflow.logger.info(
+                    f"Model resolved and cached: {self.state.resolved_model.get('model_name')}"
+                )
+            except Exception as e:
+                workflow.logger.warning(
+                    f"Could not pre-resolve model {model_id}, will fall back to per-call lookup: {e}"
+                )
+                self.state.resolved_model = None
 
         # Validate configuration
         if not StateValidator.validate_agent_config(self.state.agent_config):
@@ -588,6 +691,7 @@ class AgentExecutionWorkflow:
         self.state.service_budget_usd = state.service_budget_usd
         self.state.service_cost_used = state.service_cost_used
         self.state.wallet_id = state.wallet_id
+        self.state.resolved_model = state.resolved_model
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -668,7 +772,7 @@ class AgentExecutionWorkflow:
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
-            total_cost=self.budget_tracker.cost,
+            total_cost=serialize_money(self.budget_tracker.cost),
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
@@ -681,6 +785,7 @@ class AgentExecutionWorkflow:
             service_budget_usd=self.state.service_budget_usd,
             service_cost_used=self.state.service_cost_used,
             wallet_id=self.state.wallet_id,
+            resolved_model=self.state.resolved_model,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -688,7 +793,7 @@ class AgentExecutionWorkflow:
             EventTypes.WORKFLOW_CONTINUED_AS_NEW,
             {
                 "iteration": self.state.current_iteration,
-                "total_cost": self.budget_tracker.cost,
+                "total_cost": serialize_money(self.budget_tracker.cost),
                 "messages_carried": len(self.state.messages),
                 "continued_from_run_id": workflow.info().run_id,
                 "reason": "Temporal event history size limit approaching",
@@ -811,7 +916,7 @@ class AgentExecutionWorkflow:
             EventTypes.ITERATION_STARTED,
             {
                 "iteration": iteration,
-                "budget_remaining": self.budget_tracker.get_remaining(),
+                "budget_remaining": serialize_money(self.budget_tracker.get_remaining()),
             },
         )
         await self._publish_events_immediately()
@@ -824,7 +929,7 @@ class AgentExecutionWorkflow:
 
             self.event_manager.add_event(
                 EventTypes.ITERATION_COMPLETED,
-                {"iteration": iteration, "total_cost": self.budget_tracker.cost},
+                {"iteration": iteration, "total_cost": serialize_money(self.budget_tracker.cost)},
             )
 
         except Exception as e:
@@ -927,6 +1032,12 @@ class AgentExecutionWorkflow:
                 self.state.messages.append(Message(role="user", content=action_msg))
             self._a2ui_action_queue.clear()
 
+        # Drain queued user messages into conversation before calling LLM
+        if self._message_queue:
+            for msg in self._message_queue:
+                self.state.messages.append(Message(role="user", content=msg["content"]))
+            self._message_queue.clear()
+
         # Call LLM
         llm_response = await self._call_llm()
 
@@ -974,6 +1085,7 @@ class AgentExecutionWorkflow:
                 task_id=self.state.task_id,
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
+                resolved_model=self.state.resolved_model,
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -1039,7 +1151,7 @@ class AgentExecutionWorkflow:
                 {
                     "iteration": self.state.current_iteration,
                     "cost": usage_info["cost"],
-                    "total_cost": self.budget_tracker.cost,
+                    "total_cost": serialize_money(self.budget_tracker.cost),
                     "usage": usage_info,
                     "content": display_content,
                     "tool_calls": tool_calls_value or [],
@@ -2114,6 +2226,7 @@ class AgentExecutionWorkflow:
                 model_id=self.state.agent_config.get("model_id"),
                 workspace_id=self.state.workspace_id,
                 user_context_data=self.state.user_context_data,
+                resolved_model=self.state.resolved_model,
             )
 
             result: CompactMessagesResult = await workflow.execute_activity(
@@ -2196,8 +2309,8 @@ class AgentExecutionWorkflow:
                 EventTypes.BUDGET_WARNING,
                 {
                     "usage_percentage": self.budget_tracker.get_usage_percentage(),
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
+                    "cost": serialize_money(self.budget_tracker.cost),
+                    "limit": serialize_money(self.budget_tracker.budget_limit),
                     "message": self.budget_tracker.get_warning_message(),
                 },
             )
@@ -2208,8 +2321,8 @@ class AgentExecutionWorkflow:
             self.event_manager.add_event(
                 EventTypes.BUDGET_EXCEEDED,
                 {
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
+                    "cost": serialize_money(self.budget_tracker.cost),
+                    "limit": serialize_money(self.budget_tracker.budget_limit),
                     "message": self.budget_tracker.get_exceeded_message(),
                 },
             )
@@ -2293,7 +2406,7 @@ class AgentExecutionWorkflow:
             {
                 "success": self.state.success,
                 "iterations_completed": self.state.current_iteration,
-                "total_cost": self.budget_tracker.cost,
+                "total_cost": serialize_money(self.budget_tracker.cost),
                 "final_response": self.state.final_response,
                 "status": self.state.status,
                 "blocked_reason": self.state.blocked_reason,
@@ -2321,7 +2434,9 @@ class AgentExecutionWorkflow:
                     else None,
                     error_message=self.state.blocked_reason if final_status == "blocked" else None,
                     workspace_id=self.state.workspace_id,
-                    total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
+                    total_cost=serialize_money(self.budget_tracker.cost)
+                    if self.budget_tracker
+                    else "0",
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -2345,7 +2460,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             success=self.state.success,
             final_response=self.state.final_response,
-            total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
+            total_cost=serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
             reasoning_iterations_used=self.state.current_iteration,
             conversation_history=conversation_history,
         )
@@ -2444,9 +2559,9 @@ class AgentExecutionWorkflow:
             "status": self.state.status,
             "current_iteration": self.state.current_iteration,
             "success": self.state.success,
-            "cost": self.budget_tracker.cost if self.budget_tracker else 0.0,
+            "cost": serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
             "budget_remaining": (
-                self.budget_tracker.get_remaining() if self.budget_tracker else 0.0
+                serialize_money(self.budget_tracker.get_remaining()) if self.budget_tracker else "0"
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,

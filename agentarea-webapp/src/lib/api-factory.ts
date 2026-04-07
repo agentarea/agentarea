@@ -150,6 +150,18 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    sendTaskCommand: async (
+      agentId: string,
+      taskId: string,
+      payload: { command: string; [key: string]: any }
+    ) => {
+      const { data, error } = await client.POST(
+        `/v1/agents/${agentId}/tasks/${taskId}/command` as any,
+        { body: payload } as any
+      );
+      return { data, error };
+    },
+
     resolveEscalation: async (
       agentId: string,
       taskId: string,
@@ -1143,51 +1155,43 @@ export function createApiClient(client: Client) {
 
     discoverOpenAPITools: async (connectionId: string) => {
       const { data, error } = await client.POST(
-        `/v1/openapi-connections/${connectionId}/discover` as any,
-        {}
-      );
-      return { data, error };
-    },
-
-    testOpenAPIConnection: async (connectionId: string) => {
-      const { data, error } = await client.POST(
-        `/v1/openapi-connections/${connectionId}/test` as any,
-        {}
+        "/v1/openapi-connections/{connection_id}/discover-tools",
+        { params: { path: { connection_id: connectionId } } }
       );
       return { data, error };
     },
 
     previewOpenAPISpec: async (body: {
       spec_url?: string;
-      spec_json?: string;
+      spec_content?: Record<string, unknown>;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/openapi-connections/preview" as any,
-        { body }
+        "/v1/openapi-connections/preview-spec",
+        { body: body as any }
       );
       return { data, error };
     },
 
     // Compound MCP API
     listCompoundMCPs: async () => {
-      const { data, error } = await client.GET("/v1/compound-mcps/", {});
+      const { data, error } = await client.GET("/v1/compound-mcps/" as any, {});
       return { data, error };
     },
 
     getCompoundMCP: async (compoundId: string) => {
-      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}", {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}" as any, {
         params: { path: { compound_id: compoundId } },
       });
       return { data, error };
     },
 
-    createCompoundMCP: async (body: components["schemas"]["CompoundMCPCreateRequest"]) => {
-      const { data, error } = await client.POST("/v1/compound-mcps/", { body });
+    createCompoundMCP: async (body: any) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/" as any, { body });
       return { data, error };
     },
 
-    updateCompoundMCP: async (compoundId: string, body: components["schemas"]["CompoundMCPUpdateRequest"]) => {
-      const { data, error } = await client.PUT("/v1/compound-mcps/{compound_id}", {
+    updateCompoundMCP: async (compoundId: string, body: any) => {
+      const { data, error } = await client.PUT("/v1/compound-mcps/{compound_id}" as any, {
         params: { path: { compound_id: compoundId } },
         body,
       });
@@ -1195,21 +1199,21 @@ export function createApiClient(client: Client) {
     },
 
     deleteCompoundMCP: async (compoundId: string) => {
-      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}", {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}" as any, {
         params: { path: { compound_id: compoundId } },
       });
       return { data, error };
     },
 
     listCompoundMCPMembers: async (compoundId: string) => {
-      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}/members", {
+      const { data, error } = await client.GET("/v1/compound-mcps/{compound_id}/members" as any, {
         params: { path: { compound_id: compoundId } },
       });
       return { data, error };
     },
 
-    addCompoundMCPMember: async (compoundId: string, body: components["schemas"]["CompoundMCPMemberRequest"]) => {
-      const { data, error } = await client.POST("/v1/compound-mcps/{compound_id}/members", {
+    addCompoundMCPMember: async (compoundId: string, body: any) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/{compound_id}/members" as any, {
         params: { path: { compound_id: compoundId } },
         body,
       });
@@ -1217,7 +1221,7 @@ export function createApiClient(client: Client) {
     },
 
     removeCompoundMCPMember: async (compoundId: string, instanceId: string) => {
-      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}/members/{instance_id}", {
+      const { data, error } = await client.DELETE("/v1/compound-mcps/{compound_id}/members/{instance_id}" as any, {
         params: { path: { compound_id: compoundId, instance_id: instanceId } },
       });
       return { data, error };

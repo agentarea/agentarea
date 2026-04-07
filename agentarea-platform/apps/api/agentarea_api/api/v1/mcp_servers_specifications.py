@@ -47,6 +47,12 @@ class MCPServerUpdate(BaseModel):
     is_public: bool | None = Field(None, description="Whether the server is public")
     status: str | None = Field(None, description="Status of the MCP server")
     cmd: list[str] | None = Field(None, description="Custom command to override container CMD")
+    remote_url: str | None = Field(None, description="Remote URL for HTTP-based MCP servers")
+    env_schema: list[dict[str, Any]] | None = Field(None, description="Environment variable schema")
+    json_spec: dict[str, Any] | None = Field(
+        None, description="Raw ServerJSON spec from MCP registry"
+    )
+    registry_url: str | None = Field(None, description="Source registry URL")
 
 
 class MCPServerResponse(BaseModel):
@@ -60,6 +66,8 @@ class MCPServerResponse(BaseModel):
     env_schema: list[dict[str, Any]]
     cmd: list[str] | None
     remote_url: str | None = None
+    json_spec: dict[str, Any] | None = None
+    registry_url: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -77,6 +85,8 @@ class MCPServerResponse(BaseModel):
             env_schema=server.env_schema or [],
             cmd=server.cmd,
             remote_url=server.remote_url,
+            json_spec=server.json_spec,
+            registry_url=server.registry_url,
             status=server.status,
             created_at=server.created_at,
             updated_at=server.updated_at,

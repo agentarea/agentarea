@@ -55,6 +55,8 @@ from ..models import (
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    ResolvedModelInfo,
+    ResolveModelRequest,
     SearchHistoryRequest,
     SearchHistoryResult,
     SkillFileRequest,
@@ -239,6 +241,48 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return DiscoverToolProvidersResult(providers=provider_data)
 
     @activity.defn
+    async def resolve_model_activity(
+        request: ResolveModelRequest,
+    ) -> dict:
+        """Resolve model info once at workflow start and return as ResolvedModelInfo dict.
+
+        This is called once during _initialize_agent_config and the result is cached
+        in workflow state to avoid repeated DB lookups on every LLM call.
+        """
+        from datetime import UTC, datetime
+        from uuid import UUID as _UUID
+
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            model_instance_service = await ctx.get_model_instance_service()
+            model_instance = await model_instance_service.get(_UUID(request.model_id))
+            if not model_instance:
+                raise ValueError(f"Model instance {request.model_id} not found")
+
+            provider_type = model_instance.provider_config.provider_spec.provider_type
+            model_name = model_instance.model_spec.model_name
+            endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+            context_window = getattr(model_instance.model_spec, "context_window", 128000)
+            api_key_secret = getattr(model_instance.provider_config, "api_key", None)
+            display_name = getattr(model_instance.model_spec, "display_name", None)
+            provider_display_name = getattr(
+                model_instance.provider_config.provider_spec, "display_name", None
+            )
+
+        resolved = ResolvedModelInfo(
+            model_id=request.model_id,
+            provider_type=provider_type,
+            model_name=model_name,
+            api_key_secret=api_key_secret,
+            endpoint_url=endpoint_url,
+            context_window=context_window,
+            display_name=display_name,
+            provider_display_name=provider_display_name,
+            resolved_at=datetime.now(UTC).isoformat(),
+        )
+        return resolved.model_dump()
+
+    @activity.defn
     @auto_heartbeater
     async def call_llm_activity(
         request: LLMCallRequest,
@@ -262,37 +306,68 @@ def make_agent_activities(dependencies: ActivityDependencies):
             else:
                 raise ValueError("Either workspace_id or user_context_data must be provided")
 
-            # Get model instance from database using clean DI
-            async with ActivityContext(container, user_context) as ctx:
-                model_instance_service = await ctx.get_model_instance_service()
-                model_instance = await model_instance_service.get(model_uuid)
-                if not model_instance:
-                    raise ValueError(f"Model instance with ID {request.model_id} not found")
+            # Dual path: use cached resolved_model if provided, else fall back to DB lookup
+            provider_type = None
+            model_name = None
+            endpoint_url = None
+            api_key = None
 
-                # Extract required parameters from model instance
-                provider_type = model_instance.provider_config.provider_spec.provider_type
-                model_name = model_instance.model_spec.model_name
-                endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
-
-                # Decode API key from secret manager
-                # (provider_config.api_key is a secret name/placeholder)
-                api_key = None
-                api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+            if request.resolved_model:
+                cached = request.resolved_model
+                provider_type = cached.get("provider_type")
+                model_name = cached.get("model_name")
+                endpoint_url = cached.get("endpoint_url")
+                api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
-                    # Create secret manager from factory with workspace context
-                    # We need to create a new session for the secret manager
-                    from agentarea_common.config import get_database
-
-                    secret_session = get_database().async_session_factory()
                     try:
-                        secret_manager = dependencies.secret_manager_factory.create(
-                            session=secret_session, user_context=user_context
+                        from agentarea_common.config import get_database
+
+                        secret_session = get_database().async_session_factory()
+                        try:
+                            secret_manager = dependencies.secret_manager_factory.create(
+                                session=secret_session, user_context=user_context
+                            )
+                            api_key = await secret_manager.get_secret(api_key_secret_name)
+                        finally:
+                            await secret_session.close()
+                    except Exception as decrypt_err:
+                        logger.warning(
+                            f"Failed to decrypt cached API key for model {request.model_id}, "
+                            f"falling back to DB lookup: {decrypt_err}",
+                            exc_info=True,
                         )
-                        api_key = await secret_manager.get_secret(api_key_secret_name)
-                    finally:
-                        await secret_session.close()
-                else:
-                    logger.warning(f"No API key found for model instance {model_instance.id}")
+                        # Fall through to DB lookup below
+                        provider_type = None
+
+            if provider_type is None:
+                # Full DB lookup (initial path or fallback from failed cache decrypt)
+                async with ActivityContext(container, user_context) as ctx:
+                    model_instance_service = await ctx.get_model_instance_service()
+                    model_instance = await model_instance_service.get(model_uuid)
+                    if not model_instance:
+                        raise ValueError(f"Model instance with ID {request.model_id} not found")
+
+                    # Extract required parameters from model instance
+                    provider_type = model_instance.provider_config.provider_spec.provider_type
+                    model_name = model_instance.model_spec.model_name
+                    endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+
+                    # Decode API key from secret manager
+                    # (provider_config.api_key is a secret name/placeholder)
+                    api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+                    if api_key_secret_name:
+                        from agentarea_common.config import get_database
+
+                        secret_session = get_database().async_session_factory()
+                        try:
+                            secret_manager = dependencies.secret_manager_factory.create(
+                                session=secret_session, user_context=user_context
+                            )
+                            api_key = await secret_manager.get_secret(api_key_secret_name)
+                        finally:
+                            await secret_session.close()
+                    else:
+                        logger.warning(f"No API key found for model instance {model_instance.id}")
 
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
@@ -852,29 +927,61 @@ def make_agent_activities(dependencies: ActivityDependencies):
             else:
                 raise ValueError("Either workspace_id or user_context_data must be provided")
 
-            async with ActivityContext(container, user_context) as ctx:
-                model_instance_service = await ctx.get_model_instance_service()
-                model_instance = await model_instance_service.get(model_uuid)
-                if not model_instance:
-                    raise ValueError(f"Model instance {request.model_id} not found")
+            # Dual path: use cached resolved_model if provided, else fall back to DB lookup
+            provider_type = None
+            model_name = None
+            endpoint_url = None
+            api_key = None
 
-                provider_type = model_instance.provider_config.provider_spec.provider_type
-                model_name = model_instance.model_spec.model_name
-                endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
-
-                api_key = None
-                api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+            if request.resolved_model:
+                cached = request.resolved_model
+                provider_type = cached.get("provider_type")
+                model_name = cached.get("model_name")
+                endpoint_url = cached.get("endpoint_url")
+                api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
-                    from agentarea_common.config import get_database
-
-                    secret_session = get_database().async_session_factory()
                     try:
-                        secret_manager = dependencies.secret_manager_factory.create(
-                            session=secret_session, user_context=user_context
+                        from agentarea_common.config import get_database
+
+                        secret_session = get_database().async_session_factory()
+                        try:
+                            secret_manager = dependencies.secret_manager_factory.create(
+                                session=secret_session, user_context=user_context
+                            )
+                            api_key = await secret_manager.get_secret(api_key_secret_name)
+                        finally:
+                            await secret_session.close()
+                    except Exception as decrypt_err:
+                        logger.warning(
+                            f"Failed to decrypt cached API key for model {request.model_id} "
+                            f"in compact_messages, falling back to DB lookup: {decrypt_err}",
+                            exc_info=True,
                         )
-                        api_key = await secret_manager.get_secret(api_key_secret_name)
-                    finally:
-                        await secret_session.close()
+                        provider_type = None
+
+            if provider_type is None:
+                async with ActivityContext(container, user_context) as ctx:
+                    model_instance_service = await ctx.get_model_instance_service()
+                    model_instance = await model_instance_service.get(model_uuid)
+                    if not model_instance:
+                        raise ValueError(f"Model instance {request.model_id} not found")
+
+                    provider_type = model_instance.provider_config.provider_spec.provider_type
+                    model_name = model_instance.model_spec.model_name
+                    endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+
+                    api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+                    if api_key_secret_name:
+                        from agentarea_common.config import get_database
+
+                        secret_session = get_database().async_session_factory()
+                        try:
+                            secret_manager = dependencies.secret_manager_factory.create(
+                                session=secret_session, user_context=user_context
+                            )
+                            api_key = await secret_manager.get_secret(api_key_secret_name)
+                        finally:
+                            await secret_session.close()
 
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
@@ -1163,6 +1270,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         build_agent_config_activity,
         discover_available_tools_activity,
         discover_tool_providers_activity,
+        resolve_model_activity,
         call_llm_activity,
         execute_mcp_tool_activity,
         create_execution_plan_activity,

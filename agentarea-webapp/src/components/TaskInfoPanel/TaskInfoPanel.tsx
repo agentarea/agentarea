@@ -71,7 +71,7 @@ export default function TaskInfoPanel({
           </>
         )}
 
-        {activeTab === "model" && <ModelInfo task={task} />}
+        {activeTab === "model" && <ModelInfo task={task} isActive={isActive} />}
       </InfoPanelBody>
     </InfoPanelShell>
   );

@@ -522,6 +522,11 @@ class LLMModel:
                 try:
                     import litellm
 
+                    model_str = (
+                        f"{self.provider_type}/{self.model_name}"
+                        if self.provider_type
+                        else self.model_name
+                    )
                     prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
                     completion_tokens = (
                         getattr(usage_info, "completion_tokens", 0) if usage_info else 0
@@ -530,19 +535,23 @@ class LLMModel:
                     # If usage wasn't in chunks, estimate tokens from content
                     if prompt_tokens == 0:
                         prompt_tokens = litellm.token_counter(
-                            model=self.model_id,
+                            model=model_str,
                             messages=[m.model_dump(mode="json") for m in request.messages],
                         )
                     if completion_tokens == 0 and complete_content:
                         completion_tokens = litellm.token_counter(
-                            model=self.model_id, text=complete_content
+                            model=model_str, text=complete_content
                         )
 
                     if prompt_tokens > 0 or completion_tokens > 0:
+                        prompt_str = " ".join(
+                            m.get("content", "") if isinstance(m, dict) else str(m)
+                            for m in [msg.model_dump(mode="json") for msg in request.messages]
+                        )
                         cost = litellm.completion_cost(
-                            model=self.model_id,
-                            prompt_tokens=prompt_tokens,
-                            completion_tokens=completion_tokens,
+                            model=model_str,
+                            prompt=prompt_str,
+                            completion=complete_content or "",
                         )
                         # Update usage if it was estimated
                         if usage_info is None:

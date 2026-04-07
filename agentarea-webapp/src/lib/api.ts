@@ -23,6 +23,7 @@ export const {
   getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
+  sendTaskCommand,
   resolveEscalation,
   getAgentTaskEvents,
 
@@ -46,7 +47,6 @@ export const {
   deleteOpenAPIConnection,
   getOpenAPIConnection,
   discoverOpenAPITools,
-  testOpenAPIConnection,
   previewOpenAPISpec,
 
   // MCP Server Instance API

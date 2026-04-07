@@ -238,6 +238,16 @@ async def create_connection(
         return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch spec: HTTP {e.response.status_code}",
+        ) from e
+    except httpx.RequestError as e:
+        logger.error("Failed to fetch spec during connection create: %s", e)
+        raise HTTPException(
+            status_code=400, detail="Failed to fetch spec from the provided URL."
+        ) from e
 
 
 @router.get("/", response_model=list[OpenAPIConnectionResponse])
@@ -331,20 +341,3 @@ async def discover_tools(
     except Exception as e:
         logger.error(f"Failed to discover tools for {connection_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to discover tools") from e
-
-
-@router.post("/{connection_id}/test")
-async def check_connection(
-    connection_id: UUID,
-    service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
-):
-    try:
-        return await service.test_connection(connection_id)
-    except ValueError as e:
-        logger.warning(f"Test connection validation error for {connection_id}: {e}")
-        raise HTTPException(
-            status_code=400, detail="Connection test failed: invalid configuration"
-        ) from e
-    except Exception as e:
-        logger.error(f"Failed to test connection {connection_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to test connection") from e

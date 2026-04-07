@@ -8,6 +8,8 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
+    from agentarea_common.money import ZERO, Money, to_money
+
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
 
@@ -37,13 +39,14 @@ class EventManager:
                 **data,
             },
         }
-        self._events.append(event)
-
         if self.publish_immediately:
-            # Add to pending events for immediate publishing
+            # Add only to pending events for immediate publishing; NOT to _events
+            # to avoid publishing the same event twice (once immediately, once in
+            # the regular publish cycle that drains _events).
             self._pending_events.append(event)
             workflow.logger.debug(f"Added workflow event for immediate publishing: {event_type}")
         else:
+            self._events.append(event)
             workflow.logger.debug(f"Added workflow event: {event_type}")
 
     def get_events(self) -> list[dict[str, Any]]:
@@ -68,32 +71,37 @@ class EventManager:
 
 
 class BudgetTracker:
-    """Tracks budget usage and provides warnings."""
+    """Tracks budget usage and provides warnings.
+
+    All monetary values use the Money type (Decimal) internally.
+    Use serialize_money() when putting values into dicts/events.
+    """
 
     def __init__(self, budget_usd: float | None = None, service_budget_usd: float | None = None):
         from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
 
-        self.budget_limit = budget_usd or DEFAULT_BUDGET_USD
-        self.cost = 0.0
+        self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
+        self.cost: Money = ZERO
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
         # Service budget tracking
-        self._service_limit = service_budget_usd or 0.0
-        self._service_cost = 0.0
+        self._service_limit: Money = to_money(service_budget_usd or 0)
+        self._service_cost: Money = ZERO
         self._service_warning_sent = False
 
     def add_cost(self, amount: float) -> None:
         """Add cost to the current total."""
-        self.cost += amount
-        workflow.logger.info(f"Added cost: ${amount:.6f}, total: ${self.cost:.6f}")
+        added = to_money(amount)
+        self.cost += added
+        workflow.logger.info(f"Added cost: ${added}, total: ${self.cost}")
 
-    def get_remaining(self) -> float:
+    def get_remaining(self) -> Money:
         """Get remaining budget."""
-        return max(0.0, self.budget_limit - self.cost)
+        return max(ZERO, self.budget_limit - self.cost)
 
     def get_usage_percentage(self) -> float:
         """Get budget usage as percentage."""
-        return (self.cost / self.budget_limit) * 100 if self.budget_limit > 0 else 0
+        return float(self.cost / self.budget_limit) * 100 if self.budget_limit > 0 else 0
 
     def is_exceeded(self) -> bool:
         """Check if budget is exceeded."""
@@ -122,14 +130,14 @@ class BudgetTracker:
 
     def add_service_cost(self, amount: float) -> None:
         """Track a service payment cost."""
-        self._service_cost += amount
-        workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost:.6f}")
+        self._service_cost += to_money(amount)
+        workflow.logger.info(f"Added service cost: ${amount:.6f}, total: ${self._service_cost}")
 
-    def get_service_remaining(self) -> float:
+    def get_service_remaining(self) -> Money:
         """Get remaining service budget."""
         if self._service_limit <= 0:
-            return float("inf")
-        return max(0.0, self._service_limit - self._service_cost)
+            return to_money("Infinity")
+        return max(ZERO, self._service_limit - self._service_cost)
 
     def is_service_exceeded(self) -> bool:
         """Check if service budget is exhausted."""
@@ -142,7 +150,7 @@ class BudgetTracker:
         if self._service_limit <= 0:
             return False
         return (
-            self._service_cost / self._service_limit
+            float(self._service_cost / self._service_limit)
         ) >= self.warning_threshold and not self._service_warning_sent
 
     def mark_service_warning_sent(self) -> None:
@@ -150,7 +158,7 @@ class BudgetTracker:
         self._service_warning_sent = True
 
     @property
-    def service_cost(self) -> float:
+    def service_cost(self) -> Money:
         """Get total service cost."""
         return self._service_cost
 

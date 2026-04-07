@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.deps.services import get_trigger_health_check, get_trigger_service
+from agentarea_api.api.deps.services import get_secret_manager, get_trigger_health_check, get_trigger_service
 from agentarea_api.api.v1.triggers import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
@@ -151,13 +151,18 @@ def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_
     async def _override_health_checker():
         return mock_health_checker
 
+    async def _override_secret_manager():
+        return AsyncMock()
+
     app.dependency_overrides[get_trigger_service] = _override_trigger_service
     app.dependency_overrides[require_a2a_execute_auth] = _override_auth
     app.dependency_overrides[get_trigger_health_check] = _override_health_checker
+    app.dependency_overrides[get_secret_manager] = _override_secret_manager
     yield
     app.dependency_overrides.pop(get_trigger_service, None)
     app.dependency_overrides.pop(require_a2a_execute_auth, None)
     app.dependency_overrides.pop(get_trigger_health_check, None)
+    app.dependency_overrides.pop(get_secret_manager, None)
 
 
 @pytest.fixture

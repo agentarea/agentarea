@@ -5,6 +5,7 @@ This module contains all dataclasses and type definitions used by the agent exec
 
 from typing import Any
 
+from agentarea_common.money import ZERO, Money
 from pydantic import BaseModel, Field
 
 
@@ -80,7 +81,7 @@ class ExecutionResult(BaseModel):
     iterations_completed: int
     success: bool
     final_response: str | None = None
-    total_cost: float = 0.0
+    total_cost: Money = ZERO
 
 
 class ContinueAsNewState(BaseModel):
@@ -96,8 +97,8 @@ class ContinueAsNewState(BaseModel):
     agent_config: dict[str, Any]
     available_tools: list[dict[str, Any]]
     current_iteration: int
-    total_cost: float
-    budget_usd: float | None = None
+    total_cost: Money = ZERO
+    budget_usd: Money | None = None
     context_window: int = 128000
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     continued_from_run_id: str | None = None
@@ -108,9 +109,11 @@ class ContinueAsNewState(BaseModel):
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
     # Service budget (wallet payments)
-    service_budget_usd: float | None = None
-    service_cost_used: float = 0.0
+    service_budget_usd: Money | None = None
+    service_cost_used: Money = ZERO
     wallet_id: str | None = None
+    # Cached model resolution — preserved across continue-as-new
+    resolved_model: dict | None = None
 
 
 class AgentExecutionState(BaseModel):
@@ -130,7 +133,7 @@ class AgentExecutionState(BaseModel):
     final_response: str | None = None
     success: bool = False
     blocked_reason: str | None = None
-    budget_usd: float | None = None
+    budget_usd: Money | None = None
     context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
@@ -138,3 +141,9 @@ class AgentExecutionState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # Service budget (wallet payments)
+    service_budget_usd: Money | None = None
+    service_cost_used: Money = ZERO
+    wallet_id: str | None = None
+    # Cached model resolution — resolved once at workflow start
+    resolved_model: dict | None = None

@@ -26,18 +26,31 @@ This architecture allows for:
 """
 
 from .interfaces import ActivityDependencies, ActivityServicesInterface
-from .models import (
-    AgentExecutionRequest,
-    AgentExecutionResult,
-    LLMReasoningRequest,
-    LLMReasoningResult,
-    ToolExecutionRequest,
-    ToolExecutionResult,
-)
 
-# Avoid SDK imports in execution module to prevent Temporal sandbox issues
-# Import Message from workflow models instead
-from .workflows.models import Message
+# Lazy imports to avoid Temporal sandbox issues.
+# agentarea_execution.models imports agentarea_common.money which triggers
+# agentarea_common.__init__ → auth.dependencies → fastapi → sniffio thread
+# local creation, crashing the Temporal workflow sandbox validator.
+
+
+def __getattr__(name: str):
+    if name in (
+        "AgentExecutionRequest",
+        "AgentExecutionResult",
+        "LLMReasoningRequest",
+        "LLMReasoningResult",
+        "ToolExecutionRequest",
+        "ToolExecutionResult",
+    ):
+        from . import models
+
+        return getattr(models, name)
+    if name == "Message":
+        from .workflows.models import Message
+
+        return Message
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Note: Agentic runners are not imported here to avoid Temporal sandbox issues
 # Import them directly from .agentic when needed outside of workflows

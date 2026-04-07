@@ -12,7 +12,6 @@ from .constants import (
     CONTAINER_START_TIMEOUT,
     DB_UPDATE_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
-    ENV_RESOLVE_TIMEOUT,
     EVENT_PUBLISH_RETRY_ATTEMPTS,
     EVENT_PUBLISH_TIMEOUT,
     HEALTH_POLL_INTERVAL_SECONDS,
@@ -25,8 +24,6 @@ from .models import (
     CreateContainerResult,
     DiscoverToolsRequest,
     DiscoverToolsResult,
-    GetInstanceEnvironmentRequest,
-    GetInstanceEnvironmentResult,
     PollContainerHealthRequest,
     PollContainerHealthResult,
     PublishMCPEventRequest,
@@ -70,27 +67,11 @@ class StartMCPInstanceWorkflow:
             await self._update_status(request, "starting")
             await self._publish_event(request, "mcp.server.starting")
 
-            # Step 2: Resolve environment variables
-            env_result = await workflow.execute_activity(
-                "get_mcp_instance_environment_activity",
-                args=[
-                    GetInstanceEnvironmentRequest(
-                        instance_id=instance_id,
-                        user_id=request.user_id,
-                        workspace_id=request.workspace_id,
-                    )
-                ],
-                start_to_close_timeout=ENV_RESOLVE_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-                result_type=GetInstanceEnvironmentResult,
-            )
+            # Step 2: Secrets are resolved by Go MCP Manager directly from
+            # encrypted_secrets table. No need to pass secrets through Temporal
+            # history — this avoids storing plaintext secrets in workflow state.
 
-            # Merge resolved env vars into json_spec for container creation
             json_spec_with_env = dict(request.json_spec)
-            if env_result.env_vars:
-                existing_env = json_spec_with_env.get("environment", {})
-                existing_env.update(env_result.env_vars)
-                json_spec_with_env["environment"] = existing_env
 
             # Determine spec type — url-type MCPs skip container lifecycle
             spec_type = json_spec_with_env.get("type", "docker")

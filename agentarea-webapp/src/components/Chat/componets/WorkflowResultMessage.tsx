@@ -8,7 +8,7 @@ interface WorkflowResultData {
   final_response?: string;
   success: boolean;
   iterations_completed?: number;
-  total_cost?: number;
+  total_cost?: number | string;
   budget_usd?: number;
   service_cost_used?: number;
   service_budget_usd?: number;
@@ -31,7 +31,7 @@ const WorkflowResultMessage: React.FC<{
           <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
             <SplitBudgetDisplay
               inferenceBudget={data.budget_usd}
-              inferenceCost={data.total_cost}
+              inferenceCost={Number(data.total_cost) || 0}
               serviceBudget={data.service_budget_usd}
               serviceCost={data.service_cost_used}
             />
@@ -43,7 +43,7 @@ const WorkflowResultMessage: React.FC<{
               <span>Iterations: {data.iterations_completed}</span>
             )}
             {data.total_cost && (
-              <span>Total Cost: ${data.total_cost.toFixed(4)}</span>
+              <span>Total Cost: ${Number(data.total_cost).toFixed(4)}</span>
             )}
           </div>
         )}

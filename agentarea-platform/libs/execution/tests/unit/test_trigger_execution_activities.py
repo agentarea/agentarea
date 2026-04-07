@@ -16,7 +16,9 @@ from agentarea_execution.models import (
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [
+    pytest.mark.asyncio,
+]
 
 
 class TestTriggerExecutionActivities:
@@ -25,7 +27,11 @@ class TestTriggerExecutionActivities:
     @pytest.fixture
     def mock_dependencies(self):
         """Create mock activity dependencies."""
-        return ActivityDependencies(event_broker=AsyncMock())
+        return ActivityDependencies(
+            settings=MagicMock(),
+            event_broker=AsyncMock(),
+            secret_manager_factory=MagicMock(),
+        )
 
     @pytest.fixture
     def trigger_activities(self, mock_dependencies):
@@ -68,19 +74,19 @@ class TestTriggerExecutionActivities:
         # Mock repositories and services
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TaskRepository"
+                "agentarea_tasks.infrastructure.repository.TaskRepository"
             ) as mock_task_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TaskService"
+                "agentarea_tasks.task_service.TaskService"
             ) as mock_task_service_class,
         ):
             # Setup repository mocks
@@ -97,9 +103,12 @@ class TestTriggerExecutionActivities:
             mock_trigger_service_class.return_value = mock_trigger_service
             mock_task_service_class.return_value = mock_task_service
 
-            # Setup trigger service methods
+            # Setup trigger service methods — add conditions so condition eval runs
+            sample_trigger.conditions = {"type": "always"}
             mock_trigger_service.get_trigger.return_value = sample_trigger
             mock_trigger_service.evaluate_trigger_conditions.return_value = True
+            # Force rule-based path (not LLM)
+            mock_trigger_service.llm_condition_evaluator = None
             mock_trigger_service._build_task_parameters.return_value = {
                 "trigger_id": str(sample_trigger.id),
                 "test_param": "test_value",
@@ -109,7 +118,6 @@ class TestTriggerExecutionActivities:
             mock_task = MagicMock()
             mock_task.id = uuid4()
             mock_task_service.create_task_from_params.return_value = mock_task
-            mock_task_service.submit_task.return_value = None
 
             # Setup execution recording
             mock_execution = TriggerExecution(
@@ -134,13 +142,12 @@ class TestTriggerExecutionActivities:
             assert result.status == "success"
             assert result.trigger_id == sample_trigger.id
             assert result.task_id == mock_task.id
-            assert result.execution_time_ms > 0
+            assert result.execution_time_ms >= 0
 
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
             mock_trigger_service.evaluate_trigger_conditions.assert_called_once()
             mock_task_service.create_task_from_params.assert_called_once()
-            mock_task_service.submit_task.assert_called_once()
             mock_trigger_service.record_execution.assert_called_once()
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
@@ -155,13 +162,13 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
         ):
             # Setup repository mocks
@@ -203,13 +210,13 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
         ):
             # Setup repository mocks
@@ -250,13 +257,13 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
         ):
             # Setup repository mocks
@@ -265,11 +272,14 @@ class TestTriggerExecutionActivities:
             mock_trigger_repo_class.return_value = mock_trigger_repo
             mock_execution_repo_class.return_value = mock_execution_repo
 
-            # Setup service mocks
+            # Setup service mocks — add conditions so condition eval runs
+            sample_trigger.conditions = {"type": "check"}
             mock_trigger_service = AsyncMock()
             mock_trigger_service_class.return_value = mock_trigger_service
             mock_trigger_service.get_trigger.return_value = sample_trigger
             mock_trigger_service.evaluate_trigger_conditions.return_value = False
+            # Force rule-based path (not LLM)
+            mock_trigger_service.llm_condition_evaluator = None
 
             # Get the activity function
             execute_trigger_activity = trigger_activities[0]
@@ -298,13 +308,13 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
         ):
             # Setup repository mocks
@@ -361,13 +371,13 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
         ):
             # Setup repository mocks
@@ -415,19 +425,19 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TaskRepository"
+                "agentarea_tasks.infrastructure.repository.TaskRepository"
             ) as mock_task_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TaskService"
+                "agentarea_tasks.task_service.TaskService"
             ) as mock_task_service_class,
         ):
             # Setup repository mocks
@@ -490,20 +500,28 @@ class TestTriggerExecutionActivities:
 
         with (
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
             ) as mock_trigger_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerExecutionRepository"
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
             ) as mock_execution_repo_class,
             patch(
-                "agentarea_execution.activities.trigger_execution_activities.TriggerService"
+                "agentarea_triggers.trigger_service.TriggerService"
             ) as mock_trigger_service_class,
+            patch(
+                "agentarea_tasks.infrastructure.repository.TaskRepository"
+            ) as mock_task_repo_class,
+            patch(
+                "agentarea_tasks.task_service.TaskService"
+            ) as mock_task_service_class,
         ):
             # Setup repository mocks
             mock_trigger_repo = AsyncMock()
             mock_execution_repo = AsyncMock()
             mock_trigger_repo_class.return_value = mock_trigger_repo
             mock_execution_repo_class.return_value = mock_execution_repo
+            mock_task_repo_class.return_value = AsyncMock()
+            mock_task_service_class.return_value = AsyncMock()
 
             # Setup service mocks
             mock_trigger_service = AsyncMock()

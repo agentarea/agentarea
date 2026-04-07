@@ -165,9 +165,13 @@ class MCPToolFactory:
                     f"MCP server instance {server_instance_id} not found during tool discovery"
                 )
                 return []
-            if getattr(server_instance, "status", None) != "running":
+            status = getattr(server_instance, "status", None)
+            # RUNNING = container-based instance is alive.
+            # CONNECTED = remote URL endpoint reachable, or bundle aggregating other instances.
+            # Both are "ready for tool discovery" per MCPInstanceStatus.
+            if status not in ("running", "connected"):
                 logger.info(
-                    f"MCP server instance {server_instance_id} not running; skipping tool discovery"
+                    f"MCP server instance {server_instance_id} status={status!r}; skipping tool discovery"
                 )
                 return []
 

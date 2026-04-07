@@ -497,6 +497,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Task Command
+         * @description Send a command to a running task workflow.
+         */
+        post: operations["send_task_command_v1_agents__agent_id__tasks__task_id__command_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/{task_id}/events": {
         parameters: {
             query?: never;
@@ -679,141 +699,6 @@ export interface paths {
         get: operations["list_audit_logs_v1_audit_logs__get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Compound Mcps */
-        get: operations["list_compound_mcps_v1_compound_mcps__get"];
-        put?: never;
-        /** Create Compound Mcp */
-        post: operations["create_compound_mcp_v1_compound_mcps__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Compound Mcp */
-        get: operations["get_compound_mcp_v1_compound_mcps__compound_id__get"];
-        /** Update Compound Mcp */
-        put: operations["update_compound_mcp_v1_compound_mcps__compound_id__put"];
-        post?: never;
-        /** Delete Compound Mcp */
-        delete: operations["delete_compound_mcp_v1_compound_mcps__compound_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}/endpoint": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Compound Endpoint Info
-         * @description Return the MCP endpoint URL for a compound MCP.
-         */
-        get: operations["get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Compound Mcp Members */
-        get: operations["list_compound_mcp_members_v1_compound_mcps__compound_id__members_get"];
-        put?: never;
-        /** Add Compound Mcp Member */
-        post: operations["add_compound_mcp_member_v1_compound_mcps__compound_id__members_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}/members/{instance_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Compound Mcp Member */
-        delete: operations["remove_compound_mcp_member_v1_compound_mcps__compound_id__members__instance_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Compound Proxy
-         * @description Build and register a compound MCP proxy server.
-         *
-         *     This discovers tools from all member instances and makes the compound
-         *     available as an MCP endpoint.  Call this after adding/removing members.
-         */
-        post: operations["start_compound_proxy_v1_compound_mcps__compound_id__start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/compound-mcps/{compound_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stop Compound Proxy
-         * @description Stop a running compound MCP proxy.
-         */
-        post: operations["stop_compound_proxy_v1_compound_mcps__compound_id__stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1039,6 +924,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-server-instances/validate-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Connection
+         * @description Test a connection to an MCP server without creating an instance.
+         *
+         *     Returns tools list on success, or auth/connection error on failure.
+         *     Use this to validate credentials before creating an instance.
+         */
+        post: operations["validate_connection_v1_mcp_server_instances_validate_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/{instance_id}": {
         parameters: {
             query?: never;
@@ -1140,6 +1048,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-server-instances/{instance_id}/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe Instance Auth
+         * @description Probe a URL-type MCP instance to detect its auth requirements.
+         *
+         *     Returns the supported auth methods (oauth, credentials, none) and
+         *     any hints from the spec's env_schema for pre-filling the credential form.
+         */
+        post: operations["probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/{instance_id}/start": {
         parameters: {
             query?: never;
@@ -1157,26 +1088,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/mcp-server-instances/{instance_id}/start-bundle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Bundle Proxy
-         * @description Build and register a bundle MCP proxy server.
-         */
-        post: operations["start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/mcp-server-instances/{instance_id}/stop": {
         parameters: {
             query?: never;
@@ -1188,26 +1099,6 @@ export interface paths {
         put?: never;
         /** Stop Mcp Server Instance */
         post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/stop-bundle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stop Bundle Proxy
-         * @description Stop a running bundle MCP proxy.
-         */
-        post: operations["stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1630,23 +1521,6 @@ export interface paths {
         put?: never;
         /** Discover Tools */
         post: operations["discover_tools_v1_openapi_connections__connection_id__discover_tools_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/openapi-connections/{connection_id}/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Check Connection */
-        post: operations["check_connection_v1_openapi_connections__connection_id__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3443,87 +3317,6 @@ export interface components {
              */
             file: string;
         };
-        /** CompoundMCPCreateRequest */
-        CompoundMCPCreateRequest: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name: string;
-            /**
-             * Routing Mode
-             * @description parallel | fallback | conditional
-             * @default parallel
-             */
-            routing_mode: string;
-        };
-        /** CompoundMCPMemberRequest */
-        CompoundMCPMemberRequest: {
-            /** Config */
-            config?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Mcp Instance Id
-             * Format: uuid
-             */
-            mcp_instance_id: string;
-            /**
-             * Order
-             * @default 0
-             */
-            order: number;
-        };
-        /** CompoundMCPMemberResponse */
-        CompoundMCPMemberResponse: {
-            /** Config */
-            config: {
-                [key: string]: unknown;
-            };
-            /**
-             * Mcp Instance Id
-             * Format: uuid
-             */
-            mcp_instance_id: string;
-            /** Namespace */
-            namespace: string;
-            /** Order */
-            order: number;
-        };
-        /** CompoundMCPResponse */
-        CompoundMCPResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Description */
-            description: string | null;
-            /** Endpoint Url */
-            endpoint_url?: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Routing Mode */
-            routing_mode: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** CompoundMCPUpdateRequest */
-        CompoundMCPUpdateRequest: {
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name?: string | null;
-            /** Routing Mode */
-            routing_mode?: string | null;
-        };
         /** DiscoverPreviewModelResponse */
         DiscoverPreviewModelResponse: {
             /** Context Window */
@@ -4092,8 +3885,14 @@ export interface components {
             id: string;
             /** Is Public */
             is_public: boolean;
+            /** Json Spec */
+            json_spec?: {
+                [key: string]: unknown;
+            } | null;
             /** Name */
             name: string;
+            /** Registry Url */
+            registry_url?: string | null;
             /** Remote Url */
             remote_url?: string | null;
             /** Status */
@@ -4126,15 +3925,39 @@ export interface components {
              */
             docker_image_url?: string | null;
             /**
+             * Env Schema
+             * @description Environment variable schema
+             */
+            env_schema?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
              * Is Public
              * @description Whether the server is public
              */
             is_public?: boolean | null;
             /**
+             * Json Spec
+             * @description Raw ServerJSON spec from MCP registry
+             */
+            json_spec?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Name
              * @description Name of the MCP server
              */
             name?: string | null;
+            /**
+             * Registry Url
+             * @description Source registry URL
+             */
+            registry_url?: string | null;
+            /**
+             * Remote Url
+             * @description Remote URL for HTTP-based MCP servers
+             */
+            remote_url?: string | null;
             /**
              * Status
              * @description Status of the MCP server
@@ -5022,6 +4845,19 @@ export interface components {
             /** Updates Flagged */
             updates_flagged: number;
         };
+        /** TaskCommandPayload */
+        TaskCommandPayload: {
+            /** Budget Usd */
+            budget_usd?: number | null;
+            /** Command */
+            command: string;
+            /** Message */
+            message?: string | null;
+            /** Message Id */
+            message_id?: string | null;
+            /** Model Instance Id */
+            model_instance_id?: string | null;
+        };
         /** TaskCreate */
         TaskCreate: {
             /** Description */
@@ -5475,6 +5311,21 @@ export interface components {
             errors: number;
             /** Updated */
             updated: number;
+        };
+        /** ValidateConnectionRequest */
+        ValidateConnectionRequest: {
+            /**
+             * Headers
+             * @description HTTP headers to send (e.g. Authorization)
+             */
+            headers?: {
+                [key: string]: string;
+            };
+            /**
+             * Url
+             * @description MCP server endpoint URL to test
+             */
+            url: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -6464,6 +6315,42 @@ export interface operations {
             };
         };
     };
+    send_task_command_v1_agents__agent_id__tasks__task_id__command_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCommandPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_task_events_v1_agents__agent_id__tasks__task_id__events_get: {
         parameters: {
             query?: {
@@ -6813,343 +6700,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_compound_mcps_v1_compound_mcps__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPResponse"][];
-                };
-            };
-        };
-    };
-    create_compound_mcp_v1_compound_mcps__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompoundMCPCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_compound_mcp_v1_compound_mcps__compound_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_compound_mcp_v1_compound_mcps__compound_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompoundMCPUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_compound_mcp_v1_compound_mcps__compound_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_compound_endpoint_info_v1_compound_mcps__compound_id__endpoint_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_compound_mcp_members_v1_compound_mcps__compound_id__members_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPMemberResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_compound_mcp_member_v1_compound_mcps__compound_id__members_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompoundMCPMemberRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompoundMCPMemberResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_compound_mcp_member_v1_compound_mcps__compound_id__members__instance_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_compound_proxy_v1_compound_mcps__compound_id__start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stop_compound_proxy_v1_compound_mcps__compound_id__stop_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                compound_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -7611,6 +7161,39 @@ export interface operations {
             };
         };
     };
+    validate_connection_v1_mcp_server_instances_validate_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_mcp_server_instance_v1_mcp_server_instances__instance_id__get: {
         parameters: {
             query?: never;
@@ -7838,6 +7421,37 @@ export interface operations {
             };
         };
     };
+    probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post: {
         parameters: {
             query?: never;
@@ -7869,69 +7483,7 @@ export interface operations {
             };
         };
     };
-    start_bundle_proxy_v1_mcp_server_instances__instance_id__start_bundle_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stop_bundle_proxy_v1_mcp_server_instances__instance_id__stop_bundle_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -8917,37 +8469,6 @@ export interface operations {
         };
     };
     discover_tools_v1_openapi_connections__connection_id__discover_tools_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    check_connection_v1_openapi_connections__connection_id__test_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -235,53 +235,6 @@ def create_app() -> FastAPI:
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 
-    # Compound MCP proxy + Bundle proxy — routes already contain /v1 prefix,
-    # so we include directly on app (not on protected_v1_router which adds /v1).
-    from agentarea_common.auth.dependencies import get_user_context
-    from fastapi import Depends
-
-    from agentarea_api.api.v1.compound_mcp_proxy import router as compound_mcp_proxy_router
-
-    app.include_router(
-        compound_mcp_proxy_router,
-        dependencies=[Depends(get_user_context)],
-        tags=["compound-mcp-proxy"],
-    )
-
-    # Bundle MCP proxy routing — serves bundle instances at /bundle-mcp/{instance-id}
-    from starlette.types import ASGIApp as _ASGIApp
-    from starlette.types import Receive as _Receive
-    from starlette.types import Scope as _Scope
-    from starlette.types import Send as _Send
-
-    class BundleMCPMiddleware:
-        """Routes /mcp/{instance-id} to registered bundle proxy ASGI apps, falling through to platform MCP."""
-
-        def __init__(self, inner_app: _ASGIApp) -> None:
-            self._inner = inner_app
-
-        async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
-            if scope["type"] in ("http", "websocket"):
-                path: str = scope.get("path", "")
-                if path.startswith("/mcp/"):
-                    parts = path[len("/mcp/") :].split("/", 1)
-                    instance_id = parts[0]
-
-                    from agentarea_api.api.v1.compound_mcp_registry import registry
-
-                    proxy_app = registry.get(instance_id)
-                    if proxy_app is not None:
-                        remainder = "/" + (parts[1] if len(parts) > 1 else "")
-                        scope = dict(scope)
-                        scope["path"] = remainder
-                        scope["raw_path"] = remainder.encode()
-                        await proxy_app(scope, receive, send)
-                        return
-
-            await self._inner(scope, receive, send)
-
-    app.add_middleware(BundleMCPMiddleware)  # type: ignore[arg-type]
-
     # Mount native MCP server at /mcp — exposes platform tools via MCP protocol.
     # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
     # Session manager lifespan is run in _lifespan (above) so the task group

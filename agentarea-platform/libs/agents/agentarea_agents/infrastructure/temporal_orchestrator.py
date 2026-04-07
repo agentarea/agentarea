@@ -287,3 +287,19 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         except Exception as e:
             logger.error(f"Failed to resolve escalation in workflow: {e}")
             return False
+
+    async def send_workflow_command(
+        self, execution_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a generic command signal to a running Temporal workflow."""
+        client = await self._get_client()
+
+        try:
+            handle = client.get_workflow_handle(execution_id)
+            await handle.signal("workflow_command", args=[command, payload])
+            logger.info(f"Sent workflow command '{command}' to workflow: {execution_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send workflow command '{command}' to {execution_id}: {e}")
+            return False

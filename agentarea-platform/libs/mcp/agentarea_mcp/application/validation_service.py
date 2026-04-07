@@ -83,6 +83,13 @@ class MCPConfigurationValidator:
                             errors.append(f"Header key '{key}' must be a non-empty string")
                         if not isinstance(value, str):
                             errors.append(f"Header '{key}' value must be a string")
+        elif spec_type == "bundle":
+            # Bundle type: our internal concept for grouping MCP instances.
+            # Not a registry json_spec type — no container needed, validated separately.
+            if "members" not in json_spec:
+                errors.append("Required field 'members' is missing for type 'bundle'")
+            elif not isinstance(json_spec["members"], list) or not json_spec["members"]:
+                errors.append("Field 'members' must be a non-empty list of instance IDs")
         else:
             # Docker type (default): requires "image" and "port"
             if "image" not in json_spec:

@@ -6,7 +6,54 @@ Integrates with existing AgentArea domain models and uses proper UUID types.
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.money import ZERO, Money
 from pydantic import BaseModel, Field
+
+
+class ResolvedModelInfo(BaseModel):
+    """Cached model resolution info stored in workflow state.
+
+    api_key_secret is the SECRET MANAGER KEY NAME (e.g. "provider_123_api_key"),
+    NOT the actual API key. The actual key is decrypted inside activities only.
+    """
+
+    model_id: str
+    provider_type: str
+    model_name: str
+    api_key_secret: str | None = None  # secret manager key name, not the actual key
+    endpoint_url: str | None = None
+    context_window: int = 128000
+    display_name: str | None = None
+    provider_display_name: str | None = None
+    resolved_at: str | None = None  # ISO timestamp for staleness debugging
+
+
+class ResolveModelRequest(BaseModel):
+    """Request to resolve model info for caching."""
+
+    model_id: str
+    workspace_id: str
+
+
+class WorkflowCommand(BaseModel):
+    """Generic workflow command sent via signal."""
+
+    command: str  # "change_model", "update_budget", etc.
+    payload: dict[str, Any]
+
+
+class ChangeModelPayload(BaseModel):
+    """Typed payload for change_model command."""
+
+    model_id: str
+    provider_type: str
+    model_name: str
+    api_key_secret: str | None = None
+    endpoint_url: str | None = None
+    context_window: int = 128000
+    display_name: str | None = None
+    provider_display_name: str | None = None
+    resolved_at: str | None = None
 
 
 class AgentExecutionRequest(BaseModel):
@@ -27,7 +74,7 @@ class AgentExecutionRequest(BaseModel):
     max_reasoning_iterations: int = 10
     enable_agent_communication: bool = False
     requires_human_approval: bool = False
-    budget_usd: float | None = None  # Optional budget limit in USD
+    budget_usd: Money | None = None  # Optional budget limit in USD
 
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -52,7 +99,7 @@ class AgentExecutionResult(BaseModel):
     reasoning_iterations_used: int = 0
     total_tool_calls: int = 0
     execution_duration_seconds: float | None = None
-    total_cost: float = 0.0
+    total_cost: Money = ZERO
 
     # Error handling
     error_message: str | None = None
@@ -208,6 +255,7 @@ class LLMCallRequest(BaseModel):
     task_id: str | None = None
     agent_id: str | None = None
     execution_id: str | None = None
+    resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
 
 
 class LLMUsage(BaseModel):
@@ -224,7 +272,7 @@ class LLMCallResult(BaseModel):
     role: str = "assistant"
     content: str = ""
     tool_calls: list[dict[str, Any]] | None = None
-    cost: float = 0.0
+    cost: Money = ZERO
     usage: LLMUsage | None = None
 
 
@@ -306,7 +354,7 @@ class UpdateTaskStatusRequest(BaseModel):
     result: str | None = None
     error_message: str | None = None
     workspace_id: str
-    total_cost: float = 0.0
+    total_cost: Money = ZERO
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -323,6 +371,7 @@ class CompactMessagesRequest(BaseModel):
     model_id: str
     workspace_id: str
     user_context_data: dict[str, Any] | None = None
+    resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
 
 
 class CompactMessagesResult(BaseModel):

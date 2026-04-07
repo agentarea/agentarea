@@ -108,6 +108,18 @@ class ExecutionService(ExecutionServiceInterface):
             logger.error(f"Failed to resolve escalation: {e}")
             return False
 
+    async def send_workflow_command(
+        self, execution_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a generic command signal to a running workflow."""
+        try:
+            return await self._workflow_orchestrator.send_workflow_command(
+                execution_id, command, payload
+            )
+        except Exception as e:
+            logger.error(f"Failed to send workflow command '{command}': {e}")
+            return False
+
 
 # Interface for workflow orchestrators
 from abc import ABC, abstractmethod  # noqa: E402
@@ -146,4 +158,11 @@ class WorkflowOrchestratorInterface(ABC):
         self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
     ) -> bool:
         """Resolve a tool escalation in the workflow."""
+        pass
+
+    @abstractmethod
+    async def send_workflow_command(
+        self, execution_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a generic command signal to a running workflow."""
         pass

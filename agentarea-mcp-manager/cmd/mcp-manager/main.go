@@ -167,6 +167,11 @@ func main() {
 	}
 	defer secretResolver.Close()
 
+	// Wire secret resolver into container manager for SyncInstancesFromDatabase
+	if containerManager != nil {
+		containerManager.SetSecretResolver(secretResolver)
+	}
+
 	// Initialize providers based on environment
 	var providerManager *providers.ProviderManager
 	urlProvider := providers.NewURLProvider(logger)

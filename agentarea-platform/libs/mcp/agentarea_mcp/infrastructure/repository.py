@@ -1,6 +1,6 @@
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -75,8 +75,14 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         count_query = select(func.count()).select_from(base_query.subquery())
         total = (await self.session.execute(count_query)).scalar_one()
 
+        # Order: specs with icons first (json_spec has 'icons' key), then by name
+        has_icons = case(
+            (cast(self.model_class.json_spec, String).like('%"icons"%'), 0),
+            else_=1,
+        )
+        query = base_query.order_by(has_icons, self.model_class.name)
+
         # Apply pagination
-        query = base_query
         if offset > 0:
             query = query.offset(offset)
         if limit > 0:

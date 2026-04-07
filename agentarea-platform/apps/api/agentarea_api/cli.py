@@ -1,5 +1,9 @@
 """API CLI commands for AgentArea API."""
 
+import asyncio
+import json
+import logging
+import os
 import sys
 
 import click
@@ -8,6 +12,8 @@ from agentarea_common.config import Database, get_db_settings
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
 def get_engine():
@@ -179,6 +185,123 @@ def validate():
 
     except Exception as e:
         click.echo(f"❌ Validation failed: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    "--registries-config",
+    envvar="REGISTRIES_CONFIG",
+    default=None,
+    help="JSON array of registry definitions (or REGISTRIES_CONFIG env var)",
+)
+@click.option(
+    "--source",
+    multiple=True,
+    help="Registry source file/URL (can be repeated). Auto-detects type.",
+)
+def reconcile(registries_config: str | None, source: tuple[str, ...]):
+    """Idempotent reconcile — ensure registries exist and sync them."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    asyncio.run(_reconcile(registries_config, source))
+
+
+async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
+    """Async reconcile implementation."""
+    from agentarea_common.auth.context import UserContext
+    from agentarea_mcp.application.registry_service import RegistryService
+    from agentarea_mcp.infrastructure.registry_repository import (
+        RegistryItemRepository,
+        RegistryRepository,
+    )
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+
+    db = Database(get_db_settings())
+    system_context = UserContext(user_id="system", workspace_id="system")
+
+    # Build registry configs from args
+    configs: list[dict] = []
+
+    if registries_config:
+        try:
+            configs = json.loads(registries_config)
+            click.echo(f"📋 Loaded {len(configs)} registries from config")
+        except json.JSONDecodeError as e:
+            click.echo(f"❌ Failed to parse REGISTRIES_CONFIG: {e}")
+            sys.exit(1)
+
+    # Add any --source args as auto-detected registries
+    for src in sources:
+        name = (
+            os.path.basename(src).rsplit(".", 1)[0]
+            if not src.startswith("http")
+            else src.split("/")[-1]
+        )
+        configs.append(
+            {
+                "name": name,
+                "type": "mcp_servers",
+                "source_type": "url",
+                "source_url": src,
+            }
+        )
+
+    if not configs:
+        click.echo("⚠️  No registry config provided (set REGISTRIES_CONFIG or use --source)")
+        return
+
+    try:
+        skill_repo = None
+        try:
+            from agentarea_agents.infrastructure.skill_repository import SkillRepository
+
+            skill_repo_cls = SkillRepository
+        except ImportError:
+            skill_repo_cls = None
+
+        synced = 0
+        for config in configs:
+            registry_name = config["name"]
+            click.echo(f"\n🔄 Reconciling: {registry_name}")
+
+            async with db.async_session_factory() as session:
+                registry_repo = RegistryRepository(session, system_context)
+                item_repo = RegistryItemRepository(session, system_context)
+                server_repo = MCPServerRepository(session, system_context)
+                skill_repo = skill_repo_cls(session, system_context) if skill_repo_cls else None
+                service = RegistryService(registry_repo, item_repo, server_repo, skill_repo)
+
+                # Ensure registry record exists
+                matches = await registry_repo.find_by(name=config["name"])
+                existing = matches[0] if matches else None
+                if existing:
+                    registry_id = existing.id
+                    click.echo(f"   Found existing registry: {registry_id}")
+                else:
+                    registry = await service.create_registry(
+                        name=config["name"],
+                        registry_type=config.get("type", "mcp_servers"),
+                        source_type=config.get("source_type", "url"),
+                        source_url=config["source_url"],
+                        description=config.get("description"),
+                        sync_mode=config.get("sync_mode", "manual"),
+                    )
+                    registry_id = registry.id
+                    click.echo(f"   Created registry: {registry_id}")
+
+                # Sync
+                stats = await service.sync_registry(registry_id)
+                await session.commit()
+
+                click.echo(f"   ✅ Synced: {stats}")
+                synced += 1
+
+        click.echo(f"\n✅ Reconcile complete: {synced}/{len(configs)} registries synced")
+
+    except Exception as e:
+        click.echo(f"❌ Reconcile failed: {e}")
+        logger.exception("Reconcile failed")
         sys.exit(1)
 
 

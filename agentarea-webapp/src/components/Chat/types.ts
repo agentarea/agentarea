@@ -73,7 +73,7 @@ export interface WorkflowResultData extends BaseMessageData {
   final_response?: string;
   success: boolean;
   iterations_completed?: number;
-  total_cost?: number;
+  total_cost?: number | string;
 }
 
 // A2UI v0.9 — 18 primitive component types from the basic catalog

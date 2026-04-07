@@ -132,15 +132,37 @@ class OpenAPIConnectionService:
         if custom_headers:
             processed_headers = await self._store_headers(custom_headers, connection_id=conn_id)
 
+        # Eagerly resolve spec + tools so callers get a ready-to-use connection
+        # in a single request. Pasted JSON is parsed in-place; spec_url is fetched.
+        resolved_spec: dict[str, Any] | None = spec_content
+        if resolved_spec is None and spec_url:
+            resolved_headers = {
+                h["name"]: h.get("value", "")
+                for h in (processed_headers or [])
+                if not h.get("secret") and h.get("value")
+            }
+            # Secret headers resolved below via resolve_headers once conn exists;
+            # for initial fetch, non-secret headers are enough for most public specs.
+            resolved_spec = await fetch_and_parse_spec(
+                spec_url,
+                allow_private=self._allow_private_urls,
+                headers=resolved_headers or None,
+            )
+
+        available_tools: list[dict[str, Any]] = []
+        if resolved_spec is not None:
+            available_tools = parse_openapi_spec(resolved_spec)
+
         conn = await self._repo.create(
             id=conn_id,
             name=name,
             base_url=base_url,
             description=description,
             spec_url=spec_url,
-            spec_content=spec_content,
+            spec_content=resolved_spec,
             auth_config_id=auth_config_id,
             custom_headers=processed_headers,
+            available_tools=available_tools,
         )
 
         return conn
@@ -292,43 +314,3 @@ class OpenAPIConnectionService:
             allow_private=self._allow_private_urls,
             headers=headers,
         )
-
-    async def test_connection(self, connection_id: UUID) -> dict[str, Any]:
-        """Make a health check request to the base_url."""
-        conn = await self._repo.get_by_id(str(connection_id))
-        if not conn:
-            raise ValueError(f"Connection {connection_id} not found")
-
-        try:
-            resolved_ips = validate_url(conn.base_url, allow_private=self._allow_private_urls)
-            headers = await self.resolve_headers(conn)
-            # Build URL from validated IP to prevent DNS rebinding
-            test_url, original_host, _path = build_pinned_url(
-                conn.base_url, resolved_ips[0] if resolved_ips else None
-            )
-            if original_host:
-                headers.setdefault("Host", original_host)
-            async with httpx.AsyncClient(
-                timeout=10, headers=headers, follow_redirects=False, verify=True
-            ) as client:
-                resp = await client.get(test_url)
-
-            status_code = resp.status_code
-            if 200 <= status_code < 300:
-                status = "reachable"
-            elif status_code in (401, 403):
-                status = "auth_error"
-            elif status_code >= 500:
-                status = "server_error"
-            else:
-                status = "reachable"
-
-            return {
-                "status": status,
-                "status_code": status_code,
-            }
-        except httpx.RequestError as e:
-            return {
-                "status": "unreachable",
-                "error": str(e),
-            }

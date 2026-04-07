@@ -234,6 +234,31 @@ func (dr *DatabaseSecretResolver) removePKCS7Padding(data []byte) ([]byte, error
 	return data[:len(data)-paddingLen], nil
 }
 
+// ResolveInstanceEnvVars resolves secret env vars by name from encrypted_secrets table.
+// This is the primary method for the new flow where json_spec.env_vars holds secret names.
+func (dr *DatabaseSecretResolver) ResolveInstanceEnvVars(instanceID string, envVarNames []string) (map[string]string, error) {
+	resolved := make(map[string]string)
+
+	for _, envName := range envVarNames {
+		secretValue, err := dr.getSecretFromDatabase(instanceID, envName)
+		if err != nil {
+			dr.logger.Warn("Failed to resolve env var from database",
+				slog.String("instance_id", instanceID),
+				slog.String("env_var", envName),
+				slog.String("error", err.Error()))
+			continue // Skip missing secrets rather than failing the whole container
+		}
+		resolved[envName] = secretValue
+	}
+
+	dr.logger.Info("Resolved instance env vars from database",
+		slog.String("instance_id", instanceID),
+		slog.Int("requested", len(envVarNames)),
+		slog.Int("resolved", len(resolved)))
+
+	return resolved, nil
+}
+
 // Close closes the database connection
 func (dr *DatabaseSecretResolver) Close() error {
 	dr.logger.Info("Closing database secret resolver")

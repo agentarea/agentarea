@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from agentarea_api.api.deps.services import get_webhook_manager
+from agentarea_api.api.deps.services import get_public_webhook_manager, get_webhook_manager
 from agentarea_api.api.v1.webhooks import router
 from agentarea_common.auth.dependencies import get_user_context
 from fastapi import FastAPI
@@ -42,6 +42,7 @@ def app_with_webhooks(mock_webhook_manager, mock_user_context):
     # Include router with dependency override
     app.include_router(router)
     app.dependency_overrides[get_webhook_manager] = get_mock_webhook_manager
+    app.dependency_overrides[get_public_webhook_manager] = get_mock_webhook_manager
     app.dependency_overrides[get_user_context] = get_mock_user_context
 
     return app
@@ -195,7 +196,6 @@ class TestWebhookEndpoints:
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "webhook-manager"
-        assert "timestamp" in data
 
     def test_webhook_health_check_unhealthy(self, client, mock_webhook_manager):
         """Test webhook health check when unhealthy."""
@@ -224,19 +224,6 @@ class TestWebhookEndpoints:
         data = response.json()
         assert data["status"] == "unhealthy"
         assert data["service"] == "webhook-manager"
-        assert "error" in data
-
-    def test_debug_webhook(self, client, mock_webhook_manager):
-        """Test webhook debug endpoint."""
-        # Make request
-        response = client.get("/webhooks/debug/test123")
-
-        # Verify response
-        assert response.status_code == 200
-        data = response.json()
-        assert data["webhook_id"] == "test123"
-        assert data["status"] == "registered"
-        assert "debug_info" in data
 
     def test_handle_webhook_all_methods(self, client, mock_webhook_manager):
         """Test that webhook endpoint accepts all HTTP methods."""

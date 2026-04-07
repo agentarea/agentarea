@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { listMCPServers } from "@/lib/api";
+import { getMCPServer } from "@/lib/api";
 import CreateMCPInstanceClient from "./CreateMCPInstanceClient";
 import type { MCPServer } from "../../types";
 import MCPCreateHeaderControls from "./HeaderControls";
@@ -18,10 +18,8 @@ export default async function CreateMCPInstancePage({
   const { id } = await params;
   const t = await getTranslations("MCPServersPage");
 
-  const serversResponse = await listMCPServers();
-  const serversData = serversResponse.data as any;
-  const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
-  const mcpServer = mcpServers.find((s) => String(s.id) === String(id));
+  const { data: mcpServerData, error: serverError } = await getMCPServer(id);
+  const mcpServer = mcpServerData as MCPServer | null;
 
   return (
     <ContentBlock
@@ -45,10 +43,10 @@ export default async function CreateMCPInstancePage({
       {!mcpServer ? (
         <div className="py-6">
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-            {serversResponse.error
-              ? (serversResponse.error as any)?.detail?.[0]?.msg ||
-                (serversResponse.error as any)?.detail ||
-                (serversResponse.error as any)?.message ||
+            {serverError
+              ? (serverError as any)?.detail?.[0]?.msg ||
+                (serverError as any)?.detail ||
+                (serverError as any)?.message ||
                 t("createInstance.errors.loadServersFailed")
               : t("createInstance.errors.specNotFound")}{" "}
             (id: {id})

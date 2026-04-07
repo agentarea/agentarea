@@ -8,9 +8,12 @@ from agentarea_api.api.deps.services import get_mcp_server_instance_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import MCPServerRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import update as sa_update
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +48,39 @@ class MCPServerInstanceResponse(BaseModel):
 
     @classmethod
     def from_domain(cls, instance: MCPServerInstance) -> "MCPServerInstanceResponse":
+        json_spec = dict(instance.json_spec or {})
+
+        # Mask secret env var values — env_vars list holds names of secrets
+        secret_names = set(json_spec.get("env_vars", []))
+        if secret_names:
+            masked_value = "*" * 6
+            # Inject masked values for secret keys into environment
+            env = json_spec.get("environment")
+            if isinstance(env, dict):
+                masked_env = {k: (masked_value if k in secret_names else v) for k, v in env.items()}
+                # Add missing secret keys (stripped during creation)
+                for name in secret_names:
+                    if name not in masked_env:
+                        masked_env[name] = masked_value
+                json_spec["environment"] = masked_env
+            # Inject masked values for secret keys into headers
+            headers = json_spec.get("headers")
+            if isinstance(headers, dict):
+                masked_headers = {
+                    k: (masked_value if k in secret_names else v) for k, v in headers.items()
+                }
+                for name in secret_names:
+                    if name not in masked_headers:
+                        masked_headers[name] = masked_value
+                json_spec["headers"] = masked_headers
+
         return cls.model_validate(
             {
                 "id": instance.id,
                 "name": instance.name,
                 "description": instance.description,
                 "server_spec_id": instance.server_spec_id,
-                "json_spec": instance.json_spec,
+                "json_spec": json_spec,
                 "status": instance.status,
                 "auth_config_id": instance.auth_config_id,
                 "created_at": instance.created_at,
@@ -86,6 +115,33 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+class ValidateConnectionRequest(BaseModel):
+    url: str = Field(..., description="MCP server endpoint URL to test")
+    headers: dict[str, str] = Field(
+        default_factory=dict, description="HTTP headers to send (e.g. Authorization)"
+    )
+
+
+@router.post("/validate-connection")
+async def validate_connection(
+    data: ValidateConnectionRequest,
+    user_context: UserContextDep,
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
+):
+    """Test a connection to an MCP server without creating an instance.
+
+    Returns tools list on success, or auth/connection error on failure.
+    Use this to validate credentials before creating an instance.
+    """
+    result = await mcp_server_instance_service.validate_connection(
+        url=data.url,
+        headers=data.headers if data.headers else None,
+    )
+    return result
 
 
 @router.post("/check")
@@ -446,6 +502,57 @@ async def get_containers_health(
         raise HTTPException(status_code=503, detail="Unable to connect to container manager") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{instance_id}/probe")
+async def probe_instance_auth(
+    instance_id: UUID,
+    user_context: UserContextDep,
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
+):
+    """Probe a URL-type MCP instance to detect its auth requirements.
+
+    Returns the supported auth methods (oauth, credentials, none) and
+    any hints from the spec's env_schema for pre-filling the credential form.
+    """
+    result = await mcp_server_instance_service.probe_instance_auth(instance_id)
+
+    if result.get("status") == "error":
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("message", "Probe failed"),
+        )
+
+    # Cache auth_methods on the spec if the instance has a server_spec_id
+    if result.get("methods"):
+        try:
+            instance = await mcp_server_instance_service.repository.get_by_id(instance_id)
+            if instance and instance.server_spec_id:
+                server_repo = MCPServerRepository(
+                    mcp_server_instance_service.repository.session,
+                    mcp_server_instance_service.repository.user_context,
+                )
+                spec = await server_repo.get_by_id(instance.server_spec_id)
+                if spec:
+                    new_json_spec = dict(spec.json_spec or {})
+                    new_json_spec["auth_methods"] = result["methods"]
+                    db_session = mcp_server_instance_service.repository.session
+                    stmt = (
+                        sa_update(MCPServer)
+                        .where(MCPServer.id == spec.id)
+                        .values(json_spec=new_json_spec)
+                    )
+                    await db_session.execute(stmt)
+                    await db_session.commit()
+        except Exception:
+            logger.warning(
+                "Failed to cache auth methods for MCP server spec after probe",
+                exc_info=True,
+            )
+
+    return result
 
 
 @router.post("/{instance_id}/discover-tools")

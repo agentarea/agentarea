@@ -161,24 +161,13 @@ def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str
             url = remote.get("url", "")
             if not url:
                 continue
-            raw_headers = remote.get("headers", {})
-            if isinstance(raw_headers, list):
-                headers = {}
-                for h in raw_headers:
-                    if isinstance(h, dict):
-                        headers.update(h)
-            else:
-                headers = raw_headers or {}
-            requires_auth = bool(headers.get("Authorization"))
-            env_schema = []
-            if requires_auth:
-                auth_info = headers["Authorization"]
-                if isinstance(auth_info, dict):
-                    env_schema.append({
-                        "name": "AUTHORIZATION",
-                        "description": auth_info.get("description", "Authorization header"),
-                        "required": auth_info.get("isRequired", True),
-                    })
+            # Headers are KeyValueInput arrays — keep raw for env_schema
+            raw_headers = remote.get("headers", [])
+            env_schema = [h for h in raw_headers if isinstance(h, dict)] if isinstance(raw_headers, list) else []
+            requires_auth = any(
+                h.get("name", "").lower() in ("authorization", "api-key", "x-api-key")
+                for h in env_schema
+            )
             tags = [transport]
             if requires_auth:
                 tags.append("requires-auth")
@@ -187,7 +176,13 @@ def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str
                 "name": title,
                 "description": description,
                 "version": version,
-                "spec": {"connection_type": "url", "url": url, "transport": transport, "env_schema": env_schema},
+                "spec": {
+                    "connection_type": "url",
+                    "url": url,
+                    "transport": transport,
+                    "env_schema": env_schema,
+                    "raw_spec": server,
+                },
                 "tags": tags,
             })
 
@@ -208,7 +203,7 @@ def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str
                 "name": title,
                 "description": description,
                 "version": pkg_version,
-                "spec": {"connection_type": "docker", "image": f"{image}:{pkg_version}" if ":" not in image else image, "transport": "stdio", "env_schema": env_schema},
+                "spec": {"connection_type": "docker", "image": f"{image}:{pkg_version}" if ":" not in image else image, "transport": "stdio", "env_schema": env_schema, "raw_spec": server},
                 "tags": ["docker", "oci"],
             })
 
@@ -246,7 +241,7 @@ def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str
                 "name": title,
                 "description": description,
                 "version": pkg_version,
-                "spec": {"connection_type": "command", "command": command, "args": args, "transport": "stdio", "package_registry": reg_type, "package_name": pkg_name, "env_schema": env_schema},
+                "spec": {"connection_type": "command", "command": command, "args": args, "transport": "stdio", "package_registry": reg_type, "package_name": pkg_name, "env_schema": env_schema, "raw_spec": server},
                 "tags": ["command", reg_type],
             })
     return items
@@ -319,6 +314,7 @@ def create_mcp_server(conn: Connection, item_id: str, item: dict[str, Any]) -> s
 
     docker_image_url = ""
     cmd = None
+    remote_url = ""
     if conn_type == "docker":
         docker_image_url = spec.get("image", "")
     elif conn_type == "command":
@@ -326,6 +322,8 @@ def create_mcp_server(conn: Connection, item_id: str, item: dict[str, Any]) -> s
         command = spec.get("command", "")
         args = spec.get("args", [])
         cmd = [command, *args] if command else None
+    elif conn_type == "url":
+        remote_url = spec.get("url", "")
 
     server_tags = ["registry", conn_type]
     transport = spec.get("transport", "")
@@ -333,6 +331,7 @@ def create_mcp_server(conn: Connection, item_id: str, item: dict[str, Any]) -> s
         server_tags.append(transport)
 
     env_schema = spec.get("env_schema", [])
+    raw_spec = spec.get("raw_spec")
 
     server_id = str(uuid.uuid4())
     conn.execute(
@@ -340,10 +339,12 @@ def create_mcp_server(conn: Connection, item_id: str, item: dict[str, Any]) -> s
             "INSERT INTO mcp_servers "
             "(id, name, description, docker_image_url, version, tags, "
             " status, is_public, env_schema, cmd, registry_item_id, "
+            " remote_url, json_spec, registry_url, "
             " created_by, workspace_id, created_at, updated_at) "
             "VALUES "
             "(:id, :name, :desc, :docker_image_url, :version, :tags, "
             " :status, :is_public, :env_schema, :cmd, :registry_item_id, "
+            " :remote_url, :json_spec, :registry_url, "
             " :created_by, :workspace_id, now(), now())"
         ),
         {
@@ -358,6 +359,9 @@ def create_mcp_server(conn: Connection, item_id: str, item: dict[str, Any]) -> s
             "env_schema": json.dumps(env_schema),
             "cmd": json.dumps(cmd) if cmd else None,
             "registry_item_id": item_id,
+            "remote_url": remote_url,
+            "json_spec": json.dumps(raw_spec) if raw_spec else None,
+            "registry_url": "https://registry.modelcontextprotocol.io",
             "created_by": "system",
             "workspace_id": "system",
         },

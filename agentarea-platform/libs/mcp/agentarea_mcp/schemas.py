@@ -21,6 +21,28 @@ class MCPServerStatus(StrEnum):
     DELETED = "deleted"
 
 
+class MCPInstanceStatus(StrEnum):
+    """Runtime status for MCP server instances.
+
+    These are the possible values of MCPServerInstance.status:
+    - PENDING: Instance created, waiting for container startup
+    - STARTING: Container/process is being started
+    - RUNNING: Docker/command container is alive and serving
+    - CONNECTED: Remote URL endpoint is reachable (no container)
+    - STOPPING: Container is being stopped
+    - STOPPED: Container has been stopped
+    - FAILED: Instance failed to start or crashed
+    """
+
+    PENDING = "pending"
+    STARTING = "starting"
+    RUNNING = "running"
+    CONNECTED = "connected"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    FAILED = "failed"
+
+
 class MCPServerTemplate(StrEnum):
     """Available MCP server templates."""
 

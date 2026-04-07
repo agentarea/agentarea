@@ -31,7 +31,7 @@ export const LLMResponseMessage: React.FC<{
         {data.usage && (
           <div className="mt-3 flex gap-4 border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
             <span>Tokens: {data.usage.usage.total_tokens}</span>
-            <span>Cost: ${data.usage.cost.toFixed(4)}</span>
+            <span>Cost: ${Number(data.usage.cost ?? 0).toFixed(4)}</span>
           </div>
         )}
       </BaseMessage>

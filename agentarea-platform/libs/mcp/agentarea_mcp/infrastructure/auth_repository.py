@@ -1,4 +1,4 @@
-"""Repositories for MCP auth configs, OAuth links/sessions, compound MCPs and skills."""
+"""Repositories for MCP auth configs, OAuth links/sessions, and API keys."""
 
 from datetime import datetime
 from uuid import UUID
@@ -10,8 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.auth_models import (
     APIKey,
-    CompoundMCP,
-    CompoundMCPMember,
     MCPAuthConfig,
     MCPOAuthLink,
     MCPOAuthSession,
@@ -118,37 +116,3 @@ class MCPOAuthSessionRepository:
             await self.session.delete(s)
         await self.session.commit()
         return len(expired)
-
-
-class CompoundMCPRepository(WorkspaceScopedRepository[CompoundMCP]):
-    def __init__(self, session: AsyncSession, user_context: UserContext) -> None:
-        super().__init__(session, CompoundMCP, user_context)
-
-    async def get_members(self, compound_id: UUID) -> list[CompoundMCPMember]:
-        """Return ordered member rows for a compound MCP."""
-        result = await self.session.execute(
-            select(CompoundMCPMember)
-            .where(CompoundMCPMember.compound_id == compound_id)
-            .order_by(CompoundMCPMember.order)
-        )
-        return list(result.scalars().all())
-
-    async def add_member(self, member: CompoundMCPMember) -> CompoundMCPMember:
-        self.session.add(member)
-        await self.session.commit()
-        await self.session.refresh(member)
-        return member
-
-    async def remove_member(self, compound_id: UUID, mcp_instance_id: UUID) -> bool:
-        result = await self.session.execute(
-            select(CompoundMCPMember).where(
-                CompoundMCPMember.compound_id == compound_id,
-                CompoundMCPMember.mcp_instance_id == mcp_instance_id,
-            )
-        )
-        member = result.scalar_one_or_none()
-        if member is None:
-            return False
-        await self.session.delete(member)
-        await self.session.commit()
-        return True
