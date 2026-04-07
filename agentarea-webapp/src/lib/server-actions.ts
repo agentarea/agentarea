@@ -410,14 +410,19 @@ export async function listMCPServerInstancesAction() {
 }
 
 export async function probeInstanceAuthAction(instanceId: string) {
+  // Validate UUID to prevent SSRF/path injection in downstream fetch URL
+  if (!/^[a-f0-9-]{36}$/i.test(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
+
   const token = await getAuthToken();
-  const res = await fetch(
-    `${env.API_URL}/v1/mcp-server-instances/${instanceId}/probe`,
-    {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }
-  );
+  const base = new URL(env.API_URL);
+  base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
+
+  const res = await fetch(base.href, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) {
     const text = await res.text();
     return { data: null, error: text };
@@ -426,14 +431,20 @@ export async function probeInstanceAuthAction(instanceId: string) {
 }
 
 export async function oauthAuthorizeAction(instanceId: string) {
+  // Validate UUID to prevent SSRF/path injection in downstream fetch URL
+  if (!/^[a-f0-9-]{36}$/i.test(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
+
   const token = await getAuthToken();
-  const res = await fetch(
-    `${env.API_URL}/v1/mcp-oauth/authorize?instance_id=${instanceId}`,
-    {
-      method: "GET",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }
-  );
+  const base = new URL(env.API_URL);
+  base.pathname = "/v1/mcp-oauth/authorize";
+  base.search = new URLSearchParams({ instance_id: instanceId }).toString();
+
+  const res = await fetch(base.href, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) {
     const text = await res.text();
     return { data: null, error: text };

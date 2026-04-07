@@ -29,7 +29,7 @@ export default async function MCPInstancePage({ params }: Props) {
       : null;
 
   // Resolve bundle member names
-  let memberNames: Record<string, string> = {};
+  const memberNames: Record<string, string> = {};
   const jsonSpec = (instance as any).json_spec;
   if (jsonSpec?.type === "bundle" && Array.isArray(jsonSpec.members)) {
     const results = await Promise.all(
