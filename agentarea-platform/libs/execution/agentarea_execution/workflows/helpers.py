@@ -91,8 +91,9 @@ class BudgetTracker:
 
     def add_cost(self, amount: float) -> None:
         """Add cost to the current total."""
-        self.cost += to_money(amount)
-        workflow.logger.info(f"Added cost: ${amount:.6f}, total: ${self.cost}")
+        added = to_money(amount)
+        self.cost += added
+        workflow.logger.info(f"Added cost: ${added}, total: ${self.cost}")
 
     def get_remaining(self) -> Money:
         """Get remaining budget."""

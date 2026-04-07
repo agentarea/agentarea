@@ -424,7 +424,7 @@ export const mapSSEToDisplayEvent = (
   } else if (eventData.messages_compacted) {
     description = `${config?.title}: ${eventData.messages_compacted} messages summarized, ~${eventData.tokens_saved || 0} tokens saved`;
   } else if (eventData.cost) {
-    description = `${config?.title} (Cost: $${eventData.cost.toFixed(4)})`;
+    description = `${config?.title} (Cost: $${Number(eventData.cost).toFixed(4)})`;
   } else if (eventData.iteration) {
     description = `${config?.title} ${eventData.iteration}`;
   }
