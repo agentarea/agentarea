@@ -263,7 +263,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             provider_type = model_instance.provider_config.provider_spec.provider_type
             model_name = model_instance.model_spec.model_name
-            endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+            # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
+            endpoint_url = getattr(model_instance.provider_config, "endpoint_url", None) or getattr(
+                model_instance.model_spec, "endpoint_url", None
+            )
             context_window = getattr(model_instance.model_spec, "context_window", 128000)
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
@@ -352,7 +355,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     # Extract required parameters from model instance
                     provider_type = model_instance.provider_config.provider_spec.provider_type
                     model_name = model_instance.model_spec.model_name
-                    endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+                    # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
+                    endpoint_url = getattr(
+                        model_instance.provider_config, "endpoint_url", None
+                    ) or getattr(model_instance.model_spec, "endpoint_url", None)
 
                     # Decode API key from secret manager
                     # (provider_config.api_key is a secret name/placeholder)
@@ -575,6 +581,41 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             tool_executor.register_tool(delegation_tool)
                             logger.info(f"Registered agent tool for execution: {agent_name}")
 
+            # Register OpenAPI tools from configuration. Each connection expands to one
+            # or more OpenAPITool instances (one per allowed operation), which are then
+            # findable by name in the executor's registry — the same way code and agent
+            # tools are pre-registered.
+            if request.tools and isinstance(request.tools, list):
+                openapi_configs = [
+                    tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "openapi"
+                ]
+                if openapi_configs:
+                    from agentarea_agents_sdk.tools.openapi_tool import OpenAPIToolFactory
+
+                    openapi_connection_service = await ctx.get_openapi_connection_service()
+                    for tool_config in openapi_configs:
+                        settings = tool_config.get("settings") or {}
+                        # Prefer settings.openapi_connection_id (stable UUID) over tool.name.
+                        connection_ref = settings.get("openapi_connection_id") or tool_config.get("name")
+                        if not connection_ref:
+                            logger.warning("Skipping openapi tool with no connection reference")
+                            continue
+                        raw_allowed = settings.get("allowed_tools") or []
+                        allowed_names = [
+                            (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                        ]
+                        openapi_tools = await OpenAPIToolFactory.create_tools_from_connection(
+                            connection_name_or_id=connection_ref,
+                            allowed_tools=allowed_names,
+                            openapi_connection_service=openapi_connection_service,
+                        )
+                        for openapi_tool_instance in openapi_tools:
+                            tool_executor.register_tool(openapi_tool_instance)
+                            logger.info(
+                                f"Registered openapi tool for execution: {openapi_tool_instance.name} "
+                                f"(connection={connection_ref})"
+                            )
+
             try:
                 result = await tool_executor.execute_tool(
                     tool_name=request.tool_name,
@@ -583,10 +624,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     mcp_server_instance_service=mcp_server_instance_service,
                 )
 
+                raw_result = result.get("result")
                 return MCPToolResult(
                     success=result.get("success", False),
-                    result=str(result.get("result", "")),
-                    execution_time=result.get("execution_time", ""),
+                    result="" if raw_result is None else str(raw_result),
+                    execution_time=result.get("execution_time") or "",
+                    error=result.get("error"),
                 )
 
             except Exception as e:
@@ -970,7 +1013,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
                     model_name = model_instance.model_spec.model_name
-                    endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+                    # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
+                    endpoint_url = getattr(
+                        model_instance.provider_config, "endpoint_url", None
+                    ) or getattr(model_instance.model_spec, "endpoint_url", None)
 
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
