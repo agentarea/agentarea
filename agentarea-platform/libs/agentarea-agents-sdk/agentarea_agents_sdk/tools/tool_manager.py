@@ -9,11 +9,13 @@ from .base_tool import ToolRegistry
 from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
 from .mcp_tool import MCPToolFactory
+from .openapi_tool import OpenAPIToolFactory
 from .tool_provider import (
     AgentToolProvider,
     BuiltinToolProvider,
     CodeToolProvider,
     MCPToolProvider,
+    OpenAPIToolProvider,
     ToolProvider,
 )
 
@@ -23,9 +25,15 @@ logger = logging.getLogger(__name__)
 class ToolManager:
     """Service for managing tool discovery and availability using unified tool interface."""
 
-    def __init__(self):
-        """Initialize tool manager with registry."""
+    def __init__(self, openapi_connection_service=None):
+        """Initialize tool manager with registry.
+
+        Args:
+            openapi_connection_service: Optional OpenAPIConnectionService for resolving
+                openapi-type tools. Existing callers that omit this arg continue to work.
+        """
         self.registry = ToolRegistry()
+        self._openapi_connection_service = openapi_connection_service
 
         # Register built-in tools
         self.registry.register(CompletionTool())
@@ -122,6 +130,27 @@ class ToolManager:
                     all_tools.append(a2a_tool.get_openai_function_definition())
                     logger.info(f"Added agent tool: {tool_name}")
 
+            elif tool_type == "openapi":
+                # OpenAPI connection tool. Prefer settings.openapi_connection_id (UUID,
+                # stable across renames) over tool.name so renaming a connection does
+                # not break the agent link. Fall back to tool.name for legacy entries.
+                connection_ref = settings.get("openapi_connection_id") or tool_name
+                raw_allowed = settings.get("allowed_tools") or []
+                allowed_names = [
+                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                ]
+                openapi_tools = await self._discover_openapi_tools_by_name(
+                    connection_ref, allowed_names, self._openapi_connection_service
+                )
+                for openapi_tool in openapi_tools:
+                    all_tools.append(openapi_tool.get_openai_function_definition())
+
+            else:
+                logger.warning(
+                    f"Unknown tool type: {tool_type}",
+                    extra={"tool_config": tool},
+                )
+
         logger.info(f"Discovered {len(all_tools)} tools for agent {agent_id}")
         return all_tools
 
@@ -201,6 +230,45 @@ class ToolManager:
             )
 
         return all_mcp_tools
+
+    async def _discover_openapi_tools_by_name(
+        self,
+        connection_name: str,
+        allowed_tools: list[str],
+        openapi_connection_service,
+    ) -> list:
+        """Discover tools from an OpenAPI connection by name or UUID.
+
+        Args:
+            connection_name: Name or UUID string of the OpenAPI connection.
+            allowed_tools: List of tool names to allow (empty means all).
+            openapi_connection_service: Service for OpenAPI connections.
+
+        Returns:
+            List of OpenAPITool instances.
+        """
+        if not openapi_connection_service:
+            logger.warning(
+                f"Skipping openapi tool '{connection_name}': no openapi_connection_service provided"
+            )
+            return []
+
+        try:
+            tools = await OpenAPIToolFactory.create_tools_from_connection(
+                connection_name_or_id=connection_name,
+                allowed_tools=allowed_tools if allowed_tools else None,
+                openapi_connection_service=openapi_connection_service,
+            )
+            logger.info(
+                f"Discovered {len(tools)} tools from OpenAPI connection: {connection_name}"
+            )
+            return tools
+        except Exception as e:
+            logger.error(
+                f"Failed to get tools from OpenAPI connection {connection_name}: {e}",
+                exc_info=True,
+            )
+            return []
 
     async def discover_tool_providers(
         self,
@@ -290,6 +358,32 @@ class ToolManager:
                             tools=[a2a_tool.get_openai_function_definition()],
                         )
                     )
+
+            elif tool_type == "openapi":
+                # Prefer settings.openapi_connection_id (UUID, stable across renames).
+                connection_ref = settings.get("openapi_connection_id") or tool_name
+                raw_allowed = settings.get("allowed_tools") or []
+                allowed_names = [
+                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                ]
+                openapi_tools = await self._discover_openapi_tools_by_name(
+                    connection_ref, allowed_names, self._openapi_connection_service
+                )
+                if openapi_tools:
+                    tool_defs = [t.get_openai_function_definition() for t in openapi_tools]
+                    providers.append(
+                        OpenAPIToolProvider(
+                            name=tool_name,
+                            connection_id=str(connection_ref),
+                            tools=tool_defs,
+                        )
+                    )
+
+            else:
+                logger.warning(
+                    f"Unknown tool type: {tool_type}",
+                    extra={"tool_config": tool},
+                )
 
         logger.info(f"Discovered {len(providers)} tool providers for agent {agent_id}")
         return providers

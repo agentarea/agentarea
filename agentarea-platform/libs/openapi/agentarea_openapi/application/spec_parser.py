@@ -4,15 +4,13 @@ import re
 from typing import Any
 
 
-def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract operations from an OpenAPI 3.x spec as tool definitions.
+def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract enriched per-operation records from an OpenAPI 3.x spec.
 
-    Each operation becomes a tool with:
-    - name: operationId or generated from method + path
-    - description: summary or description
-    - inputSchema: merged path params, query params, and request body
+    Each operation record includes HTTP method, path, parameters with `in`
+    location, request body metadata, and the flat input_schema for LLM use.
 
-    Raises ValueError for non-OpenAPI 3.x specs.
+    Raises ValueError for non-OpenAPI 3.x specs (same rules as parse_openapi_spec).
     """
     if "swagger" in spec:
         raise ValueError("Swagger 2.0 specs are not supported. Please convert to OpenAPI 3.x.")
@@ -22,7 +20,7 @@ def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
         raise ValueError(f"Only OpenAPI 3.x specs are supported, got: {openapi_version!r}")
 
     paths = spec.get("paths", {})
-    tools: list[dict[str, Any]] = []
+    operations: list[dict[str, Any]] = []
 
     for path, path_item in paths.items():
         if not path_item or not isinstance(path_item, dict):
@@ -39,17 +37,84 @@ def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
             name = operation.get("operationId") or _generate_name(method, path)
             description = operation.get("summary") or operation.get("description") or ""
 
+            # Resolve and merge parameters, preserving `in` location
+            op_params = [_resolve_ref(p, spec) for p in operation.get("parameters", [])]
+            merged_params = _merge_parameters(path_params, op_params)
+
+            # Build enriched parameter list with `in` location
+            parameters: list[dict[str, Any]] = []
+            for param in merged_params:
+                param_name = param.get("name", "")
+                if not param_name:
+                    continue
+                param_schema = _resolve_ref(param.get("schema", {"type": "string"}), spec)
+                parameters.append(
+                    {
+                        "name": param_name,
+                        "in": param.get("in", "query"),
+                        "required": param.get("required", False),
+                        "schema": param_schema,
+                    }
+                )
+
+            # Resolve request body metadata
+            request_body: dict[str, Any] | None = None
+            raw_body = operation.get("requestBody")
+            if raw_body:
+                raw_body = _resolve_ref(raw_body, spec)
+                content = raw_body.get("content", {})
+                # Pick first content type; prefer application/json
+                content_type = "application/json"
+                body_schema: dict[str, Any] | None = None
+                if "application/json" in content:
+                    body_schema = _resolve_ref(
+                        content["application/json"].get("schema", {}), spec
+                    )
+                elif content:
+                    content_type = next(iter(content))
+                    body_schema = _resolve_ref(
+                        content[content_type].get("schema", {}), spec
+                    )
+                request_body = {
+                    "content_type": content_type,
+                    "required": raw_body.get("required", True),
+                    "schema": body_schema or {},
+                }
+
             input_schema = _build_input_schema(operation, path_params, spec)
 
-            tools.append(
+            operations.append(
                 {
                     "name": name,
                     "description": description,
-                    "inputSchema": input_schema,
+                    "method": method.upper(),
+                    "path": path,
+                    "parameters": parameters,
+                    "request_body": request_body,
+                    "input_schema": input_schema,
                 }
             )
 
-    return tools
+    return operations
+
+
+def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract operations from an OpenAPI 3.x spec as tool definitions.
+
+    Thin projector over parse_openapi_operations — returns the legacy
+    {name, description, inputSchema} shape for the UI contract (available_tools column).
+
+    Raises ValueError for non-OpenAPI 3.x specs.
+    """
+    operations = parse_openapi_operations(spec)
+    return [
+        {
+            "name": op["name"],
+            "description": op["description"],
+            "inputSchema": op["input_schema"],
+        }
+        for op in operations
+    ]
 
 
 def _generate_name(method: str, path: str) -> str:

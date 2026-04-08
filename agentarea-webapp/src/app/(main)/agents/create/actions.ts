@@ -27,6 +27,13 @@ const MCPConfigSchema = z.object({
   allowed_tools: z.array(MCPToolConfigSchema).optional().nullable(),
 });
 
+// Define Zod schema for OpenAPI Config
+const OpenAPIConfigSchema = z.object({
+  openapi_connection_id: z.string().uuid("Invalid OpenAPI connection ID"),
+  openapi_connection_name: z.string().optional(),
+  allowed_tools: z.array(z.string()).optional().nullable(),
+});
+
 // Define Zod schema for Builtin Tool Config
 const BuiltinToolConfigSchema = z.object({
   tool_name: z.string().min(1, "Builtin tool name is required"),
@@ -65,6 +72,11 @@ export interface AddAgentFormState {
         enabled?: boolean;
         disabled_methods?: Record<string, boolean>;
       }> | null;
+      openapi_configs?: Array<{
+        openapi_connection_id: string;
+        openapi_connection_name?: string;
+        allowed_tools?: string[] | null;
+      }> | null;
     } | null;
     events_config?: {
       events?: Array<{
@@ -98,6 +110,7 @@ const AgentSchema = z.object({
     .object({
       mcp_server_configs: z.array(MCPConfigSchema).optional().nullable(),
       builtin_tools: z.array(BuiltinToolConfigSchema).optional().nullable(),
+      openapi_configs: z.array(OpenAPIConfigSchema).optional().nullable(),
     })
     .optional()
     .nullable(),
@@ -131,6 +144,12 @@ export async function addAgent(
     disabled_methods?: Record<string, boolean>;
   };
   const builtinToolConfigs: Record<number, BuiltinToolConfigMutable> = {};
+  type OpenAPIConfigMutable = {
+    openapi_connection_id?: string;
+    openapi_connection_name?: string;
+    allowed_tools?: string[];
+  };
+  const openapiConfigs: Record<number, OpenAPIConfigMutable> = {};
 
   formData.forEach((value, key) => {
     // Handle MCP server configs
@@ -212,6 +231,43 @@ export async function addAgent(
           break;
       }
     }
+
+    // Handle OpenAPI configs
+    const openapiIdMatch = key.match(
+      /tools_config\.openapi_configs\[(\d+)\]\.openapi_connection_id/
+    );
+    if (openapiIdMatch) {
+      const index = parseInt(openapiIdMatch[1], 10);
+      if (!openapiConfigs[index]) {
+        openapiConfigs[index] = {};
+      }
+      openapiConfigs[index].openapi_connection_id = value as string;
+    }
+
+    const openapiNameMatch = key.match(
+      /tools_config\.openapi_configs\[(\d+)\]\.openapi_connection_name/
+    );
+    if (openapiNameMatch) {
+      const index = parseInt(openapiNameMatch[1], 10);
+      if (!openapiConfigs[index]) {
+        openapiConfigs[index] = {};
+      }
+      openapiConfigs[index].openapi_connection_name = value as string;
+    }
+
+    const openapiToolMatch = key.match(
+      /tools_config\.openapi_configs\[(\d+)\]\.allowed_tools\[(\d+)\]/
+    );
+    if (openapiToolMatch) {
+      const index = parseInt(openapiToolMatch[1], 10);
+      if (!openapiConfigs[index]) {
+        openapiConfigs[index] = {};
+      }
+      if (!openapiConfigs[index].allowed_tools) {
+        openapiConfigs[index].allowed_tools = [];
+      }
+      openapiConfigs[index].allowed_tools!.push(value as string);
+    }
   });
 
   // Combine MCP configs with their allowed tools
@@ -234,6 +290,13 @@ export async function addAgent(
     requires_user_confirmation: !!config.requires_user_confirmation,
     enabled: config.enabled !== undefined ? config.enabled : true,
     disabled_methods: config.disabled_methods,
+  }));
+
+  // Convert OpenAPI configs record to array
+  const openapiConfigsArray = Object.values(openapiConfigs).map((config) => ({
+    openapi_connection_id: config.openapi_connection_id as string,
+    openapi_connection_name: config.openapi_connection_name,
+    allowed_tools: config.allowed_tools,
   }));
 
   // Reconstruct events array using new format
@@ -302,6 +365,7 @@ export async function addAgent(
     tools_config: {
       mcp_server_configs: mcpConfigsArray,
       builtin_tools: builtinToolsArray,
+      openapi_configs: openapiConfigsArray,
     },
     events_config: { events: eventConfigsArray },
     planning: formData.get("planning") === "on",

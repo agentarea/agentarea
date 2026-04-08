@@ -178,6 +178,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
+            openapi_connection_service = await ctx.get_openapi_connection_service()
 
             # Get agent configuration
             agent = await agent_service.get(request.agent_id)
@@ -185,7 +186,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 raise ValueError(f"Agent {request.agent_id} not found")
 
             # Use tool manager to discover available tools
-            tool_manager = ToolManager()
+            tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
@@ -207,6 +208,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
+            openapi_connection_service = await ctx.get_openapi_connection_service()
 
             agent = await agent_service.get(request.agent_id)
             if not agent:
@@ -214,7 +216,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     success=False, error=f"Agent {request.agent_id} not found"
                 )
 
-            tool_manager = ToolManager()
+            tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,

@@ -17,6 +17,7 @@ from agentarea_common.di.container import resolve
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
+from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_tasks.application.task_event_service import TaskEventService
 
 from ..interfaces import ActivityDependencies
@@ -80,6 +81,31 @@ class ActivityServiceContainer:
             repository_factory=repository_factory,
             event_broker=self.dependencies.event_broker,
             secret_manager=secret_manager,
+        )
+        return service, session
+
+    async def get_openapi_connection_service(
+        self, user_context: UserContext
+    ) -> tuple[OpenAPIConnectionService, Any]:
+        """Get OpenAPIConnectionService with proper session and context."""
+        session = self._database.async_session_factory()
+        repository_factory = RepositoryFactory(session, user_context)
+
+        secret_manager = self.dependencies.secret_manager_factory.create(
+            session=session, user_context=user_context
+        )
+
+        allow_private = getattr(
+            getattr(self.dependencies, "settings", None),
+            "mcp",
+            None,
+        )
+        allow_private_urls = getattr(allow_private, "ALLOW_PRIVATE_URLS", False)
+
+        service = OpenAPIConnectionService(
+            repository_factory=repository_factory,
+            secret_manager=secret_manager,
+            allow_private_urls=allow_private_urls,
         )
         return service, session
 
@@ -224,6 +250,12 @@ class ActivityContext:
     async def get_task_event_service(self) -> TaskEventService:
         """Get TaskEventService for this context."""
         service, session = await self.container.get_task_event_service(self.user_context)
+        self._sessions.append(session)
+        return service
+
+    async def get_openapi_connection_service(self) -> OpenAPIConnectionService:
+        """Get OpenAPIConnectionService for this context."""
+        service, session = await self.container.get_openapi_connection_service(self.user_context)
         self._sessions.append(session)
         return service
 

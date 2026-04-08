@@ -2,7 +2,7 @@
 
 import pytest
 
-from agentarea_openapi.application.spec_parser import parse_openapi_spec
+from agentarea_openapi.application.spec_parser import parse_openapi_operations, parse_openapi_spec
 
 
 SAMPLE_SPEC = {
@@ -129,3 +129,173 @@ class TestParseOpenAPISpec:
         tools = parse_openapi_spec(spec)
         assert len(tools) == 1
         assert tools[0]["inputSchema"]["properties"] == {}
+
+
+SAMPLE_SPEC_WITH_REFS = {
+    "openapi": "3.0.0",
+    "info": {"title": "Ref Test API", "version": "1.0.0"},
+    "components": {
+        "schemas": {
+            "UserBody": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "email": {"type": "string"}},
+                "required": ["name", "email"],
+            }
+        },
+        "parameters": {
+            "UserIdParam": {
+                "name": "user_id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string"},
+            }
+        },
+    },
+    "paths": {
+        "/users/{user_id}": {
+            "parameters": [{"$ref": "#/components/parameters/UserIdParam"}],
+            "put": {
+                "operationId": "updateUser",
+                "summary": "Update user",
+                "parameters": [
+                    {"name": "dry_run", "in": "query", "required": False, "schema": {"type": "boolean"}},
+                    {"name": "X-Trace-Id", "in": "header", "required": False, "schema": {"type": "string"}},
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/UserBody"}
+                        }
+                    },
+                },
+            },
+        }
+    },
+}
+
+
+class TestParseOpenAPIOperations:
+    def test_returns_method_and_path(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        get_users = next(op for op in ops if op["name"] == "listUsers")
+        assert get_users["method"] == "GET"
+        assert get_users["path"] == "/users"
+
+    def test_returns_all_operations(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        names = [op["name"] for op in ops]
+        assert "listUsers" in names
+        assert "createUser" in names
+        assert "getUser" in names
+        assert len(ops) == 3
+
+    def test_query_param_in_location(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        list_users = next(op for op in ops if op["name"] == "listUsers")
+        param_ins = {p["name"]: p["in"] for p in list_users["parameters"]}
+        assert param_ins["page"] == "query"
+        assert param_ins["limit"] == "query"
+
+    def test_path_param_in_location(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        get_user = next(op for op in ops if op["name"] == "getUser")
+        param_ins = {p["name"]: p["in"] for p in get_user["parameters"]}
+        assert param_ins["user_id"] == "path"
+
+    def test_path_param_required_flag(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        get_user = next(op for op in ops if op["name"] == "getUser")
+        user_id_param = next(p for p in get_user["parameters"] if p["name"] == "user_id")
+        assert user_id_param["required"] is True
+
+    def test_request_body_present(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        create_user = next(op for op in ops if op["name"] == "createUser")
+        assert create_user["request_body"] is not None
+        assert create_user["request_body"]["content_type"] == "application/json"
+        assert create_user["request_body"]["required"] is True
+
+    def test_request_body_none_when_absent(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        list_users = next(op for op in ops if op["name"] == "listUsers")
+        assert list_users["request_body"] is None
+
+    def test_input_schema_present(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC)
+        list_users = next(op for op in ops if op["name"] == "listUsers")
+        assert "type" in list_users["input_schema"]
+        assert list_users["input_schema"]["type"] == "object"
+        assert "page" in list_users["input_schema"]["properties"]
+
+    def test_ref_in_path_level_parameter(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC_WITH_REFS)
+        update_user = next(op for op in ops if op["name"] == "updateUser")
+        param_names = {p["name"] for p in update_user["parameters"]}
+        assert "user_id" in param_names
+
+    def test_ref_in_request_body_schema(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC_WITH_REFS)
+        update_user = next(op for op in ops if op["name"] == "updateUser")
+        rb = update_user["request_body"]
+        assert rb is not None
+        assert "name" in rb["schema"].get("properties", {})
+
+    def test_header_param_in_location(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC_WITH_REFS)
+        update_user = next(op for op in ops if op["name"] == "updateUser")
+        param_ins = {p["name"]: p["in"] for p in update_user["parameters"]}
+        assert param_ins["X-Trace-Id"] == "header"
+
+    def test_path_level_and_operation_level_params_merged(self):
+        ops = parse_openapi_operations(SAMPLE_SPEC_WITH_REFS)
+        update_user = next(op for op in ops if op["name"] == "updateUser")
+        param_names = {p["name"] for p in update_user["parameters"]}
+        # path-level: user_id; operation-level: dry_run, X-Trace-Id
+        assert "user_id" in param_names
+        assert "dry_run" in param_names
+        assert "X-Trace-Id" in param_names
+
+    def test_cycle_breaking(self):
+        cyclic_spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Cyclic", "version": "1.0.0"},
+            "components": {
+                "schemas": {
+                    "Cyclic": {"$ref": "#/components/schemas/Cyclic"},
+                }
+            },
+            "paths": {
+                "/test": {
+                    "get": {
+                        "operationId": "testOp",
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Cyclic"}
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        # Must not raise; cycle is broken and returns empty schema
+        ops = parse_openapi_operations(cyclic_spec)
+        assert len(ops) == 1
+
+    def test_rejects_swagger_2(self):
+        spec = {"swagger": "2.0", "info": {"title": "Old", "version": "1.0.0"}, "paths": {}}
+        with pytest.raises(ValueError, match="OpenAPI 3.x"):
+            parse_openapi_operations(spec)
+
+    def test_parse_openapi_spec_still_returns_legacy_shape(self):
+        """parse_openapi_spec must return {name, description, inputSchema} for UI contract."""
+        tools = parse_openapi_spec(SAMPLE_SPEC)
+        for t in tools:
+            assert "name" in t
+            assert "description" in t
+            assert "inputSchema" in t
+            # Must NOT have enriched fields in the legacy output
+            assert "method" not in t
+            assert "path" not in t

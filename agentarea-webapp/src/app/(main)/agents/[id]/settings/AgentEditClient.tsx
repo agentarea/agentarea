@@ -57,6 +57,21 @@ export default function AgentEditClient({
         });
       }
 
+      // OpenAPI tools — store by connection UUID so renames don't break the link.
+      // Mirrors the MCP pattern (`name: mcp_server_id`). ToolConfig.tsx resolves the
+      // display name at render time by looking up openapi_connection_id in the live
+      // connections list.
+      for (const openapiConfig of (formData.tools_config as any).openapi_configs || []) {
+        tools.push({
+          type: "openapi",
+          name: openapiConfig.openapi_connection_id,
+          settings: {
+            openapi_connection_id: openapiConfig.openapi_connection_id,
+            allowed_tools: openapiConfig.allowed_tools?.length > 0 ? openapiConfig.allowed_tools : null,
+          },
+        });
+      }
+
       // Builtin tools
       for (const bt of (formData.tools_config as any).builtin_tools || []) {
         const disabledMethods = bt.disabled_methods

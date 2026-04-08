@@ -109,6 +109,17 @@ export async function loadAgentEditData(
           ),
           requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
         })),
+      openapi_configs: (agent.tools || [])
+        .filter((t: any) => t.type === "openapi")
+        .map((t: any) => ({
+          // Prefer settings.openapi_connection_id (new shape, stable across renames);
+          // fall back to t.name for legacy entries that stored the display name.
+          openapi_connection_id: t.settings?.openapi_connection_id || t.name,
+          // Display name is resolved at render time from the fetched connections list
+          // in ToolConfig.tsx — no need to cache it here.
+          openapi_connection_name: undefined,
+          allowed_tools: t.settings?.allowed_tools || [],
+        })),
     },
     events_config: {
       events: (agent as any).events_config?.events || [],
