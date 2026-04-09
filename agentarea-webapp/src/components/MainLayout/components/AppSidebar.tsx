@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Github } from "lucide-react";
+import { Github, SquarePen } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +11,12 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { NavMain } from "./NavMain";
 import { NavUser } from "./NavUser";
@@ -19,10 +26,51 @@ const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.8";
 
 export function AppSidebarContent({ data }: { data: any }) {
   const { open } = useSidebar();
+  const router = useRouter();
+
+  // Cmd+J → open workplace (new task)
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+        e.preventDefault();
+        router.push("/workplace");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [router]);
+
   return (
     <>
       <SidebarHeader>
         <TeamSwitcher teams={data.workspaces} />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full justify-start gap-2",
+                !open && "justify-center px-2"
+              )}
+              onClick={() => router.push("/workplace")}
+            >
+              <SquarePen className="h-4 w-4 shrink-0" />
+              {open && (
+                <>
+                  <span className="flex-1 text-left">New Task</span>
+                  <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+                    <span className="text-xs">&#8984;</span>J
+                  </kbd>
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          {!open && (
+            <TooltipContent side="right">
+              New Task <kbd className="ml-1 text-[10px]">&#8984;J</kbd>
+            </TooltipContent>
+          )}
+        </Tooltip>
       </SidebarHeader>
       <SidebarContent>
         <NavMain sections={data.navSections} />
