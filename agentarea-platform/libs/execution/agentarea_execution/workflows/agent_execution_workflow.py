@@ -110,6 +110,7 @@ class AgentExecutionWorkflow:
         self.context_manager: ContextWindowManager | None = None
         self._paused = False
         self._pause_reason = ""
+        self._awaiting_input = False
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
         # A2UI action queue — frontend signals land here, workflow loop drains them
@@ -818,7 +819,12 @@ class AgentExecutionWorkflow:
         workflow.continue_as_new(args=[new_request])
 
     async def _execute_main_loop(self) -> dict[str, Any]:
-        """Main execution loop with dynamic termination conditions."""
+        """Main execution loop with dynamic termination conditions.
+
+        After the agent calls task_complete, the workflow enters awaiting_input
+        state instead of terminating. It waits for follow-up user messages
+        (via queue_message signal) or times out after AWAIT_INPUT_TIMEOUT.
+        """
         workflow.logger.info("Starting main execution loop")
 
         self.state.status = ExecutionStatus.EXECUTING
@@ -842,6 +848,18 @@ class AgentExecutionWorkflow:
             # Execute iteration
             await self._execute_iteration()
 
+            # If agent completed the task, wait for follow-up messages
+            if self._awaiting_input:
+                await self._await_follow_up()
+                # If we got a new message, continue the loop
+                if not self._awaiting_input:
+                    # Reset success so the loop continues with new message
+                    self.state.success = False
+                    self.state.status = ExecutionStatus.EXECUTING
+                    continue
+                # Timed out — exit the loop
+                break
+
             # Check if we should finish after completing the iteration
             should_continue, reason = self._should_continue_execution()
             if not should_continue:
@@ -860,6 +878,42 @@ class AgentExecutionWorkflow:
                 await workflow.wait_condition(lambda: not self._paused)
 
         return {"iterations_completed": self.state.current_iteration}
+
+    async def _await_follow_up(self) -> None:
+        """Wait for a follow-up user message or timeout.
+
+        The workflow idles here consuming zero worker resources. Temporal
+        persists the state and wakes the workflow on signal or timeout.
+        """
+        from datetime import timedelta
+
+        workflow.logger.info("Task completed — waiting for follow-up messages (30 min timeout)")
+
+        # Wait for a new message or timeout (30 minutes)
+        got_message = await workflow.wait_condition(
+            lambda: len(self._message_queue) > 0,
+            timeout=timedelta(minutes=30),
+        )
+
+        if got_message:
+            workflow.logger.info("Follow-up message received, resuming execution")
+            self._awaiting_input = False
+
+            # Update task status back to running
+            await workflow.execute_activity(
+                Activities.UPDATE_TASK_STATUS,
+                args=[
+                    UpdateTaskStatusRequest(
+                        task_id=self.state.task_id,
+                        status="running",
+                        workspace_id=self.state.workspace_id,
+                    )
+                ],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
+        else:
+            workflow.logger.info("Await timeout reached, finalizing workflow")
 
     def _should_continue_execution(self) -> tuple[bool, str]:
         """Comprehensive check for whether execution should continue.
@@ -1346,7 +1400,7 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Handle task completion signal immediately."""
+        """Handle task completion — enter awaiting_input state for follow-ups."""
         # Parse completion arguments to get the result
         import json
 
@@ -1356,12 +1410,13 @@ class AgentExecutionWorkflow:
         except (json.JSONDecodeError, KeyError):
             result_text = "Task completed"
 
-        # Mark task as completed immediately
+        # Enter awaiting state — workflow stays alive for follow-up messages
         self.state.success = True
         self.state.final_response = result_text
+        self._awaiting_input = True
 
-        workflow.logger.info(f"Task completed immediately: {result_text}")
-        workflow.logger.info("Workflow will terminate after this iteration")
+        workflow.logger.info(f"Task completed: {result_text}")
+        workflow.logger.info("Entering awaiting_input state for follow-up messages")
 
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
         """Execute a single MCP tool call using Pydantic models."""

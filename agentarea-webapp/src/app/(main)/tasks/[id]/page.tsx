@@ -275,7 +275,8 @@ export default function TaskDetailsPage() {
   }
 
   // Determine if task is active based on status
-  const isActive = ["running", "paused", "blocked"].includes(task.status);
+  // Completed tasks stay alive (workflow waits for follow-ups), so we always use queue_message
+  const isActive = ["running", "paused", "blocked", "completed"].includes(task.status);
 
   // Get current status from taskStatus or fallback to task.status
   const currentStatus = taskStatus?.status || task.status;
