@@ -370,6 +370,8 @@
       "activeMcpServers": "Активные MCP серверы",
       "builtinTools": "Встроенные инструменты",
       "availableMcpServers": "Доступные MCP серверы",
+      "availableOpenAPIConnections": "Доступные OpenAPI подключения",
+      "openAPIConnections": "OpenAPI подключения",
       "mcpServers": "MCP серверы",
       "noActiveMcpServers": "Активные MCP серверы не найдены",
       "noActiveMcpServersDescription": "Вам нужно настроить экземпляры MCP серверов, прежде чем вы сможете добавить их к своему агенту. Перейдите в MCP серверы для создания экземпляров.",

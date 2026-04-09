@@ -10,7 +10,7 @@ export interface ToolSettings {
 }
 
 export interface ToolConfig {
-  type: 'code' | 'mcp';
+  type: 'code' | 'mcp' | 'openapi';
   name: string;
   settings?: ToolSettings;
 }
@@ -29,6 +29,7 @@ export interface Agent {
   tools_config?: {
     builtin_tools?: Array<{ tool_name: string; [key: string]: any }>;
     mcp_server_configs?: Array<{ server_id: string; tools?: string[]; [key: string]: any }>;
+    openapi_configs?: Array<{ openapi_connection_id: string; allowed_tools?: string[]; [key: string]: any }>;
     [key: string]: any;
   } | null;
   events_config?: Record<string, any> | null;

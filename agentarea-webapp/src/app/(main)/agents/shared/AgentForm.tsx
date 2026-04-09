@@ -115,6 +115,15 @@ export default function AgentForm({
   });
 
   const {
+    fields: openapiFields,
+    append: appendOpenapiTool,
+    remove: removeOpenapiTool,
+  } = useFieldArray({
+    control,
+    name: "tools_config.openapi_configs",
+  });
+
+  const {
     fields: eventFields,
     append: appendEvent,
     remove: removeEvent,
@@ -295,6 +304,9 @@ export default function AgentForm({
               builtinToolFields={builtinToolFields}
               removeBuiltinTool={removeBuiltinTool}
               appendBuiltinTool={appendBuiltinTool}
+              openapiFields={openapiFields}
+              appendOpenapiTool={appendOpenapiTool}
+              removeOpenapiTool={removeOpenapiTool}
             />
             <Divider />
             <SkillsConfig

@@ -161,6 +161,42 @@ class AgentToolProvider:
         return self._tools
 
 
+class OpenAPIToolProvider:
+    """ToolProvider backed by an OpenAPI connection."""
+
+    def __init__(
+        self,
+        name: str,
+        connection_id: str,
+        tools: list[dict[str, Any]],
+        description: str = "",
+    ):
+        self._name = name
+        self._connection_id = connection_id
+        self._tools = tools
+        self._description = description or f"OpenAPI connection: {name}"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def provider_type(self) -> str:
+        return "openapi"
+
+    def get_catalog_entry(self) -> CatalogEntry:
+        tool_names = [t.get("function", {}).get("name", "unknown") for t in self._tools]
+        return CatalogEntry(
+            name=self._name,
+            provider_type="openapi",
+            tool_names=tool_names,
+            description=self._description,
+        )
+
+    def get_tool_definitions(self) -> list[dict[str, Any]]:
+        return self._tools
+
+
 class BuiltinToolProvider:
     """ToolProvider for built-in tools (completion, etc.)."""
 

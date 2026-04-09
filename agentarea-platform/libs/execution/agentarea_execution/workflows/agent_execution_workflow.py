@@ -2180,7 +2180,7 @@ class AgentExecutionWorkflow:
         ]
 
         # Find safe compaction boundary
-        boundary = find_compaction_boundary(messages_dict)
+        boundary = find_compaction_boundary(messages_dict, keep_recent=4)
         if boundary <= 1:
             workflow.logger.warning("No safe compaction boundary found, skipping")
             return False

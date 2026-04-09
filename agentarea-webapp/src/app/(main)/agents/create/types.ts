@@ -27,6 +27,15 @@ export type MCPServerConfig = {
 };
 
 /**
+ * OpenAPI Connection configuration type
+ */
+export type OpenAPIConfig = {
+  openapi_connection_id: string;
+  openapi_connection_name?: string;  // resolved name for backend; filled by picker
+  allowed_tools?: string[];  // operation names; empty/missing = all
+};
+
+/**
  * Builtin Tool configuration type
  */
 export type BuiltinToolConfig = {
@@ -57,6 +66,7 @@ export type AgentFormValues = {
   tools_config: {
     mcp_server_configs: MCPServerConfig[];
     builtin_tools?: BuiltinToolConfig[];
+    openapi_configs?: OpenAPIConfig[];
   };
   events_config: {
     events: EventConfig[];

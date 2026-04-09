@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { ArrowRight, Wrench } from "lucide-react";
+import { ArrowRight, Globe, Wrench } from "lucide-react";
 import {
   FieldErrors,
   UseFieldArrayAppend,
@@ -20,6 +20,8 @@ import {
   getMCPServerInstanceAction as getMCPServerInstance,
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
+import { listOpenAPIConnections } from "@/lib/api";
+import type { OpenAPIConnection } from "@/app/(main)/mcp-servers/types";
 import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { getNestedErrorMessage } from "../utils/formUtils";
@@ -58,6 +60,16 @@ type ToolConfigProps = {
     AgentFormValues,
     "tools_config.builtin_tools"
   >;
+  openapiFields?: UseFieldArrayReturn<
+    AgentFormValues,
+    "tools_config.openapi_configs",
+    "id"
+  >["fields"];
+  removeOpenapiTool?: (index: number) => void;
+  appendOpenapiTool?: UseFieldArrayAppend<
+    AgentFormValues,
+    "tools_config.openapi_configs"
+  >;
 };
 
 const ToolConfig = ({
@@ -73,6 +85,9 @@ const ToolConfig = ({
   builtinToolFields,
   removeBuiltinTool,
   appendBuiltinTool,
+  openapiFields,
+  removeOpenapiTool,
+  appendOpenapiTool,
 }: ToolConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -114,6 +129,25 @@ const ToolConfig = ({
     setActiveInstances(mcpInstanceList || []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(mcpInstanceList)]);
+
+  // OpenAPI connections state
+  const [openapiConnections, setOpenapiConnections] = useState<OpenAPIConnection[]>([]);
+  const [loadingOpenapiConnections, setLoadingOpenapiConnections] = useState(false);
+
+  useEffect(() => {
+    setLoadingOpenapiConnections(true);
+    listOpenAPIConnections()
+      .then(({ data }) => {
+        const items = (data as any)?.items || data || [];
+        setOpenapiConnections(Array.isArray(items) ? items : []);
+      })
+      .catch((err) => {
+        console.error("Failed to load OpenAPI connections:", err);
+      })
+      .finally(() => {
+        setLoadingOpenapiConnections(false);
+      });
+  }, []);
 
   // Initialize selectedMethods for sheet (all methods selected by default)
   useEffect(() => {
@@ -194,6 +228,63 @@ const ToolConfig = ({
     if (index !== undefined && index !== -1) {
       removeBuiltinTool(index);
     }
+  };
+
+  const handleAddOpenapiConnection = (connection: OpenAPIConnection) => {
+    if (!appendOpenapiTool) return;
+    const alreadyAdded = openapiFields?.some(
+      (f) => f.openapi_connection_id === connection.id
+    );
+    if (alreadyAdded) return;
+    appendOpenapiTool({
+      openapi_connection_id: connection.id,
+      openapi_connection_name: connection.name,
+      allowed_tools: [],
+    });
+  };
+
+  const handleRemoveOpenapiConnection = (connectionId: string) => {
+    if (!removeOpenapiTool) return;
+    const index = openapiFields?.findIndex(
+      (f) => f.openapi_connection_id === connectionId
+    );
+    if (index !== undefined && index !== -1) {
+      removeOpenapiTool(index);
+    }
+  };
+
+  const handleOpenapiToolToggle = (
+    connectionId: string,
+    toolName: string,
+    enabled: boolean
+  ) => {
+    if (!setValue || !openapiFields) return;
+    const index = openapiFields.findIndex(
+      (f) => f.openapi_connection_id === connectionId
+    );
+    if (index === -1) return;
+
+    const field = openapiFields[index];
+    const connection = openapiConnections.find((c) => c.id === connectionId);
+    const allToolNames = (connection?.available_tools || []).map((t) => t.name);
+
+    // Empty allowed_tools means "all enabled" — initialize on first toggle
+    let current: string[] = (field as any).allowed_tools || [];
+    if (current.length === 0 && allToolNames.length > 0) {
+      current = [...allToolNames];
+    }
+
+    let updated: string[];
+    if (enabled) {
+      updated = current.includes(toolName) ? current : [...current, toolName];
+    } else {
+      updated = current.filter((t) => t !== toolName);
+    }
+
+    setValue(
+      `tools_config.openapi_configs.${index}.allowed_tools`,
+      updated
+    );
   };
 
   const handleMethodToggle = (
@@ -444,6 +535,95 @@ const ToolConfig = ({
                 }}
               />
               <div className="flex items-center gap-2 font-semibold text-sm">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                {t("create.availableOpenAPIConnections")}
+              </div>
+              {loadingOpenapiConnections ? (
+                <Note>
+                  <p>Loading OpenAPI connections...</p>
+                </Note>
+              ) : openapiConnections.length > 0 ? (
+                <SelectableList
+                  items={openapiConnections}
+                  prefix="openapi"
+                  extractTitle={(connection) => (
+                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
+                      <div className="relative shrink-0">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+                        {connection.name}
+                      </h3>
+                    </div>
+                  )}
+                  onAdd={(connection) => handleAddOpenapiConnection(connection)}
+                  onRemove={(connection) => handleRemoveOpenapiConnection(connection.id)}
+                  selectedIds={(openapiFields || []).map((f) => f.openapi_connection_id)}
+                  renderContent={(connection) => (
+                    <div className="space-y-2 p-2">
+                      <p className="text-xs text-muted-foreground">
+                        {connection.base_url}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {connection.available_tools?.length ?? 0} operations available
+                      </p>
+                      {connection.available_tools && connection.available_tools.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-foreground">Operations:</p>
+                          <div className="space-y-1">
+                            {connection.available_tools.map((tool) => {
+                              const field = (openapiFields || []).find(
+                                (f) => f.openapi_connection_id === connection.id
+                              );
+                              const allowedTools: string[] = (field as any)?.allowed_tools || [];
+                              const isEnabled =
+                                allowedTools.length === 0 ||
+                                allowedTools.includes(tool.name);
+                              const isSelected = (openapiFields || []).some(
+                                (f) => f.openapi_connection_id === connection.id
+                              );
+                              return (
+                                <div
+                                  key={tool.name}
+                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
+                                >
+                                  {isSelected && (
+                                    <input
+                                      type="checkbox"
+                                      checked={isEnabled}
+                                      onChange={(e) =>
+                                        handleOpenapiToolToggle(
+                                          connection.id,
+                                          tool.name,
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="h-3 w-3 shrink-0"
+                                    />
+                                  )}
+                                  <span className="text-xs text-foreground">
+                                    {tool.name}
+                                  </span>
+                                  {tool.description && (
+                                    <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">
+                                      {tool.description}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                />
+              ) : (
+                <Note>
+                  <p>No OpenAPI connections configured yet.</p>
+                </Note>
+              )}
+              <div className="flex items-center gap-2 font-semibold text-sm">
                 <Image
                   src="/mcp.svg"
                   alt="MCP"
@@ -675,9 +855,82 @@ const ToolConfig = ({
             </div>
           )}
 
+          {/* OpenAPI Tools Section */}
+          {openapiFields && openapiFields.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Globe className="h-[14px] w-[14px] text-muted-foreground" />
+                {t("create.openAPIConnections")}
+              </h4>
+              <div className="space-y-2">
+                {openapiFields.map((item, index) => {
+                  const connection = openapiConnections.find(
+                    (c) => c.id === item.openapi_connection_id
+                  );
+                  const displayName =
+                    (item as any).openapi_connection_name ||
+                    connection?.name ||
+                    item.openapi_connection_id;
+                  const allowedTools: string[] = (item as any).allowed_tools || [];
+                  const allTools = connection?.available_tools || [];
+                  const activeCount =
+                    allowedTools.length === 0
+                      ? allTools.length
+                      : allowedTools.length;
+
+                  return (
+                    <div
+                      key={`openapi-${index}`}
+                      className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{displayName}</p>
+                          {connection?.base_url && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {connection.base_url}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {activeCount} of {allTools.length} operations
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeOpenapiTool?.(index)}
+                        className="h-6 w-6 shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
+                        aria-label="Remove OpenAPI connection"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        </svg>
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Empty state - only show if no tools at all */}
           {(!builtinToolFields || builtinToolFields.length === 0) &&
-            toolFields.length === 0 && (
+            toolFields.length === 0 &&
+            (!openapiFields || openapiFields.length === 0) && (
             <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
               <p>{t("create.agentToolsDescription")}</p>  
               <p>{t("create.agentToolsNote")}</p>

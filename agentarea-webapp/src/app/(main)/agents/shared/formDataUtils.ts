@@ -60,6 +60,32 @@ export function createAgentFormData(data: AgentFormValues): FormData {
     );
   }
 
+  // Add OpenAPI configs
+  if ((data.tools_config as any).openapi_configs) {
+    ((data.tools_config as any).openapi_configs as any[]).forEach(
+      (config: any, index: number) => {
+        formData.append(
+          `tools_config.openapi_configs[${index}].openapi_connection_id`,
+          config.openapi_connection_id
+        );
+        if (config.openapi_connection_name) {
+          formData.append(
+            `tools_config.openapi_configs[${index}].openapi_connection_name`,
+            config.openapi_connection_name
+          );
+        }
+        if (config.allowed_tools) {
+          config.allowed_tools.forEach((toolName: string, toolIndex: number) => {
+            formData.append(
+              `tools_config.openapi_configs[${index}].allowed_tools[${toolIndex}]`,
+              toolName
+            );
+          });
+        }
+      }
+    );
+  }
+
   // Add events config
   data.events_config.events.forEach((event: any, index: number) => {
     formData.append(
