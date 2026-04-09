@@ -535,6 +535,95 @@ const ToolConfig = ({
                 }}
               />
               <div className="flex items-center gap-2 font-semibold text-sm">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                {t("create.availableOpenAPIConnections")}
+              </div>
+              {loadingOpenapiConnections ? (
+                <Note>
+                  <p>Loading OpenAPI connections...</p>
+                </Note>
+              ) : openapiConnections.length > 0 ? (
+                <SelectableList
+                  items={openapiConnections}
+                  prefix="openapi"
+                  extractTitle={(connection) => (
+                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
+                      <div className="relative shrink-0">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+                        {connection.name}
+                      </h3>
+                    </div>
+                  )}
+                  onAdd={(connection) => handleAddOpenapiConnection(connection)}
+                  onRemove={(connection) => handleRemoveOpenapiConnection(connection.id)}
+                  selectedIds={(openapiFields || []).map((f) => f.openapi_connection_id)}
+                  renderContent={(connection) => (
+                    <div className="space-y-2 p-2">
+                      <p className="text-xs text-muted-foreground">
+                        {connection.base_url}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {connection.available_tools?.length ?? 0} operations available
+                      </p>
+                      {connection.available_tools && connection.available_tools.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-foreground">Operations:</p>
+                          <div className="space-y-1">
+                            {connection.available_tools.map((tool) => {
+                              const field = (openapiFields || []).find(
+                                (f) => f.openapi_connection_id === connection.id
+                              );
+                              const allowedTools: string[] = (field as any)?.allowed_tools || [];
+                              const isEnabled =
+                                allowedTools.length === 0 ||
+                                allowedTools.includes(tool.name);
+                              const isSelected = (openapiFields || []).some(
+                                (f) => f.openapi_connection_id === connection.id
+                              );
+                              return (
+                                <div
+                                  key={tool.name}
+                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
+                                >
+                                  {isSelected && (
+                                    <input
+                                      type="checkbox"
+                                      checked={isEnabled}
+                                      onChange={(e) =>
+                                        handleOpenapiToolToggle(
+                                          connection.id,
+                                          tool.name,
+                                          e.target.checked
+                                        )
+                                      }
+                                      className="h-3 w-3 shrink-0"
+                                    />
+                                  )}
+                                  <span className="text-xs text-foreground">
+                                    {tool.name}
+                                  </span>
+                                  {tool.description && (
+                                    <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">
+                                      {tool.description}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                />
+              ) : (
+                <Note>
+                  <p>No OpenAPI connections configured yet.</p>
+                </Note>
+              )}
+              <div className="flex items-center gap-2 font-semibold text-sm">
                 <Image
                   src="/mcp.svg"
                   alt="MCP"
@@ -643,95 +732,6 @@ const ToolConfig = ({
               ) : (
                 <Note>
                   <p>{t("create.noAvailableMcpServersDescription")}</p>
-                </Note>
-              )}
-              <div className="flex items-center gap-2 font-semibold text-sm">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                {t("create.availableOpenAPIConnections")}
-              </div>
-              {loadingOpenapiConnections ? (
-                <Note>
-                  <p>Loading OpenAPI connections...</p>
-                </Note>
-              ) : openapiConnections.length > 0 ? (
-                <SelectableList
-                  items={openapiConnections}
-                  prefix="openapi"
-                  extractTitle={(connection) => (
-                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <div className="relative shrink-0">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                        {connection.name}
-                      </h3>
-                    </div>
-                  )}
-                  onAdd={(connection) => handleAddOpenapiConnection(connection)}
-                  onRemove={(connection) => handleRemoveOpenapiConnection(connection.id)}
-                  selectedIds={(openapiFields || []).map((f) => f.openapi_connection_id)}
-                  renderContent={(connection) => (
-                    <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        {connection.base_url}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {connection.available_tools?.length ?? 0} operations available
-                      </p>
-                      {connection.available_tools && connection.available_tools.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-foreground">Operations:</p>
-                          <div className="space-y-1">
-                            {connection.available_tools.map((tool) => {
-                              const field = (openapiFields || []).find(
-                                (f) => f.openapi_connection_id === connection.id
-                              );
-                              const allowedTools: string[] = (field as any)?.allowed_tools || [];
-                              const isEnabled =
-                                allowedTools.length === 0 ||
-                                allowedTools.includes(tool.name);
-                              const isSelected = (openapiFields || []).some(
-                                (f) => f.openapi_connection_id === connection.id
-                              );
-                              return (
-                                <div
-                                  key={tool.name}
-                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
-                                >
-                                  {isSelected && (
-                                    <input
-                                      type="checkbox"
-                                      checked={isEnabled}
-                                      onChange={(e) =>
-                                        handleOpenapiToolToggle(
-                                          connection.id,
-                                          tool.name,
-                                          e.target.checked
-                                        )
-                                      }
-                                      className="h-3 w-3 shrink-0"
-                                    />
-                                  )}
-                                  <span className="text-xs text-foreground">
-                                    {tool.name}
-                                  </span>
-                                  {tool.description && (
-                                    <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">
-                                      {tool.description}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                />
-              ) : (
-                <Note>
-                  <p>No OpenAPI connections configured yet. Create one in MCP Servers.</p>
                 </Note>
               )}
             </div>

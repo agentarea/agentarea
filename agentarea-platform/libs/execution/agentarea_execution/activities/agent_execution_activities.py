@@ -628,11 +628,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     mcp_server_instance_service=mcp_server_instance_service,
                 )
 
-                raw_result = result.get("result")
                 return MCPToolResult(
                     success=result.get("success", False),
-                    result="" if raw_result is None else str(raw_result),
-                    execution_time=result.get("execution_time") or "",
+                    result=str(result.get("result") or ""),
+                    execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
                 )
 
