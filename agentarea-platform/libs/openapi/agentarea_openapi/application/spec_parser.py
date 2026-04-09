@@ -67,14 +67,10 @@ def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
                 content_type = "application/json"
                 body_schema: dict[str, Any] | None = None
                 if "application/json" in content:
-                    body_schema = _resolve_ref(
-                        content["application/json"].get("schema", {}), spec
-                    )
+                    body_schema = _resolve_ref(content["application/json"].get("schema", {}), spec)
                 elif content:
                     content_type = next(iter(content))
-                    body_schema = _resolve_ref(
-                        content[content_type].get("schema", {}), spec
-                    )
+                    body_schema = _resolve_ref(content[content_type].get("schema", {}), spec)
                 request_body = {
                     "content_type": content_type,
                     "required": raw_body.get("required", True),

@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -97,7 +97,10 @@ class OpenAPITool(BaseTool):
             validate_url(connection.base_url, allow_private=allow_private)
         except ValueError as e:
             logger.error(
-                "SSRF validation failed for connection %s: %s", self._connection_id, e, exc_info=True
+                "SSRF validation failed for connection %s: %s",
+                self._connection_id,
+                e,
+                exc_info=True,
             )
             return {
                 "success": False,
@@ -322,9 +325,7 @@ class OpenAPIToolFactory:
             return []
 
         if not connection:
-            logger.warning(
-                "OpenAPI connection not found: %r", connection_name_or_id
-            )
+            logger.warning("OpenAPI connection not found: %r", connection_name_or_id)
             return []
 
         if not connection.spec_content:

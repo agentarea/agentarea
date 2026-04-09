@@ -5013,7 +5013,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "code" | "mcp" | "agent";
+            type: "code" | "mcp" | "agent" | "openapi";
         };
         /**
          * ToolResponse
@@ -5051,6 +5051,8 @@ export interface components {
             description_override?: string | null;
             /** Disabled Methods */
             disabled_methods?: string[] | null;
+            /** Openapi Connection Id */
+            openapi_connection_id?: string | null;
             /** Requires User Confirmation */
             requires_user_confirmation?: boolean | null;
         };

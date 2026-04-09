@@ -587,7 +587,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # tools are pre-registered.
             if request.tools and isinstance(request.tools, list):
                 openapi_configs = [
-                    tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "openapi"
+                    tc
+                    for tc in request.tools
+                    if isinstance(tc, dict) and tc.get("type") == "openapi"
                 ]
                 if openapi_configs:
                     from agentarea_agents_sdk.tools.openapi_tool import OpenAPIToolFactory
@@ -596,7 +598,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     for tool_config in openapi_configs:
                         settings = tool_config.get("settings") or {}
                         # Prefer settings.openapi_connection_id (stable UUID) over tool.name.
-                        connection_ref = settings.get("openapi_connection_id") or tool_config.get("name")
+                        connection_ref = settings.get("openapi_connection_id") or tool_config.get(
+                            "name"
+                        )
                         if not connection_ref:
                             logger.warning("Skipping openapi tool with no connection reference")
                             continue

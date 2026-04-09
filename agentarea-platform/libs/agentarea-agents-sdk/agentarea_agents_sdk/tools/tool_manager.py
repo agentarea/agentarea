@@ -259,9 +259,7 @@ class ToolManager:
                 allowed_tools=allowed_tools if allowed_tools else None,
                 openapi_connection_service=openapi_connection_service,
             )
-            logger.info(
-                f"Discovered {len(tools)} tools from OpenAPI connection: {connection_name}"
-            )
+            logger.info(f"Discovered {len(tools)} tools from OpenAPI connection: {connection_name}")
             return tools
         except Exception as e:
             logger.error(
