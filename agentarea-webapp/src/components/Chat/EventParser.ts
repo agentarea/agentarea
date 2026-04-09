@@ -21,6 +21,7 @@ export const parseEventToMessage = (
       // Extract content and usage information
       const originalData = eventData.original_data || eventData;
       const content = originalData.content || eventData.content;
+      const thinking = originalData.thinking || eventData.thinking || "";
 
       // Only create message if there's actual content
       if (!content || !content.trim()) return null;
@@ -30,6 +31,7 @@ export const parseEventToMessage = (
         data: {
           ...baseData,
           content,
+          thinking: thinking || undefined,
           role: originalData.role || eventData.role || "assistant",
           tool_calls: originalData.tool_calls || eventData.tool_calls,
           usage: originalData.usage || eventData.usage,

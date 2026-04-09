@@ -271,6 +271,7 @@ class LLMCallResult(BaseModel):
 
     role: str = "assistant"
     content: str = ""
+    thinking: str = ""
     tool_calls: list[dict[str, Any]] | None = None
     cost: Money = ZERO
     usage: LLMUsage | None = None

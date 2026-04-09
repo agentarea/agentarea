@@ -1102,12 +1102,14 @@ class AgentExecutionWorkflow:
                 cost_value = response.get("cost", 0.0)
                 role_value = response.get("role", "assistant")
                 content_value = response.get("content", "")
+                thinking_value = response.get("thinking", "")
                 tool_calls_value = response.get("tool_calls")
             else:
                 raw_usage = getattr(response, "usage", None)
                 cost_value = getattr(response, "cost", 0.0)
                 role_value = getattr(response, "role", "assistant")
                 content_value = getattr(response, "content", "")
+                thinking_value = getattr(response, "thinking", "")
                 tool_calls_value = getattr(response, "tool_calls", None)
 
             # Extract usage info and update budget
@@ -1154,6 +1156,7 @@ class AgentExecutionWorkflow:
                     "total_cost": serialize_money(self.budget_tracker.cost),
                     "usage": usage_info,
                     "content": display_content,
+                    "thinking": thinking_value,
                     "tool_calls": tool_calls_value or [],
                     "role": role_value,
                 },

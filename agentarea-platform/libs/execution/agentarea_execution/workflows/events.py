@@ -82,6 +82,7 @@ class LLMCallCompletedEvent(BaseWorkflowEvent):
     """Event emitted when LLM call completes successfully."""
 
     content: str = ""
+    thinking: str = ""
     role: str = "assistant"
     tool_calls: list[dict[str, Any]] | None = None
     usage: dict[str, Any] | None = None

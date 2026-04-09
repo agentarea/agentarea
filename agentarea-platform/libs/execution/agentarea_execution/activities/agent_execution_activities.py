@@ -400,6 +400,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use streaming with ainvoke_stream and publish events
             complete_content = ""
+            complete_thinking = ""
             complete_tool_calls = None
             final_usage = None
             final_cost = 0.0
@@ -412,8 +413,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Stream the response and collect chunks
             async for chunk_response in llm_model.ainvoke_stream(llm_request):
-                # Publish reasoning/thinking chunks
+                # Accumulate and publish reasoning/thinking chunks
                 if chunk_response.reasoning_content:
+                    complete_thinking += chunk_response.reasoning_content
                     if event_publisher:
                         await event_publisher(
                             chunk_response.reasoning_content, chunk_index, False, chunk_type="thinking"
@@ -457,6 +459,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return LLMCallResult(
                 role="assistant",
                 content=complete_content,
+                thinking=complete_thinking,
                 tool_calls=complete_tool_calls,
                 cost=final_cost,
                 usage=usage_model,
