@@ -35,6 +35,7 @@ export function handleLLMChunk(
   const chunkIndex = originalData.chunk_index || event.data.chunk_index || 0;
   const isFinal = originalData.is_final || event.data.is_final || false;
   const taskId = originalData.task_id || event.data.task_id;
+  const chunkType = originalData.chunk_type || event.data.chunk_type || "text";
 
   // Accumulate chunk
   setMessages((prev) => {
@@ -45,6 +46,7 @@ export function handleLLMChunk(
       chunkIndex,
       isFinal,
       messageComponent,
+      chunkType,
     });
   });
 

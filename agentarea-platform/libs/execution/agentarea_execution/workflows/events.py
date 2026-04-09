@@ -74,6 +74,7 @@ class LLMCallChunkEvent(BaseWorkflowEvent):
     chunk: str = ""
     chunk_index: int = 0
     is_final: bool = False
+    chunk_type: str = "text"
     model_id: str | None = None
 
 

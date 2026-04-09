@@ -412,6 +412,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Stream the response and collect chunks
             async for chunk_response in llm_model.ainvoke_stream(llm_request):
+                # Publish reasoning/thinking chunks
+                if chunk_response.reasoning_content:
+                    if event_publisher:
+                        await event_publisher(
+                            chunk_response.reasoning_content, chunk_index, False, chunk_type="thinking"
+                        )
+                        chunk_index += 1
+
                 # Accumulate content
                 if chunk_response.content:
                     complete_content += chunk_response.content

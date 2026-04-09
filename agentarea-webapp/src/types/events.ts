@@ -77,6 +77,7 @@ export interface SSEMessage {
       chunk?: string;
       chunk_index?: number;
       is_final?: boolean;
+      chunk_type?: "text" | "thinking";
 
       // Context management fields
       usage_ratio?: number;

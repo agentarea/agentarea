@@ -43,6 +43,7 @@ export const parseEventToMessage = (
       const chunk = originalData.chunk || eventData.chunk;
       const chunkIndex = originalData.chunk_index || eventData.chunk_index || 0;
       const isFinal = originalData.is_final || eventData.is_final || false;
+      const chunkType = originalData.chunk_type || eventData.chunk_type || "text";
 
       // Create or update streaming message
       // Note: This requires special handling in the chat component to accumulate chunks
@@ -53,6 +54,7 @@ export const parseEventToMessage = (
           chunk,
           chunk_index: chunkIndex,
           is_final: isFinal,
+          chunk_type: chunkType,
         },
       };
     }

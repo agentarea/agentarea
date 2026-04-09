@@ -233,6 +233,7 @@ class LLMCallChunkEvent(WorkflowEvent):
     chunk: str = Field(..., description="Response chunk content")
     chunk_index: int = Field(..., description="Chunk sequence number")
     is_final: bool = Field(default=False, description="Whether this is the final chunk")
+    chunk_type: str = Field(default="text", description="Chunk type: 'text' or 'thinking'")
 
 
 class ToolExecutionStartedEvent(WorkflowEvent):

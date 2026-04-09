@@ -9,6 +9,7 @@ export interface BaseMessageData {
 // LLM Response Message
 export interface LLMResponseData extends BaseMessageData {
   content: string;
+  thinking?: string;
   role?: string;
   tool_calls?: Array<{
     function: {
@@ -50,6 +51,8 @@ export interface LLMChunkData extends BaseMessageData {
   chunk: string;
   chunk_index: number;
   is_final: boolean;
+  chunk_type?: "text" | "thinking";
+  thinking?: string;
 }
 
 // Error Message (Enhanced)
