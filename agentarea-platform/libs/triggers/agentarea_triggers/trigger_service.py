@@ -1032,23 +1032,26 @@ class TriggerService:
                 if channel_origin:
                     task_params["channel_origin"] = channel_origin
 
-                # Create task
-                task = await self.task_service.create_task_from_params(
+                # Route to active workflow or create new task
+                from agentarea_tasks.domain.models import SimpleTask
+
+                task = SimpleTask(
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,
-                    user_id=trigger.created_by,
-                    workspace_id=trigger.workspace_id,
+                    user_id=str(trigger.created_by),
+                    workspace_id=str(trigger.workspace_id),
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
+                    status="submitted",
                 )
+                task = await self.task_service.route_or_submit_task(task)
 
                 task_id = task.id
-                logger.info(f"Created task {task_id} from trigger {trigger_id}")
-
-                # Submit task for workflow execution
-                await self.task_service.task_manager.submit_task(task)
-                logger.info(f"Submitted task {task_id} for workflow execution")
+                if task.status == "routed":
+                    logger.info(f"Routed follow-up to existing workflow for trigger {trigger_id}")
+                else:
+                    logger.info(f"Submitted task {task_id} for trigger {trigger_id}")
             else:
                 logger.warning(
                     f"Task service not available, skipping task creation for trigger {trigger_id}"

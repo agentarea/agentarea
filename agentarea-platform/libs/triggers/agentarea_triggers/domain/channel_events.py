@@ -9,7 +9,6 @@ trigger types, served to the frontend via GET /triggers/catalog.
 
 from typing import Any
 
-
 # ── Trigger catalog ───────────────────────────────────────────────
 # Each entry defines a trigger type available in the UI.
 # Frontend fetches this via API — never hardcodes trigger types.

@@ -12,7 +12,6 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from datetime import datetime
     from uuid import UUID
 
 

@@ -31,7 +31,7 @@ class ChannelEventSubscriber:
     subscriber restarts with exponential back-off.
     """
 
-    def __init__(self, router: "ChannelRouter", redis_url: str) -> None:
+    def __init__(self, router: ChannelRouter, redis_url: str) -> None:
         self._router = router
         self._redis_url = redis_url
         self._task: asyncio.Task[None] | None = None
@@ -108,12 +108,12 @@ class ChannelEventSubscriber:
             try:
                 await pubsub.punsubscribe(_WORKFLOW_CHANNEL_PATTERN)
                 await pubsub.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Pubsub cleanup error suppressed: %s", exc)
             try:
                 await client.aclose()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Redis client close error suppressed: %s", exc)
 
     async def _handle_message(self, raw_message: dict[str, Any]) -> None:
         """Parse a raw pubsub message and call router.on_task_event()."""

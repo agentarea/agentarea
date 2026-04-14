@@ -200,8 +200,8 @@ function groupToolMessages(messages: MessageComponentType[]): MessageComponentTy
 
     // Start a new group, collecting all consecutive tool messages
     const groupTools: ToolCallGroupData["tools"] = [];
-    let groupId = msg.data.id;
-    let groupTimestamp = msg.data.timestamp;
+    const groupId = msg.data.id;
+    const groupTimestamp = msg.data.timestamp;
     const agentId = msg.data.agent_id;
 
     let j = i;

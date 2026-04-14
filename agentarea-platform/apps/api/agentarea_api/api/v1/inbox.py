@@ -12,6 +12,7 @@ from agentarea_api.api.v1.agents_tasks import TaskWithAgent
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -24,39 +25,50 @@ INBOX_STATUSES = [
 ]
 
 
-@router.get("/", response_model=list[TaskWithAgent])
+class InboxResponse(BaseModel):
+    items: list[TaskWithAgent]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/", response_model=InboxResponse)
 async def get_inbox_items(
     user_context: UserContextDep,
     status: str | None = Query(None, description="Filter to a specific inbox status"),
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
-) -> list[TaskWithAgent]:
+) -> InboxResponse:
     """List tasks requiring user attention.
 
     Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
-    ordered by most recently updated first.
+    ordered by most recently updated first. Includes total count for badge/pagination.
     """
     try:
         import asyncio
 
         query_statuses = [status] if status and status in INBOX_STATUSES else INBOX_STATUSES
+        offset = (page - 1) * page_size
 
-        agents_result, tasks = await asyncio.gather(
+        agents_result, tasks, total = await asyncio.gather(
             agent_service.list(),
             task_service.task_repository.list_by_statuses(
                 statuses=query_statuses,
                 agent_id=agent_id,
-                limit=limit,
+                limit=page_size,
                 offset=offset,
+            ),
+            task_service.task_repository.count_by_statuses(
+                statuses=query_statuses,
             ),
         )
 
         agent_map = {str(agent.id): agent.name for agent in agents_result}
 
-        return [
+        items = [
             TaskWithAgent(
                 id=task.id,
                 agent_id=task.agent_id,
@@ -73,22 +85,8 @@ async def get_inbox_items(
             )
             for task in tasks
         ]
+
+        return InboxResponse(items=items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to get inbox items: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get("/count")
-async def get_inbox_count(
-    user_context: UserContextDep,
-    task_service: TaskService = Depends(get_read_task_service),
-) -> dict:
-    """Get count of tasks requiring user attention (for badge)."""
-    try:
-        count = await task_service.task_repository.count_by_statuses(
-            statuses=INBOX_STATUSES,
-        )
-        return {"count": count}
-    except Exception as e:
-        logger.error(f"Failed to get inbox count: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

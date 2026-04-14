@@ -100,6 +100,9 @@ def create_mock_trigger():
     mock_trigger.webhook_type = None
     mock_trigger.validation_rules = None
     mock_trigger.webhook_config = None
+    mock_trigger.event_types = []
+    mock_trigger.data_extractor = None
+    mock_trigger.has_channel_credentials = False
     return mock_trigger
 
 

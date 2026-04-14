@@ -491,7 +491,7 @@ class AgentExecutionWorkflow:
         # === Built-in completion tool (always present, canonical definition) ===
         # Remove any existing completion/task_complete from discovery — we always
         # use our own definition with correct description and required params.
-        COMPLETION_TOOL_DEFINITION = {
+        completion_tool_definition = {
             "type": "function",
             "function": {
                 "name": "completion",
@@ -518,7 +518,7 @@ class AgentExecutionWorkflow:
             if (t.get("function", {}).get("name") if t.get("type") == "function" else t.get("name"))
             not in {"completion", "task_complete"}
         ]
-        available_tools.insert(0, COMPLETION_TOOL_DEFINITION)
+        available_tools.insert(0, completion_tool_definition)
 
         # recall_history — query past execution context
         available_tools.append(
@@ -927,7 +927,6 @@ class AgentExecutionWorkflow:
         persists the state and wakes the workflow on signal or timeout.
         Uses try/except per Temporal SDK docs (TimeoutError on timeout).
         """
-        import asyncio
         from datetime import timedelta
 
         workflow.logger.info("Task completed — waiting for follow-up messages (30 min timeout)")
@@ -937,7 +936,7 @@ class AgentExecutionWorkflow:
                 lambda: len(self._message_queue) > 0,
                 timeout=timedelta(minutes=30),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             workflow.logger.info("Await timeout reached, finalizing workflow")
             return
 
@@ -1330,6 +1329,7 @@ class AgentExecutionWorkflow:
         # Only add non-empty messages to state
         content = response.get("content", "")
         tool_calls_raw = response.get("tool_calls")
+        thinking_value = response.get("thinking", "")
 
         # Parse and publish A2UI events if agent has A2UI enabled
         if self.state.agent_config.get("a2ui_enabled", False) and content:

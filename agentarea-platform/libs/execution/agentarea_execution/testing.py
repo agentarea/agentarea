@@ -4,6 +4,8 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from temporalio import activity
+
 from agentarea_execution.models import (
     AgentConfigRequest,
     LLMCallRequest,
@@ -14,8 +16,6 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
-from temporalio import activity
-
 
 # ---------------------------------------------------------------------------
 # LLM response builders

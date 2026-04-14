@@ -27,6 +27,7 @@ class LazySecretManager:
 
         from agentarea_common.auth.context import UserContext
         from agentarea_common.config import get_database
+
         from agentarea_triggers.infrastructure.orm import TriggerORM
 
         database = get_database()

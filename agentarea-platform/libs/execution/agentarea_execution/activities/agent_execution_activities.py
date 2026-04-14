@@ -1336,8 +1336,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
     ) -> CreateDelegationTaskResult:
         """Create a task record in DB for agent delegation."""
         try:
-            from agentarea_common.config import get_database
             from agentarea_common.base.repository_factory import RepositoryFactory
+            from agentarea_common.config import get_database
             from agentarea_tasks.task_service import TaskService
 
             database = get_database()
@@ -1355,7 +1355,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
 
                 task = await task_service.create_task_from_params(
-                    title=f"Delegation from agent",
+                    title="Delegation from agent",
                     description=f"Delegated task to {request.target_agent_name}",
                     query=request.message,
                     user_id=request.user_id,

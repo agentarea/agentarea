@@ -208,6 +208,29 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         task_orms = result.scalars().all()
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
+    async def find_active_by_agent_and_chat(
+        self, agent_id: UUID, chat_id: str, limit: int = 5
+    ) -> list[Task]:
+        """Find recent active tasks for an agent + chat_id combination.
+
+        Used for follow-up routing: if an active workflow exists for the same
+        channel conversation, we route the message there instead of creating a new task.
+        """
+        stmt = (
+            select(TaskORM)
+            .where(
+                self._get_workspace_filter(),
+                TaskORM.agent_id == agent_id,
+                TaskORM.status.in_(["running", "completed"]),
+                TaskORM.execution_id.isnot(None),
+                TaskORM.parameters["channel_origin"]["chat_id"].as_string() == chat_id,
+            )
+            .order_by(TaskORM.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return [self._orm_to_domain(t) for t in result.scalars().all()]
+
     async def count_by_statuses(self, statuses: list[str]) -> int:
         """Count tasks matching any of the given statuses in the current workspace."""
         stmt = (

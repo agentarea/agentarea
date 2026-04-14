@@ -117,7 +117,10 @@ class TestTriggerExecutionActivities:
             # Setup task service methods
             mock_task = MagicMock()
             mock_task.id = uuid4()
+            mock_task.status = "running"
             mock_task_service.create_task_from_params.return_value = mock_task
+            mock_task_service.route_or_submit_task.return_value = mock_task
+            mock_task_service.submit_task.return_value = mock_task
 
             # Setup execution recording
             mock_execution = TriggerExecution(
@@ -147,7 +150,7 @@ class TestTriggerExecutionActivities:
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
             mock_trigger_service.evaluate_trigger_conditions.assert_called_once()
-            mock_task_service.create_task_from_params.assert_called_once()
+            mock_task_service.route_or_submit_task.assert_called_once()
             mock_trigger_service.record_execution.assert_called_once()
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")

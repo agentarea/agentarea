@@ -112,6 +112,80 @@ class TaskService(BaseTaskService):
         # Then submit to task manager for execution
         return await self.task_manager.submit_task(created_task)
 
+    async def route_or_submit_task(self, task: SimpleTask) -> SimpleTask:
+        """Route message to an active workflow if one exists, otherwise submit a new task.
+
+        This is the single routing point for all channel-originated tasks.
+        If a running/completed workflow exists for the same agent + chat_id,
+        the message is delivered as a follow-up signal instead of creating a new task.
+        """
+        channel_origin = (task.task_parameters or {}).get("channel_origin", {})
+        chat_id = channel_origin.get("chat_id")
+
+        if chat_id:
+            routed = await self._try_route_to_active_workflow(task, str(chat_id))
+            if routed:
+                return routed
+
+        return await self.submit_task(task)
+
+    async def _try_route_to_active_workflow(
+        self, task: SimpleTask, chat_id: str
+    ) -> SimpleTask | None:
+        """Try to route a message to an existing active workflow for this channel.
+
+        Returns the existing task (with status="routed") if successful, None otherwise.
+        """
+        executor = getattr(self.task_manager, "temporal_executor", None)
+        if not executor:
+            return None
+
+        task_repository = self.repository_factory.create_repository(TaskRepository)
+        candidates = await task_repository.find_active_by_agent_and_chat(
+            task.agent_id, chat_id
+        )
+
+        message_text = task.query or task.description
+
+        for candidate in candidates:
+            try:
+                ok = await executor.send_workflow_command(
+                    candidate.execution_id,
+                    "queue_message",
+                    {"message": message_text},
+                )
+                if not ok:
+                    continue
+                logger.info(
+                    "Routed follow-up to workflow %s (agent=%s, chat_id=%s)",
+                    candidate.execution_id,
+                    task.agent_id,
+                    chat_id,
+                )
+                # Return existing task marked as routed
+                candidate_as_simple = SimpleTask(
+                    id=candidate.id,
+                    title=task.title,
+                    description=candidate.description,
+                    query=task.query,
+                    user_id=candidate.user_id,
+                    workspace_id=candidate.workspace_id,
+                    agent_id=candidate.agent_id,
+                    status="routed",
+                    execution_id=candidate.execution_id,
+                    task_parameters=candidate.parameters,
+                )
+                return candidate_as_simple
+            except Exception:
+                logger.warning(
+                    "Failed to signal workflow %s, trying next candidate",
+                    candidate.execution_id,
+                    exc_info=True,
+                )
+                continue
+
+        return None
+
     async def cancel_task(self, task_id: UUID) -> bool:
         """Cancel a task."""
         return await self.task_manager.cancel_task(task_id)
@@ -447,18 +521,16 @@ class TaskService(BaseTaskService):
             },
         )
 
+        # Try routing to active workflow if channel_origin is present
+        channel_origin = (parameters or {}).get("channel_origin", {})
+        chat_id = channel_origin.get("chat_id") if channel_origin else None
+        if chat_id:
+            routed = await self._try_route_to_active_workflow(task, str(chat_id))
+            if routed:
+                return routed
+
         # Store task
         stored_task = await self.create_task(task)
-
-        # Publish TaskCreated event - temporarily disabled due to event creation issue
-        # from .domain.events import TaskCreated
-        # task_created_event = TaskCreated(
-        #     task_id=str(task_id),
-        #     agent_id=str(agent_id),
-        #     description=description,
-        #     parameters=parameters or {},
-        # )
-        # await self._publish_task_event(task_created_event)
 
         # Set initial status
         stored_task.status = "pending"
