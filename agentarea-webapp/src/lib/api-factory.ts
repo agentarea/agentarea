@@ -909,6 +909,11 @@ export function createApiClient(client: Client) {
     },
 
     // Triggers API
+    listTriggerCatalog: async () => {
+      const { data, error } = await client.GET("/v1/triggers/catalog" as any, {});
+      return { data, error };
+    },
+
     listTriggers: async (params?: {
       agent_id?: string;
       trigger_type?: string;
@@ -928,8 +933,11 @@ export function createApiClient(client: Client) {
       task_parameters?: Record<string, any>;
       failure_threshold?: number;
     }) => {
+      // Flatten config into the body — backend expects flat fields
+      const { config, ...rest } = body;
+      const flat = { ...rest, ...config };
       const { data, error } = await client.POST("/v1/triggers/" as any, {
-        body,
+        body: flat,
       });
       return { data, error };
     },
@@ -946,12 +954,16 @@ export function createApiClient(client: Client) {
       triggerId: string,
       body: {
         name?: string;
-        config?: Record<string, any>;
+        cron_expression?: string;
+        timezone?: string;
         task_parameters?: Record<string, any>;
         failure_threshold?: number;
+        description?: string;
+        is_active?: boolean;
+        conditions?: Record<string, any>;
       }
     ) => {
-      const { data, error } = await client.PATCH(
+      const { data, error } = await client.PUT(
         `/v1/triggers/${triggerId}` as any,
         { body }
       );

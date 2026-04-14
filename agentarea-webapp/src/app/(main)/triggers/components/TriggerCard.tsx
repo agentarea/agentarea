@@ -1,18 +1,32 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Clock, Webhook, Zap } from "lucide-react";
+import { Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface TriggerCardProps {
   trigger: any;
+  catalog: any[];
 }
 
-export default function TriggerCard({ trigger }: TriggerCardProps) {
+function findCatalogEntry(trigger: any, catalog: any[]) {
+  // Match polling triggers by data_extractor first
+  if (trigger.data_extractor) {
+    const match = catalog.find((e: any) => e.data_extractor === trigger.data_extractor);
+    if (match) return match;
+  }
+  if (trigger.trigger_type === "cron") {
+    return catalog.find((e) => e.id === "cron");
+  }
+  const wt = trigger.webhook_type || trigger.config?.webhook_type;
+  return catalog.find((e: any) => e.webhook_type === wt) || catalog.find((e) => e.id === "webhook");
+}
+
+export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
   const t = useTranslations("TriggersPage");
 
-  const isCron = trigger.trigger_type === "cron";
+  const entry = findCatalogEntry(trigger, catalog);
   const isActive = trigger.is_active;
 
   return (
@@ -20,7 +34,7 @@ export default function TriggerCard({ trigger }: TriggerCardProps) {
       href={`/triggers/${trigger.id}`}
       title={trigger.name}
       type="view"
-      icon={isCron ? Clock : Webhook}
+      icon={Clock}
       subtitle={
         <div className="flex items-center gap-1.5">
           <Badge
@@ -28,8 +42,7 @@ export default function TriggerCard({ trigger }: TriggerCardProps) {
             variant="outline"
             className="gap-1 font-normal text-muted-foreground border-transparent bg-secondary/50 hover:bg-secondary/70 px-1.5 h-5"
           >
-            {isCron ? <Clock className="h-3 w-3" /> : <Webhook className="h-3 w-3" />}
-            {isCron ? t("type.cron") : t("type.webhook")}
+            {entry?.name ?? trigger.trigger_type}
           </Badge>
           <Badge
             size="sm"

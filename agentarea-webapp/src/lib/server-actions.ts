@@ -2,6 +2,7 @@
 
 import {
   getAgent,
+  updateAgent,
   listAgents,
   listModelInstances,
   getModelSpec,
@@ -52,6 +53,7 @@ import {
   disableTrigger,
   deleteTrigger,
   listMCPServers,
+  listOpenAPIConnections,
   getOpenAPIConnection,
   deleteOpenAPIConnection,
   discoverOpenAPITools,
@@ -91,6 +93,13 @@ function isUUID(value: string): boolean {
 
 export async function getAgentAction(agentId: string) {
   return await getAgent(agentId);
+}
+
+export async function updateAgentAction(
+  agentId: string,
+  body: Parameters<typeof updateAgent>[1]
+) {
+  return await updateAgent(agentId, body);
 }
 
 export async function listModelInstancesAction(params?: {
@@ -387,6 +396,10 @@ export async function listMCPServersAction(params?: {
   search?: string;
 }) {
   return await listMCPServers(params);
+}
+
+export async function listOpenAPIConnectionsAction(params?: Parameters<typeof listOpenAPIConnections>[0]) {
+  return await listOpenAPIConnections(params);
 }
 
 export async function getOpenAPIConnectionAction(connectionId: string) {

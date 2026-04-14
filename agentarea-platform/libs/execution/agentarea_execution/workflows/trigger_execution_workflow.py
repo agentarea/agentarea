@@ -100,6 +100,7 @@ class TriggerExecutionWorkflow:
                         trigger_id=trigger_id, event_data=execution_data
                     )
                 ],
+                result_type=EvaluateTriggerConditionsResult,
                 start_to_close_timeout=timedelta(minutes=3),  # Increased timeout for LLM evaluation
                 heartbeat_timeout=timedelta(seconds=30),  # Heartbeat for condition evaluation
                 retry_policy=RetryPolicy(
@@ -136,6 +137,7 @@ class TriggerExecutionWorkflow:
             execution_result_model: ExecuteTriggerResult = await workflow.execute_activity(
                 TriggerActivities.execute_trigger,
                 args=[ExecuteTriggerRequest(trigger_id=trigger_id, execution_data=execution_data)],
+                result_type=ExecuteTriggerResult,
                 start_to_close_timeout=timedelta(
                     minutes=12
                 ),  # Increased timeout for complex triggers
@@ -202,7 +204,7 @@ class TriggerExecutionWorkflow:
                             "error_message": str(e),
                             "execution_time_ms": execution_time_ms,
                             "executed_at": execution_data.get(
-                                "execution_time", datetime.utcnow().isoformat()
+                                "execution_time", workflow.now().isoformat()
                             ),
                             "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                             "error_type": type(e).__name__,
@@ -242,7 +244,7 @@ class TriggerExecutionWorkflow:
                             "error_message": f"Unexpected error: {e!s}",
                             "execution_time_ms": execution_time_ms,
                             "executed_at": execution_data.get(
-                                "execution_time", datetime.utcnow().isoformat()
+                                "execution_time", workflow.now().isoformat()
                             ),
                             "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                             "error_type": type(e).__name__,

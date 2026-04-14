@@ -72,6 +72,12 @@ class ChannelRouter:
 
         await _dispatch(adapter, channel_origin, event, presentation)
 
+        # Evict cache entry on terminal events to prevent unbounded growth
+        if event_type in ("WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"):
+            task_id = event.get("task_id") or event.get("aggregate_id")
+            if task_id:
+                self._origin_cache.pop(str(task_id), None)
+
     async def _resolve_channel_origin(self, task_id: str) -> dict[str, Any] | None:
         """Resolve channel_origin for a task, using cache."""
         if task_id in self._origin_cache:

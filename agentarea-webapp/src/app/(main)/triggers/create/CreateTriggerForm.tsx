@@ -3,15 +3,7 @@
 import { useState, useEffect, useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import {
-  Clock,
-  Webhook,
-  Zap,
-  Bot,
-  Settings,
-  FileJson,
-  AlertTriangle,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,46 +16,34 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import FormLabel from "@/components/FormLabel/FormLabel";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   createTriggerAction,
   updateTriggerAction,
   type TriggerFormState,
 } from "./actions";
+import { CronScheduler } from "./CronScheduler";
+
+interface CatalogEntry {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  kind: "messaging" | "event" | "schedule";
+  backend_type: "cron" | "webhook";
+  webhook_type?: string;
+  default_methods?: string[];
+  default_cron?: string;
+  data_extractor?: string;
+  credential_fields?: { key: string; label: string; placeholder: string }[];
+  events?: string[];
+}
 
 interface CreateTriggerFormProps {
   agents: any[];
   initialData?: any;
 }
-
-const WEBHOOK_TYPES = [
-  "generic",
-  "slack",
-  "discord",
-  "telegram",
-  "github",
-  "gmail",
-  "teams",
-  "linear",
-  "stripe",
-] as const;
-
-// Credential fields per channel type
-const CHANNEL_CREDENTIAL_FIELDS: Record<string, { key: string; label: string; placeholder: string }[]> = {
-  slack: [
-    { key: "signing_secret", label: "Signing Secret", placeholder: "Your Slack app's signing secret" },
-  ],
-  github: [
-    { key: "webhook_secret", label: "Webhook Secret", placeholder: "Secret configured in GitHub webhook settings" },
-  ],
-  discord: [
-    { key: "public_key", label: "Application Public Key", placeholder: "Your Discord application's public key" },
-  ],
-  linear: [
-    { key: "signing_secret", label: "Signing Secret", placeholder: "Your Linear webhook signing secret" },
-  ],
-};
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
@@ -83,7 +63,18 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProps) {
+function resolveInitialId(catalog: CatalogEntry[], initialData?: any): string {
+  if (!initialData) return "";
+  if (initialData.trigger_type === "cron") return "cron";
+  const wt = initialData.config?.webhook_type;
+  if (!wt) return "webhook";
+  return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
+}
+
+export function CreateTriggerForm({
+  agents,
+  initialData,
+}: CreateTriggerFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const t = useTranslations("TriggersPage.create");
@@ -96,39 +87,57 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  const [triggerType, setTriggerType] = useState<string>(
-    initialData?.trigger_type || ""
-  );
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [search, setSearch] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
     initialData?.config?.allowed_methods || ["POST"]
   );
-  const [webhookType, setWebhookType] = useState<string>(
-    initialData?.config?.webhook_type || "generic"
-  );
-  const [channelEvents, setChannelEvents] = useState<Record<string, string[]>>({});
   const [selectedEvents, setSelectedEvents] = useState<string[]>(
     initialData?.event_types || []
   );
 
-  // Fetch channel events registry
+  // Fetch catalog from backend
   useEffect(() => {
-    fetch("/api/proxy/v1/triggers/channels/events")
-      .then((res) => res.ok ? res.json() : {})
-      .then((data) => setChannelEvents(data))
+    fetch("/api/proxy/v1/triggers/catalog")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CatalogEntry[]) => {
+        setCatalog(data);
+        if (initialData) {
+          setSelectedId(resolveInitialId(data, initialData));
+        }
+      })
       .catch(() => {});
   }, []);
 
-  const availableEvents = channelEvents[webhookType] || [];
+  const selected = catalog.find((e) => e.id === selectedId);
+  const triggerType = selected?.backend_type ?? "";
+  const webhookType = selected?.webhook_type ?? "";
+
+  // Reset methods and events when selection changes
+  useEffect(() => {
+    if (selected && !isEditing) {
+      setSelectedMethods(selected.default_methods ?? ["POST"]);
+      setSelectedEvents([]);
+    }
+  }, [selectedId]);
+
+  const availableEvents = selected?.events ?? [];
+  const credentialFields = selected?.credential_fields ?? [];
 
   const toggleEvent = (event: string) => {
     setSelectedEvents((prev) =>
-      prev.includes(event)
-        ? prev.filter((e) => e !== event)
-        : [...prev, event]
+      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
     );
   };
 
-  const credentialFields = CHANNEL_CREDENTIAL_FIELDS[webhookType] || [];
+  const toggleMethod = (method: string) => {
+    setSelectedMethods((prev) =>
+      prev.includes(method)
+        ? prev.filter((m) => m !== method)
+        : [...prev, method]
+    );
+  };
 
   useEffect(() => {
     if (state.success) {
@@ -147,125 +156,188 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
     }
   }, [state, toast, router, isEditing, tSuccess, tError]);
 
-  const toggleMethod = (method: string) => {
-    setSelectedMethods((prev) =>
-      prev.includes(method)
-        ? prev.filter((m) => m !== method)
-        : [...prev, method]
-    );
+  // Filter catalog by search
+  const filteredEntries = search.trim()
+    ? catalog.filter(
+        (e) =>
+          e.name.toLowerCase().includes(search.toLowerCase()) ||
+          e.description.toLowerCase().includes(search.toLowerCase())
+      )
+    : null;
+
+  // Group by kind for default view
+  const kindLabels: Record<string, string> = {
+    messaging: "Messaging",
+    schedule: "Scheduling",
+    event: "Events",
   };
+  const kinds = [...new Set(catalog.map((e) => e.kind))];
+
+  const renderCard = (entry: CatalogEntry) => (
+    <button
+      key={entry.id}
+      type="button"
+      onClick={() => setSelectedId(entry.id)}
+      title={entry.description}
+      className={cn(
+        "flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition-colors w-[72px] shrink-0",
+        selectedId === entry.id
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
+      )}
+    >
+      <span className="text-[10px] leading-tight font-medium line-clamp-2">
+        {entry.name}
+      </span>
+    </button>
+  );
 
   return (
     <form action={formAction} className="overflow-auto h-full">
-      <div className="form-content lg:max-w-xl lg:mx-auto space-y-6">
+      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-5">
         {isEditing && (
           <input type="hidden" name="id" value={initialData.id} />
         )}
+        <input type="hidden" name="trigger_type" value={triggerType} />
+        {triggerType === "webhook" && (
+          <input type="hidden" name="webhook_type" value={webhookType} />
+        )}
+        {selected?.data_extractor && (
+          <input type="hidden" name="data_extractor" value={selected.data_extractor} />
+        )}
 
-        {/* Name */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="name" icon={Zap} required>
-            {t("name")}
-          </FormLabel>
-          <Input
-            id="name"
-            name="name"
-            placeholder={t("namePlaceholder")}
-            defaultValue={initialData?.name || ""}
-            required
-          />
-          {state.errors?.name && (
-            <p className="text-sm text-destructive">{state.errors.name[0]}</p>
-          )}
-        </div>
-
-        {/* Trigger Type */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="trigger_type" icon={Settings} required>
-            {t("triggerType")}
-          </FormLabel>
-          <input type="hidden" name="trigger_type" value={triggerType} />
-          <Select
-            value={triggerType}
-            onValueChange={setTriggerType}
-            disabled={isEditing}
-          >
-            <SelectTrigger id="trigger_type">
-              <SelectValue placeholder={t("selectType")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cron">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Cron
-                </div>
-              </SelectItem>
-              <SelectItem value="webhook">
-                <div className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4" />
-                  Webhook
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {state.errors?.trigger_type && (
-            <p className="text-sm text-destructive">
-              {state.errors.trigger_type[0]}
-            </p>
-          )}
-        </div>
-
-        {/* Agent Selector */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="agent_id" icon={Bot} required>
-            {t("agent")}
-          </FormLabel>
-          <Select
-            name="agent_id"
-            defaultValue={initialData?.agent_id || ""}
-          >
-            <SelectTrigger id="agent_id">
-              <SelectValue placeholder={t("selectAgent")} />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {state.errors?.agent_id && (
-            <p className="text-sm text-destructive">
-              {state.errors.agent_id[0]}
-            </p>
-          )}
-        </div>
-
-        {/* Cron-specific config */}
-        {triggerType === "cron" && (
-          <>
-            <div className="grid gap-2">
-              <FormLabel htmlFor="cron_expression" icon={Clock} required>
-                {t("cronExpression")}
-              </FormLabel>
+        {/* Catalog Picker */}
+        {!isEditing ? (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("triggerType")}
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                id="cron_expression"
-                name="cron_expression"
-                placeholder={t("cronPlaceholder")}
-                defaultValue={initialData?.config?.cron_expression || ""}
-                required
-                className="font-mono"
+                type="text"
+                placeholder="Search triggers..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
               />
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {filteredEntries ? (
+                <div className="flex flex-wrap gap-2">
+                  {filteredEntries.map(renderCard)}
+                  {filteredEntries.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-4 w-full text-center">
+                      No triggers found for &ldquo;{search}&rdquo;
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {kinds.map((kind) => {
+                    const entries = catalog.filter((e) => e.kind === kind);
+                    return (
+                      <div key={kind}>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          {kindLabels[kind] ?? kind}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {entries.map(renderCard)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {selected && (
               <p className="text-xs text-muted-foreground">
-                Format: minute hour day month weekday (e.g., 0 9 * * 1-5 = weekdays at 9am)
+                <span className="font-medium text-foreground">
+                  {selected.name}
+                </span>{" "}
+                &mdash; {selected.description}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+            {selected && (
+              <span className="text-lg">{selected.icon}</span>
+            )}
+            <div>
+              <p className="text-sm font-medium">
+                {selected?.name ?? initialData.trigger_type}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {selected?.description}
               </p>
             </div>
+          </div>
+        )}
 
-            <div className="grid gap-2">
-              <FormLabel htmlFor="timezone" icon={Clock} required={false}>
+        {/* Basic Info */}
+        <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Basic Info
+          </div>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-sm">
+                {t("name")} <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder={t("namePlaceholder")}
+                defaultValue={initialData?.name || ""}
+                required
+              />
+              {state.errors?.name && (
+                <p className="text-sm text-destructive">{state.errors.name[0]}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="agent_id" className="text-sm">
+                {t("agent")} <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                name="agent_id"
+                defaultValue={initialData?.agent_id || ""}
+              >
+                <SelectTrigger id="agent_id">
+                  <SelectValue placeholder={t("selectAgent")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {state.errors?.agent_id && (
+                <p className="text-sm text-destructive">
+                  {state.errors.agent_id[0]}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Cron config */}
+        {triggerType === "cron" && (
+          <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Schedule
+            </div>
+            <CronScheduler
+              name="cron_expression"
+              defaultValue={initialData?.config?.cron_expression || selected?.default_cron || ""}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="timezone" className="text-sm">
                 {t("timezone")}
-              </FormLabel>
+              </Label>
               <Select
                 name="timezone"
                 defaultValue={initialData?.config?.timezone || "UTC"}
@@ -282,41 +354,16 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
                 </SelectContent>
               </Select>
             </div>
-          </>
+          </div>
         )}
 
-        {/* Webhook-specific config */}
+        {/* Webhook config */}
         {triggerType === "webhook" && (
           <>
-            <div className="grid gap-2">
-              <FormLabel htmlFor="webhook_type" icon={Webhook} required={false}>
-                {t("webhookType")}
-              </FormLabel>
-              <input type="hidden" name="webhook_type" value={webhookType} />
-              <Select
-                value={webhookType}
-                onValueChange={(v) => {
-                  setWebhookType(v);
-                  setSelectedEvents([]);
-                }}
-              >
-                <SelectTrigger id="webhook_type">
-                  <SelectValue placeholder={t("selectWebhookType")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {WEBHOOK_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <FormLabel icon={Settings} required={false}>
+            <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("allowedMethods")}
-              </FormLabel>
+              </div>
               <div className="flex flex-wrap gap-3">
                 {HTTP_METHODS.map((method) => (
                   <div key={method} className="flex items-center gap-2">
@@ -337,27 +384,32 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
               </div>
             </div>
 
-            {/* Event Type Filter */}
             {availableEvents.length > 0 && (
-              <div className="grid gap-2">
-                <FormLabel icon={Zap} required={false}>
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Event Types
-                </FormLabel>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Select which events should trigger execution. Leave empty to accept all events.
+                  Select which events trigger execution. Leave empty to accept
+                  all.
                 </p>
-                <input type="hidden" name="event_types" value={JSON.stringify(selectedEvents)} />
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto rounded-md border border-input p-3">
+                <input
+                  type="hidden"
+                  name="event_types"
+                  value={JSON.stringify(selectedEvents)}
+                />
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
                   {availableEvents.map((event) => (
                     <button
                       key={event}
                       type="button"
                       onClick={() => toggleEvent(event)}
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer",
                         selectedEvents.includes(event)
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
+                      )}
                     >
                       {event}
                     </button>
@@ -365,87 +417,95 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
                 </div>
                 {selectedEvents.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""} selected
+                    {selectedEvents.length} event
+                    {selectedEvents.length !== 1 ? "s" : ""} selected
                   </p>
                 )}
               </div>
             )}
 
-            {/* Channel Credentials */}
-            {credentialFields.length > 0 && (
-              <div className="grid gap-3 rounded-md border border-input p-4">
-                <div className="flex items-center gap-2">
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Channel Credentials</span>
-                  <span className="text-xs text-muted-foreground">(optional)</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Add signing credentials to verify webhook authenticity. Stored securely and never displayed.
-                </p>
-                {credentialFields.map((field) => (
-                  <div key={field.key} className="grid gap-1.5">
-                    <Label htmlFor={`cred_${field.key}`} className="text-sm">
-                      {field.label}
-                    </Label>
-                    <Input
-                      id={`cred_${field.key}`}
-                      name={`credential_${field.key}`}
-                      type="password"
-                      placeholder={field.placeholder}
-                      autoComplete="off"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
           </>
         )}
 
-        {/* Task Parameters */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="task_parameters" icon={FileJson} required={false}>
-            {t("taskParameters")}
-          </FormLabel>
-          <Textarea
-            id="task_parameters"
-            name="task_parameters"
-            placeholder={t("taskParametersPlaceholder")}
-            defaultValue={
-              initialData?.task_parameters
-                ? JSON.stringify(initialData.task_parameters, null, 2)
-                : ""
-            }
-            className="font-mono min-h-[100px]"
-          />
-          {state.errors?.task_parameters && (
-            <p className="text-sm text-destructive">
-              {state.errors.task_parameters[0]}
+        {/* Channel Credentials — shown for any trigger with credential_fields */}
+        {credentialFields.length > 0 && (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Credentials
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selected?.data_extractor
+                ? "Required to connect to the service."
+                : "Add signing credentials to verify webhook authenticity. Stored securely."}
             </p>
-          )}
+            {credentialFields.map((field) => (
+              <div key={field.key} className="space-y-1.5">
+                <Label
+                  htmlFor={`cred_${field.key}`}
+                  className="text-sm"
+                >
+                  {field.label}
+                  {selected?.data_extractor && <span className="text-red-500"> *</span>}
+                </Label>
+                <Input
+                  id={`cred_${field.key}`}
+                  name={`credential_${field.key}`}
+                  type="password"
+                  placeholder={field.placeholder}
+                  autoComplete="off"
+                  required={!!selected?.data_extractor}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Advanced */}
+        <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Advanced
+          </div>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="task_parameters" className="text-sm">
+                {t("taskParameters")}
+              </Label>
+              <Textarea
+                id="task_parameters"
+                name="task_parameters"
+                placeholder={t("taskParametersPlaceholder")}
+                defaultValue={
+                  initialData?.task_parameters
+                    ? JSON.stringify(initialData.task_parameters, null, 2)
+                    : ""
+                }
+                className="font-mono min-h-[100px]"
+              />
+              {state.errors?.task_parameters && (
+                <p className="text-sm text-destructive">
+                  {state.errors.task_parameters[0]}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="failure_threshold" className="text-sm">
+                {t("failureThreshold")}
+              </Label>
+              <Input
+                id="failure_threshold"
+                name="failure_threshold"
+                type="number"
+                min={1}
+                placeholder={t("failureThresholdPlaceholder")}
+                defaultValue={initialData?.failure_threshold || ""}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Failure Threshold */}
-        <div className="grid gap-2">
-          <FormLabel
-            htmlFor="failure_threshold"
-            icon={AlertTriangle}
-            required={false}
-          >
-            {t("failureThreshold")}
-          </FormLabel>
-          <Input
-            id="failure_threshold"
-            name="failure_threshold"
-            type="number"
-            min={1}
-            placeholder={t("failureThresholdPlaceholder")}
-            defaultValue={initialData?.failure_threshold || ""}
-          />
-        </div>
-
-        {/* Submit Button */}
-        <div className="flex justify-end pt-4">
-          <Button type="submit" disabled={isPending}>
+        {/* Submit */}
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isPending || !selected}>
             {isPending
               ? "..."
               : isEditing
@@ -454,9 +514,8 @@ export function CreateTriggerForm({ agents, initialData }: CreateTriggerFormProp
           </Button>
         </div>
 
-        {/* Form-level errors */}
         {state.errors?._form && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             {state.errors._form.map((err, i) => (
               <p key={i}>{err}</p>
             ))}

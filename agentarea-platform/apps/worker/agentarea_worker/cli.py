@@ -35,19 +35,19 @@ def start(debug: bool, max_activities: int | None, max_workflows: int | None):
     if max_workflows:
         settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = max_workflows
 
-    click.echo("🚀 Starting AgentArea Temporal Worker...")
-    click.echo(f"   Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"   Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"   Max Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}")
-    click.echo(f"   Max Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
+    click.echo("Starting AgentArea Temporal Worker...")
+    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
+    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
+    click.echo(f"Max Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}")
+    click.echo(f"Max Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
 
     try:
         worker = AgentAreaWorker()
         asyncio.run(worker.start())
     except KeyboardInterrupt:
-        click.echo("\n✅ Worker stopped by user")
+        click.echo("\nWorker stopped by user")
     except Exception as e:
-        click.echo(f"\n❌ Worker failed: {e}")
+        click.echo(f"\nWorker failed: {e}")
         sys.exit(1)
 
 
@@ -61,8 +61,8 @@ def dev(debug: bool):
     if debug:
         logging.basicConfig(level=logging.DEBUG)
 
-    click.echo("🚀 Starting Temporal worker with auto-restart...")
-    click.echo("📝 Watching for Python file changes in apps/worker and libs directories")
+    click.echo("Starting Temporal worker with auto-restart...")
+    click.echo("Watching for Python file changes in apps/worker and libs directories")
     click.echo("Press Ctrl+C to stop")
 
     try:
@@ -80,7 +80,7 @@ def dev(debug: bool):
             libs_path = "/app/libs"
             current_dir = "/app"
 
-        click.echo(f"📁 Watching: {worker_path} and {libs_path}")
+        click.echo(f"Watching: {worker_path} and {libs_path}")
 
         # Run watchfiles to monitor and restart the worker
         subprocess.run(  # noqa: S603
@@ -95,9 +95,9 @@ def dev(debug: bool):
             cwd=current_dir,
         )
     except KeyboardInterrupt:
-        click.echo("\n✅ Worker auto-restart stopped")
+        click.echo("\nWorker auto-restart stopped")
     except Exception as e:
-        click.echo(f"\n❌ Error: {e}")
+        click.echo(f"\nError: {e}")
         sys.exit(1)
 
 
@@ -106,21 +106,21 @@ def status():
     """Check worker status and configuration."""
     settings = get_settings()
 
-    click.echo("🔍 Worker Configuration:")
-    click.echo(f"   Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"   Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
-    click.echo(f"   Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"   Database: {settings.database.POSTGRES_HOST}:{settings.database.POSTGRES_PORT}")
+    click.echo("Worker Configuration:")
+    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
+    click.echo(f"Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
+    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
+    click.echo(f"Database: {settings.database.POSTGRES_HOST}:{settings.database.POSTGRES_PORT}")
 
 
 @cli.command()
 def validate():
     """Validate worker configuration and dependencies."""
-    click.echo("🔍 Validating worker configuration...")
+    click.echo("Validating worker configuration...")
 
     try:
         settings = get_settings()
-        click.echo("✅ Settings loaded successfully")
+        click.echo("Settings loaded successfully")
 
         # Test database connection
         from agentarea_common.config import Database
@@ -129,12 +129,12 @@ def validate():
         db = Database(settings.database)
         with db.get_sync_db() as session:
             session.execute(text("SELECT 1"))
-        click.echo("✅ Database connection successful")
+        click.echo("Database connection successful")
 
-        click.echo("✅ Worker validation passed")
+        click.echo("Worker validation passed")
 
     except Exception as e:
-        click.echo(f"❌ Validation failed: {e}")
+        click.echo(f"Validation failed: {e}")
         sys.exit(1)
 
 

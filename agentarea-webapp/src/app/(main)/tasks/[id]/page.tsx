@@ -42,6 +42,7 @@ export default function TaskDetailsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<MessageComponentType[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,7 +70,7 @@ export default function TaskDetailsPage() {
   const executionMessages = useMemo((): MessageComponentType[] => {
     if (!task) return [];
 
-    return processEventsToMessages(
+    const processed = processEventsToMessages(
       taskEvents.map((e) => ({
         type: e.type,
         timestamp: e.timestamp,
@@ -77,7 +78,19 @@ export default function TaskDetailsPage() {
       })),
       { taskId: task.id, agentId: task.agent_id }
     );
-  }, [task, taskEvents]);
+
+    // Merge optimistic messages, filtering out any that have been confirmed by events
+    const confirmedContents = new Set(
+      processed
+        .filter((m) => m.type === "user_message")
+        .map((m) => (m.data as any).content)
+    );
+    const pendingOptimistic = optimisticMessages.filter(
+      (m) => !confirmedContents.has((m.data as any).content)
+    );
+
+    return [...processed, ...pendingOptimistic];
+  }, [task, taskEvents, optimisticMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -185,14 +198,31 @@ export default function TaskDetailsPage() {
 
     try {
       if (isActive) {
+        // Optimistically show user message immediately
+        setOptimisticMessages((prev) => [
+          ...prev,
+          {
+            type: "user_message",
+            data: {
+              id: `optimistic-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              agent_id: task.agent_id,
+              event_type: "MessageQueued",
+              content: message,
+            },
+          },
+        ]);
+
         const { error } = await sendTaskCommand(task.agent_id, task.id, {
           command: "queue_message",
           message: message,
         });
         if (error) {
           toast.error("Failed to send message");
-        } else {
-          await refreshEvents();
+          // Remove optimistic message on error
+          setOptimisticMessages((prev) =>
+            prev.filter((m) => (m.data as any).content !== message)
+          );
         }
       } else {
         // Task is completed — create a new task for the same agent

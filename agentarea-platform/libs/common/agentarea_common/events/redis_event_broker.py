@@ -85,12 +85,10 @@ class RedisEventBroker(EventBroker):
 
     def _is_cross_language_channel(self, channel: str) -> bool:
         """Check if channel is for cross-language communication (Go services)."""
-        # MCP events need to be consumed by Go MCP Manager
-        # Check both new format (lowercase) and legacy format (PascalCase)
         channel_lower = channel.lower()
         return (
-            "mcp" in channel_lower  # Any MCP-related channel
-            or channel.startswith("MCPServerInstance")  # Legacy exact match
+            "mcp" in channel_lower
+            or channel.startswith("MCPServerInstance")
         )
 
     @override
@@ -127,15 +125,16 @@ class RedisEventBroker(EventBroker):
         # Serialize to JSON using shared format
         serialized_message = SharedEventFormat.serialize(shared_event)
 
-        # For cross-language channels (MCP events to Go), use raw Redis
-        # to avoid FastStream binary framing
-        if self._is_cross_language_channel(channel) and self._raw_redis:
+        # Publish via FastStream for internal Python consumers (SSE streaming)
+        await self.redis_broker.publish(message=serialized_message, channel=channel)
+
+        # Also publish via raw Redis for non-FastStream consumers:
+        # - MCP events → Go MCP Manager
+        # - Workflow events → outbound channel delivery (ChannelEventSubscriber)
+        if self._raw_redis and (
+            self._is_cross_language_channel(channel) or "workflow" in channel.lower()
+        ):
             await self._raw_redis.publish(channel, serialized_message)
-            logger.debug(f"Published to {channel} using raw Redis (cross-language)")
-        else:
-            # For internal Python channels, use FastStream broker
-            await self.redis_broker.publish(message=serialized_message, channel=channel)
-            logger.debug(f"Published to {channel} using FastStream broker")
 
     def _get_channel_for_event(self, event_type: str) -> str:
         """Get channel name for event type."""

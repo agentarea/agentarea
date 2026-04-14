@@ -3,18 +3,29 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { Clock, Webhook } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 
 interface TriggersTableProps {
   triggers: any[];
+  catalog: any[];
 }
 
-export default function TriggersTable({ triggers }: TriggersTableProps) {
+function findCatalogEntry(trigger: any, catalog: any[]) {
+  if (trigger.data_extractor) {
+    const match = catalog.find((e: any) => e.data_extractor === trigger.data_extractor);
+    if (match) return match;
+  }
+  if (trigger.trigger_type === "cron") {
+    return catalog.find((e: any) => e.id === "cron");
+  }
+  const wt = trigger.webhook_type || trigger.config?.webhook_type;
+  return catalog.find((e: any) => e.webhook_type === wt) || catalog.find((e: any) => e.id === "webhook");
+}
+
+export default function TriggersTable({ triggers, catalog }: TriggersTableProps) {
   const router = useRouter();
   const t = useTranslations("TriggersPage.table");
-  const tType = useTranslations("TriggersPage.type");
   const tStatus = useTranslations("TriggersPage.status");
 
   const columns = [
@@ -30,16 +41,14 @@ export default function TriggersTable({ triggers }: TriggersTableProps) {
     {
       accessor: "trigger_type",
       header: t("type"),
-      render: (value: string) => (
-        <Badge variant="outline" className="gap-1">
-          {value === "cron" ? (
-            <Clock className="h-3 w-3" />
-          ) : (
-            <Webhook className="h-3 w-3" />
-          )}
-          {value === "cron" ? tType("cron") : tType("webhook")}
-        </Badge>
-      ),
+      render: (_value: string, trigger: any) => {
+        const entry = findCatalogEntry(trigger, catalog);
+        return (
+          <Badge variant="outline" className="gap-1">
+            {entry?.name ?? _value}
+          </Badge>
+        );
+      },
     },
     {
       accessor: "agent_name",

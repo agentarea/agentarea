@@ -52,8 +52,8 @@ export default function ExecutionsTable({
       ),
     },
     {
-      accessor: "started_at",
-      header: "Started",
+      accessor: "executed_at",
+      header: "Executed",
       render: (value: string) => (
         <span className="text-muted-foreground">
           {value
@@ -63,20 +63,29 @@ export default function ExecutionsTable({
       ),
     },
     {
-      accessor: "duration_ms",
+      accessor: "execution_time_ms",
       header: "Duration",
       render: (value: number) => (
         <span className="text-muted-foreground">
-          {value != null ? `${(value / 1000).toFixed(2)}s` : "-"}
+          {value != null ? `${value}ms` : "-"}
         </span>
       ),
     },
     {
-      accessor: "result",
-      header: "Result",
-      render: (value: any) => (
+      accessor: "task_id",
+      header: "Task",
+      render: (value: string) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {value ? `${value.slice(0, 8)}...` : "-"}
+        </span>
+      ),
+    },
+    {
+      accessor: "error_message",
+      header: "Error",
+      render: (value: string) => (
         <span className="max-w-xs truncate text-muted-foreground block text-xs">
-          {value ? (typeof value === "string" ? value : JSON.stringify(value)) : "-"}
+          {value || "-"}
         </span>
       ),
     },

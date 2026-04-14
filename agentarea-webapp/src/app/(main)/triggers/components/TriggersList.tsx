@@ -7,12 +7,14 @@ import TriggersTable from "./TriggersTable";
 
 interface TriggersListProps {
   triggers: any[];
+  catalog: any[];
   viewMode: "grid" | "table";
   searchQuery: string;
 }
 
 export default function TriggersList({
   triggers,
+  catalog,
   viewMode,
   searchQuery,
 }: TriggersListProps) {
@@ -45,11 +47,11 @@ export default function TriggersList({
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {triggers.map((trigger) => (
-            <TriggerCard key={trigger.id} trigger={trigger} />
+            <TriggerCard key={trigger.id} trigger={trigger} catalog={catalog} />
           ))}
         </div>
       ) : (
-        <TriggersTable triggers={triggers} />
+        <TriggersTable triggers={triggers} catalog={catalog} />
       )}
     </>
   );

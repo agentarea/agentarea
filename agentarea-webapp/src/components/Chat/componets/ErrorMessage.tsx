@@ -22,15 +22,6 @@ interface ErrorData {
 const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
   const t = useTranslations("ErrorMessage");
 
-  const getErrorIcon = () => {
-    if (data.is_auth_error) return "\ud83d\udd11";
-    if (data.is_rate_limit_error) return "\u23f1\ufe0f";
-    if (data.is_quota_error) return "\ud83d\udcb3";
-    if (data.is_model_error) return "\ud83e\udd16";
-    if (data.is_network_error) return "\ud83c\udf10";
-    return "\u26a0\ufe0f";
-  };
-
   const getErrorStyles = () => {
     if (data.retryable !== false) {
       return {
@@ -51,32 +42,25 @@ const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
       <BaseMessage
         collapsed={true}
         headerLeft={
-          <span className="">
-            {getErrorIcon()}
-            <span className="ml-2 text-red-700 dark:text-red-300">
-              {data.error_type || t("error")}
-            </span>
+          <span className="text-red-700 dark:text-red-300">
+            {data.error_type || t("error")}
           </span>
         }
       >
         {data.error}
-        <br />
-        {data.error_type && (
-          <span>
-            {t("type")} {data.error_type}
-          </span>
-        )}
-        <br />
         {data.retryable !== undefined && (
-          <span
-            className={
-              data.retryable
-                ? "text-yellow-600 dark:text-yellow-400"
-                : "text-red-600 dark:text-red-400"
-            }
-          >
-            {data.retryable ? t("retryable") : t("nonRetryable")}
-          </span>
+          <>
+            <br />
+            <span
+              className={
+                data.retryable
+                  ? "text-yellow-600 dark:text-yellow-400"
+                  : "text-red-600 dark:text-red-400"
+              }
+            >
+              {data.retryable ? t("retryable") : t("nonRetryable")}
+            </span>
+          </>
         )}
       </BaseMessage>
     </MessageWrapper>

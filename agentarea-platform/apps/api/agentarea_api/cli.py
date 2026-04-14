@@ -44,8 +44,8 @@ def cli():
 @click.option("--workers", default=1, help="Number of worker processes")
 def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
     """Start the API server."""
-    click.echo(f"🚀 Starting AgentArea API server on {host}:{port}")
-    click.echo(f"   Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
+    click.echo(f"Starting AgentArea API server on {host}:{port}")
+    click.echo(f"Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
 
     uvicorn.run(
         app="agentarea_api.main:app",
@@ -61,14 +61,14 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
 @cli.command()
 def migrate():
     """Run database migrations."""
-    click.echo("🔄 Running database migrations...")
+    click.echo("Running database migrations...")
 
     try:
         # Check database connection
         engine = get_engine()
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-        click.echo("✅ Database connection successful")
+        click.echo("Database connection successful")
 
         # Determine current revision and handle pre-existing schema gracefully
         from alembic.runtime.migration import MigrationContext
@@ -91,28 +91,28 @@ def migrate():
                 # Only stamp if provider_specs exists, otherwise it might be a dirty DB (e.g. Kratos tables)
                 if existing_tables and "provider_specs" in existing_tables:
                     click.echo(
-                        "⚠️  No Alembic revision found but tables exist. Stamping head without applying migrations."
+                        "No Alembic revision found but tables exist. Stamping head without applying migrations."
                     )
                     command.stamp(alembic_cfg, head_rev)
-                    click.echo("✅ Stamped database to head revision")
+                    click.echo("Stamped database to head revision")
                 else:
                     click.echo("Empty or dirty database detected. Applying migrations to head...")
                     command.upgrade(alembic_cfg, "head")
-                    click.echo("✅ Migrations applied to head")
+                    click.echo("Migrations applied to head")
             else:
                 # Normal path: apply outstanding migrations
                 command.upgrade(alembic_cfg, "head")
-                click.echo("✅ Migrations completed successfully")
+                click.echo("Migrations completed successfully")
 
     except Exception as e:
-        click.echo(f"❌ Migration failed: {e}")
+        click.echo(f"Migration failed: {e}")
         sys.exit(1)
 
 
 @cli.command()
 def check_migrations():
     """Check migration status."""
-    click.echo("🔍 Checking migration status...")
+    click.echo("Checking migration status...")
 
     try:
         from alembic.runtime.migration import MigrationContext
@@ -127,42 +127,42 @@ def check_migrations():
             current = context.get_current_revision()
             head = script.get_current_head()
 
-            click.echo(f"   Current revision: {current}")
-            click.echo(f"   Head revision: {head}")
+            click.echo(f"Current revision: {current}")
+            click.echo(f"Head revision: {head}")
 
             if current == head:
-                click.echo("✅ Database is up to date")
+                click.echo("Database is up to date")
             else:
-                click.echo("⚠️  Database needs migration")
+                click.echo("Database needs migration")
                 sys.exit(1)
 
     except Exception as e:
-        click.echo(f"❌ Failed to check migrations: {e}")
+        click.echo(f"Failed to check migrations: {e}")
         sys.exit(1)
 
 
 @cli.command()
 def status():
     """Check API status and configuration."""
-    click.echo("🔍 API Configuration:")
+    click.echo("API Configuration:")
 
     settings = get_db_settings()
-    click.echo(f"   Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
-    click.echo(f"   Database Name: {settings.POSTGRES_DB}")
-    click.echo("   Port: set via --port flag or PORT env var (default: 8000)")
+    click.echo(f"Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
+    click.echo(f"Database Name: {settings.POSTGRES_DB}")
+    click.echo("Port: set via --port flag or PORT env var (default: 8000)")
 
 
 @cli.command()
 def validate():
     """Validate API configuration and dependencies."""
-    click.echo("🔍 Validating API configuration...")
+    click.echo("Validating API configuration...")
 
     try:
         # Test database connection
         engine = get_engine()
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-        click.echo("✅ Database connection successful")
+        click.echo("Database connection successful")
 
         # Check if migrations are up to date
         from alembic.runtime.migration import MigrationContext
@@ -177,14 +177,14 @@ def validate():
             head = script.get_current_head()
 
             if current == head:
-                click.echo("✅ Database migrations up to date")
+                click.echo("Database migrations up to date")
             else:
-                click.echo("⚠️  Database needs migration")
+                click.echo("Database needs migration")
 
-        click.echo("✅ API validation passed")
+        click.echo("API validation passed")
 
     except Exception as e:
-        click.echo(f"❌ Validation failed: {e}")
+        click.echo(f"Validation failed: {e}")
         sys.exit(1)
 
 
@@ -226,9 +226,9 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
     if registries_config:
         try:
             configs = json.loads(registries_config)
-            click.echo(f"📋 Loaded {len(configs)} registries from config")
+            click.echo(f"Loaded {len(configs)} registries from config")
         except json.JSONDecodeError as e:
-            click.echo(f"❌ Failed to parse REGISTRIES_CONFIG: {e}")
+            click.echo(f"Failed to parse REGISTRIES_CONFIG: {e}")
             sys.exit(1)
 
     # Add any --source args as auto-detected registries
@@ -248,7 +248,7 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
         )
 
     if not configs:
-        click.echo("⚠️  No registry config provided (set REGISTRIES_CONFIG or use --source)")
+        click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
 
     try:
@@ -263,7 +263,7 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
         synced = 0
         for config in configs:
             registry_name = config["name"]
-            click.echo(f"\n🔄 Reconciling: {registry_name}")
+            click.echo(f"\nReconciling: {registry_name}")
 
             async with db.async_session_factory() as session:
                 registry_repo = RegistryRepository(session, system_context)
@@ -277,7 +277,7 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                 existing = matches[0] if matches else None
                 if existing:
                     registry_id = existing.id
-                    click.echo(f"   Found existing registry: {registry_id}")
+                    click.echo(f"Found existing registry: {registry_id}")
                 else:
                     registry = await service.create_registry(
                         name=config["name"],
@@ -288,19 +288,19 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                         sync_mode=config.get("sync_mode", "manual"),
                     )
                     registry_id = registry.id
-                    click.echo(f"   Created registry: {registry_id}")
+                    click.echo(f"Created registry: {registry_id}")
 
                 # Sync
                 stats = await service.sync_registry(registry_id)
                 await session.commit()
 
-                click.echo(f"   ✅ Synced: {stats}")
+                click.echo(f"Synced: {stats}")
                 synced += 1
 
-        click.echo(f"\n✅ Reconcile complete: {synced}/{len(configs)} registries synced")
+        click.echo(f"\n Reconcile complete: {synced}/{len(configs)} registries synced")
 
     except Exception as e:
-        click.echo(f"❌ Reconcile failed: {e}")
+        click.echo(f"Reconcile failed: {e}")
         logger.exception("Reconcile failed")
         sys.exit(1)
 

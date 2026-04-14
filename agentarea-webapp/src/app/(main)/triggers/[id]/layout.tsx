@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getTrigger, listAgents } from "@/lib/api";
 import TriggerDetailTabs from "./TriggerDetailTabs";
+import TriggerHeaderControls from "./TriggerHeaderControls";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -18,11 +19,6 @@ export default async function TriggerLayout({ params, children }: Props) {
     notFound();
   }
 
-  const { data: agents } = await listAgents();
-  const agentName =
-    (agents as any[])?.find((a: any) => a.id === (trigger as any).agent_id)
-      ?.name || "Unknown Agent";
-
   return (
     <ContentBlock
       header={{
@@ -30,6 +26,13 @@ export default async function TriggerLayout({ params, children }: Props) {
           { label: t("title"), href: "/triggers" },
           { label: (trigger as any).name },
         ],
+        controls: (
+          <TriggerHeaderControls
+            triggerId={id}
+            triggerName={(trigger as any).name}
+            isActive={(trigger as any).is_active}
+          />
+        ),
       }}
       className="p-0"
       subheader={

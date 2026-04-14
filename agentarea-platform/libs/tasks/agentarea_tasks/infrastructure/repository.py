@@ -5,7 +5,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
@@ -184,6 +184,39 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         task_orms = result.scalars().all()
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+
+    async def list_by_statuses(
+        self,
+        statuses: list[str],
+        agent_id: UUID | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Task]:
+        """List tasks matching any of the given statuses, ordered by updated_at desc."""
+        stmt = (
+            select(TaskORM)
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status.in_(statuses))
+            .order_by(TaskORM.updated_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if agent_id is not None:
+            stmt = stmt.where(TaskORM.agent_id == agent_id)
+
+        result = await self.session.execute(stmt)
+        task_orms = result.scalars().all()
+        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+
+    async def count_by_statuses(self, statuses: list[str]) -> int:
+        """Count tasks matching any of the given statuses in the current workspace."""
+        stmt = (
+            select(func.count(TaskORM.id))
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status.in_(statuses))
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
         """Update task status atomically with optional additional fields."""

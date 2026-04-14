@@ -6,9 +6,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CreditCard,
+  LayoutGrid,
   List,
   MessagesSquare,
   Settings,
+  Users,
   // Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,8 @@ const TABS = [
   { key: "tasks", icon: List, labelKey: "currentTasks" },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
   // { key: "wallet", icon: Wallet, labelKey: "wallet" },
+  { key: "delegation", icon: Users, labelKey: "delegation" },
+  { key: "a2ui", icon: LayoutGrid, labelKey: "a2ui" },
   { key: "settings", icon: Settings, labelKey: "settings" },
 ];
 

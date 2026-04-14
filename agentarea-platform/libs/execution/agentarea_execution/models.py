@@ -435,6 +435,26 @@ class EvaluateTriggerConditionsResult(BaseModel):
     trigger_id: UUID | None = None
 
 
+class CreateDelegationTaskRequest(BaseModel):
+    """Request to create a task for agent delegation."""
+
+    parent_agent_id: str
+    parent_task_id: str
+    target_agent_id: str
+    target_agent_name: str
+    message: str
+    user_id: str
+    workspace_id: str
+
+
+class CreateDelegationTaskResult(BaseModel):
+    """Result of creating a delegation task."""
+
+    task_id: UUID | None = None
+    status: str
+    error: str | None = None
+
+
 class CreateTaskFromTriggerRequest(BaseModel):
     """Request to create task from trigger."""
 

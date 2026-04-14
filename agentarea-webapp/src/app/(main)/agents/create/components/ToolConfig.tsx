@@ -20,7 +20,7 @@ import {
   getMCPServerInstanceAction as getMCPServerInstance,
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
-import { listOpenAPIConnections } from "@/lib/api";
+import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
 import type { OpenAPIConnection } from "@/app/(main)/mcp-servers/types";
 import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";

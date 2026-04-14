@@ -128,6 +128,7 @@ export const {
   revokeAPIKey,
 
   // Triggers API
+  listTriggerCatalog,
   listTriggers,
   createTrigger,
   getTrigger,

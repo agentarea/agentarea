@@ -115,6 +115,8 @@ class Activities:
     READ_CONTEXT_OUTPUT: Final[str] = "read_context_output"
     STORE_HISTORY_CHUNK: Final[str] = "store_history_chunk"
     SEARCH_HISTORY: Final[str] = "search_history"
+    # Delegation
+    CREATE_DELEGATION_TASK: Final[str] = "create_delegation_task_activity"
     # Model resolution
     RESOLVE_MODEL: Final[str] = "resolve_model_activity"
 

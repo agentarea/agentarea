@@ -5,8 +5,8 @@ into temporal activities, allowing each activity to create its own
 database sessions and services for better retryability.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from agentarea_common.config import Settings
@@ -30,6 +30,7 @@ class ActivityDependencies:
     settings: "Settings"
     event_broker: "EventBroker"
     secret_manager_factory: "SecretManagerFactory"
+    workflow_executor: Any = field(default=None)
 
 
 # Legacy alias for backward compatibility during transition

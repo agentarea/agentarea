@@ -8,6 +8,7 @@ class TriggerType(StrEnum):
 
     CRON = "cron"
     WEBHOOK = "webhook"
+    POLLING = "polling"
 
 
 class TriggerStatus(StrEnum):

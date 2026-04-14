@@ -38,6 +38,8 @@ from ..models import (
     AgentConfigResult,
     CompactMessagesRequest,
     CompactMessagesResult,
+    CreateDelegationTaskRequest,
+    CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
     ExecuteSkillScriptRequest,
     ExecuteSkillScriptResult,
@@ -851,17 +853,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
             task_repo = TaskRepository(session, user_context)
             try:
                 additional_fields = {}
-                if request.result:
-                    # Task model expects result as dict, but request carries it as JSON string
+                if request.result:                    # Task model expects result as dict, but request carries it as JSON string
                     try:
                         result_dict = json.loads(request.result)
                     except (json.JSONDecodeError, TypeError):
                         result_dict = {"response": request.result}
                     if request.total_cost:
-                        result_dict["total_cost"] = request.total_cost
+                        # Serialize Money (Decimal) to string for JSON compatibility
+                        result_dict["total_cost"] = str(request.total_cost)
                     additional_fields["result"] = result_dict
                 elif request.total_cost:
-                    additional_fields["result"] = {"total_cost": request.total_cost}
+                    # Serialize Money (Decimal) to string for JSON compatibility
+                    additional_fields["result"] = {"total_cost": str(request.total_cost)}
                 if request.error_message:
                     # Tasks table stores this as `error`, not `error_message`.
                     additional_fields["error"] = request.error_message
@@ -1327,6 +1330,57 @@ def make_agent_activities(dependencies: ActivityDependencies):
             logger.error(f"Failed to search history: {e}")
             return SearchHistoryResult(success=False, error=str(e))
 
+    @activity.defn
+    async def create_delegation_task_activity(
+        request: CreateDelegationTaskRequest,
+    ) -> CreateDelegationTaskResult:
+        """Create a task record in DB for agent delegation."""
+        try:
+            from agentarea_common.config import get_database
+            from agentarea_common.base.repository_factory import RepositoryFactory
+            from agentarea_tasks.task_service import TaskService
+
+            database = get_database()
+            async with database.async_session_factory() as session:
+                user_context = UserContext(
+                    user_id=request.user_id,
+                    workspace_id=request.workspace_id,
+                )
+                repository_factory = RepositoryFactory(session, user_context)
+
+                task_service = TaskService(
+                    repository_factory=repository_factory,
+                    event_broker=dependencies.event_broker,
+                    task_manager=None,
+                )
+
+                task = await task_service.create_task_from_params(
+                    title=f"Delegation from agent",
+                    description=f"Delegated task to {request.target_agent_name}",
+                    query=request.message,
+                    user_id=request.user_id,
+                    agent_id=UUID(request.target_agent_id),
+                    workspace_id=request.workspace_id,
+                    task_parameters={
+                        "source": "agent_delegation",
+                        "parent_agent_id": request.parent_agent_id,
+                        "parent_task_id": request.parent_task_id,
+                    },
+                )
+
+                logger.info(
+                    f"Created delegation task {task.id} for agent {request.target_agent_name}"
+                )
+
+                return CreateDelegationTaskResult(
+                    task_id=task.id,
+                    status="created",
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to create delegation task: {e}", exc_info=True)
+            raise
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -1348,4 +1402,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         read_context_output_activity,
         store_history_chunk_activity,
         search_history_activity,
+        create_delegation_task_activity,
     ]
