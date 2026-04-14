@@ -33,8 +33,8 @@ class InboundMessageSubscriber:
     def __init__(
         self,
         redis_url: str,
-        event_broker: "EventBroker",
-        workflow_executor: "WorkflowExecutor | None" = None,
+        event_broker: EventBroker,
+        workflow_executor: WorkflowExecutor | None = None,
     ) -> None:
         self._redis_url = redis_url
         self._event_broker = event_broker
@@ -56,6 +56,7 @@ class InboundMessageSubscriber:
             try:
                 await self._task
             except asyncio.CancelledError:
+                # Expected during shutdown - task cancellation is normal
                 pass
             self._task = None
         logger.info("InboundMessageSubscriber stopped")
@@ -98,12 +99,12 @@ class InboundMessageSubscriber:
             try:
                 await pubsub.unsubscribe(INBOUND_CHANNEL)
                 await pubsub.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Pubsub cleanup error suppressed: %s", exc)
             try:
                 await client.aclose()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Redis client close error suppressed: %s", exc)
 
     async def _handle_message(self, raw_message: dict[str, Any]) -> None:
         try:
@@ -120,23 +121,12 @@ class InboundMessageSubscriber:
                 logger.warning("Inbound message missing trigger_id, skipping")
                 return
 
-            message_text = event.get("text", "")
-
             logger.info(
                 "Inbound message received for trigger %s (text=%s)",
                 trigger_id,
-                (message_text or "")[:50],
+                (event.get("text") or "")[:50],
             )
 
-            # Try to route to existing active workflow before creating a new task
-            if message_text and channel_origin.get("chat_id") and self._workflow_executor:
-                routed = await self._try_route_to_active_workflow(
-                    trigger_id, channel_origin, message_text
-                )
-                if routed:
-                    return
-
-            # No active workflow — create new task via trigger
             trigger_data: dict[str, Any] = {
                 "events": [event],
                 "channel_origin": channel_origin,
@@ -146,61 +136,6 @@ class InboundMessageSubscriber:
 
         except Exception:
             logger.exception("Failed to handle inbound channel message")
-
-    async def _try_route_to_active_workflow(
-        self, trigger_id: str, channel_origin: dict[str, Any], message_text: str
-    ) -> bool:
-        """Find active workflow for this channel and route message to it."""
-        from uuid import UUID
-
-        from sqlalchemy import select
-
-        from agentarea_common.config import get_database
-        from agentarea_tasks.infrastructure.orm import TaskORM
-        from agentarea_triggers.infrastructure.orm import TriggerORM
-
-        chat_id = str(channel_origin.get("chat_id", ""))
-        if not chat_id:
-            return False
-
-        try:
-            database = get_database()
-            async with database.async_session_factory() as session:
-                trigger = await session.get(TriggerORM, UUID(trigger_id))
-                if not trigger:
-                    return False
-
-                result = await session.execute(
-                    select(TaskORM)
-                    .where(
-                        TaskORM.agent_id == trigger.agent_id,
-                        TaskORM.workspace_id == str(trigger.workspace_id),
-                        TaskORM.status.in_(["running", "completed"]),
-                    )
-                    .order_by(TaskORM.created_at.desc())
-                    .limit(5)
-                )
-
-                for task in result.scalars().all():
-                    params = task.parameters or {}
-                    task_chat_id = str(params.get("channel_origin", {}).get("chat_id", ""))
-                    if task_chat_id == chat_id and task.execution_id:
-                        ok = await self._workflow_executor.send_workflow_command(
-                            task.execution_id,
-                            "queue_message",
-                            {"message": message_text},
-                        )
-                        if ok:
-                            logger.info(
-                                "Routed follow-up to workflow %s (chat_id=%s)",
-                                task.execution_id,
-                                chat_id,
-                            )
-                            return True
-        except Exception:
-            logger.exception("Follow-up routing failed for trigger %s", trigger_id)
-
-        return False
 
     async def _execute_trigger(self, trigger_id: str, trigger_data: dict[str, Any]) -> None:
         """Execute the trigger using TriggerService with a fresh DB session."""
@@ -212,6 +147,7 @@ class InboundMessageSubscriber:
         from agentarea_tasks.infrastructure.repository import TaskRepository
         from agentarea_tasks.task_service import TaskService
         from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
         from agentarea_triggers.infrastructure.orm import TriggerORM
         from agentarea_triggers.trigger_service import TriggerService
 

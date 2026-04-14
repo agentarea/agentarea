@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Awaitable
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from . import ChannelAdapter, register_adapter
+from . import register_adapter
 
 if TYPE_CHECKING:
     from agentarea_common.infrastructure.secret_manager import BaseSecretManager

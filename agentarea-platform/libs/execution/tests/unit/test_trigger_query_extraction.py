@@ -3,8 +3,6 @@
 Covers webhook-based (Telegram, Slack, Discord, etc.) and poll-based (extractors) paths.
 """
 
-import pytest
-
 
 class TestTriggerQueryFromWebhookParsedData:
     """Webhook parsers put text at top level of execution_data."""

@@ -96,10 +96,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             )
 
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.logging_utils import TriggerNotFoundError
             from agentarea_triggers.trigger_service import TriggerService
 
@@ -258,7 +254,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         # Continue without extracted data
 
                 # Create task from trigger
-                channel_origin = execution_data.get("channel_origin", {})
                 task_id = None
                 try:
                     from agentarea_tasks.domain.models import SimpleTask
@@ -315,10 +310,13 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         task_parameters=task_params,
                         status="submitted",
                     )
-                    task = await task_service.submit_task(task)
+                    task = await task_service.route_or_submit_task(task)
 
                     task_id = task.id
-                    logger.info(f"Submitted task {task_id} from trigger {trigger_id}")
+                    if task.status == "routed":
+                        logger.info(f"Routed follow-up to existing workflow for trigger {trigger_id}")
+                    else:
+                        logger.info(f"Submitted task {task_id} from trigger {trigger_id}")
 
                 except Exception as task_error:
                     logger.error(f"Failed to create task for trigger {trigger_id}: {task_error}")
@@ -348,10 +346,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
         except Exception as e:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import (
                 TriggerNotFoundError,
                 TriggerService,
@@ -407,10 +401,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         execution_data = request.execution_data
         try:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
@@ -467,10 +457,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         event_data = request.event_data
         try:
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
@@ -518,12 +504,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         execution_data = request.execution_data
         try:
-            from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()

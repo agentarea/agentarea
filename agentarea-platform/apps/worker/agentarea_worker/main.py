@@ -283,6 +283,7 @@ class AgentAreaWorker:
                 try:
                     await task
                 except asyncio.CancelledError:
+                    # Expected during worker shutdown - task cancellation is normal
                     pass
         logger.info("Workers stopped")
 

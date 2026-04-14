@@ -765,7 +765,7 @@ class LLMModel:
         # Use direct streaming for OpenAI-compatible providers to capture thinking
         if self._supports_direct_streaming():
             logger.info(
-                f"Using direct OpenAI-compatible streaming for {self.provider_type}/{self.model_name}"
+                f"Using direct OpenAI-compatible streaming for provider {self.provider_type}"
             )
             async for response in self._stream_openai_compatible(request):
                 yield response
