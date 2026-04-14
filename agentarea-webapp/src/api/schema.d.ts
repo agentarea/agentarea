@@ -705,6 +705,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/inbox/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbox Items
+         * @description List tasks requiring user attention.
+         *
+         *     Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
+         *     ordered by most recently updated first. Includes total count for badge/pagination.
+         */
+        get: operations["get_inbox_items_v1_inbox__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-auth-configs/": {
         parameters: {
             query?: never;
@@ -2413,6 +2436,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/triggers/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Catalog
+         * @description Get the trigger catalog — available trigger types with metadata and events.
+         */
+        get: operations["get_catalog_v1_triggers_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/triggers/channels/events": {
         parameters: {
             query?: never;
@@ -2628,6 +2671,41 @@ export interface paths {
          *         HTTPException: If trigger not found
          */
         post: operations["enable_trigger_v1_triggers__trigger_id__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute Trigger
+         * @description Execute a trigger with the provided event data.
+         *
+         *     Called by the Go event service when a polling channel receives new messages.
+         *     Builds trigger data from the events and channel origin, then creates and
+         *     submits a task for agent execution.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         request: Events and channel origin data
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Execution result with task ID
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found or execution fails
+         */
+        post: operations["execute_trigger_v1_triggers__trigger_id__execute_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3638,6 +3716,17 @@ export interface components {
             success: boolean;
             /** Warnings */
             warnings?: string[];
+        };
+        /** InboxResponse */
+        InboxResponse: {
+            /** Items */
+            items: components["schemas"]["TaskWithAgent"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** JSONRPCError */
         JSONRPCError: {
@@ -5081,6 +5170,12 @@ export interface components {
             };
             /** Cron Expression */
             cron_expression?: string | null;
+            /** Data Extractor */
+            data_extractor?: string | null;
+            /** Data Extractor Config */
+            data_extractor_config?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Description
              * @default
@@ -5124,6 +5219,20 @@ export interface components {
              * @default generic
              */
             webhook_type: string;
+        };
+        /**
+         * TriggerExecuteRequest
+         * @description Request model for executing a trigger via the event service.
+         */
+        TriggerExecuteRequest: {
+            /** Channel Origin */
+            channel_origin?: {
+                [key: string]: unknown;
+            };
+            /** Events */
+            events?: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * TriggerExecutionResponse
@@ -5189,6 +5298,8 @@ export interface components {
             created_by: string;
             /** Cron Expression */
             cron_expression?: string | null;
+            /** Data Extractor */
+            data_extractor?: string | null;
             /** Description */
             description: string;
             /** Event Types */
@@ -6702,6 +6813,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inbox_items_v1_inbox__get: {
+        parameters: {
+            query?: {
+                /** @description Filter to a specific inbox status */
+                status?: string | null;
+                /** @description Filter by agent ID */
+                agent_id?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10296,6 +10443,28 @@ export interface operations {
             };
         };
     };
+    get_catalog_v1_triggers_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
     get_channel_events_v1_triggers_channels_events_get: {
         parameters: {
             query?: never;
@@ -10514,6 +10683,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_trigger_v1_triggers__trigger_id__execute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriggerExecuteRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

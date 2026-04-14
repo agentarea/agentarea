@@ -39,6 +39,25 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
+async def _resolve_trigger_context(session, trigger_id: UUID):
+    """Resolve UserContext from trigger ORM for workspace-scoped repositories.
+
+    Raises:
+        ValueError: If trigger not found — prevents silent fallback to system context.
+    """
+    from agentarea_common.auth.context import UserContext
+    from agentarea_triggers.infrastructure.orm import TriggerORM
+
+    trigger_orm = await session.get(TriggerORM, trigger_id)
+    if not trigger_orm:
+        raise ValueError(f"Trigger {trigger_id} not found — cannot resolve workspace context")
+
+    return UserContext(
+        user_id=trigger_orm.created_by,
+        workspace_id=trigger_orm.workspace_id,
+    )
+
+
 def make_trigger_activities(dependencies: ActivityDependencies):
     """Create trigger activity functions with injected dependencies.
 
@@ -77,10 +96,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             )
 
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.logging_utils import TriggerNotFoundError
             from agentarea_triggers.trigger_service import TriggerService
 
@@ -93,17 +108,14 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
             async with database.async_session_factory() as session:
-                trigger_repository = TriggerRepository(session)
-                trigger_execution_repository = TriggerExecutionRepository(session)
+                user_context = await _resolve_trigger_context(session, trigger_id)
+                from agentarea_common.base.repository_factory import RepositoryFactory
+
+                repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
-                    trigger_repository=trigger_repository,
-                    trigger_execution_repository=trigger_execution_repository,
+                    repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    agent_repository=None,
-                    task_service=None,
-                    llm_condition_evaluator=None,
-                    temporal_schedule_manager=None,
                 )
 
                 # Get trigger with error handling
@@ -220,27 +232,24 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                                 execution_data["channel_origin"] = extraction_result.channel_origin
 
                             # Persist updated extractor state
-                            await trigger_repository.update_extractor_state(
+                            await trigger_service.trigger_repository.update_extractor_state(
                                 trigger_id, extraction_result.updated_state
                             )
                             await session.commit()
 
                             logger.info(
-                                "Data extractor found %d new events",
-                                len(extraction_result.events),
+                                f"Data extractor found {len(extraction_result.events)} new events",
                                 trigger_id=trigger_id,
                                 extractor=trigger.data_extractor,
                             )
                         else:
                             logger.warning(
-                                "Unknown extractor type: %s",
-                                trigger.data_extractor,
+                                f"Unknown extractor type: {trigger.data_extractor}",
                                 trigger_id=trigger_id,
                             )
                     except Exception as extractor_error:
                         logger.error(
-                            "Data extractor failed: %s",
-                            extractor_error,
+                            f"Data extractor failed: {extractor_error}",
                             trigger_id=trigger_id,
                         )
                         # Continue without extracted data
@@ -248,18 +257,24 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Create task from trigger
                 task_id = None
                 try:
-                    # Import TaskService and create task
+                    from agentarea_tasks.domain.models import SimpleTask
                     from agentarea_tasks.infrastructure.repository import TaskRepository
                     from agentarea_tasks.task_service import TaskService
+                    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
-                    # Create task repository and service
-                    task_repository = TaskRepository(session)
+                    task_repository = repository_factory.create_repository(TaskRepository)
+
+                    if dependencies.workflow_executor is not None:
+                        task_manager = TemporalTaskManager.__new__(TemporalTaskManager)
+                        task_manager.task_repository = task_repository
+                        task_manager.temporal_executor = dependencies.workflow_executor
+                    else:
+                        task_manager = TemporalTaskManager(task_repository=task_repository)
+
                     task_service = TaskService(
-                        task_repository=task_repository,
+                        repository_factory=repository_factory,
                         event_broker=dependencies.event_broker,
-                        task_manager=None,  # Not needed for task creation
-                        agent_repository=None,
-                        workflow_service=None,
+                        task_manager=task_manager,
                     )
 
                     # Build task parameters
@@ -267,18 +282,44 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         trigger, execution_data
                     )
 
-                    # Create task
-                    task = await task_service.create_task_from_params(
-                        title=f"Trigger: {trigger.name}",
-                        description=trigger.description or f"Execution of trigger {trigger.name}",
-                        query=trigger.description or f"Execute trigger {trigger.name}",
-                        user_id=trigger.created_by,
-                        agent_id=trigger.agent_id,
-                        task_parameters=task_params,
+                    # Extract message text for the task query.
+                    extracted_events = execution_data.get("extracted_events", [])
+                    message_texts = [e.get("text") for e in extracted_events if e.get("text")]
+                    if not message_texts:
+                        top_level_text = execution_data.get("text")
+                        if top_level_text:
+                            message_texts = [top_level_text]
+                    query = (
+                        "\n".join(message_texts)
+                        if message_texts
+                        else (trigger.description or f"Execute trigger {trigger.name}")
                     )
 
+                    # Pass channel_origin so agent response routes back to the channel
+                    channel_origin = execution_data.get("channel_origin")
+                    if channel_origin:
+                        task_params["channel_origin"] = channel_origin
+
+                    # Submit task (creates DB record AND starts Temporal workflow)
+                    task = SimpleTask(
+                        title=f"Trigger: {trigger.name}",
+                        description=query,
+                        query=query,
+                        user_id=str(trigger.created_by),
+                        workspace_id=str(user_context.workspace_id),
+                        agent_id=trigger.agent_id,
+                        task_parameters=task_params,
+                        status="submitted",
+                    )
+                    task = await task_service.route_or_submit_task(task)
+
                     task_id = task.id
-                    logger.info(f"Created task {task_id} from trigger {trigger_id}")
+                    if task.status == "routed":
+                        logger.info(
+                            f"Routed follow-up to existing workflow for trigger {trigger_id}"
+                        )
+                    else:
+                        logger.info(f"Submitted task {task_id} from trigger {trigger_id}")
 
                 except Exception as task_error:
                     logger.error(f"Failed to create task for trigger {trigger_id}: {task_error}")
@@ -308,10 +349,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
         except Exception as e:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import (
                 TriggerNotFoundError,
                 TriggerService,
@@ -328,16 +365,14 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             try:
                 database = get_database()
                 async with database.async_session_factory() as session:
-                    trigger_repository = TriggerRepository(session)
-                    trigger_execution_repository = TriggerExecutionRepository(session)
+                    user_context = await _resolve_trigger_context(session, trigger_id)
+                    from agentarea_common.base.repository_factory import RepositoryFactory
+
+                    repository_factory = RepositoryFactory(session, user_context)
 
                     trigger_service = TriggerService(
-                        trigger_repository=trigger_repository,
-                        trigger_execution_repository=trigger_execution_repository,
+                        repository_factory=repository_factory,
                         event_broker=dependencies.event_broker,
-                        agent_repository=None,
-                        task_service=None,
-                        llm_service=None,
                     )
 
                     await trigger_service.record_execution(
@@ -370,24 +405,18 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         execution_data = request.execution_data
         try:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
             async with database.async_session_factory() as session:
-                trigger_repository = TriggerRepository(session)
-                trigger_execution_repository = TriggerExecutionRepository(session)
+                user_context = await _resolve_trigger_context(session, trigger_id)
+                from agentarea_common.base.repository_factory import RepositoryFactory
+
+                repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
-                    trigger_repository=trigger_repository,
-                    trigger_execution_repository=trigger_execution_repository,
+                    repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    agent_repository=None,
-                    task_service=None,
-                    llm_service=None,
                 )
 
                 status = ExecutionStatus(execution_data["status"])
@@ -433,24 +462,18 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         event_data = request.event_data
         try:
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
             async with database.async_session_factory() as session:
-                trigger_repository = TriggerRepository(session)
-                trigger_execution_repository = TriggerExecutionRepository(session)
+                user_context = await _resolve_trigger_context(session, trigger_id)
+                from agentarea_common.base.repository_factory import RepositoryFactory
+
+                repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
-                    trigger_repository=trigger_repository,
-                    trigger_execution_repository=trigger_execution_repository,
+                    repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    agent_repository=None,
-                    task_service=None,
-                    llm_service=None,
                 )
 
                 trigger = await trigger_service.get_trigger(trigger_id)
@@ -487,29 +510,21 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         execution_data = request.execution_data
         try:
-            from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
-            from agentarea_triggers.infrastructure.repository import (
-                TriggerExecutionRepository,
-                TriggerRepository,
-            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
             async with database.async_session_factory() as session:
-                # Create repositories
-                trigger_repository = TriggerRepository(session)
-                trigger_execution_repository = TriggerExecutionRepository(session)
-                task_repository = TaskRepository(session)
+                # Create repositories via factory
+                user_context = await _resolve_trigger_context(session, trigger_id)
+                from agentarea_common.base.repository_factory import RepositoryFactory
+
+                repository_factory = RepositoryFactory(session, user_context)
 
                 # Create services
                 trigger_service = TriggerService(
-                    trigger_repository=trigger_repository,
-                    trigger_execution_repository=trigger_execution_repository,
+                    repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    agent_repository=None,
-                    task_service=None,
-                    llm_service=None,
                 )
 
                 # Get the trigger
@@ -525,7 +540,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 # Create task service with minimal dependencies for task creation
                 task_service = TaskService(
-                    task_repository=task_repository,
+                    repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
                     task_manager=None,  # Not needed for task creation
                     agent_repository=None,
@@ -535,11 +550,24 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Build task parameters
                 task_params = await trigger_service._build_task_parameters(trigger, execution_data)
 
+                # Extract message text for query (same logic as execute_trigger_activity)
+                extracted_events = execution_data.get("extracted_events", [])
+                message_texts = [e.get("text") for e in extracted_events if e.get("text")]
+                if not message_texts:
+                    top_level_text = execution_data.get("text")
+                    if top_level_text:
+                        message_texts = [top_level_text]
+                query = (
+                    "\n".join(message_texts)
+                    if message_texts
+                    else (trigger.description or f"Execute trigger {trigger.name}")
+                )
+
                 # Create task
                 task = await task_service.create_task_from_params(
                     title=f"Trigger: {trigger.name}",
-                    description=trigger.description or f"Execution of trigger {trigger.name}",
-                    query=trigger.description or f"Execute trigger {trigger.name}",
+                    description=query,
+                    query=query,
                     user_id=trigger.created_by,
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,

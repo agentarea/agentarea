@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Calendar, Clock } from "lucide-react";
+import { Bot, Calendar, Clock, GitFork } from "lucide-react";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { TaskStatusIcon } from "@/components/ui/task-status-icon";
@@ -13,6 +13,7 @@ export interface TaskItemData {
   created_at: string;
   agent_name?: string;
   agent_id?: string;
+  parameters?: Record<string, unknown>;
 }
 
 interface TaskItemProps {
@@ -63,6 +64,7 @@ export default function TaskItem({
   const status =
     statusConfig[task.status as keyof typeof statusConfig] ||
     statusConfig.pending;
+  const isDelegation = task.parameters?.source === "agent_delegation";
 
   return (
     <LinkedCard
@@ -83,6 +85,12 @@ export default function TaskItem({
       }
     >
       <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+        {isDelegation && (
+          <div className="flex items-center gap-1.5 text-primary">
+            <GitFork className="h-3 w-3" />
+            <span>Delegated subtask</span>
+          </div>
+        )}
         {showAgentName && (
           <div className="flex items-center gap-1.5">
             <Bot className="h-3 w-3" />

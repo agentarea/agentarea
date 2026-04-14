@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { listTriggers, listAgents } from "@/lib/api";
+import { listTriggers, listAgents, listTriggerCatalog } from "@/lib/api";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
@@ -13,9 +13,10 @@ export default async function TriggersContent({
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
-  const [triggersResponse, agentsResponse] = await Promise.all([
+  const [triggersResponse, agentsResponse, catalogResponse] = await Promise.all([
     listTriggers(),
     listAgents(),
+    listTriggerCatalog(),
   ]);
 
   if (triggersResponse.error) {
@@ -28,6 +29,7 @@ export default async function TriggersContent({
 
   const triggers = (triggersResponse.data as any[]) || [];
   const agents = (agentsResponse.data as any[]) || [];
+  const catalog = (catalogResponse.data as any[]) || [];
 
   // Build agent name lookup
   const agentMap = new Map(agents.map((a: any) => [a.id, a.name]));
@@ -50,6 +52,7 @@ export default async function TriggersContent({
   return (
     <TriggersList
       triggers={filteredTriggers}
+      catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}
     />

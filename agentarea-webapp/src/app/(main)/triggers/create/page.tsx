@@ -20,12 +20,8 @@ export default async function CreateTriggerPage() {
           { label: t("title"), href: "/triggers" },
           { label: tCreate("title") },
         ],
-        description: tCreate("description"),
-        backLink: {
-          label: tCreate("back"),
-          href: "/triggers",
-        },
       }}
+      className="p-0 overflow-hidden"
     >
       <CreateTriggerForm agents={(agents as any[]) || []} />
     </ContentBlock>

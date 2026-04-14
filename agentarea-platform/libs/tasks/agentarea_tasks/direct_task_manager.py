@@ -84,11 +84,14 @@ class DirectTaskManager(BaseTaskManager):
                     "type": "function",
                     "function": {
                         "name": "completion",
-                        "description": "Signal that the task is complete",
+                        "description": "Present your final answer to the user. The 'result' parameter is the message the user will read — write a complete, helpful response (not just a status like 'done').",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "result": {"type": "string", "description": "Final result"},
+                                "result": {
+                                    "type": "string",
+                                    "description": "Your complete response to the user. This text is shown directly to them.",
+                                },
                             },
                             "required": ["result"],
                         },

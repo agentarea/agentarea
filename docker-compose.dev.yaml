@@ -442,6 +442,26 @@ services:
     restart: unless-stopped
     command: ["agentarea-worker", "dev"]
 
+  agentarea-event-service:
+    build:
+      context: agentarea-event-service
+      dockerfile: Dockerfile.dev
+    container_name: agentarea-event-service
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - REDIS_URL=redis://valkey:6379
+      - POLL_INTERVAL=30s
+      - MAX_POLLERS=10
+    volumes:
+      - ./agentarea-event-service:/app
+    networks:
+      - default
+    restart: unless-stopped
 
   # Ory Kratos Migration
   kratos-migrate:

@@ -128,6 +128,7 @@ export const {
   revokeAPIKey,
 
   // Triggers API
+  listTriggerCatalog,
   listTriggers,
   createTrigger,
   getTrigger,
@@ -163,6 +164,9 @@ export const {
 
   // Global Tasks API
   getTask,
+
+  // Inbox API
+  getInbox,
 
   // Compound MCP API
   listCompoundMCPs,

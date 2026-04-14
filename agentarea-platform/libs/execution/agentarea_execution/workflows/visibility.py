@@ -18,7 +18,6 @@ class EventVisibility:
     # Progress indicators — shown on concise channels
     STATUS: Final[set[str]] = {
         "WorkflowStarted",
-        "IterationStarted",
         "ToolCallStarted",
         "AgentDelegationStarted",
         "AgentDelegationCompleted",

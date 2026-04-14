@@ -74,6 +74,7 @@ class LLMCallChunkEvent(BaseWorkflowEvent):
     chunk: str = ""
     chunk_index: int = 0
     is_final: bool = False
+    chunk_type: str = "text"
     model_id: str | None = None
 
 
@@ -81,6 +82,7 @@ class LLMCallCompletedEvent(BaseWorkflowEvent):
     """Event emitted when LLM call completes successfully."""
 
     content: str = ""
+    thinking: str = ""
     role: str = "assistant"
     tool_calls: list[dict[str, Any]] | None = None
     usage: dict[str, Any] | None = None

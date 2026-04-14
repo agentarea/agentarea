@@ -20,9 +20,11 @@ export function accumulateLLMChunk(
     chunkIndex: number;
     isFinal: boolean;
     messageComponent: MessageComponentType | null;
+    chunkType?: "text" | "thinking";
   }
 ): AnyMessage[] {
   const lastMessage = messages[messages.length - 1];
+  const isThinking = chunkData.chunkType === "thinking";
 
   // Check if the last message is a streaming message from the same task
   if (
@@ -32,13 +34,19 @@ export function accumulateLLMChunk(
     lastMessage.data.id === chunkData.taskId
   ) {
     // Update the existing streaming message
+    const prevData = lastMessage.data;
     const updatedMessage: MessageComponentType = {
       ...lastMessage,
       data: {
-        ...lastMessage.data,
-        chunk: lastMessage.data.chunk + chunkData.chunk,
+        ...prevData,
+        // Accumulate thinking separately from text content
+        thinking: isThinking
+          ? (prevData.thinking || "") + chunkData.chunk
+          : prevData.thinking || "",
+        chunk: isThinking ? prevData.chunk : prevData.chunk + chunkData.chunk,
         chunk_index: chunkData.chunkIndex,
         is_final: chunkData.isFinal,
+        chunk_type: chunkData.chunkType || prevData.chunk_type || "text",
       },
     };
 
@@ -47,6 +55,20 @@ export function accumulateLLMChunk(
 
   // Create new streaming message if we have a component
   if (chunkData.messageComponent) {
+    // If this is a thinking chunk, initialize thinking field
+    if (isThinking && chunkData.messageComponent.type === "llm_chunk") {
+      return [
+        ...messages,
+        {
+          ...chunkData.messageComponent,
+          data: {
+            ...chunkData.messageComponent.data,
+            thinking: chunkData.chunk,
+            chunk: "",
+          },
+        },
+      ];
+    }
     return [...messages, chunkData.messageComponent];
   }
 
@@ -68,7 +90,7 @@ export function finalizeLLMChunk(
     lastMessage.type === "llm_chunk" &&
     lastMessage.data.id === taskId
   ) {
-    // Convert to final llm_response message
+    // Convert to final llm_response message, preserving thinking content
     const finalMessage: MessageComponentType = {
       type: "llm_response",
       data: {
@@ -77,6 +99,7 @@ export function finalizeLLMChunk(
         agent_id: lastMessage.data.agent_id,
         event_type: "LLMCallCompleted",
         content: lastMessage.data.chunk,
+        thinking: lastMessage.data.thinking || undefined,
         role: "assistant",
       },
     };

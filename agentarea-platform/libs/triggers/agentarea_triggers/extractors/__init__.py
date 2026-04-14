@@ -53,3 +53,17 @@ def get_extractor(name: str) -> type | None:
 def list_extractors() -> list[str]:
     """List all registered extractor names."""
     return list(_EXTRACTORS.keys())
+
+
+def _auto_register() -> None:
+    """Import extractor modules so they self-register."""
+    import importlib
+    import pkgutil
+
+    for info in pkgutil.iter_modules(__path__):
+        if info.name.startswith("_"):
+            continue
+        importlib.import_module(f".{info.name}", __package__)
+
+
+_auto_register()

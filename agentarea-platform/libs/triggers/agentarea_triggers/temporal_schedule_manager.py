@@ -4,6 +4,8 @@ This module provides a clean interface for managing Temporal Schedules
 for cron triggers, handling schedule creation, updates, and deletion.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -28,17 +30,49 @@ from .logging_utils import (
 
 logger = TriggerLogger(__name__)
 
+DEFAULT_TASK_QUEUE = "trigger-execution-queue"
+
 
 class TemporalScheduleManager:
-    """Manages Temporal Schedules for cron triggers."""
+    """Manages Temporal Schedules for cron triggers.
 
-    def __init__(self, temporal_client: Client):
-        """Initialize with Temporal client.
+    Can be initialized with either a pre-built Client or with
+    namespace/task_queue for lazy client creation.
+    """
 
-        Args:
-            temporal_client: The Temporal client instance
-        """
+    def __init__(
+        self,
+        temporal_client: Client | None = None,
+        *,
+        namespace: str = "default",
+        task_queue: str = DEFAULT_TASK_QUEUE,
+    ):
         self.client = temporal_client
+        self._namespace = namespace
+        self._task_queue = task_queue
+        self._connected = temporal_client is not None
+
+    async def _ensure_client(self) -> None:
+        """Lazily connect to Temporal if not already connected."""
+        if self._connected:
+            return
+        from agentarea_common.config import get_settings
+
+        settings = get_settings()
+        server_url = settings.workflow.TEMPORAL_SERVER_URL
+        if not server_url:
+            raise DependencyUnavailableError(
+                "TEMPORAL_SERVER_URL not configured",
+                dependency="temporal_client",
+            )
+        from temporalio.contrib.pydantic import pydantic_data_converter
+
+        self.client = await Client.connect(
+            server_url,
+            namespace=self._namespace,
+            data_converter=pydantic_data_converter,
+        )
+        self._connected = True
 
     async def create_cron_schedule(
         self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"
@@ -60,6 +94,8 @@ class TemporalScheduleManager:
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
         schedule_id = f"cron-trigger-{trigger_id}"
+
+        await self._ensure_client()
 
         if not self.client:
             error_msg = "Temporal client not available"
@@ -91,15 +127,15 @@ class TemporalScheduleManager:
                         },
                     ],
                     id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                    task_queue="trigger-execution-queue",
+                    task_queue=self._task_queue,
                 ),
-                spec=ScheduleSpec(cron_expressions=[cron_expression], timezone=timezone),
+                spec=ScheduleSpec(cron_expressions=[cron_expression], time_zone_name=timezone),
                 state=ScheduleState(
                     note=f"Cron trigger schedule for trigger {trigger_id}", paused=False
                 ),
             )
 
-            await self.client.create_schedule(schedule_id=schedule_id, schedule=schedule)
+            await self.client.create_schedule(id=schedule_id, schedule=schedule)
 
             logger.info(
                 "Successfully created Temporal schedule",
@@ -151,6 +187,7 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule update fails
         """
+        await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
@@ -173,9 +210,11 @@ class TemporalScheduleManager:
                                 },
                             ],
                             id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                            task_queue="trigger-execution-queue",
+                            task_queue=self._task_queue,
                         ),
-                        spec=ScheduleSpec(cron_expressions=[cron_expression], timezone=timezone),
+                        spec=ScheduleSpec(
+                            cron_expressions=[cron_expression], time_zone_name=timezone
+                        ),
                         state=input.description.schedule.state,
                     )
                 )
@@ -196,6 +235,7 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule deletion fails
         """
+        await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
@@ -226,6 +266,7 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule pause fails
         """
+        await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
@@ -250,6 +291,7 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule unpause fails
         """
+        await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
@@ -274,6 +316,7 @@ class TemporalScheduleManager:
         Returns:
             Dictionary containing schedule information, or None if not found
         """
+        await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
@@ -286,20 +329,24 @@ class TemporalScheduleManager:
             return {
                 "schedule_id": schedule_id,
                 "trigger_id": str(trigger_id),
-                "cron_expressions": description.schedule.spec.cron_expressions,
-                "timezone": description.schedule.spec.timezone,
-                "paused": description.schedule.state.paused,
-                "note": description.schedule.state.note,
-                "next_action_times": [t.isoformat() for t in description.info.next_action_times],
+                "cron_expressions": list(description.schedule.spec.cron_expressions),
+                "timezone": str(description.schedule.spec.time_zone_name or ""),
+                "paused": bool(description.schedule.state.paused),
+                "note": str(description.schedule.state.note or ""),
+                "next_action_times": [
+                    t.isoformat() for t in (description.info.next_action_times or [])
+                ],
                 "recent_actions": [
                     {
                         "scheduled_time": action.scheduled_time.isoformat(),
-                        "actual_time": action.actual_time.isoformat(),
+                        "actual_time": action.actual_time.isoformat()
+                        if action.actual_time
+                        else None,
                         "start_workflow_result": str(action.start_workflow_result)
                         if action.start_workflow_result
                         else None,
                     }
-                    for action in description.info.recent_actions
+                    for action in (description.info.recent_actions or [])
                 ],
             }
 

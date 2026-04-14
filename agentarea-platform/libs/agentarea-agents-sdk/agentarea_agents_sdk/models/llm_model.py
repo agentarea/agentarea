@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 import litellm
 from litellm import (
     ModelResponse,
@@ -69,6 +70,7 @@ class LLMResponse:
     tool_calls: list[dict[str, Any]] | None = None
     cost: float = 0.0
     usage: LLMUsage | None = None
+    reasoning_content: str = ""
 
 
 class LLMModel:
@@ -242,6 +244,155 @@ class LLMModel:
             params["max_tokens"] = request.max_tokens
 
         return params
+
+    def _get_base_url(self) -> str | None:
+        """Resolve the base URL for direct HTTP calls."""
+        if self.endpoint_url:
+            url = self.endpoint_url
+            if not url.startswith("http"):
+                url = f"http://{url}"
+            return url.rstrip("/")
+        # Default Ollama URL
+        if self.provider_type and "ollama" in self.provider_type:
+            return "http://localhost:11434"
+        return None
+
+    def _supports_direct_streaming(self) -> bool:
+        """Check if this provider supports direct OpenAI-compatible streaming.
+
+        We use direct streaming (bypassing LiteLLM) for providers with
+        OpenAI-compatible APIs to properly capture reasoning/thinking content
+        that LiteLLM drops during streaming.
+        """
+        if not self._get_base_url():
+            return False
+        # Ollama and any provider with a custom endpoint (OpenAI-compatible)
+        if self.provider_type and "ollama" in self.provider_type:
+            return True
+        if self.endpoint_url:
+            return True
+        return False
+
+    async def _stream_openai_compatible(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
+        """Stream from an OpenAI-compatible API directly via httpx.
+
+        This bypasses LiteLLM's streaming to properly capture reasoning/thinking
+        content that LiteLLM drops. Works with any provider that exposes an
+        OpenAI-compatible /v1/chat/completions endpoint (Ollama, vLLM, etc.).
+        """
+        base_url = self._get_base_url()
+        url = f"{base_url}/v1/chat/completions"
+
+        normalized_messages = self._normalize_messages(request.messages)
+
+        payload: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": normalized_messages,
+            "stream": True,
+        }
+        if request.tools:
+            payload["tools"] = request.tools
+            payload["tool_choice"] = "auto"
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
+        if request.max_tokens is not None:
+            payload["max_tokens"] = request.max_tokens
+
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        tool_calls_buffer: dict[int, dict[str, Any]] = {}
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            # Try with thinking enabled first; fall back without if provider rejects it
+            use_payload = {**payload, "think": True}
+            resp = await client.send(
+                client.build_request("POST", url, json=use_payload, headers=headers),
+                stream=True,
+            )
+            if resp.status_code >= 400:
+                await resp.aclose()
+                logger.info("Provider rejected 'think' param, retrying without it")
+                resp = await client.send(
+                    client.build_request("POST", url, json=payload, headers=headers),
+                    stream=True,
+                )
+                resp.raise_for_status()
+
+            try:
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:].strip()
+                    if data_str == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+
+                    delta = choices[0].get("delta", {})
+
+                    # Extract content
+                    delta_content = delta.get("content") or ""
+
+                    # Extract reasoning — different providers use different field names
+                    delta_reasoning = (
+                        delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thinking")
+                        or ""
+                    )
+
+                    # Extract tool calls
+                    delta_tool_calls = None
+                    if delta.get("tool_calls"):
+                        for tc_delta in delta["tool_calls"]:
+                            idx = tc_delta.get("index", 0)
+                            if idx not in tool_calls_buffer:
+                                tool_calls_buffer[idx] = {
+                                    "id": "",
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                }
+                            if tc_delta.get("id"):
+                                tool_calls_buffer[idx]["id"] = tc_delta["id"]
+                            fn = tc_delta.get("function", {})
+                            if fn.get("name"):
+                                tool_calls_buffer[idx]["function"]["name"] = fn["name"]
+                            if fn.get("arguments"):
+                                tool_calls_buffer[idx]["function"]["arguments"] += fn["arguments"]
+
+                        delta_tool_calls = [
+                            tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())
+                        ]
+
+                    # Extract usage from final chunk
+                    usage_delta = None
+                    usage_data = chunk.get("usage")
+                    if usage_data:
+                        usage_delta = LLMUsage(
+                            prompt_tokens=usage_data.get("prompt_tokens", 0),
+                            completion_tokens=usage_data.get("completion_tokens", 0),
+                            total_tokens=usage_data.get("total_tokens", 0),
+                        )
+
+                    if delta_content or delta_reasoning or delta_tool_calls or usage_delta:
+                        yield LLMResponse(
+                            content=delta_content,
+                            role="assistant",
+                            tool_calls=delta_tool_calls,
+                            reasoning_content=delta_reasoning,
+                            usage=usage_delta,
+                        )
+            finally:
+                await resp.aclose()
 
     def _parse_response(self, response: ModelResponse) -> LLMResponse:
         """Parse litellm response into standardized format."""
@@ -598,12 +749,25 @@ class LLMModel:
     async def ainvoke_stream(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Call LLM with streaming and yield responses as they arrive.
 
+        Uses direct OpenAI-compatible HTTP streaming when available (to properly
+        capture reasoning/thinking content). Falls back to LiteLLM for providers
+        without a known base URL.
+
         Args:
             request: The LLM request parameters
 
         Yields:
             LLMResponse objects containing delta responses (only new content)
         """
+
+        # Use direct streaming for OpenAI-compatible providers to capture thinking
+        if self._supports_direct_streaming():
+            logger.info(
+                f"Using direct OpenAI-compatible streaming for provider {self.provider_type}"
+            )
+            async for response in self._stream_openai_compatible(request):
+                yield response
+            return
 
         try:
             # Build parameters for streaming
@@ -617,6 +781,7 @@ class LLMModel:
 
             # Process streaming response
             complete_content = ""  # Keep track for tool calls and final usage
+            complete_reasoning = ""  # Track reasoning/thinking content
             tool_calls_buffer = {}  # Buffer for streaming tool calls
             usage = LLMUsage()
             cost = 0.0
@@ -626,8 +791,14 @@ class LLMModel:
                 if chunk.choices:
                     delta = chunk.choices[0].delta
                     delta_content = ""
+                    delta_reasoning = ""
                     delta_tool_calls = None
                     tool_calls_updated = False
+
+                    # Handle reasoning/thinking chunks (LiteLLM exposes as reasoning_content)
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        delta_reasoning = delta.reasoning_content
+                        complete_reasoning += delta_reasoning
 
                     # Handle content chunks
                     if hasattr(delta, "content") and delta.content:
@@ -766,9 +937,10 @@ class LLMModel:
                         tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())
                     ]
 
-                # Yield delta response for each content or tool-calls update
+                # Yield delta response for each content, reasoning, or tool-calls update
                 if (
                     ("delta_content" in locals() and delta_content)
+                    or ("delta_reasoning" in locals() and delta_reasoning)
                     or delta_tool_calls is not None
                     or (hasattr(chunk, "usage") and chunk.usage)
                 ):
@@ -786,6 +958,7 @@ class LLMModel:
                         tool_calls=delta_tool_calls,
                         cost=cost,
                         usage=usage_delta,
+                        reasoning_content=delta_reasoning if "delta_reasoning" in locals() else "",
                     )
 
             # Calculate cost after streaming ends using litellm.completion_cost()

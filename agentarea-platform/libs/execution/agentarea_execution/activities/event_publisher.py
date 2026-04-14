@@ -13,8 +13,20 @@ logger = logging.getLogger(__name__)
 def create_event_publisher(event_broker, task_id: str):
     """Create an event publisher function for chunk events."""
 
-    async def publish_chunk_event(chunk: str, chunk_index: int, is_final: bool = False):
-        """Publish LLM chunk event."""
+    async def publish_chunk_event(
+        chunk: str,
+        chunk_index: int,
+        is_final: bool = False,
+        chunk_type: str = "text",
+    ):
+        """Publish LLM chunk event.
+
+        Args:
+            chunk: The text content of the chunk.
+            chunk_index: Sequence number.
+            is_final: Whether this is the last chunk.
+            chunk_type: "text" for regular content, "thinking" for reasoning blocks.
+        """
         try:
             redis_event_broker = create_event_broker_from_router(event_broker)
 
@@ -27,6 +39,7 @@ def create_event_publisher(event_broker, task_id: str):
                     "chunk": chunk,
                     "chunk_index": chunk_index,
                     "is_final": is_final,
+                    "chunk_type": chunk_type,
                 },
             }
 

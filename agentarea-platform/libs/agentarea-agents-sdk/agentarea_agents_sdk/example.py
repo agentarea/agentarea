@@ -13,7 +13,7 @@ from agent import create_agent
 
 async def streaming_math_example():
     """Streaming math calculation example."""
-    print("🧮 Streaming Math Example")
+    print("Streaming Math Example")
     print("=" * 50)
 
     # Create a math assistant agent
@@ -38,7 +38,7 @@ async def streaming_math_example():
 
 async def non_streaming_example():
     """Non-streaming example."""
-    print("\n⚡ Non-Streaming Example")
+    print("\n Non-Streaming Example")
     print("=" * 50)
 
     agent = create_agent(
@@ -59,7 +59,7 @@ async def non_streaming_example():
 
 async def reasoning_example():
     """Example with more complex reasoning using streaming."""
-    print("\n🤔 Reasoning Example (Streaming)")
+    print("\n Reasoning Example (Streaming)")
     print("=" * 50)
 
     # Create a reasoning agent
@@ -86,7 +86,7 @@ async def reasoning_example():
 
 async def custom_agent_example():
     """Example with custom agent configuration."""
-    print("\n⚙️ Custom Agent Configuration Example")
+    print("\nCustom Agent Configuration Example")
     print("=" * 50)
 
     from agent import Agent
@@ -116,7 +116,7 @@ async def custom_agent_example():
 
 async def main():
     """Run all examples."""
-    print("🚀 AgentArea Agents SDK - Usage Examples\n")
+    print("AgentArea Agents SDK - Usage Examples\n")
 
     try:
         await streaming_math_example()
@@ -124,10 +124,10 @@ async def main():
         await reasoning_example()
         await custom_agent_example()
 
-        print("\n🎉 All examples completed successfully!")
+        print("\nAll examples completed successfully!")
 
     except Exception as e:
-        print(f"\n❌ Example failed: {e}")
+        print(f"\nExample failed: {e}")
         print("Make sure you have Ollama running with qwen2.5 model available.")
 
 

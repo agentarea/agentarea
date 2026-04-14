@@ -56,6 +56,8 @@ from ..models import (
     ChangeModelPayload,
     CompactMessagesRequest,
     CompactMessagesResult,
+    CreateDelegationTaskRequest,
+    CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
     ExecuteSkillScriptRequest,
     ExecuteSkillScriptResult,
@@ -110,6 +112,7 @@ class AgentExecutionWorkflow:
         self.context_manager: ContextWindowManager | None = None
         self._paused = False
         self._pause_reason = ""
+        self._awaiting_input = False
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
         # A2UI action queue — frontend signals land here, workflow loop drains them
@@ -119,6 +122,8 @@ class AgentExecutionWorkflow:
         self._pending_escalations: dict[str, PendingEscalation] = {}
         # Generic message queue — queued user messages drained before each LLM call
         self._message_queue: list[dict[str, Any]] = []
+        # Track if completion event has been published (to avoid double-publish at termination)
+        self._completion_event_published = False
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -260,13 +265,18 @@ class AgentExecutionWorkflow:
     def _handle_queue_message(self, payload: dict) -> None:
         """Queue a user message for the agent's next iteration."""
         msg_id = str(workflow.uuid4())
-        self._message_queue.append({"id": msg_id, "content": payload["message"]})
+        # Accept both "message" and "content" keys for robustness
+        text = payload.get("message") or payload.get("content") or ""
+        if not text:
+            workflow.logger.warning("queue_message received with empty text, ignoring")
+            return
+        self._message_queue.append({"id": msg_id, "content": text})
         if self.event_manager:
             self.event_manager.add_event(
                 "MessageQueued",
                 {
                     "message_id": msg_id,
-                    "content": payload["message"][:200],
+                    "content": text,
                 },
             )
         workflow.logger.info(f"Message queued: {msg_id}")
@@ -478,7 +488,40 @@ class AgentExecutionWorkflow:
                         except Exception:  # noqa: S110
                             pass
 
-        # Inject built-in recall_history tool for querying past execution context
+        # === Built-in completion tool (always present, canonical definition) ===
+        # Remove any existing completion/task_complete from discovery — we always
+        # use our own definition with correct description and required params.
+        completion_tool_definition = {
+            "type": "function",
+            "function": {
+                "name": "completion",
+                "description": (
+                    "Finish the task and send your response to the user. "
+                    "The 'result' parameter is the message the user will see — "
+                    "write it as a complete, helpful answer (not a summary or status). "
+                    "You MUST call this tool when you are done."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "result": {
+                            "type": "string",
+                            "description": "Your complete response to the user. This is what they will read.",
+                        },
+                    },
+                    "required": ["result"],
+                },
+            },
+        }
+        available_tools = [
+            t
+            for t in available_tools
+            if (t.get("function", {}).get("name") if t.get("type") == "function" else t.get("name"))
+            not in {"completion", "task_complete"}
+        ]
+        available_tools.insert(0, completion_tool_definition)
+
+        # recall_history — query past execution context
         available_tools.append(
             {
                 "type": "function",
@@ -818,7 +861,12 @@ class AgentExecutionWorkflow:
         workflow.continue_as_new(args=[new_request])
 
     async def _execute_main_loop(self) -> dict[str, Any]:
-        """Main execution loop with dynamic termination conditions."""
+        """Main execution loop with dynamic termination conditions.
+
+        After the agent calls task_complete, the workflow enters awaiting_input
+        state instead of terminating. It waits for follow-up user messages
+        (via queue_message signal) or times out after AWAIT_INPUT_TIMEOUT.
+        """
         workflow.logger.info("Starting main execution loop")
 
         self.state.status = ExecutionStatus.EXECUTING
@@ -842,6 +890,18 @@ class AgentExecutionWorkflow:
             # Execute iteration
             await self._execute_iteration()
 
+            # If agent completed the task, wait for follow-up messages
+            if self._awaiting_input:
+                await self._await_follow_up()
+                # If we got a new message, continue the loop
+                if not self._awaiting_input:
+                    # Reset success so the loop continues with new message
+                    self.state.success = False
+                    self.state.status = ExecutionStatus.EXECUTING
+                    continue
+                # Timed out — exit the loop
+                break
+
             # Check if we should finish after completing the iteration
             should_continue, reason = self._should_continue_execution()
             if not should_continue:
@@ -860,6 +920,43 @@ class AgentExecutionWorkflow:
                 await workflow.wait_condition(lambda: not self._paused)
 
         return {"iterations_completed": self.state.current_iteration}
+
+    async def _await_follow_up(self) -> None:
+        """Wait for a follow-up user message or timeout.
+
+        The workflow idles here consuming zero worker resources. Temporal
+        persists the state and wakes the workflow on signal or timeout.
+        Uses try/except per Temporal SDK docs (TimeoutError on timeout).
+        """
+        from datetime import timedelta
+
+        workflow.logger.info("Task completed — waiting for follow-up messages (30 min timeout)")
+
+        try:
+            await workflow.wait_condition(
+                lambda: len(self._message_queue) > 0,
+                timeout=timedelta(minutes=30),
+            )
+        except TimeoutError:
+            workflow.logger.info("Await timeout reached, finalizing workflow")
+            return
+
+        workflow.logger.info("Follow-up message received, resuming execution")
+        self._awaiting_input = False
+
+        # Update task status back to running
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
 
     def _should_continue_execution(self) -> tuple[bool, str]:
         """Comprehensive check for whether execution should continue.
@@ -931,6 +1028,20 @@ class AgentExecutionWorkflow:
                 EventTypes.ITERATION_COMPLETED,
                 {"iteration": iteration, "total_cost": serialize_money(self.budget_tracker.cost)},
             )
+
+            # Emit WorkflowCompleted after IterationCompleted to maintain correct event ordering.
+            # _handle_task_completion sets _awaiting_input=True but defers event emission here.
+            if self._awaiting_input:
+                self.event_manager.add_event(
+                    EventTypes.WORKFLOW_COMPLETED,
+                    {
+                        "success": True,
+                        "iterations_completed": self.state.current_iteration,
+                        "total_cost": serialize_money(self.budget_tracker.cost),
+                        "result": self.state.final_response,
+                    },
+                )
+                self._completion_event_published = True
 
         except Exception as e:
             error_details = self._extract_temporal_error_details(e)
@@ -1102,12 +1213,14 @@ class AgentExecutionWorkflow:
                 cost_value = response.get("cost", 0.0)
                 role_value = response.get("role", "assistant")
                 content_value = response.get("content", "")
+                thinking_value = response.get("thinking", "")
                 tool_calls_value = response.get("tool_calls")
             else:
                 raw_usage = getattr(response, "usage", None)
                 cost_value = getattr(response, "cost", 0.0)
                 role_value = getattr(response, "role", "assistant")
                 content_value = getattr(response, "content", "")
+                thinking_value = getattr(response, "thinking", "")
                 tool_calls_value = getattr(response, "tool_calls", None)
 
             # Extract usage info and update budget
@@ -1154,6 +1267,7 @@ class AgentExecutionWorkflow:
                     "total_cost": serialize_money(self.budget_tracker.cost),
                     "usage": usage_info,
                     "content": display_content,
+                    "thinking": thinking_value,
                     "tool_calls": tool_calls_value or [],
                     "role": role_value,
                 },
@@ -1173,7 +1287,6 @@ class AgentExecutionWorkflow:
 
         except Exception as e:
             # Simplified error handling - enriched error events are now published by the activity
-            error_type = getattr(e, "type", type(e).__name__)
             error_message = self._extract_temporal_error_details(e)
             error_lower = error_message.lower()
 
@@ -1184,26 +1297,27 @@ class AgentExecutionWorkflow:
             )
 
             # Generic LLM error event for workflow tracking
+            user_error = self._get_user_facing_error(e)
             self.event_manager.add_event(
                 EventTypes.LLM_CALL_FAILED,
                 {
                     "iteration": self.state.current_iteration,
-                    "error": error_message,
-                    "error_type": error_type,
+                    "error": user_error,
+                    "error_type": self._get_user_facing_error_type(e),
                     "model_id": self.state.agent_config.get("model_id"),
                 },
             )
 
             if is_provider_quota_block:
                 self.state.status = ExecutionStatus.BLOCKED
-                self.state.blocked_reason = error_message
+                self.state.blocked_reason = user_error
                 self.event_manager.add_event(
                     EventTypes.WORKFLOW_FAILED,
                     {
-                        "error": error_message,
+                        "error": user_error,
                         "error_type": "ProviderQuotaExceeded",
                         "blocked": True,
-                        "blocked_reason": error_message,
+                        "blocked_reason": user_error,
                         "retryable": False,
                     },
                 )
@@ -1216,6 +1330,7 @@ class AgentExecutionWorkflow:
         # Only add non-empty messages to state
         content = response.get("content", "")
         tool_calls_raw = response.get("tool_calls")
+        thinking_value = response.get("thinking", "")
 
         # Parse and publish A2UI events if agent has A2UI enabled
         if self.state.agent_config.get("a2ui_enabled", False) and content:
@@ -1239,12 +1354,21 @@ class AgentExecutionWorkflow:
                 if a2ui_result.parse_error:
                     workflow.logger.warning(f"A2UI parse error: {a2ui_result.parse_error}")
 
-        if content.strip() or tool_calls_raw:
+        # Use thinking as content fallback when model returns only reasoning
+        # (some models like GLM return reasoning_content without content/tool_calls)
+        effective_content = content
+        if not effective_content.strip() and not tool_calls_raw and thinking_value:
+            effective_content = thinking_value
+            workflow.logger.info(
+                "LLM returned thinking without content/tools — using thinking as content"
+            )
+
+        if effective_content.strip() or tool_calls_raw:
             # Create Message directly from response dict
             self.state.messages.append(
                 Message(
                     role=response.get("role", "assistant"),
-                    content=content,
+                    content=effective_content,
                     tool_calls=tool_calls_raw,
                 )
             )
@@ -1258,14 +1382,26 @@ class AgentExecutionWorkflow:
 
         if tool_calls:
             await self._execute_tool_calls(tool_calls)
-        elif not content.strip():
-            # If we have no content and no tool calls, this is problematic
+        elif effective_content.strip():
+            # LLM responded with text/thinking but no tool calls.
+            # This IS the agent's response — treat it as implicit completion.
+            # Most agent frameworks (Claude Code, Cline, OpenCode) work this way:
+            # text response = answer to user, no explicit completion tool needed.
+            workflow.logger.info("LLM responded with text only — treating as implicit completion")
+            completion_call = ToolCall(
+                id=str(workflow.uuid4()),
+                function={
+                    "name": "completion",
+                    "arguments": json.dumps({"result": effective_content.strip()}),
+                },
+            )
+            await self._handle_task_completion(completion_call)
+            return
+        else:
+            # No content, no thinking, no tool calls — truly empty response
             workflow.logger.error(
                 f"LLM returned empty response with no tool calls in iteration {self.state.current_iteration}"
             )
-
-        # Check if goal is achieved
-        await self._evaluate_goal_progress()
 
     async def _execute_tool_calls(self, tool_calls: list[ToolCall]) -> None:
         """Execute tools, running agent delegations in parallel.
@@ -1343,22 +1479,38 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Handle task completion signal immediately."""
-        # Parse completion arguments to get the result
-        import json
-
+        """Handle task completion — enter awaiting_input state for follow-ups."""
         try:
             tool_args = json.loads(completion_call.function["arguments"])
             result_text = tool_args.get("result", "Task completed")
         except (json.JSONDecodeError, KeyError):
             result_text = "Task completed"
 
-        # Mark task as completed immediately
+        # Enter awaiting state — workflow stays alive for follow-up messages
         self.state.success = True
         self.state.final_response = result_text
+        self._awaiting_input = True
 
-        workflow.logger.info(f"Task completed immediately: {result_text}")
-        workflow.logger.info("Workflow will terminate after this iteration")
+        workflow.logger.info(f"Task completed: {result_text}")
+        workflow.logger.info("Entering awaiting_input state for follow-up messages")
+
+        # Update task status to completed immediately so UI reflects it
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="completed",
+                    result=json.dumps({"response": result_text}),
+                    workspace_id=self.state.workspace_id,
+                    total_cost=serialize_money(self.budget_tracker.cost)
+                    if self.budget_tracker
+                    else "0",
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
 
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
         """Execute a single MCP tool call using Pydantic models."""
@@ -1394,6 +1546,20 @@ class AgentExecutionWorkflow:
             self._pending_escalations[escalation_id] = escalation
 
             self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
+
+            # Persist approval status to DB so inbox can query it
+            await workflow.execute_activity(
+                Activities.UPDATE_TASK_STATUS,
+                args=[
+                    UpdateTaskStatusRequest(
+                        task_id=self.state.task_id,
+                        status="waiting_for_approval",
+                        workspace_id=self.state.workspace_id,
+                    )
+                ],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
 
             # Publish approval requested event with escalation_id
             self.event_manager.add_event(
@@ -1441,6 +1607,18 @@ class AgentExecutionWorkflow:
                 del self._pending_escalations[escalation_id]
                 if not self._pending_escalations:
                     self.state.status = ExecutionStatus.EXECUTING
+                    await workflow.execute_activity(
+                        Activities.UPDATE_TASK_STATUS,
+                        args=[
+                            UpdateTaskStatusRequest(
+                                task_id=self.state.task_id,
+                                status="running",
+                                workspace_id=self.state.workspace_id,
+                            )
+                        ],
+                        start_to_close_timeout=ACTIVITY_TIMEOUT,
+                        retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                    )
                 return
 
             # Approved — continue to execute
@@ -1457,6 +1635,18 @@ class AgentExecutionWorkflow:
             del self._pending_escalations[escalation_id]
             if not self._pending_escalations:
                 self.state.status = ExecutionStatus.EXECUTING
+                await workflow.execute_activity(
+                    Activities.UPDATE_TASK_STATUS,
+                    args=[
+                        UpdateTaskStatusRequest(
+                            task_id=self.state.task_id,
+                            status="running",
+                            workspace_id=self.state.workspace_id,
+                        )
+                    ],
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                )
 
         # Publish tool call started event (only after approval if required)
         self.event_manager.add_event(
@@ -2021,9 +2211,34 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         try:
-            # Build child workflow request
+            # Create a task record in DB for the child agent
+            create_task_request = CreateDelegationTaskRequest(
+                parent_agent_id=self.state.agent_id,
+                parent_task_id=self.state.task_id,
+                target_agent_id=agent_id,
+                target_agent_name=agent_name,
+                message=message,
+                user_id=self.state.user_id,
+                workspace_id=self.state.workspace_id,
+            )
+            create_task_result: CreateDelegationTaskResult = await workflow.execute_activity(
+                Activities.CREATE_DELEGATION_TASK,
+                args=[create_task_request],
+                result_type=CreateDelegationTaskResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
+
+            if create_task_result.status != "created" or not create_task_result.task_id:
+                raise ApplicationError(
+                    f"Failed to create delegation task: {create_task_result.error}"
+                )
+
+            child_task_id = create_task_result.task_id
+
+            # Build child workflow request with its own task_id
             child_request = AgentExecutionRequest(
-                task_id=UUID(self.state.task_id),
+                task_id=child_task_id,
                 agent_id=UUID(agent_id),
                 user_id=self.state.user_id,
                 workspace_id=self.state.workspace_id,
@@ -2033,6 +2248,7 @@ class AgentExecutionWorkflow:
                     "source": "agent_delegation",
                     "parent_execution_id": self.state.execution_id,
                     "parent_agent_id": self.state.agent_id,
+                    "parent_task_id": self.state.task_id,
                 },
             )
 
@@ -2074,7 +2290,7 @@ class AgentExecutionWorkflow:
                     "success": child_result.success,
                     "iteration": self.state.current_iteration,
                     "child_iterations": child_result.reasoning_iterations_used,
-                    "child_cost": child_result.total_cost,
+                    "child_cost": float(child_result.total_cost),
                 },
             )
             await self._publish_events_immediately()
@@ -2089,16 +2305,7 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
-            workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}")
-
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Agent delegation failed: {e}",
-                    tool_call_id=tool_call.id,
-                    name=tool_name,
-                )
-            )
+            workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}", exc_info=True)
 
             self.event_manager.add_event(
                 EventTypes.AGENT_DELEGATION_FAILED,
@@ -2112,40 +2319,7 @@ class AgentExecutionWorkflow:
             )
             await self._publish_events_immediately()
 
-    async def _evaluate_goal_progress(self) -> None:
-        """Evaluate if the goal has been achieved."""
-        try:
-            # If already marked as complete by completion signal, skip evaluation
-            if self.state.success:
-                workflow.logger.info("Goal already marked as achieved - skipping evaluation")
-                return
-
-            # Regular goal evaluation
-            # if self.state.goal:
-            #     # Convert AgentGoal dataclass to dict for activity
-            #     goal_dict = {
-            #         "id": self.state.goal.id,
-            #         "description": self.state.goal.description,
-            #         "success_criteria": self.state.goal.success_criteria,
-            #         "max_iterations": self.state.goal.max_iterations,
-            #         "requires_human_approval": self.state.goal.requires_human_approval,
-            #         "context": self.state.goal.context,
-            #     }
-
-            #     evaluation = await workflow.execute_activity(
-            #         Activities.EVALUATE_GOAL_PROGRESS,
-            #         args=[goal_dict, self.state.messages, self.state.current_iteration],
-            #         start_to_close_timeout=ACTIVITY_TIMEOUT,
-            #         retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-            #     )
-
-            #     # Update success based on evaluation
-            #     self.state.success = evaluation.get("goal_achieved", False)
-            #     if evaluation.get("final_response"):
-            #         self.state.final_response = evaluation.get("final_response")
-
-        except Exception as e:
-            workflow.logger.warning(f"Goal evaluation failed: {e}")
+            raise
 
     async def _compact_context_if_needed(self) -> bool:
         """Check context usage and compact if threshold exceeded.
@@ -2391,33 +2565,39 @@ class AgentExecutionWorkflow:
         """Finalize workflow execution and return result."""
         workflow.logger.info("Finalizing workflow execution")
 
-        # Determine final status
-        if self.state.success:
+        # Determine final status.
+        # If task_complete was already called, the task succeeded regardless of
+        # follow-up message processing failures.
+        if self._completion_event_published or self.state.success:
             self.state.status = ExecutionStatus.COMPLETED
-            event_type = EventTypes.WORKFLOW_COMPLETED
+            self.state.success = True
         else:
             if self.state.status != ExecutionStatus.BLOCKED:
                 self.state.status = ExecutionStatus.FAILED
-            event_type = EventTypes.WORKFLOW_FAILED
 
-        # Add final event
-        self.event_manager.add_event(
-            event_type,
-            {
-                "success": self.state.success,
-                "iterations_completed": self.state.current_iteration,
-                "total_cost": serialize_money(self.budget_tracker.cost),
-                "final_response": self.state.final_response,
-                "status": self.state.status,
-                "blocked_reason": self.state.blocked_reason,
-            },
-        )
+        # Only publish completion/failure event if not already published at task_complete
+        if not self._completion_event_published:
+            event_type = (
+                EventTypes.WORKFLOW_COMPLETED if self.state.success else EventTypes.WORKFLOW_FAILED
+            )
+            self.event_manager.add_event(
+                event_type,
+                {
+                    "success": self.state.success,
+                    "iterations_completed": self.state.current_iteration,
+                    "total_cost": serialize_money(self.budget_tracker.cost),
+                    "final_response": self.state.final_response,
+                    "status": self.state.status,
+                    "blocked_reason": self.state.blocked_reason,
+                },
+            )
+            await self._publish_events_immediately()
 
-        # Publish final events immediately
-        await self._publish_events_immediately()
-
-        # Update task status in the database
-        if self.state.success:
+        # Update task status in the database.
+        # If task_complete already set status to "completed", don't downgrade it.
+        if self._completion_event_published:
+            final_status = "completed"
+        elif self.state.success:
             final_status = "completed"
         elif self.state.status == ExecutionStatus.BLOCKED:
             final_status = "blocked"
@@ -2468,19 +2648,21 @@ class AgentExecutionWorkflow:
     async def _handle_workflow_error(self, error: Exception) -> None:
         """Handle workflow-level errors."""
         error_details = self._extract_temporal_error_details(error)
+        user_message = self._get_user_facing_error(error)
 
         if self.event_manager:
             self.event_manager.add_event(
                 EventTypes.WORKFLOW_FAILED,
                 {
-                    "error": error_details,
-                    "error_type": type(error).__name__,
+                    "error": user_message,
+                    "error_type": self._get_user_facing_error_type(error),
                     "iterations_completed": self.state.current_iteration,
                     "status": self.state.status,
                     "blocked_reason": self.state.blocked_reason,
                 },
             )
             await self._publish_events_immediately()
+        workflow.logger.error(f"Workflow failed: {error_details}")
 
         # Update task status to failed
         if self.state and self.state.task_id:
@@ -2498,6 +2680,74 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
+
+    @staticmethod
+    def _get_user_facing_error(error: Exception) -> str:
+        """Return a short, user-friendly error message (no stack traces)."""
+        msg = str(error).lower()
+        cause_msg = ""
+        if isinstance(error, ActivityError) and error.cause:
+            cause_msg = str(error.cause).lower()
+
+        activity_name = ""
+        if isinstance(error, ActivityError) and error.activity_type:
+            activity_name = error.activity_type.lower()
+
+        combined = f"{msg} {cause_msg} {activity_name}"
+
+        if "model_id" in combined and ("none" in combined or "valid string" in combined):
+            return "No model is configured for this agent. Please assign a model in agent settings."
+        if "build_agent_config" in combined:
+            return "Agent configuration error. Please check the agent settings."
+        if "call_llm" in combined:
+            if "auth" in combined or "api_key" in combined or "unauthorized" in combined:
+                return "Authentication failed with the LLM provider. Please check your API key."
+            if "rate_limit" in combined or "429" in combined:
+                return "Rate limit exceeded. Please try again in a moment."
+            if "timeout" in combined:
+                return "The AI model request timed out. Please try again."
+            if "deprecated" in combined:
+                return "The configured model has been deprecated by the provider. Please select a different model."
+            if "not found" in combined or "notfounderror" in combined or "404" in combined:
+                return "The configured model was not found. Please check the model name or select a different one."
+            return "Failed to get a response from the AI model."
+        if "execute_mcp_tool" in combined or "tool_execution" in combined:
+            return "A tool execution failed during the task."
+        if "budget" in combined:
+            return "Task budget has been exceeded."
+        if "compact_messages" in combined:
+            return "Failed to manage conversation context. Please try again."
+
+        # Generic fallback — activity name only, no internals
+        if isinstance(error, ActivityError) and error.activity_type:
+            activity = error.activity_type.replace("_activity", "").replace("_", " ")
+            return f"Task failed during {activity}. Please try again."
+
+        return "An unexpected error occurred. Please try again."
+
+    @staticmethod
+    def _get_user_facing_error_type(error: Exception) -> str:
+        """Return a human-readable error category instead of raw Python class names."""
+        combined = str(error).lower()
+        if isinstance(error, ActivityError):
+            if error.cause:
+                combined += " " + str(error.cause).lower()
+
+        if "auth" in combined or "api_key" in combined or "unauthorized" in combined:
+            return "AuthenticationError"
+        if "rate_limit" in combined or "429" in combined:
+            return "RateLimitError"
+        if "deprecated" in combined:
+            return "ModelDeprecated"
+        if "not found" in combined or "notfounderror" in combined or "404" in combined:
+            return "ModelNotFound"
+        if "timeout" in combined:
+            return "TimeoutError"
+        if "budget" in combined or "quota" in combined:
+            return "BudgetExceeded"
+        if "model_id" in combined and "none" in combined:
+            return "ConfigurationError"
+        return "Error"
 
     def _extract_temporal_error_details(self, error: Exception) -> str:
         """Extract actionable details from Temporal errors (Activity/ApplicationError)."""

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Bot, Calendar, Clock, DollarSign } from "lucide-react";
+import { Bot, Calendar, Clock, DollarSign, GitFork } from "lucide-react";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
 import { Badge } from "@/components/ui/badge";
@@ -37,9 +37,17 @@ export default function TasksList({
     {
       accessor: "description",
       header: t("description"),
-      render: (value: string) => (
-        <span className="line-clamp-2 max-w-[300px] font-medium">{value}</span>
-      ),
+      render: (value: string, row: TaskWithAgent) => {
+        const isDelegation = (row as any).parameters?.source === "agent_delegation";
+        return (
+          <div className="flex items-center gap-2 max-w-[300px]">
+            {isDelegation && (
+              <GitFork className="h-3.5 w-3.5 shrink-0 text-primary" />
+            )}
+            <span className="line-clamp-2 font-medium">{value}</span>
+          </div>
+        );
+      },
     },
     {
       accessor: "agent_name",

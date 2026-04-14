@@ -271,6 +271,7 @@ class LLMCallResult(BaseModel):
 
     role: str = "assistant"
     content: str = ""
+    thinking: str = ""
     tool_calls: list[dict[str, Any]] | None = None
     cost: Money = ZERO
     usage: LLMUsage | None = None
@@ -432,6 +433,26 @@ class EvaluateTriggerConditionsResult(BaseModel):
 
     conditions_met: bool = False
     trigger_id: UUID | None = None
+
+
+class CreateDelegationTaskRequest(BaseModel):
+    """Request to create a task for agent delegation."""
+
+    parent_agent_id: str
+    parent_task_id: str
+    target_agent_id: str
+    target_agent_name: str
+    message: str
+    user_id: str
+    workspace_id: str
+
+
+class CreateDelegationTaskResult(BaseModel):
+    """Result of creating a delegation task."""
+
+    task_id: UUID | None = None
+    status: str
+    error: str | None = None
 
 
 class CreateTaskFromTriggerRequest(BaseModel):

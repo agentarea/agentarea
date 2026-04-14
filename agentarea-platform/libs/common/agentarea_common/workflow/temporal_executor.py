@@ -382,6 +382,25 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             logger.error(f"Failed to signal workflow {workflow_id}: {e}")
             raise
 
+    async def send_workflow_command(
+        self, workflow_id: str, command: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a generic command signal to a running workflow.
+
+        Uses the two-arg signal format expected by workflow_command(command, payload).
+        """
+        await self._ensure_connected()
+
+        try:
+            handle = self.client.get_workflow_handle(workflow_id)
+            await handle.signal("workflow_command", args=[command, payload])
+            logger.debug(f"Sent workflow command '{command}' to workflow {workflow_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send workflow command '{command}' to {workflow_id}: {e}")
+            return False
+
     async def query_workflow(
         self, workflow_id: str, query_name: str, args: dict[str, Any] | None = None
     ) -> Any:

@@ -226,31 +226,6 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
-            {/* Refresh Tools button */}
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRefreshTools}
-                disabled={isRefreshingTools}
-              >
-                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
-                Refresh Tools
-              </Button>
-              {canStart && !isUrlType && !isBundleType && (
-                <Button size="sm" variant="outline" disabled>
-                  <Play className="mr-1.5 h-3.5 w-3.5" />
-                  Start
-                </Button>
-              )}
-              {canStop && !isUrlType && !isBundleType && (
-                <Button size="sm" variant="outline" disabled>
-                  <Square className="mr-1.5 h-3.5 w-3.5" />
-                  Stop
-                </Button>
-              )}
-            </div>
-
             {/* Spec info — repo, website, description from server spec */}
             {serverSpec && (() => {
               const spec = (serverSpec as any).json_spec as Record<string, any> | undefined;
@@ -552,7 +527,38 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
             )}
 
             {tools.length > 0 && (
-              <ToolsTable tools={tools} label={t("tools.title", { count: tools.length })} />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("tools.title", { count: tools.length })}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRefreshTools}
+                    disabled={isRefreshingTools}
+                  >
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
+                <ToolsTable tools={tools} />
+              </div>
+            )}
+
+            {tools.length === 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                <span className="text-sm text-muted-foreground">No tools discovered yet</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRefreshTools}
+                  disabled={isRefreshingTools}
+                >
+                  <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+                  Discover Tools
+                </Button>
+              </div>
             )}
 
             {Object.keys(envVars).length > 0 && (

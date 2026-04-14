@@ -9,6 +9,7 @@ export interface BaseMessageData {
 // LLM Response Message
 export interface LLMResponseData extends BaseMessageData {
   content: string;
+  thinking?: string;
   role?: string;
   tool_calls?: Array<{
     function: {
@@ -50,6 +51,8 @@ export interface LLMChunkData extends BaseMessageData {
   chunk: string;
   chunk_index: number;
   is_final: boolean;
+  chunk_type?: "text" | "thinking";
+  thinking?: string;
 }
 
 // Error Message (Enhanced)
@@ -165,17 +168,37 @@ export interface ApprovalRequestData extends BaseMessageData {
   _onResolve?: (escalationId: string, approved: boolean, comment: string) => void;
 }
 
+// User message from follow-up (MessageQueued event)
+export interface UserMessageData extends BaseMessageData {
+  content: string;
+}
+
+// Tool Call Group Message (groups consecutive tool calls/results into one block)
+export interface ToolCallGroupData extends BaseMessageData {
+  tools: Array<{
+    tool_name: string;
+    tool_call_id: string;
+    result: any;
+    success: boolean;
+    arguments?: Record<string, any>;
+    execution_time?: string;
+    pending?: boolean; // true if still in "calling..." state
+  }>;
+}
+
 // Export all message component types
 export type MessageComponentType =
   | { type: "llm_response"; data: LLMResponseData }
   | { type: "llm_chunk"; data: LLMChunkData }
   | { type: "tool_call_started"; data: ToolCallStartedData }
   | { type: "tool_result"; data: ToolResultData }
+  | { type: "tool_call_group"; data: ToolCallGroupData }
   | { type: "error"; data: ErrorData }
   | { type: "workflow_result"; data: WorkflowResultData }
   | { type: "system"; data: SystemData }
   | { type: "a2ui_surface"; data: A2UISurfaceData }
-  | { type: "approval_request"; data: ApprovalRequestData };
+  | { type: "approval_request"; data: ApprovalRequestData }
+  | { type: "user_message"; data: UserMessageData };
 
 // Chat Message Types
 export interface UserChatMessage {

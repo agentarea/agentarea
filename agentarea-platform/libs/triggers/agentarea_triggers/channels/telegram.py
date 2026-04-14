@@ -42,8 +42,8 @@ class TelegramAdapter:
         data = event.get("data", {})
 
         if event_type == "WorkflowCompleted":
-            result = data.get("result", "Task completed.")
-            return f"*Done* \u2014 {_escape_md(str(result))}"
+            result = data.get("result") or data.get("final_response") or ""
+            return _escape_md(str(result))
 
         if event_type == "WorkflowFailed":
             error = data.get("error", "Unknown error")

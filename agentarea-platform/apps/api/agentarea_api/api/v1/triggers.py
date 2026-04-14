@@ -31,7 +31,7 @@ from agentarea_api.api.v1.a2a_auth import (
     require_a2a_execute_auth,  # noqa: F401  # re-exported for tests
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
-from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
+from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
     TriggerCreate,
@@ -50,6 +50,10 @@ TRIGGERS_AVAILABLE = True
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/triggers", tags=["triggers"])
+
+# Public router for endpoints that don't require authentication
+# Used by internal services (e.g., Go event-service) for trigger execution
+public_router = APIRouter(prefix="/triggers", tags=["triggers"])
 
 
 # API Response Models
@@ -85,6 +89,9 @@ class TriggerResponse(BaseModel):
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] = Field(default_factory=list)
+
+    # Poll-based extractor type (e.g., "mailslurper")
+    data_extractor: str | None = None
 
     # Channel credentials indicator (actual credentials never returned)
     has_channel_credentials: bool = False
@@ -139,6 +146,7 @@ class TriggerResponse(BaseModel):
                     "cron_expression": trigger.cron_expression,
                     "timezone": trigger.timezone,
                     "next_run_time": getattr(trigger, "next_run_time", None),
+                    "data_extractor": getattr(trigger, "data_extractor", None),
                 }
             )
 
@@ -222,6 +230,8 @@ class TriggerCreateRequest(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str = Field(default="UTC")
+    data_extractor: str | None = None
+    data_extractor_config: dict[str, Any] | None = None
 
     # Webhook-specific fields
     webhook_id: str | None = None
@@ -244,7 +254,7 @@ class TriggerCreateRequest(BaseModel):
     @classmethod
     def validate_trigger_type(cls, v: str) -> str:
         """Validate trigger type."""
-        valid_types = ["cron", "webhook"]
+        valid_types = ["cron", "webhook", "polling"]
         if v.lower() not in valid_types:
             raise ValueError(f"Invalid trigger type. Must be one of: {valid_types}")
         return v.lower()
@@ -356,6 +366,13 @@ class ExecutionCorrelationResponse(BaseModel):
     has_next: bool
 
 
+class TriggerExecuteRequest(BaseModel):
+    """Request model for executing a trigger via the event service."""
+
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    channel_origin: dict[str, Any] = Field(default_factory=dict)
+
+
 # Utility Functions
 
 
@@ -387,7 +404,12 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
     # Import here to avoid issues when triggers not available
 
     # Convert string enums to domain enums
-    trigger_type = TriggerType.CRON if request.trigger_type == "cron" else TriggerType.WEBHOOK
+    if request.trigger_type == "cron":
+        trigger_type = TriggerType.CRON
+    elif request.trigger_type == "polling":
+        trigger_type = TriggerType.POLLING
+    else:
+        trigger_type = TriggerType.WEBHOOK
     webhook_type = (
         WebhookType(request.webhook_type) if request.webhook_type else WebhookType.GENERIC
     )
@@ -410,6 +432,8 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
         failure_threshold=request.failure_threshold,
         cron_expression=request.cron_expression,
         timezone=request.timezone,
+        data_extractor=request.data_extractor,
+        data_extractor_config=request.data_extractor_config,
         webhook_id=webhook_id,
         allowed_methods=request.allowed_methods,
         webhook_type=webhook_type,
@@ -448,6 +472,14 @@ def _convert_to_domain_update(request: TriggerUpdateRequest) -> Any:
 
 
 # API Endpoints
+
+
+@router.get("/catalog")
+async def get_catalog(
+    user_context: UserContext = Depends(get_user_context),
+) -> list[dict[str, Any]]:
+    """Get the trigger catalog — available trigger types with metadata and events."""
+    return get_trigger_catalog()
 
 
 @router.get("/channels/events")
@@ -497,13 +529,24 @@ async def create_trigger(
         trigger_data = _convert_to_domain_create(request, created_by)
         trigger_data.workspace_id = user_context.workspace_id
 
+        # For polling extractors, merge credentials into extractor config
+        # so the Go polling service can read them (e.g. bot_token for Telegram).
+        if trigger_data.data_extractor and request.channel_credentials:
+            trigger_data.data_extractor_config = {
+                **(trigger_data.data_extractor_config or {}),
+                **request.channel_credentials,
+            }
+
         # Create trigger
         trigger = await trigger_service.create_trigger(trigger_data)
 
-        # Store channel credentials if provided
+        # Also store credentials encrypted in secret store for Python outbound delivery
         has_creds = False
         if request.channel_credentials and secret_manager:
-            channel_type = request.webhook_type or "generic"
+            # Channel type for secret key: use webhook_type or derive from data_extractor.
+            # Extractor names like "mailslurper" map to channel type via suffix stripping.
+            extractor = request.data_extractor or ""
+            channel_type = request.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
             await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
             has_creds = True
@@ -713,6 +756,8 @@ async def update_trigger(
             if hasattr(updated_trigger, "webhook_type"):
                 wt = updated_trigger.webhook_type
                 channel_type = wt.value if hasattr(wt, "value") else str(wt)
+            elif hasattr(updated_trigger, "data_extractor") and updated_trigger.data_extractor:
+                channel_type = updated_trigger.data_extractor.removesuffix("_polling")
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
             await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
             has_creds = True
@@ -1153,4 +1198,57 @@ async def get_execution_correlations(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@public_router.post("/{trigger_id}/execute", response_model=dict[str, Any])
+async def execute_trigger(
+    trigger_id: UUID,
+    request: TriggerExecuteRequest,
+    trigger_service: TriggerService = Depends(get_trigger_service),
+) -> dict[str, Any]:
+    """Execute a trigger with the provided event data.
+
+    Called by the Go event service when a polling channel receives new messages.
+    Builds trigger data from the events and channel origin, then creates and
+    submits a task for agent execution.
+
+    Args:
+        trigger_id: The unique identifier of the trigger
+        request: Events and channel origin data
+        trigger_service: Injected trigger service
+
+    Returns:
+        Execution result with task ID
+
+    Raises:
+        HTTPException: If trigger not found or execution fails
+    """
+    _check_triggers_availability()
+
+    try:
+        trigger_data: dict[str, Any] = {
+            "events": request.events,
+            "channel_origin": request.channel_origin,
+        }
+
+        execution = await trigger_service.execute_trigger(trigger_id, trigger_data)
+
+        if execution is None:
+            return {
+                "status": "skipped",
+                "trigger_id": str(trigger_id),
+            }
+
+        return {
+            "status": "success",
+            "trigger_id": str(trigger_id),
+            "execution_id": str(execution.id) if execution else None,
+            "task_id": str(execution.task_id) if execution and execution.task_id else None,
+        }
+
+    except TriggerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Failed to execute trigger {trigger_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

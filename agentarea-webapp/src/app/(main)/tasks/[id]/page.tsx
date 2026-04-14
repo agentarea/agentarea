@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
-import { parseEventToMessage, shouldDisplayEvent } from "@/components/Chat/EventParser";
 import { MessageRenderer } from "@/components/Chat/MessageComponents";
 import type { MessageComponentType } from "@/components/Chat/types";
-import { normalizeEventType } from "@/components/Chat/utils/eventNormalizer";
+import { processEventsToMessages } from "@/components/Chat/utils/eventProcessor";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
@@ -27,16 +28,23 @@ import {
   cancelAgentTaskAction as cancelAgentTask,
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
+  sendTaskCommandAction as sendTaskCommand,
 } from "@/lib/server-actions";
 import { resolveEscalationAction } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
   const { task, taskStatus, loading, error, refresh } = useTaskContext();
+  const router = useRouter();
 
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<MessageComponentType[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleResolveEscalation = async (escalationId: string, approved: boolean, comment: string) => {
     if (!task) return;
@@ -58,36 +66,31 @@ export default function TaskDetailsPage() {
     autoConnect: true,
   });
 
-  // FIXME: Performance — this useMemo re-processes ALL events on every render whenever
-  // taskEvents or task changes. Each event goes through normalizeEventType → shouldDisplayEvent →
-  // parseEventToMessage (a large switch statement). For long-running tasks with many events
-  // this becomes O(n) per render. Should accumulate incrementally: keep a processed array
-  // and only parse newly appended events rather than replaying the full list each time.
-  // Convert historical events to chat message components for direct rendering
+  // Convert historical events to chat message components using shared processor
   const executionMessages = useMemo((): MessageComponentType[] => {
     if (!task) return [];
 
-    const messages: MessageComponentType[] = [];
+    const processed = processEventsToMessages(
+      taskEvents.map((e) => ({
+        type: e.type,
+        timestamp: e.timestamp,
+        data: e.data,
+      })),
+      { taskId: task.id, agentId: task.agent_id }
+    );
 
-    for (const event of taskEvents) {
-      const eventType = normalizeEventType(event.type);
-      if (!shouldDisplayEvent(eventType)) continue;
+    // Merge optimistic messages, filtering out any that have been confirmed by events
+    const confirmedContents = new Set(
+      processed
+        .filter((m) => m.type === "user_message")
+        .map((m) => (m.data as any).content)
+    );
+    const pendingOptimistic = optimisticMessages.filter(
+      (m) => !confirmedContents.has((m.data as any).content)
+    );
 
-      const eventData = {
-        ...(event.data || {}),
-        task_id: task.id,
-        agent_id: task.agent_id,
-        timestamp: event.timestamp.toISOString(),
-      };
-
-      const message = parseEventToMessage(eventType, eventData);
-      if (message) {
-        messages.push(message);
-      }
-    }
-
-    return messages;
-  }, [task, taskEvents]);
+    return [...processed, ...pendingOptimistic];
+  }, [task, taskEvents, optimisticMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -118,7 +121,6 @@ export default function TaskDetailsPage() {
         });
       } else {
         toast.success("Task paused successfully");
-        // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
@@ -145,7 +147,6 @@ export default function TaskDetailsPage() {
         });
       } else {
         toast.success("Task resumed successfully");
-        // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
@@ -174,7 +175,6 @@ export default function TaskDetailsPage() {
         });
       } else {
         toast.success("Task cancelled successfully");
-        // Refresh task data to get updated status
         await refresh();
       }
     } catch (err) {
@@ -185,6 +185,101 @@ export default function TaskDetailsPage() {
       setControlling(false);
       setShowCancelDialog(false);
     }
+  };
+
+  // Chat input handler
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !task || sendingMessage) return;
+
+    const message = chatInput.trim();
+    setChatInput("");
+    setSendingMessage(true);
+
+    try {
+      if (isActive) {
+        // Optimistically show user message immediately
+        setOptimisticMessages((prev) => [
+          ...prev,
+          {
+            type: "user_message",
+            data: {
+              id: `optimistic-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              agent_id: task.agent_id,
+              event_type: "MessageQueued",
+              content: message,
+            },
+          },
+        ]);
+
+        const { error } = await sendTaskCommand(task.agent_id, task.id, {
+          command: "queue_message",
+          message: message,
+        });
+        if (error) {
+          toast.error("Failed to send message");
+          // Remove optimistic message on error
+          setOptimisticMessages((prev) =>
+            prev.filter((m) => (m.data as any).content !== message)
+          );
+        }
+      } else {
+        // Task is completed — create a new task for the same agent
+        const response = await fetch(`/api/agents/${task.agent_id}/tasks/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: message,
+            parameters: {
+              context: {},
+              task_type: "chat",
+              session_id: `chat-${Date.now()}`,
+            },
+            enable_agent_communication: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Extract task_id from the SSE stream to navigate
+        const reader = response.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder();
+          let newTaskId: string | null = null;
+          let done = false;
+          while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            done = readerDone;
+            if (value) {
+              const text = decoder.decode(value, { stream: true });
+              const match = text.match(/"task_id"\s*:\s*"([^"]+)"/);
+              if (match && !newTaskId) {
+                newTaskId = match[1];
+              }
+            }
+          }
+          if (newTaskId) {
+            router.push(`/tasks/${newTaskId}`);
+            return;
+          }
+        }
+        toast.error("Failed to create new task");
+      }
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      toast.error("Failed to send message", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setChatInput(e.target.value);
   };
 
   // Show loading state
@@ -210,7 +305,8 @@ export default function TaskDetailsPage() {
   }
 
   // Determine if task is active based on status
-  const isActive = ["running", "paused", "blocked"].includes(task.status);
+  // Completed tasks stay alive (workflow waits for follow-ups), so we always use queue_message
+  const isActive = ["running", "paused", "blocked", "completed"].includes(task.status);
 
   // Get current status from taskStatus or fallback to task.status
   const currentStatus = taskStatus?.status || task.status;
@@ -221,7 +317,7 @@ export default function TaskDetailsPage() {
   return (
     <>
       <div className="flex h-full w-full">
-        {/* Left side - Execution history */}
+        {/* Left side - Execution history + chat input */}
         <div className="flex-1 flex flex-col h-full">
           <div className="relative flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
@@ -261,6 +357,35 @@ export default function TaskDetailsPage() {
 
               <div ref={messagesEndRef} />
             </div>
+          </div>
+
+          {/* Chat input */}
+          <div className="border-t bg-background px-3 py-3">
+            <ChatInputArea
+              input={chatInput}
+              onInputChange={handleInputChange}
+              onSubmit={handleSendMessage}
+              isLoading={sendingMessage}
+              placeholder={
+                isActive
+                  ? `Message ${task.agent_name || "agent"}...`
+                  : `Send a follow-up to ${task.agent_name || "agent"}...`
+              }
+              selectedFiles={[]}
+              onRemoveFile={() => {}}
+              onOpenFileDialog={() => {}}
+              fileInputRef={fileInputRef}
+              textareaRef={textareaRef}
+              variant="default"
+              sendButtonIcon="send"
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage(e);
+                }
+              }}
+            />
           </div>
         </div>
 

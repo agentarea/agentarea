@@ -83,31 +83,31 @@ async def initialize_services():
 
 async def cleanup_all_connections():
     """Comprehensive cleanup of all connections."""
-    logger.info("🧹 Starting comprehensive connection cleanup...")
+    logger.info("Starting comprehensive connection cleanup...")
 
     try:
         # Cleanup connection manager singletons with timeout
         from agentarea_common.infrastructure.connection_manager import cleanup_connections
 
         await asyncio.wait_for(cleanup_connections(), timeout=2.0)
-        logger.info("✅ Connection manager cleanup completed")
+        logger.info("Connection manager cleanup completed")
     except TimeoutError:
-        logger.warning("⚠️  Connection manager cleanup timed out (reload mode)")
+        logger.warning("Connection manager cleanup timed out (reload mode)")
     except Exception as e:
-        logger.error("⚠️  Error in connection manager cleanup: %s", e)
+        logger.error("Error in connection manager cleanup: %s", e)
 
     try:
         # Stop events router with timeout
         from agentarea_api.api.events.events_router import stop_events_router
 
         await asyncio.wait_for(stop_events_router(), timeout=2.0)
-        logger.info("✅ Events router cleanup completed")
+        logger.info("Events router cleanup completed")
     except TimeoutError:
-        logger.warning("⚠️  Events router cleanup timed out (reload mode)")
+        logger.warning("Events router cleanup timed out (reload mode)")
     except Exception as e:
-        logger.error("⚠️  Error in events router cleanup: %s", e)
+        logger.error("Error in events router cleanup: %s", e)
 
-    logger.info("🎉 All connection cleanup completed")
+    logger.info("All connection cleanup completed")
 
 
 @asynccontextmanager

@@ -7,4 +7,5 @@ export interface Task {
   created_at?: string;
   execution_id?: string | null;
   result?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }

@@ -21,6 +21,7 @@ export const parseEventToMessage = (
       // Extract content and usage information
       const originalData = eventData.original_data || eventData;
       const content = originalData.content || eventData.content;
+      const thinking = originalData.thinking || eventData.thinking || "";
 
       // Only create message if there's actual content
       if (!content || !content.trim()) return null;
@@ -30,6 +31,7 @@ export const parseEventToMessage = (
         data: {
           ...baseData,
           content,
+          thinking: thinking || undefined,
           role: originalData.role || eventData.role || "assistant",
           tool_calls: originalData.tool_calls || eventData.tool_calls,
           usage: originalData.usage || eventData.usage,
@@ -43,6 +45,7 @@ export const parseEventToMessage = (
       const chunk = originalData.chunk || eventData.chunk;
       const chunkIndex = originalData.chunk_index || eventData.chunk_index || 0;
       const isFinal = originalData.is_final || eventData.is_final || false;
+      const chunkType = originalData.chunk_type || eventData.chunk_type || "text";
 
       // Create or update streaming message
       // Note: This requires special handling in the chat component to accumulate chunks
@@ -53,6 +56,7 @@ export const parseEventToMessage = (
           chunk,
           chunk_index: chunkIndex,
           is_final: isFinal,
+          chunk_type: chunkType,
         },
       };
     }
@@ -216,11 +220,14 @@ export const parseEventToMessage = (
     case "WorkflowFailed":
     case "task_failed": {
       // Extract error information
-      const error = eventData.error || eventData.message;
+      const rawError = eventData.error || eventData.message;
       const originalData = eventData.original_data || eventData;
 
       // Only create message if there's an error
-      if (!error) return null;
+      if (!rawError) return null;
+
+      // Sanitize internal errors into user-friendly messages
+      const error = sanitizeWorkflowError(rawError);
 
       return {
         type: "error",
@@ -228,6 +235,7 @@ export const parseEventToMessage = (
           ...baseData,
           error,
           error_type: originalData.error_type || eventData.error_type,
+          raw_error: rawError,
         },
       };
     }
@@ -318,6 +326,20 @@ export const parseEventToMessage = (
       };
     }
 
+    case "MessageQueued": {
+      const originalData = eventData.original_data || eventData;
+      const content = originalData.content || eventData.content || eventData.message;
+      if (!content) return null;
+
+      return {
+        type: "user_message",
+        data: {
+          ...baseData,
+          content,
+        },
+      };
+    }
+
     // A2UIUpdateComponents, A2UIUpdateDataModel, A2UIDeleteSurface are handled
     // via setMessages mutation in messageEventHandlers — they return null here.
     case "A2UIUpdateComponents":
@@ -332,6 +354,62 @@ export const parseEventToMessage = (
       // For unhandled event types, return null (don't display)
       return null;
   }
+};
+
+// Sanitize internal workflow errors into user-friendly messages
+const sanitizeWorkflowError = (rawError: string): string => {
+  const lower = rawError.toLowerCase();
+
+  // Agent configuration errors
+  if (lower.includes("build_agent_config") || lower.includes("agentconfigresult")) {
+    if (lower.includes("model_id")) {
+      return "Agent configuration error: no model is assigned. Please configure a model in agent settings.";
+    }
+    return "Agent configuration error. Please check the agent settings.";
+  }
+
+  // LLM / provider errors
+  if (lower.includes("call_llm_activity") || lower.includes("call_llm")) {
+    if (lower.includes("auth") || lower.includes("api_key") || lower.includes("unauthorized")) {
+      return "Authentication failed with the LLM provider. Please check your API key configuration.";
+    }
+    if (lower.includes("rate_limit") || lower.includes("429")) {
+      return "Rate limit exceeded. Please try again in a moment.";
+    }
+    if (lower.includes("timeout")) {
+      return "The LLM request timed out. Please try again.";
+    }
+    if (lower.includes("deprecated")) {
+      return "The configured model has been deprecated by the provider. Please select a different model.";
+    }
+    if (lower.includes("not found") || lower.includes("notfounderror") || lower.includes("404")) {
+      return "The configured model was not found. Please check the model name or select a different one.";
+    }
+    return "Failed to get a response from the AI model. Please try again.";
+  }
+
+  // Tool execution errors
+  if (lower.includes("execute_mcp_tool") || lower.includes("tool_execution")) {
+    return "A tool execution failed. Please check the tool configuration.";
+  }
+
+  // Budget errors
+  if (lower.includes("budget")) {
+    return "Task budget has been exceeded.";
+  }
+
+  // Generic activity failures — extract just the activity name
+  const activityMatch = rawError.match(/activity=(\w+)/);
+  if (activityMatch) {
+    return `Task failed during ${activityMatch[1].replace(/_activity$/, "").replace(/_/g, " ")}. Please try again.`;
+  }
+
+  // Fallback — truncate and remove internal details
+  const firstLine = rawError.split("\n")[0];
+  if (firstLine.length > 150) {
+    return firstLine.substring(0, 147) + "...";
+  }
+  return firstLine;
 };
 
 // Helper to determine if event should create a visible message
@@ -355,6 +433,7 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "A2UIUpdateDataModel",
     "A2UIDeleteSurface",
     "HumanApprovalRequested",
+    "MessageQueued",
   ];
 
   return displayableEvents.includes(eventType);

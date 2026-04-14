@@ -692,28 +692,74 @@ class DefaultWebhookManager(WebhookManager):
             }
 
             # Extract message data if present
-            if "message" in telegram_data:
-                message = telegram_data["message"]
+            message = telegram_data.get("message") or telegram_data.get("edited_message")
+            if message:
                 parsed_data.update(
                     {
                         "chat_id": message.get("chat", {}).get("id"),
+                        "chat_type": message.get("chat", {}).get("type"),
                         "user_id": message.get("from", {}).get("id"),
                         "username": message.get("from", {}).get("username"),
-                        "text": message.get("text"),
+                        "first_name": message.get("from", {}).get("first_name"),
+                        "text": message.get("text") or message.get("caption"),
                         "message_id": message.get("message_id"),
                         "date": message.get("date"),
                     }
                 )
 
-                # Check for document/file
-                if "document" in message:
-                    parsed_data["document"] = message["document"]
-                    parsed_data["has_file"] = True
+                # Thread/reply context
+                if "reply_to_message" in message:
+                    reply = message["reply_to_message"]
+                    parsed_data["reply_to_message_id"] = reply.get("message_id")
+                    parsed_data["reply_to_text"] = reply.get("text") or reply.get("caption")
 
-                # Check for photo
-                if "photo" in message:
-                    parsed_data["photo"] = message["photo"]
-                    parsed_data["has_photo"] = True
+                # Media — extract file_id for any attachment type
+                for media_type in (
+                    "document",
+                    "photo",
+                    "video",
+                    "voice",
+                    "audio",
+                    "sticker",
+                    "video_note",
+                    "animation",
+                ):
+                    if media_type in message:
+                        media = message[media_type]
+                        # photo is a list of sizes, take the largest
+                        if media_type == "photo":
+                            media = media[-1] if media else {}
+                        parsed_data["media_type"] = media_type
+                        parsed_data["file_id"] = media.get("file_id")
+                        parsed_data["file_name"] = media.get("file_name")
+                        parsed_data["mime_type"] = media.get("mime_type")
+                        parsed_data[media_type] = message[media_type]
+                        break
+
+                # Location
+                if "location" in message:
+                    loc = message["location"]
+                    parsed_data["location"] = {
+                        "lat": loc.get("latitude"),
+                        "lon": loc.get("longitude"),
+                    }
+
+                # Forward info
+                if "forward_from" in message:
+                    parsed_data["forwarded_from"] = message["forward_from"].get("username")
+
+            # Callback query (inline button press)
+            elif "callback_query" in telegram_data:
+                cb = telegram_data["callback_query"]
+                parsed_data.update(
+                    {
+                        "chat_id": cb.get("message", {}).get("chat", {}).get("id"),
+                        "user_id": cb.get("from", {}).get("id"),
+                        "username": cb.get("from", {}).get("username"),
+                        "callback_data": cb.get("data"),
+                        "message_id": cb.get("message", {}).get("message_id"),
+                    }
+                )
 
             return parsed_data
 

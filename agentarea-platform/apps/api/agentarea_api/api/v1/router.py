@@ -15,6 +15,7 @@ from . import (
     agents_well_known,
     api_keys,
     audit,
+    inbox,
     mcp_auth_configs,
     mcp_oauth_connect,
     mcp_oauth_links,
@@ -40,6 +41,9 @@ public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 
 # MCP OAuth callback (public — user is mid-redirect from external AS)
 public_v1_router.include_router(mcp_oauth_connect.public_router)
+
+# Trigger execute endpoint (public — called by internal Go event-service)
+public_v1_router.include_router(triggers.public_router)
 
 # Webhook receiver is mounted directly on app (not under /v1) to avoid auth conflicts
 # See main.py: app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
@@ -112,3 +116,6 @@ protected_v1_router.include_router(projects.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
+
+# Inbox - PROTECTED
+protected_v1_router.include_router(inbox.router)

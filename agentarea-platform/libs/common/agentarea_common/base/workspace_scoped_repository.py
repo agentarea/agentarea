@@ -123,6 +123,10 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
                 if hasattr(self.model_class, field):
                     query = query.where(getattr(self.model_class, field) == value)
 
+            # Order by newest first
+            if hasattr(self.model_class, "created_at"):
+                query = query.order_by(self.model_class.created_at.desc())
+
             # Apply pagination
             if offset is not None:
                 query = query.offset(offset)
