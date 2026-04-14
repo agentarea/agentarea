@@ -165,6 +165,9 @@ export const {
   // Global Tasks API
   getTask,
 
+  // Inbox API
+  getInbox,
+
   // Compound MCP API
   listCompoundMCPs,
   getCompoundMCP,

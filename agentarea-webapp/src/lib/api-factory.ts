@@ -1457,6 +1457,13 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    getInbox: async (params?: { status?: string; agent_id?: string; page?: number; page_size?: number }) => {
+      const { data, error } = await client.GET("/v1/inbox/" as any, {
+        params: { query: params },
+      } as any);
+      return { data, error };
+    },
+
     getTask: async (taskId: string) => {
       const { data, error } = await client.GET("/v1/tasks/{task_id}" as any, {
         params: { path: { task_id: taskId } },
