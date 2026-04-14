@@ -57,6 +57,7 @@ class TemporalScheduleManager:
         if self._connected:
             return
         from agentarea_common.config import get_settings
+
         settings = get_settings()
         server_url = settings.workflow.TEMPORAL_SERVER_URL
         if not server_url:
@@ -65,6 +66,7 @@ class TemporalScheduleManager:
                 dependency="temporal_client",
             )
         from temporalio.contrib.pydantic import pydantic_data_converter
+
         self.client = await Client.connect(
             server_url,
             namespace=self._namespace,
@@ -210,7 +212,9 @@ class TemporalScheduleManager:
                             id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
                             task_queue=self._task_queue,
                         ),
-                        spec=ScheduleSpec(cron_expressions=[cron_expression], time_zone_name=timezone),
+                        spec=ScheduleSpec(
+                            cron_expressions=[cron_expression], time_zone_name=timezone
+                        ),
                         state=input.description.schedule.state,
                     )
                 )
@@ -329,11 +333,15 @@ class TemporalScheduleManager:
                 "timezone": str(description.schedule.spec.time_zone_name or ""),
                 "paused": bool(description.schedule.state.paused),
                 "note": str(description.schedule.state.note or ""),
-                "next_action_times": [t.isoformat() for t in (description.info.next_action_times or [])],
+                "next_action_times": [
+                    t.isoformat() for t in (description.info.next_action_times or [])
+                ],
                 "recent_actions": [
                     {
                         "scheduled_time": action.scheduled_time.isoformat(),
-                        "actual_time": action.actual_time.isoformat() if action.actual_time else None,
+                        "actual_time": action.actual_time.isoformat()
+                        if action.actual_time
+                        else None,
                         "start_workflow_result": str(action.start_workflow_result)
                         if action.start_workflow_result
                         else None,

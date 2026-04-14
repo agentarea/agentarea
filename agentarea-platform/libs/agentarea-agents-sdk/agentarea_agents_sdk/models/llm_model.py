@@ -367,9 +367,7 @@ class LLMModel:
                             if fn.get("name"):
                                 tool_calls_buffer[idx]["function"]["name"] = fn["name"]
                             if fn.get("arguments"):
-                                tool_calls_buffer[idx]["function"]["arguments"] += fn[
-                                    "arguments"
-                                ]
+                                tool_calls_buffer[idx]["function"]["arguments"] += fn["arguments"]
 
                         delta_tool_calls = [
                             tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())

@@ -141,9 +141,7 @@ class TaskService(BaseTaskService):
             return None
 
         task_repository = self.repository_factory.create_repository(TaskRepository)
-        candidates = await task_repository.find_active_by_agent_and_chat(
-            task.agent_id, chat_id
-        )
+        candidates = await task_repository.find_active_by_agent_and_chat(task.agent_id, chat_id)
 
         message_text = task.query or task.description
 

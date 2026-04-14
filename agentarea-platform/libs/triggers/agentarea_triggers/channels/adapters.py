@@ -30,13 +30,15 @@ logger = logging.getLogger(__name__)
 
 # ── Markdown flavors ──────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class MarkdownFlavor:
     """How to render bold/italic/quote + emoji map."""
-    bold: tuple[str, str]       # (open, close) e.g. ("*", "*") or ("**", "**")
+
+    bold: tuple[str, str]  # (open, close) e.g. ("*", "*") or ("**", "**")
     italic: tuple[str, str]
-    quote: str                  # line prefix for quotes
-    emojis: dict[str, str]      # logical name → rendered emoji
+    quote: str  # line prefix for quotes
+    emojis: dict[str, str]  # logical name → rendered emoji
     escape: Callable[[str], str] | None = None  # optional text escaper
 
 
@@ -70,22 +72,30 @@ def _telegram_escape(text: str) -> str:
 
 
 SLACK_MD = MarkdownFlavor(
-    bold=("*", "*"), italic=("_", "_"), quote=">",
+    bold=("*", "*"),
+    italic=("_", "_"),
+    quote=">",
     emojis=SLACK_EMOJIS,
 )
 
 DISCORD_MD = MarkdownFlavor(
-    bold=("**", "**"), italic=("*", "*"), quote="> ",
+    bold=("**", "**"),
+    italic=("*", "*"),
+    quote="> ",
     emojis=UNICODE_EMOJIS,
 )
 
 TELEGRAM_MD = MarkdownFlavor(
-    bold=("*", "*"), italic=("_", "_"), quote=">",
-    emojis=UNICODE_EMOJIS, escape=_telegram_escape,
+    bold=("*", "*"),
+    italic=("_", "_"),
+    quote=">",
+    emojis=UNICODE_EMOJIS,
+    escape=_telegram_escape,
 )
 
 
 # ── Formatter factory ─────────────────────────────────────────────
+
 
 def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], str]:
     """Build a format(event, presentation) function from a markdown flavor."""
@@ -99,7 +109,7 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
         d = event.get("data", {})
 
         if et == "WorkflowCompleted":
-            return esc(str(d.get('result') or d.get('final_response') or ''))
+            return esc(str(d.get("result") or d.get("final_response") or ""))
         if et == "WorkflowFailed":
             return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
         if et == "WorkflowCancelled":
@@ -128,11 +138,13 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
 
 # ── HTTP sender factory ───────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class HttpSenderConfig:
     """Config for building an HTTP-based send function."""
+
     url: str | Callable[[dict[str, Any], str], str]
-    auth_fmt: str                # "Bearer {token}" or "Bot {token}"
+    auth_fmt: str  # "Bearer {token}" or "Bot {token}"
     build_payload: Callable[[dict[str, Any], str], dict[str, Any]]
     max_length: int = 3000
     truncation_suffix: str = "\n\n_(truncated)_"
@@ -151,7 +163,7 @@ def make_http_sender(
             return
 
         if len(message) > cfg.max_length:
-            message = message[:cfg.max_length - len(cfg.truncation_suffix)] + cfg.truncation_suffix
+            message = message[: cfg.max_length - len(cfg.truncation_suffix)] + cfg.truncation_suffix
 
         url = cfg.url(channel_config, token) if callable(cfg.url) else cfg.url
         payload = cfg.build_payload(channel_config, message)
@@ -160,7 +172,8 @@ def make_http_sender(
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
-                    url, json=payload,
+                    url,
+                    json=payload,
                     headers={"Authorization": auth, "Content-Type": "application/json"},
                 )
                 if not cfg.validate_response(resp):
@@ -216,7 +229,11 @@ DISCORD_SENDER = HttpSenderConfig(
     auth_fmt="Bot {token}",
     build_payload=lambda cfg, msg: {
         "content": msg,
-        **({"message_reference": {"message_id": cfg["message_id"]}} if cfg.get("message_id") else {}),
+        **(
+            {"message_reference": {"message_id": cfg["message_id"]}}
+            if cfg.get("message_id")
+            else {}
+        ),
     },
     max_length=2000,
 )
@@ -237,6 +254,7 @@ TELEGRAM_SENDER = HttpSenderConfig(
 
 # ── Adapter wrapper ───────────────────────────────────────────────
 
+
 class _ComposedAdapter:
     """Wraps a (formatter, sender) pair into the ChannelAdapter protocol."""
 
@@ -256,6 +274,7 @@ class _ComposedAdapter:
 
 
 # ── Registration ──────────────────────────────────────────────────
+
 
 def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> None:
     """Register all HTTP-based channel adapters."""

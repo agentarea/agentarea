@@ -86,10 +86,7 @@ class RedisEventBroker(EventBroker):
     def _is_cross_language_channel(self, channel: str) -> bool:
         """Check if channel is for cross-language communication (Go services)."""
         channel_lower = channel.lower()
-        return (
-            "mcp" in channel_lower
-            or channel.startswith("MCPServerInstance")
-        )
+        return "mcp" in channel_lower or channel.startswith("MCPServerInstance")
 
     @override
     async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:

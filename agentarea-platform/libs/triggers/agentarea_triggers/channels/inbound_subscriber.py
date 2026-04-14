@@ -187,9 +187,7 @@ class InboundMessageSubscriber:
                 task_service=task_service,
             )
 
-            execution = await trigger_service.execute_trigger(
-                UUID(trigger_id), trigger_data
-            )
+            execution = await trigger_service.execute_trigger(UUID(trigger_id), trigger_data)
 
             if execution:
                 logger.info(

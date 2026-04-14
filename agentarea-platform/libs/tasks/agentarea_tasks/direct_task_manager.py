@@ -88,7 +88,10 @@ class DirectTaskManager(BaseTaskManager):
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "result": {"type": "string", "description": "Your complete response to the user. This text is shown directly to them."},
+                                "result": {
+                                    "type": "string",
+                                    "description": "Your complete response to the user. This text is shown directly to them.",
+                                },
                             },
                             "required": ["result"],
                         },

@@ -420,7 +420,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     complete_thinking += chunk_response.reasoning_content
                     if event_publisher:
                         await event_publisher(
-                            chunk_response.reasoning_content, chunk_index, False, chunk_type="thinking"
+                            chunk_response.reasoning_content,
+                            chunk_index,
+                            False,
+                            chunk_type="thinking",
                         )
                         chunk_index += 1
 
@@ -853,7 +856,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             task_repo = TaskRepository(session, user_context)
             try:
                 additional_fields = {}
-                if request.result:                    # Task model expects result as dict, but request carries it as JSON string
+                if (
+                    request.result
+                ):  # Task model expects result as dict, but request carries it as JSON string
                     try:
                         result_dict = json.loads(request.result)
                     except (json.JSONDecodeError, TypeError):

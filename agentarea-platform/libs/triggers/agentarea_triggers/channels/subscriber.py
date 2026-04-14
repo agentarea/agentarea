@@ -140,7 +140,7 @@ class ChannelEventSubscriber:
             raw_event_type: str = envelope.get("type", "")
             # Strip the "workflow." prefix to get the canonical event_type
             event_type = (
-                raw_event_type[len("workflow."):]
+                raw_event_type[len("workflow.") :]
                 if raw_event_type.startswith("workflow.")
                 else raw_event_type
             )
@@ -152,9 +152,7 @@ class ChannelEventSubscriber:
             if isinstance(original_data, dict):
                 data = {**data, **original_data}
             task_id = (
-                data.get("task_id")
-                or envelope.get("aggregate_id")
-                or data.get("aggregate_id")
+                data.get("task_id") or envelope.get("aggregate_id") or data.get("aggregate_id")
             )
 
             event: dict[str, Any] = {

@@ -110,6 +110,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             async with database.async_session_factory() as session:
                 user_context = await _resolve_trigger_context(session, trigger_id)
                 from agentarea_common.base.repository_factory import RepositoryFactory
+
                 repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
@@ -283,15 +284,15 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                     # Extract message text for the task query.
                     extracted_events = execution_data.get("extracted_events", [])
-                    message_texts = [
-                        e.get("text") for e in extracted_events if e.get("text")
-                    ]
+                    message_texts = [e.get("text") for e in extracted_events if e.get("text")]
                     if not message_texts:
                         top_level_text = execution_data.get("text")
                         if top_level_text:
                             message_texts = [top_level_text]
-                    query = "\n".join(message_texts) if message_texts else (
-                        trigger.description or f"Execute trigger {trigger.name}"
+                    query = (
+                        "\n".join(message_texts)
+                        if message_texts
+                        else (trigger.description or f"Execute trigger {trigger.name}")
                     )
 
                     # Pass channel_origin so agent response routes back to the channel
@@ -314,7 +315,9 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                     task_id = task.id
                     if task.status == "routed":
-                        logger.info(f"Routed follow-up to existing workflow for trigger {trigger_id}")
+                        logger.info(
+                            f"Routed follow-up to existing workflow for trigger {trigger_id}"
+                        )
                     else:
                         logger.info(f"Submitted task {task_id} from trigger {trigger_id}")
 
@@ -364,6 +367,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 async with database.async_session_factory() as session:
                     user_context = await _resolve_trigger_context(session, trigger_id)
                     from agentarea_common.base.repository_factory import RepositoryFactory
+
                     repository_factory = RepositoryFactory(session, user_context)
 
                     trigger_service = TriggerService(
@@ -407,6 +411,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             async with database.async_session_factory() as session:
                 user_context = await _resolve_trigger_context(session, trigger_id)
                 from agentarea_common.base.repository_factory import RepositoryFactory
+
                 repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
@@ -463,6 +468,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             async with database.async_session_factory() as session:
                 user_context = await _resolve_trigger_context(session, trigger_id)
                 from agentarea_common.base.repository_factory import RepositoryFactory
+
                 repository_factory = RepositoryFactory(session, user_context)
 
                 trigger_service = TriggerService(
@@ -512,6 +518,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Create repositories via factory
                 user_context = await _resolve_trigger_context(session, trigger_id)
                 from agentarea_common.base.repository_factory import RepositoryFactory
+
                 repository_factory = RepositoryFactory(session, user_context)
 
                 # Create services
@@ -550,8 +557,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     top_level_text = execution_data.get("text")
                     if top_level_text:
                         message_texts = [top_level_text]
-                query = "\n".join(message_texts) if message_texts else (
-                    trigger.description or f"Execute trigger {trigger.name}"
+                query = (
+                    "\n".join(message_texts)
+                    if message_texts
+                    else (trigger.description or f"Execute trigger {trigger.name}")
                 )
 
                 # Create task

@@ -714,7 +714,16 @@ class DefaultWebhookManager(WebhookManager):
                     parsed_data["reply_to_text"] = reply.get("text") or reply.get("caption")
 
                 # Media — extract file_id for any attachment type
-                for media_type in ("document", "photo", "video", "voice", "audio", "sticker", "video_note", "animation"):
+                for media_type in (
+                    "document",
+                    "photo",
+                    "video",
+                    "voice",
+                    "audio",
+                    "sticker",
+                    "video_note",
+                    "animation",
+                ):
                     if media_type in message:
                         media = message[media_type]
                         # photo is a list of sizes, take the largest
@@ -730,7 +739,10 @@ class DefaultWebhookManager(WebhookManager):
                 # Location
                 if "location" in message:
                     loc = message["location"]
-                    parsed_data["location"] = {"lat": loc.get("latitude"), "lon": loc.get("longitude")}
+                    parsed_data["location"] = {
+                        "lat": loc.get("latitude"),
+                        "lon": loc.get("longitude"),
+                    }
 
                 # Forward info
                 if "forward_from" in message:

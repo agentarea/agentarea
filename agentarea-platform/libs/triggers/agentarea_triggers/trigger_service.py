@@ -1021,8 +1021,10 @@ class TriggerService:
                     top_level_text = trigger_data.get("text")
                     if top_level_text:
                         message_texts = [top_level_text]
-                query = "\n".join(message_texts) if message_texts else (
-                    trigger.description or f"Execute trigger {trigger.name}"
+                query = (
+                    "\n".join(message_texts)
+                    if message_texts
+                    else (trigger.description or f"Execute trigger {trigger.name}")
                 )
 
                 channel_origin = trigger_data.get("channel_origin")

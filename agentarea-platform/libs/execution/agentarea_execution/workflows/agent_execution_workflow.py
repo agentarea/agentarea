@@ -514,7 +514,8 @@ class AgentExecutionWorkflow:
             },
         }
         available_tools = [
-            t for t in available_tools
+            t
+            for t in available_tools
             if (t.get("function", {}).get("name") if t.get("type") == "function" else t.get("name"))
             not in {"completion", "task_complete"}
         ]
@@ -1386,9 +1387,7 @@ class AgentExecutionWorkflow:
             # This IS the agent's response — treat it as implicit completion.
             # Most agent frameworks (Claude Code, Cline, OpenCode) work this way:
             # text response = answer to user, no explicit completion tool needed.
-            workflow.logger.info(
-                "LLM responded with text only — treating as implicit completion"
-            )
+            workflow.logger.info("LLM responded with text only — treating as implicit completion")
             completion_call = ToolCall(
                 id=str(workflow.uuid4()),
                 function={
@@ -2306,9 +2305,7 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
-            workflow.logger.error(
-                f"Agent delegation to '{agent_name}' failed: {e}", exc_info=True
-            )
+            workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}", exc_info=True)
 
             self.event_manager.add_event(
                 EventTypes.AGENT_DELEGATION_FAILED,

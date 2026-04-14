@@ -45,7 +45,11 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
         "webhook_type": "slack",
         "default_methods": ["POST"],
         "credential_fields": [
-            {"key": "signing_secret", "label": "Signing Secret", "placeholder": "Your Slack app's signing secret"},
+            {
+                "key": "signing_secret",
+                "label": "Signing Secret",
+                "placeholder": "Your Slack app's signing secret",
+            },
         ],
     },
     {
@@ -58,7 +62,11 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
         "webhook_type": "discord",
         "default_methods": ["POST"],
         "credential_fields": [
-            {"key": "public_key", "label": "Application Public Key", "placeholder": "Your Discord app's public key"},
+            {
+                "key": "public_key",
+                "label": "Application Public Key",
+                "placeholder": "Your Discord app's public key",
+            },
         ],
     },
     {

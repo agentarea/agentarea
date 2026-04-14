@@ -55,9 +55,7 @@ def llm_response_completion(result: str = "Task completed") -> dict[str, Any]:
     }
 
 
-def llm_response_tool_call(
-    tool_name: str = "search", args: dict | None = None
-) -> dict[str, Any]:
+def llm_response_tool_call(tool_name: str = "search", args: dict | None = None) -> dict[str, Any]:
     """LLM calls a regular tool -> triggers another iteration."""
     return {
         "content": "",
@@ -127,9 +125,7 @@ class EventCapture:
                     continue
                 data = json.loads(ej)
                 capture.events.append(data)
-            return WorkflowEventsResult(
-                success=True, events_published=len(request.events_json)
-            )
+            return WorkflowEventsResult(success=True, events_published=len(request.events_json))
 
         return mock_publish_events
 

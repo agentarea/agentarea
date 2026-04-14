@@ -181,7 +181,9 @@ class AgentAreaWorker:
 
         trigger_activities = make_trigger_activities(dependencies)
         trigger_queue = getattr(settings, "triggers", None)
-        trigger_task_queue = getattr(trigger_queue, "TEMPORAL_SCHEDULE_TASK_QUEUE", "trigger-schedules")
+        trigger_task_queue = getattr(
+            trigger_queue, "TEMPORAL_SCHEDULE_TASK_QUEUE", "trigger-schedules"
+        )
 
         self.trigger_worker = Worker(
             self.client,
@@ -268,7 +270,9 @@ class AgentAreaWorker:
 
         # Start workers in background
         worker_task = asyncio.create_task(self.worker.run())
-        trigger_task = asyncio.create_task(self.trigger_worker.run()) if self.trigger_worker else None
+        trigger_task = (
+            asyncio.create_task(self.trigger_worker.run()) if self.trigger_worker else None
+        )
 
         # Wait for shutdown signal
         await self.worker_shutdown_event.wait()
