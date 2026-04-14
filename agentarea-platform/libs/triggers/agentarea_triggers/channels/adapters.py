@@ -1,0 +1,271 @@
+"""Composable channel adapter factories.
+
+Instead of one class per channel, adapters are assembled from:
+  - A formatter: (event, presentation) → str
+  - A sender:    (channel_config, message) → None
+
+Formatters are built from a markdown flavor config.
+Senders are built from HTTP endpoint config.
+Channels that need truly custom logic (Email/SMTP, Telegram retry)
+provide their own functions and compose normally.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Awaitable
+
+import httpx
+
+from . import ChannelAdapter, register_adapter
+
+if TYPE_CHECKING:
+    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+
+logger = logging.getLogger(__name__)
+
+
+# ── Markdown flavors ──────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class MarkdownFlavor:
+    """How to render bold/italic/quote + emoji map."""
+    bold: tuple[str, str]       # (open, close) e.g. ("*", "*") or ("**", "**")
+    italic: tuple[str, str]
+    quote: str                  # line prefix for quotes
+    emojis: dict[str, str]      # logical name → rendered emoji
+    escape: Callable[[str], str] | None = None  # optional text escaper
+
+
+SLACK_EMOJIS = {
+    "check": ":white_check_mark:",
+    "cross": ":x:",
+    "stop": ":no_entry_sign:",
+    "question": ":question:",
+    "hourglass": ":hourglass_flowing_sand:",
+    "wrench": ":wrench:",
+    "robot": ":robot_face:",
+    "info": ":information_source:",
+}
+
+UNICODE_EMOJIS = {
+    "check": "\u2705",
+    "cross": "\u274c",
+    "stop": "\u26d4",
+    "question": "\u2753",
+    "hourglass": "\u23f3",
+    "wrench": "\U0001f527",
+    "robot": "\U0001f916",
+    "info": "\u2139\ufe0f",
+}
+
+
+def _telegram_escape(text: str) -> str:
+    """Escape special chars for Telegram MarkdownV2."""
+    special = r"_*[]()~`>#+-=|{}.!\\"
+    return "".join("\\" + c if c in special else c for c in text)
+
+
+SLACK_MD = MarkdownFlavor(
+    bold=("*", "*"), italic=("_", "_"), quote=">",
+    emojis=SLACK_EMOJIS,
+)
+
+DISCORD_MD = MarkdownFlavor(
+    bold=("**", "**"), italic=("*", "*"), quote="> ",
+    emojis=UNICODE_EMOJIS,
+)
+
+TELEGRAM_MD = MarkdownFlavor(
+    bold=("*", "*"), italic=("_", "_"), quote=">",
+    emojis=UNICODE_EMOJIS, escape=_telegram_escape,
+)
+
+
+# ── Formatter factory ─────────────────────────────────────────────
+
+def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], str]:
+    """Build a format(event, presentation) function from a markdown flavor."""
+    b0, b1 = flavor.bold
+    i0, i1 = flavor.italic
+    e = flavor.emojis
+    esc = flavor.escape or (lambda t: t)
+
+    def fmt(event: dict[str, Any], presentation: str) -> str:
+        et = event.get("event_type", "")
+        d = event.get("data", {})
+
+        if et == "WorkflowCompleted":
+            return esc(str(d.get('result') or d.get('final_response') or ''))
+        if et == "WorkflowFailed":
+            return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
+        if et == "WorkflowCancelled":
+            return f"{e['stop']} Task was cancelled."
+        if et == "HumanApprovalRequested":
+            q = esc(str(d.get("question", "Approval needed")))
+            return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
+        if et == "HumanApprovalReceived":
+            return f"{e['check']} Approval received, continuing..."
+
+        if presentation == "concise":
+            if et == "WorkflowStarted":
+                return f"{e['hourglass']} Working on it..."
+            if et == "ToolCallStarted":
+                tool = d.get("tool_name", "tool")
+                return f"{e['wrench']} Using {i0}{esc(tool)}{i1}..."
+            if et in ("AgentDelegationStarted", "AgentDelegationCompleted"):
+                agent = d.get("agent_name", "sub-agent")
+                action = "Delegating to" if "Started" in et else "Received from"
+                return f"{e['robot']} {action} {i0}{esc(agent)}{i1}"
+
+        return f"{e['info']} {esc(et)}"
+
+    return fmt
+
+
+# ── HTTP sender factory ───────────────────────────────────────────
+
+@dataclass(frozen=True)
+class HttpSenderConfig:
+    """Config for building an HTTP-based send function."""
+    url: str | Callable[[dict[str, Any], str], str]
+    auth_fmt: str                # "Bearer {token}" or "Bot {token}"
+    build_payload: Callable[[dict[str, Any], str], dict[str, Any]]
+    max_length: int = 3000
+    truncation_suffix: str = "\n\n_(truncated)_"
+    validate_response: Callable[[httpx.Response], bool] = lambda r: r.is_success
+
+
+def make_http_sender(
+    cfg: HttpSenderConfig,
+    secret_manager: BaseSecretManager | None = None,
+) -> Callable[[dict[str, Any], str], Awaitable[None]]:
+    """Build an async send(channel_config, message) function."""
+
+    async def send(channel_config: dict[str, Any], message: str) -> None:
+        token = await _resolve_token(secret_manager, channel_config)
+        if not token:
+            return
+
+        if len(message) > cfg.max_length:
+            message = message[:cfg.max_length - len(cfg.truncation_suffix)] + cfg.truncation_suffix
+
+        url = cfg.url(channel_config, token) if callable(cfg.url) else cfg.url
+        payload = cfg.build_payload(channel_config, message)
+        auth = cfg.auth_fmt.format(token=token)
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    url, json=payload,
+                    headers={"Authorization": auth, "Content-Type": "application/json"},
+                )
+                if not cfg.validate_response(resp):
+                    logger.error("Channel send error %d: %s", resp.status_code, resp.text[:200])
+        except httpx.HTTPError as e:
+            logger.error("Channel send failed: %s", e)
+
+    return send
+
+
+async def _resolve_token(
+    secret_manager: BaseSecretManager | None,
+    channel_config: dict[str, Any],
+) -> str | None:
+    """Resolve bot token from the secret store. Shared by all HTTP senders."""
+    if not secret_manager:
+        logger.error("No secret_manager — cannot resolve channel credentials")
+        return None
+
+    trigger_id = channel_config.get("trigger_id")
+    if not trigger_id:
+        logger.error("No trigger_id in channel_config")
+        return None
+
+    ch_type = channel_config.get("type", "unknown")
+    secret_name = f"channel_cred:{ch_type}:{trigger_id}"
+    raw = await secret_manager.get_secret(secret_name)
+    if not raw:
+        logger.error("Credentials not found for %s trigger %s", ch_type, trigger_id)
+        return None
+
+    creds = json.loads(raw)
+    return creds.get("bot_token")
+
+
+# ── Channel definitions (just config) ─────────────────────────────
+
+SLACK_SENDER = HttpSenderConfig(
+    url="https://slack.com/api/chat.postMessage",
+    auth_fmt="Bearer {token}",
+    build_payload=lambda cfg, msg: {
+        "channel": cfg["channel_id"],
+        "text": msg,
+        "mrkdwn": True,
+        **({"thread_ts": cfg["thread_ts"]} if cfg.get("thread_ts") else {}),
+    },
+    max_length=3000,
+    validate_response=lambda r: r.is_success and r.json().get("ok", False),
+)
+
+DISCORD_SENDER = HttpSenderConfig(
+    url=lambda cfg, _token: f"https://discord.com/api/v10/channels/{cfg['channel_id']}/messages",
+    auth_fmt="Bot {token}",
+    build_payload=lambda cfg, msg: {
+        "content": msg,
+        **({"message_reference": {"message_id": cfg["message_id"]}} if cfg.get("message_id") else {}),
+    },
+    max_length=2000,
+)
+
+TELEGRAM_SENDER = HttpSenderConfig(
+    url=lambda _cfg, token: f"https://api.telegram.org/bot{token}/sendMessage",
+    auth_fmt="",  # token is in URL, not header
+    build_payload=lambda cfg, msg: {
+        "chat_id": cfg["chat_id"],
+        "text": msg,
+        "parse_mode": "MarkdownV2",
+        **({"reply_to_message_id": cfg["message_id"]} if cfg.get("message_id") else {}),
+    },
+    max_length=4096,
+    truncation_suffix="\n\n_\\(truncated\\)_",
+)
+
+
+# ── Adapter wrapper ───────────────────────────────────────────────
+
+class _ComposedAdapter:
+    """Wraps a (formatter, sender) pair into the ChannelAdapter protocol."""
+
+    def __init__(
+        self,
+        formatter: Callable[[dict[str, Any], str], str],
+        sender: Callable[[dict[str, Any], str], Awaitable[None]],
+    ):
+        self._format = formatter
+        self._send = sender
+
+    def format(self, event: dict[str, Any], presentation: str) -> str:
+        return self._format(event, presentation)
+
+    async def send(self, channel_config: dict[str, Any], message: str) -> None:
+        await self._send(channel_config, message)
+
+
+# ── Registration ──────────────────────────────────────────────────
+
+def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> None:
+    """Register all HTTP-based channel adapters."""
+    channels = {
+        "slack": (SLACK_MD, SLACK_SENDER),
+        "discord": (DISCORD_MD, DISCORD_SENDER),
+        "telegram": (TELEGRAM_MD, TELEGRAM_SENDER),
+    }
+    for name, (flavor, sender_cfg) in channels.items():
+        adapter = _ComposedAdapter(
+            formatter=make_formatter(flavor),
+            sender=make_http_sender(sender_cfg, secret_manager),
+        )
+        register_adapter(name, adapter)

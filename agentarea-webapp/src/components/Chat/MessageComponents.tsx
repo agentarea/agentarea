@@ -5,8 +5,10 @@ import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
 import LLMResponseMessage from "./componets/LLMResponseMessage";
 import SystemMessage from "./componets/SystemMessage";
+import ToolCallGroupMessage from "./componets/ToolCallGroupMessage";
 import ToolCallStartedMessage from "./componets/ToolCallStartedMessage";
 import ToolResultMessage from "./componets/ToolResultMessage";
+import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import WorkflowResultMessage from "./componets/WorkflowResultMessage";
 import { A2UIAction, MessageComponentType } from "./types";
 
@@ -47,6 +49,8 @@ export const MessageRenderer: React.FC<{
       );
     case "tool_result":
       return <ToolResultMessage data={message.data} key={message.data.id} />;
+    case "tool_call_group":
+      return <ToolCallGroupMessage data={message.data} key={message.data.id} />;
     case "error":
       return <ErrorMessage data={message.data} key={message.data.id} />;
     case "workflow_result":
@@ -76,6 +80,15 @@ export const MessageRenderer: React.FC<{
       return (
         <ApprovalRequestMessage
           data={{...message.data, _onResolve: onResolveEscalation}}
+          key={message.data.id}
+        />
+      );
+    case "user_message":
+      return (
+        <UserMessageComponent
+          id={message.data.id}
+          content={message.data.content}
+          timestamp={message.data.timestamp}
           key={message.data.id}
         />
       );

@@ -1,10 +1,119 @@
-"""Channel event type registry.
+"""Channel event type registry and trigger catalog.
 
 Maps each webhook channel to its supported event types.
 Used for event filtering on triggers and for the frontend event selector.
+
+Also provides TRIGGER_CATALOG — the single source of truth for available
+trigger types, served to the frontend via GET /triggers/catalog.
 """
 
-# Channel event type registry
+from typing import Any
+
+
+# ── Trigger catalog ───────────────────────────────────────────────
+# Each entry defines a trigger type available in the UI.
+# Frontend fetches this via API — never hardcodes trigger types.
+
+TRIGGER_CATALOG: list[dict[str, Any]] = [
+    {
+        "id": "cron",
+        "name": "Cron",
+        "icon": "\u23f0",
+        "description": "Run your agent on a schedule",
+        "kind": "schedule",
+        "backend_type": "cron",
+    },
+    {
+        "id": "telegram",
+        "name": "Telegram",
+        "icon": "\u2708\ufe0f",
+        "description": "Connect a Telegram bot to your agent",
+        "kind": "messaging",
+        "backend_type": "webhook",
+        "webhook_type": "telegram",
+        "default_methods": ["POST"],
+        "credential_fields": [
+            {"key": "bot_token", "label": "Bot Token", "placeholder": "Token from @BotFather"},
+        ],
+    },
+    {
+        "id": "slack",
+        "name": "Slack",
+        "icon": "\U0001f4ac",
+        "description": "Receive Slack messages and events",
+        "kind": "messaging",
+        "backend_type": "webhook",
+        "webhook_type": "slack",
+        "default_methods": ["POST"],
+        "credential_fields": [
+            {"key": "signing_secret", "label": "Signing Secret", "placeholder": "Your Slack app's signing secret"},
+        ],
+    },
+    {
+        "id": "discord",
+        "name": "Discord",
+        "icon": "\U0001f3ae",
+        "description": "Receive Discord messages and interactions",
+        "kind": "messaging",
+        "backend_type": "webhook",
+        "webhook_type": "discord",
+        "default_methods": ["POST"],
+        "credential_fields": [
+            {"key": "public_key", "label": "Application Public Key", "placeholder": "Your Discord app's public key"},
+        ],
+    },
+    {
+        "id": "email",
+        "name": "Email",
+        "icon": "\U0001f4e7",
+        "description": "Trigger agent via email",
+        "kind": "messaging",
+        "backend_type": "webhook",
+        "webhook_type": "gmail",
+        "default_methods": ["POST"],
+    },
+    {
+        "id": "webhook",
+        "name": "Webhook",
+        "icon": "\U0001f517",
+        "description": "Generic HTTP webhook for any integration",
+        "kind": "event",
+        "backend_type": "webhook",
+        "webhook_type": "generic",
+        "default_methods": ["POST"],
+    },
+]
+
+
+def get_trigger_catalog() -> list[dict[str, Any]]:
+    """Return the full trigger catalog with events merged in."""
+    catalog = []
+    for entry in TRIGGER_CATALOG:
+        item = {**entry}
+        wt = entry.get("webhook_type")
+        if wt and wt in CHANNEL_EVENTS:
+            item["events"] = CHANNEL_EVENTS[wt]
+        catalog.append(item)
+    return catalog
+
+
+def get_catalog_entry(trigger_id: str) -> dict[str, Any] | None:
+    """Look up a catalog entry by ID."""
+    for entry in TRIGGER_CATALOG:
+        if entry["id"] == trigger_id:
+            return entry
+    return None
+
+
+def get_catalog_entry_by_webhook_type(webhook_type: str) -> dict[str, Any] | None:
+    """Look up a catalog entry by webhook_type."""
+    for entry in TRIGGER_CATALOG:
+        if entry.get("webhook_type") == webhook_type:
+            return entry
+    return None
+
+
+# ── Channel event type registry ───────────────────────────────────
 # Each channel maps to a list of supported event type strings.
 # When a trigger has event_types configured, only matching events execute.
 # Empty event_types means accept all events.

@@ -497,7 +497,11 @@ class TriggerService:
             trigger.record_execution_failure()
 
         # Update trigger in database
-        await self.trigger_repository.update(trigger)
+        await self.trigger_repository.update_execution_tracking(
+            trigger_id,
+            last_execution_at=trigger.last_execution_at,
+            consecutive_failures=trigger.consecutive_failures,
+        )
 
         # Check if trigger should be disabled due to consecutive failures
         if trigger.should_disable_due_to_failures():
@@ -556,7 +560,11 @@ class TriggerService:
         trigger.updated_at = datetime.utcnow()
 
         # Update in database
-        await self.trigger_repository.update(trigger)
+        await self.trigger_repository.update_execution_tracking(
+            trigger_id,
+            last_execution_at=trigger.last_execution_at,
+            consecutive_failures=0,
+        )
 
         logger.info(f"Reset failure count for trigger {trigger_id}")
         return True
@@ -1005,14 +1013,30 @@ class TriggerService:
             # Create task from trigger
             task_id = None
             if self.task_service:
+                # Extract message text for the task query.
+                # Priority: events (poll-based) > top-level text (webhook-parsed) > fallback
+                events = trigger_data.get("events", [])
+                message_texts = [e.get("text") for e in events if e.get("text")]
+                if not message_texts:
+                    top_level_text = trigger_data.get("text")
+                    if top_level_text:
+                        message_texts = [top_level_text]
+                query = "\n".join(message_texts) if message_texts else (
+                    trigger.description or f"Execute trigger {trigger.name}"
+                )
+
+                channel_origin = trigger_data.get("channel_origin")
+
                 # Build task parameters
                 task_params = await self._build_task_parameters(trigger, trigger_data)
+                if channel_origin:
+                    task_params["channel_origin"] = channel_origin
 
                 # Create task
                 task = await self.task_service.create_task_from_params(
                     title=f"Trigger: {trigger.name}",
-                    description=trigger.description or f"Execution of trigger {trigger.name}",
-                    query=trigger.description or f"Execute trigger {trigger.name}",
+                    description=query,
+                    query=query,
                     user_id=trigger.created_by,
                     workspace_id=trigger.workspace_id,
                     agent_id=trigger.agent_id,
@@ -1021,6 +1045,10 @@ class TriggerService:
 
                 task_id = task.id
                 logger.info(f"Created task {task_id} from trigger {trigger_id}")
+
+                # Submit task for workflow execution
+                await self.task_service.task_manager.submit_task(task)
+                logger.info(f"Submitted task {task_id} for workflow execution")
             else:
                 logger.warning(
                     f"Task service not available, skipping task creation for trigger {trigger_id}"
@@ -1036,7 +1064,11 @@ class TriggerService:
                     trigger_id, execution_time_ms, task_id, trigger_data
                 )
                 trigger.record_execution_success()
-                await self.trigger_repository.update(trigger)
+                await self.trigger_repository.update_execution_tracking(
+                    trigger_id,
+                    last_execution_at=trigger.last_execution_at,
+                    consecutive_failures=trigger.consecutive_failures,
+                )
             except Exception as rec_err:
                 logger.warning(
                     f"Failed to record execution history (task was created successfully): {rec_err}"
@@ -1058,7 +1090,11 @@ class TriggerService:
                     trigger_id, str(e), trigger_data, execution_time_ms
                 )
                 trigger.record_execution_failure()
-                await self.trigger_repository.update(trigger)
+                await self.trigger_repository.update_execution_tracking(
+                    trigger_id,
+                    last_execution_at=trigger.last_execution_at,
+                    consecutive_failures=trigger.consecutive_failures,
+                )
 
                 if trigger.should_disable_due_to_failures():
                     logger.warning(f"Disabling trigger {trigger_id} due to consecutive failures")

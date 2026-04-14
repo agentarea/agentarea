@@ -5,7 +5,7 @@
  */
 
 import { parseEventToMessage, shouldDisplayEvent } from "../EventParser";
-import { LLMChunkData, MessageComponentType } from "../types";
+import { LLMChunkData, MessageComponentType, ToolCallGroupData, ToolResultData, ToolCallStartedData } from "../types";
 import { normalizeEventType } from "./eventNormalizer";
 
 interface RawEvent {
@@ -136,6 +136,30 @@ export function processEventsToMessages(
       continue;
     }
 
+    // Deduplicate consecutive errors (e.g. Temporal workflow retries)
+    if (eventType === "WorkflowFailed" || eventType === "task_failed") {
+      const message = parseEventToMessage(eventType, eventData);
+      if (message && message.type === "error") {
+        const lastMsg = messages[messages.length - 1];
+        if (
+          lastMsg?.type === "error" &&
+          (lastMsg.data as any).error === (message.data as any).error
+        ) {
+          // Same error repeated — skip duplicate
+          continue;
+        }
+      }
+      if (message) messages.push(message);
+      continue;
+    }
+
+    // Skip WorkflowStarted for retried workflows (preceding a duplicate failure)
+    if (eventType === "WorkflowStarted") {
+      const message = parseEventToMessage(eventType, eventData);
+      if (message) messages.push(message);
+      continue;
+    }
+
     // Default: parse and add
     const message = parseEventToMessage(eventType, eventData);
     if (message) {
@@ -148,5 +172,89 @@ export function processEventsToMessages(
     messages.push(pendingChunk);
   }
 
-  return messages;
+  return groupToolMessages(messages);
+}
+
+/**
+ * Merge consecutive tool_result and tool_call_started messages into tool_call_group messages.
+ * The "completion" tool is excluded from grouping (it's the final answer).
+ * A group ends when the next message is not a tool_result or tool_call_started.
+ */
+function groupToolMessages(messages: MessageComponentType[]): MessageComponentType[] {
+  const result: MessageComponentType[] = [];
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+
+    if (msg.type !== "tool_result" && msg.type !== "tool_call_started") {
+      result.push(msg);
+      continue;
+    }
+
+    // Check if this is the "completion" tool — never group it
+    const toolName = (msg.data as ToolResultData | ToolCallStartedData).tool_name;
+    if (toolName === "completion") {
+      result.push(msg);
+      continue;
+    }
+
+    // Start a new group, collecting all consecutive tool messages
+    const groupTools: ToolCallGroupData["tools"] = [];
+    let groupId = msg.data.id;
+    let groupTimestamp = msg.data.timestamp;
+    const agentId = msg.data.agent_id;
+
+    let j = i;
+    while (j < messages.length) {
+      const cur = messages[j];
+      if (cur.type !== "tool_result" && cur.type !== "tool_call_started") break;
+
+      const curToolName = (cur.data as ToolResultData | ToolCallStartedData).tool_name;
+      if (curToolName === "completion") break;
+
+      if (cur.type === "tool_result") {
+        const d = cur.data as ToolResultData;
+        groupTools.push({
+          tool_name: d.tool_name,
+          tool_call_id: d.tool_call_id,
+          result: d.result,
+          success: d.success,
+          arguments: d.arguments,
+          execution_time: d.execution_time,
+          pending: false,
+        });
+      } else {
+        // tool_call_started
+        const d = cur.data as ToolCallStartedData;
+        groupTools.push({
+          tool_name: d.tool_name,
+          tool_call_id: d.tool_call_id,
+          result: null,
+          success: true,
+          arguments: d.arguments,
+          pending: true,
+        });
+      }
+      j++;
+    }
+
+    // Only create a group if there are 2+ tools; otherwise keep single message as-is
+    if (groupTools.length >= 2) {
+      result.push({
+        type: "tool_call_group",
+        data: {
+          id: groupId,
+          timestamp: groupTimestamp,
+          agent_id: agentId,
+          event_type: "tool_call_group",
+          tools: groupTools,
+        },
+      });
+      i = j - 1; // skip consumed messages (loop will i++)
+    } else {
+      result.push(msg);
+    }
+  }
+
+  return result;
 }
