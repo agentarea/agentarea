@@ -163,10 +163,11 @@ services:
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
     command: /data --console-enable
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   db:
     image: postgres:18
@@ -345,17 +346,13 @@ services:
         condition: service_healthy
     environment:
       - RCLONE_CONFIG_RUSTFS_TYPE=s3
-      - RCLONE_CONFIG_RUSTFS_PROVIDER=Minio
+      - RCLONE_CONFIG_RUSTFS_PROVIDER=Rustfs
       - RCLONE_CONFIG_RUSTFS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - RCLONE_CONFIG_RUSTFS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
       - RCLONE_CONFIG_RUSTFS_ACL=private
-    command: >
-      sh -c "
-        rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true &&
-        rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true &&
-        echo 'Buckets created successfully'
-      "
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true && echo 'Buckets created successfully'"]
     networks:
       - default
 
