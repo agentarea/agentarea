@@ -68,6 +68,11 @@ jobs:
 
   version-check:
     runs-on: ubuntu-latest
+    # Only run when Docker builds would run: on main, release PRs, or when called as reusable workflow
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      github.event_name == 'workflow_call'
     steps:
       - uses: actions/checkout@v4
       
