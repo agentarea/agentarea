@@ -44,19 +44,19 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
-        # Wait for MinIO to be ready
-        {{- if .Values.minio.enabled }}
-        - name: wait-for-minio
+        # Wait for RustFS to be ready
+        {{- if .Values.rustfs.enabled }}
+        - name: wait-for-rustfs
           image: curlimages/curl:latest
           command:
             - sh
             - -c
             - |
-              until curl -f http://{{ include "agentarea.minio.host" . }}:9000/minio/health/live; do
-                echo "Waiting for MinIO to be ready..."
+              until curl -f http://{{ include "agentarea.rustfs.host" . }}:9000/minio/health/live; do
+                echo "Waiting for RustFS to be ready..."
                 sleep 2
               done
-              echo "MinIO is ready!"
+              echo "RustFS is ready!"
         {{- end }}
       containers:
         - name: bootstrap
@@ -65,20 +65,20 @@ spec:
           env:
             {{- include "agentarea.databaseJobs.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.databaseJobs.envs" . | nindent 12 }}
-            {{- if .Values.minio.enabled }}
-            # MinIO configuration
+            {{- if .Values.rustfs.enabled }}
+            # RustFS configuration
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-user
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-password
             - name: MINIO_ENDPOINT
-              value: "http://{{ include "agentarea.minio.host" . }}:9000"
+              value: "http://{{ include "agentarea.rustfs.host" . }}:9000"
             {{- end }}
 
             # Admin user configuration

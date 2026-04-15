@@ -8,7 +8,7 @@ from code.populate_mcp_providers import main as populate_mcp_providers_main
 from code.populate_provider_configs import main as populate_provider_configs_main
 from code.populate_default_agent import main as populate_default_agent_main
 from code.populate_skills import main as populate_skills_main
-from code.minio_setup import minio_setup
+from code.rustfs_setup import rustfs_setup
 
 
 def main():
@@ -18,9 +18,9 @@ def main():
     print("=" * 50)
 
     try:
-        print("1. Setting up MinIO...")
-        minio_setup()
-        print("✓ MinIO setup completed")
+        print("1. Setting up RustFS...")
+        rustfs_setup()
+        print("✓ RustFS setup completed")
 
         print("\n2. Populating provider specs and model specs (new architecture)...")
         populate_providers_new_arch_main()

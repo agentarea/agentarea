@@ -15,7 +15,7 @@ helm install agentarea agentarea/agentarea \
 
 - Kubernetes 1.20+
 - Helm 3.8+
-- PV provisioner for PostgreSQL/MinIO persistence (if enabled)
+- PV provisioner for PostgreSQL/RustFS persistence (if enabled)
 
 ## Installing with external services
 
@@ -26,7 +26,7 @@ postgresql:
   enabled: false
 redis:
   enabled: false
-minio:
+rustfs:
   enabled: false
 
 global:
@@ -66,7 +66,7 @@ The following table lists configurable parameters of the chart and their default
 | global.serviceAccountName | string | `"agentarea"` |  |
 | global.secrets.postgresql | string | `"agentarea-postgresql-secret"` |  |
 | global.secrets.redis | string | `"agentarea-redis-secret"` |  |
-| global.secrets.minio | string | `"agentarea-minio-secret"` |  |
+| global.secrets.rustfs | string | `"agentarea-rustfs-secret"` |  |
 | global.secrets.application | string | `"agentarea-app-secrets"` |  |
 | global.database.secretName | string | `"agentarea-postgresql-secret"` |  |
 | global.database.host | string | `""` |  |
@@ -84,7 +84,7 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.ssl | bool | `false` |  |
 | global.redis.maxConnections | int | `50` |  |
 | global.redis.connectionTimeout | string | `"5s"` |  |
-| global.storage.type | string | `"minio"` |  |
+| global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
@@ -93,8 +93,8 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.s3.sessionToken | string | `""` |  |
 | global.storage.gcs.projectId | string | `""` |  |
 | global.storage.gcs.credentials | string | `""` |  |
-| global.storage.minio.accessKey | string | `""` |  |
-| global.storage.minio.secretKey | string | `""` |  |
+| global.storage.rustfs.accessKey | string | `""` |  |
+| global.storage.rustfs.secretKey | string | `""` |  |
 | global.temporal.host | string | `""` |  |
 | global.temporal.port | int | `7233` |  |
 | global.temporal.namespace | string | `"default"` |  |
@@ -310,17 +310,17 @@ The following table lists configurable parameters of the chart and their default
 | redis.resources.limits.memory | string | `"256Mi"` |  |
 | redis.resources.requests.cpu | string | `"100m"` |  |
 | redis.resources.requests.memory | string | `"128Mi"` |  |
-| minio.enabled | bool | `true` |  |
-| minio.image.repository | string | `"minio/minio"` |  |
-| minio.image.tag | string | `"latest"` |  |
-| minio.auth.existingSecret | string | `"agentarea-minio-secret"` |  |
-| minio.defaultBuckets | string | `"agentarea-documents"` |  |
-| minio.resources.limits.cpu | string | `"500m"` |  |
-| minio.resources.limits.memory | string | `"512Mi"` |  |
-| minio.resources.requests.cpu | string | `"250m"` |  |
-| minio.resources.requests.memory | string | `"256Mi"` |  |
-| minio.persistence.enabled | bool | `true` |  |
-| minio.persistence.size | string | `"10Gi"` |  |
+| rustfs.enabled | bool | `true` |  |
+| rustfs.image.repository | string | `"rustfs/rustfs"` |  |
+| rustfs.image.tag | string | `"latest"` |  |
+| rustfs.auth.existingSecret | string | `"agentarea-rustfs-secret"` |  |
+| rustfs.defaultBuckets | string | `"agentarea-documents"` |  |
+| rustfs.resources.limits.cpu | string | `"500m"` |  |
+| rustfs.resources.limits.memory | string | `"512Mi"` |  |
+| rustfs.resources.requests.cpu | string | `"250m"` |  |
+| rustfs.resources.requests.memory | string | `"256Mi"` |  |
+| rustfs.persistence.enabled | bool | `true` |  |
+| rustfs.persistence.size | string | `"10Gi"` |  |
 | jobs.bootstrap.enabled | bool | `false` |  |
 | jobs.bootstrap.image.repository | string | `"agentarea/agentarea-bootstrap"` |  |
 | jobs.bootstrap.image.tag | string | `"latest"` |  |
@@ -393,7 +393,7 @@ kubectl create secret generic agentarea-postgresql-secret \
 kubectl create secret generic agentarea-redis-secret \
   --from-literal=redis-password=<password>
 
-kubectl create secret generic agentarea-minio-secret \
+kubectl create secret generic agentarea-rustfs-secret \
   --from-literal=root-user=<access-key> \
   --from-literal=root-password=<secret-key>
 ```
