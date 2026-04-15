@@ -156,6 +156,8 @@ services:
         condition: service_healthy
       rustfs:
         condition: service_healthy
+      rclone-init:
+        condition: service_completed_successfully
       app_migrations:
         condition: service_completed_successfully
       # infisical:
@@ -442,11 +444,34 @@ services:
     restart: unless-stopped
     command: ["agentarea-worker", "dev"]
 
-  agentarea-event-service:
+  # Rclone bucket initialization
+  rclone-init:
+    image: rclone/rclone:latest
+    container_name: agentarea-rclone-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      - RCLONE_CONFIG_RUSTFS_TYPE=s3
+      - RCLONE_CONFIG_RUSTFS_PROVIDER=Minio
+      - RCLONE_CONFIG_RUSTFS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
+      - RCLONE_CONFIG_RUSTFS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
+      - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
+      - RCLONE_CONFIG_RUSTFS_ACL=private
+    command: >
+      sh -c "
+        rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true &&
+        rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true &&
+        echo 'Buckets created successfully'
+      "
+    networks:
+      - default
+
+  agentarea-events:
     build:
       context: agentarea-event-service
       dockerfile: Dockerfile.dev
-    container_name: agentarea-event-service
+    container_name: agentarea-events
     depends_on:
       db:
         condition: service_healthy
@@ -590,8 +615,8 @@ services:
 
 volumes:
   postgres_data:
-  rustfs_data:
   valkey_data:
+  rustfs_data:
 
 networks:
   mcp-network:
