@@ -77,8 +77,8 @@ redis:
         cpu: 100m
         memory: 128Mi
 
-# MinIO - keep existing PVC size
-minio:
+# RustFS - keep existing PVC size
+rustfs:
   resources:
     limits:
       cpu: 250m

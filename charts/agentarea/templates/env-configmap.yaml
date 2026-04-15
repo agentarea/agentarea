@@ -28,7 +28,7 @@ metadata:
 data:
   {{- include "agentarea.redis.configVars" . | nindent 2 }}
 ---
-{{- if .Values.minio.enabled }}
+{{- if .Values.rustfs.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

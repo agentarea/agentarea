@@ -2,7 +2,7 @@
 
 This module handles the initial setup and configuration of the AgentArea platform, including:
 
-1. **MinIO Setup** - Creates necessary S3-compatible storage buckets
+1. **RustFS Setup** - Creates necessary S3-compatible storage buckets
 2. **Infisical Setup** - Creates Infisical database and configures secrets management system
 3. **LLM Providers** - Populates the database with supported LLM providers and models
 
@@ -16,7 +16,7 @@ This module handles the initial setup and configuration of the AgentArea platfor
 
 - Docker and Docker Compose
 - PostgreSQL database (configured in docker-compose)
-- MinIO instance (configured in docker-compose)
+- RustFS instance (configured in docker-compose)
 - Infisical instance (configured in docker-compose)
 
 ## Environment Variables
@@ -35,11 +35,11 @@ DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432
 
 **Note**: The bootstrap process will automatically create an `infisical` database in the same PostgreSQL instance.
 
-### MinIO Configuration
+### RustFS Configuration
 ```bash
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin123
-MINIO_ENDPOINT=http://minio:9000
+RUSTFS_ACCESS_KEY=minioadmin
+RUSTFS_SECRET_KEY=minioadmin123
+MINIO_ENDPOINT=http://rustfs:9000
 DOCUMENTS_BUCKET=documents
 ```
 
@@ -66,9 +66,9 @@ docker compose -f docker-compose.dev.yaml up -d
 ```
 
 The bootstrap service will:
-1. Wait for database and MinIO to be healthy
+1. Wait for database and RustFS to be healthy
 2. Wait for database migrations to complete
-3. Set up MinIO buckets
+3. Set up RustFS buckets
 4. Create Infisical database (if it doesn't exist)
 5. Configure Infisical
 6. Populate LLM providers from the YAML configuration
@@ -133,7 +133,7 @@ When adding new providers to the YAML file:
 ### `code/` Directory
 Contains the implementation modules:
 - `populate_llm_providers.py` - Database population logic with UUID-based upserts
-- `minio_setup.py` - MinIO bucket creation and configuration
+- `rustfs_setup.py` - RustFS bucket creation and configuration
 - `infisical_setup.py` - Infisical bootstrap and setup
 
 ### `scripts/` Directory
@@ -157,10 +157,10 @@ The module uses the following Python packages:
    - Check DATABASE_URL environment variable
    - Verify database credentials
 
-2. **MinIO Setup Failed**
-   - Ensure MinIO service is healthy
-   - Check MinIO credentials and endpoint
-   - Verify MinIO client (`mc`) is installed
+2. **RustFS Setup Failed**
+   - Ensure RustFS service is healthy
+   - Check RustFS credentials and endpoint
+   - Verify S3 client (`mc`) is installed
 
 3. **Infisical Setup Failed**
    - Ensure Infisical service is running

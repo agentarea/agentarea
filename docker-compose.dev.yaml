@@ -11,11 +11,11 @@ services:
     restart: always
     environment:
       # S3 settings
-      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
-      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
-      - AWS_REGION=${MINIO_REGION}
+      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
+      - AWS_REGION=${RUSTFS_REGION}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_ENDPOINT_URL=http://rustfs:9000
       # Database settings
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -56,7 +56,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
+      rustfs:
         condition: service_healthy
       valkey:
         condition: service_started
@@ -82,11 +82,11 @@ services:
     environment:
       ## Have to add it for now
       # S3 settings
-      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
-      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
-      - AWS_REGION=${MINIO_REGION}
+      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
+      - AWS_REGION=${RUSTFS_REGION}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_ENDPOINT_URL=http://rustfs:9000
       # Only database settings
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -134,9 +134,9 @@ services:
       - ./agentarea-bootstrap/data:/app/llm
     environment:
       - SECRET_MANAGER_TYPE=${SECRET_MANAGER_TYPE:-database}
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
-      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ROOT_USER=${RUSTFS_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${RUSTFS_SECRET_KEY}
+      - MINIO_ENDPOINT=http://rustfs:9000
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-your-secure-password}
       - ORGANIZATION_NAME=${ORGANIZATION_NAME:-your-org-name}
@@ -154,7 +154,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
+      rustfs:
         condition: service_healthy
       app_migrations:
         condition: service_completed_successfully
@@ -195,19 +195,19 @@ services:
   #     - auth-network
   #   command: sh -c "npx pnpm dev"
 
-  minio:
-    image: minio/minio:latest
+  rustfs:
+    image: rustfs/rustfs:latest
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
     environment:
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
-    command: server /data --console-address ":9001"
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+    command: /data --console-enable
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -590,7 +590,7 @@ services:
 
 volumes:
   postgres_data:
-  minio_data:
+  rustfs_data:
   valkey_data:
 
 networks:

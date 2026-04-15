@@ -15,7 +15,7 @@ helm install agentarea agentarea/agentarea \
 
 - Kubernetes 1.20+
 - Helm 3.8+
-- PV provisioner for PostgreSQL/MinIO persistence (if enabled)
+- PV provisioner for PostgreSQL/RustFS persistence (if enabled)
 
 ## Installing with external services
 
@@ -26,7 +26,7 @@ postgresql:
   enabled: false
 redis:
   enabled: false
-minio:
+rustfs:
   enabled: false
 
 global:
@@ -63,7 +63,7 @@ kubectl create secret generic agentarea-postgresql-secret \
 kubectl create secret generic agentarea-redis-secret \
   --from-literal=redis-password=<password>
 
-kubectl create secret generic agentarea-minio-secret \
+kubectl create secret generic agentarea-rustfs-secret \
   --from-literal=root-user=<access-key> \
   --from-literal=root-password=<secret-key>
 ```

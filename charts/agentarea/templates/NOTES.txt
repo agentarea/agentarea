@@ -18,8 +18,8 @@ Components deployed:
 {{- if .Values.redis.enabled }}
 ✓ Redis ({{ .Release.Name }}-redis-master:6379)
 {{- end }}
-{{- if .Values.minio.enabled }}
-✓ MinIO ({{ .Release.Name }}-minio:9000)
+{{- if .Values.rustfs.enabled }}
+✓ RustFS ({{ .Release.Name }}-rustfs:9000)
 {{- end }}
 {{- if .Values.kratos.enabled }}
 ✓ Kratos Public ({{ include "agentarea.fullname" . }}-kratos-public:4433)

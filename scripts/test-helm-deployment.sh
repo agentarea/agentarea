@@ -130,7 +130,7 @@ print_header "Test 1: Checking Deployments"
 DEPLOYMENTS=(
     "agentarea-postgresql"
     "agentarea-redis"
-    "agentarea-minio"
+    "agentarea-rustfs"
     "agentarea-temporal"
     "agentarea-kratos"
     "agentarea-backend"
@@ -159,7 +159,7 @@ print_header "Test 2: Checking Services"
 SERVICES=(
     "agentarea-postgresql"
     "agentarea-redis"
-    "agentarea-minio"
+    "agentarea-rustfs"
     "agentarea-temporal"
     "agentarea-kratos-public"
     "agentarea-kratos-admin"
@@ -195,14 +195,13 @@ else
     print_error "Redis pod not found"
 fi
 
-# Test 5: Check MinIO connectivity
-print_header "Test 5: Checking MinIO Connectivity"
-print_info "Checking MinIO health..."
-POD=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=minio -o jsonpath='{.items[0].metadata.name}')
-if [ ! -z "$POD" ]; then
-    kubectl exec "$POD" -n "$NAMESPACE" -- curl -s http://localhost:9000/minio/health/live > /dev/null && print_success "MinIO is ready" || print_error "MinIO is not ready"
+# Test 5: Check RustFS connectivity
+print_header "Test 5: Checking RustFS Connectivity"
+print_info "Checking RustFS health..."
+if POD=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/component=rustfs -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); then
+    kubectl exec "$POD" -n "$NAMESPACE" -- curl -s http://localhost:9000/minio/health/live > /dev/null && print_success "RustFS is ready" || print_error "RustFS is not ready"
 else
-    print_error "MinIO pod not found"
+    print_error "RustFS pod not found"
 fi
 
 # Test 6: Check Temporal connectivity
@@ -268,4 +267,4 @@ echo -e "  ${YELLOW}API (8000):${NC}     kubectl port-forward -n $NAMESPACE svc/
 echo -e "  ${YELLOW}Kratos Public (4433):${NC}  kubectl port-forward -n $NAMESPACE svc/agentarea-kratos-public 4433:4433"
 echo -e "  ${YELLOW}Kratos Admin (4434):${NC}   kubectl port-forward -n $NAMESPACE svc/agentarea-kratos-admin 4434:4434"
 echo -e "  ${YELLOW}Temporal (7233):${NC} kubectl port-forward -n $NAMESPACE svc/agentarea-temporal 7233:7233"
-echo -e "  ${YELLOW}MinIO (9001):${NC}   kubectl port-forward -n $NAMESPACE svc/agentarea-minio 9001:9001"
+echo -e "  ${YELLOW}RustFS (9001):${NC}   kubectl port-forward -n $NAMESPACE svc/agentarea-rustfs 9001:9001"

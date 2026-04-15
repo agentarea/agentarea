@@ -4,7 +4,7 @@
 
 ### Question: "Is PostgreSQL installed? How is initialization order handled?"
 
-**Answer**: Yes, PostgreSQL (and Redis, MinIO) are installed as Helm chart dependencies. Here's how we ensure proper initialization order:
+**Answer**: Yes, PostgreSQL (and Redis, RustFS) are installed as Helm chart dependencies. Here's how we ensure proper initialization order:
 
 ## Installation Sequence
 
@@ -13,7 +13,7 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Hook Weight -1 (Pre-Install/Pre-Upgrade)               │
-│ • Secrets (PostgreSQL, Redis, MinIO, App)              │
+│ • Secrets (PostgreSQL, Redis, RustFS, App)              │
 │ • ConfigMaps (centralized env-configmap)               │
 └─────────────────────────────────────────────────────────┘
                          ↓
@@ -21,7 +21,7 @@
 │ Default Weight 0 (Normal Installation)                  │
 │ • PostgreSQL (Bitnami chart - has readiness probes)    │
 │ • Redis (Bitnami chart - has readiness probes)         │
-│ • MinIO (Bitnami chart - has readiness probes)         │
+│ • RustFS (custom template - has readiness probes)      │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -109,13 +109,13 @@ initContainers:
   - name: wait-for-postgres
     # Waits for PostgreSQL to accept connections
 
-  - name: wait-for-minio
-    # Waits for MinIO health endpoint to respond
+  - name: wait-for-rustfs
+    # Waits for RustFS health endpoint to respond
 ```
 
 ### 4. Bitnami Charts Have Built-in Readiness
 
-The Bitnami PostgreSQL, Redis, and MinIO charts already include:
+The Bitnami PostgreSQL and Redis charts already include:
 - **Readiness Probes**: Pods won't be marked "Ready" until they can accept connections
 - **Liveness Probes**: Pods restart if they become unhealthy
 - **StatefulSets**: Ordered deployment for databases
@@ -124,13 +124,13 @@ The Bitnami PostgreSQL, Redis, and MinIO charts already include:
 1. ✅ Helm hooks for jobs (migration, bootstrap)
 2. ✅ Hook weights (-1, 5, 10)
 3. ✅ Init containers with active waiting
-4. ✅ Bitnami charts for PostgreSQL, Redis, MinIO
+4. ✅ Bitnami charts for PostgreSQL, Redis
 5. ✅ Centralized ConfigMap with lifecycle hooks
 
 ## Why This Works
 
 ### 1. Secrets Created First (Weight -1)
-PostgreSQL, Redis, and MinIO need credentials to start. By creating secrets first, they're available when Bitnami charts start.
+PostgreSQL, Redis, and RustFS need credentials to start. By creating secrets first, they're available when services start.
 
 ### 2. Dependencies Install (Weight 0)
 Bitnami charts deploy with default weight. They won't be "Ready" until their health checks pass.
@@ -139,7 +139,7 @@ Bitnami charts deploy with default weight. They won't be "Ready" until their hea
 The init container actively polls `pg_isready` until PostgreSQL accepts connections. Only then does the migration run.
 
 ### 4. Bootstrap Waits for Everything (Weight 10)
-Runs AFTER migrations complete. Init containers ensure both PostgreSQL and MinIO are ready.
+Runs AFTER migrations complete. Init containers ensure both PostgreSQL and RustFS are ready.
 
 ### 5. Application Pods Start (No Hook)
 Normal deployment happens after all hooks complete. Services can safely connect to databases.
@@ -172,14 +172,14 @@ Normal deployment happens after all hooks complete. Services can safely connect 
 
 2. **Check MinIO is running:**
    ```bash
-   kubectl get pods -n agentarea -l app.kubernetes.io/name=minio
+   kubectl get pods -n agentarea -l app.kubernetes.io/name=rustfs
    ```
 
 3. **Check bootstrap logs:**
    ```bash
    kubectl logs -n agentarea job/agentarea-bootstrap
    kubectl logs -n agentarea job/agentarea-bootstrap -c wait-for-postgres
-   kubectl logs -n agentarea job/agentarea-bootstrap -c wait-for-minio
+   kubectl logs -n agentarea job/agentarea-bootstrap -c wait-for-rustfs
    ```
 
 ### If Application Pods Crash:
@@ -207,7 +207,7 @@ kubectl describe job agentarea-bootstrap -n agentarea
 
 ## Summary
 
-**Yes, PostgreSQL is installed** as a Helm chart dependency along with Redis and MinIO.
+**Yes, PostgreSQL is installed** as a Helm chart dependency along with Redis. RustFS is deployed as a custom template.
 
 **We handle initialization order** using:
 1. Helm hooks with explicit weights

@@ -1,51 +1,51 @@
-{{- if .Values.minio.enabled }}
+{{- if .Values.rustfs.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-minio
+  name: {{ .Release.Name }}-rustfs
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: minio
+    app.kubernetes.io/component: rustfs
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: minio
+      app.kubernetes.io/component: rustfs
   template:
     metadata:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: minio
+        app.kubernetes.io/component: rustfs
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       containers:
-        - name: minio
-          image: "{{ default "minio/minio" .Values.minio.image.repository }}:{{ default "latest" .Values.minio.image.tag }}"
+        - name: rustfs
+          image: "{{ default "rustfs/rustfs" .Values.rustfs.image.repository }}:{{ default "latest" .Values.rustfs.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
-          args: ["server","/data","--console-address",":9001"]
+          args: ["/data", "--console-enable"]
           ports:
-            - name: minio
+            - name: rustfs
               containerPort: 9000
               protocol: TCP
             - name: console
               containerPort: 9001
               protocol: TCP
           env:
-            - name: MINIO_ROOT_USER
+            - name: RUSTFS_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-user
-            - name: MINIO_ROOT_PASSWORD
+            - name: RUSTFS_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-password
           readinessProbe:
             httpGet:
               path: /minio/health/live
-              port: minio
+              port: rustfs
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
@@ -53,15 +53,15 @@ spec:
           livenessProbe:
             httpGet:
               path: /minio/health/live
-              port: minio
+              port: rustfs
             initialDelaySeconds: 20
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
-          {{- if or .Values.minio.resources .Values.global.workloads.resources.mainContainer }}
+          {{- if or .Values.rustfs.resources .Values.global.workloads.resources.mainContainer }}
           resources:
-            {{- if .Values.minio.resources }}
-            {{- toYaml .Values.minio.resources | nindent 12 }}
+            {{- if .Values.rustfs.resources }}
+            {{- toYaml .Values.rustfs.resources | nindent 12 }}
             {{- else }}
             limits:
               cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.limit }}
@@ -75,10 +75,10 @@ spec:
             - name: data
               mountPath: /data
       volumes:
-        {{- if .Values.minio.persistence.enabled }}
+        {{- if .Values.rustfs.persistence.enabled }}
         - name: data
           persistentVolumeClaim:
-            claimName: {{ .Release.Name }}-minio-pvc
+            claimName: {{ .Release.Name }}-rustfs-pvc
         {{- else }}
         - name: data
           emptyDir: {}
@@ -87,49 +87,49 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-minio
+  name: {{ .Release.Name }}-rustfs
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: minio
+    app.kubernetes.io/component: rustfs
 spec:
   type: ClusterIP
   ports:
     - port: 9000
-      targetPort: minio
+      targetPort: rustfs
       protocol: TCP
-      name: minio
+      name: rustfs
     - port: 9001
       targetPort: console
       protocol: TCP
       name: console
   selector:
     {{- include "agentarea.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: minio
+    app.kubernetes.io/component: rustfs
 ---
-{{- if .Values.minio.persistence.enabled }}
+{{- if .Values.rustfs.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Release.Name }}-minio-pvc
+  name: {{ .Release.Name }}-rustfs-pvc
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: minio
+    app.kubernetes.io/component: rustfs
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.minio.persistence.size }}
+      storage: {{ .Values.rustfs.persistence.size }}
 {{- end }}
 ---
-{{- if .Values.minio.defaultBuckets }}
+{{- if .Values.rustfs.defaultBuckets }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "agentarea.fullname" . }}-minio-bucket-init
+  name: {{ include "agentarea.fullname" . }}-rustfs-bucket-init
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: minio-bucket-init
+    app.kubernetes.io/component: rustfs-bucket-init
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "5"
@@ -139,7 +139,7 @@ spec:
     metadata:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: minio-bucket-init
+        app.kubernetes.io/component: rustfs-bucket-init
     spec:
       restartPolicy: Never
       containers:
@@ -149,18 +149,18 @@ spec:
             - sh
             - -c
             - |
-              mc alias set local http://{{ .Release.Name }}-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
-              mc mb -p local/{{ .Values.minio.defaultBuckets }} || true
+              mc alias set local http://{{ .Release.Name }}-rustfs:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY"
+              mc mb -p local/{{ .Values.rustfs.defaultBuckets }} || true
           env:
-            - name: MINIO_ROOT_USER
+            - name: RUSTFS_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-user
-            - name: MINIO_ROOT_PASSWORD
+            - name: RUSTFS_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
+                  name: {{ .Values.global.secrets.rustfs }}
                   key: root-password
 {{- end }}
 {{- end }}

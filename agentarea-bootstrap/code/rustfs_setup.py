@@ -13,19 +13,19 @@ def _get_env(name: str, default: Optional[str] = None) -> Optional[str]:
     return val
 
 
-def minio_setup():
-    # Support both MinIO and AWS-style envs
-    endpoint_url = _get_env("AWS_ENDPOINT_URL", _get_env("MINIO_ENDPOINT", None))
-    access_key = _get_env("AWS_ACCESS_KEY_ID", _get_env("MINIO_ROOT_USER", _get_env("MINIO_ACCESS_KEY", None)))
+def rustfs_setup():
+    # Support RustFS, MinIO, and AWS-style envs
+    endpoint_url = _get_env("AWS_ENDPOINT_URL", _get_env("MINIO_ENDPOINT", _get_env("RUSTFS_ENDPOINT", None)))
+    access_key = _get_env("AWS_ACCESS_KEY_ID", _get_env("MINIO_ROOT_USER", _get_env("MINIO_ACCESS_KEY", _get_env("RUSTFS_ACCESS_KEY", None))))
     secret_key = _get_env(
         "AWS_SECRET_ACCESS_KEY",
-        _get_env("MINIO_ROOT_PASSWORD", _get_env("MINIO_SECRET_KEY", None)),
+        _get_env("MINIO_ROOT_PASSWORD", _get_env("MINIO_SECRET_KEY", _get_env("RUSTFS_SECRET_KEY", None))),
     )
     region = _get_env("AWS_REGION", "us-east-1")
 
     bucket = _get_env("S3_BUCKET_NAME", _get_env("DOCUMENTS_BUCKET", "documents"))
 
-    # Build S3 client configured for MinIO or AWS
+    # Build S3 client configured for RustFS, MinIO, or AWS
     session = boto3.session.Session()
     s3 = session.client(
         "s3",

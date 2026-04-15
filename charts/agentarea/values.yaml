@@ -44,7 +44,7 @@ global:
     # Redis credentials
     redis: "agentarea-redis-secret"
     # MinIO/S3 credentials
-    minio: "agentarea-minio-secret"
+    rustfs: "agentarea-rustfs-secret"
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
 
@@ -78,11 +78,11 @@ global:
     maxConnections: 50
     connectionTimeout: 5s
 
-  # Storage configuration - S3/MinIO compatible
+  # Storage configuration - S3/RustFS compatible
   storage:
-    # Storage type (s3, minio, gcs)
-    type: "minio"
-    endpoint: ""  # Auto-set from minio service if empty
+    # Storage type (s3, rustfs, gcs)
+    type: "rustfs"
+    endpoint: ""  # Auto-set from rustfs service if empty
     bucket: "agentarea-documents"
     region: "us-east-1"
     # S3 settings
@@ -94,8 +94,8 @@ global:
     gcs:
       projectId: ""
       credentials: ""
-    # MinIO settings
-    minio:
+    # RustFS settings
+    rustfs:
       accessKey: ""
       secretKey: ""
 
@@ -579,14 +579,14 @@ redis:
       cpu: 100m
       memory: 128Mi
 
-# Bitnami MinIO dependency configuration
-minio:
+# RustFS - S3-compatible object storage
+rustfs:
   enabled: true
   image:
-    repository: "minio/minio"
+    repository: "rustfs/rustfs"
     tag: "latest"
   auth:
-    existingSecret: "agentarea-minio-secret"
+    existingSecret: "agentarea-rustfs-secret"
   defaultBuckets: "agentarea-documents"
   resources:
     limits:

@@ -25,13 +25,13 @@ Valkey (Redis-compatible) host helper
 {{- end -}}
 
 {{/*
-MinIO host helper
+RustFS host helper
 */}}
-{{- define "agentarea.minio.host" -}}
+{{- define "agentarea.rustfs.host" -}}
 {{- if .Values.global.storage.endpoint -}}
 {{ .Values.global.storage.endpoint }}
 {{- else -}}
-{{ .Release.Name }}-minio
+{{ .Release.Name }}-rustfs
 {{- end -}}
 {{- end -}}
 
