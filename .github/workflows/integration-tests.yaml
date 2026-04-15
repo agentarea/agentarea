@@ -13,6 +13,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
   REDIS_URL: redis://localhost:6379/0
