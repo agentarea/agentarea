@@ -19,6 +19,8 @@ import (
 	"github.com/agentarea/event-service/internal/submit"
 )
 
+const version = "0.0.8"
+
 func main() {
 	// Structured logging
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

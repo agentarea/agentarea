@@ -94,6 +94,28 @@ def main():
                 f.write(updated)
             print(f"✅ Updated {chart_yaml.relative_to(Path.cwd())}")
 
+    # Update Go version constants
+    go_version_files = [
+        Path(__file__).parent.parent / 'agentarea-mcp-manager' / 'cmd' / 'mcp-manager' / 'main.go',
+        Path(__file__).parent.parent / 'agentarea-event-service' / 'cmd' / 'server' / 'main.go',
+    ]
+
+    for go_file in go_version_files:
+        if go_file.exists():
+            with open(go_file, 'r') as f:
+                content = f.read()
+
+            updated = re.sub(
+                r'const version = "[^"]*"',
+                f'const version = "{target_version}"',
+                content
+            )
+
+            if updated != content:
+                with open(go_file, 'w') as f:
+                    f.write(updated)
+                print(f"✅ Updated {go_file.relative_to(Path.cwd())}")
+
     print(f"\n✅ All versions synchronized to {target_version}")
 
 if __name__ == '__main__':
