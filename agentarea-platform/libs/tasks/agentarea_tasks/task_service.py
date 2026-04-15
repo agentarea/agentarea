@@ -294,7 +294,7 @@ class TaskService(BaseTaskService):
                 return filtered_tasks[:limit]
 
         except Exception as e:
-            logger.error(f"Failed to get recent tasks: {e}")
+            logger.error("Failed to get recent tasks", extra={"error": str(e)})
             # Return empty list on error to not break monitoring
             return []
 
@@ -419,7 +419,7 @@ class TaskService(BaseTaskService):
                 if workflow_status.get("result"):
                     task.result = workflow_status.get("result")
         except Exception as e:
-            logger.debug(f"Could not get workflow status for task {task.id}: {e}")
+            logger.debug("Could not get workflow status for task", extra={"task_id": str(task.id), "error": str(e)})
 
         return task
 
@@ -435,7 +435,7 @@ class TaskService(BaseTaskService):
         if not task:
             raise ValueError(f"Task {task_id} not found")
 
-        logger.info(f"Starting execution of task {task_id}")
+        logger.info("Starting execution of task", extra={"task_id": str(task_id)})
 
         # Update task status to working
         task.status = "working"
@@ -450,7 +450,7 @@ class TaskService(BaseTaskService):
             await self.task_manager.submit_task(task)
 
         except Exception as e:
-            logger.error(f"Error executing task {task_id}: {e}")
+            logger.error("Error executing task", extra={"task_id": str(task_id), "error": str(e)})
             # Update task with error
             task.status = "failed"
             task.error_message = str(e)
@@ -498,7 +498,7 @@ class TaskService(BaseTaskService):
                 if agent:
                     agent_name = agent.name
             except Exception as e:
-                logger.warning(f"Could not get agent name for {agent_id}: {e}")
+                logger.warning("Could not get agent name", extra={"agent_id": str(agent_id), "error": str(e)})
 
         # Create task
         task = SimpleTask(
@@ -542,10 +542,10 @@ class TaskService(BaseTaskService):
             stored_task.status = executed_task.status
             stored_task.execution_id = executed_task.execution_id
 
-            logger.info(f"Task {task_id} submitted successfully with status {executed_task.status}")
+            logger.info("Task submitted successfully", extra={"task_id": str(task_id), "status": executed_task.status})
 
         except Exception as e:
-            logger.error(f"Failed to submit task: {e}")
+            logger.error("Failed to submit task", extra={"error": str(e)})
             stored_task.status = "failed"
             stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 
@@ -614,7 +614,7 @@ class TaskService(BaseTaskService):
                 return historical_events
 
         except Exception as e:
-            logger.error(f"Failed to get historical events for task {task_id}: {e}")
+            logger.error("Failed to get historical events for task", extra={"task_id": str(task_id), "error": str(e)})
             # Return empty list on error to not break SSE streaming
             return []
 

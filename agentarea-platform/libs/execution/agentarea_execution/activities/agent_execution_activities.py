@@ -150,7 +150,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             model_instance.model_spec, "default_context_strategy", None
                         )
                 except Exception as e:
-                    logger.warning(f"Could not fetch model spec for model {model_id_str}: {e}")
+                    logger.warning("Could not fetch model spec", extra={"model_id": model_id_str, "error": str(e)})
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -339,8 +339,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             await secret_session.close()
                     except Exception as decrypt_err:
                         logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id}, "
-                            f"falling back to DB lookup: {decrypt_err}",
+                            "Failed to decrypt cached API key, falling back to DB lookup",
+                            extra={"model_id": request.model_id, "error": str(decrypt_err)},
                             exc_info=True,
                         )
                         # Fall through to DB lookup below
@@ -377,7 +377,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         finally:
                             await secret_session.close()
                     else:
-                        logger.warning(f"No API key found for model instance {model_instance.id}")
+                        logger.warning("No API key found for model instance", extra={"model_instance_id": str(model_instance.id)})
 
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
@@ -488,7 +488,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             error_message = str(e)
 
             # Simplified error raising - workflow will handle enriched events
-            logger.error(f"LLM call failed: {error_message}")
+            logger.error("LLM call failed", extra={"error_message": error_message, "error_type": error_type})
             from temporalio.exceptions import ApplicationError
 
             # Import error checking functions from event_publisher
@@ -547,9 +547,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             tool_instance = ToolsetAdapter(tool_instance)
 
                         tool_executor.register_tool(tool_instance)
-                        logger.info(f"Registered code tool for execution: {tool_name}")
+                        logger.info("Registered code tool for execution", extra={"tool_name": tool_name})
                     else:
-                        logger.warning(f"Unknown code tool requested: {tool_name}")
+                        logger.warning("Unknown code tool requested", extra={"tool_name": tool_name})
 
             # Register agent tools from configuration
             if request.tools and isinstance(request.tools, list):
@@ -595,7 +595,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         )
                         if delegation_tool:
                             tool_executor.register_tool(delegation_tool)
-                            logger.info(f"Registered agent tool for execution: {agent_name}")
+                            logger.info("Registered agent tool for execution", extra={"agent_name": agent_name})
 
             # Register OpenAPI tools from configuration. Each connection expands to one
             # or more OpenAPITool instances (one per allowed operation), which are then
@@ -632,8 +632,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         for openapi_tool_instance in openapi_tools:
                             tool_executor.register_tool(openapi_tool_instance)
                             logger.info(
-                                f"Registered openapi tool for execution: {openapi_tool_instance.name} "
-                                f"(connection={connection_ref})"
+                                "Registered openapi tool for execution",
+                                extra={"tool_name": openapi_tool_instance.name, "connection": str(connection_ref)},
                             )
 
             try:
@@ -652,7 +652,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
 
             except Exception as e:
-                logger.error(f"Tool execution failed: {e}")
+                logger.error("Tool execution failed", extra={"error": str(e)})
                 return MCPToolResult(
                     success=False,
                     result="",
@@ -684,7 +684,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
         except Exception as e:
-            logger.error(f"Failed to create execution plan: {e}")
+            logger.error("Failed to create execution plan", extra={"error": str(e)})
             return ExecutionPlanResult(
                 plan=(
                     f"Execute the task '{request.goal.get('description', 'Unknown')}' step by step"
@@ -735,7 +735,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             from ..handlers import handle_llm_error_event
 
-            logger.info(f"Publishing {len(request.events_json)} workflow events via EventBroker")
+            logger.info("Publishing workflow events via EventBroker", extra={"event_count": len(request.events_json)})
 
             # Convert RedisRouter to RedisEventBroker for publishing
             # dependencies.event_broker is a RedisRouter, we need RedisEventBroker to publish
@@ -776,7 +776,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     # infrastructure) for real-time SSE
                     await redis_event_broker.publish(domain_event)
                     logger.debug(
-                        f"Published workflow event: {event['event_type']} for task {task_id}"
+                        "Published workflow event",
+                        extra={"event_type": event["event_type"], "task_id": task_id},
                     )
 
                     # 2. Store event in database using proper service layer
@@ -805,11 +806,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                             # Commit is handled by the service
                             logger.debug(
-                                f"Stored event using service: {event['event_type']} for task {task_id}"
+                                "Stored event using service",
+                                extra={"event_type": event["event_type"], "task_id": task_id},
                             )
 
                     except Exception as db_error:
-                        logger.error(f"Failed to store event using service: {db_error}")
+                        logger.error("Failed to store event using service", extra={"error": str(db_error)})
                         errors.append(f"DB storage failed for {event['event_type']}: {db_error!s}")
 
                     # 3. Handle LLM error events locally for immediate action
@@ -817,13 +819,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         try:
                             await handle_llm_error_event(domain_event)
                         except Exception as handler_error:
-                            logger.error(f"Failed to handle LLM error event: {handler_error}")
+                            logger.error("Failed to handle LLM error event", extra={"error": str(handler_error)})
                             errors.append(f"Error handler failed: {handler_error!s}")
 
                     events_published += 1
 
                 except Exception as event_error:
-                    logger.error(f"Failed to process single event: {event_error}")
+                    logger.error("Failed to process single event", extra={"error": str(event_error)})
                     errors.append(f"Event processing failed: {event_error!s}")
 
             return WorkflowEventsResult(
@@ -833,7 +835,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
         except Exception as e:
-            logger.error(f"Failed to publish workflow events: {e}")
+            logger.error("Failed to publish workflow events", extra={"error": str(e)})
             return WorkflowEventsResult(
                 success=False,
                 events_published=0,
@@ -881,7 +883,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     return UpdateTaskStatusResult(success=True)
                 return UpdateTaskStatusResult(success=False, error="Task not found")
             except Exception as e:
-                logger.error(f"Failed to update task status: {e}")
+                logger.error("Failed to update task status", extra={"error": str(e)})
                 return UpdateTaskStatusResult(success=False, error=str(e))
 
     @activity.defn
@@ -967,7 +969,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
 
         except Exception as e:
-            logger.error(f"Failed to resolve skill file: {e}")
+            logger.error("Failed to resolve skill file", extra={"error": str(e)})
             return SkillFileResult(
                 success=False,
                 error=str(e),
@@ -1020,8 +1022,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             await secret_session.close()
                     except Exception as decrypt_err:
                         logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id} "
-                            f"in compact_messages, falling back to DB lookup: {decrypt_err}",
+                            "Failed to decrypt cached API key in compact_messages, falling back to DB lookup",
+                            extra={"model_id": request.model_id, "error": str(decrypt_err)},
                             exc_info=True,
                         )
                         provider_type = None
@@ -1125,7 +1127,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
         except Exception as e:
-            logger.error(f"Message compaction failed: {e}")
+            logger.error("Message compaction failed", extra={"error": str(e)})
             # On failure, return a basic concatenation as fallback
             fallback = "Previous conversation summary (compaction failed):\n"
             for msg in request.messages_to_compact[-5:]:

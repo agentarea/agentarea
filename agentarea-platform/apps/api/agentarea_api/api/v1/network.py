@@ -154,7 +154,7 @@ async def get_network_topology(
                 member_result = await session.execute(member_query)
                 members = list(member_result)
             except Exception as e:
-                logger.debug(f"Could not fetch skill members: {e}")
+                logger.debug("Could not fetch skill members", extra={"error": str(e)})
 
             return skills, members
 
@@ -169,7 +169,7 @@ async def get_network_topology(
                 )
                 return await repo.list_all()
         except Exception as e:
-            logger.warning(f"Failed to fetch MCP instances: {e}")
+            logger.warning("Failed to fetch MCP instances", extra={"error": str(e)})
             return []
 
     async def fetch_triggers() -> list:
@@ -180,9 +180,9 @@ async def get_network_topology(
                 query = select(TriggerORM).where(TriggerORM.workspace_id.in_(accessible_workspaces))
                 result = await session.execute(query)
                 return list(result.scalars().all())
-        except Exception as e:
-            logger.warning(f"Failed to fetch triggers: {e}")
-            return []
+    except Exception as e:
+        logger.warning("Failed to fetch triggers", extra={"error": str(e)})
+        return []
 
     agents, (skills, skill_members), mcp_instances, triggers = await asyncio.gather(
         fetch_agents(),

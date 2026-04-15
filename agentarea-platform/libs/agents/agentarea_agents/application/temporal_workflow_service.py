@@ -43,7 +43,7 @@ class TemporalWorkflowService:
                 "error": result.error,
             }
         except Exception as e:
-            logger.error(f"Failed to execute agent task: {e}")
+            logger.error("Failed to execute agent task", extra={"error": str(e)})
             return {
                 "success": False,
                 "task_id": "unknown",
@@ -56,7 +56,7 @@ class TemporalWorkflowService:
         try:
             return await self._execution_service.get_status(execution_id)
         except Exception as e:
-            logger.error(f"Failed to get workflow status: {e}")
+            logger.error("Failed to get workflow status", extra={"error": str(e)})
             return {
                 "status": "error",
                 "success": False,
@@ -67,28 +67,28 @@ class TemporalWorkflowService:
         try:
             return await self._execution_service.cancel_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to cancel task: {e}")
+            logger.error("Failed to cancel task", extra={"error": str(e)})
             return False
 
     async def pause_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.pause_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to pause task: {e}")
+            logger.error("Failed to pause task", extra={"error": str(e)})
             return False
 
     async def resume_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.resume_execution(execution_id)
         except Exception as e:
-            logger.error(f"Failed to resume task: {e}")
+            logger.error("Failed to resume task", extra={"error": str(e)})
             return False
 
     async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
         try:
             return await self._execution_service.send_a2ui_action(execution_id, action_data)
         except Exception as e:
-            logger.error(f"Failed to send A2UI action: {e}")
+            logger.error("Failed to send A2UI action", extra={"error": str(e)})
             return False
 
     async def resolve_escalation(
@@ -99,7 +99,7 @@ class TemporalWorkflowService:
                 execution_id, escalation_id, approved, comment
             )
         except Exception as e:
-            logger.error(f"Failed to resolve escalation: {e}")
+            logger.error("Failed to resolve escalation", extra={"error": str(e)})
             return False
 
     async def send_workflow_command(
@@ -110,5 +110,5 @@ class TemporalWorkflowService:
                 execution_id, command, payload
             )
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}': {e}")
+            logger.error("Failed to send workflow command", extra={"command": command, "error": str(e)})
             return False

@@ -68,7 +68,7 @@ class RedisEventBroker(EventBroker):
                 self._connected = True
                 logger.info("Redis event broker connected successfully")
             except Exception as e:
-                logger.warning(f"Failed to connect Redis broker: {e}")
+                logger.warning("Failed to connect Redis broker", extra={"error": str(e)})
                 raise
 
     async def _create_raw_redis(self) -> redis.Redis:
@@ -117,7 +117,7 @@ class RedisEventBroker(EventBroker):
             event_id=envelope.event_id,
         )
 
-        logger.info(f"Publishing event to channel: {channel}")
+        logger.info("Publishing event", extra={"channel": channel})
 
         # Serialize to JSON using shared format
         serialized_message = SharedEventFormat.serialize(shared_event)
@@ -151,14 +151,14 @@ class RedisEventBroker(EventBroker):
                 self._connected = False
                 logger.info("Redis event broker disconnected")
             except Exception as e:
-                logger.warning(f"Error closing Redis event broker: {e}")
+                logger.warning("Error closing Redis event broker", extra={"error": str(e)})
 
         # Additional cleanup for any remaining connections
         try:
             if hasattr(self.redis_broker, "_connection") and self.redis_broker._connection:
                 await self.redis_broker._connection.close()
         except Exception as e:
-            logger.debug(f"Error during additional Redis cleanup: {e}")
+            logger.debug("Error during additional Redis cleanup", extra={"error": str(e)})
 
     async def close(self):
         """Explicit close method for manual cleanup."""

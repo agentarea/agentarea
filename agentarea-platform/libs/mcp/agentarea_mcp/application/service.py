@@ -364,14 +364,14 @@ class MCPServerInstanceService:
             try:
                 await self.discover_and_store_tools(instance.id)
             except Exception as e:
-                logger.warning("Auto tool discovery failed for URL instance %s: %s", instance.id, e)
+                logger.warning("Auto tool discovery failed for URL instance", extra={"instance_id": str(instance.id), "error": str(e)})
         elif is_bundle_type:
             # Bundle aggregates other instances — no container needed.
             # Discover and cache tools from all members.
             try:
                 await self.discover_and_store_tools(instance.id)
             except Exception as e:
-                logger.warning("Auto tool discovery failed for bundle %s: %s", instance.id, e)
+                logger.warning("Auto tool discovery failed for bundle", extra={"instance_id": str(instance.id), "error": str(e)})
         else:
             # Publish event for MCP Infrastructure to handle container deployment
             await self.event_broker.publish(
@@ -696,7 +696,7 @@ class MCPServerInstanceService:
         except httpx.TimeoutException:
             return {"status": "error", "message": f"Connection to {mcp_url} timed out"}
         except Exception as e:
-            logger.warning("Probe failed for instance %s: %s", instance_id, e, exc_info=True)
+            logger.warning("Probe failed for instance", extra={"instance_id": str(instance_id), "error": str(e)}, exc_info=True)
             return {"status": "error", "message": "Probe failed due to an internal error"}
 
     async def discover_and_store_tools(self, instance_id: UUID) -> bool:
@@ -728,7 +728,7 @@ class MCPServerInstanceService:
                 instance.json_spec or {}
             ).get("url", "")
             if not mcp_url:
-                logger.warning("URL-type instance %s has no endpoint_url in json_spec", instance_id)
+                logger.warning("URL-type instance has no endpoint_url in json_spec", extra={"instance_id": str(instance_id)})
                 return False
         else:
             # Docker or command-type — connect directly to container by name
@@ -764,7 +764,7 @@ class MCPServerInstanceService:
                 if auth_config:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
-                logger.warning("Failed to resolve auth headers for instance %s: %s", instance_id, e)
+                logger.warning("Failed to resolve auth headers for instance", extra={"instance_id": str(instance_id), "error": str(e)})
 
         try:
             result = await self._list_tools_via_mcp(mcp_url, headers)

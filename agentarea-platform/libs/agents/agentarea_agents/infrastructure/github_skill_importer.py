@@ -150,7 +150,7 @@ class GitHubSkillImporter:
             f"{self.GITHUB_API_BASE}/repos/{repo_info.owner}/{repo_info.repo}/zipball/{ref}"
         )
 
-        logger.info(f"Downloading repository from {zipball_url}")
+        logger.info("Downloading repository", extra={"zipball_url": zipball_url})
 
         headers = self._get_headers()
 

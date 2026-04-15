@@ -85,11 +85,11 @@ class TaskEventService:
             task_event_repository = self.repository_factory.create_repository(TaskEventRepository)
             persisted_event = await task_event_repository.create_event(event)
 
-            logger.debug(f"Created workflow event: {event_type} for task {task_id}")
+            logger.debug("Created workflow event", extra={"event_type": event_type, "task_id": str(task_id)})
             return persisted_event
 
         except Exception as e:
-            logger.error(f"Failed to create workflow event: {e}")
+            logger.error("Failed to create workflow event", extra={"error": str(e)})
             raise
 
     async def get_task_events(
@@ -132,7 +132,8 @@ class TaskEventService:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to create event {event_data.get('event_type', 'unknown')}: {e}"
+                    "Failed to create event",
+                    extra={"event_type": event_data.get('event_type', 'unknown'), "error": str(e)},
                 )
                 # Continue processing other events
                 continue

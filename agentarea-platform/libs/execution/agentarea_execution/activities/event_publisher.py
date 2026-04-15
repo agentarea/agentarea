@@ -57,10 +57,10 @@ def create_event_publisher(event_broker, task_id: str):
 
             # Publish via RedisEventBroker for real-time SSE
             await redis_event_broker.publish(domain_event)
-            logger.debug(f"Published LLM chunk event {chunk_index} for task {task_id}")
+            logger.debug("Published LLM chunk event", extra={"chunk_index": chunk_index, "task_id": task_id})
 
         except Exception as e:
-            logger.error(f"Failed to publish chunk event: {e}")
+            logger.error("Failed to publish chunk event", extra={"error": str(e)})
 
     return publish_chunk_event
 
@@ -106,10 +106,10 @@ async def publish_a2ui_event(
         )
 
         await redis_event_broker.publish(domain_event)
-        logger.debug(f"Published {event_type} event for task {task_id}")
+        logger.debug("Published A2UI event", extra={"event_type": event_type, "task_id": task_id})
 
     except Exception as e:
-        logger.error(f"Failed to publish A2UI event {event_type}: {e}")
+        logger.error("Failed to publish A2UI event", extra={"event_type": event_type, "error": str(e)})
 
 
 async def publish_enriched_llm_error_event(
@@ -176,10 +176,10 @@ async def publish_enriched_llm_error_event(
 
         # Publish via RedisEventBroker for real-time SSE
         await redis_event_broker.publish(domain_event)
-        logger.info(f"Published enriched LLM error event for task {task_id}: {error_type}")
+        logger.info("Published enriched LLM error event", extra={"task_id": task_id, "error_type": error_type})
 
     except Exception as e:
-        logger.error(f"Failed to publish enriched LLM error event: {e}")
+        logger.error("Failed to publish enriched LLM error event", extra={"error": str(e)})
 
 
 def _is_auth_error(error: Exception) -> bool:

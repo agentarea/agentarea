@@ -251,7 +251,7 @@ async def list_mcp_server_instances(
             else:
                 health_lookup = {}
     except Exception as e:
-        logger.warning(f"Failed to get real-time status from container manager: {e}")
+        logger.warning("Failed to get real-time status from container manager", extra={"error": str(e)})
         health_lookup = {}
 
     # Merge database config with real-time status

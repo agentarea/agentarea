@@ -130,9 +130,9 @@ class BaseTaskService(ABC):
             pass  # Temporarily disabled
         except Exception as e:
             # Log the error but don't fail the operation
-            logger.error(f"Failed to publish TaskCreated event: {e}")
+            logger.error("Failed to publish TaskCreated event", extra={"error": str(e)})
 
-        logger.info(f"Created task {created_task.id} for agent {created_task.agent_id}")
+        logger.info("Created task", extra={"task_id": str(created_task.id), "agent_id": str(created_task.agent_id)})
         return created_task
 
     async def get_task(self, task_id: UUID) -> SimpleTask | None:
@@ -245,9 +245,9 @@ class BaseTaskService(ABC):
                 )
         except Exception as e:
             # Log the error but don't fail the operation
-            logger.error(f"Failed to publish task update events: {e}")
+            logger.error("Failed to publish task update events", extra={"error": str(e)})
 
-        logger.info(f"Updated task {updated_task.id}")
+        logger.info("Updated task", extra={"task_id": str(updated_task.id)})
         return updated_task
 
     async def list_tasks(
@@ -310,7 +310,7 @@ class BaseTaskService(ABC):
         success = await self.task_repository.delete_task(task_id)
 
         if success:
-            logger.info(f"Deleted task {task_id}")
+            logger.info("Deleted task", extra={"task_id": str(task_id)})
 
         return success
 
@@ -405,7 +405,7 @@ class BaseTaskService(ABC):
             await self.event_broker.publish(event)
         except Exception as e:
             # Log the error but don't fail the operation
-            logger.error(f"Failed to publish event {event.__class__.__name__}: {e}")
+            logger.error("Failed to publish event", extra={"event_class": event.__class__.__name__, "error": str(e)})
 
     # Abstract methods that subclasses must implement
 

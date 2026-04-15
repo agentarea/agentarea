@@ -189,12 +189,12 @@ async def get_all_tasks(
         # Apply pagination
         paginated_tasks = all_tasks[offset : offset + limit]
 
-        logger.info(f"Returning {len(paginated_tasks)} tasks out of {len(all_tasks)} total tasks")
+        logger.info("Returning tasks", extra={"returned": len(paginated_tasks), "total": len(all_tasks)})
 
         return paginated_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get all tasks: {e}")
+        logger.error("Failed to get all tasks", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -231,7 +231,7 @@ async def get_task_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get task {task_id}: {e}")
+        logger.error("Failed to get task", extra={"task_id": str(task_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -352,7 +352,7 @@ async def create_task_for_agent_with_stream(
                         "workflow_completed",
                         "workflow_failed",
                     ]:
-                        logger.info(f"Task {task.id} reached terminal state: {event_type}")
+                        logger.info("Task reached terminal state", extra={"task_id": str(task.id), "event_type": event_type})
                         break
             else:
                 # Task failed to start
@@ -380,7 +380,7 @@ async def create_task_for_agent_with_stream(
                 },
             )
         except Exception as e:
-            logger.error(f"Failed to create task for agent {agent_id}: {e}")
+            logger.error("Failed to create task for agent", extra={"agent_id": str(agent_id), "error": str(e)})
             yield _format_sse_event(
                 "error",
                 {
@@ -442,7 +442,7 @@ async def create_task_for_agent_sync(
         # Agent validation errors
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to create task for agent {agent_id}: {e}")
+        logger.error("Failed to create task for agent", extra={"agent_id": str(agent_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -473,7 +473,7 @@ async def list_agent_tasks(
             agent_id, limit=limit, creator_scoped=False
         )
 
-        logger.info(f"Found {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
+        logger.info("Found tasks for agent", extra={"count": len(agent_tasks), "agent_id": str(agent_id), "agent_name": agent.name})
 
         task_responses: list[TaskResponse] = []
 
@@ -502,12 +502,12 @@ async def list_agent_tasks(
         # Apply pagination
         paginated_tasks = task_responses[offset : offset + limit]
 
-        logger.info(f"Returning {len(paginated_tasks)} tasks for agent {agent_id}")
+        logger.info("Returning tasks for agent", extra={"count": len(paginated_tasks), "agent_id": str(agent_id)})
 
         return paginated_tasks
 
     except Exception as e:
-        logger.error(f"Failed to get tasks for agent {agent_id}: {e}")
+        logger.error("Failed to get tasks for agent", extra={"agent_id": str(agent_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -673,7 +673,7 @@ async def pause_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
+        logger.error("Failed to pause task", extra={"task_id": str(task_id), "agent_id": str(agent_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -729,7 +729,7 @@ async def resume_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
+        logger.error("Failed to resume task", extra={"task_id": str(task_id), "agent_id": str(agent_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -778,7 +778,7 @@ async def send_a2ui_action(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        logger.error("Failed to send A2UI action for task", extra={"task_id": str(task_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -871,7 +871,7 @@ async def send_task_command(
         raise
     except Exception as e:
         logger.error(
-            f"Failed to send command '{payload.command}' for task {task_id}: {e}", exc_info=True
+            "Failed to send command for task", extra={"task_id": str(task_id), "command": payload.command, "error": str(e)}, exc_info=True
         )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
@@ -909,7 +909,7 @@ async def resolve_task_escalation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to resolve escalation for task {task_id}, agent {agent_id}: {e}")
+        logger.error("Failed to resolve escalation for task", extra={"task_id": str(task_id), "agent_id": str(agent_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1001,7 +1001,7 @@ async def get_task_events(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get task events for task {task_id}: {e}")
+        logger.error("Failed to get task events", extra={"task_id": str(task_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1070,11 +1070,11 @@ async def stream_task_events(
                         "workflow_completed",
                         "workflow_failed",
                     ]:
-                        logger.info(f"Task {task_id} reached terminal state: {event_type}")
+                        logger.info("Task reached terminal state", extra={"task_id": str(task_id), "event_type": event_type})
                         break
 
             except Exception as e:
-                logger.error(f"Fatal error in SSE stream for task {task_id}: {e}")
+                logger.error("Fatal error in SSE stream", extra={"task_id": str(task_id), "error": str(e)})
                 yield _format_sse_event(
                     "error",
                     {
@@ -1100,7 +1100,7 @@ async def stream_task_events(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create SSE stream for task {task_id}: {e}")
+        logger.error("Failed to create SSE stream for task", extra={"task_id": str(task_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

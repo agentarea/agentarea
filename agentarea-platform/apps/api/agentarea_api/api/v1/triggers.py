@@ -550,17 +550,17 @@ async def create_trigger(
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
             await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
             has_creds = True
-            logger.info(f"Stored channel credentials for trigger {trigger.id}")
+            logger.info("Stored channel credentials for trigger", extra={"trigger_id": trigger.id})
 
-        logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
+        logger.info("Created trigger for agent", extra={"trigger_id": trigger.id, "agent_id": trigger.agent_id})
 
         return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
     except TriggerValidationError as e:
-        logger.warning(f"Trigger validation failed: {e}")
+        logger.warning("Trigger validation failed", extra={"error": str(e)})
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to create trigger: {e}")
+        logger.error("Failed to create trigger", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -622,14 +622,14 @@ async def list_triggers(
             limit=limit,
         )
 
-        logger.info(f"Listed {len(triggers)} triggers")
+        logger.info("Listed triggers", extra={"count": len(triggers)})
 
         return [TriggerResponse.from_domain_model(trigger) for trigger in triggers]
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list triggers: {e}")
+        logger.error("Failed to list triggers", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -666,7 +666,7 @@ async def triggers_health_check(
         return health_status
 
     except Exception as e:
-        logger.error(f"Triggers health check failed: {e}")
+        logger.error("Triggers health check failed", extra={"error": str(e)})
         return {
             "overall_status": "unhealthy",
             "service": "triggers",
@@ -708,7 +708,7 @@ async def get_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get trigger {trigger_id}: {e}")
+        logger.error("Failed to get trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -761,22 +761,22 @@ async def update_trigger(
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
             await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
             has_creds = True
-            logger.info(f"Updated channel credentials for trigger {trigger_id}")
+            logger.info("Updated channel credentials for trigger", extra={"trigger_id": str(trigger_id)})
         elif secret_manager:
             # Check if credentials already exist
             has_creds = await _has_credentials(secret_manager, updated_trigger, trigger_id)
 
-        logger.info(f"Updated trigger {trigger_id}")
+        logger.info("Updated trigger", extra={"trigger_id": str(trigger_id)})
 
         return TriggerResponse.from_domain_model(updated_trigger, has_channel_credentials=has_creds)
 
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TriggerValidationError as e:
-        logger.warning(f"Trigger validation failed: {e}")
+        logger.warning("Trigger validation failed", extra={"error": str(e)})
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to update trigger {trigger_id}: {e}")
+        logger.error("Failed to update trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -807,12 +807,12 @@ async def delete_trigger(
         if not success:
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
-        logger.info(f"Deleted trigger {trigger_id}")
+        logger.info("Deleted trigger", extra={"trigger_id": str(trigger_id)})
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete trigger {trigger_id}: {e}")
+        logger.error("Failed to delete trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -846,7 +846,7 @@ async def enable_trigger(
         if not success:
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
-        logger.info(f"Enabled trigger {trigger_id}")
+        logger.info("Enabled trigger", extra={"trigger_id": str(trigger_id)})
 
         return {
             "status": "success",
@@ -858,7 +858,7 @@ async def enable_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to enable trigger {trigger_id}: {e}")
+        logger.error("Failed to enable trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -892,7 +892,7 @@ async def disable_trigger(
         if not success:
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
-        logger.info(f"Disabled trigger {trigger_id}")
+        logger.info("Disabled trigger", extra={"trigger_id": str(trigger_id)})
 
         return {
             "status": "success",
@@ -904,7 +904,7 @@ async def disable_trigger(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to disable trigger {trigger_id}: {e}")
+        logger.error("Failed to disable trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -996,7 +996,7 @@ async def get_execution_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution history for trigger {trigger_id}: {e}")
+        logger.error("Failed to get execution history for trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1047,7 +1047,7 @@ async def get_trigger_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get trigger status for {trigger_id}: {e}")
+        logger.error("Failed to get trigger status", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1091,7 +1091,7 @@ async def get_execution_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
+        logger.error("Failed to get execution metrics for trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1141,7 +1141,7 @@ async def get_execution_timeline(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
+        logger.error("Failed to get execution timeline for trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1197,7 +1197,7 @@ async def get_execution_correlations(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
+        logger.error("Failed to get execution correlations for trigger", extra={"trigger_id": str(trigger_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1250,5 +1250,5 @@ async def execute_trigger(
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to execute trigger {trigger_id}: {e}", exc_info=True)
+        logger.error("Failed to execute trigger", extra={"trigger_id": str(trigger_id), "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

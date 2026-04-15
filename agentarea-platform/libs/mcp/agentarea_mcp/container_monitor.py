@@ -56,7 +56,7 @@ class MCPContainerMonitor:
         # MCP Manager URL from settings
         self.mcp_manager_url = getattr(self.settings, "MCP_MANAGER_URL", "http://localhost:7999")
 
-        logger.info(f"MCPContainerMonitor initialized with check_interval={check_interval}s")
+        logger.info("MCPContainerMonitor initialized", extra={"check_interval": check_interval})
 
     async def start(self):
         """Start the monitoring loop."""
@@ -72,7 +72,7 @@ class MCPContainerMonitor:
                 await self._check_all_containers()
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
-                logger.error(f"Error in monitoring loop: {e}")
+                logger.error("Error in monitoring loop", extra={"error": str(e)})
                 await asyncio.sleep(min(self.check_interval, 10))  # Shorter retry interval on error
 
     async def stop(self):
@@ -87,19 +87,19 @@ class MCPContainerMonitor:
                 # Get list of all containers
                 response = await client.get(f"{self.mcp_manager_url}/containers")
                 if response.status_code != 200:
-                    logger.error(f"Failed to get container list: {response.status_code}")
+                    logger.error("Failed to get container list", extra={"status_code": response.status_code})
                     return
 
                 containers_data = response.json()
                 containers = containers_data.get("containers", [])
 
-                logger.debug(f"Checking health of {len(containers)} containers")
+                logger.debug("Checking health of containers", extra={"container_count": len(containers)})
 
                 for container in containers:
                     await self._check_container_health(container, client)
 
         except Exception as e:
-            logger.error(f"Failed to check containers: {e}")
+            logger.error("Failed to check containers", extra={"error": str(e)})
 
     async def _check_container_health(
         self, container_data: dict[str, Any], client: httpx.AsyncClient
@@ -123,7 +123,8 @@ class MCPContainerMonitor:
                 status = health_data.get("status", "unhealthy")
             else:
                 logger.warning(
-                    f"Unexpected health check response for {service_name}: {response.status_code}"
+                    "Unexpected health check response",
+                    extra={"service_name": service_name, "status_code": response.status_code},
                 )
                 is_healthy = False
                 status = "error"
@@ -139,7 +140,7 @@ class MCPContainerMonitor:
             await self._handle_status_change(new_health_status)
 
         except Exception as e:
-            logger.error(f"Failed to check health for container {service_name}: {e}")
+            logger.error("Failed to check health for container", extra={"service_name": service_name, "error": str(e)})
             # Create error status
             error_status = ContainerHealthStatus(
                 service_name=service_name,
@@ -159,7 +160,7 @@ class MCPContainerMonitor:
 
         # Check if this is a status change
         if previous_status is None:
-            logger.info(f"Initial status for {service_name}: {new_status}")
+            logger.info("Initial status for container", extra={"service_name": service_name, "status": str(new_status)})
             # Publish initial status
             await self._publish_status_event(new_status, "initial")
         elif (
@@ -167,11 +168,16 @@ class MCPContainerMonitor:
             or previous_status.status != new_status.status
         ):
             logger.info(
-                f"Status change for {service_name}: {previous_status.status} -> {new_status.status}"
+                "Status change for container",
+                extra={
+                    "service_name": service_name,
+                    "previous_status": previous_status.status,
+                    "new_status": new_status.status,
+                },
             )
             await self._publish_status_event(new_status, "changed")
         else:
-            logger.debug(f"No change for {service_name}: {new_status}")
+            logger.debug("No change for container", extra={"service_name": service_name, "status": str(new_status)})
 
     async def _publish_status_event(self, status: ContainerHealthStatus, change_type: str):
         """Publish a status change event."""
@@ -202,11 +208,12 @@ class MCPContainerMonitor:
             await self.event_broker.publish(event)
 
             logger.info(
-                f"Published status event for {status.service_name}: {mapped_status} ({change_type})"
+                "Published status event",
+                extra={"service_name": status.service_name, "mapped_status": mapped_status, "change_type": change_type},
             )
 
         except Exception as e:
-            logger.error(f"Failed to publish status event for {status.service_name}: {e}")
+            logger.error("Failed to publish status event", extra={"service_name": status.service_name, "error": str(e)})
 
     def get_all_statuses(self) -> list[ContainerHealthStatus]:
         """Get current health status of all monitored containers."""

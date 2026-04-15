@@ -339,5 +339,5 @@ async def discover_tools(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Failed to discover tools for {connection_id}: {e}")
+        logger.error("Failed to discover tools", extra={"connection_id": str(connection_id), "error": str(e)})
         raise HTTPException(status_code=500, detail="Failed to discover tools") from e

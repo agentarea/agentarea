@@ -214,7 +214,7 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         return None
 
     except A2AValidationError as e:
-        logger.warning(f"A2A validation failed: {e.message}")
+        logger.warning("A2A validation failed", extra={"error_message": e.message})
 
         # Try to extract request ID from body
         request_id = None
@@ -222,7 +222,7 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
             body = await request.json()
             request_id = body.get("id")
         except Exception as e:
-            logger.debug(f"Could not extract request ID from request body: {e}")
+            logger.debug("Could not extract request ID from request body", extra={"error": str(e)})
 
         # Return error response
         error_response = create_a2a_error_response(request_id, e)

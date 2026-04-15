@@ -21,7 +21,7 @@ async def webhook_health_check(
         is_healthy = await webhook_manager.is_healthy()
         return {"status": "healthy" if is_healthy else "unhealthy", "service": "webhook-manager"}
     except Exception as e:
-        logger.error(f"Webhook health check failed: {e}")
+        logger.error("Webhook health check failed", extra={"error": str(e)})
         return {"status": "unhealthy", "service": "webhook-manager"}
 
 
@@ -55,7 +55,7 @@ async def handle_webhook(
                     body_bytes = await request.body()
                     body = body_bytes.decode("utf-8") if body_bytes else None
             except Exception as e:
-                logger.warning(f"Failed to parse request body for webhook {webhook_id}: {e}")
+                logger.warning("Failed to parse request body for webhook", extra={"webhook_id": str(webhook_id), "error": str(e)})
                 body = None
 
         result = await webhook_manager.handle_webhook_request(
@@ -71,7 +71,7 @@ async def handle_webhook(
         return JSONResponse(status_code=status_code, content=response_body)
 
     except Exception as e:
-        logger.error(f"Unexpected error handling webhook {webhook_id}: {e}")
+        logger.error("Unexpected error handling webhook", extra={"webhook_id": str(webhook_id), "error": str(e)})
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": "Internal server error processing webhook"},

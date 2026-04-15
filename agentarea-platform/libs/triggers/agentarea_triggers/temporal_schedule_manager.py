@@ -220,10 +220,10 @@ class TemporalScheduleManager:
                 )
             )
 
-            logger.info(f"Updated Temporal schedule {schedule_id} for trigger {trigger_id}")
+            logger.info("Updated Temporal schedule", schedule_id=schedule_id, trigger_id=trigger_id)
 
         except Exception as e:
-            logger.error(f"Failed to update schedule for trigger {trigger_id}: {e}")
+            logger.error("Failed to update schedule", trigger_id=trigger_id, error=str(e))
             raise
 
     async def delete_cron_schedule(self, trigger_id: UUID) -> None:
@@ -245,16 +245,16 @@ class TemporalScheduleManager:
             # Delete the schedule
             await handle.delete()
 
-            logger.info(f"Deleted Temporal schedule {schedule_id} for trigger {trigger_id}")
+            logger.info("Deleted Temporal schedule", schedule_id=schedule_id, trigger_id=trigger_id)
 
         except TemporalError as e:
             if "not found" in str(e).lower():
-                logger.warning(f"Schedule {schedule_id} not found, may have been already deleted")
+                logger.warning("Schedule not found, may have been already deleted", schedule_id=schedule_id)
             else:
-                logger.error(f"Failed to delete schedule for trigger {trigger_id}: {e}")
+                logger.error("Failed to delete schedule", trigger_id=trigger_id, error=str(e))
                 raise
         except Exception as e:
-            logger.error(f"Failed to delete schedule for trigger {trigger_id}: {e}")
+            logger.error("Failed to delete schedule", trigger_id=trigger_id, error=str(e))
             raise
 
     async def pause_cron_schedule(self, trigger_id: UUID) -> None:
@@ -276,10 +276,10 @@ class TemporalScheduleManager:
             # Pause the schedule
             await handle.pause(note=f"Trigger {trigger_id} disabled")
 
-            logger.info(f"Paused Temporal schedule {schedule_id} for trigger {trigger_id}")
+            logger.info("Paused Temporal schedule", schedule_id=schedule_id, trigger_id=trigger_id)
 
         except Exception as e:
-            logger.error(f"Failed to pause schedule for trigger {trigger_id}: {e}")
+            logger.error("Failed to pause schedule", trigger_id=trigger_id, error=str(e))
             raise
 
     async def unpause_cron_schedule(self, trigger_id: UUID) -> None:
@@ -301,10 +301,10 @@ class TemporalScheduleManager:
             # Unpause the schedule
             await handle.unpause(note=f"Trigger {trigger_id} enabled")
 
-            logger.info(f"Unpaused Temporal schedule {schedule_id} for trigger {trigger_id}")
+            logger.info("Unpaused Temporal schedule", schedule_id=schedule_id, trigger_id=trigger_id)
 
         except Exception as e:
-            logger.error(f"Failed to unpause schedule for trigger {trigger_id}: {e}")
+            logger.error("Failed to unpause schedule", trigger_id=trigger_id, error=str(e))
             raise
 
     async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
@@ -354,8 +354,8 @@ class TemporalScheduleManager:
             if "not found" in str(e).lower():
                 return None
             else:
-                logger.error(f"Failed to get schedule info for trigger {trigger_id}: {e}")
+                logger.error("Failed to get schedule info", trigger_id=trigger_id, error=str(e))
                 raise
         except Exception as e:
-            logger.error(f"Failed to get schedule info for trigger {trigger_id}: {e}")
+            logger.error("Failed to get schedule info", trigger_id=trigger_id, error=str(e))
             raise

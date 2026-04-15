@@ -20,8 +20,6 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 
 INBOX_STATUSES = [
     "waiting_for_approval",
-    "completed",
-    "failed",
 ]
 
 
@@ -48,23 +46,21 @@ async def get_inbox_items(
     ordered by most recently updated first. Includes total count for badge/pagination.
     """
     try:
-        import asyncio
-
         query_statuses = [status] if status and status in INBOX_STATUSES else INBOX_STATUSES
         offset = (page - 1) * page_size
 
-        agents_result, tasks, total = await asyncio.gather(
-            agent_service.list(),
-            task_service.task_repository.list_by_statuses(
-                statuses=query_statuses,
-                agent_id=agent_id,
-                limit=page_size,
-                offset=offset,
-            ),
-            task_service.task_repository.count_by_statuses(
-                statuses=query_statuses,
-            ),
+        # Sequential task queries (same DB session can't handle concurrent ops)
+        tasks = await task_service.task_repository.list_by_statuses(
+            statuses=query_statuses,
+            agent_id=agent_id,
+            limit=page_size,
+            offset=offset,
         )
+        total = await task_service.task_repository.count_by_statuses(
+            statuses=query_statuses,
+        )
+        # Agent service has its own session, safe to call separately
+        agents_result = await agent_service.list()
 
         agent_map = {str(agent.id): agent.name for agent in agents_result}
 
@@ -88,5 +84,5 @@ async def get_inbox_items(
 
         return InboxResponse(items=items, total=total, page=page, page_size=page_size)
     except Exception as e:
-        logger.error(f"Failed to get inbox items: {e}", exc_info=True)
+        logger.error("Failed to get inbox items", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -121,7 +121,7 @@ class SkillStorageService:
                     ContentType=content_type,
                 )
 
-                logger.debug(f"Uploaded {relative_path} to s3://{self.bucket_name}/{s3_key}")
+                logger.debug("Uploaded file to S3", extra={"relative_path": relative_path, "bucket": self.bucket_name, "s3_key": s3_key})
 
         return s3_prefix
 
@@ -165,7 +165,7 @@ class SkillStorageService:
                     ContentType=content_type,
                 )
 
-            logger.debug(f"Uploaded {relative_path} to s3://{self.bucket_name}/{s3_key}")
+            logger.debug("Uploaded file to S3", extra={"relative_path": relative_path, "bucket": self.bucket_name, "s3_key": s3_key})
 
         return s3_prefix
 
@@ -320,7 +320,7 @@ class SkillStorageService:
             )
             deleted_count += len(delete_keys)
 
-        logger.info(f"Deleted {deleted_count} files from {s3_path}")
+        logger.info("Deleted files from S3", extra={"deleted_count": deleted_count, "s3_path": s3_path})
         return deleted_count
 
     async def package_exists(self, s3_path: str) -> bool:

@@ -139,7 +139,7 @@ def _get_hydra_jwks():
     settings = get_settings()
     jwks_url = f"{settings.mcp.HYDRA_PUBLIC_URL.rstrip('/')}/.well-known/jwks.json"
     _hydra_jwks_client = pyjwt.PyJWKClient(jwks_url, cache_keys=True)
-    logger.info(f"Hydra JWKS client initialized: {jwks_url}")
+    logger.info("Hydra JWKS client initialized", extra={"jwks_url": jwks_url})
     return _hydra_jwks_client
 
 
@@ -178,7 +178,7 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         )
 
     except Exception as e:
-        logger.debug(f"Hydra token verification failed: {e}")
+        logger.debug("Hydra token verification failed", extra={"error": str(e)})
         return None
 
 
@@ -229,7 +229,8 @@ async def get_user_context(
         await _resolve_accessible_workspaces(user_context)
         ContextManager.set_context(user_context)
         logger.debug(
-            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+            "Authenticated via API key",
+            extra={"user_id": user_context.user_id, "workspace_id": user_context.workspace_id},
         )
         return user_context
 
@@ -248,7 +249,7 @@ async def get_user_context(
                 ContextManager.set_context(hydra_context)
                 return hydra_context
 
-            logger.warning(f"Authentication failed: {auth_result.error}")
+            logger.warning("Authentication failed", extra={"error": auth_result.error})
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=auth_result.error or "Invalid authentication token",
@@ -272,7 +273,8 @@ async def get_user_context(
         ContextManager.set_context(user_context)
 
         logger.debug(
-            f"Authenticated user: {user_context.user_id} in workspace: {user_context.workspace_id}"
+            "Authenticated user",
+            extra={"user_id": user_context.user_id, "workspace_id": user_context.workspace_id},
         )
 
         return user_context
@@ -287,7 +289,7 @@ async def get_user_context(
             ContextManager.set_context(hydra_context)
             return hydra_context
 
-        logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
+        logger.error("Unexpected error during authentication", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during authentication",
@@ -334,7 +336,8 @@ async def get_optional_user(
         await _resolve_accessible_workspaces(user_context)
         ContextManager.set_context(user_context)
         logger.debug(
-            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+            "Authenticated via API key",
+            extra={"user_id": user_context.user_id, "workspace_id": user_context.workspace_id},
         )
         return user_context
 
@@ -346,7 +349,7 @@ async def get_optional_user(
         auth_result: AuthResult = await auth_provider.verify_token(token)
 
         if not auth_result.is_authenticated or not auth_result.token:
-            logger.debug(f"Optional authentication failed: {auth_result.error}")
+            logger.debug("Optional authentication failed", extra={"error": auth_result.error})
             return None
 
         # Get workspace from header, fallback to user_id
@@ -365,12 +368,12 @@ async def get_optional_user(
         # Set context in ContextManager
         ContextManager.set_context(user_context)
 
-        logger.debug(f"Optionally authenticated user: {user_context.user_id}")
+        logger.debug("Optionally authenticated user", extra={"user_id": user_context.user_id})
 
         return user_context
 
     except Exception as e:
-        logger.warning(f"Error during optional authentication: {e}")
+        logger.warning("Error during optional authentication", extra={"error": str(e)})
         return None
 
 
@@ -403,8 +406,12 @@ async def verify_workspace_access(
     """
     if user.workspace_id != workspace_id:
         logger.warning(
-            f"User {user.user_id} attempted to access workspace {workspace_id} "
-            f"but belongs to workspace {user.workspace_id}"
+            "User attempted to access workspace but belongs to different workspace",
+            extra={
+                "user_id": user.user_id,
+                "attempted_workspace_id": workspace_id,
+                "actual_workspace_id": user.workspace_id,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

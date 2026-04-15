@@ -104,7 +104,7 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
         auth_result = await auth_provider.verify_token(token)
 
         if not auth_result.is_authenticated or not auth_result.token:
-            logger.warning(f"Bearer token authentication failed: {auth_result.error}")
+            logger.warning("Bearer token authentication failed", extra={"error": auth_result.error})
             return None
 
         # Extract user information from validated token
@@ -115,8 +115,8 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
 
         if not workspace_id:
             logger.warning(
-                f"Token missing workspace_id claim for user {auth_result.token.user_id}. "
-                "A2A requests require workspace_id in token."
+                "Token missing workspace_id claim for user. A2A requests require workspace_id in token.",
+                extra={"user_id": auth_result.token.user_id},
             )
             return None
 
@@ -128,7 +128,7 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
         }
 
     except Exception as e:
-        logger.error(f"Error authenticating bearer token: {e}")
+        logger.error("Error authenticating bearer token", extra={"error": str(e)})
         return None
 
 
@@ -174,7 +174,8 @@ async def get_a2a_auth_context(
         workspace_id = auth_result.get("workspace_id")
         if not workspace_id:
             logger.warning(
-                f"Authentication result missing workspace_id for user {auth_result['user_id']}"
+                "Authentication result missing workspace_id for user",
+                extra={"user_id": auth_result["user_id"]},
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -185,16 +186,21 @@ async def get_a2a_auth_context(
         context.agent_id = agent_id
 
         logger.info(
-            f"A2A authentication successful: user={context.user_id}, "
-            f"workspace={context.workspace_id}, method={context.auth_method}"
+            "A2A authentication successful",
+            extra={
+                "user_id": context.user_id,
+                "workspace": context.workspace_id,
+                "method": context.auth_method,
+            },
         )
     else:
-        logger.info(f"A2A authentication failed or not provided: method={auth_info['method']}")
+        logger.info("A2A authentication failed or not provided", extra={"method": auth_info["method"]})
 
     # Check required permission
     if required_permission and required_permission not in context.permissions:
         logger.warning(
-            f"A2A authorization failed: user={context.user_id}, required={required_permission}"
+            "A2A authorization failed",
+            extra={"user_id": context.user_id, "required_permission": required_permission},
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

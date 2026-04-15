@@ -32,7 +32,7 @@ class DirectTaskManager(BaseTaskManager):
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit and immediately execute a task in-process."""
-        logger.info(f"DirectTaskManager: executing task {task.id} in-process")
+        logger.info("DirectTaskManager: executing task in-process", extra={"task_id": str(task.id)})
 
         task.status = "running"
         task.execution_id = f"task-{task.id}"
@@ -106,7 +106,7 @@ class DirectTaskManager(BaseTaskManager):
 
             max_iterations = 10
             for iteration in range(1, max_iterations + 1):
-                logger.info(f"DirectTaskManager: iteration {iteration}")
+                logger.info("DirectTaskManager: iteration", extra={"iteration": iteration})
 
                 response = await llm.complete(
                     LLMRequest(
@@ -176,7 +176,7 @@ class DirectTaskManager(BaseTaskManager):
             self._tasks[task.id] = task
 
         except Exception as e:
-            logger.error(f"DirectTaskManager: execution failed: {e}")
+            logger.error("DirectTaskManager: execution failed", extra={"error": str(e)})
             task.status = "failed"
             task.result = {"error": str(e)}
             await self.task_repository.update_status(
@@ -251,7 +251,8 @@ class DirectTaskManager(BaseTaskManager):
         )
 
         logger.info(
-            f"DirectTaskManager: resolved {provider_type}/{model_name} for agent {agent.name}"
+            "DirectTaskManager: resolved agent config",
+            extra={"provider_type": provider_type, "model_name": model_name, "agent_name": agent.name},
         )
 
         await session.close()
@@ -269,7 +270,7 @@ class DirectTaskManager(BaseTaskManager):
         return None
 
     async def cancel_task(self, task_id: UUID) -> bool:
-        logger.warning(f"DirectTaskManager: cancel not supported for {task_id}")
+        logger.warning("DirectTaskManager: cancel not supported", extra={"task_id": str(task_id)})
         return False
 
     async def list_tasks(

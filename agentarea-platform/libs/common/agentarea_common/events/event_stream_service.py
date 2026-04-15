@@ -107,7 +107,7 @@ class EventStreamService:
                 yield event
 
         except Exception as e:
-            logger.error(f"EventStreamService error for task {task_id}: {e}", exc_info=True)
+            logger.error("EventStreamService error for task", extra={"task_id": str(task_id), "error": str(e)}, exc_info=True)
             raise
 
     async def stream_events(
@@ -133,7 +133,7 @@ class EventStreamService:
                 yield event
 
         except Exception as e:
-            logger.error(f"EventStreamService error: {e}", exc_info=True)
+            logger.error("EventStreamService error", extra={"error": str(e)}, exc_info=True)
             raise
 
     async def _subscribe_and_iterate(
@@ -161,7 +161,7 @@ class EventStreamService:
                 await self.broker.connect()
             except Exception as e:
                 # Connection may already be established; ignore failures
-                logger.debug(f"Broker connection attempt ignored: {e}")
+                logger.debug("Broker connection attempt ignored", extra={"error": str(e)})
 
         for pattern in event_patterns:
             logger.info(
@@ -211,7 +211,7 @@ class EventStreamService:
                                 try:
                                     payload = payload.decode("utf-8")
                                 except Exception as e:
-                                    logger.debug(f"Could not decode payload as UTF-8: {e}")
+                                    logger.debug("Could not decode payload as UTF-8", extra={"error": str(e)})
                             if isinstance(payload, str):
                                 try:
                                     payload = json.loads(payload)
@@ -234,7 +234,7 @@ class EventStreamService:
                                     try:
                                         maybe_ack()
                                     except Exception as e:
-                                        logger.debug(f"Could not ack message: {e}")
+                                        logger.debug("Could not ack message", extra={"error": str(e)})
 
                         except Exception as e:
                             logger.error(
@@ -247,10 +247,10 @@ class EventStreamService:
                     try:
                         await subscriber.stop()
                     except Exception as e:
-                        logger.debug(f"Could not stop subscriber: {e}")
+                        logger.debug("Could not stop subscriber", extra={"error": str(e)})
 
             except Exception as e:
-                logger.error(f"Error subscribing to pattern '{pattern}': {e}", exc_info=True)
+                logger.error("Error subscribing to pattern", extra={"pattern": pattern, "error": str(e)}, exc_info=True)
                 # Continue to next pattern
                 continue
 
@@ -327,7 +327,7 @@ class EventStreamService:
                     return None
 
             # Build response structure
-            logger.debug(f"EventStreamService: parsed event_data={event_data}")
+            logger.debug("EventStreamService parsed event_data", extra={"event_data": str(event_data)})
             return {
                 "event_type": event_data.get("event_type")
                 if isinstance(event_data, dict)
@@ -338,5 +338,5 @@ class EventStreamService:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
-            logger.error(f"Failed to parse message from channel '{channel}': {e}", exc_info=True)
+            logger.error("Failed to parse message from channel", extra={"channel": str(channel), "error": str(e)}, exc_info=True)
             return None

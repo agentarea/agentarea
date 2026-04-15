@@ -61,7 +61,7 @@ class WorkspaceImportExportService:
                 skills = await self.skill_service.list()
                 skill_id_to_name = {str(s.id): s.name for s in skills}
             except Exception as e:
-                logger.warning(f"Failed to build skill lookup: {e}")
+                logger.warning("Failed to build skill lookup", extra={"error": str(e)})
 
         # Get all workspace-scoped resources (exclude system resources)
         agents = await self.agent_service.list()
@@ -168,7 +168,7 @@ class WorkspaceImportExportService:
             return result
         except Exception as e:
             # Log error but don't fail the entire export
-            logger.warning(f"Failed to export MCP instances: {e}")
+            logger.warning("Failed to export MCP instances", extra={"error": str(e)})
             return []
 
     async def _export_provider_configs(self) -> list[dict]:
@@ -207,7 +207,7 @@ class WorkspaceImportExportService:
             return result
         except Exception as e:
             # Log error but don't fail the entire export
-            logger.warning(f"Failed to export provider configs: {e}")
+            logger.warning("Failed to export provider configs", extra={"error": str(e)})
             return []
 
     async def _export_skills(self) -> list[dict]:
@@ -249,7 +249,7 @@ class WorkspaceImportExportService:
 
             return result
         except Exception as e:
-            logger.warning(f"Failed to export skills: {e}")
+            logger.warning("Failed to export skills", extra={"error": str(e)})
             return []
 
     async def import_workspace(
@@ -495,7 +495,7 @@ class WorkspaceImportExportService:
         else:
             raise ValueError("Skill must have one of: content, github, or path")
 
-        logger.info(f"Imported skill '{skill.name}' (id={skill.id})")
+        logger.info("Imported skill", extra={"skill_name": skill.name, "skill_id": str(skill.id)})
         return skill
 
     async def _import_agent(
@@ -543,9 +543,7 @@ class WorkspaceImportExportService:
                         f"Agent '{agent_yaml.name}' references unknown skill '{skill_name}'"
                     )
                 else:
-                    logger.warning(
-                        f"Agent '{agent_yaml.name}': Skipping unknown skill '{skill_name}'"
-                    )
+                    logger.warning("Agent skipping unknown skill", extra={"agent_name": agent_yaml.name, "skill_name": skill_name})
 
         # Create or update agent
         if existing_agent and options.override_existing:

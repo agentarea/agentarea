@@ -203,7 +203,7 @@ async def validate_model_instance(
         if not resolved_endpoint_url and provider_type == "ollama_chat":
             resolved_endpoint_url = "http://host.docker.internal:11434"
 
-        logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")
+        logger.info("Testing LLM configuration via SDK", extra={"provider_type": provider_type, "model_name": model_name})
 
         # Use internal Agent SDK LLM model wrapper
         llm_model = LLMModel(
@@ -236,7 +236,7 @@ async def validate_model_instance(
         error_message = str(e)
         error_type = type(e).__name__
 
-        logger.error(f"LLM test failed: {error_message}")
+        logger.error("LLM test failed", extra={"error_message": error_message, "error_type": error_type})
 
         # Categorize common errors
         if "AuthenticationError" in error_type or "api_key" in error_message.lower():

@@ -109,7 +109,7 @@ class SkillService:
             s3_path=None,
         )
 
-        logger.info(f"Created skill '{skill_name}' from content (id={skill.id})")
+        logger.info("Created skill from content", extra={"skill_name": skill_name, "skill_id": str(skill.id)})
         return skill
 
     @audited("skill.create", resource_type="skill")
@@ -170,7 +170,7 @@ class SkillService:
             s3_path=s3_path,
         )
 
-        logger.info(f"Created skill '{skill_name}' from ZIP (id={skill.id})")
+        logger.info("Created skill from ZIP", extra={"skill_name": skill_name, "skill_id": str(skill.id)})
         return skill
 
     @audited("skill.create", resource_type="skill")
@@ -233,7 +233,7 @@ class SkillService:
             s3_path=s3_path,
         )
 
-        logger.info(f"Created skill '{skill_name}' from GitHub: {github_url} (id={skill.id})")
+        logger.info("Created skill from GitHub", extra={"skill_name": skill_name, "github_url": github_url, "skill_id": str(skill.id)})
         return skill
 
     @audited("skill.create", resource_type="skill")
@@ -316,7 +316,7 @@ class SkillService:
                 s3_path=s3_path,
             )
 
-            logger.info(f"Created skill '{skill_name}' from path: {full_path} (id={skill.id})")
+            logger.info("Created skill from path", extra={"skill_name": skill_name, "path": str(full_path), "skill_id": str(skill.id)})
             return skill
 
         raise ValueError(f"Path is neither a directory nor a ZIP file: {full_path}")
@@ -411,12 +411,12 @@ class SkillService:
             try:
                 await self.storage_service.delete_package(skill.s3_path)
             except Exception as e:
-                logger.warning(f"Failed to delete S3 package for skill {skill_id}: {e}")
+                logger.warning("Failed to delete S3 package for skill", extra={"skill_id": str(skill_id), "error": str(e)})
 
         # Delete from database
         await repo.delete(str(skill_id))
 
-        logger.info(f"Deleted skill {skill_id}")
+        logger.info("Deleted skill", extra={"skill_id": str(skill_id)})
         return True
 
     async def get_skill_files(

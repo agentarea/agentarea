@@ -70,7 +70,7 @@ class JWTTokenHandler:
             )
 
         except jwt.InvalidTokenError as e:
-            self.logger.error(f"JWT validation failed: {e}")
+            self.logger.error("JWT validation failed", extra={"error": str(e)})
             raise InvalidJWTToken(
                 reason=f"Token validation failed: {e!s}", token_present=True
             ) from e

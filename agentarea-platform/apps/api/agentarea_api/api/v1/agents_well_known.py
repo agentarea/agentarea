@@ -102,13 +102,13 @@ async def get_agent_well_known_card(
         # Create agent card for this specific agent
         agent_card = await create_agent_card_for_agent(agent, base_url, agent_id)
 
-        logger.info(f"Agent well-known discovery: {agent.name} ({agent_id})")
+        logger.info("Agent well-known discovery", extra={"agent_name": agent.name, "agent_id": str(agent_id)})
         return agent_card
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in agent well-known discovery for {agent_id}: {e}", exc_info=True)
+        logger.error("Error in agent well-known discovery", extra={"agent_id": str(agent_id), "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="Agent discovery failed") from e
 
 
@@ -177,7 +177,7 @@ async def get_agent_a2a_info(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting A2A info for agent {agent_id}: {e}", exc_info=True)
+        logger.error("Error getting A2A info for agent", extra={"agent_id": str(agent_id), "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="A2A info failed") from e
 
 
@@ -211,5 +211,5 @@ async def get_agent_well_known_index(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting well-known index for agent {agent_id}: {e}", exc_info=True)
+        logger.error("Error getting well-known index for agent", extra={"agent_id": str(agent_id), "error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="Well-known index failed") from e

@@ -43,14 +43,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     self.temporal_address,
                     data_converter=pydantic_data_converter,
                 )
-                logger.info(f"Connected to Temporal at {self.temporal_address}")
+                logger.info("Connected to Temporal", extra={"temporal_address": self.temporal_address})
             except ImportError as e:
-                logger.error(f"Temporal library not installed: {e}")
+                logger.error("Temporal library not installed", extra={"error": str(e)})
                 raise RuntimeError(
                     "Temporal integration is not ready (missing 'temporalio')"
                 ) from e
             except Exception as e:
-                logger.error(f"Failed to connect to Temporal: {e}")
+                logger.error("Failed to connect to Temporal", extra={"error": str(e)})
                 raise RuntimeError(f"Temporal client connection failed: {e}") from e
         return self._client
 
@@ -61,7 +61,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 await self._client.close()
                 logger.info("Closed Temporal client connection")
             except Exception as e:
-                logger.warning(f"Error closing Temporal client: {e}")
+                logger.warning("Error closing Temporal client", extra={"error": str(e)})
             finally:
                 self._client = None
 
@@ -89,8 +89,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
                         task_id_uuid = uuid4()
                         logger.warning(
-                            f"Failed to extract UUID from execution_id "
-                            f"{execution_id}, using new UUID: {task_id_uuid}"
+                            "Failed to extract UUID from execution_id, using new UUID",
+                            extra={"execution_id": execution_id, "task_id_uuid": str(task_id_uuid)},
                         )
                 else:
                     # If execution_id doesn't match expected pattern, try to parse it as UUID
@@ -102,8 +102,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
                         task_id_uuid = uuid4()
                         logger.warning(
-                            f"execution_id {execution_id} is not a valid UUID "
-                            f"pattern, using new UUID: {task_id_uuid}"
+                            "execution_id is not a valid UUID pattern, using new UUID",
+                            extra={"execution_id": execution_id, "task_id_uuid": str(task_id_uuid)},
                         )
 
                 # Ensure workspace_id is provided
@@ -130,12 +130,12 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 )
 
             except ImportError as e:
-                logger.error(f"Agent execution library not available: {e}")
+                logger.error("Agent execution library not available", extra={"error": str(e)})
                 raise RuntimeError(
                     "Agent execution integration is not ready (missing 'agentarea_execution')"
                 ) from e
 
-            logger.info(f"Started Temporal workflow: {execution_id}")
+            logger.info("Started Temporal workflow", extra={"execution_id": execution_id})
 
             return {
                 "success": True,
@@ -146,7 +146,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             }
 
         except Exception as e:
-            logger.error(f"Failed to start Temporal workflow: {e}")
+            logger.error("Failed to start Temporal workflow", extra={"error": str(e)})
             raise RuntimeError(f"Failed to start Temporal workflow: {e}") from e
 
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
@@ -213,7 +213,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return response
 
         except Exception as e:
-            logger.error(f"Failed to get workflow status: {e}")
+            logger.error("Failed to get workflow status", extra={"error": str(e)})
             raise RuntimeError(f"Failed to get workflow status: {e}") from e
 
     async def cancel_workflow(self, execution_id: str) -> bool:
@@ -223,11 +223,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.cancel()
-            logger.info(f"Cancelled Temporal workflow: {execution_id}")
+            logger.info("Cancelled Temporal workflow", extra={"execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to cancel workflow: {e}")
+            logger.error("Failed to cancel workflow", extra={"error": str(e)})
             return False
 
     async def pause_workflow(self, execution_id: str) -> bool:
@@ -237,11 +237,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("pause_execution", "User requested pause")
-            logger.info(f"Paused Temporal workflow: {execution_id}")
+            logger.info("Paused Temporal workflow", extra={"execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to pause workflow: {e}")
+            logger.error("Failed to pause workflow", extra={"error": str(e)})
             return False
 
     async def resume_workflow(self, execution_id: str) -> bool:
@@ -251,11 +251,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("resume_execution", "User requested resume")
-            logger.info(f"Resumed Temporal workflow: {execution_id}")
+            logger.info("Resumed Temporal workflow", extra={"execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to resume workflow: {e}")
+            logger.error("Failed to resume workflow", extra={"error": str(e)})
             return False
 
     async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
@@ -265,11 +265,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("handle_a2ui_action", action_data)
-            logger.info(f"Sent A2UI action to workflow: {execution_id}")
+            logger.info("Sent A2UI action to workflow", extra={"execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send A2UI action: {e}")
+            logger.error("Failed to send A2UI action", extra={"error": str(e)})
             return False
 
     async def resolve_escalation_workflow(
@@ -281,11 +281,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("resolve_escalation", args=[escalation_id, approved, comment])
-            logger.info(f"Resolved escalation {escalation_id} in workflow: {execution_id}")
+            logger.info("Resolved escalation in workflow", extra={"escalation_id": escalation_id, "execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to resolve escalation in workflow: {e}")
+            logger.error("Failed to resolve escalation in workflow", extra={"error": str(e)})
             return False
 
     async def send_workflow_command(
@@ -297,9 +297,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("workflow_command", args=[command, payload])
-            logger.info(f"Sent workflow command '{command}' to workflow: {execution_id}")
+            logger.info("Sent workflow command to workflow", extra={"command": command, "execution_id": execution_id})
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}' to {execution_id}: {e}")
+            logger.error("Failed to send workflow command", extra={"command": command, "execution_id": execution_id, "error": str(e)})
             return False

@@ -237,7 +237,7 @@ class RegistryService:
                 await self.update_item_spec(item.id)
                 updated += 1
             except Exception as e:
-                logger.warning(f"Failed to update {item.name}: {e}")
+                logger.warning("Failed to update registry item", extra={"item_name": item.name, "error": str(e)})
                 errors += 1
         return {"updated": updated, "errors": errors}
 

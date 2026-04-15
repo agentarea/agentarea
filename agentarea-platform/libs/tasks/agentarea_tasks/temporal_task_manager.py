@@ -111,7 +111,7 @@ class TemporalTaskManager(BaseTaskManager):
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit a task for execution."""
         try:
-            logger.info(f"Submitting task {task.id} for execution")
+            logger.info("Submitting task for execution", extra={"task_id": str(task.id)})
 
             # Convert SimpleTask to Task for repository operations
             task_domain = self._simple_task_to_task(task)
@@ -165,8 +165,7 @@ class TemporalTaskManager(BaseTaskManager):
             )
 
             # Debug: Log args_dict to verify workspace_id is present
-            logger.info(f"Starting workflow {workflow_id} with args: {args_dict}")
-            logger.info(f"workspace_id in args_dict: {args_dict.get('workspace_id')}")
+            logger.info("Starting workflow", extra={"workflow_id": workflow_id, "task_id": str(task.id), "workspace_id": str(args_dict.get('workspace_id'))})
 
             execution_id = await self.temporal_executor.start_workflow(
                 workflow_name="AgentExecutionWorkflow",
@@ -185,13 +184,13 @@ class TemporalTaskManager(BaseTaskManager):
 
             if updated_task_domain:
                 updated_simple_task = self._task_to_simple_task(updated_task_domain)
-                logger.info(f"Task {task.id} submitted successfully")
+                logger.info("Task submitted successfully", extra={"task_id": str(task.id)})
                 return updated_simple_task
             else:
                 raise Exception(f"Failed to update task {task.id} status")
 
         except Exception as e:
-            logger.error(f"Error submitting task {task.id}: {e}", exc_info=True)
+            logger.error("Error submitting task", extra={"task_id": str(task.id), "error": str(e)})
             # Update task status to failed
             task.status = "failed"
             task.error_message = str(e)
@@ -210,12 +209,12 @@ class TemporalTaskManager(BaseTaskManager):
     async def cancel_task(self, task_id: UUID) -> bool:
         """Cancel a task."""
         try:
-            logger.info(f"Cancelling task {task_id}")
+            logger.info("Cancelling task", extra={"task_id": str(task_id)})
 
             # Get task from database
             task_domain = await self.task_repository.get_task(task_id)
             if not task_domain:
-                logger.warning(f"Task {task_id} not found")
+                logger.warning("Task not found", extra={"task_id": str(task_id)})
                 return False
 
             # Cancel temporal workflow
@@ -225,11 +224,11 @@ class TemporalTaskManager(BaseTaskManager):
             # Update task status
             await self.task_repository.update_status(task_id, "cancelled")
 
-            logger.info(f"Task {task_id} cancelled successfully")
+            logger.info("Task cancelled successfully", extra={"task_id": str(task_id)})
             return True
 
         except Exception as e:
-            logger.error(f"Error cancelling task {task_id}: {e}", exc_info=True)
+            logger.error("Error cancelling task", extra={"task_id": str(task_id), "error": str(e)})
             return False
 
     async def list_tasks(

@@ -134,12 +134,14 @@ def log_a2a_operation(
         log_data.update(extra_metadata)
 
     # Log at appropriate level based on status
+    log_data["operation"] = operation
+    log_data["status"] = status
     if status == "failed" or error:
-        logger.error(f"A2A {operation} failed", extra={"a2a_metrics": log_data})
+        logger.error("A2A operation failed", extra={"a2a_metrics": log_data})
     elif status == "completed":
-        logger.info(f"A2A {operation} completed", extra={"a2a_metrics": log_data})
+        logger.info("A2A operation completed", extra={"a2a_metrics": log_data})
     else:
-        logger.info(f"A2A {operation} {status}", extra={"a2a_metrics": log_data})
+        logger.info("A2A operation status", extra={"a2a_metrics": log_data})
 
 
 def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
@@ -236,7 +238,7 @@ async def validate_agent_exists(agent_service: AgentService, agent_id: UUID) -> 
         # Re-raise validation errors as-is
         raise
     except Exception as e:
-        logger.error(f"Error validating agent existence for {agent_id}: {e}")
+        logger.error("Error validating agent existence", extra={"agent_id": str(agent_id), "error": str(e)})
         raise A2AValidationError(f"Failed to validate agent availability: {e}", -32603) from None
 
 

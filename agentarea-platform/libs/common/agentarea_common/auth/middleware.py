@@ -88,7 +88,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user_id = auth_result.token.user_id if auth_result.token else None
                 if user_id:
                     workspace_id = user_id
-                    logger.debug(f"Using user_id as workspace_id for user {user_id}")
+                    logger.debug("Using user_id as workspace_id", extra={"user_id": user_id})
                 else:
                     logger.error("No user_id available to use as workspace_id")
                     raise ValueError("Unable to determine workspace_id: no user_id in token")
@@ -104,7 +104,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 ContextManager.set_context(user_context)
 
         except Exception as e:
-            logger.error(f"Unexpected error during token validation: {e}")
+            logger.error("Unexpected error during token validation", extra={"error": str(e)})
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"detail": "Internal server error"},
