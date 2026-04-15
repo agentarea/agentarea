@@ -47,6 +47,23 @@ while IFS= read -r file; do
   fi
 done < <(find "$PROJECT_ROOT" -name "pyproject.toml" -type f)
 
+# Check Go version constants
+GO_VERSION_FILES=(
+  "$PROJECT_ROOT/agentarea-mcp-manager/cmd/mcp-manager/main.go"
+  "$PROJECT_ROOT/agentarea-event-service/cmd/server/main.go"
+)
+
+for file in "${GO_VERSION_FILES[@]}"; do
+  if [ -f "$file" ]; then
+    GO_VERSION=$(grep 'const version = ' "$file" | sed 's/const version = "\(.*\)"/\1/')
+    if [ "$GO_VERSION" != "$EXPECTED_VERSION" ]; then
+      REL_PATH=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+      echo "❌ $REL_PATH: $GO_VERSION (expected: $EXPECTED_VERSION)"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+done
+
 # Check package.json
 PACKAGE_JSON="$PROJECT_ROOT/agentarea-webapp/package.json"
 if [ -f "$PACKAGE_JSON" ]; then
