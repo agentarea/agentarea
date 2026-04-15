@@ -1,0 +1,100 @@
+{{- if .Values.eventService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-event-service
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: event-service
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.eventService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: event-service
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: event-service
+        {{- with .Values.global.extraSelectorLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.eventService.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- with .Values.eventService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.eventService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.eventService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.eventService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: event-service
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.eventService.image.repository }}:{{ default .Chart.AppVersion .Values.eventService.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.eventService.port }}
+              protocol: TCP
+          env:
+            {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
+            - name: POLL_INTERVAL
+              value: {{ .Values.eventService.pollInterval | quote }}
+            - name: MAX_POLLERS
+              value: {{ .Values.eventService.maxPollers | quote }}
+            {{- if .Values.eventService.extraEnv }}
+            {{- toYaml .Values.eventService.extraEnv | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.global.monitoring.health.path }}
+              port: {{ .Values.eventService.port }}
+            initialDelaySeconds: {{ .Values.eventService.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.eventService.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.eventService.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.eventService.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.global.monitoring.health.path }}
+              port: {{ .Values.eventService.port }}
+            initialDelaySeconds: {{ .Values.eventService.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.eventService.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.eventService.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.eventService.readinessProbe.failureThreshold }}
+          {{- if .Values.eventService.resources }}
+          resources:
+            {{- toYaml .Values.eventService.resources | nindent 12 }}
+          {{- end }}
+{{- end }}
