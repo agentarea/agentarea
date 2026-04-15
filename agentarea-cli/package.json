@@ -19,7 +19,7 @@
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
-		"axios": "^1.13.5",
+		"axios": "^1.15.0",
 		"eventsource": "^2.0.2",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
@@ -58,5 +58,11 @@
 			"react/prop-types": "off"
 		}
 	},
-	"prettier": "@vdemedes/prettier-config"
+	"prettier": "@vdemedes/prettier-config",
+	"overrides": {
+		"braces": ">=3.0.3",
+		"micromatch": ">=4.0.8",
+		"picomatch": ">=3.0.0",
+		"semver": ">=7.5.2"
+	}
 }
