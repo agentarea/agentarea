@@ -66,9 +66,25 @@ files:
     search: version = "{current_version}"
     replace: version = "{new_version}"
 
+  - filename: agentarea-operator/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/projects/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/governance/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
   - filename: agentarea-webapp/package.json
     search: '"version": "{current_version}"'
     replace: '"version": "{new_version}"'
+
+  - filename: charts/agentarea/Chart.yaml
+    search: 'appVersion: "{current_version}"'
+    replace: 'appVersion: "{new_version}"'
 
   - filename: VERSION
     search: "{current_version}"

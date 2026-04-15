@@ -77,6 +77,23 @@ def main():
             f.write(updated)
         print(f"✅ Updated {bumpversion_yaml.relative_to(Path.cwd())}")
 
+    # Update Chart.yaml appVersion
+    chart_yaml = Path(__file__).parent.parent / 'charts' / 'agentarea' / 'Chart.yaml'
+    if chart_yaml.exists():
+        with open(chart_yaml, 'r') as f:
+            content = f.read()
+
+        updated = re.sub(
+            r'appVersion:\s*"[^"]*"',
+            f'appVersion: "{target_version}"',
+            content
+        )
+
+        if updated != content:
+            with open(chart_yaml, 'w') as f:
+                f.write(updated)
+            print(f"✅ Updated {chart_yaml.relative_to(Path.cwd())}")
+
     print(f"\n✅ All versions synchronized to {target_version}")
 
 if __name__ == '__main__':
