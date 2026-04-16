@@ -107,6 +107,7 @@ The following table lists configurable parameters of the chart and their default
 | global.temporal.worker.maxConcurrentSessionExecutions | int | `1000` |  |
 | global.api.host | string | `"0.0.0.0"` |  |
 | global.api.port | int | `8000` |  |
+| global.api.publicUrl | string | `""` |  |
 | global.api.auth.enabled | bool | `false` |  |
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
