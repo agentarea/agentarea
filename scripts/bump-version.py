@@ -108,6 +108,25 @@ def main():
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Warning: Failed to update Chart.yaml appVersion: {e.stderr}")
 
+    # Update Go version constants
+    go_version_files = [
+        root_dir / 'agentarea-mcp-manager' / 'cmd' / 'mcp-manager' / 'main.go',
+        root_dir / 'agentarea-event-service' / 'cmd' / 'server' / 'main.go',
+    ]
+
+    for go_file in go_version_files:
+        if go_file.exists():
+            content = go_file.read_text()
+            updated = re.sub(
+                r'const version = "[^"]*"',
+                f'const version = "{new_version}"',
+                content
+            )
+
+            if updated != content:
+                go_file.write_text(updated)
+                print(f"✅ Updated {go_file.relative_to(root_dir)}")
+
     print(f"\n✅ All versions bumped to {new_version}")
 
 if __name__ == '__main__':

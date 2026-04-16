@@ -56,10 +56,12 @@ GO_VERSION_FILES=(
 for file in "${GO_VERSION_FILES[@]}"; do
   if [ -f "$file" ]; then
     GO_VERSION=$(grep 'const version = ' "$file" | sed 's/const version = "\(.*\)"/\1/')
+    REL_PATH=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
     if [ "$GO_VERSION" != "$EXPECTED_VERSION" ]; then
-      REL_PATH=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
       echo "❌ $REL_PATH: $GO_VERSION (expected: $EXPECTED_VERSION)"
       ERRORS=$((ERRORS + 1))
+    else
+      echo "✅ $REL_PATH: $GO_VERSION"
     fi
   fi
 done
