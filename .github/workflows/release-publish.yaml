@@ -1,108 +1,82 @@
 name: Publish Release
 
+# Triggered by push of a semver tag `vX.Y.Z`.
+# Does NOT rebuild images. Retags existing `<version>-<sha>` artifacts (pushed by
+# ci.yml on merge to main) with immutable semver tags `<version>`, `<maj.min>`,
+# `<maj>`, and the mutable `latest`. Then creates a GitHub Release.
+#
+# Preconditions (enforced by scripts/release.sh and re-checked here):
+#   - Tag name is `vX.Y.Z` (semver)
+#   - VERSION file at tag commit == X.Y.Z
+#   - ci.yml has produced images `agentarea-<component>:X.Y.Z-<short_sha>` on DockerHub
+
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - main
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
 
 jobs:
-  check-release:
+  verify:
     runs-on: ubuntu-latest
-    if: |
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/') &&
-      contains(github.event.pull_request.labels.*.name, 'release')
     outputs:
-      is_release: ${{ steps.check.outputs.is_release }}
-      version: ${{ steps.extract-version.outputs.version }}
-    steps:
-      - name: Check release conditions
-        id: check
-        run: echo "is_release=true" >> $GITHUB_OUTPUT
-
-      - uses: actions/checkout@v4
-        with:
-          ref: main  # Ensure we're on merged main
-
-      - name: Read version from VERSION file
-        id: extract-version
-        run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          VERSION_TAG="v${VERSION}"
-          echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
-          echo "app_version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Releasing version: ${VERSION_TAG}"
-
-      - name: Verify version synchronization
-        run: |
-          bash scripts/verify-version-sync.sh
-
-  create-tag:
-    runs-on: ubuntu-latest
-    needs: check-release
-    if: needs.check-release.outputs.is_release == 'true'
-    permissions:
-      contents: write
+      version: ${{ steps.parse.outputs.version }}
+      major: ${{ steps.parse.outputs.major }}
+      major_minor: ${{ steps.parse.outputs.major_minor }}
+      short_sha: ${{ steps.parse.outputs.short_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Create and push tag
+      - name: Parse tag and verify VERSION sync
+        id: parse
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ needs.check-release.outputs.version }}" -m "Release ${{ needs.check-release.outputs.version }}"
-          git push origin "${{ needs.check-release.outputs.version }}"
+          set -euo pipefail
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG_NAME#v}"
 
-      - name: Create GitHub Release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: '${{ needs.check-release.outputs.version }}',
-              name: 'Release ${{ needs.check-release.outputs.version }}',
-              body: 'Release ${{ needs.check-release.outputs.version }}\n\nSee [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.',
-              draft: false,
-              prerelease: false
-            });
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag $TAG_NAME does not match vX.Y.Z semver"
+            exit 1
+          fi
 
-  build-and-push:
+          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
+          if [ "$FILE_VERSION" != "$VERSION" ]; then
+            echo "::error::VERSION file ($FILE_VERSION) does not match tag ($VERSION)"
+            exit 1
+          fi
+
+          bash scripts/verify-version-sync.sh
+
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+
+          {
+            echo "version=$VERSION"
+            echo "major=$MAJOR"
+            echo "major_minor=$MAJOR.$MINOR"
+            echo "short_sha=$SHORT_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+  retag:
     runs-on: ubuntu-latest
-    needs: [check-release, create-tag]
-    if: needs.check-release.outputs.is_release == 'true'
-    permissions:
-      packages: write
+    needs: verify
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - name: api
-            context: agentarea-platform
-            file: agentarea-platform/apps/api/Dockerfile
-          - name: worker
-            context: agentarea-platform
-            file: agentarea-platform/apps/worker/Dockerfile
-          - name: frontend
-            context: agentarea-webapp
-            file: agentarea-webapp/Dockerfile
-          - name: bootstrap
-            context: .
-            file: agentarea-bootstrap/Dockerfile
-          - name: mcp-manager
-            context: agentarea-mcp-manager
-            file: agentarea-mcp-manager/Dockerfile
-          - name: mcp-runner
-            context: agentarea-mcp-manager
-            file: agentarea-mcp-manager/Dockerfile.runner
-
+        component:
+          - api
+          - worker
+          - frontend
+          - bootstrap
+          - mcp-manager
+          - mcp-runner
+          - events
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -112,60 +86,75 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Log in to Private Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
-          username: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
-          password: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-
-      - name: Get commit SHA
-        id: sha
+      - name: Wait for source image
+        env:
+          IMAGE: agentarea/agentarea-${{ matrix.component }}
+          SRC_TAG: ${{ needs.verify.outputs.version }}-${{ needs.verify.outputs.short_sha }}
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          # ci.yml may still be building the same commit; retry up to 15 minutes.
+          for i in $(seq 1 30); do
+            if docker buildx imagetools inspect "${IMAGE}:${SRC_TAG}" >/dev/null 2>&1; then
+              echo "Source image ${IMAGE}:${SRC_TAG} available"
+              exit 0
+            fi
+            echo "Attempt $i/30: ${IMAGE}:${SRC_TAG} not yet available, sleeping 30s..."
+            sleep 30
+          done
+          echo "::error::Source image ${IMAGE}:${SRC_TAG} not found after 15 minutes. Did ci.yml succeed for this commit?"
+          exit 1
 
-      - name: Extract version components
-        id: version-parts
+      - name: Retag to release tags
+        env:
+          IMAGE: agentarea/agentarea-${{ matrix.component }}
+          SRC_TAG: ${{ needs.verify.outputs.version }}-${{ needs.verify.outputs.short_sha }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          MAJOR_MINOR: ${{ needs.verify.outputs.major_minor }}
+          MAJOR: ${{ needs.verify.outputs.major }}
         run: |
-          VERSION="${{ needs.check-release.outputs.version }}"
-          # Remove 'v' prefix if present
-          VERSION="${VERSION#v}"
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            --tag "${IMAGE}:${MAJOR_MINOR}" \
+            --tag "${IMAGE}:${MAJOR}" \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}:${SRC_TAG}"
 
-          # Extract major, minor, patch
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
-          PATCH=$(echo "$VERSION" | cut -d. -f3 | cut -d- -f1)
+          echo "Retagged ${IMAGE}:${SRC_TAG} -> ${VERSION}, ${MAJOR_MINOR}, ${MAJOR}, latest"
 
-          echo "major=${MAJOR}" >> $GITHUB_OUTPUT
-          echo "minor=${MINOR}" >> $GITHUB_OUTPUT
-          echo "patch=${PATCH}" >> $GITHUB_OUTPUT
-          echo "version_clean=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
-          echo "major_minor=${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
+  release:
+    runs-on: ubuntu-latest
+    needs: [verify, retag]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
         with:
-          images: |
-            agentarea/agentarea-${{ matrix.name }}
-            ${{ secrets.DOCKER_REGISTRY_MIRROR }}/agentarea/agentarea-${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ steps.version-parts.outputs.version_clean }}-${{ steps.sha.outputs.short_sha }}
-            type=raw,value=${{ steps.version-parts.outputs.version_clean }}
-            type=raw,value=${{ steps.version-parts.outputs.major_minor }}-${{ steps.sha.outputs.short_sha }}
-            type=raw,value=${{ steps.version-parts.outputs.major_minor }}
-            type=raw,value=${{ steps.version-parts.outputs.major }}-${{ steps.sha.outputs.short_sha }}
-            type=raw,value=${{ steps.version-parts.outputs.major }}
-            type=raw,value=latest
+          fetch-depth: 0
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=agentarea/agentarea-${{ matrix.name }}:buildcache
-          cache-to: type=registry,ref=agentarea/agentarea-${{ matrix.name }}:buildcache,mode=max
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git describe --tags --abbrev=0 --match='v*' "${TAG}^" 2>/dev/null || echo "")
+
+          NOTES_FILE=$(mktemp)
+          if [ -n "$PREV_TAG" ]; then
+            {
+              echo "## Changes since $PREV_TAG"
+              echo ""
+              git log "${PREV_TAG}..${TAG}" --pretty=format:'- %s (%an)' --no-merges
+            } > "$NOTES_FILE"
+          else
+            {
+              echo "## Changes"
+              echo ""
+              git log "${TAG}" --pretty=format:'- %s (%an)' --no-merges | head -n 50
+            } > "$NOTES_FILE"
+          fi
+
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes-file "$NOTES_FILE"

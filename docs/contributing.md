@@ -282,36 +282,15 @@ agentarea/
 
 ## 🚀 Release Process
 
-### Versioning
+We follow [Semantic Versioning](https://semver.org/). Releases use a
+**build-once / promote-on-tag** model:
 
-We follow [Semantic Versioning](https://semver.org/):
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backward compatible)
-- **PATCH**: Bug fixes (backward compatible)
+1. **Actions → "Prepare Release"** (patch/minor/major) — opens a release PR that bumps `VERSION`.
+2. Review and merge the PR. `ci.yml` builds immutable `<version>-<sha>` Docker images.
+3. Locally: `./scripts/release.sh` — runs pre-flight checks, creates and pushes `vX.Y.Z` tag.
+4. The tag push triggers retag of the pre-built images to `<version>`, `<maj.min>`, `<maj>`, `latest`, creates the GitHub Release, and publishes the Helm chart. **No rebuild.**
 
-### Release Checklist
-
-<Steps>
-  <Step title="Version Bump">
-    Update version numbers in relevant files and create a new tag
-  </Step>
-  
-  <Step title="Changelog Update">
-    Document all changes in CHANGELOG.md with proper categorization
-  </Step>
-  
-  <Step title="Testing">
-    Run comprehensive test suite and manual testing
-  </Step>
-  
-  <Step title="Documentation">
-    Update documentation and API references
-  </Step>
-  
-  <Step title="Release">
-    Create GitHub release with detailed release notes
-  </Step>
-</Steps>
+See [VERSIONING.md](./VERSIONING.md) for the full process, tag semantics, invariants, and troubleshooting.
 
 ## 🤝 Community Guidelines
 

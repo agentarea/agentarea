@@ -137,7 +137,6 @@ jobs:
         with:
           images: ${{ steps.image.outputs.images }}
           tags: |
-            type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=${{ steps.version.outputs.version }}-{{sha}}
           flavor: |
             latest=false
