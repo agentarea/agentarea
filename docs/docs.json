@@ -90,6 +90,7 @@
         "icon": "users",
         "pages": [
           "contributing",
+          "VERSIONING",
           "community",
           "roadmap",
           "changelog"

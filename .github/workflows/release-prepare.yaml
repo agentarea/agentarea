@@ -126,8 +126,14 @@ jobs:
           - [ ] Verify all package versions are updated correctly
           - [ ] Add release notes to CHANGELOG (if applicable)
           - [ ] If chart configs changed, bump chart version independently
-          - [ ] Merge this PR to trigger automated build and publish
+          - [ ] Merge this PR — ci.yml will build `<version>-<sha>` Docker images
+          - [ ] After ci.yml is green, run `./scripts/release.sh` locally to tag the release
 
-          **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.
+          **Note:** Merging this PR does **not** automatically publish the release.
+          It only bumps versions and triggers ci.yml to build `<version>-<sha>`
+          Docker images. To publish the release (retag images as `<version>`,
+          create git tag and GitHub Release), run `./scripts/release.sh` from
+          your local checkout of main after the PR is merged and ci.yml is green.
+          The release-publish workflow also publishes the Helm chart.
           EOF
           )"
