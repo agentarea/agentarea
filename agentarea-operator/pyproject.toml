@@ -1,6 +1,6 @@
 [project]
 name = "agentarea-operator"
-version = "0.0.8"
+version = "0.0.9"
 description = "K8s operator for managing AgentArea LLM provider configs via CRDs"
 requires-python = ">=3.12"
 dependencies = [
