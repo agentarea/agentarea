@@ -123,7 +123,9 @@ ok "Tag $TAG available"
 
 # ─── CI status ────────────────────────────────────────────────────────
 HEAD_SHA=$(git rev-parse HEAD)
-SHORT_SHA=$(git rev-parse --short HEAD)
+# Must be 7 chars to match docker/metadata-action's {{sha}} (docker-build-push.yml).
+# Local git may auto-widen --short beyond 7, so pin the length explicitly.
+SHORT_SHA=$(git rev-parse --short=7 HEAD)
 
 if $SKIP_CI; then
   warn "Skipping ci.yml status check (--skip-ci)"
