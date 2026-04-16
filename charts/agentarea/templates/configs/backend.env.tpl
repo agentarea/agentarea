@@ -10,6 +10,7 @@ MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Va
 MCP_CLIENT_TIMEOUT: "30"
 API_HOST: "{{ .Values.global.api.host }}"
 API_PORT: "{{ .Values.global.api.port }}"
+API_BASE_URL: "{{ include "agentarea.backend.apiUrl" . }}"
 API_AUTH_ENABLED: "{{ .Values.global.api.auth.enabled }}"
 API_RATE_LIMIT_ENABLED: "{{ .Values.global.api.rateLimit.enabled }}"
 API_RATE_LIMIT_REQUESTS_PER_MINUTE: "{{ .Values.global.api.rateLimit.requestsPerMinute }}"
@@ -53,6 +54,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_PORT
+- name: API_BASE_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: API_BASE_URL
 - name: API_AUTH_ENABLED
   valueFrom:
     configMapKeyRef:

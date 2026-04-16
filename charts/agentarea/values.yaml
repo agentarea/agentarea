@@ -121,6 +121,12 @@ global:
     # API server settings
     host: "0.0.0.0"
     port: 8000
+    # Public base URL of the backend API (e.g. https://api.example.com).
+    # Advertised in OAuth protected-resource metadata and the MCP
+    # WWW-Authenticate header. If empty, derived from
+    # ingress.hosts.backend.host when ingress is enabled, otherwise falls
+    # back to the internal ClusterIP service URL.
+    publicUrl: ""
     # Authentication
     auth:
       enabled: false

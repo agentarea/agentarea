@@ -34,7 +34,8 @@ async def oauth_protected_resource_metadata() -> JSONResponse:
     api_base = settings.app.API_BASE_URL.rstrip("/")
     return JSONResponse(
         content={
-            "resource": api_base,
+            # MCP spec: canonical URI of the MCP server endpoint, not the API root.
+            "resource": f"{api_base}/mcp",
             # Using ourselves as the AS URL so clients resolve
             # /.well-known/oauth-authorization-server against us (not Hydra directly).
             "authorization_servers": [api_base],
