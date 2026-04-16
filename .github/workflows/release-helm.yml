@@ -83,7 +83,7 @@ jobs:
 
       - name: Add repositories
         run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add valkey https://valkey.io/valkey-helm/
           helm repo update
 
       - name: Build chart dependencies
