@@ -247,7 +247,7 @@ The following table lists configurable parameters of the chart and their default
 | worker.waitForDependencies | bool | `false` |  |
 | eventService.enabled | bool | `true` |  |
 | eventService.replicaCount | int | `1` |  |
-| eventService.image.repository | string | `"agentarea/agentarea-event-service"` |  |
+| eventService.image.repository | string | `"agentarea/agentarea-events"` |  |
 | eventService.image.tag | string | `"latest"` |  |
 | eventService.image.pullPolicy | string | `""` |  |
 | eventService.port | int | `8002` |  |
