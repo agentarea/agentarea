@@ -20,8 +20,8 @@ from typing import Any
 from uuid import UUID
 
 import yaml
-
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
+
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import (
     RegistryItemRepository,
@@ -822,9 +822,7 @@ class RegistryService:
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
-                        "supports_function_calling": entry.get(
-                            "supports_function_calling", False
-                        ),
+                        "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },
                     "tags": entry.get("tags", []),

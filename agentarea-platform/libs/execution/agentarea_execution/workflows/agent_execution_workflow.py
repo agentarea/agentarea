@@ -1701,6 +1701,7 @@ class AgentExecutionWorkflow:
 
             # Extract fields with fallbacks
             success = bool(result_dict.get("success", getattr(result_obj, "success", True)))
+            error_text = result_dict.get("error", getattr(result_obj, "error", None))
             # Prefer standard "result", fallback to "output", then stringify the whole object
             result_text = result_dict.get("result", getattr(result_obj, "result", None))
             if result_text is None:
@@ -1713,6 +1714,33 @@ class AgentExecutionWorkflow:
             ) or result_dict.get(
                 "execution_time_seconds", getattr(result_obj, "execution_time_seconds", None)
             )
+
+            # Failure path: surface the error to the LLM and emit ToolCallFailed
+            # so the UI renders an actual error instead of "(no result data)".
+            if not success:
+                error_message = error_text or result_text or "Tool execution failed"
+                workflow.logger.warning(f"Tool '{tool_name}' returned failure: {error_message}")
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=f"Tool failed: {error_message}",
+                        tool_call_id=tool_call.id,
+                        name=tool_name,
+                    )
+                )
+                self.event_manager.add_event(
+                    EventTypes.TOOL_CALL_FAILED,
+                    {
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "error": error_message,
+                        "arguments": tool_args,
+                        "execution_time": execution_time,
+                        "iteration": self.state.current_iteration,
+                    },
+                )
+                await self._publish_events_immediately()
+                return
 
             # Offload large outputs to MinIO (hybrid/dynamic strategy)
             result_text = await self._maybe_offload_output(result_text, tool_call.id)

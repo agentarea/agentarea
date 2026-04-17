@@ -297,13 +297,9 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                     else None
                 )
                 model_spec_repo = (
-                    model_spec_repo_cls(session, system_context)
-                    if model_spec_repo_cls
-                    else None
+                    model_spec_repo_cls(session, system_context) if model_spec_repo_cls else None
                 )
-                agent_repo = (
-                    agent_repo_cls(session, system_context) if agent_repo_cls else None
-                )
+                agent_repo = agent_repo_cls(session, system_context) if agent_repo_cls else None
                 service = RegistryService(
                     registry_repo,
                     item_repo,
