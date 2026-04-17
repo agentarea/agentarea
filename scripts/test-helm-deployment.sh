@@ -241,21 +241,15 @@ else
     print_info "API pod not yet running (may still be initializing)"
 fi
 
-# Test 9: Check bootstrap jobs
-print_header "Test 9: Checking Bootstrap Jobs"
-print_info "Checking bootstrap job status..."
-BOOTSTRAP_JOBS=$(kubectl get jobs -n "$NAMESPACE" -l app.kubernetes.io/name=bootstrap -o jsonpath='{.items[*].metadata.name}')
-if [ ! -z "$BOOTSTRAP_JOBS" ]; then
-    for job in $BOOTSTRAP_JOBS; do
-        SUCCEEDED=$(kubectl get job "$job" -n "$NAMESPACE" -o jsonpath='{.status.succeeded}')
-        if [ "$SUCCEEDED" == "1" ]; then
-            print_success "Bootstrap job $job completed"
-        else
-            print_info "Bootstrap job $job is still running or pending"
-        fi
-    done
+# Test 9: Check operator Deployment
+print_header "Test 9: Checking operator"
+OPERATOR_READY=$(kubectl get deploy -n "$NAMESPACE" -l app.kubernetes.io/component=operator -o jsonpath='{.items[*].status.readyReplicas}')
+if [ "$OPERATOR_READY" == "1" ]; then
+    print_success "agentarea-operator is ready"
+    REGSYNC_COUNT=$(kubectl get registrysyncs -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    print_info "RegistrySync CRs: $REGSYNC_COUNT"
 else
-    print_error "No bootstrap jobs found"
+    print_info "agentarea-operator not running (operator.enabled=false or still starting)"
 fi
 
 # Summary

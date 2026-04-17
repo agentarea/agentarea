@@ -44,8 +44,6 @@ kratos:
 jobs:
   dbMigration:
     enabled: true
-  bootstrap:
-    enabled: true
-    image:
-      repository: cr.yandex/crp1mu03jgfvckifcqsn/agentarea/agentarea-bootstrap
-      tag: "manual-test-v1-20251204183846"
+
+operator:
+  enabled: true

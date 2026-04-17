@@ -27,13 +27,13 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
-from agentarea_mcp.application.registry_service import RegistryService
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
-from agentarea_mcp.infrastructure.registry_repository import (
+from agentarea_openapi.application.service import OpenAPIConnectionService
+from agentarea_registry.application.service import RegistryService
+from agentarea_registry.infrastructure.repository import (
     RegistryItemRepository,
     RegistryRepository,
 )
-from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.infrastructure.repository import TaskRepository

@@ -1,0 +1,745 @@
+"""RegistrySync reconciliation for the agentarea-operator.
+
+Parses catalog source data (mcp_servers, skills, llm_providers, llm_models,
+default_agents) and upserts the corresponding registry_items + target entities
+into the database via raw SQL.
+
+Parser shapes match agentarea_mcp.application.registry_service so registries
+written against the Python platform are fed the same way here.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import urllib.request
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+import yaml
+
+logger = logging.getLogger("agentarea-operator.registry_sync")
+
+VALID_TYPES = (
+    "mcp_servers",
+    "skills",
+    "llm_providers",
+    "llm_models",
+    "default_agents",
+)
+
+
+# ── Source fetching ──
+
+
+def fetch_source(source_type: str, location: str, configmap_body: str | None = None) -> Any:
+    """Return parsed JSON/YAML from a source.
+
+    source_type:
+      - "url":       location is http(s) URL
+      - "file":      location is a filesystem path
+      - "configMap": configmap_body already holds the raw text
+    """
+    if source_type == "configMap":
+        if configmap_body is None:
+            raise ValueError("configMap source requires configmap_body")
+        raw = configmap_body
+    elif source_type == "url":
+        req = urllib.request.Request(  # noqa: S310
+            location,
+            headers={
+                "Accept": "application/json, application/yaml, text/yaml, */*",
+                "User-Agent": "agentarea-operator-registry-sync",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+            raw = resp.read().decode("utf-8")
+    elif source_type == "file":
+        with open(location) as f:
+            raw = f.read()
+    else:
+        raise ValueError(f"Unknown source type: {source_type}")
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return yaml.safe_load(raw)
+
+
+# ── Parsers ──
+
+
+def _parse_mcp_servers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    servers = data.get("servers", [])
+    if not servers:
+        return []
+    first = servers[0]
+    if "server" in first:
+        return _parse_standard_mcp(servers)
+    return _parse_legacy_mcp(servers)
+
+
+def _parse_legacy_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in servers:
+        external_id = entry.get("registry_id") or entry.get("name")
+        if not external_id:
+            continue
+        conn_type = entry.get("connection_type", "url")
+        json_spec = entry.get("json_spec", {})
+        ext_id = f"{external_id}/{conn_type}" if conn_type != "url" else external_id
+        items.append(
+            {
+                "external_id": ext_id,
+                "name": external_id,
+                "description": (entry.get("description") or "")[:500],
+                "version": entry.get("version") or "latest",
+                "spec": {**json_spec, "connection_type": conn_type},
+                "tags": [],
+            }
+        )
+    return items
+
+
+def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in servers:
+        server = entry.get("server", {})
+        identifier = server.get("name") or ""
+        if not identifier:
+            continue
+        title = server.get("title") or identifier
+        description = (server.get("description") or "")[:500]
+        version = server.get("version", "latest")
+        for remote in server.get("remotes", []):
+            url = remote.get("url")
+            if not url:
+                continue
+            items.append(
+                {
+                    "external_id": identifier,
+                    "name": title,
+                    "description": description,
+                    "version": version,
+                    "spec": {
+                        "connection_type": "url",
+                        "url": url,
+                        "transport": remote.get("type", "streamable-http"),
+                        "raw_spec": server,
+                    },
+                    "tags": [remote.get("type", "streamable-http")],
+                }
+            )
+    return items
+
+
+def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in data.get("skills", []):
+        name = entry.get("name")
+        if not name:
+            continue
+        items.append(
+            {
+                "external_id": name,
+                "name": name,
+                "description": entry.get("description"),
+                "version": entry.get("version") or "1.0.0",
+                "spec": {
+                    "source_type": entry.get("source_type", "content"),
+                    "content": entry.get("content"),
+                    "source_url": entry.get("source_url"),
+                },
+                "tags": entry.get("tags", []),
+            }
+        )
+    return items
+
+
+def _parse_llm_providers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in data.get("providers", []):
+        provider_key = entry.get("provider_key")
+        if not provider_key:
+            continue
+        items.append(
+            {
+                "external_id": provider_key,
+                "name": entry.get("name") or provider_key,
+                "description": entry.get("description"),
+                "version": entry.get("version") or "1.0.0",
+                "spec": {
+                    "provider_key": provider_key,
+                    "provider_type": entry.get("provider_type", provider_key),
+                    "icon": entry.get("icon"),
+                    "is_builtin": entry.get("is_builtin", True),
+                },
+                "tags": entry.get("tags", []),
+            }
+        )
+    return items
+
+
+def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in data.get("models", []):
+        provider_key = entry.get("provider_key")
+        model_name = entry.get("model_name")
+        if not provider_key or not model_name:
+            continue
+        items.append(
+            {
+                "external_id": f"{provider_key}/{model_name}",
+                "name": entry.get("display_name") or model_name,
+                "description": entry.get("description"),
+                "version": entry.get("version") or "1.0.0",
+                "spec": {
+                    "provider_key": provider_key,
+                    "model_name": model_name,
+                    "context_window": entry.get("context_window", 4096),
+                    "max_output_tokens": entry.get("max_output_tokens"),
+                    "input_cost_per_token": entry.get("input_cost_per_token"),
+                    "output_cost_per_token": entry.get("output_cost_per_token"),
+                    "supports_function_calling": entry.get(
+                        "supports_function_calling", False
+                    ),
+                    "is_active": entry.get("is_active", True),
+                },
+                "tags": entry.get("tags", []),
+            }
+        )
+    return items
+
+
+def _parse_default_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in data.get("agents", []):
+        name = entry.get("name")
+        if not name:
+            continue
+        agent_id = entry.get("id")
+        tools = entry.get("tools") or []
+        if not isinstance(tools, list):
+            tools = []
+        items.append(
+            {
+                "external_id": str(agent_id) if agent_id else name,
+                "name": name,
+                "description": entry.get("description"),
+                "version": entry.get("version") or "1.0.0",
+                "spec": {
+                    "id": agent_id,
+                    "instruction": entry.get("instruction", ""),
+                    "tools": tools,
+                    "planning": entry.get("planning", False),
+                },
+                "tags": entry.get("tags", []),
+            }
+        )
+    return items
+
+
+def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        data = {}
+    if registry_type == "mcp_servers":
+        return _parse_mcp_servers(data)
+    if registry_type == "skills":
+        return _parse_skills(data)
+    if registry_type == "llm_providers":
+        return _parse_llm_providers(data)
+    if registry_type == "llm_models":
+        return _parse_llm_models(data)
+    if registry_type == "default_agents":
+        return _parse_default_agents(data)
+    raise ValueError(f"Unknown registry type: {registry_type}")
+
+
+# ── Reconcile ──
+
+
+def reconcile(
+    conn,
+    cr_name: str,
+    registry_type: str,
+    source_type: str,
+    source_location: str,
+    configmap_body: str | None,
+    workspace_id: str,
+) -> dict[str, int]:
+    """Fetch catalog source and upsert registry + items + target entities.
+
+    conn is an active SQLAlchemy Connection (sync). Caller owns transaction.
+    Returns stats dict: {total, new, updated}.
+    """
+    if registry_type not in VALID_TYPES:
+        raise ValueError(f"Unknown registry type: {registry_type}")
+
+    data = fetch_source(source_type, source_location, configmap_body)
+    parsed = parse_source(registry_type, data)
+    logger.info("Parsed %d items for %s (%s)", len(parsed), cr_name, registry_type)
+
+    registry_id = _upsert_registry(
+        conn,
+        name=cr_name,
+        registry_type=registry_type,
+        source_type=source_type,
+        source_url=source_location,
+        workspace_id=workspace_id,
+    )
+
+    new_count = 0
+    updated_count = 0
+
+    for item in parsed:
+        existing = _get_registry_item(conn, registry_id, item["external_id"])
+        if existing:
+            _update_registry_item(conn, existing["id"], item)
+            entity_id = existing["installed_entity_id"]
+            if entity_id:
+                _update_entity(
+                    conn, registry_type, entity_id, item, workspace_id
+                )
+            updated_count += 1
+        else:
+            item_id = _create_registry_item(conn, registry_id, item, workspace_id)
+            entity_id = _create_entity(conn, registry_type, item, workspace_id)
+            if entity_id:
+                conn.execute(
+                    _text(
+                        "UPDATE registry_items SET installed_entity_id = :eid, "
+                        "installed_version = :v WHERE id = :id"
+                    ),
+                    {"eid": entity_id, "v": item.get("version") or "latest", "id": item_id},
+                )
+            new_count += 1
+
+    conn.execute(
+        _text(
+            "UPDATE registries SET last_synced_at = :ts, last_sync_error = NULL, "
+            "item_count = :n, updated_at = now() WHERE id = :id"
+        ),
+        {"ts": datetime.now(timezone.utc), "n": len(parsed), "id": registry_id},
+    )
+
+    return {"total": len(parsed), "new": new_count, "updated": updated_count}
+
+
+# ── DB helpers (raw SQL, sync) ──
+
+
+def _text(sql: str):
+    # Lazy import to avoid circular + keep this module importable without a DB
+    from sqlalchemy import text
+
+    return text(sql)
+
+
+def _upsert_registry(
+    conn,
+    *,
+    name: str,
+    registry_type: str,
+    source_type: str,
+    source_url: str,
+    workspace_id: str,
+) -> str:
+    row = conn.execute(
+        _text(
+            "SELECT id FROM registries WHERE name = :name AND workspace_id = :ws"
+        ),
+        {"name": name, "ws": workspace_id},
+    ).fetchone()
+    if row:
+        registry_id = str(row[0])
+        conn.execute(
+            _text(
+                "UPDATE registries SET registry_type = :rt, source_type = :st, "
+                "source_url = :url, is_active = true, updated_at = now() WHERE id = :id"
+            ),
+            {
+                "id": registry_id,
+                "rt": registry_type,
+                "st": source_type,
+                "url": source_url,
+            },
+        )
+        return registry_id
+    registry_id = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO registries (id, name, registry_type, source_type, source_url, "
+            "is_active, sync_mode, workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :name, :rt, :st, :url, true, 'manual', :ws, 'system', now(), now())"
+        ),
+        {
+            "id": registry_id,
+            "name": name,
+            "rt": registry_type,
+            "st": source_type,
+            "url": source_url,
+            "ws": workspace_id,
+        },
+    )
+    return registry_id
+
+
+def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
+    row = conn.execute(
+        _text(
+            "SELECT id, installed_entity_id, installed_version FROM registry_items "
+            "WHERE registry_id = :rid AND external_id = :ext"
+        ),
+        {"rid": registry_id, "ext": external_id},
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": str(row[0]),
+        "installed_entity_id": str(row[1]) if row[1] else None,
+        "installed_version": row[2],
+    }
+
+
+def _create_registry_item(
+    conn, registry_id: str, item: dict[str, Any], workspace_id: str
+) -> str:
+    item_id = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO registry_items (id, registry_id, external_id, name, description, "
+            "version, spec, tags, update_available, workspace_id, created_by, "
+            "created_at, updated_at) VALUES (:id, :rid, :ext, :name, :desc, :ver, "
+            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": item_id,
+            "rid": registry_id,
+            "ext": item["external_id"],
+            "name": item["name"],
+            "desc": item.get("description"),
+            "ver": item.get("version"),
+            "spec": json.dumps(item.get("spec") or {}),
+            "tags": json.dumps(item.get("tags") or []),
+            "ws": workspace_id,
+        },
+    )
+    return item_id
+
+
+def _update_registry_item(conn, item_id: str, item: dict[str, Any]) -> None:
+    conn.execute(
+        _text(
+            "UPDATE registry_items SET name = :name, description = :desc, version = :ver, "
+            "spec = CAST(:spec AS JSONB), tags = CAST(:tags AS JSONB), updated_at = now() "
+            "WHERE id = :id"
+        ),
+        {
+            "id": item_id,
+            "name": item["name"],
+            "desc": item.get("description"),
+            "ver": item.get("version"),
+            "spec": json.dumps(item.get("spec") or {}),
+            "tags": json.dumps(item.get("tags") or []),
+        },
+    )
+
+
+# ── Entity dispatchers ──
+
+
+def _create_entity(
+    conn, registry_type: str, item: dict[str, Any], workspace_id: str
+) -> str | None:
+    if registry_type == "llm_providers":
+        return _upsert_provider_spec(conn, item, workspace_id)
+    if registry_type == "llm_models":
+        return _upsert_model_spec(conn, item, workspace_id)
+    if registry_type == "default_agents":
+        return _upsert_default_agent(conn, item, workspace_id)
+    if registry_type == "mcp_servers":
+        return _upsert_mcp_server(conn, item, workspace_id)
+    if registry_type == "skills":
+        return _upsert_skill(conn, item, workspace_id)
+    return None
+
+
+def _update_entity(
+    conn,
+    registry_type: str,
+    entity_id: str,
+    item: dict[str, Any],
+    workspace_id: str,
+) -> None:
+    # Re-upsert handles updates uniformly for our catalog shapes.
+    _create_entity(conn, registry_type, item, workspace_id)
+
+
+def _upsert_provider_spec(
+    conn, item: dict[str, Any], workspace_id: str
+) -> str:
+    spec = item.get("spec") or {}
+    provider_key = spec["provider_key"]
+    row = conn.execute(
+        _text("SELECT id FROM provider_specs WHERE provider_key = :pk"),
+        {"pk": provider_key},
+    ).fetchone()
+    if row:
+        pid = str(row[0])
+        conn.execute(
+            _text(
+                "UPDATE provider_specs SET name = :name, description = :desc, "
+                "provider_type = :pt, icon = :icon, is_builtin = :bi, updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {
+                "id": pid,
+                "name": item["name"],
+                "desc": item.get("description"),
+                "pt": spec.get("provider_type", provider_key),
+                "icon": spec.get("icon"),
+                "bi": spec.get("is_builtin", True),
+            },
+        )
+        return pid
+    pid = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO provider_specs (id, provider_key, name, description, provider_type, "
+            "icon, is_builtin, workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :pk, :name, :desc, :pt, :icon, :bi, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": pid,
+            "pk": provider_key,
+            "name": item["name"],
+            "desc": item.get("description"),
+            "pt": spec.get("provider_type", provider_key),
+            "icon": spec.get("icon"),
+            "bi": spec.get("is_builtin", True),
+            "ws": workspace_id,
+        },
+    )
+    return pid
+
+
+def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
+    spec = item.get("spec") or {}
+    provider_key = spec["provider_key"]
+    model_name = spec["model_name"]
+
+    prow = conn.execute(
+        _text("SELECT id FROM provider_specs WHERE provider_key = :pk"),
+        {"pk": provider_key},
+    ).fetchone()
+    if not prow:
+        raise ValueError(
+            f"provider_spec '{provider_key}' not found; sync llm_providers registry first"
+        )
+    provider_spec_id = str(prow[0])
+
+    mrow = conn.execute(
+        _text(
+            "SELECT id FROM model_specs WHERE provider_spec_id = :pid AND model_name = :mn"
+        ),
+        {"pid": provider_spec_id, "mn": model_name},
+    ).fetchone()
+    if mrow:
+        mid = str(mrow[0])
+        conn.execute(
+            _text(
+                "UPDATE model_specs SET display_name = :dn, description = :desc, "
+                "context_window = :cw, max_output_tokens = :mot, "
+                "input_cost_per_token = :icpt, output_cost_per_token = :ocpt, "
+                "supports_function_calling = :sfc, is_active = :active, updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {
+                "id": mid,
+                "dn": item["name"],
+                "desc": item.get("description"),
+                "cw": spec.get("context_window", 4096),
+                "mot": spec.get("max_output_tokens"),
+                "icpt": spec.get("input_cost_per_token"),
+                "ocpt": spec.get("output_cost_per_token"),
+                "sfc": spec.get("supports_function_calling", False),
+                "active": spec.get("is_active", True),
+            },
+        )
+        return mid
+    mid = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
+            "description, context_window, max_output_tokens, input_cost_per_token, "
+            "output_cost_per_token, supports_function_calling, is_active, workspace_id, "
+            "created_by, created_at, updated_at) VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
+            ":mot, :icpt, :ocpt, :sfc, :active, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": mid,
+            "pid": provider_spec_id,
+            "mn": model_name,
+            "dn": item["name"],
+            "desc": item.get("description"),
+            "cw": spec.get("context_window", 4096),
+            "mot": spec.get("max_output_tokens"),
+            "icpt": spec.get("input_cost_per_token"),
+            "ocpt": spec.get("output_cost_per_token"),
+            "sfc": spec.get("supports_function_calling", False),
+            "active": spec.get("is_active", True),
+            "ws": workspace_id,
+        },
+    )
+    return mid
+
+
+def _upsert_default_agent(conn, item: dict[str, Any], workspace_id: str) -> str:
+    spec = item.get("spec") or {}
+    agent_id = spec.get("id") or str(uuid.uuid4())
+    tools_json = json.dumps(spec.get("tools") or [])
+    row = conn.execute(
+        _text("SELECT id FROM agents WHERE id = :id"),
+        {"id": agent_id},
+    ).fetchone()
+    if row:
+        conn.execute(
+            _text(
+                "UPDATE agents SET name = :name, description = :desc, instruction = :inst, "
+                "tools = CAST(:tools AS JSONB), planning = :plan, updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {
+                "id": agent_id,
+                "name": item["name"],
+                "desc": item.get("description") or "",
+                "inst": spec.get("instruction", ""),
+                "tools": tools_json,
+                "plan": spec.get("planning", False),
+            },
+        )
+        return str(agent_id)
+    conn.execute(
+        _text(
+            "INSERT INTO agents (id, name, status, description, instruction, model_id, "
+            "tools, events_config, planning, workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :name, 'active', :desc, :inst, NULL, CAST(:tools AS JSONB), NULL, "
+            ":plan, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": agent_id,
+            "name": item["name"],
+            "desc": item.get("description") or "",
+            "inst": spec.get("instruction", ""),
+            "tools": tools_json,
+            "plan": spec.get("planning", False),
+            "ws": workspace_id,
+        },
+    )
+    return str(agent_id)
+
+
+def _upsert_mcp_server(conn, item: dict[str, Any], workspace_id: str) -> str:
+    spec = item.get("spec") or {}
+    conn_type = spec.get("connection_type", "url")
+    docker_image_url = ""
+    cmd_list: list[str] | None = None
+    if conn_type == "docker":
+        docker_image_url = spec.get("image", "")
+    elif conn_type == "command":
+        docker_image_url = "agentarea/mcp-bridge:latest"
+        command_str = spec.get("command", "")
+        args = spec.get("args", []) or []
+        if command_str:
+            cmd_list = [command_str, *args]
+    remote_url = spec.get("url") if conn_type == "url" else None
+
+    row = conn.execute(
+        _text(
+            "SELECT id FROM mcp_servers WHERE name = :name AND workspace_id = :ws"
+        ),
+        {"name": item["name"], "ws": workspace_id},
+    ).fetchone()
+    tags_json = json.dumps(["registry", conn_type])
+    if row:
+        sid = str(row[0])
+        conn.execute(
+            _text(
+                "UPDATE mcp_servers SET description = :desc, docker_image_url = :img, "
+                "version = :ver, tags = CAST(:tags AS JSONB), remote_url = :rurl, "
+                "cmd = CAST(:cmd AS JSONB), updated_at = now() WHERE id = :id"
+            ),
+            {
+                "id": sid,
+                "desc": item.get("description") or "",
+                "img": docker_image_url,
+                "ver": item.get("version") or "latest",
+                "tags": tags_json,
+                "rurl": remote_url,
+                "cmd": json.dumps(cmd_list) if cmd_list else None,
+            },
+        )
+        return sid
+    sid = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO mcp_servers (id, name, description, docker_image_url, version, tags, "
+            "is_public, cmd, remote_url, workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :name, :desc, :img, :ver, CAST(:tags AS JSONB), false, "
+            "CAST(:cmd AS JSONB), :rurl, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": sid,
+            "name": item["name"],
+            "desc": item.get("description") or "",
+            "img": docker_image_url,
+            "ver": item.get("version") or "latest",
+            "tags": tags_json,
+            "cmd": json.dumps(cmd_list) if cmd_list else None,
+            "rurl": remote_url,
+            "ws": workspace_id,
+        },
+    )
+    return sid
+
+
+def _upsert_skill(conn, item: dict[str, Any], workspace_id: str) -> str:
+    spec = item.get("spec") or {}
+    row = conn.execute(
+        _text("SELECT id FROM skills WHERE name = :name AND workspace_id = :ws"),
+        {"name": item["name"], "ws": workspace_id},
+    ).fetchone()
+    if row:
+        sid = str(row[0])
+        conn.execute(
+            _text(
+                "UPDATE skills SET description = :desc, content = :content, "
+                "source_url = :url, updated_at = now() WHERE id = :id"
+            ),
+            {
+                "id": sid,
+                "desc": item.get("description"),
+                "content": spec.get("content"),
+                "url": spec.get("source_url"),
+            },
+        )
+        return sid
+    sid = str(uuid.uuid4())
+    conn.execute(
+        _text(
+            "INSERT INTO skills (id, name, description, source_type, content, source_url, "
+            "workspace_id, created_by, created_at, updated_at) VALUES (:id, :name, :desc, "
+            ":st, :content, :url, :ws, 'system', now(), now())"
+        ),
+        {
+            "id": sid,
+            "name": item["name"],
+            "desc": item.get("description"),
+            "st": spec.get("source_type", "content"),
+            "content": spec.get("content"),
+            "url": spec.get("source_url"),
+            "ws": workspace_id,
+        },
+    )
+    return sid

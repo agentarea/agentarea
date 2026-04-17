@@ -1,0 +1,28 @@
+{{- if and .Values.operator.enabled .Values.registries }}
+{{- range $reg := .Values.registries }}
+---
+apiVersion: agentarea.io/v1alpha1
+kind: RegistrySync
+metadata:
+  name: {{ $reg.name | required "registries[].name is required" }}
+  labels:
+    {{- include "agentarea.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: registry-sync
+spec:
+  type: {{ $reg.type | required (printf "registries[%s].type is required" $reg.name) }}
+  source:
+    type: {{ $reg.source.type | required (printf "registries[%s].source.type is required" $reg.name) }}
+    {{- if $reg.source.url }}
+    url: {{ $reg.source.url | quote }}
+    {{- end }}
+    {{- with $reg.source.configMapRef }}
+    configMapRef:
+      name: {{ .name | quote }}
+      key: {{ .key | quote }}
+    {{- end }}
+  {{- if $reg.syncIntervalSeconds }}
+  syncIntervalSeconds: {{ $reg.syncIntervalSeconds }}
+  {{- end }}
+  workspaceId: {{ $reg.workspaceId | default "system" | quote }}
+{{- end }}
+{{- end }}

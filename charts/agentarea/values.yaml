@@ -649,45 +649,51 @@ rustfs:
 
 # Job toggles
 jobs:
-  bootstrap:
-    enabled: false
-    image:
-      repository: "agentarea/agentarea-bootstrap"
-      tag: "latest"
-    adminEmail: "admin@example.com"
-    adminPassword: "changeme"
-    organizationName: "AgentArea"
-    # Seed data for system-wide skills, MCPs, agents, and LLM providers.
-    # Default data is loaded from charts/agentarea/seed-data/*.yaml files.
-    # To override for a specific environment, set the value here as inline YAML:
-    #   seedData:
-    #     skills: |
-    #       skills:
-    #         - name: "My Custom Skill"
-    #           ...
-    seedData:
-      providers: ""    # Override: inline YAML, or empty to use seed-data/providers.yaml
-      mcpProviders: "" # Override: inline YAML, or empty to use seed-data/mcp_providers.yaml
-      skills: ""       # Override: inline YAML, or empty to use seed-data/skills.yaml
-      agents: ""       # Override: inline YAML, or empty to use seed-data/agents.yaml
-    # External registries (IaaC). Each entry creates a registry + initial sync.
-    # Sync auto-creates entity specs. Re-syncs flag version updates for manual approval.
-    # type: "mcp_servers" or "skills"
-    # Example:
-    #   registries:
-    #     - name: "MCP Public Registry"
-    #       type: "mcp_servers"
-    #       source_type: "url"
-    #       source_url: "https://s3.amazonaws.com/bucket/mcp-servers.json"
-    #       sync_mode: "manual"
-    #     - name: "Skills Registry"
-    #       type: "skills"
-    #       source_type: "url"
-    #       source_url: "https://s3.amazonaws.com/bucket/skills.yaml"
-    #       sync_mode: "manual"
-    registries: []
   dbMigration:
     enabled: true
+
+# agentarea-operator — watches RegistrySync and LLMProviderConfig CRs and
+# reconciles them into the database. Replaces the legacy bootstrap Job for
+# catalog data.
+operator:
+  enabled: true
+  image:
+    repository: "agentarea/agentarea-operator"
+    tag: ""          # defaults to chart appVersion
+    pullPolicy: ""   # defaults to global pullPolicy
+  # Suffix appended to DATABASE_URL (e.g. "?sslmode=require" for managed PG)
+  postgresSslSuffix: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+
+# RegistrySync CRs rendered into the cluster. Each entry becomes one
+# RegistrySync custom resource that the operator reconciles.
+#
+# type:   mcp_servers | skills | llm_providers | llm_models | default_agents
+# source: {type: url, url: "https://..."}
+#         {type: file, url: "/mounted/path.yaml"}
+#         {type: configMap, configMapRef: {name: "...", key: "..."}}
+# syncIntervalSeconds: optional override (default: 21600 = 6h)
+registries: []
+# Example:
+#   registries:
+#     - name: mcp-official
+#       type: mcp_servers
+#       source:
+#         type: url
+#         url: https://registry.modelcontextprotocol.io/servers.json
+#     - name: default-skills
+#       type: skills
+#       source:
+#         type: configMap
+#         configMapRef: {name: catalog-seed, key: skills.yaml}
 
 # Ory Kratos Identity Server
 kratos:

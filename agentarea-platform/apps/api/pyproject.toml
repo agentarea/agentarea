@@ -14,6 +14,7 @@ dependencies = [
     "agentarea-execution",
     "agentarea-llm",
     "agentarea-mcp",
+    "agentarea-registry",
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-triggers",
@@ -35,6 +36,7 @@ agentarea-agents = { workspace = true }
 agentarea-execution = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
+agentarea-registry = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
 agentarea-triggers = { workspace = true }

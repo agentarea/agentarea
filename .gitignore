@@ -93,10 +93,10 @@ openspec
 .trae
 .sisyphus
 
-# Downloaded registry data (fetched via make init)
-agentarea-bootstrap/data/registries/
-
 .omc
 
 # CodeQL analysis
 **/codeql-db/
+
+# Local playground key (not checked in)
+/key

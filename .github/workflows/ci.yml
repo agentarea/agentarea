@@ -33,7 +33,7 @@ jobs:
       webapp: ${{ steps.filter.outputs.webapp }}
       cli: ${{ steps.filter.outputs.cli }}
       mcp_manager: ${{ steps.filter.outputs.mcp_manager }}
-      bootstrap: ${{ steps.filter.outputs.bootstrap }}
+      operator: ${{ steps.filter.outputs.operator }}
       events: ${{ steps.filter.outputs.events }}
     steps:
       - uses: actions/checkout@v4
@@ -61,8 +61,8 @@ jobs:
             mcp_runner:
               - 'agentarea-mcp-manager/Dockerfile.runner'
               - 'agentarea-mcp-manager/cmd/activation-service/**'
-            bootstrap:
-              - 'agentarea-bootstrap/**'
+            operator:
+              - 'agentarea-operator/**'
             events:
               - 'agentarea-event-service/**'
 
@@ -384,10 +384,10 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
-  docker-bootstrap:
+  docker-operator:
     # Always build to validate, but only push on main when not skipped
     if: |
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.operator == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
       inputs.skip-docker
     needs: [changes, version-check]
@@ -396,9 +396,9 @@ jobs:
       contents: read
     uses: ./.github/workflows/docker-build-push.yml
     with:
-      component: bootstrap
-      context: .
-      dockerfile: agentarea-bootstrap/Dockerfile
+      component: operator
+      context: agentarea-operator
+      dockerfile: agentarea-operator/Dockerfile
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:

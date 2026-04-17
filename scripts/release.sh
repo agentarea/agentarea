@@ -154,7 +154,7 @@ else
 fi
 
 # ─── DockerHub images ─────────────────────────────────────────────────
-COMPONENTS=(api worker frontend bootstrap mcp-manager mcp-runner events)
+COMPONENTS=(api worker frontend operator mcp-manager mcp-runner events)
 
 if $SKIP_IMAGES; then
   warn "Skipping DockerHub image check (--skip-images)"
@@ -213,7 +213,7 @@ git tag -a "$TAG" -m "Release $TAG"
 info "Pushing tag to origin..."
 git push origin "refs/tags/$TAG"
 
-REPO=$(git remote get-url origin | sed -E 's#.*github\.com[:/]([^/]+/[^/.]+?)(\.git)?$#\1#')
+REPO=$(git remote get-url origin | sed -E 's#.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$#\1#')
 echo
 ok "Tag $TAG pushed."
 printf '  Workflow: https://github.com/%s/actions/workflows/release-publish.yaml\n' "$REPO"
