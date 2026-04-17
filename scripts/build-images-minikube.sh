@@ -102,14 +102,14 @@ build_mcp_manager() {
         "agentarea/agentarea-mcp-manager:latest"
 }
 
-# Build bootstrap image
-build_bootstrap() {
-    log_info "Building Bootstrap image..."
+# Build operator image
+build_operator() {
+    log_info "Building Operator image..."
     build_image \
-        "Bootstrap" \
-        "${PROJECT_ROOT}/agentarea-bootstrap" \
-        "${PROJECT_ROOT}/agentarea-bootstrap/Dockerfile" \
-        "agentarea/agentarea-bootstrap:latest"
+        "Operator" \
+        "${PROJECT_ROOT}/agentarea-operator" \
+        "${PROJECT_ROOT}/agentarea-operator/Dockerfile" \
+        "agentarea/agentarea-operator:latest"
 }
 
 # Main execution
@@ -132,19 +132,19 @@ main() {
         mcp-manager|mcp)
             build_mcp_manager
             ;;
-        bootstrap)
-            build_bootstrap
+        operator)
+            build_operator
             ;;
         all)
             build_api
             build_worker
             build_frontend
             build_mcp_manager
-            build_bootstrap
+            build_operator
             ;;
         *)
             log_error "Unknown component: ${COMPONENT}"
-            echo "Usage: $0 [api|worker|frontend|mcp-manager|bootstrap|all]"
+            echo "Usage: $0 [api|worker|frontend|mcp-manager|operator|all]"
             exit 1
             ;;
     esac

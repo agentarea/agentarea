@@ -62,10 +62,6 @@ files:
     search: version = "{current_version}"
     replace: version = "{new_version}"
 
-  - filename: agentarea-bootstrap/pyproject.toml
-    search: version = "{current_version}"
-    replace: version = "{new_version}"
-
   - filename: agentarea-operator/pyproject.toml
     search: version = "{current_version}"
     replace: version = "{new_version}"

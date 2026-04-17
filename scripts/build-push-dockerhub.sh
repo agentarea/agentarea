@@ -108,7 +108,7 @@ COMPONENTS=(
   "api|agentarea-platform|apps/api/Dockerfile"
   "worker|agentarea-platform|apps/worker/Dockerfile"
   "frontend|agentarea-webapp|Dockerfile"
-  "bootstrap|agentarea-bootstrap|Dockerfile"
+  "operator|agentarea-operator|Dockerfile"
   "mcp-manager|agentarea-mcp-manager|Dockerfile"
 )
 

@@ -886,7 +886,7 @@ Our GitHub Actions build and push all Docker images in the monorepo.
 - Helm charts in `charts/*/Chart.yaml` are automatically bumped to the release version via the release workflow and a PR is opened.
 
 Images are published under `agentarea/agentarea-<component>` on Docker Hub for components:
-`agentarea-api`, `agentarea-worker`, `agentarea-frontend`, `agentarea-bootstrap`, `agentarea-mcp-manager`.
+`agentarea-api`, `agentarea-worker`, `agentarea-frontend`, `agentarea-operator`, `agentarea-mcp-manager`.
 
 Authentication for publishing uses repository secrets:
 - `DOCKERHUB_USERNAME`

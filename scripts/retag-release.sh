@@ -39,7 +39,7 @@ echo -e "${BLUE}Commit SHA: $COMMIT_SHA${NC}"
 echo ""
 
 # Components to re-tag
-COMPONENTS=("api" "worker" "frontend" "bootstrap" "mcp-manager")
+COMPONENTS=("api" "worker" "frontend" "operator" "mcp-manager")
 
 # Log in to Docker Hub
 echo -e "${BLUE}Logging into Docker Hub...${NC}"

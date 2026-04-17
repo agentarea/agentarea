@@ -9,8 +9,8 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_mcp.application.registry_service import RegistryService
-from agentarea_mcp.domain.registry_models import Registry, RegistryItem
+from agentarea_registry.application.service import RegistryService
+from agentarea_registry.domain.models import Registry, RegistryItem
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 

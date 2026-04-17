@@ -1,0 +1,104 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: registrysyncs.agentarea.io
+spec:
+  group: agentarea.io
+  names:
+    kind: RegistrySync
+    listKind: RegistrySyncList
+    plural: registrysyncs
+    singular: registrysync
+    shortNames:
+      - regsync
+      - rsync
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - type
+                - source
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - mcp_servers
+                    - skills
+                    - llm_providers
+                    - llm_models
+                    - default_agents
+                  description: "Registry item type to sync."
+                source:
+                  type: object
+                  required:
+                    - type
+                  properties:
+                    type:
+                      type: string
+                      enum: [url, file, configMap]
+                      description: "Where to fetch the catalog data from."
+                    url:
+                      type: string
+                      description: "HTTP(S) URL (for type=url) or local path (for type=file)."
+                    configMapRef:
+                      type: object
+                      required:
+                        - name
+                        - key
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                syncIntervalSeconds:
+                  type: integer
+                  default: 21600
+                  minimum: 60
+                  description: "Seconds between timer-driven resync. Defaults to 6h."
+                workspaceId:
+                  type: string
+                  default: "system"
+                  description: "Target workspace for synced entities."
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Syncing, Synced, Error]
+                message:
+                  type: string
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+                itemCount:
+                  type: integer
+                newItems:
+                  type: integer
+                updatedItems:
+                  type: integer
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Type
+          type: string
+          jsonPath: .spec.type
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Items
+          type: integer
+          jsonPath: .status.itemCount
+        - name: LastSync
+          type: string
+          jsonPath: .status.lastSyncedAt
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

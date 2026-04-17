@@ -42,8 +42,6 @@ services:
         condition: service_started
       app_migrations:
         condition: service_completed_successfully
-      bootstrap:
-        condition: service_completed_successfully
       # mcp-manager:
       #   condition: service_healthy
     networks:
@@ -55,14 +53,11 @@ services:
     image: agentarea/agentarea-api:${VERSION:-latest}
     pull_policy: always
     environment:
-      ## Have to add it for now
-      # S3 settings
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - AWS_REGION=${RUSTFS_REGION}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
       - AWS_ENDPOINT_URL=http://rustfs:9000
-      # Only database settings
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -71,65 +66,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      bootstrap_db:
+      postgres_init:
         condition: service_completed_successfully
     command: ["agentarea-api", "migrate"]
     working_dir: /app/apps/api
 
-  # Bootstrap Database Creation - creates all required databases
-  bootstrap_db:
-    image: agentarea/agentarea-bootstrap:${VERSION:-latest}
-    pull_policy: always
+  # Create auxiliary databases (temporal, kratos, hydra) — idempotent.
+  postgres_init:
+    image: postgres:18
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-aiagents}
-      - TEMPORAL_DB=${TEMPORAL_DB:-temporal}
-      - KRATOS_DB=${KRATOS_DB:-kratos}
-      - HYDRA_DB=${HYDRA_DB:-hydra}
+      - PGHOST=db
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        for db in "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}"; do
+          exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
+          if [ "$$exists" != "1" ]; then
+            echo "Creating database $$db"
+            psql -c "CREATE DATABASE \"$$db\""
+          else
+            echo "Database $$db already exists"
+          fi
+        done
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "-c", "from code.database_setup import database_setup; database_setup()"]
-
-  # Bootstrap Application Setup - runs after migrations
-  bootstrap:
-    image: agentarea/agentarea-bootstrap:${VERSION:-latest}
-    pull_policy: always
-    volumes:
-      - ./agentarea-bootstrap/data:/app/llm
-    environment:
-      - SECRET_MANAGER_TYPE=${SECRET_MANAGER_TYPE:-database}
-      - MINIO_ROOT_USER=${RUSTFS_ACCESS_KEY}
-      - MINIO_ROOT_PASSWORD=${RUSTFS_SECRET_KEY}
-      - MINIO_ENDPOINT=http://rustfs:9000
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-your-secure-password}
-      - ORGANIZATION_NAME=${ORGANIZATION_NAME:-your-org-name}
-      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - LLM_PROVIDERS_YAML=/app/llm/providers.yaml
-      - MCP_PROVIDERS_YAML=/app/llm/mcp_providers.yaml
-      - AGENTS_YAML=/app/llm/agents.yaml
-      - SKILLS_YAML=/app/llm/skills.yaml
-      - REGISTRIES_CONFIG=[{"name":"MCP Public Registry","type":"mcp_servers","source_type":"url","source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json","sync_mode":"manual"}]
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-aiagents}
-    depends_on:
-      db:
-        condition: service_healthy
-      rustfs:
-        condition: service_healthy
-      app_migrations:
-        condition: service_completed_successfully
-      rclone-init:
-        condition: service_completed_successfully
-      # infisical:
-      #   condition: service_started
 
   # Frontend service
   frontend:
@@ -174,7 +140,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=postgres  # Use default postgres DB, bootstrap will create all others
+      - POSTGRES_DB=postgres  # Default postgres DB; postgres_init creates aux DBs (temporal, kratos, hydra)
     ports:
       - "5432:5432"
     volumes:
@@ -238,7 +204,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      bootstrap:
+      postgres_init:
         condition: service_completed_successfully
     environment:
       - DB=postgres12
@@ -388,7 +354,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      bootstrap_db:
+      postgres_init:
         condition: service_completed_successfully
 
   # Ory Kratos Identity Server

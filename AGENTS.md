@@ -28,7 +28,7 @@ agentarea/
 ├── agentarea-webapp/       # Next.js frontend + packages
 ├── agentarea-mcp-manager/  # Go MCP server orchestration
 ├── agentarea-cli/          # Node.js CLI (Ink/React)
-├── agentarea-bootstrap/    # System initialization
+├── agentarea-operator/     # K8s operator (catalog reconcile, LLM provider configs)
 ├── charts/                 # Helm charts
 ├── docs/                   # Mintlify documentation
 └── scripts/                # Build/deploy utilities

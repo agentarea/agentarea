@@ -210,12 +210,12 @@ def reconcile(registries_config: str | None, source: tuple[str, ...]):
 async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
-    from agentarea_mcp.application.registry_service import RegistryService
-    from agentarea_mcp.infrastructure.registry_repository import (
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+    from agentarea_registry.application.service import RegistryService
+    from agentarea_registry.infrastructure.repository import (
         RegistryItemRepository,
         RegistryRepository,
     )
-    from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
     db = Database(get_db_settings())
     system_context = UserContext(user_id="system", workspace_id="system")
@@ -251,36 +251,77 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
 
+    skill_repo_cls = None
     try:
-        skill_repo = None
+        from agentarea_agents.infrastructure.skill_repository import SkillRepository
+
+        skill_repo_cls = SkillRepository
+    except ImportError:
+        pass
+
+    provider_spec_repo_cls = None
+    model_spec_repo_cls = None
+    try:
+        from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+        from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+
+        provider_spec_repo_cls = ProviderSpecRepository
+        model_spec_repo_cls = ModelSpecRepository
+    except ImportError:
+        pass
+
+    agent_repo_cls = None
+    try:
+        from agentarea_agents.infrastructure.repository import AgentRepository
+
+        agent_repo_cls = AgentRepository
+    except ImportError:
+        pass
+
+    succeeded: list[str] = []
+    failed: list[tuple[str, str]] = []
+
+    for config in configs:
+        registry_name = config["name"]
+        click.echo(f"\nReconciling: {registry_name}")
+
         try:
-            from agentarea_agents.infrastructure.skill_repository import SkillRepository
-
-            skill_repo_cls = SkillRepository
-        except ImportError:
-            skill_repo_cls = None
-
-        synced = 0
-        for config in configs:
-            registry_name = config["name"]
-            click.echo(f"\nReconciling: {registry_name}")
-
             async with db.async_session_factory() as session:
                 registry_repo = RegistryRepository(session, system_context)
                 item_repo = RegistryItemRepository(session, system_context)
                 server_repo = MCPServerRepository(session, system_context)
                 skill_repo = skill_repo_cls(session, system_context) if skill_repo_cls else None
-                service = RegistryService(registry_repo, item_repo, server_repo, skill_repo)
+                provider_spec_repo = (
+                    provider_spec_repo_cls(session, system_context)
+                    if provider_spec_repo_cls
+                    else None
+                )
+                model_spec_repo = (
+                    model_spec_repo_cls(session, system_context)
+                    if model_spec_repo_cls
+                    else None
+                )
+                agent_repo = (
+                    agent_repo_cls(session, system_context) if agent_repo_cls else None
+                )
+                service = RegistryService(
+                    registry_repo,
+                    item_repo,
+                    server_repo,
+                    skill_repo=skill_repo,
+                    provider_spec_repo=provider_spec_repo,
+                    model_spec_repo=model_spec_repo,
+                    agent_repo=agent_repo,
+                )
 
-                # Ensure registry record exists
-                matches = await registry_repo.find_by(name=config["name"])
+                matches = await registry_repo.find_by(name=registry_name)
                 existing = matches[0] if matches else None
                 if existing:
                     registry_id = existing.id
                     click.echo(f"Found existing registry: {registry_id}")
                 else:
                     registry = await service.create_registry(
-                        name=config["name"],
+                        name=registry_name,
                         registry_type=config.get("type", "mcp_servers"),
                         source_type=config.get("source_type", "url"),
                         source_url=config["source_url"],
@@ -290,18 +331,22 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                     registry_id = registry.id
                     click.echo(f"Created registry: {registry_id}")
 
-                # Sync
                 stats = await service.sync_registry(registry_id)
                 await session.commit()
-
                 click.echo(f"Synced: {stats}")
-                synced += 1
+                succeeded.append(registry_name)
+        except Exception as e:
+            logger.exception("Reconcile failed for registry %s", registry_name)
+            click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)
+            failed.append((registry_name, str(e)))
 
-        click.echo(f"\n Reconcile complete: {synced}/{len(configs)} registries synced")
-
-    except Exception as e:
-        click.echo(f"Reconcile failed: {e}")
-        logger.exception("Reconcile failed")
+    click.echo(
+        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed "
+        f"(out of {len(configs)})"
+    )
+    if failed:
+        for name, err in failed:
+            click.echo(f"  - {name}: {err}", err=True)
         sys.exit(1)
 
 
