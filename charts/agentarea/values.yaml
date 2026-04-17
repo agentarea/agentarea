@@ -429,7 +429,7 @@ eventService:
   enabled: true
   replicaCount: 1
   image:
-    repository: agentarea/agentarea-event-service
+    repository: agentarea/agentarea-events
     tag: "latest"
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
