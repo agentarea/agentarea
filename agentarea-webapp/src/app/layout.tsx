@@ -11,10 +11,38 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://app.agentarea.ai/'),
   title: {
     default: "AgentArea",
     template: "%s | AgentArea",
   },
+  description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+  openGraph: {
+    title: "AgentArea - Privacy-First Agent Platform",
+    description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+    locale: 'en_US',
+    type: 'website',
+    siteName: 'AgentArea',
+    images: [
+      {
+        url: '/cover.png',
+        width: 1308,
+        height: 650,
+        alt: 'AgentArea - Privacy-First Agent Platform'
+      }
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AgentArea - Privacy-First Agent Platform',
+    description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+    images: ['/cover.png'],
+  },
+  other: {
+    'vk:image': '/cover.png',
+    'og:image': '/cover.png',
+    'og:image:alt': 'AgentArea - Privacy-First Agent Platform',
+  }
 };
 
 const inter = Inter({
