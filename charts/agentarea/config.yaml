@@ -17,6 +17,10 @@ groups:
         value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"
 
   redis:
+    # REDIS_URL is emitted by the agentarea.redis.urlEnv helper
+    # (templates/_redis-url.tpl) so it can support external providers via
+    # global.redis.url or global.redis.existingSecret. Do NOT add REDIS_URL
+    # back to envExtras here.
     configVars:
       REDIS_HOST: '{{ include "agentarea.redis.host" . }}'
       REDIS_PORT: '{{ .Values.global.redis.port }}'
@@ -24,9 +28,6 @@ groups:
       - name: REDIS_PASSWORD
         secretName: "{{ .Values.global.secrets.redis }}"
         key: "redis-password"
-    envExtras:
-      - name: REDIS_URL
-        value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
 
   storage:
     # Only include storage config when RustFS is enabled
