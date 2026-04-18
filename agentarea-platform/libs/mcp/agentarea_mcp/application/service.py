@@ -865,6 +865,243 @@ class MCPServerInstanceService:
                 await session.initialize()
                 return await session.list_tools()
 
+    async def _resolve_mcp_url_and_headers(
+        self, instance: MCPServerInstance
+    ) -> tuple[str, dict[str, str]]:
+        """Build the MCP URL and auth/custom headers for a non-bundle instance."""
+        instance_type = (instance.json_spec or {}).get("type", "docker")
+
+        if instance_type == "url":
+            mcp_url = (instance.json_spec or {}).get("endpoint_url") or (
+                instance.json_spec or {}
+            ).get("url", "")
+            if not mcp_url:
+                raise RuntimeError(
+                    f"URL-type instance {instance.id} has no endpoint_url in json_spec"
+                )
+        else:
+            import re
+
+            slug = re.sub(r"[^a-z0-9]+", "-", instance.name.lower()).strip("-")
+            container_name = f"mcp-{slug}"
+            container_port = (instance.json_spec or {}).get("port", 8080)
+            path = "/mcp" if instance_type == "command" else ""
+            mcp_url = f"http://{container_name}:{container_port}{path}"
+
+        headers: dict[str, str] = {}
+        custom_headers = (instance.json_spec or {}).get("headers")
+        if isinstance(custom_headers, dict):
+            headers.update(custom_headers)
+
+        if not headers and instance.auth_config_id:
+            try:
+                from agentarea_mcp.application.auth_service import MCPAuthService
+                from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+
+                auth_repo = MCPAuthConfigRepository(
+                    self.repository.session, self.repository.user_context
+                )
+                auth_service = MCPAuthService(auth_repo, self.secret_manager)
+                auth_config = await auth_service.get(instance.auth_config_id)
+                if auth_config:
+                    headers = await auth_service.get_auth_headers(auth_config)
+            except Exception as e:
+                logger.warning(
+                    "Failed to resolve auth headers for instance %s: %s", instance.id, e
+                )
+
+        return mcp_url, headers
+
+    async def _call_tool_via_mcp(
+        self,
+        mcp_url: str,
+        headers: dict[str, str],
+        tool_name: str,
+        tool_args: dict[str, Any],
+    ):
+        """Open an MCP session and call a tool. Streamable HTTP with SSE fallback."""
+        from mcp import ClientSession
+
+        try:
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async with streamablehttp_client(
+                mcp_url, timeout=timedelta(seconds=30), headers=headers or None
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    return await session.call_tool(tool_name, tool_args)
+        except Exception as e:
+            logger.info(
+                "Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e
+            )
+
+        from mcp.client.sse import sse_client
+
+        sse_url = mcp_url.rstrip("/")
+        if sse_url.endswith("/mcp"):
+            sse_url = sse_url[:-4] + "/sse"
+        elif not sse_url.endswith("/sse"):
+            sse_url = sse_url + "/sse"
+
+        async with sse_client(sse_url, timeout=30, headers=headers or None) as (
+            read_stream,
+            write_stream,
+        ):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await session.call_tool(tool_name, tool_args)
+
+    async def execute_tool(
+        self,
+        server_instance_id: UUID,
+        tool_name: str,
+        tool_args: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute a tool on an MCP server instance via session.call_tool.
+
+        Handles url/docker/command types directly. For bundle instances,
+        resolves the original member via ``available_tools`` metadata and
+        recursively dispatches to that member's instance.
+
+        Returns a dict compatible with the tool executor contract:
+            {"success": bool, "result": str, "error": str | None,
+             "tool_name": str, "server_instance_id": str}
+        """
+        instance = await self.repository.get_by_id(server_instance_id)
+        if not instance:
+            return {
+                "success": False,
+                "result": "",
+                "error": f"MCP server instance {server_instance_id} not found",
+                "tool_name": tool_name,
+                "server_instance_id": str(server_instance_id),
+            }
+
+        status = getattr(instance, "status", None)
+        if status not in ("running", "connected"):
+            return {
+                "success": False,
+                "result": "",
+                "error": (
+                    f"MCP server instance {server_instance_id} is not ready "
+                    f"(status: {status})"
+                ),
+                "tool_name": tool_name,
+                "server_instance_id": str(server_instance_id),
+            }
+
+        instance_type = (instance.json_spec or {}).get("type", "docker")
+
+        # Bundle: the exposed tool_name is "{namespace}__{original_tool_name}".
+        # Resolve the member instance from cached available_tools metadata
+        # and recurse into it.
+        if instance_type == "bundle":
+            available_tools = (instance.json_spec or {}).get("available_tools") or []
+            matched = next(
+                (t for t in available_tools if t.get("name") == tool_name),
+                None,
+            )
+            if not matched:
+                return {
+                    "success": False,
+                    "result": "",
+                    "error": (
+                        f"Bundle {instance.name} does not expose tool '{tool_name}'. "
+                        "Try refreshing the bundle's tool list."
+                    ),
+                    "tool_name": tool_name,
+                    "server_instance_id": str(server_instance_id),
+                }
+            member_instance_id = matched.get("member_instance_id")
+            original_tool_name = matched.get("original_tool_name") or tool_name
+            if not member_instance_id:
+                return {
+                    "success": False,
+                    "result": "",
+                    "error": (
+                        f"Bundle entry for '{tool_name}' is missing member_instance_id"
+                    ),
+                    "tool_name": tool_name,
+                    "server_instance_id": str(server_instance_id),
+                }
+            return await self.execute_tool(
+                UUID(member_instance_id), original_tool_name, tool_args
+            )
+
+        try:
+            mcp_url, headers = await self._resolve_mcp_url_and_headers(instance)
+        except Exception as e:
+            return {
+                "success": False,
+                "result": "",
+                "error": str(e),
+                "tool_name": tool_name,
+                "server_instance_id": str(server_instance_id),
+            }
+
+        logger.info(
+            "MCP tool call to %s: instance=%s tool=%s",
+            mcp_url,
+            server_instance_id,
+            tool_name,
+        )
+
+        try:
+            call_result = await self._call_tool_via_mcp(
+                mcp_url, headers, tool_name, tool_args
+            )
+        except Exception as e:
+            logger.error(
+                "MCP tool call failed for %s (%s): %s",
+                server_instance_id,
+                tool_name,
+                e,
+                exc_info=True,
+            )
+            return {
+                "success": False,
+                "result": "",
+                "error": f"MCP tool call failed: {e}",
+                "tool_name": tool_name,
+                "server_instance_id": str(server_instance_id),
+            }
+
+        parts: list[str] = []
+        for block in getattr(call_result, "content", None) or []:
+            block_type = getattr(block, "type", None)
+            if block_type == "text":
+                parts.append(getattr(block, "text", "") or "")
+            elif block_type == "image":
+                mime = getattr(block, "mimeType", "unknown")
+                parts.append(f"<image mime={mime}>")
+            elif block_type == "resource":
+                resource = getattr(block, "resource", None)
+                uri = getattr(resource, "uri", "unknown") if resource else "unknown"
+                parts.append(f"<resource uri={uri}>")
+            else:
+                parts.append(str(block))
+
+        result_str = "\n".join(parts)
+        is_error = bool(getattr(call_result, "isError", False))
+
+        if is_error:
+            return {
+                "success": False,
+                "result": "",
+                "error": result_str or "MCP tool returned error",
+                "tool_name": tool_name,
+                "server_instance_id": str(server_instance_id),
+            }
+
+        return {
+            "success": True,
+            "result": result_str,
+            "error": None,
+            "tool_name": tool_name,
+            "server_instance_id": str(server_instance_id),
+        }
+
     async def _discover_bundle_tools(self, instance) -> bool:
         """Aggregate tools from all bundle member instances with namespace prefixes."""
         import hashlib

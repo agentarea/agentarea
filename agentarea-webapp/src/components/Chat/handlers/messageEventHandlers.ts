@@ -84,8 +84,9 @@ export function handleToolCallStarted(
 }
 
 /**
- * Handle tool call completed events
- * Replaces the tool_call_started message with the result
+ * Handle tool call resolved events (Completed or Failed).
+ * Replaces the tool_call_started message with the result (success or error
+ * styled tool_result — EventParser maps both event types to that component).
  */
 export function handleToolCallCompleted(
   event: any,
@@ -94,18 +95,17 @@ export function handleToolCallCompleted(
   const originalData = event.data.original_data || event.data;
   const toolName = originalData.tool_name || event.data.tool_name;
   const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+  const eventType =
+    event.event_type || event.type || EVENT_TOOL_CALL_COMPLETED;
 
   setMessages((prev) => {
-    // Check if this tool call has already been completed (deduplication)
+    // Check if this tool call has already been resolved (deduplication)
     if (hasToolCallCompleted(prev, toolName, toolCallId)) {
       return prev;
     }
 
     // Replace tool_call_started with tool_result
-    const messageComponent = parseEventToMessage(
-      EVENT_TOOL_CALL_COMPLETED,
-      event.data
-    );
+    const messageComponent = parseEventToMessage(eventType, event.data);
     return replaceToolCallStarted(prev, {
       toolName,
       toolCallId,

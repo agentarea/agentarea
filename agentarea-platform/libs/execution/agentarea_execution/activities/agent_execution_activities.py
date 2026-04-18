@@ -636,6 +636,54 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 f"(connection={connection_ref})"
                             )
 
+            # MCP dispatch: resolve the requested tool against configured MCP
+            # instances and call the service directly. The service handles
+            # bundle namespace resolution and session.call_tool internally.
+            if request.tools and isinstance(request.tools, list):
+                mcp_configs = [
+                    tc
+                    for tc in request.tools
+                    if isinstance(tc, dict) and tc.get("type") == "mcp"
+                ]
+                for tool_config in mcp_configs:
+                    instance_ref = tool_config.get("name")
+                    if not instance_ref:
+                        continue
+
+                    instance = None
+                    try:
+                        instance = await mcp_server_instance_service.get(UUID(str(instance_ref)))
+                    except (ValueError, TypeError):
+                        pass
+                    if not instance:
+                        instance = await mcp_server_instance_service.get_by_name(instance_ref)
+                    if not instance:
+                        continue
+
+                    available = (instance.json_spec or {}).get("available_tools") or []
+                    if not any(t.get("name") == request.tool_name for t in available):
+                        continue
+
+                    try:
+                        mcp_result = await mcp_server_instance_service.execute_tool(
+                            instance.id, request.tool_name, request.tool_args
+                        )
+                    except Exception as e:
+                        logger.error("MCP tool execution failed: %s", e, exc_info=True)
+                        return MCPToolResult(
+                            success=False,
+                            result="",
+                            execution_time="",
+                            error=str(e),
+                        )
+
+                    return MCPToolResult(
+                        success=bool(mcp_result.get("success", False)),
+                        result=str(mcp_result.get("result") or ""),
+                        execution_time="",
+                        error=mcp_result.get("error"),
+                    )
+
             try:
                 result = await tool_executor.execute_tool(
                     tool_name=request.tool_name,

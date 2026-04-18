@@ -148,48 +148,69 @@ export const parseEventToMessage = (
     case "ToolCallCompleted": {
       // Extract tool result information
       const originalData = eventData.original_data || eventData;
-      const result = originalData.result || eventData.result;
+      const result = originalData.result ?? eventData.result;
       const toolName = originalData.tool_name || eventData.tool_name;
       const toolCallId = originalData.tool_call_id || eventData.tool_call_id;
+      const success = originalData.success ?? eventData.success ?? true;
+      const errorText = originalData.error || eventData.error;
 
-      // If no tool name or result, create a generic tool completion message
       const displayToolName = toolName || "Unknown Tool";
-      const displayResult =
-        result || "Tool execution completed (no result data)";
 
-      const resultComponent = {
-        type: "tool_result" as const,
+      // Failure path (legacy events: pre-fix workflows emitted success=false
+      // as Completed instead of Failed). Render as tool_result with success=false
+      // so ToolResultMessage applies error styling and grouping still works.
+      if (!success) {
+        return {
+          type: "tool_result",
+          data: {
+            ...baseData,
+            tool_name: displayToolName,
+            tool_call_id: toolCallId || "unknown",
+            result: errorText || result || "Tool execution failed",
+            success: false,
+            execution_time:
+              originalData.execution_time || eventData.execution_time,
+            arguments: originalData.arguments || eventData.arguments,
+          },
+        };
+      }
+
+      return {
+        type: "tool_result",
         data: {
           ...baseData,
           tool_name: displayToolName,
           tool_call_id: toolCallId || "unknown",
-          result: displayResult,
-          success: originalData.success ?? eventData.success ?? true,
+          result: result || "(empty response)",
+          success: true,
           execution_time:
             originalData.execution_time || eventData.execution_time,
           arguments: originalData.arguments || eventData.arguments,
         },
       };
-
-      return resultComponent;
     }
 
     case "ToolCallFailed": {
-      // Extract tool failure information
+      // Extract tool failure information. Emit as a tool_result with success=false
+      // so the UI groups it with other tool calls and applies error styling in
+      // ToolResultMessage, matching the legacy Completed+success=false path.
       const originalData = eventData.original_data || eventData;
       const error = originalData.error || eventData.error;
       const toolName = originalData.tool_name || eventData.tool_name;
+      const toolCallId = originalData.tool_call_id || eventData.tool_call_id;
 
-      // Only create message if there's an error and tool name
-      if (!error || !toolName) return null;
+      const displayToolName = toolName || "Unknown Tool";
 
       return {
-        type: "error",
+        type: "tool_result",
         data: {
           ...baseData,
-          error: `Tool "${toolName}" failed: ${error}`,
-          error_type: "tool_call_failed",
-          tool_name: toolName,
+          tool_name: displayToolName,
+          tool_call_id: toolCallId || "unknown",
+          result: error || "Tool execution failed",
+          success: false,
+          execution_time:
+            originalData.execution_time || eventData.execution_time,
           arguments: originalData.arguments || eventData.arguments,
         },
       };

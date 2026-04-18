@@ -52,92 +52,41 @@ class MCPTool(BaseTool):
         return self._schema
 
     async def execute(self, **kwargs) -> dict[str, Any]:
-        """Execute the MCP tool.
+        """Execute the MCP tool by delegating to the service's ``execute_tool``.
 
-        Args:
-            **kwargs: Tool-specific arguments
-
-        Returns:
-            Dict containing execution results
+        The service is responsible for URL/transport resolution, auth, and
+        bundle dispatch — this wrapper just adapts kwargs → (instance_id,
+        tool_name, tool_args) and normalises the return shape.
         """
-        try:
-            # Get server instance
-            server_instance = await self.mcp_server_instance_service.get(self.server_instance_id)
-            if not server_instance:
-                raise ToolExecutionError(
-                    self.name, f"MCP server instance {self.server_instance_id} not found"
-                )
-
-            # Basic safety: ensure instance is running before attempting execution
-            status = getattr(server_instance, "status", None)
-            if status != "running":
-                raise ToolExecutionError(
-                    self.name,
-                    (
-                        f"MCP server instance {self.server_instance_id} is not "
-                        f"running (status: {status})"
-                    ),
-                )
-
-            # Prefer a dedicated execute method on the service if available
-            service_execute = getattr(self.mcp_server_instance_service, "execute_tool", None)
-            if callable(service_execute):
-                logger.info(
-                    f"Executing MCP tool via service: instance="
-                    f"{self.server_instance_id}, tool={self.name}, args={kwargs}"
-                )
-                result = await service_execute(
-                    server_instance_id=self.server_instance_id,
-                    tool_name=self.name,
-                    tool_args=kwargs,
-                )
-                # Expecting a dict payload; normalize minimal shape
-                if not isinstance(result, dict):
-                    result = {"success": True, "result": result}
-                # Ensure common fields exist
-                result.setdefault("tool_name", self.name)
-                result.setdefault("server_instance_id", str(self.server_instance_id))
-                result.setdefault("success", True)
-                result.setdefault("error", None)
-                return result
-
-            # Fallback: if there is a generic "run_tool" or similar method
-            for alt_method in ("run_tool", "invoke_tool", "call_tool"):
-                fn = getattr(self.mcp_server_instance_service, alt_method, None)
-                if callable(fn):
-                    logger.info(
-                        f"Executing MCP tool via service.{alt_method}: "
-                        f"instance={self.server_instance_id}, tool={self.name}"
-                    )
-                    result = await fn(self.server_instance_id, self.name, kwargs)
-                    if not isinstance(result, dict):
-                        result = {"success": True, "result": result}
-                    result.setdefault("tool_name", self.name)
-                    result.setdefault("server_instance_id", str(self.server_instance_id))
-                    result.setdefault("success", True)
-                    result.setdefault("error", None)
-                    return result
-
-            # If we reach here, integration method is not yet implemented on the service
-            logger.warning(
-                f"MCP tool execution not yet implemented on service for tool "
-                f"{self.name}; service missing execute method"
+        service_execute = getattr(self.mcp_server_instance_service, "execute_tool", None)
+        if not callable(service_execute):
+            raise ToolExecutionError(
+                self.name,
+                "MCP server instance service does not implement execute_tool",
             )
 
-            # Placeholder return for now
-            return {
-                "success": True,
-                "result": f"MCP tool {self.name} executed successfully (placeholder)",
-                "tool_name": self.name,
-                "error": None,
-                "server_instance_id": str(self.server_instance_id),
-            }
-
+        try:
+            logger.info(
+                "Executing MCP tool via service: instance=%s, tool=%s",
+                self.server_instance_id,
+                self.name,
+            )
+            result = await service_execute(
+                self.server_instance_id,
+                self.name,
+                kwargs,
+            )
+            if not isinstance(result, dict):
+                result = {"success": True, "result": result}
+            result.setdefault("tool_name", self.name)
+            result.setdefault("server_instance_id", str(self.server_instance_id))
+            result.setdefault("success", True)
+            result.setdefault("error", None)
+            return result
         except ToolExecutionError:
-            # Re-raise tool execution errors as-is
             raise
         except Exception as e:
-            logger.error(f"MCP tool execution failed for {self.name}: {e}")
+            logger.error("MCP tool execution failed for %s: %s", self.name, e, exc_info=True)
             raise ToolExecutionError(self.name, str(e), e) from e
 
 
