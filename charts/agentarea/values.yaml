@@ -67,14 +67,31 @@ global:
       runAtStartup: true
       initializationTimeout: 300s
 
-  # Valkey configuration (Redis-compatible, Apache 2.0)
+  # Redis client configuration consumed by AgentArea services.
+  #
+  # This block is AgentArea's OWN client config. It is NOT passed through to
+  # the bundled Valkey subchart. Subchart values live under the top-level
+  # `valkey:` key (see bottom of this file). The only cross-link is
+  # `Chart.yaml` dependency `condition: redis.enabled`, which toggles the
+  # bundled Valkey subchart on/off.
+  #
+  # Precedence for REDIS_URL injection (see templates/_redis-url.tpl):
+  #   1. existingSecret set -> REDIS_URL from secretKeyRef (recommended for
+  #      production: managed Redis URLs carry credentials).
+  #   2. url set            -> REDIS_URL literal value (quick-start / dev).
+  #   3. neither set        -> derived redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)
+  #      using the in-cluster Valkey subchart (default behavior).
   redis:
-    host: ""  # Auto-set from redis.fullnameOverride if empty
+    host: ""  # auto-derived from bundled Valkey service when empty
     port: 6379
-    # Valkey settings
+    # External Redis URL (full connection string, e.g. rediss://user:pass@host:6379).
+    # Takes precedence over host/port when set.
+    url: ""
+    # Pre-existing Secret containing the full REDIS_URL (takes precedence over url).
+    existingSecret: ""
+    existingSecretKey: "url"
     database: 0
     ssl: false
-    # Connection pool settings
     maxConnections: 50
     connectionTimeout: 5s
 
@@ -603,10 +620,13 @@ postgresql:
     size: 8Gi
     storageClass: ""
 
-# Valkey - Redis-compatible key-value store (Apache 2.0)
-# Uses official valkey-io/valkey-helm chart
+# `redis.enabled` is the Chart.yaml dependency condition that toggles the
+# bundled Valkey subchart. No other keys here reach the subchart.
 redis:
   enabled: true
+
+# Valkey subchart passthrough — forwarded verbatim to valkey-io/valkey-helm.
+valkey:
   auth:
     enabled: true
     usersExistingSecret: "agentarea-redis-secret"
