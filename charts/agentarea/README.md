@@ -80,6 +80,9 @@ The following table lists configurable parameters of the chart and their default
 | global.database.migrations.initializationTimeout | string | `"300s"` |  |
 | global.redis.host | string | `""` |  |
 | global.redis.port | int | `6379` |  |
+| global.redis.url | string | `""` |  |
+| global.redis.existingSecret | string | `""` |  |
+| global.redis.existingSecretKey | string | `"url"` |  |
 | global.redis.database | int | `0` |  |
 | global.redis.ssl | bool | `false` |  |
 | global.redis.maxConnections | int | `50` |  |
@@ -325,17 +328,17 @@ The following table lists configurable parameters of the chart and their default
 | postgresql.persistence.size | string | `"8Gi"` |  |
 | postgresql.persistence.storageClass | string | `""` |  |
 | redis.enabled | bool | `true` |  |
-| redis.auth.enabled | bool | `true` |  |
-| redis.auth.usersExistingSecret | string | `"agentarea-redis-secret"` |  |
-| redis.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
-| redis.auth.aclUsers.default.passwordKey | string | `"redis-password"` |  |
-| redis.replica.enabled | bool | `false` |  |
-| redis.dataStorage.enabled | bool | `false` |  |
-| redis.dataStorage.requestedSize | string | `"1Gi"` |  |
-| redis.resources.limits.cpu | string | `"250m"` |  |
-| redis.resources.limits.memory | string | `"256Mi"` |  |
-| redis.resources.requests.cpu | string | `"100m"` |  |
-| redis.resources.requests.memory | string | `"128Mi"` |  |
+| valkey.auth.enabled | bool | `true` |  |
+| valkey.auth.usersExistingSecret | string | `"agentarea-redis-secret"` |  |
+| valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
+| valkey.auth.aclUsers.default.passwordKey | string | `"redis-password"` |  |
+| valkey.replica.enabled | bool | `false` |  |
+| valkey.dataStorage.enabled | bool | `false` |  |
+| valkey.dataStorage.requestedSize | string | `"1Gi"` |  |
+| valkey.resources.limits.cpu | string | `"250m"` |  |
+| valkey.resources.limits.memory | string | `"256Mi"` |  |
+| valkey.resources.requests.cpu | string | `"100m"` |  |
+| valkey.resources.requests.memory | string | `"128Mi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
 | rustfs.image.tag | string | `"latest"` |  |
@@ -347,6 +350,16 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.resources.requests.memory | string | `"256Mi"` |  |
 | rustfs.persistence.enabled | bool | `true` |  |
 | rustfs.persistence.size | string | `"10Gi"` |  |
+| rustfs.readinessProbe.tcpSocket.port | string | `"rustfs"` |  |
+| rustfs.readinessProbe.initialDelaySeconds | int | `10` |  |
+| rustfs.readinessProbe.periodSeconds | int | `10` |  |
+| rustfs.readinessProbe.timeoutSeconds | int | `5` |  |
+| rustfs.readinessProbe.failureThreshold | int | `6` |  |
+| rustfs.livenessProbe.tcpSocket.port | string | `"rustfs"` |  |
+| rustfs.livenessProbe.initialDelaySeconds | int | `20` |  |
+| rustfs.livenessProbe.periodSeconds | int | `20` |  |
+| rustfs.livenessProbe.timeoutSeconds | int | `5` |  |
+| rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | operator.enabled | bool | `true` |  |
 | operator.image.repository | string | `"agentarea/agentarea-operator"` |  |

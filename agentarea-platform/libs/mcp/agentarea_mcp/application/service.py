@@ -906,9 +906,7 @@ class MCPServerInstanceService:
                 if auth_config:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
-                logger.warning(
-                    "Failed to resolve auth headers for instance %s: %s", instance.id, e
-                )
+                logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
 
         return mcp_url, headers
 
@@ -932,9 +930,7 @@ class MCPServerInstanceService:
                     await session.initialize()
                     return await session.call_tool(tool_name, tool_args)
         except Exception as e:
-            logger.info(
-                "Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e
-            )
+            logger.info("Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e)
 
         from mcp.client.sse import sse_client
 
@@ -984,8 +980,7 @@ class MCPServerInstanceService:
                 "success": False,
                 "result": "",
                 "error": (
-                    f"MCP server instance {server_instance_id} is not ready "
-                    f"(status: {status})"
+                    f"MCP server instance {server_instance_id} is not ready (status: {status})"
                 ),
                 "tool_name": tool_name,
                 "server_instance_id": str(server_instance_id),
@@ -1019,15 +1014,11 @@ class MCPServerInstanceService:
                 return {
                     "success": False,
                     "result": "",
-                    "error": (
-                        f"Bundle entry for '{tool_name}' is missing member_instance_id"
-                    ),
+                    "error": (f"Bundle entry for '{tool_name}' is missing member_instance_id"),
                     "tool_name": tool_name,
                     "server_instance_id": str(server_instance_id),
                 }
-            return await self.execute_tool(
-                UUID(member_instance_id), original_tool_name, tool_args
-            )
+            return await self.execute_tool(UUID(member_instance_id), original_tool_name, tool_args)
 
         try:
             mcp_url, headers = await self._resolve_mcp_url_and_headers(instance)
@@ -1048,9 +1039,7 @@ class MCPServerInstanceService:
         )
 
         try:
-            call_result = await self._call_tool_via_mcp(
-                mcp_url, headers, tool_name, tool_args
-            )
+            call_result = await self._call_tool_via_mcp(mcp_url, headers, tool_name, tool_args)
         except Exception as e:
             logger.error(
                 "MCP tool call failed for %s (%s): %s",

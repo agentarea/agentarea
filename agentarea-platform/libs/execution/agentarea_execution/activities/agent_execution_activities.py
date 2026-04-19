@@ -641,9 +641,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # bundle namespace resolution and session.call_tool internally.
             if request.tools and isinstance(request.tools, list):
                 mcp_configs = [
-                    tc
-                    for tc in request.tools
-                    if isinstance(tc, dict) and tc.get("type") == "mcp"
+                    tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "mcp"
                 ]
                 for tool_config in mcp_configs:
                     instance_ref = tool_config.get("name")
