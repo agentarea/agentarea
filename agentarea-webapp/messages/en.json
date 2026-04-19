@@ -1276,5 +1276,26 @@
       "ip": "IP",
       "when": "When"
     }
+  },
+  "AuthConsent": {
+    "title": "Authorize {clientName}",
+    "description": "{clientName} is requesting access to your AgentArea account. Only approve apps you recognize and trust.",
+    "permissionsHeading": "It will be able to:",
+    "scope": {
+      "openid": "Verify your identity",
+      "profile": "Read your basic profile",
+      "email": "See your email address",
+      "offline_access": "Stay connected on your behalf when you're offline"
+    },
+    "footnote": "You can revoke access any time from Settings.",
+    "allow": "Allow access",
+    "deny": "Cancel",
+    "defaultClient": "an external application",
+    "error": {
+      "missingChallenge": "This authorization link is invalid or has expired.",
+      "loadFailed": "We couldn't load the authorization request.",
+      "acceptFailed": "Authorization didn't go through. Please try again.",
+      "rejectFailed": "We couldn't cancel the request. Please try again."
+    }
   }
 }
