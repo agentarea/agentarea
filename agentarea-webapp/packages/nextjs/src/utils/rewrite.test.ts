@@ -19,12 +19,14 @@ describe("rewriteUrls", () => {
       settings_ui_url: "/custom/settings",
       error_ui_url: "/custom/error",
       default_locale: "en",
+      enabled_locales: ["en"],
       default_redirect_url: "/",
       locale_behavior: "force_default",
       name: "Ory Next.js App Router Example",
       registration_enabled: true,
       verification_enabled: true,
       recovery_enabled: true,
+      translations: [],
     },
   }
 

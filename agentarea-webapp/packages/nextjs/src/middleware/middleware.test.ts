@@ -57,6 +57,7 @@ const createOptions = (): OryMiddlewareOptions => ({
     default_locale: "en",
     default_redirect_url: "/custom-redirect",
     error_ui_url: "/auth/error",
+    enabled_locales: ["en"],
     locale_behavior: "force_default",
     name: "Ory Next.js App Router Example",
     registration_enabled: true,
@@ -67,6 +68,7 @@ const createOptions = (): OryMiddlewareOptions => ({
     recovery_ui_url: "/auth/recovery",
     login_ui_url: "/custom-login",
     settings_ui_url: "/auth/settings",
+    translations: [],
   },
 })
 
