@@ -237,6 +237,17 @@ class OpenAPITool(BaseTool):
             }
 
         # Coerce successful response to string
+        # 204 No Content or empty body — legitimate empty success, don't fall
+        # into the JSON decoder (which would raise and flip to success=False).
+        if status_code == 204 or not response.content:
+            return {
+                "success": True,
+                "result": "",
+                "error": None,
+                "tool_name": self.name,
+                "status_code": status_code,
+            }
+
         try:
             ct = response.headers.get("content-type", "")
             if "application/json" in ct:

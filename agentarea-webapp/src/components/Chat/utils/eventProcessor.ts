@@ -116,8 +116,9 @@ export function processEventsToMessages(
       continue;
     }
 
-    // Tool call deduplication: if we see ToolCallCompleted, replace matching ToolCallStarted
-    if (eventType === "ToolCallCompleted") {
+    // Tool call deduplication: ToolCallCompleted/Failed replaces the matching
+    // ToolCallStarted so the UI swaps pending → result/error in place.
+    if (eventType === "ToolCallCompleted" || eventType === "ToolCallFailed") {
       const toolCallId =
         eventData.original_data?.tool_call_id || eventData.tool_call_id;
       const startedIndex = messages.findLastIndex(

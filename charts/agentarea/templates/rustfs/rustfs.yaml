@@ -42,22 +42,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.rustfs }}
                   key: root-password
+          {{- with .Values.rustfs.readinessProbe }}
           readinessProbe:
-            httpGet:
-              path: /minio/health/live
-              port: rustfs
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.rustfs.livenessProbe }}
           livenessProbe:
-            httpGet:
-              path: /minio/health/live
-              port: rustfs
-            initialDelaySeconds: 20
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 6
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if or .Values.rustfs.resources .Values.global.workloads.resources.mainContainer }}
           resources:
             {{- if .Values.rustfs.resources }}

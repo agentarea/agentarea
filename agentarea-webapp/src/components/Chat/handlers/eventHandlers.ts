@@ -19,6 +19,7 @@ import {
   EVENT_LLM_CALL_CHUNK,
   EVENT_TOOL_CALL_STARTED,
   EVENT_TOOL_CALL_COMPLETED,
+  EVENT_TOOL_CALL_FAILED,
   EVENT_WORKFLOW_COMPLETED,
   EVENT_WORKFLOW_FAILED,
   EVENT_TASK_FAILED,
@@ -198,7 +199,10 @@ export function createSSEEventHandler(
       return;
     }
 
-    if (cleanEventType === EVENT_TOOL_CALL_COMPLETED) {
+    if (
+      cleanEventType === EVENT_TOOL_CALL_COMPLETED ||
+      cleanEventType === EVENT_TOOL_CALL_FAILED
+    ) {
       handleToolCallCompleted(event, setMessages);
       return;
     }

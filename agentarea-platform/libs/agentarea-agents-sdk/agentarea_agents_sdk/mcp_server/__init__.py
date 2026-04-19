@@ -11,6 +11,7 @@ Usage:
 """
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset
@@ -30,7 +31,15 @@ def create_mcp_server(
     """
     # streamable_http_path="/" so the route lives at the mount root.
     # When FastAPI mounts this at /mcp, the endpoint is /mcp (not /mcp/mcp).
-    server = FastMCP(name=name, instructions=description, streamable_http_path="/")
+    # transport_security disabled: FastMCP auto-enables DNS rebinding protection
+    # when host is the default 127.0.0.1, but we mount under FastAPI behind a
+    # reverse proxy where Host validation should be handled at the ingress layer.
+    server = FastMCP(
+        name=name,
+        instructions=description,
+        streamable_http_path="/",
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
     adapter = MCPToolAdapter(server)
 
     for tool in toolsets:

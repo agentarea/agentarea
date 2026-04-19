@@ -19,8 +19,6 @@ REDIS_PORT: "{{ .Values.global.redis.port }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-redis
       key: REDIS_PORT
-- name: REDIS_URL
-  value: redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)
 {{- end }}
 
 {{- define "agentarea.redis.secrets.envs" }}
