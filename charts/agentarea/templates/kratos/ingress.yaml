@@ -40,7 +40,7 @@ spec:
               service:
                 name: {{ $fullName }}-kratos-public
                 port:
-                  number: 4433
+                  name: http
           {{- end }}
     {{- else }}
     - http:
@@ -52,7 +52,7 @@ spec:
               service:
                 name: {{ $fullName }}-kratos-public
                 port:
-                  number: 4433
+                  name: http
           {{- end }}
     {{- end }}
 {{- end }}
