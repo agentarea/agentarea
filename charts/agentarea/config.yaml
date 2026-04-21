@@ -72,7 +72,7 @@ groups:
       API_URL: '{{ include "agentarea.backend.url" . }}'
       ORY_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
       ORY_SDK_URL: '{{ include "agentarea.kratosPublicUrl" . }}'
-      NEXT_PUBLIC_ORY_SDK_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
+      ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
 

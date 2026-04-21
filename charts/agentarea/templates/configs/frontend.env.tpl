@@ -9,7 +9,7 @@ NODE_ENV: "production"
 API_URL: "{{ include "agentarea.backend.url" . }}"
 ORY_ADMIN_URL: "{{ include "agentarea.kratosAdminUrl" . }}"
 ORY_SDK_URL: "{{ include "agentarea.kratosPublicUrl" . }}"
-NEXT_PUBLIC_ORY_SDK_URL: "{{ include "agentarea.kratosPublicBrowserUrl" . }}"
+ORY_BROWSER_URL: "{{ include "agentarea.kratosPublicBrowserUrl" . }}"
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 {{- end }}
@@ -40,11 +40,11 @@ HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
       key: ORY_SDK_URL
-- name: NEXT_PUBLIC_ORY_SDK_URL
+- name: ORY_BROWSER_URL
   valueFrom:
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
-      key: NEXT_PUBLIC_ORY_SDK_URL
+      key: ORY_BROWSER_URL
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:
