@@ -414,11 +414,11 @@ curl http://localhost:8000/v1/agents/{agent_id}/conversations/export
 ## 📚 Next Steps
 
 <CardGroup cols={3}>
-  <Card title="Advanced Agent Communication" icon="network" href="/agent_to_agent_communication">
+  <Card title="Advanced Agent Communication" icon="network" href="/agent-communication">
     Learn complex multi-agent patterns
   </Card>
   
-  <Card title="MCP Integration Guide" icon="plug" href="/mcp_architecture">
+  <Card title="MCP Integration Guide" icon="plug" href="/mcp-integration">
     Deep dive into Model Context Protocol
   </Card>
   
