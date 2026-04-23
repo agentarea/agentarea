@@ -7,10 +7,10 @@ Explore real-world examples and practical use cases for AgentArea. Each example 
 ## 🚀 Quick Examples
 
 <CardGroup cols={2}>
-  <Card title="Basic Chatbot" icon="comment" href="/examples/basic-chatbot">
+  <Card title="Basic Chatbot" icon="comment" href="https://github.com/agentarea/agentarea/tree/main/examples/basic-chatbot">
     Build a simple conversational AI agent in minutes
   </Card>
-  <Card title="Multi-Agent Workflow" icon="network" href="/examples/multi-agent-workflow">
+  <Card title="Multi-Agent Workflow" icon="network" href="https://github.com/agentarea/agentarea/tree/main/examples/multi-agent-workflow">
     Create agents that work together on complex tasks
   </Card>
 </CardGroup>
@@ -18,7 +18,7 @@ Explore real-world examples and practical use cases for AgentArea. Each example 
 ## 🛠️ Advanced Examples
 
 <CardGroup cols={2}>
-  <Card title="Custom Tools Integration" icon="wrench" href="/examples/custom-tools">
+  <Card title="Custom Tools Integration" icon="wrench" href="https://github.com/agentarea/agentarea/tree/main/examples/custom-tools">
     Integrate external APIs and tools using MCP
   </Card>
   <Card title="More Examples" icon="github" href="https://github.com/agentarea/agentarea/tree/main/examples">

@@ -72,7 +72,9 @@ const config = {
     error_ui_url: "string",
     name: "string",
     default_locale: "en",
+    enabled_locales: ["en"],
     locale_behavior: "force_default",
+    translations: [],
   } satisfies AccountExperienceConfiguration,
 }
 

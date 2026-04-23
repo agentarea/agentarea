@@ -26,7 +26,9 @@ export const defaultConfiguration: OryClientConfiguration = {
     error_ui_url: "http://localhost:4455/error",
     settings_ui_url: "http://localhost:4455/settings",
     default_locale: "en",
+    enabled_locales: ["en"],
     locale_behavior: "respect_accept_language",
+    translations: [],
   },
   sdk: {
     url: "http://localhost:4455",
