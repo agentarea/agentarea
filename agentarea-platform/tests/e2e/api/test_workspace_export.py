@@ -1,35 +1,37 @@
 """Workspace export smoke.
 
-Currently `/v1/workspace/export` returns 500 once the workspace has any
-seeded data (tracked as a known bug — see backend log
-`workspace_config.py:187 export_workspace_config`). This test documents the
-expected behaviour and xfails the broken case so a future fix turns XPASS.
+Endpoint returns YAML (text/yaml). We parse with pyyaml.
 """
 
 from __future__ import annotations
 
 import httpx
 import pytest
+import yaml
+
+
+def _parse_export(resp: httpx.Response) -> dict:
+    assert resp.status_code == 200, resp.text[:200]
+    parsed = yaml.safe_load(resp.text) or {}
+    assert isinstance(parsed, dict)
+    return parsed
 
 
 @pytest.mark.integration
 def test_workspace_export_empty_ok(alice_client: httpx.Client) -> None:
-    resp = alice_client.get("/v1/workspace/export")
-    assert resp.status_code == 200, resp.text[:200]
-    body = resp.json()
-    assert isinstance(body, dict)
+    _parse_export(alice_client.get("/v1/workspace/export"))
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(reason="Known bug: workspace export 500s once workspace has content", strict=False)
 def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
     alice_client.post(
         "/v1/projects/", json={"name": "export-me"}
     ).raise_for_status()
+    agent_name = "export-agent"
     alice_client.post(
         "/v1/agents/",
         json={
-            "name": "export-agent",
+            "name": agent_name,
             "description": "d",
             "instruction": "i",
             "model_id": "gpt-4",
@@ -37,10 +39,9 @@ def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
         },
     ).raise_for_status()
 
-    resp = alice_client.get("/v1/workspace/export")
-    assert resp.status_code == 200, resp.text[:200]
-    body = resp.json()
-    assert "agents" in body or "projects" in body or body, "expected non-empty shape"
+    body = _parse_export(alice_client.get("/v1/workspace/export"))
+    assert body.get("agents"), f"expected agents in export, got {body}"
+    assert any(a.get("name") == agent_name for a in body["agents"])
 
 
 @pytest.mark.integration
