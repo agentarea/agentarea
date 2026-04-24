@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import packageJson from "./package.json";
 import path from "path";
 import "./src/env";
 
@@ -18,6 +19,10 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/static/:path*`,
       },
     ];
+  },
+  env: {
+    NEXT_PUBLIC_APP_VERSION:
+      process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version,
   },
   transpilePackages: ["@t3-oss/env-nextjs", "@t3-oss/env-core", "@ory/elements-react", "@ory/nextjs"],
   // Turbopack (used by default in next dev) needs its own SVG rule,

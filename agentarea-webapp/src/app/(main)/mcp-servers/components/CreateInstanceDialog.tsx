@@ -17,6 +17,7 @@ import {
 import { checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration } from "@/lib/server-actions";
 import { createMCPServerInstance } from "../actions";
 import { MCPServer } from "../types";
+import { VerifyingModal } from "./VerifyingModal";
 import { MCP_CONSTANTS } from "../utils";
 
 interface CreateInstanceDialogProps {
@@ -35,6 +36,7 @@ export function CreateInstanceDialog({
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
     errors: string[];
@@ -107,10 +109,15 @@ export function CreateInstanceDialog({
           throw new Error(errorMessage);
         }
 
-        toast.success(t("success.created", { instanceName }));
+        const created = instanceResult.data as any;
+        const vStatus = created?.verification?.status;
         onOpenChange(false);
-        router.refresh();
         resetForm();
+        if (vStatus === "in_progress" || vStatus === "never_attempted") {
+          setVerifyingInstance({ id: created.id, name: instanceName });
+        } else {
+          router.push(`/mcp-servers/${created.id}`);
+        }
       } catch (error) {
         const errorMessage =
           error instanceof Error
@@ -138,6 +145,16 @@ export function CreateInstanceDialog({
   if (!mcpServer) return null;
 
   return (
+    <>
+      {verifyingInstance && (
+        <VerifyingModal
+          instanceId={verifyingInstance.id}
+          instanceName={verifyingInstance.name}
+          onSuccess={(id) => { setVerifyingInstance(null); router.push(`/mcp-servers/${id}`); }}
+          onDelete={() => { setVerifyingInstance(null); router.refresh(); }}
+          onEditRetry={(id) => { setVerifyingInstance(null); router.push(`/mcp-servers/${id}`); }}
+        />
+      )}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
@@ -230,5 +247,6 @@ export function CreateInstanceDialog({
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

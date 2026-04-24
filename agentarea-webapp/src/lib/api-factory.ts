@@ -367,22 +367,18 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    startMCPServerInstance: async (instanceId: string) => {
+    verifyMCPServerInstance: async (instanceId: string) => {
       const { data, error } = await client.POST(
-        "/v1/mcp-server-instances/{instance_id}/start",
-        {
-          params: { path: { instance_id: instanceId } },
-        }
+        `/v1/mcp-server-instances/${instanceId}/verify` as any,
+        {}
       );
       return { data, error };
     },
 
-    stopMCPServerInstance: async (instanceId: string) => {
+    validateMCPServerInstanceSpec: async (spec: Record<string, unknown>) => {
       const { data, error } = await client.POST(
-        "/v1/mcp-server-instances/{instance_id}/stop",
-        {
-          params: { path: { instance_id: instanceId } },
-        }
+        "/v1/mcp-server-instances/validate" as any,
+        { body: spec }
       );
       return { data, error };
     },

@@ -3929,13 +3929,57 @@ export interface components {
             name: string;
             /** Server Spec Id */
             server_spec_id: string | null;
-            /** Status */
-            status: string;
+            /**
+             * Verification
+             * @description Current verification state
+             */
+            verification?: {
+                status: "never_attempted" | "in_progress" | "succeeded" | "failed";
+                at?: string | null;
+                error?: {
+                    message: string;
+                    code?: string | null;
+                } | null;
+            } | null;
+            /**
+             * Last Dispatch
+             * @description ISO timestamp of last dispatch attempt
+             */
+            last_dispatch?: string | null;
+            /**
+             * Tools
+             * @description Discovered tools from this instance
+             */
+            tools?: Array<{ name: string; description: string }> | null;
+            /**
+             * Type
+             * @description Instance connection type
+             */
+            type?: string | null;
+            /**
+             * External Url
+             * @description External URL for url-type instances
+             */
+            external_url?: string | null;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** MCPInstanceVerificationResponse */
+        MCPInstanceVerificationResponse: {
+            status: "never_attempted" | "in_progress" | "succeeded" | "failed";
+            at?: string | null;
+            error?: {
+                message: string;
+                code?: string | null;
+            } | null;
+        };
+        /** MCPInstanceValidateResponse */
+        MCPInstanceValidateResponse: {
+            valid: boolean;
+            errors: string[];
         };
         /** MCPServerInstanceUpdate */
         MCPServerInstanceUpdate: {

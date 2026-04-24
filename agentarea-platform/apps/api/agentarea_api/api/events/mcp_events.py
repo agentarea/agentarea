@@ -1,8 +1,9 @@
 """MCP event handlers using existing EventBroker architecture.
 
-Status changes and tool discovery are now handled by Temporal workflows
-(StartMCPInstanceWorkflow / StopMCPInstanceWorkflow). These Redis subscribers
-remain for observability logging of events from the Go MCP Manager.
+Lifecycle is owned by the substrate (Go MCP manager + Docker); Python's
+`verify()` function + `container_monitor.py` sweep handle tool discovery and
+orphan cleanup. These Redis subscribers remain for observability logging of
+events from the Go MCP Manager.
 """
 
 import logging

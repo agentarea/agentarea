@@ -56,8 +56,8 @@ export const {
   getMCPServerInstance,
   deleteMCPServerInstance,
   updateMCPServerInstance,
-  startMCPServerInstance,
-  stopMCPServerInstance,
+  verifyMCPServerInstance,
+  validateMCPServerInstanceSpec,
   getMCPServerInstanceEnvironment,
 
   // Provider Spec API

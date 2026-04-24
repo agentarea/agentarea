@@ -11,37 +11,30 @@ export default function MCPInstanceInfoHeader({
   instance: MCPInstance;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail");
-  const tPage = useTranslations("MCPServersPage");
 
-  const status = instance.status;
+  const verification = (instance as any).verification as {
+    status: string;
+  } | null | undefined;
+
+  const vStatus = verification?.status ?? "never_attempted";
+
   const statusVariant =
-    status === "connected"
-      ? "teal"
-      : status === "running" || status === "healthy"
-        ? "success"
-        : status === "starting" ||
-            status === "pending" ||
-            status === "validating" ||
-            status === "stopping"
-          ? "yellow"
-          : status === "stopped"
-            ? "secondary"
-            : status === "error" || status === "unhealthy"
-              ? "destructive"
-              : "zinc";
+    vStatus === "succeeded"
+      ? "success"
+      : vStatus === "in_progress"
+        ? "yellow"
+        : vStatus === "failed"
+          ? "destructive"
+          : "zinc";
 
   const statusLabel =
-    status === "connected"
-      ? tPage("status.connected")
-      : status === "running" || status === "healthy"
-        ? tPage("status.running")
-        : status === "starting"
-          ? tPage("status.starting")
-          : status === "stopped"
-            ? t("status.stopped")
-            : status === "error" || status === "unhealthy"
-              ? tPage("status.error")
-              : status || t("status.unknown");
+    vStatus === "succeeded"
+      ? "Verified"
+      : vStatus === "in_progress"
+        ? "Verifying"
+        : vStatus === "failed"
+          ? "Failed"
+          : "Not verified";
 
   return (
     <InfoPanelHeader

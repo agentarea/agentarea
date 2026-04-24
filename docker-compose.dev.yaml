@@ -99,7 +99,7 @@ services:
     command: ["agentarea-api", "migrate"]
     working_dir: /app/apps/api
 
-  # Create auxiliary databases (temporal, kratos, hydra, infisical) — idempotent.
+  # Create the main app database and auxiliary databases — idempotent.
   postgres_init:
     image: postgres:18
     environment:
@@ -112,7 +112,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -182,7 +182,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=postgres  # Default postgres DB; postgres_init creates aux DBs (temporal, kratos, hydra, infisical)
+      - POSTGRES_DB=postgres  # Maintenance DB; postgres_init creates the main app DB plus aux DBs
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

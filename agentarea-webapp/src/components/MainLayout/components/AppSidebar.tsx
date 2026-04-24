@@ -17,12 +17,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import { NavMain } from "./NavMain";
 import { NavUser } from "./NavUser";
 import { TeamSwitcher } from "./TeamSwitcher";
-
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.8";
 
 export function AppSidebarContent({ data }: { data: any }) {
   const { open } = useSidebar();

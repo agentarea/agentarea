@@ -90,10 +90,17 @@ export function MyMCPsSection({
   // Get health status for instance
   const getHealthStatus = (instance: MCPInstance): HealthStatus => {
     const instanceType = (instance.json_spec?.type as string) || "docker";
+    const vStatus = (instance as any).verification?.status ?? "never_attempted";
 
-    // URL-type and bundle have no container health checks — map instance status directly
+    // URL-type and bundle have no container health checks — map verification status directly
     if (instanceType === "url" || instanceType === "bundle") {
-      return STATUS_TO_HEALTH[instance.status] ?? "unknown";
+      const vToHealth: Record<string, HealthStatus> = {
+        succeeded: "connected",
+        in_progress: "starting",
+        failed: "unhealthy",
+        never_attempted: "unknown",
+      };
+      return vToHealth[vStatus] ?? "unknown";
     }
 
     const healthCheck = getHealthCheck(instance.name);

@@ -25,7 +25,6 @@ from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
 from agentarea_mcp.activities import make_mcp_activities
-from agentarea_mcp.workflows import StartMCPInstanceWorkflow, StopMCPInstanceWorkflow
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -74,6 +73,7 @@ class AgentAreaWorker:
         self.trigger_worker = None
         self.inbound_subscriber = None
         self.outbound_subscriber = None
+        self.container_monitor = None
         self.worker_shutdown_event = asyncio.Event()
 
     async def signal_handler(self, signum: int, frame: Any) -> None:
@@ -162,8 +162,6 @@ class AgentAreaWorker:
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
             workflows=[
                 AgentExecutionWorkflow,
-                StartMCPInstanceWorkflow,
-                StopMCPInstanceWorkflow,
             ],
             activities=activities + mcp_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
@@ -268,6 +266,10 @@ class AgentAreaWorker:
         if self.outbound_subscriber:
             await self.outbound_subscriber.start()
 
+        # Start MCP container monitor in background
+        from agentarea_mcp.container_monitor import start_container_monitoring
+        self.container_monitor = await start_container_monitoring()
+
         # Start workers in background
         worker_task = asyncio.create_task(self.worker.run())
         trigger_task = (
@@ -307,6 +309,9 @@ class AgentAreaWorker:
         """Shutdown the worker and cleanup resources."""
         logger.info("Shutting down worker...")
 
+        if self.container_monitor:
+            await self.container_monitor.stop()
+            self.container_monitor = None
         if self.inbound_subscriber:
             await self.inbound_subscriber.stop()
             self.inbound_subscriber = None

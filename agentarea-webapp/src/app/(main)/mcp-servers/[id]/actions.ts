@@ -1,17 +1,12 @@
 "use server";
 
 import {
-  startMCPServerInstance,
-  stopMCPServerInstance,
   deleteMCPServerInstance,
+  verifyMCPServerInstance,
 } from "@/lib/api";
 
-export async function startInstance(instanceId: string) {
-  return startMCPServerInstance(instanceId);
-}
-
-export async function stopInstance(instanceId: string) {
-  return stopMCPServerInstance(instanceId);
+export async function verifyInstance(instanceId: string) {
+  return verifyMCPServerInstance(instanceId);
 }
 
 export async function deleteInstance(instanceId: string) {

@@ -46,10 +46,16 @@ build_and_push() {
     tag_args+=(-t "$tag")
   done
 
+  local build_args=()
+  if [[ "$name" == "frontend" ]]; then
+    build_args+=(--build-arg "APP_VERSION=${VERSION}")
+  fi
+
   docker buildx build \
     --platform linux/amd64,linux/arm64 \
     --file "$dockerfile" \
     "${tag_args[@]}" \
+    "${build_args[@]}" \
     --push \
     "$context"
 

@@ -54,28 +54,27 @@ export function MCPInstanceCard({
   serverSpec,
 }: MCPInstanceCardProps) {
   const specType = (instance.json_spec?.type as string) || "docker";
-  const toolCount = (instance.json_spec?.available_tools as any[] | undefined)?.length ?? 0;
-  const status = instance.status;
+  const toolCount = ((instance as any).tools as any[] | undefined)?.length
+    ?? (instance.json_spec?.available_tools as any[] | undefined)?.length ?? 0;
+
+  const verification = (instance as any).verification as {
+    status: string;
+  } | null | undefined;
+  const vStatus = verification?.status ?? "never_attempted";
 
   const statusColor = {
-    running: "text-green-600 border-green-300",
-    connected: "text-blue-600 border-blue-300",
-    stopped: "text-gray-500 border-gray-300",
+    succeeded: "text-green-600 border-green-300",
+    in_progress: "text-amber-600 border-amber-300",
     failed: "text-red-600 border-red-300",
-    starting: "text-amber-600 border-amber-300",
-    creating: "text-amber-600 border-amber-300",
-    pending: "text-amber-600 border-amber-300",
-  }[status] || "text-gray-500 border-gray-300";
+    never_attempted: "text-gray-500 border-gray-300",
+  }[vStatus] ?? "text-gray-500 border-gray-300";
 
   const statusLabel = {
-    running: "Running",
-    connected: "Connected",
-    stopped: "Stopped",
+    succeeded: "Verified",
+    in_progress: "Verifying",
     failed: "Failed",
-    starting: "Starting",
-    creating: "Creating",
-    pending: "Pending",
-  }[status] || status;
+    never_attempted: "Not verified",
+  }[vStatus] ?? vStatus;
 
   const typeLabel = specType === "command" ? "Command" : specType === "url" ? "External" : specType === "bundle" ? "Bundle" : serverSpec?.name || "Docker";
 

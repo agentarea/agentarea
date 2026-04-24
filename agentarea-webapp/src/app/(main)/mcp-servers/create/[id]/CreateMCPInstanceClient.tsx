@@ -20,6 +20,7 @@ import {
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
+import { VerifyingModal } from "../../components/VerifyingModal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -180,6 +181,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const [authTab, setAuthTab] = useState<"oauth" | "manual">("manual");
   const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
 
   // Build headers dict from form field values
   const buildHeaders = (): Record<string, string> => {
@@ -295,7 +297,13 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       }
 
       const created = instanceResult.data as any;
-      router.push(`/mcp-servers/${created.id}`);
+      const vStatus = created?.verification?.status;
+      if (vStatus === "in_progress" || vStatus === "never_attempted") {
+        const { instanceName } = getValues();
+        setVerifyingInstance({ id: created.id, name: instanceName });
+      } else {
+        router.push(`/mcp-servers/${created.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create connection");
     } finally {
@@ -323,6 +331,19 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   };
 
   return (
+    <>
+      {verifyingInstance && (
+        <VerifyingModal
+          instanceId={verifyingInstance.id}
+          instanceName={verifyingInstance.name}
+          onSuccess={(id) => router.push(`/mcp-servers/${id}`)}
+          onDelete={() => router.push("/mcp-servers")}
+          onEditRetry={(id) => {
+            setVerifyingInstance(null);
+            router.push(`/mcp-servers/${id}`);
+          }}
+        />
+      )}
     <div className="mx-auto w-full max-w-4xl space-y-6 py-8">
       <SpecHeader server={server} />
 
@@ -497,6 +518,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         </Button>
       )}
     </div>
+    </>
   );
 }
 
@@ -519,6 +541,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
     errors: string[];
@@ -553,7 +576,13 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
         throw new Error(errorMessage);
       }
 
-      router.replace("/mcp-servers");
+      const created = instanceResult.data as any;
+      const vStatus = created?.verification?.status;
+      if (vStatus === "in_progress" || vStatus === "never_attempted") {
+        setVerifyingInstance({ id: created.id, name: instanceName });
+      } else {
+        router.replace(`/mcp-servers/${created.id}`);
+      }
     } catch (error) {
       console.error("Instance creation error:", error);
     } finally {
@@ -562,62 +591,76 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-6 py-8">
-      <SpecHeader server={server} />
-      <MCPInstanceConfigForm
-        formId="mcp-instance-form"
-        className="h-full overflow-auto"
-        hideSubmitButton
-        hideForceCreateButton
-        server={server as any}
-        instanceName={instanceName}
-        instanceDescription={instanceDescription}
-        envVars={envVars}
-        onChangeName={setInstanceName}
-        onChangeDescription={setInstanceDescription}
-        onChangeEnvVar={(key, value) => {
-          setEnvVars((prev) => ({ ...prev, [key]: value }));
-          if (validationResult) setValidationResult(null);
-        }}
-        onValidate={async () => {
-          setIsChecking(true);
-          try {
-            const checkResult = await checkMCPServerInstanceConfiguration({
-              json_spec: {
-                image: server.docker_image_url,
-                port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
-                environment: envVars,
-              },
-            });
-            if (!checkResult.error) {
-              setValidationResult(checkResult.data as any);
+    <>
+      {verifyingInstance && (
+        <VerifyingModal
+          instanceId={verifyingInstance.id}
+          instanceName={verifyingInstance.name}
+          onSuccess={(id) => router.replace(`/mcp-servers/${id}`)}
+          onDelete={() => router.replace("/mcp-servers")}
+          onEditRetry={(id) => {
+            setVerifyingInstance(null);
+            router.replace(`/mcp-servers/${id}`);
+          }}
+        />
+      )}
+      <div className="mx-auto w-full max-w-xl space-y-6 py-8">
+        <SpecHeader server={server} />
+        <MCPInstanceConfigForm
+          formId="mcp-instance-form"
+          className="h-full overflow-auto"
+          hideSubmitButton
+          hideForceCreateButton
+          server={server as any}
+          instanceName={instanceName}
+          instanceDescription={instanceDescription}
+          envVars={envVars}
+          onChangeName={setInstanceName}
+          onChangeDescription={setInstanceDescription}
+          onChangeEnvVar={(key, value) => {
+            setEnvVars((prev) => ({ ...prev, [key]: value }));
+            if (validationResult) setValidationResult(null);
+          }}
+          onValidate={async () => {
+            setIsChecking(true);
+            try {
+              const checkResult = await checkMCPServerInstanceConfiguration({
+                json_spec: {
+                  image: server.docker_image_url,
+                  port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
+                  environment: envVars,
+                },
+              });
+              if (!checkResult.error) {
+                setValidationResult(checkResult.data as any);
+              }
+            } catch (error) {
+              console.error("Validation error:", error);
+            } finally {
+              setIsChecking(false);
             }
-          } catch (error) {
-            console.error("Validation error:", error);
-          } finally {
-            setIsChecking(false);
+          }}
+          validateDisabled={isChecking || !instanceName.trim()}
+          validateLoading={isChecking}
+          onForceCreate={() => createInstance(true)}
+          forceCreateDisabled={isCreating || !instanceName.trim()}
+          onSubmit={async (e) => {
+            e?.preventDefault();
+            if (!validationResult) return;
+            await createInstance(false);
+          }}
+          submitDisabled={
+            isCreating ||
+            !instanceName.trim() ||
+            (validationResult ? !validationResult.valid : false)
           }
-        }}
-        validateDisabled={isChecking || !instanceName.trim()}
-        validateLoading={isChecking}
-        onForceCreate={() => createInstance(true)}
-        forceCreateDisabled={isCreating || !instanceName.trim()}
-        onSubmit={async (e) => {
-          e?.preventDefault();
-          if (!validationResult) return;
-          await createInstance(false);
-        }}
-        submitDisabled={
-          isCreating ||
-          !instanceName.trim() ||
-          (validationResult ? !validationResult.valid : false)
-        }
-        submitLabel={isCreating ? t("actions.creating") : t("actions.createInstance")}
-        showContainerSummary
-        containerImage={server.docker_image_url}
-        containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
-      />
-    </div>
+          submitLabel={isCreating ? t("actions.creating") : t("actions.createInstance")}
+          showContainerSummary
+          containerImage={server.docker_image_url}
+          containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
+        />
+      </div>
+    </>
   );
 }
 

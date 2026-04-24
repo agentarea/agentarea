@@ -8,7 +8,7 @@ from .base import platform_context
 
 
 class MCPServersToolset(Toolset):
-    """Manage MCP server instances: create, list, get, start, stop."""
+    """Manage MCP server instances: create, list, get, verify."""
 
     @property
     def name(self) -> str:
@@ -105,7 +105,7 @@ class MCPServersToolset(Toolset):
                 {
                     "id": str(instance.id),
                     "name": instance.name,
-                    "status": instance.status,
+                    "verification": instance.verification,
                     "description": instance.description,
                 },
                 default=str,
@@ -134,7 +134,7 @@ class MCPServersToolset(Toolset):
                     {
                         "id": str(i.id),
                         "name": i.name,
-                        "status": i.status,
+                        "verification": i.verification,
                         "description": i.description,
                     }
                     for i in instances
@@ -168,15 +168,21 @@ class MCPServersToolset(Toolset):
                 {
                     "id": str(instance.id),
                     "name": instance.name,
-                    "status": instance.status,
+                    "verification": instance.verification,
+                    "last_dispatch": instance.last_dispatch,
+                    "tools": instance.tools,
                     "description": instance.description,
                 },
                 default=str,
             )
 
     @tool_method
-    async def start(self, instance_id: str) -> str:
-        """Start an MCP server instance."""
+    async def verify(self, instance_id: str) -> str:
+        """Run end-to-end verification on an MCP server instance.
+
+        Provisions (if needed), waits for readiness, and lists tools.
+        Returns the fresh verification payload.
+        """
         from uuid import UUID
 
         async with platform_context() as (
@@ -193,27 +199,5 @@ class MCPServersToolset(Toolset):
                 event_broker=event_broker,
                 secret_manager=secret_mgr,
             )
-            started = await service.start_instance(UUID(instance_id))
-            return json.dumps({"started": started})
-
-    @tool_method
-    async def stop(self, instance_id: str) -> str:
-        """Stop a running MCP server instance."""
-        from uuid import UUID
-
-        async with platform_context() as (
-            _session,
-            _user_ctx,
-            repo_factory,
-            event_broker,
-            secret_mgr,
-        ):
-            from agentarea_mcp.application.service import MCPServerInstanceService
-
-            service = MCPServerInstanceService(
-                repository_factory=repo_factory,
-                event_broker=event_broker,
-                secret_manager=secret_mgr,
-            )
-            stopped = await service.stop_instance(UUID(instance_id))
-            return json.dumps({"stopped": stopped})
+            result = await service.verify_instance(UUID(instance_id))
+            return json.dumps(result, default=str)

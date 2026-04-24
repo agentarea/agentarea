@@ -1,19 +1,16 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import httpx
 from agentarea_api.api.deps.services import get_mcp_server_instance_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
-from agentarea_mcp.application.service import MCPServerInstanceService
-from agentarea_mcp.domain.models import MCPServer
+from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
+from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea_mcp.infrastructure.repository import MCPServerRepository
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import update as sa_update
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +29,6 @@ class MCPServerInstanceUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     json_spec: dict[str, Any] | None = None
-    status: str | None = None
 
 
 class MCPServerInstanceResponse(BaseModel):
@@ -41,29 +37,32 @@ class MCPServerInstanceResponse(BaseModel):
     description: str | None
     server_spec_id: str | None
     json_spec: dict[str, Any]
-    status: str
+    verification: dict[str, Any]
+    last_dispatch: dict[str, Any] | None = None
+    tools: list[dict[str, Any]] | None = None
     auth_config_id: UUID | str | None = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, instance: MCPServerInstance) -> "MCPServerInstanceResponse":
+    def from_domain(
+        cls,
+        instance: MCPServerInstance,
+        verification_override: dict | None = None,
+    ) -> "MCPServerInstanceResponse":
         json_spec = dict(instance.json_spec or {})
 
-        # Mask secret env var values — env_vars list holds names of secrets
+        # Mask secret env var values
         secret_names = set(json_spec.get("env_vars", []))
         if secret_names:
             masked_value = "*" * 6
-            # Inject masked values for secret keys into environment
             env = json_spec.get("environment")
             if isinstance(env, dict):
                 masked_env = {k: (masked_value if k in secret_names else v) for k, v in env.items()}
-                # Add missing secret keys (stripped during creation)
                 for name in secret_names:
                     if name not in masked_env:
                         masked_env[name] = masked_value
                 json_spec["environment"] = masked_env
-            # Inject masked values for secret keys into headers
             headers = json_spec.get("headers")
             if isinstance(headers, dict):
                 masked_headers = {
@@ -74,6 +73,10 @@ class MCPServerInstanceResponse(BaseModel):
                         masked_headers[name] = masked_value
                 json_spec["headers"] = masked_headers
 
+        verification = verification_override if verification_override is not None else (
+            instance.verification or {}
+        )
+
         return cls.model_validate(
             {
                 "id": instance.id,
@@ -81,7 +84,9 @@ class MCPServerInstanceResponse(BaseModel):
                 "description": instance.description,
                 "server_spec_id": instance.server_spec_id,
                 "json_spec": json_spec,
-                "status": instance.status,
+                "verification": verification,
+                "last_dispatch": instance.last_dispatch,
+                "tools": instance.tools,
                 "auth_config_id": instance.auth_config_id,
                 "created_at": instance.created_at,
                 "updated_at": instance.updated_at,
@@ -89,16 +94,52 @@ class MCPServerInstanceResponse(BaseModel):
         )
 
 
-@router.post("/", response_model=MCPServerInstanceResponse)
+class ValidateRequest(BaseModel):
+    name: str | None = None
+    type: str = Field(..., description="Instance type: url, docker, command, bundle")
+    endpoint_url: str | None = Field(None, description="For type=url: the MCP endpoint URL")
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/validate")
+async def validate_instance_spec(
+    data: ValidateRequest,
+    user_context: UserContextDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Stateless spec validation. For type=url, probes with list_tools (3s budget)."""
+    errors = []
+
+    if data.type == "url":
+        if not data.endpoint_url:
+            return {"valid": False, "errors": ["endpoint_url is required for type=url"]}
+        result = await service.validate_connection(data.endpoint_url, data.headers or None)
+        return result
+
+    if data.type in ("docker", "command"):
+        # Schema-level check only — no container launched for validate
+        return {"valid": True, "errors": []}
+
+    if data.type == "bundle":
+        return {"valid": True, "errors": []}
+
+    return {"valid": False, "errors": [f"Unknown type: {data.type}"]}
+
+
+@router.post("/", status_code=201)
 async def create_mcp_server_instance(
     data: MCPServerInstanceCreateRequest,
+    response: Response,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
+    """Create a new MCP server instance.
+
+    Returns 201 for url/bundle (synchronous verification completed).
+    Returns 202 for docker/command (background verification in progress).
+    """
     try:
-        instance = await mcp_server_instance_service.create_instance(
+        instance = await service.create_instance(
             name=data.name,
             description=data.description,
             server_spec_id=data.server_spec_id,
@@ -109,38 +150,31 @@ async def create_mcp_server_instance(
         if not instance:
             raise HTTPException(status_code=500, detail="Failed to create MCP instance")
 
+        instance_type = (data.json_spec or {}).get("type", "docker")
+        if instance_type in ("docker", "command"):
+            response.status_code = 202
+
         return MCPServerInstanceResponse.from_domain(instance)
 
+    except MCPValidationError as e:
+        raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-class ValidateConnectionRequest(BaseModel):
-    url: str = Field(..., description="MCP server endpoint URL to test")
-    headers: dict[str, str] = Field(
-        default_factory=dict, description="HTTP headers to send (e.g. Authorization)"
-    )
+        logger.exception("create_mcp_server_instance failed")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.post("/validate-connection")
 async def validate_connection(
-    data: ValidateConnectionRequest,
+    data: dict[str, Any],
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Test a connection to an MCP server without creating an instance.
-
-    Returns tools list on success, or auth/connection error on failure.
-    Use this to validate credentials before creating an instance.
-    """
-    result = await mcp_server_instance_service.validate_connection(
-        url=data.url,
-        headers=data.headers if data.headers else None,
-    )
+    """Test a connection to an MCP server without creating an instance."""
+    url = data.get("url", "")
+    headers = data.get("headers")
+    result = await service.validate_connection(url=url, headers=headers)
     return result
 
 
@@ -148,46 +182,35 @@ async def validate_connection(
 async def check_mcp_server_instance_configuration(
     data: dict[str, Any],
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Check if an MCP server instance configuration is valid by validating it
-    through the golang manager.
-    """
+    """Check if an MCP server instance configuration is valid via the Go manager."""
+    import httpx
+
     try:
         settings = get_settings()
-
-        # Extract json_spec from the request (the frontend sends { json_spec: {...} })
         json_spec = data.get("json_spec", data)
-
-        # Format the request for the golang manager
         validation_request = {
-            "instance_id": "validation-check",  # Temporary ID for validation
-            "name": "validation-test",  # Temporary name for validation
+            "instance_id": "validation-check",
+            "name": "validation-test",
             "json_spec": json_spec,
             "dry_run": True,
         }
 
-        # Validate the configuration through the golang manager
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            resp = await client.post(
                 f"{settings.mcp.MCP_MANAGER_URL}/containers/validate",
                 json=validation_request,
                 headers={"Content-Type": "application/json"},
             )
 
-            if response.status_code == 200:
-                return {
-                    "valid": True,
-                    "message": "Configuration is valid",
-                    "details": response.json(),
-                }
+            if resp.status_code == 200:
+                return {"valid": True, "message": "Configuration is valid", "details": resp.json()}
             else:
                 return {
                     "valid": False,
-                    "message": f"Configuration validation failed: {response.text}",
-                    "status_code": response.status_code,
+                    "message": f"Configuration validation failed: {resp.text}",
+                    "status_code": resp.status_code,
                 }
     except httpx.RequestError as e:
         raise HTTPException(
@@ -201,18 +224,10 @@ async def check_mcp_server_instance_configuration(
 async def get_instance_environment(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Get environment variables for an MCP server instance.
-
-    Note: This endpoint should have proper authentication and authorization in production.
-    """
     try:
-        env_vars = await mcp_server_instance_service.get_instance_environment(instance_id)
-
-        # Return env var names only for security (don't leak values)
+        env_vars = await service.get_instance_environment(instance_id)
         return {
             "instance_id": instance_id,
             "env_vars": list(env_vars.keys()),
@@ -225,51 +240,31 @@ async def get_instance_environment(
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """List all MCP server instances in the workspace.
+    """List all MCP server instances in the workspace."""
+    instances = await service.list()
 
-    Access Control:
-        Returns all instances within the current user's workspace (workspace isolation).
-        All users in the same workspace can see all workspace instances.
-    """
-    # Get instances from database (configuration/metadata)
-    instances = await mcp_server_instance_service.list()
-
-    # Get real-time status from golang manager
-    try:
-        settings = get_settings()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
-            if response.status_code == 200:
-                health_data = response.json()
-                health_lookup = {
-                    check["service_name"]: check for check in health_data.get("health_checks", [])
-                }
-            else:
-                health_lookup = {}
-    except Exception as e:
-        logger.warning(f"Failed to get real-time status from container manager: {e}")
-        health_lookup = {}
-
-    # Merge database config with real-time status
     response_instances = []
     for instance in instances:
-        response_instance = MCPServerInstanceResponse.from_domain(instance)
-
-        # Override status with real-time data if available
-        if instance.name in health_lookup:
-            health_check = health_lookup[instance.name]
-            if health_check["container_status"] == "running" and health_check["healthy"]:
-                response_instance.status = "running"
-            elif health_check["container_status"] == "running" and not health_check["healthy"]:
-                response_instance.status = "unhealthy"
-            elif health_check["container_status"] == "stopped":
-                response_instance.status = "stopped"
-
-        response_instances.append(response_instance)
+        instance_type = (instance.json_spec or {}).get("type", "")
+        if instance_type == "bundle":
+            # Derive bundle verification from current member states
+            member_ids: list[str] = (instance.json_spec or {}).get("members", [])
+            members = []
+            for mid in member_ids:
+                try:
+                    m = await service.repository.get_by_id(UUID(mid))
+                    if m:
+                        members.append(m)
+                except Exception:
+                    pass
+            derived_v = derive_bundle_verification(instance, members)
+            response_instances.append(
+                MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
+            )
+        else:
+            response_instances.append(MCPServerInstanceResponse.from_domain(instance))
 
     return response_instances
 
@@ -278,45 +273,27 @@ async def list_mcp_server_instances(
 async def get_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    # Get instance from database (configuration/metadata)
-    instance = await mcp_server_instance_service.get(instance_id)
+    instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    response_instance = MCPServerInstanceResponse.from_domain(instance)
+    instance_type = (instance.json_spec or {}).get("type", "")
+    if instance_type == "bundle":
+        member_ids: list[str] = (instance.json_spec or {}).get("members", [])
+        members = []
+        for mid in member_ids:
+            try:
+                m = await service.repository.get_by_id(UUID(mid))
+                if m:
+                    members.append(m)
+            except Exception:
+                pass
+        derived_v = derive_bundle_verification(instance, members)
+        return MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
 
-    # Get real-time status from golang manager
-    try:
-        settings = get_settings()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
-            if response.status_code == 200:
-                health_data = response.json()
-                health_lookup = {
-                    check["service_name"]: check for check in health_data.get("health_checks", [])
-                }
-
-                # Override status with real-time data if available
-                if instance.name in health_lookup:
-                    health_check = health_lookup[instance.name]
-                    if health_check["container_status"] == "running" and health_check["healthy"]:
-                        response_instance.status = "running"
-                    elif (
-                        health_check["container_status"] == "running"
-                        and not health_check["healthy"]
-                    ):
-                        response_instance.status = "unhealthy"
-                    elif health_check["container_status"] == "stopped":
-                        response_instance.status = "stopped"
-    except Exception as e:
-        logger.warning(f"Failed to get real-time status from container manager: {e}")
-        # Fall back to database status
-
-    return response_instance
+    return MCPServerInstanceResponse.from_domain(instance)
 
 
 @router.patch("/{instance_id}", response_model=MCPServerInstanceResponse)
@@ -324,16 +301,13 @@ async def update_mcp_server_instance(
     instance_id: UUID,
     data: MCPServerInstanceUpdate,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    instance = await mcp_server_instance_service.update_instance(
+    instance = await service.update_instance(
         id=instance_id,
         name=data.name,
         description=data.description,
         json_spec=data.json_spec,
-        status=data.status,
     )
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
@@ -344,162 +318,58 @@ async def update_mcp_server_instance(
 async def delete_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    success = await mcp_server_instance_service.delete_instance(instance_id)
+    success = await service.delete_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
     return {"status": "success"}
 
 
-@router.post("/{instance_id}/start")
-async def start_mcp_server_instance(
+@router.post("/{instance_id}/verify")
+async def verify_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    instance = await mcp_server_instance_service.get(instance_id)
+    """Run verification on an MCP server instance and return the fresh result synchronously.
+
+    HTTP 200 regardless of verification outcome — the call itself succeeded.
+    Check verification.status in the response to determine success/failure.
+    """
+    instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    # Start Temporal workflow for durable lifecycle management
-    from agentarea_mcp.workflows.models import StartMCPInstanceRequest
-    from agentarea_mcp.workflows.start_instance_workflow import (
-        StartMCPInstanceWorkflow,
-    )
-
-    settings = get_settings()
-    workflow_id = f"mcp-start-{instance_id}"
-    request = StartMCPInstanceRequest(
-        instance_id=instance_id,
-        user_id=user_context.user_id,
-        workspace_id=user_context.workspace_id,
-        json_spec=instance.json_spec or {},
-        instance_name=instance.name,
-    )
-
     try:
-        from temporalio.client import Client
-        from temporalio.common import WorkflowIDReusePolicy
-        from temporalio.contrib.pydantic import pydantic_data_converter
-
-        client = await Client.connect(
-            settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
-            data_converter=pydantic_data_converter,
-        )
-        handle = await client.start_workflow(
-            StartMCPInstanceWorkflow.run,
-            args=[request],
-            id=workflow_id,
-            task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-            execution_timeout=timedelta(minutes=10),
-            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
-        )
-        return {
-            "status": "success",
-            "message": "Instance start workflow initiated",
-            "workflow_id": handle.id,
-        }
+        verification = await service.verify_instance(instance_id)
+        return {"instance_id": str(instance_id), "verification": verification}
     except Exception as e:
-        if "already started" in str(e).lower():
-            return {
-                "status": "success",
-                "message": "Instance start already in progress",
-                "workflow_id": workflow_id,
-            }
-        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}") from e
-
-
-@router.post("/{instance_id}/stop")
-async def stop_mcp_server_instance(
-    instance_id: UUID,
-    user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
-):
-    instance = await mcp_server_instance_service.get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-
-    # Start Temporal workflow for durable lifecycle management
-    from agentarea_mcp.workflows.models import StopMCPInstanceRequest
-    from agentarea_mcp.workflows.stop_instance_workflow import (
-        StopMCPInstanceWorkflow,
-    )
-
-    settings = get_settings()
-    workflow_id = f"mcp-stop-{instance_id}"
-    request = StopMCPInstanceRequest(
-        instance_id=instance_id,
-        user_id=user_context.user_id,
-        workspace_id=user_context.workspace_id,
-        json_spec=instance.json_spec or {},
-    )
-
-    try:
-        from temporalio.client import Client
-        from temporalio.common import WorkflowIDReusePolicy
-        from temporalio.contrib.pydantic import pydantic_data_converter
-
-        client = await Client.connect(
-            settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
-            data_converter=pydantic_data_converter,
-        )
-        handle = await client.start_workflow(
-            StopMCPInstanceWorkflow.run,
-            args=[request],
-            id=workflow_id,
-            task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-            execution_timeout=timedelta(minutes=5),
-            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
-        )
-        return {
-            "status": "success",
-            "message": "Instance stop workflow initiated",
-            "workflow_id": handle.id,
-        }
-    except Exception as e:
-        if "already started" in str(e).lower():
-            return {
-                "status": "success",
-                "message": "Instance stop already in progress",
-                "workflow_id": workflow_id,
-            }
-        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}") from e
-
-
-# REMOVED: Insecure endpoint that exposed secrets via HTTP
-# Secrets are now resolved directly in the Go service using Infisical SDK
+        logger.error("verify_instance failed for %s: %s", instance_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Verification failed due to internal error") from e
 
 
 @router.get("/health/containers")
 async def get_containers_health(
     user_context: UserContextDep,
 ):
-    """Get health status of all MCP containers by proxying to the golang manager."""
+    """Get health status of all MCP containers by proxying to the Go manager."""
+    import httpx
+
     try:
         settings = get_settings()
-        # Proxy request to golang manager
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
-
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Failed to get container health: {response.text}",
                 )
-
-            # No URL transformation needed - Go manager returns correct external URLs
             return response.json()
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail="Unable to connect to container manager") from e
+        raise HTTPException(
+            status_code=503, detail="Unable to connect to container manager"
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
@@ -508,37 +378,32 @@ async def get_containers_health(
 async def probe_instance_auth(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Probe a URL-type MCP instance to detect its auth requirements.
+    """Probe a URL-type MCP instance to detect its auth requirements."""
+    from sqlalchemy import update as sa_update
 
-    Returns the supported auth methods (oauth, credentials, none) and
-    any hints from the spec's env_schema for pre-filling the credential form.
-    """
-    result = await mcp_server_instance_service.probe_instance_auth(instance_id)
+    from agentarea_mcp.domain.models import MCPServer
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+
+    result = await service.probe_instance_auth(instance_id)
 
     if result.get("status") == "error":
-        raise HTTPException(
-            status_code=400,
-            detail=result.get("message", "Probe failed"),
-        )
+        raise HTTPException(status_code=400, detail=result.get("message", "Probe failed"))
 
-    # Cache auth_methods on the spec if the instance has a server_spec_id
     if result.get("methods"):
         try:
-            instance = await mcp_server_instance_service.repository.get_by_id(instance_id)
+            instance = await service.repository.get_by_id(instance_id)
             if instance and instance.server_spec_id:
                 server_repo = MCPServerRepository(
-                    mcp_server_instance_service.repository.session,
-                    mcp_server_instance_service.repository.user_context,
+                    service.repository.session,
+                    service.repository.user_context,
                 )
                 spec = await server_repo.get_by_id(instance.server_spec_id)
                 if spec:
                     new_json_spec = dict(spec.json_spec or {})
                     new_json_spec["auth_methods"] = result["methods"]
-                    db_session = mcp_server_instance_service.repository.session
+                    db_session = service.repository.session
                     stmt = (
                         sa_update(MCPServer)
                         .where(MCPServer.id == spec.id)
@@ -555,34 +420,14 @@ async def probe_instance_auth(
     return result
 
 
-@router.post("/{instance_id}/discover-tools")
-async def discover_instance_tools(
-    instance_id: UUID,
-    user_context: UserContextDep,
-    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
-):
-    """Trigger tool discovery for a specific MCP server instance."""
-    success = await service.discover_and_store_tools(instance_id)
-    if not success:
-        raise HTTPException(status_code=400, detail="Failed to discover tools for the instance")
-
-    return {"message": "Tool discovery completed successfully"}
-
-
 @router.post("/{instance_id}/test-auth")
 async def test_mcp_auth(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(  # noqa: PT028
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Test the authentication configuration attached to an MCP server instance.
-
-    Attempts to connect to the MCP endpoint with the configured auth headers and
-    returns a diagnostic result without executing any tools.
-    """
-    instance = await mcp_server_instance_service.get(instance_id)
+    """Test the authentication configuration attached to an MCP server instance."""
+    instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
@@ -590,9 +435,7 @@ async def test_mcp_auth(
         raise HTTPException(status_code=400, detail="No auth config attached to this MCP instance")
 
     try:
-        # Re-resolve session/secret-manager via the instance service's internals
-        # This is a lightweight connectivity test using httpx
-        mcp_url: str = instance.json_spec.get("url", "")
+        mcp_url: str = instance.endpoint_url
         if not mcp_url:
             raise HTTPException(status_code=400, detail="MCP instance has no URL in json_spec")
 
@@ -616,38 +459,25 @@ async def create_oauth_link(
     instance_id: UUID,
     data: dict,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Generate an OAuth-protected shareable link for a container MCP instance."""
-    instance = await mcp_server_instance_service.get(instance_id)
+    instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    try:
-        # Build service inline — we don't have the session in this scope so we
-        # import it from the DI factory pattern
-
-        # Use FastAPI DI to get a session
-        raise HTTPException(
-            status_code=501,
-            detail="Use the /v1/mcp-oauth-links endpoint to create OAuth links",
-        )
-    except HTTPException:
-        raise
+    raise HTTPException(
+        status_code=501,
+        detail="Use the /v1/mcp-oauth-links endpoint to create OAuth links",
+    )
 
 
 @router.get("/{instance_id}/oauth-links")
 async def list_oauth_links(
     instance_id: UUID,
     user_context: UserContextDep,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(
-        get_mcp_server_instance_service
-    ),
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """List all active OAuth links for an MCP server instance."""
-    instance = await mcp_server_instance_service.get(instance_id)
+    instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
