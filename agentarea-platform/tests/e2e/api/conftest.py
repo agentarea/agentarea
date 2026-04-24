@@ -163,10 +163,11 @@ OMNIROUTE_ENDPOINT = os.environ.get(
     "OMNIROUTE_ENDPOINT", "http://host.docker.internal:20128/v1"
 )
 OMNIROUTE_MODEL = os.environ.get("OMNIROUTE_MODEL", "kr/claude-sonnet-4.5")
-# Omniroute rejects requests with any non-matching Authorization header even
-# when REQUIRE_API_KEY=false. Pass a real key via this env var to enable
-# task-execution tests; "" or missing = tests that actually invoke the model
-# are skipped.
+# Omniroute rejects any non-matching bearer but accepts requests with no
+# Authorization header at all (REQUIRE_API_KEY=false). Default to an empty
+# api_key so the backend suppresses the header (see llm_model.py:302 —
+# "if self.api_key:" guards the header). Override with a real key for
+# providers that actually require one.
 OMNIROUTE_API_KEY = os.environ.get("OMNIROUTE_API_KEY", "")
 _POSTGRES_CONTAINER = os.environ.get("POSTGRES_CONTAINER", "agentarea-db-1")
 _POSTGRES_DB = os.environ.get("POSTGRES_DB_NAME", "agentarea")
@@ -247,7 +248,7 @@ def omniroute_model(
         json={
             "provider_spec_id": omniroute_provider_spec_id,
             "name": f"omniroute-{uuid.uuid4().hex[:6]}",
-            "api_key": OMNIROUTE_API_KEY or "sk-noop",
+            "api_key": OMNIROUTE_API_KEY,
             "endpoint_url": OMNIROUTE_ENDPOINT,
         },
     ).raise_for_status().json()

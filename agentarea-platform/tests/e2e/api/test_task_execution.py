@@ -13,7 +13,6 @@ The test drives the full happy path:
 
 from __future__ import annotations
 
-import os
 import time
 
 import httpx
@@ -22,10 +21,6 @@ import pytest
 
 @pytest.mark.integration
 @pytest.mark.slow
-@pytest.mark.skipif(
-    not os.environ.get("OMNIROUTE_API_KEY"),
-    reason="OMNIROUTE_API_KEY not set — skipping real LLM round-trip",
-)
 def test_task_executes_end_to_end(
     alice_client: httpx.Client, omniroute_model: str
 ) -> None:
@@ -56,21 +51,29 @@ def test_task_executes_end_to_end(
         )
         events_resp.raise_for_status()
         last_events = events_resp.json()["events"]
-        completions = [
+        if any(
+            e["event_type"] in ("TaskFailed", "WorkflowFailed", "LLMCallFailed")
+            for e in last_events
+        ):
+            pytest.fail(f"task failed: {[e['event_type'] for e in last_events]}")
+        # Success = the workflow reached a completed iteration AND actually
+        # invoked the LLM at least once (either got content back or chose a
+        # tool call — both are valid outcomes of a real model round-trip).
+        llm_completed = [
             e for e in last_events if e["event_type"] == "LLMCallCompleted"
         ]
-        if completions:
-            content = completions[-1]["metadata"]["content"]
-            assert content, "model returned empty content"
-            return
-        if any(
-            e["event_type"] in ("TaskFailed", "WorkflowFailed") for e in last_events
+        if llm_completed and any(
+            e["event_type"] == "WorkflowCompleted" for e in last_events
         ):
-            pytest.fail(f"task failed: {last_events}")
+            md = llm_completed[-1]["metadata"]
+            assert md.get("content") is not None or md.get("tool_calls"), (
+                f"LLMCallCompleted had neither content nor tool_calls: {md}"
+            )
+            return
         time.sleep(1.0)
 
     event_types = [e["event_type"] for e in last_events]
-    pytest.fail(f"no LLMCallCompleted within 60s, saw events: {event_types}")
+    pytest.fail(f"no WorkflowCompleted within 60s, saw events: {event_types}")
 
 
 @pytest.mark.integration
