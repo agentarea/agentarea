@@ -1,14 +1,16 @@
-"""End-to-end task execution against a real LLM (local Omniroute router).
+"""End-to-end task execution against a real OpenAI-compatible LLM endpoint.
 
-Requires:
-  - Omniroute reachable at http://host.docker.internal:20128 from the backend
-    container (default; override via OMNIROUTE_ENDPOINT).
-  - Model `kr/claude-sonnet-4.5` available on the router (override via
-    OMNIROUTE_MODEL).
+The LLM target is configured via env vars in conftest:
+  OPENAI_COMPAT_ENDPOINT  (default http://host.docker.internal:20128/v1)
+  OPENAI_COMPAT_MODEL     (default kr/claude-sonnet-4.5)
+  OPENAI_COMPAT_API_KEY   (default "" — backend skips Authorization header)
+
+Works with any /v1/chat/completions provider (Omniroute, LiteLLM proxy,
+vLLM, Ollama-openai, OpenAI itself, etc.).
 
 The test drives the full happy path:
-  agent create -> POST /tasks/sync -> poll /events for LLMCallCompleted
-  -> assert the assistant message is present.
+  agent create -> POST /tasks/sync -> poll /events for WorkflowCompleted
+  -> assert an LLMCallCompleted event is present with content or a tool_call.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import pytest
 @pytest.mark.integration
 @pytest.mark.slow
 def test_task_executes_end_to_end(
-    alice_client: httpx.Client, omniroute_model: str
+    alice_client: httpx.Client, llm_model: str
 ) -> None:
     agent_id = alice_client.post(
         "/v1/agents/",
@@ -30,7 +32,7 @@ def test_task_executes_end_to_end(
             "name": "exec-agent",
             "description": "e2e execution test",
             "instruction": "Reply with exactly one lowercase word and nothing else.",
-            "model_id": omniroute_model,
+            "model_id": llm_model,
             "agent_type": "chat",
         },
     ).raise_for_status().json()["id"]
@@ -80,7 +82,7 @@ def test_task_executes_end_to_end(
 def test_task_events_are_isolated(
     alice_client: httpx.Client,
     bob_client: httpx.Client,
-    omniroute_model: str,
+    llm_model: str,
 ) -> None:
     agent_id = alice_client.post(
         "/v1/agents/",
@@ -88,7 +90,7 @@ def test_task_events_are_isolated(
             "name": "iso-exec-agent",
             "description": "d",
             "instruction": "x",
-            "model_id": omniroute_model,
+            "model_id": llm_model,
             "agent_type": "chat",
         },
     ).raise_for_status().json()["id"]

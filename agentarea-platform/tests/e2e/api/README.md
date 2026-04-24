@@ -56,8 +56,27 @@ KRATOS_ADMIN_URL=http://... KRATOS_PUBLIC_URL=http://... API_URL=http://... \
 
 ## Fixtures (`conftest.py`)
 
+Auth:
 - `kratos_admin` / `kratos_public` — session-scoped httpx clients
 - `user_factory` — mint an ephemeral user, auto-cleanup
-- `alice`, `bob` — convenience wrappers returning `TestUser(identity_id, email, session_token, jwt)`
+- `alice`, `bob` — `AuthedUser(identity_id, email, session_token, jwt)`
 - `alice_client`, `bob_client` — httpx clients pre-authed with each user's JWT
 - `anon_client` — unauthenticated baseline
+
+LLM (for tests that actually invoke a model):
+- `llm_provider_spec_id` (session) — SQL-seeded `provider_spec` in workspace
+  `system` with `provider_type='openai-compatible'`
+- `llm_model_spec_id` (session) — SQL-seeded `model_spec` tied to the spec
+  above; `(provider_spec_id, model_name)` is globally unique so this must
+  live in the system workspace
+- `llm_model` — per-test `provider_config` + `model_instance` pointing at
+  the configured endpoint; returns the `model_instance` UUID you pass as
+  `model_id` when creating an agent
+
+Env vars (with defaults targeting a local OpenAI-compatible proxy):
+- `OPENAI_COMPAT_ENDPOINT` — `http://host.docker.internal:20128/v1`
+- `OPENAI_COMPAT_MODEL` — `kr/claude-sonnet-4.5`
+- `OPENAI_COMPAT_API_KEY` — `""` (empty ⇒ backend omits the `Authorization`
+  header; set this for endpoints that require a key)
+- `OPENAI_COMPAT_PROVIDER_KEY` — `e2e-openai-compat` (the `provider_key`
+  slug used when seeding the spec)
