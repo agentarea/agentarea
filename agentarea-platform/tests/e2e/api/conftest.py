@@ -244,6 +244,53 @@ def llm_model_spec_id(llm_provider_spec_id: str) -> str:
     return spec_id
 
 
+def wait_for_workflow(
+    client: httpx.Client,
+    agent_id: str,
+    task_id: str,
+    timeout: float = 90.0,
+    poll: float = 1.0,
+) -> list[dict]:
+    """Poll /events until WorkflowCompleted or WorkflowFailed. Return events."""
+    import time
+
+    terminal = {"WorkflowCompleted", "WorkflowFailed"}
+    deadline = time.time() + timeout
+    last: list[dict] = []
+    while time.time() < deadline:
+        resp = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/events")
+        resp.raise_for_status()
+        last = resp.json()["events"]
+        if any(e["event_type"] in terminal for e in last):
+            return last
+        time.sleep(poll)
+    raise AssertionError(
+        f"workflow didn't terminate within {timeout}s; last events: "
+        f"{[e['event_type'] for e in last]}"
+    )
+
+
+def create_agent(
+    client: httpx.Client,
+    model_id: str,
+    *,
+    name: str,
+    instruction: str,
+    tools: list[dict] | None = None,
+    description: str = "e2e",
+) -> str:
+    body: dict = {
+        "name": name,
+        "description": description,
+        "instruction": instruction,
+        "model_id": model_id,
+        "agent_type": "chat",
+    }
+    if tools:
+        body["tools"] = tools
+    return client.post("/v1/agents/", json=body).raise_for_status().json()["id"]
+
+
 @pytest.fixture
 def llm_model(
     alice_client: httpx.Client,
