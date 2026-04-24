@@ -16,7 +16,11 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from agentarea_common.config.aws import get_aws_settings, get_s3_client
+from agentarea_common.config.aws import (
+    get_aws_settings,
+    get_s3_client,
+    get_s3_public_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +46,15 @@ class ArtifactService:
         self,
         *,
         client: Any | None = None,
+        public_client: Any | None = None,
         bucket: str | None = None,
     ) -> None:
         self._client = client or get_s3_client()
+        # Presigned URLs must be signed against a host the external caller
+        # can reach; in dev that's localhost:9000, not the in-docker
+        # rustfs:9000. Falls back to the internal client when
+        # PUBLIC_S3_ENDPOINT is unset (single-host setups).
+        self._public_client = public_client or get_s3_public_client()
         self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET_NAME
 
     @property
@@ -173,7 +183,7 @@ class ArtifactService:
         key = self._key(workspace_id, path)
 
         def _call() -> str:
-            return self._client.generate_presigned_url(
+            return self._public_client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self._bucket, "Key": key},
                 ExpiresIn=expires_in,

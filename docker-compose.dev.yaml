@@ -17,6 +17,10 @@ services:
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
       - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
       - AWS_ENDPOINT_URL=http://rustfs:9000
+      # Presigned URLs are followed by callers OUTSIDE the docker network
+      # (frontend on host, e2e test harness). Must point at a host the
+      # external caller can reach. Override in real deploys.
+      - PUBLIC_S3_ENDPOINT=${PUBLIC_S3_ENDPOINT:-http://localhost:9000}
       # Database settings
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
@@ -383,6 +387,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - AWS_REGION=${RUSTFS_REGION:-us-east-1}
       - AWS_ENDPOINT_URL=http://rustfs:9000
+      - PUBLIC_S3_ENDPOINT=${PUBLIC_S3_ENDPOINT:-http://localhost:9000}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
       - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
 
