@@ -93,6 +93,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             "provider_spec_id": entity.provider_spec_id,
             "name": entity.name,
             "description": entity.description,
+            "endpoint_url": entity.endpoint_url,
             "is_active": entity.is_active,
             "is_public": entity.is_public,
             "api_key": entity.api_key,
@@ -118,6 +119,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             "provider_spec_id": entity.provider_spec_id,
             "name": entity.name,
             "description": entity.description,
+            "endpoint_url": entity.endpoint_url,
             "is_active": entity.is_active,
             "is_public": entity.is_public,
         }
