@@ -6,18 +6,35 @@ Covers:
   - The agent's final answer is delivered via the `completion` tool call.
   - The built-in `agentarea/files` tool writes land in RustFS under
     ``workspaces/{workspace_id}/tasks/{task_id}/`` and the sandbox is
-    isolated across workspaces.
+    isolated across workspaces. A real agent task writes a file; the test
+    then reads the bytes back directly from RustFS via ArtifactService to
+    prove the full agent -> activity -> S3 chain.
   - Tool events are workspace-scoped: Bob cannot read Alice's agent events.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 
 import httpx
 import pytest
 
-from tests.e2e.api.conftest import create_agent, wait_for_workflow
+from tests.e2e.api.conftest import _psql, create_agent, wait_for_workflow
+
+
+def _rustfs_env_defaults() -> None:
+    """Point ArtifactService at the local RustFS the backend also uses.
+
+    Test runs on the host, the backend container runs against
+    ``http://rustfs:9000``; from the host we reach it at localhost:9000.
+    """
+    os.environ.setdefault("AWS_ENDPOINT_URL", "http://localhost:9000")
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "rustfsadmin")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "rustfsadmin")
+    os.environ.setdefault("AWS_REGION", "us-east-1")
+    os.environ.setdefault("ARTIFACTS_BUCKET_NAME", "artifacts")
 
 
 def _tool_events(events: list[dict], event_type: str, tool_name: str) -> list[dict]:
@@ -125,11 +142,20 @@ def _first_save_result(events: list[dict]) -> str:
 def test_agent_file_tool_writes_persist_in_workspace_sandbox(
     alice_client: httpx.Client, llm_model: str
 ) -> None:
-    """Agent writes a file via agentarea/files and the write succeeds.
+    """Agent writes a file via ``agentarea/files`` and the bytes land in RustFS.
 
-    Backend injects a workspace-scoped base_dir so writes actually land on a
-    writable path. A prior bug had this tool hit the read-only /app dir.
+    This is the load-bearing proof that the full chain works end-to-end:
+
+        agent → activity → ArtifactService → RustFS
+
+    After the agent's task completes, we connect to RustFS directly (via
+    ``ArtifactService``) and read the object back. The assertion is on the
+    actual stored bytes, not on the tool's success string — a tool returning
+    "Saved 'greeting.txt'" proves nothing about what reached the bucket.
     """
+    _rustfs_env_defaults()
+    from agentarea_common.artifacts import ArtifactService
+
     file_name = "greeting.txt"
     content = "hello from e2e"
 
@@ -166,6 +192,197 @@ def test_agent_file_tool_writes_persist_in_workspace_sandbox(
     assert file_name in result, (
         f"save_file result should echo the file name; got {result!r}"
     )
+
+    # The task row owns workspace_id; the activity scopes the file tool
+    # under tasks/{task_id}/, so the object key in RustFS is
+    #   workspaces/{workspace_id}/tasks/{task_id}/{file_name}
+    workspace_id = _psql(f"SELECT workspace_id FROM tasks WHERE id='{task_id}';")
+    assert workspace_id, f"task {task_id} missing workspace_id"
+
+    svc = ArtifactService()
+    artifact_path = f"tasks/{task_id}/{file_name}"
+    try:
+        assert asyncio.run(svc.exists(workspace_id, artifact_path)), (
+            f"expected artifact at workspaces/{workspace_id}/{artifact_path} "
+            f"in bucket {svc.bucket!r}, but it is not there"
+        )
+        data, _ = asyncio.run(svc.get(workspace_id, artifact_path))
+        decoded = data.decode("utf-8", errors="replace")
+        assert content in decoded, (
+            f"artifact bytes do not contain the requested content; "
+            f"expected substring {content!r}, got {decoded!r}"
+        )
+    finally:
+        try:
+            asyncio.run(svc.delete(workspace_id, artifact_path))
+        except Exception:  # best-effort cleanup, never mask assertion failure
+            pass
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_agent_file_tool_round_trip_read_after_write(
+    alice_client: httpx.Client, llm_model: str
+) -> None:
+    """Agent writes a file, reads it back, and returns the content — within one task.
+
+    Exercises both halves of the tool against the same RustFS scope in a
+    single workflow:
+
+        save_file("secret.txt", sentinel) → read_file("secret.txt") → completion(result=<bytes>)
+
+    The test then also pulls the bytes directly from RustFS via
+    ArtifactService to triple-check nothing lied along the way.
+    """
+    _rustfs_env_defaults()
+    from agentarea_common.artifacts import ArtifactService
+
+    file_name = "secret.txt"
+    sentinel = "artichoke-42-zebra"
+
+    agent_id = create_agent(
+        alice_client,
+        llm_model,
+        name="file-rw-agent",
+        instruction=(
+            "You have a file tool. Do EXACTLY this sequence in order:\n"
+            "  1. save_file to create the requested file with the requested content.\n"
+            "  2. read_file on the same file.\n"
+            "  3. completion with a single-field JSON {\"result\": <text you just read>}.\n"
+            "Never skip steps; never invent content."
+        ),
+        tools=[{"type": "code", "name": "agentarea/files"}],
+    )
+    task_id = alice_client.post(
+        f"/v1/agents/{agent_id}/tasks/sync",
+        json={
+            "description": (
+                f"Create file {file_name} with exact content: {sentinel}. "
+                f"Then read it and return what you read."
+            )
+        },
+        timeout=30.0,
+    ).raise_for_status().json()["id"]
+
+    events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
+
+    # Tool layer: the save AND the read both succeeded.
+    tool_events = _tool_events(events, "ToolCallCompleted", "file")
+    actions = [
+        (e["metadata"].get("arguments") or {}).get("action") for e in tool_events
+    ]
+    assert "save_file" in actions, f"save_file never invoked; got {actions!r}"
+    assert "read_file" in actions, f"read_file never invoked; got {actions!r}"
+
+    read_events = [
+        e for e in tool_events
+        if (e["metadata"].get("arguments") or {}).get("action") == "read_file"
+    ]
+    assert read_events, "no read_file ToolCallCompleted event"
+    read_result = str(read_events[0]["metadata"].get("result") or "")
+    assert not read_result.startswith("Error"), (
+        f"agent's read_file returned an error: {read_result!r}"
+    )
+    assert sentinel in read_result, (
+        f"read_file did not return the bytes the agent just wrote; "
+        f"expected {sentinel!r} in {read_result!r}"
+    )
+
+    # Completion layer: the agent echoed the content back to the user.
+    args = _completion_args(events)
+    assert args is not None, "agent never called completion"
+    final = str(args.get("result") or args.get("answer") or "")
+    assert sentinel in final, (
+        f"completion args should contain the round-tripped content; got {final!r}"
+    )
+
+    # Storage layer: the bytes really landed in RustFS, under this task's scope.
+    workspace_id = _psql(f"SELECT workspace_id FROM tasks WHERE id='{task_id}';")
+    svc = ArtifactService()
+    artifact_path = f"tasks/{task_id}/{file_name}"
+    try:
+        data, _ = asyncio.run(svc.get(workspace_id, artifact_path))
+        assert sentinel in data.decode("utf-8", errors="replace"), (
+            f"RustFS object contents don't match what the agent saved"
+        )
+    finally:
+        try:
+            asyncio.run(svc.delete(workspace_id, artifact_path))
+        except Exception:
+            pass
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_agent_file_tool_lists_its_own_writes(
+    alice_client: httpx.Client, llm_model: str
+) -> None:
+    """Agent writes two files then list_files returns both names.
+
+    Proves the LIST path against the same workspace/task scope that writes
+    land in — the exact flow a multi-artifact tool (image + caption, etc.)
+    will rely on.
+    """
+    _rustfs_env_defaults()
+    from agentarea_common.artifacts import ArtifactService
+
+    names = ["alpha.txt", "beta.txt"]
+
+    agent_id = create_agent(
+        alice_client,
+        llm_model,
+        name="file-list-agent",
+        instruction=(
+            "You have a file tool. Do EXACTLY this:\n"
+            "  1. save_file to create the first file.\n"
+            "  2. save_file to create the second file.\n"
+            "  3. list_files with pattern '*'.\n"
+            "  4. completion with {\"result\": <the list_files JSON you got>}."
+        ),
+        tools=[{"type": "code", "name": "agentarea/files"}],
+    )
+    task_id = alice_client.post(
+        f"/v1/agents/{agent_id}/tasks/sync",
+        json={
+            "description": (
+                f"Create two files: {names[0]} with content 'A' and "
+                f"{names[1]} with content 'B'. Then list all files."
+            )
+        },
+        timeout=30.0,
+    ).raise_for_status().json()["id"]
+
+    events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
+
+    # Tool event for list_files must contain both names.
+    list_events = [
+        e for e in _tool_events(events, "ToolCallCompleted", "file")
+        if (e["metadata"].get("arguments") or {}).get("action") == "list_files"
+    ]
+    assert list_events, "list_files never produced a ToolCallCompleted event"
+    listing = str(list_events[-1]["metadata"].get("result") or "")
+    for n in names:
+        assert n in listing, (
+            f"list_files result missing {n!r}; got {listing!r}"
+        )
+
+    # Storage layer cross-check: both objects present in RustFS.
+    workspace_id = _psql(f"SELECT workspace_id FROM tasks WHERE id='{task_id}';")
+    svc = ArtifactService()
+    try:
+        objs = asyncio.run(svc.list(workspace_id, prefix=f"tasks/{task_id}/"))
+        paths = {o.path for o in objs}
+        for n in names:
+            expected = f"tasks/{task_id}/{n}"
+            assert expected in paths, (
+                f"expected artifact {expected} in RustFS; present: {sorted(paths)}"
+            )
+    finally:
+        for n in names:
+            try:
+                asyncio.run(svc.delete(workspace_id, f"tasks/{task_id}/{n}"))
+            except Exception:
+                pass
 
 
 @pytest.mark.integration
