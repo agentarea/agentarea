@@ -284,6 +284,7 @@ class MCPToolRequest(BaseModel):
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
     workspace_id: str  # Required - must be provided explicitly
+    task_id: str | None = None  # Scopes artifact-style tools to a task
     tools: list[dict[str, Any]] | None = None
 
 

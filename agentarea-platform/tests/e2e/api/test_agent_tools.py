@@ -4,15 +4,10 @@ Covers:
   - Agent with the calculator tool actually calls the tool and gets the
     right arithmetic answer.
   - The agent's final answer is delivered via the `completion` tool call.
-  - A built-in tool fires ToolCallStarted + ToolCallCompleted events with
-    observable arguments and results.
+  - The built-in `agentarea/files` tool writes land in RustFS under
+    ``workspaces/{workspace_id}/tasks/{task_id}/`` and the sandbox is
+    isolated across workspaces.
   - Tool events are workspace-scoped: Bob cannot read Alice's agent events.
-
-The built-in `agentarea/files` tool currently writes to the backend
-container's /app directory (read-only) — writes fail with Permission
-denied. The file test therefore only asserts the tool is *reachable*
-(ToolCallCompleted fires), not that a file is persisted. Tightening to a
-real roundtrip requires wiring the tool to RustFS or a project directory.
 """
 
 from __future__ import annotations

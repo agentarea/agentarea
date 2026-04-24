@@ -610,24 +610,21 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
 
                     # Build runtime kwargs for tools that need request context.
-                    # The file tool must be sandboxed per workspace — anything
-                    # else leaks state across tenants and races in parallel
-                    # workflows. Env override lets ops point this at a mounted
-                    # volume (or RustFS-backed fuse mount in the future).
+                    # The file tool is backed by S3 (RustFS locally) and keyed
+                    # under ``workspaces/{workspace_id}/tasks/{task_id}/`` so
+                    # artifacts are grouped by workspace and scoped per task.
                     extra_kwargs: dict = {}
                     if tool_name == "agentarea/files":
-                        import os
-                        from pathlib import Path
+                        from agentarea_common.artifacts import ArtifactService
 
-                        root = Path(
-                            os.environ.get(
-                                "AGENTAREA_FILE_TOOL_ROOT",
-                                "/tmp/agentarea/workspaces",
-                            )
+                        base_prefix = (
+                            f"tasks/{request.task_id}" if request.task_id else "shared"
                         )
-                        workspace_dir = root / str(request.workspace_id) / "files"
-                        workspace_dir.mkdir(parents=True, exist_ok=True)
-                        extra_kwargs["base_dir"] = str(workspace_dir)
+                        extra_kwargs = {
+                            "storage": ArtifactService(),
+                            "workspace_id": str(request.workspace_id),
+                            "base_prefix": base_prefix,
+                        }
 
                     # Create and register the code tool instance
                     tool_instance = create_code_tool_instance(

@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from pathlib import Path
 
 from agentarea_agents_sdk.tools import FileToolset, Toolset, ToolsetAdapter, tool_method
 
@@ -160,25 +159,18 @@ async def main():
     print(f"Echo result: {result['result']}")
 
     print("\n=== FileToolset Example ===")
-    # Create a temporary directory for file operations
-    import tempfile
+    file_toolset = FileToolset(workspace_id="demo", base_prefix="tasks/example")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        file_toolset = FileToolset(base_dir=Path(temp_dir))
+    result = await file_toolset.execute(
+        action="save_file", contents="Hello from FileToolset!", file_name="example.txt"
+    )
+    print(f"Save file result: {result['result']}")
 
-        # Save a file
-        result = await file_toolset.execute(
-            action="save_file", contents="Hello from FileToolset!", file_name="example.txt"
-        )
-        print(f"Save file result: {result['result']}")
+    result = await file_toolset.execute(action="read_file", file_name="example.txt")
+    print(f"Read file result: {result['result']}")
 
-        # Read the file back
-        result = await file_toolset.execute(action="read_file", file_name="example.txt")
-        print(f"Read file result: {result['result']}")
-
-        # List files
-        result = await file_toolset.execute(action="list_files")
-        print(f"List files result: {result['result']}")
+    result = await file_toolset.execute(action="list_files")
+    print(f"List files result: {result['result']}")
 
     print("\n=== ToolsetAdapter Example ===")
     # Show how to use with existing BaseTool interface
