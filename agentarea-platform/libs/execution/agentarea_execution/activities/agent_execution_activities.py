@@ -609,8 +609,30 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         dict.fromkeys(disabled_methods, False) if disabled_methods else {}
                     )
 
+                    # Build runtime kwargs for tools that need request context.
+                    # The file tool must be sandboxed per workspace — anything
+                    # else leaks state across tenants and races in parallel
+                    # workflows. Env override lets ops point this at a mounted
+                    # volume (or RustFS-backed fuse mount in the future).
+                    extra_kwargs: dict = {}
+                    if tool_name == "agentarea/files":
+                        import os
+                        from pathlib import Path
+
+                        root = Path(
+                            os.environ.get(
+                                "AGENTAREA_FILE_TOOL_ROOT",
+                                "/tmp/agentarea/workspaces",
+                            )
+                        )
+                        workspace_dir = root / str(request.workspace_id) / "files"
+                        workspace_dir.mkdir(parents=True, exist_ok=True)
+                        extra_kwargs["base_dir"] = str(workspace_dir)
+
                     # Create and register the code tool instance
-                    tool_instance = create_code_tool_instance(tool_name, toolset_methods)
+                    tool_instance = create_code_tool_instance(
+                        tool_name, toolset_methods, extra_kwargs=extra_kwargs
+                    )
                     if tool_instance:
                         # Check if tool is a Toolset - if so, wrap it in adapter for compatibility
                         if isinstance(tool_instance, Toolset):

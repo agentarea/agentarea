@@ -9,7 +9,7 @@ class FileToolset(Toolset):
 
     def __init__(
         self,
-        base_dir: Path | None = None,
+        base_dir: Path | str | None = None,
         save_files: bool = True,
         read_files: bool = True,
         list_files: bool = True,
@@ -18,18 +18,38 @@ class FileToolset(Toolset):
         """Initialize the FileToolset.
 
         Args:
-            base_dir: Base directory for file operations. Defaults to current working directory.
+            base_dir: Base directory for file operations. If None, defaults to
+                ``Path.cwd()`` (kept for backwards compat in standalone usage).
+                The agent runtime always injects a workspace-scoped path so the
+                tool never touches paths outside the caller's sandbox.
             save_files: Enable save_file method.
             read_files: Enable read_file method.
             list_files: Enable list_files method.
             search_files: Enable search_files method.
         """
         super().__init__()
-        self.base_dir: Path = base_dir or Path.cwd()
+        base = Path(base_dir) if base_dir else Path.cwd()
+        base.mkdir(parents=True, exist_ok=True)
+        self.base_dir: Path = base.resolve()
         self._save_files_enabled = save_files
         self._read_files_enabled = read_files
         self._list_files_enabled = list_files
         self._search_files_enabled = search_files
+
+    def _resolve_within_base(self, file_name: str) -> Path:
+        """Resolve ``file_name`` against base_dir and forbid escaping it.
+
+        Raises ValueError if the resolved path tries to step outside the
+        workspace sandbox (e.g. via ``..`` or an absolute path).
+        """
+        candidate = (self.base_dir / file_name).resolve()
+        try:
+            candidate.relative_to(self.base_dir)
+        except ValueError as exc:
+            raise ValueError(
+                f"path escapes workspace sandbox: {file_name!r}"
+            ) from exc
+        return candidate
 
     @tool_method
     async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
@@ -47,7 +67,7 @@ class FileToolset(Toolset):
             return "Error: save_file is disabled for this toolset instance"
 
         try:
-            file_path = self.base_dir / file_name
+            file_path = self._resolve_within_base(file_name)
 
             # Create parent directories if they don't exist
             if not file_path.parent.exists():
@@ -78,7 +98,7 @@ class FileToolset(Toolset):
             return "Error: read_file is disabled for this toolset instance"
 
         try:
-            file_path = self.base_dir / file_name
+            file_path = self._resolve_within_base(file_name)
 
             if not file_path.exists():
                 return f"Error: File {file_name} does not exist"

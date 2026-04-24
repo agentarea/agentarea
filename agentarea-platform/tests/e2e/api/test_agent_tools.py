@@ -108,40 +108,185 @@ def test_agent_completion_tool_delivers_final_answer(
     assert "blue" in answer, f"expected 'blue' in final answer, got {answer!r}"
 
 
+def _first_save_result(events: list[dict]) -> str:
+    """Return the `result` of the first successful save_file ToolCallCompleted."""
+    for e in events:
+        if e["event_type"] != "ToolCallCompleted":
+            continue
+        md = e.get("metadata", {})
+        if md.get("tool_name") != "file":
+            continue
+        args = md.get("arguments") or {}
+        if args.get("action") != "save_file":
+            continue
+        result = str(md.get("result") or "")
+        if not result.startswith("Error"):
+            return result
+    return ""
+
+
 @pytest.mark.integration
 @pytest.mark.slow
-def test_agent_file_tool_is_reachable(
+def test_agent_file_tool_writes_persist_in_workspace_sandbox(
     alice_client: httpx.Client, llm_model: str
 ) -> None:
-    """Calls into the built-in files tool are dispatched end-to-end.
+    """Agent writes a file via agentarea/files and the write succeeds.
 
-    Does NOT assert persistence — the tool currently writes to the backend
-    container FS where /app is read-only. We only check that ToolCallStarted
-    and ToolCallCompleted events fire for the `file` tool.
+    Backend injects a workspace-scoped base_dir so writes actually land on a
+    writable path. A prior bug had this tool hit the read-only /app dir.
     """
+    file_name = "greeting.txt"
+    content = "hello from e2e"
+
     agent_id = create_agent(
         alice_client,
         llm_model,
         name="file-agent",
         instruction=(
-            "You have access to a file tool. When asked to create a file, "
-            "call it once. Then call completion with any short status message."
+            "You have access to a file tool. Use save_file exactly once to "
+            "create the requested file, then call completion."
         ),
         tools=[{"type": "code", "name": "agentarea/files"}],
     )
     task_id = alice_client.post(
         f"/v1/agents/{agent_id}/tasks/sync",
-        json={"description": "Create a file note.txt with content 'hello'."},
+        json={
+            "description": (
+                f"Create a file named {file_name} with the exact content: "
+                f"{content}. Do not create any other files."
+            )
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
-    events = wait_for_workflow(
-        alice_client, agent_id, task_id, timeout=180.0
-    )
-    started = _tool_events(events, "ToolCallStarted", "file")
+    events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
     completed = _tool_events(events, "ToolCallCompleted", "file")
-    assert started, "file tool was never started"
     assert completed, "file tool never produced a ToolCallCompleted event"
+
+    result = _first_save_result(events)
+    assert result and not result.startswith("Error"), (
+        f"agent's save_file never succeeded; last save results: "
+        f"{[e['metadata'].get('result') for e in completed]}"
+    )
+    assert file_name in result, (
+        f"save_file result should echo the file name; got {result!r}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_file_tool_sandbox_isolated_across_workspaces(
+    alice_client: httpx.Client,
+    user_factory,
+    llm_model: str,
+) -> None:
+    """Alice writes a file; a second user's file tool cannot see it.
+
+    The sandbox must be scoped by workspace_id — same file_name in a
+    different workspace is a distinct empty directory.
+    """
+    file_name = "alice-secret.txt"
+    alice_agent = create_agent(
+        alice_client,
+        llm_model,
+        name="alice-fs-agent",
+        instruction="Use save_file once to create the file, then call completion.",
+        tools=[{"type": "code", "name": "agentarea/files"}],
+    )
+    alice_task = alice_client.post(
+        f"/v1/agents/{alice_agent}/tasks/sync",
+        json={
+            "description": (
+                f"Create file {file_name} with content: classified-alice-note."
+            )
+        },
+        timeout=30.0,
+    ).raise_for_status().json()["id"]
+    alice_events = wait_for_workflow(
+        alice_client, alice_agent, alice_task, timeout=180.0
+    )
+    assert _first_save_result(alice_events), "Alice's write did not succeed"
+
+    # New user = new workspace. The agent reuses the same llm_model fixture
+    # that Alice used, but because model_instance is workspace-scoped Charlie
+    # can't reach it — so we build her own chain through alice_client's API,
+    # then mint a separate user and run a list_files probe from their client.
+    eve = user_factory("eve")
+    eve_client = httpx.Client(
+        base_url=str(alice_client.base_url),
+        headers={"Authorization": f"Bearer {eve.jwt}"},
+        timeout=20.0,
+    )
+    try:
+        # Eve needs her own provider_config + model_instance — shortest path:
+        # reuse the system-scoped provider_spec + model_spec by looking up
+        # alice's model_instance would fail (workspace-scoped). We use the
+        # same kwargs create path the fixture does.
+        from tests.e2e.api.conftest import (
+            LLM_API_KEY,
+            LLM_ENDPOINT,
+            _psql,
+        )
+
+        spec_id = _psql(
+            "SELECT id FROM provider_specs WHERE provider_key='e2e-openai-compat';"
+        )
+        model_spec_id = _psql(
+            "SELECT id FROM model_specs WHERE provider_spec_id='"
+            + spec_id
+            + "' ORDER BY created_at LIMIT 1;"
+        )
+        pc = eve_client.post(
+            "/v1/provider-configs/",
+            json={
+                "provider_spec_id": spec_id,
+                "name": "eve-cfg",
+                "api_key": LLM_API_KEY,
+                "endpoint_url": LLM_ENDPOINT,
+            },
+        ).raise_for_status().json()
+        mi = eve_client.post(
+            "/v1/model-instances/",
+            json={
+                "provider_config_id": pc["id"],
+                "model_spec_id": model_spec_id,
+                "name": "eve-mi",
+            },
+        ).raise_for_status().json()
+
+        eve_agent = create_agent(
+            eve_client,
+            mi["id"],
+            name="eve-fs-agent",
+            instruction=(
+                "Use list_files with pattern '*' once, then call completion."
+            ),
+            tools=[{"type": "code", "name": "agentarea/files"}],
+        )
+        eve_task = eve_client.post(
+            f"/v1/agents/{eve_agent}/tasks/sync",
+            json={"description": "List all files you can see."},
+            timeout=30.0,
+        ).raise_for_status().json()["id"]
+        eve_events = wait_for_workflow(
+            eve_client, eve_agent, eve_task, timeout=180.0
+        )
+    finally:
+        eve_client.close()
+
+    # Scan every list_files result from Eve — the file Alice wrote must not
+    # appear. (Any save_file by Eve is fine; we only care about leaks.)
+    listings = [
+        e["metadata"].get("result", "")
+        for e in eve_events
+        if e["event_type"] == "ToolCallCompleted"
+        and e.get("metadata", {}).get("tool_name") == "file"
+        and e["metadata"].get("arguments", {}).get("action") == "list_files"
+    ]
+    for listing in listings:
+        assert file_name not in str(listing), (
+            f"CRITICAL: Alice's {file_name} is visible to Eve: {listing}"
+        )
 
 
 @pytest.mark.integration
