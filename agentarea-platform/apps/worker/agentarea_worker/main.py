@@ -268,6 +268,7 @@ class AgentAreaWorker:
 
         # Start MCP container monitor in background
         from agentarea_mcp.container_monitor import start_container_monitoring
+
         self.container_monitor = await start_container_monitoring()
 
         # Start workers in background

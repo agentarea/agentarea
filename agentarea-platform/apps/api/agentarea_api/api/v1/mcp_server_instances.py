@@ -73,8 +73,10 @@ class MCPServerInstanceResponse(BaseModel):
                         masked_headers[name] = masked_value
                 json_spec["headers"] = masked_headers
 
-        verification = verification_override if verification_override is not None else (
-            instance.verification or {}
+        verification = (
+            verification_override
+            if verification_override is not None
+            else (instance.verification or {})
         )
 
         return cls.model_validate(
@@ -108,8 +110,6 @@ async def validate_instance_spec(
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
     """Stateless spec validation. For type=url, probes with list_tools (3s budget)."""
-    errors = []
-
     if data.type == "url":
         if not data.endpoint_url:
             return {"valid": False, "errors": ["endpoint_url is required for type=url"]}
@@ -257,8 +257,8 @@ async def list_mcp_server_instances(
                     m = await service.repository.get_by_id(UUID(mid))
                     if m:
                         members.append(m)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("bundle member %s lookup failed: %s", mid, e)
             derived_v = derive_bundle_verification(instance, members)
             response_instances.append(
                 MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
@@ -288,8 +288,8 @@ async def get_mcp_server_instance(
                 m = await service.repository.get_by_id(UUID(mid))
                 if m:
                     members.append(m)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("bundle member %s lookup failed: %s", mid, e)
         derived_v = derive_bundle_verification(instance, members)
         return MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
 
@@ -346,7 +346,9 @@ async def verify_mcp_server_instance(
         return {"instance_id": str(instance_id), "verification": verification}
     except Exception as e:
         logger.error("verify_instance failed for %s: %s", instance_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Verification failed due to internal error") from e
+        raise HTTPException(
+            status_code=500, detail="Verification failed due to internal error"
+        ) from e
 
 
 @router.get("/health/containers")
@@ -367,9 +369,7 @@ async def get_containers_health(
                 )
             return response.json()
     except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503, detail="Unable to connect to container manager"
-        ) from e
+        raise HTTPException(status_code=503, detail="Unable to connect to container manager") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
@@ -381,10 +381,9 @@ async def probe_instance_auth(
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
     """Probe a URL-type MCP instance to detect its auth requirements."""
-    from sqlalchemy import update as sa_update
-
     from agentarea_mcp.domain.models import MCPServer
     from agentarea_mcp.infrastructure.repository import MCPServerRepository
+    from sqlalchemy import update as sa_update
 
     result = await service.probe_instance_auth(instance_id)
 
@@ -421,7 +420,7 @@ async def probe_instance_auth(
 
 
 @router.post("/{instance_id}/test-auth")
-async def test_mcp_auth(
+async def run_test_auth(
     instance_id: UUID,
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),

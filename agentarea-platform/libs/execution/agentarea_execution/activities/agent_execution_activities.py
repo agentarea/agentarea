@@ -14,7 +14,7 @@ This module provides Temporal activities for agent execution:
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +25,7 @@ try:
         return _Counter(name, doc, labels or [])
 
 except ImportError:
+
     class _NoopCounter:
         def inc(self, amount=1):
             pass
@@ -34,6 +35,7 @@ except ImportError:
 
     def _make_counter(name: str, doc: str, labels: list[str] | None = None):  # type: ignore[misc]
         return _NoopCounter()
+
 
 from agentarea_agents_sdk import (
     GoalProgressEvaluator,
@@ -323,7 +325,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         This is called once during _initialize_agent_config and the result is cached
         in workflow state to avoid repeated DB lookups on every LLM call.
         """
-        from datetime import UTC, datetime
+        from datetime import UTC
         from uuid import UUID as _UUID
 
         user_context = create_system_context(request.workspace_id)
@@ -617,9 +619,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if tool_name in ("agentarea/files", "agentarea/web"):
                         from agentarea_common.artifacts import ArtifactService
 
-                        base_prefix = (
-                            f"tasks/{request.task_id}" if request.task_id else "shared"
-                        )
+                        base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
                             "storage": ArtifactService(),
                             "workspace_id": str(request.workspace_id),

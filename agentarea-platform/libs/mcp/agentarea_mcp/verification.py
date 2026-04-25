@@ -11,7 +11,7 @@ path.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from agentarea_common.config import get_database, get_settings
@@ -69,7 +69,7 @@ def _classify_list_tools_error(exc: BaseException) -> tuple[bool, BaseException]
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _make_payload(
@@ -176,8 +176,6 @@ async def verify(
     instance: MCPServerInstance,
     session=None,
     *,
-    go_manager_client=None,  # reserved for test injection (not used yet)
-    mcp_client=None,  # reserved for test injection (not used yet)
     _list_tools_fn=None,  # test seam
     _go_create_fn=None,  # test seam
     _go_health_fn=None,  # test seam
@@ -333,9 +331,7 @@ async def verify(
                     async with save_sess.begin():
                         row = (
                             await save_sess.execute(
-                                select(MCPServerInstance).where(
-                                    MCPServerInstance.id == locked.id
-                                )
+                                select(MCPServerInstance).where(MCPServerInstance.id == locked.id)
                             )
                         ).scalar_one()
                         row.verification = dict(payload)

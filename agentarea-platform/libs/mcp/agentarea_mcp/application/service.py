@@ -1,5 +1,4 @@
 import asyncio
-import builtins
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -62,9 +61,7 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
-def derive_bundle_verification(
-    bundle: MCPServerInstance, members: list[MCPServerInstance]
-) -> dict:
+def derive_bundle_verification(bundle: MCPServerInstance, members: list[MCPServerInstance]) -> dict:
     """Derive a bundle's verification from its members' current verification state."""
     json_spec = bundle.json_spec or {}
     member_ids: list[str] = json_spec.get("members", [])
@@ -405,9 +402,7 @@ class MCPServerInstanceService:
                     continue
                 v = member.verification or {}
                 if v.get("status") != "succeeded":
-                    not_ready.append(
-                        f"name={member.name}, status={v.get('status', 'unknown')}"
-                    )
+                    not_ready.append(f"name={member.name}, status={v.get('status', 'unknown')}")
 
             if not_ready:
                 try:
@@ -425,8 +420,15 @@ class MCPServerInstanceService:
                 )
 
         else:
-            # docker/command — fire background verify; monitor will also sweep
-            asyncio.create_task(verify(instance))
+            # docker/command — fire background verify; monitor will also sweep.
+            # Hold a strong reference so the GC doesn't drop the task mid-flight
+            # (https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task).
+            self._background_verify_tasks: set[asyncio.Task] = getattr(
+                self, "_background_verify_tasks", set()
+            )
+            task = asyncio.create_task(verify(instance))
+            self._background_verify_tasks.add(task)
+            task.add_done_callback(self._background_verify_tasks.discard)
 
         await self.event_broker.publish(
             MCPServerInstanceCreated(
@@ -504,8 +506,8 @@ class MCPServerInstanceService:
                     m = await self.repository.get_by_id(UUID(mid))
                     if m:
                         members.append(m)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
         payload = await verify(instance)
@@ -751,9 +753,7 @@ class MCPServerInstanceService:
                 if auth_config:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
-                logger.warning(
-                    "Failed to resolve auth headers for instance %s: %s", instance.id, e
-                )
+                logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
 
         return mcp_url, headers
 
@@ -776,9 +776,7 @@ class MCPServerInstanceService:
                     await session.initialize()
                     return await session.call_tool(tool_name, tool_args)
         except Exception as e:
-            logger.info(
-                "Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e
-            )
+            logger.info("Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e)
 
         from mcp.client.sse import sse_client
 

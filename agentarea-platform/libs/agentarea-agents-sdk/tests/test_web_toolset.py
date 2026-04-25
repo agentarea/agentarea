@@ -17,7 +17,6 @@ import pytest
 from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.web_toolset import WebToolset
 
-
 _REAL_ASYNC_CLIENT = httpx.AsyncClient  # captured before any monkeypatch
 
 
@@ -95,9 +94,7 @@ async def test_binary_response_is_persisted_as_artifact(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_binary_without_storage_returns_error(monkeypatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, content=b"\x00\x01", headers={"content-type": "image/png"}
-        )
+        return httpx.Response(200, content=b"\x00\x01", headers={"content-type": "image/png"})
 
     monkeypatch.setattr(
         "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
@@ -123,9 +120,7 @@ async def test_filename_inferred_from_content_type_when_path_has_none(
     pdf = b"%PDF-1.4\n%hello"
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, content=pdf, headers={"content-type": "application/pdf"}
-        )
+        return httpx.Response(200, content=pdf, headers={"content-type": "application/pdf"})
 
     monkeypatch.setattr(
         "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",

@@ -630,9 +630,7 @@ async def list_task_artifacts(
 
     items: list[TaskArtifactItem] = []
     for obj in objects:
-        url = await svc.presigned_url(
-            user_context.workspace_id, obj.path, expires_in=expires_in
-        )
+        url = await svc.presigned_url(user_context.workspace_id, obj.path, expires_in=expires_in)
         items.append(
             TaskArtifactItem(
                 path=obj.path,

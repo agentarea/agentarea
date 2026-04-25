@@ -42,15 +42,11 @@ class StorageClient(Protocol):
         content_type: str | None = None,
     ) -> Any: ...
 
-    async def get(
-        self, workspace_id: str, path: str
-    ) -> tuple[bytes, str | None]: ...
+    async def get(self, workspace_id: str, path: str) -> tuple[bytes, str | None]: ...
 
     async def exists(self, workspace_id: str, path: str) -> bool: ...
 
-    async def list(
-        self, workspace_id: str, prefix: str = ""
-    ) -> list[Any]: ...
+    async def list(self, workspace_id: str, prefix: str = "") -> list[Any]: ...
 
     async def delete(self, workspace_id: str, path: str) -> None: ...
 
@@ -72,9 +68,7 @@ class InMemoryStorage:
         self._data[key] = (data, content_type)
         return StoredObject(path=key[1], size=len(data), content_type=content_type)
 
-    async def get(
-        self, workspace_id: str, path: str
-    ) -> tuple[bytes, str | None]:
+    async def get(self, workspace_id: str, path: str) -> tuple[bytes, str | None]:
         key = (workspace_id, path.lstrip("/"))
         if key not in self._data:
             raise FileNotFoundError(path)
@@ -83,9 +77,7 @@ class InMemoryStorage:
     async def exists(self, workspace_id: str, path: str) -> bool:
         return (workspace_id, path.lstrip("/")) in self._data
 
-    async def list(
-        self, workspace_id: str, prefix: str = ""
-    ) -> list[StoredObject]:
+    async def list(self, workspace_id: str, prefix: str = "") -> list[StoredObject]:
         clean = prefix.lstrip("/")
         out: list[StoredObject] = []
         for (ws, path), (data, ct) in self._data.items():
@@ -136,9 +128,7 @@ class FileToolset(Toolset):
         return name
 
     @tool_method
-    async def save_file(
-        self, contents: str, file_name: str, overwrite: bool = True
-    ) -> str:
+    async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
         """Save ``contents`` as a text file under the task's artifact scope.
 
         Args:

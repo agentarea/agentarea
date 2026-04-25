@@ -24,7 +24,6 @@ import httpx
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import StorageClient
 
-
 _TEXT_CONTENT_TYPES: tuple[str, ...] = (
     "text/",
     "application/json",
@@ -148,9 +147,7 @@ class WebToolset(Toolset):
             return f"Error: url must be http(s); got {url!r}"
 
         try:
-            async with httpx.AsyncClient(
-                timeout=timeout_seconds, follow_redirects=True
-            ) as client:
+            async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
                 resp = await client.get(url)
         except httpx.HTTPError as e:
             return f"Error fetching {url}: {e}"
@@ -190,9 +187,7 @@ class WebToolset(Toolset):
         file_name = _filename_from_url(url, content_type)
         artifact_path = self._artifact_path(file_name)
         try:
-            await self.storage.put(
-                self.workspace_id, artifact_path, body, content_type
-            )
+            await self.storage.put(self.workspace_id, artifact_path, body, content_type)
         except Exception as e:
             return f"Error writing artifact {artifact_path}: {e}"
 
