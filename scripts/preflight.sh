@@ -2,13 +2,14 @@
 # preflight.sh — run the same checks CI runs, locally, before pushing.
 #
 # Mirrors:
-#   .github/workflows/ci.yml             (Python lint + tests, Go lint + tests)
+#   .github/workflows/ci.yml             (Python lint+tests, Go lint+tests, webapp lint+build)
 #   .github/workflows/schema-check.yml   (OpenAPI -> schema.d.ts drift)
+#   .github/workflows/frontend-integration.yml (elements-react build + webapp build)
 #   .github/workflows/check-helm-docs.yml (Helm chart README)
 #   .github/workflows/validate-env-templates.yml (Helm env tpl drift)
 #
 # Each check is independent — failure prints how to fix and aborts.
-# Set SKIP=schema,helm-docs,... to skip groups.
+# Set SKIP=schema,webapp,helm-docs,... to skip groups.
 
 set -euo pipefail
 
@@ -82,6 +83,29 @@ if ! should_skip schema; then
     ok "Schema drift"
   else
     printf '\033[33m⚠ npx not installed — skipping schema check\033[0m\n'
+  fi
+fi
+
+# ── 3b. Webapp lint + build (mirrors webapp-lint, webapp-build, frontend-integration) ──
+if ! should_skip webapp; then
+  if have pnpm; then
+    step "Webapp lint (pnpm run lint)"
+    ( cd agentarea-webapp && pnpm install --frozen-lockfile >/dev/null ) \
+      || fail "pnpm install failed"
+    ( cd agentarea-webapp && pnpm run lint ) || fail "webapp lint failed"
+    ok "Webapp lint"
+
+    step "Webapp packages build (elements-react)"
+    ( cd agentarea-webapp/packages/elements-react && npm run build >/dev/null ) \
+      || fail "elements-react build failed"
+    ok "elements-react"
+
+    step "Webapp build (pnpm run build, includes type-check)"
+    ( cd agentarea-webapp && pnpm run build >/dev/null ) \
+      || fail "webapp build failed (type errors block CI even though type-check is warn-only)"
+    ok "Webapp build"
+  else
+    printf '\033[33m⚠ pnpm not installed — skipping webapp build (install: npm i -g pnpm@9)\033[0m\n'
   fi
 fi
 

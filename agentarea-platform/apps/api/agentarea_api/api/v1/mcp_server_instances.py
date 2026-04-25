@@ -126,7 +126,7 @@ async def validate_instance_spec(
     return {"valid": False, "errors": [f"Unknown type: {data.type}"]}
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=MCPServerInstanceResponse)
 async def create_mcp_server_instance(
     data: MCPServerInstanceCreateRequest,
     response: Response,
