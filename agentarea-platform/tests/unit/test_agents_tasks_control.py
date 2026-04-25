@@ -243,28 +243,30 @@ class TestAgentTaskControl:
         mock_workflow_service.resume_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
-    async def test_resume_agent_task_not_paused(
+    async def test_resume_agent_task_running_is_accepted(
         self, mock_agent_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
     ):
-        """Test resume task when task is not paused."""
-        # Setup mocks
+        """Resume from 'running' is accepted: signal-based pause keeps Temporal's
+        external status as 'running' while the workflow's internal handler
+        waits on the pause flag, so the API can't 400 on 'not paused' here.
+        Resume signals are no-ops on workflows that aren't paused.
+        """
         mock_agent_service.get.return_value = mock_agent
         mock_workflow_service.get_workflow_status.return_value = {
             "status": "running",
         }
+        mock_workflow_service.resume_task.return_value = True
 
-        # Call the endpoint and expect exception
-        with pytest.raises(HTTPException) as exc_info:
-            await resume_agent_task(
-                agent_id=test_agent_id,
-                task_id=test_task_id,
-                user_context=test_user_context,
-                agent_service=mock_agent_service,
-                workflow_task_service=mock_workflow_service,
-            )
+        result = await resume_agent_task(
+            agent_id=test_agent_id,
+            task_id=test_task_id,
+            user_context=test_user_context,
+            agent_service=mock_agent_service,
+            workflow_task_service=mock_workflow_service,
+        )
 
-        assert exc_info.value.status_code == 400
-        assert "Cannot resume task that is not paused" in exc_info.value.detail
+        assert result["status"] == "running"
+        mock_workflow_service.resume_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_resume_fails(
