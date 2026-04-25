@@ -154,11 +154,16 @@ class TestGetUserContext:
         """Test successful user context extraction and context manager setting."""
         from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.interfaces import AuthToken
-        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
         from agentarea_common.di.container import register_singleton
 
-        # Register AuthorizationService in DI container
-        register_singleton(AuthorizationService, SimpleAuthorizationService())
+        # Register a mock AuthorizationService that allows "test-workspace"
+        mock_authz = Mock(spec=AuthorizationService)
+
+        async def mock_get_accessible_workspaces(user_context):
+            return [user_context.workspace_id, "test-workspace", "system"]
+
+        mock_authz.get_accessible_workspaces = mock_get_accessible_workspaces
+        register_singleton(AuthorizationService, mock_authz)
 
         # Setup mocks
         mock_auth_provider = Mock()
@@ -177,7 +182,9 @@ class TestGetUserContext:
 
         mock_auth_provider.verify_token = mock_verify_token
 
-        # Mock request headers
+        # Mock request headers — X-Workspace-ID override is only honoured if
+        # the user is a member; our mock authz returns "test-workspace" so this
+        # should succeed.
         mock_request.headers = {"X-Workspace-ID": "test-workspace"}
 
         # Call the dependency with valid credentials

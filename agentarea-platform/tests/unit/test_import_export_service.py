@@ -24,6 +24,8 @@ def mock_agent_service():
     service.get_by_name = AsyncMock(return_value=None)
     service.create_agent = AsyncMock()
     service.update_agent = AsyncMock()
+    # get_with_skills is called during export to eager-load skills relationship
+    service.get_with_skills = AsyncMock(side_effect=lambda agent_id: None)
     return service
 
 
