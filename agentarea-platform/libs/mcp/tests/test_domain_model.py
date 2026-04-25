@@ -90,10 +90,12 @@ class TestMCPServerInstanceModel:
         instance.id = "abc-123"
         assert instance.endpoint_url == "http://mcp-abc-123:8000"
 
-    def test_endpoint_url_command_type_defaults_to_8000(self):
+    def test_endpoint_url_command_type_uses_mcp_bridge_port_8080(self):
+        # command-type MCPs run behind mcp-bridge which always listens on 8080,
+        # not the 8000 default that applies to docker-type instances.
         instance = self._make_instance(json_spec={"type": "command"})
         instance.id = "xyz-456"
-        assert instance.endpoint_url == "http://mcp-xyz-456:8000"
+        assert instance.endpoint_url == "http://mcp-xyz-456:8080"
 
     def test_endpoint_url_prefers_full_internal_url_from_go(self):
         instance = self._make_instance(

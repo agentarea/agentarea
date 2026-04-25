@@ -27,8 +27,8 @@ from agentarea_mcp.domain.verification_types import (
 logger = logging.getLogger(__name__)
 
 _LIST_TOOLS_ATTEMPT_TIMEOUT = 5  # seconds per attempt
-_LIST_TOOLS_BACKOFF_DELAYS = [2, 4, 8, 16]  # seconds between retries
-_TOTAL_DEADLINE = 60  # seconds total budget
+_LIST_TOOLS_BACKOFF_DELAYS = [2, 4, 8, 16, 30, 30]  # seconds between retries
+_TOTAL_DEADLINE = 120  # seconds total budget (cold image pulls can take 60-90s)
 
 _TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (
     ConnectionRefusedError,
@@ -142,12 +142,7 @@ async def _list_tools(endpoint_url: str, headers: dict | None = None) -> list[di
 
 
 async def _go_create_instance(instance: MCPServerInstance, mcp_manager_url: str) -> dict:
-    """POST /instances to Go manager — ack only (fast, not health poll).
-
-    Returns dict with status_code, body, and internal_url (when Go reports it).
-    internal_url is the authoritative service-discovery endpoint the Go manager
-    assigned (it knows the real service name + namespace + port for the backend).
-    """
+    """POST /instances to Go manager (ack only); returns status_code, body, and internal_url."""
     payload = {
         "instance_id": str(instance.id),
         "name": instance.name,

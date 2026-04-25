@@ -70,13 +70,18 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
             return self.json_spec.get("endpoint_url", "")
         if instance_type in ("docker", "command"):
             # Prefer a full URL the Go manager returned (K8s backend reports
-            # `http://mcp-<name>.<ns>.svc.cluster.local:<port>`). Docker backend
+            # `http://mcp-<name>.<ns>.svc.cluster.local:80`). Docker backend
             # returns a traefik path like `/mcp/<slug>` — ignore those and fall
             # back to the direct-container address.
             resolved = self.json_spec.get("internal_url")
             if isinstance(resolved, str) and "://" in resolved:
                 return resolved
-            port = self.json_spec.get("port") or 8000
+            # command type is always wrapped in mcp-bridge, which listens on
+            # 8080 regardless of json_spec.port (usually absent).
+            if instance_type == "command":
+                port = 8080
+            else:
+                port = self.json_spec.get("port") or 8000
             return f"http://mcp-{self.id}:{port}"
         raise ValueError("bundle has no endpoint_url")
 

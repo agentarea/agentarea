@@ -72,7 +72,10 @@ class _InstanceProxy:
             resolved = self.json_spec.get("internal_url")
             if isinstance(resolved, str) and "://" in resolved:
                 return resolved
-            port = self.json_spec.get("port") or 8000
+            if t == "command":
+                port = 8080
+            else:
+                port = self.json_spec.get("port") or 8000
             return f"http://mcp-{self.id}:{port}"
         raise ValueError("bundle has no endpoint_url")
 

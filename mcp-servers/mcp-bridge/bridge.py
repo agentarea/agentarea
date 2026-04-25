@@ -38,7 +38,12 @@ class StdioBridge:
         self.command = command
         self.args = args
         self.proc: asyncio.subprocess.Process | None = None
-        self._pending: dict[str | int, asyncio.Future] = {}
+        # _pending is keyed by the internal id we send to the child; each entry
+        # holds both the caller's original id and the Future awaiting the reply.
+        # Keying by caller-supplied id would break as soon as two clients both
+        # send the same id (e.g. every MCP client starts `initialize` at id=0)
+        # because the second call would silently overwrite the first's future.
+        self._pending: dict[str, tuple[str | int | None, asyncio.Future]] = {}
         self._write_lock = asyncio.Lock()
         self._reader_task: asyncio.Task | None = None
         self._healthy = False
@@ -65,7 +70,7 @@ class StdioBridge:
                 log.warning("Child stdout closed")
                 self._healthy = False
                 # Fail all pending requests
-                for fut in self._pending.values():
+                for _, fut in self._pending.values():
                     if not fut.done():
                         fut.set_exception(ConnectionError("Child process exited"))
                 break
@@ -77,9 +82,14 @@ class StdioBridge:
             except json.JSONDecodeError:
                 log.debug("Non-JSON stdout: %s", line[:200])
                 continue
-            msg_id = msg.get("id")
-            if msg_id is not None and msg_id in self._pending:
-                self._pending[msg_id].set_result(msg)
+            internal_id = msg.get("id")
+            if internal_id is not None and str(internal_id) in self._pending:
+                original_id, future = self._pending[str(internal_id)]
+                # Rewrite the id back to whatever the caller sent so the client
+                # correlates it with its own request.
+                msg["id"] = original_id
+                if not future.done():
+                    future.set_result(msg)
             else:
                 # Notification from server (no id or unsolicited)
                 log.debug("Notification: %s", msg.get("method", "unknown"))
@@ -94,32 +104,43 @@ class StdioBridge:
             log.info("Child stderr: %s", line.decode().rstrip())
 
     async def send(self, request: dict) -> dict:
-        """Send a JSON-RPC request to the child and wait for the response."""
-        assert self.proc and self.proc.stdin
-        msg_id = request.get("id")
-        future: asyncio.Future | None = None
+        """Send a JSON-RPC request to the child and wait for the response.
 
-        if msg_id is not None:
+        The request is rewritten with a bridge-scoped unique id before hitting
+        the child, and the response's id is rewritten back before returning.
+        This keeps concurrent clients from colliding on caller-supplied ids
+        (e.g. every MCP session starts at id=0 for `initialize`).
+        """
+        assert self.proc and self.proc.stdin
+        original_id = request.get("id")
+        future: asyncio.Future | None = None
+        internal_id: str | None = None
+        outgoing = request
+
+        if original_id is not None:
+            internal_id = uuid.uuid4().hex
             future = asyncio.get_event_loop().create_future()
-            self._pending[msg_id] = future
+            self._pending[internal_id] = (original_id, future)
+            outgoing = dict(request)
+            outgoing["id"] = internal_id
 
         async with self._write_lock:
-            data = json.dumps(request) + "\n"
+            data = json.dumps(outgoing) + "\n"
             self.proc.stdin.write(data.encode())
             await self.proc.stdin.drain()
 
-        if future is not None:
+        if future is not None and internal_id is not None:
             try:
                 return await asyncio.wait_for(future, timeout=REQUEST_TIMEOUT)
             except asyncio.TimeoutError:
-                log.error("Timeout waiting for response to request id=%s", msg_id)
+                log.error("Timeout waiting for response to request id=%s", original_id)
                 return {
                     "jsonrpc": "2.0",
-                    "id": msg_id,
+                    "id": original_id,
                     "error": {"code": -32000, "message": "Request timed out"},
                 }
             finally:
-                self._pending.pop(msg_id, None)
+                self._pending.pop(internal_id, None)
 
         # Notification (no id) — fire and forget
         return {}
@@ -136,6 +157,8 @@ class StdioBridge:
 
 # ── HTTP Handlers ──────────────────────────────────────────────────────
 
+# Process-scoped (not per-request): one bridge process wraps a single child
+# stdio server, so all HTTP requests share the same logical MCP session.
 SESSION_ID = str(uuid.uuid4())
 
 

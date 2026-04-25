@@ -213,6 +213,12 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return response
 
         except Exception as e:
+            # Workflow-not-found is normal: callers ask about task IDs that
+            # never started a workflow (UI optimistic refresh, fake IDs,
+            # already-evicted history). Surface as ``unknown`` so the API
+            # layer can map it to 404 instead of 500.
+            if "not found" in str(e).lower() or "no execution" in str(e).lower():
+                return {"status": "unknown", "success": False, "error": "Workflow not found"}
             logger.error(f"Failed to get workflow status: {e}")
             raise RuntimeError(f"Failed to get workflow status: {e}") from e
 

@@ -19,7 +19,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -136,9 +135,14 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	}
 
 	// Container definition
+	pullPolicy := k.k8sConfig.ImagePullPolicy
+	if pullPolicy == "" {
+		pullPolicy = "IfNotPresent" // safe default for k3d/local; production should set Always
+	}
 	container := corev1.Container{
-		Name:  "mcp-server",
-		Image: spec.Image,
+		Name:            "mcp-server",
+		Image:           spec.Image,
+		ImagePullPolicy: corev1.PullPolicy(pullPolicy),
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "http",
@@ -164,12 +168,12 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		},
 		Resources:       resourceRequirements,
 		SecurityContext: securityContext,
+		// TCP probes — portable across all MCP server images. HTTP probes
+		// would require every image to implement the same /health path,
+		// which is not part of the MCP spec.
 		LivenessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/health",
-					Port: intstr.FromInt(spec.Port),
-				},
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
 			InitialDelaySeconds: 30,
 			PeriodSeconds:       10,
@@ -178,21 +182,32 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/ready",
-					Port: intstr.FromInt(spec.Port),
-				},
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
 			InitialDelaySeconds: 5,
-			PeriodSeconds:       5,
-			TimeoutSeconds:      3,
-			FailureThreshold:    3,
+			PeriodSeconds:       3,
+			TimeoutSeconds:      2,
+			FailureThreshold:    5,
 		},
 	}
 
-	// Add custom command if specified
+	// Entrypoint → container.command (overrides image ENTRYPOINT).
+	// Command   → container.args    (appended to ENTRYPOINT).
+	if len(spec.Entrypoint) > 0 {
+		container.Command = spec.Entrypoint
+	}
 	if len(spec.Command) > 0 {
-		container.Command = spec.Command
+		// Strip --transport=stdio: in K8s the pod must bind a port directly
+		// (no traefik wrapper), and stdio-capable images default to HTTP SSE.
+		args := make([]string, 0, len(spec.Command))
+		for _, a := range spec.Command {
+			if a != "--transport=stdio" {
+				args = append(args, a)
+			}
+		}
+		if len(args) > 0 {
+			container.Args = args
+		}
 	}
 
 	// Volume mounts for writable directories (since we use read-only root filesystem)
@@ -535,25 +550,6 @@ func intPtr(i int32) *int32 {
 	return &i
 }
 
-// waitForDeploymentReady waits for the deployment to be ready
-func (k *KubernetesBackend) waitForDeploymentReady(ctx context.Context, instanceName string) error {
-	deploymentName := fmt.Sprintf("mcp-%s", instanceName)
-
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, k.k8sConfig.DeploymentTimeout, true, func(ctx context.Context) (bool, error) {
-		deployment := &appsv1.Deployment{}
-		if err := k.client.Get(ctx, types.NamespacedName{
-			Namespace: k.k8sConfig.Namespace,
-			Name:      deploymentName,
-		}, deployment); err != nil {
-			return false, err
-		}
-
-		// Check if deployment is ready
-		return deployment.Status.ReadyReplicas > 0 &&
-			deployment.Status.ReadyReplicas == deployment.Status.Replicas, nil
-	})
-}
-
 // cleanupResources removes all resources for an instance
 func (k *KubernetesBackend) cleanupResources(ctx context.Context, instanceName string) error {
 	resourceName := fmt.Sprintf("mcp-%s", instanceName)
@@ -672,8 +668,11 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 		container := &deployment.Spec.Template.Spec.Containers[0]
 		container.Image = spec.Image
 
+		if len(spec.Entrypoint) > 0 {
+			container.Command = spec.Entrypoint
+		}
 		if len(spec.Command) > 0 {
-			container.Command = spec.Command
+			container.Args = spec.Command
 		}
 
 		// Convert ResourceList to config.ResourceRequirements
@@ -778,9 +777,9 @@ func (k *KubernetesBackend) getDeploymentStatus(deployment *appsv1.Deployment) s
 	return "unknown"
 }
 
-// performHTTPHealthCheck performs HTTP health check against the service
-func (k *KubernetesBackend) performHTTPHealthCheck(ctx context.Context, instanceName string) (bool, time.Duration) {
-	// Use internal service URL for health check
+// performHTTPHealthCheck performs HTTP health check against the service.
+// ctx is intentionally unused — the http.Client's own timeout governs the request.
+func (k *KubernetesBackend) performHTTPHealthCheck(_ context.Context, instanceName string) (bool, time.Duration) {
 	url := fmt.Sprintf("http://mcp-%s.%s.svc.cluster.local/health", instanceName, k.k8sConfig.Namespace)
 
 	start := time.Now()

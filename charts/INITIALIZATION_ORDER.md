@@ -1,8 +1,6 @@
 # AgentArea Helm Chart - Initialization Order
 
 > **Note:** The legacy "Bootstrap Job" flow described below has been removed.
-> Catalog data (MCP servers, skills, LLM providers/models, default agents) is
-> now reconciled by the **agentarea-operator** via `RegistrySync` CRDs.
 > Infrastructure bootstrap (RustFS bucket, Infisical org) currently handled
 > by the relevant subchart / compose init services. DB migrations still run
 > via the `jobs/db-migration.yaml` pattern described below.

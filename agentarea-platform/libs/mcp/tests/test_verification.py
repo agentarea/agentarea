@@ -32,7 +32,10 @@ class _FakeInstance:
             resolved = self.json_spec.get("internal_url")
             if isinstance(resolved, str) and "://" in resolved:
                 return resolved
-            port = self.json_spec.get("port") or 8000
+            if t == "command":
+                port = 8080
+            else:
+                port = self.json_spec.get("port") or 8000
             return f"http://mcp-{self.id}:{port}"
         raise ValueError("bundle has no endpoint_url")
 
@@ -475,6 +478,135 @@ async def test_monitor_orphan_gc_marks_stale_in_progress_as_failed():
 # ---------------------------------------------------------------------------
 # MCPContainerMonitor — re-verify sweep enqueues never_attempted rows
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Constant checks — Phase 1 deadline / backoff values
+# ---------------------------------------------------------------------------
+
+def test_total_deadline_is_120():
+    """_TOTAL_DEADLINE must be 120s to accommodate cold image pulls (60-90s)."""
+    from agentarea_mcp.verification import _TOTAL_DEADLINE
+    assert _TOTAL_DEADLINE == 120, (
+        f"_TOTAL_DEADLINE must be 120 (was changed for Phase 1 K8s cold-pull support), got {_TOTAL_DEADLINE}"
+    )
+
+
+def test_list_tools_backoff_delays_extended():
+    """_LIST_TOOLS_BACKOFF_DELAYS must match the Phase 1 extended schedule."""
+    from agentarea_mcp.verification import _LIST_TOOLS_BACKOFF_DELAYS
+    expected = [2, 4, 8, 16, 30, 30]
+    assert _LIST_TOOLS_BACKOFF_DELAYS == expected, (
+        f"Expected {expected}, got {_LIST_TOOLS_BACKOFF_DELAYS}"
+    )
+
+
+def test_list_tools_backoff_delays_has_six_entries():
+    """Backoff schedule must have exactly 6 retry delays (Phase 1 extended from 4)."""
+    from agentarea_mcp.verification import _LIST_TOOLS_BACKOFF_DELAYS
+    assert len(_LIST_TOOLS_BACKOFF_DELAYS) == 6, (
+        f"Expected 6 backoff entries, got {len(_LIST_TOOLS_BACKOFF_DELAYS)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Slow pod startup — Go ack fast, list_tools fails several times then succeeds
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_verify_slow_pod_startup_succeeds_after_multiple_list_tools_failures():
+    """Go ack returns 201 fast; list_tools fails 4 times (transient) then succeeds.
+
+    This simulates a K8s pod that is still pulling its image / initialising
+    when the first few list_tools attempts are made.  With the extended
+    _LIST_TOOLS_BACKOFF_DELAYS the verification must ultimately succeed.
+    """
+    inst = _make_instance("docker")
+    db_mock = _make_db_mock(inst)
+
+    go_create_called = 0
+    list_tools_attempt = 0
+    fake_tools = [{"name": "query", "description": "runs SQL", "inputSchema": {}}]
+
+    async def fake_go_create(instance, mcp_manager_url):
+        nonlocal go_create_called
+        go_create_called += 1
+        # Ack returns immediately — no blocking wait in Phase 1
+        return {"status_code": 201, "body": {"instance_id": str(instance.id)}}
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        nonlocal list_tools_attempt
+        list_tools_attempt += 1
+        if list_tools_attempt <= 4:
+            raise ConnectionRefusedError("pod not ready yet")
+        return fake_tools
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings, \
+         patch("agentarea_mcp.verification._LIST_TOOLS_BACKOFF_DELAYS", [0, 0, 0, 0, 0, 0]), \
+         patch("agentarea_mcp.verification._TOTAL_DEADLINE", 9999):
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+
+        from agentarea_mcp.verification import verify
+        result = await verify(
+            inst,
+            _list_tools_fn=fake_list_tools,
+            _go_create_fn=fake_go_create,
+        )
+
+    assert result["status"] == "succeeded", (
+        f"Expected succeeded after slow pod startup, got {result}"
+    )
+    assert go_create_called == 1, "Go create must be called exactly once"
+    assert list_tools_attempt == 5, (
+        f"Expected 5 list_tools attempts (4 failures + 1 success), got {list_tools_attempt}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_verify_slow_pod_startup_extended_deadline_allows_late_success():
+    """The extended _TOTAL_DEADLINE=120 permits success even after many slow retries.
+
+    Patches the deadline to a tight value AND uses zero-delay backoff so the
+    test runs fast, but verifies the retry count the extended backoff list enables.
+    """
+    inst = _make_instance("command")
+    db_mock = _make_db_mock(inst)
+
+    list_tools_attempt = 0
+    fake_tools = [{"name": "list_dir", "description": "", "inputSchema": {}}]
+
+    async def fake_go_create(instance, mcp_manager_url):
+        return {"status_code": 201, "body": {}}
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        nonlocal list_tools_attempt
+        list_tools_attempt += 1
+        # Succeed on the 6th attempt — last slot in extended backoff list
+        if list_tools_attempt < 6:
+            raise ConnectionRefusedError("still starting")
+        return fake_tools
+
+    # Use zero-delay backoff (same length as real list) to avoid sleeping
+    zero_delays = [0, 0, 0, 0, 0, 0]
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings, \
+         patch("agentarea_mcp.verification._LIST_TOOLS_BACKOFF_DELAYS", zero_delays), \
+         patch("agentarea_mcp.verification._TOTAL_DEADLINE", 9999):
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+
+        from agentarea_mcp.verification import verify
+        result = await verify(
+            inst,
+            _list_tools_fn=fake_list_tools,
+            _go_create_fn=fake_go_create,
+        )
+
+    assert result["status"] == "succeeded", (
+        f"Extended backoff must allow success on 6th attempt; got {result}"
+    )
+    assert list_tools_attempt == 6
+
 
 @pytest.mark.asyncio
 async def test_monitor_reverify_sweep_enqueues_never_attempted():

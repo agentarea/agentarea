@@ -751,17 +751,17 @@ async def resume_agent_task(
         if status.get("status") == "unknown":
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Check if task is in a resumable state
+        # Reject only terminal states. Signal-based pause does NOT flip
+        # Temporal's external status to "paused" (the workflow keeps the
+        # "running" execution status while its internal handler waits on
+        # the pause flag), so gating on "paused/blocked" here would 400
+        # every legitimate resume right after a pause. The resume signal
+        # is itself a no-op on workflows that aren't paused, so accepting
+        # it from "running" is safe.
         current_status = status.get("status", "").lower()
         if current_status in ["completed", "failed", "cancelled"]:
             raise HTTPException(
                 status_code=400, detail=f"Cannot resume task in '{current_status}' state"
-            )
-
-        if current_status not in ["paused", "blocked"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot resume task that is not paused/blocked (current status: {current_status})",
             )
 
         # Resume the workflow

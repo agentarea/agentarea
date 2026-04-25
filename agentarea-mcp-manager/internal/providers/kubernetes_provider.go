@@ -8,8 +8,15 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
+// sandboxImage / sandboxPort mirror the constants in internal/container.
+// Duplicated to avoid an import cycle (container → models → providers).
+const (
+	sandboxImage = "agentarea/mcp-bridge:latest"
+	sandboxPort  = 8080
+)
+
 // BackendInstanceSpec defines the specification for creating an instance
-// (local copy to avoid import cycle)
+// (local copy to avoid import cycle).
 type BackendInstanceSpec struct {
 	InstanceID  string
 	Name        string
@@ -18,8 +25,10 @@ type BackendInstanceSpec struct {
 	Port        int
 	Environment map[string]string
 	Labels      map[string]string
-	Command     []string
-	Resources   struct {
+	// Command maps to CMD / K8s container.args — arguments appended to
+	// the image's existing ENTRYPOINT.
+	Command   []string
+	Resources struct {
 		Limits   struct{ CPU, Memory string }
 		Requests struct{ CPU, Memory string }
 	}
@@ -101,7 +110,11 @@ func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, nam
 	return nil
 }
 
-// convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec
+// convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec.
+//
+// For command-type instances we wrap the stdio command in mcp-bridge (same as
+// the docker-mode handler does). Otherwise deployment would be created with
+// empty image + port=0 and rejected by the K8s apiserver.
 func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
 	spec := &BackendInstanceSpec{
 		InstanceID:  instance.InstanceID,
@@ -109,21 +122,50 @@ func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerIns
 		ServiceName: instance.Name,
 	}
 
-	// Extract image from json_spec
-	if image, ok := instance.JSONSpec["image"].(string); ok {
-		spec.Image = image
-	}
+	jsonSpec := instance.JSONSpec
+	specType, _ := jsonSpec["type"].(string)
 
-	// Extract port from json_spec
-	if port, ok := instance.JSONSpec["port"].(float64); ok {
-		spec.Port = int(port)
-	} else if port, ok := instance.JSONSpec["port"].(int); ok {
-		spec.Port = port
+	if specType == "command" {
+		// command-type: always wraps stdio command with mcp-bridge.
+		cmd, _ := jsonSpec["command"].(string)
+		var args []string
+		if rawArgs, ok := jsonSpec["args"].([]any); ok {
+			for _, a := range rawArgs {
+				if s, ok := a.(string); ok {
+					args = append(args, s)
+				}
+			}
+		}
+		spec.Image = sandboxImage
+		spec.Port = sandboxPort
+		// mcp-bridge's ENTRYPOINT is `python bridge.py`. The stdio command
+		// + args are appended as CLI arguments (K8s container.args).
+		spec.Command = append([]string{cmd}, args...)
+	} else {
+		// docker-type: use the image directly — it must serve HTTP natively.
+		// Strip --transport=stdio: in K8s the container must bind a port
+		// directly (no traefik gateway), and stdio-capable images default to
+		// HTTP SSE when this flag is absent.
+		if image, ok := jsonSpec["image"].(string); ok {
+			spec.Image = image
+		}
+		if port, ok := jsonSpec["port"].(float64); ok {
+			spec.Port = int(port)
+		} else if port, ok := jsonSpec["port"].(int); ok {
+			spec.Port = port
+		}
+		if rawCmd, ok := jsonSpec["command"].([]any); ok {
+			for _, a := range rawCmd {
+				if s, ok := a.(string); ok && s != "--transport=stdio" {
+					spec.Command = append(spec.Command, s)
+				}
+			}
+		}
 	}
 
 	// Extract environment variables
 	if envInterface, exists := instance.JSONSpec["environment"]; exists {
-		if envMap, ok := envInterface.(map[string]interface{}); ok {
+		if envMap, ok := envInterface.(map[string]any); ok {
 			env := make(map[string]string)
 			for key, value := range envMap {
 				env[key] = fmt.Sprintf("%v", value)
@@ -134,7 +176,7 @@ func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerIns
 
 	// Also check for env_vars (alternative key)
 	if envInterface, exists := instance.JSONSpec["env_vars"]; exists {
-		if envMap, ok := envInterface.(map[string]interface{}); ok {
+		if envMap, ok := envInterface.(map[string]any); ok {
 			if spec.Environment == nil {
 				spec.Environment = make(map[string]string)
 			}
@@ -146,7 +188,7 @@ func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerIns
 
 	// Extract labels
 	if labelsInterface, exists := instance.JSONSpec["labels"]; exists {
-		if labelsMap, ok := labelsInterface.(map[string]interface{}); ok {
+		if labelsMap, ok := labelsInterface.(map[string]any); ok {
 			labels := make(map[string]string)
 			for key, value := range labelsMap {
 				labels[key] = fmt.Sprintf("%v", value)
@@ -157,7 +199,7 @@ func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerIns
 
 	// Extract resource limits
 	if resourcesInterface, exists := instance.JSONSpec["resource_limits"]; exists {
-		if resourcesMap, ok := resourcesInterface.(map[string]interface{}); ok {
+		if resourcesMap, ok := resourcesInterface.(map[string]any); ok {
 			if memory, ok := resourcesMap["memory"].(string); ok {
 				spec.Resources.Limits.Memory = memory
 			}

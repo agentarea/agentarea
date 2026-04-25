@@ -17,7 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bridge.py .
 
-ENV PORT=8080
+ENV PORT=8080 \
+    HOME=/tmp \
+    NPM_CONFIG_CACHE=/tmp/.npm-cache \
+    UV_CACHE_DIR=/tmp/.uv-cache
 EXPOSE 8080
 
 ENTRYPOINT ["python", "bridge.py"]

@@ -1,9 +1,7 @@
-import os
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import yaml
 from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
@@ -137,131 +135,6 @@ async def list_mcp_servers(
         page_size=pagination.page_size,
         has_next=(pagination.offset + pagination.page_size) < total,
     )
-
-
-def load_mcp_provider_templates() -> dict[str, Any]:
-    """Load MCP provider templates from YAML file."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Go up to project root and then to data directory
-    # From core/apps/api/agentarea_api/api/v1/ -> go up to project root
-    root_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..", ".."))
-    yaml_path = os.path.join(root_dir, "data", "mcp_providers.yaml")
-
-    try:
-        with open(yaml_path) as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        # Fallback: try alternative paths
-        alternative_paths = [
-            os.path.join(root_dir, "core", "..", "data", "mcp_providers.yaml"),
-            os.path.join(os.getcwd(), "data", "mcp_providers.yaml"),
-            os.path.join(os.getcwd(), "..", "data", "mcp_providers.yaml"),
-        ]
-
-        for alt_path in alternative_paths:
-            try:
-                with open(alt_path) as f:
-                    return yaml.safe_load(f)
-            except FileNotFoundError:
-                continue
-
-        # If all paths fail, raise the original error with helpful info
-        raise FileNotFoundError(
-            f"Could not find mcp_providers.yaml. Tried paths: {yaml_path}, {alternative_paths}"
-        ) from None
-
-
-@router.get("/templates", response_model=list[dict[str, Any]])
-async def get_mcp_server_templates(
-    user_context: UserContextDep,
-):
-    """Get all available MCP server templates from the YAML configuration."""
-    try:
-        data = load_mcp_provider_templates()
-        providers = data.get("providers", {})
-
-        return [
-            {
-                "id": provider_data.get("id"),
-                "key": provider_key,
-                "name": provider_data.get("name", provider_key),
-                "description": provider_data.get("description", ""),
-                "icon": provider_data.get("icon", ""),
-                "docker_image": provider_data.get("docker_image", ""),
-                "env_vars": provider_data.get("env_vars", []),
-                "capabilities": provider_data.get("capabilities", []),
-            }
-            for provider_key, provider_data in providers.items()
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.get("/templates/{template_key}", response_model=dict[str, Any])
-async def get_mcp_server_template(
-    template_key: str,
-    user_context: UserContextDep,
-):
-    """Get a specific MCP server template by key."""
-    try:
-        data = load_mcp_provider_templates()
-        providers = data.get("providers", {})
-
-        if template_key not in providers:
-            raise HTTPException(status_code=404, detail="MCP Server template not found")
-
-        provider_data = providers[template_key]
-        return {
-            "id": provider_data.get("id"),
-            "key": template_key,
-            "name": provider_data.get("name", template_key),
-            "description": provider_data.get("description", ""),
-            "icon": provider_data.get("icon", ""),
-            "docker_image": provider_data.get("docker_image", ""),
-            "env_vars": provider_data.get("env_vars", []),
-            "capabilities": provider_data.get("capabilities", []),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-@router.post("/from-template/{template_key}", response_model=MCPServerResponse)
-async def create_mcp_server_from_template(
-    template_key: str,
-    user_context: UserContextDep,
-    server_name: str,
-    server_description: str = "",
-    version: str = "latest",
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
-):
-    """Create an MCP server from a template."""
-    try:
-        data = load_mcp_provider_templates()
-        providers = data.get("providers", {})
-
-        if template_key not in providers:
-            raise HTTPException(status_code=404, detail="MCP Server template not found")
-
-        provider_data = providers[template_key]
-
-        # Create MCP server using the template
-        server = await mcp_server_service.create_mcp_server(
-            name=server_name,
-            description=server_description or provider_data.get("description", ""),
-            docker_image_url=provider_data.get("docker_image", ""),
-            version=version,
-            tags=[template_key],
-            is_public=True,
-            env_schema=provider_data.get("env_vars", []),
-            json_spec=provider_data.get("json_spec", {}),
-        )
-        return MCPServerResponse.from_domain(server)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{server_id}", response_model=MCPServerResponse)

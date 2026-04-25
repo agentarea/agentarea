@@ -35,11 +35,17 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 	if typeInterface, exists := instance.JSONSpec["type"]; exists {
 		if typeStr, ok := typeInterface.(string); ok {
 			switch typeStr {
-			case "docker":
+			case "docker", "command":
+				// "docker" and "command" both describe a container workload.
+				// In Kubernetes mode the k8s provider handles both — fall back
+				// to it when the docker provider isn't registered.
 				if pm.dockerProvider != nil {
 					return pm.dockerProvider, nil
 				}
-				return nil, fmt.Errorf("docker provider not available")
+				if pm.kubernetesProvider != nil {
+					return pm.kubernetesProvider, nil
+				}
+				return nil, fmt.Errorf("no container provider available (docker/kubernetes)")
 			case "kubernetes":
 				if pm.kubernetesProvider != nil {
 					return pm.kubernetesProvider, nil

@@ -177,6 +177,7 @@ func loadKubernetesConfig() KubernetesConfig {
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
 	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
+	config.ImagePullPolicy = getEnv("K8S_IMAGE_PULL_POLICY", config.ImagePullPolicy)
 	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)
 	config.GatewayNamespace = getEnv("KUBERNETES_GATEWAY_NAMESPACE", config.GatewayNamespace)
 	config.Domain = getEnv("KUBERNETES_DOMAIN", config.Domain)
