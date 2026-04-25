@@ -387,6 +387,79 @@ def test_agent_file_tool_lists_its_own_writes(
 
 @pytest.mark.integration
 @pytest.mark.slow
+def test_agent_web_tool_persists_binary_fetch_as_artifact(
+    alice_client: httpx.Client, llm_model: str
+) -> None:
+    """Agent fetches a binary URL via ``agentarea/web`` and the bytes land in RustFS.
+
+    Proves the artifact convention generalizes beyond the file tool: any
+    tool that produces bytes routes through ``ArtifactService`` under the
+    same workspace+task scope, and the LLM only ever sees the artifact
+    path. After the workflow finishes we read the object back directly.
+    """
+    _rustfs_env_defaults()
+    from agentarea_common.artifacts import ArtifactService
+
+    # 64 random bytes from httpbin — small, deterministic length.
+    fetch_url = "https://httpbin.org/bytes/64"
+
+    # Reachability probe so the test skips cleanly on a flaky network
+    # rather than blaming the platform.
+    try:
+        with httpx.Client(timeout=5.0) as probe:
+            probe.get(fetch_url).raise_for_status()
+    except (httpx.HTTPError, httpx.TransportError):
+        pytest.skip("httpbin.org unreachable")
+
+    agent_id = create_agent(
+        alice_client,
+        llm_model,
+        name="web-fetch-agent",
+        instruction=(
+            "You have a web tool. Call fetch_webpage on the URL the user "
+            "provides exactly once, then call completion with "
+            "{\"result\": <the JSON envelope you got back from fetch_webpage>}."
+        ),
+        tools=[{"type": "code", "name": "agentarea/web"}],
+    )
+    task_id = alice_client.post(
+        f"/v1/agents/{agent_id}/tasks/sync",
+        json={"description": f"fetch_webpage on {fetch_url} and return the result."},
+        timeout=30.0,
+    ).raise_for_status().json()["id"]
+
+    events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
+
+    fetch_events = _tool_events(events, "ToolCallCompleted", "web")
+    assert fetch_events, "web tool never produced a ToolCallCompleted event"
+    raw_result = str(fetch_events[-1]["metadata"].get("result") or "")
+    assert not raw_result.startswith("Error"), (
+        f"agent's fetch_webpage returned an error: {raw_result!r}"
+    )
+
+    payload = json.loads(raw_result)
+    assert payload["kind"] == "binary", (
+        f"expected a binary response envelope; got {payload!r}"
+    )
+    assert payload["size"] == 64
+    assert payload["artifact_path"].startswith(f"tasks/{task_id}/downloads/")
+
+    # Storage layer cross-check: the bytes are really in RustFS.
+    workspace_id = _psql(f"SELECT workspace_id FROM tasks WHERE id='{task_id}';")
+    svc = ArtifactService()
+    try:
+        data, ct = asyncio.run(svc.get(workspace_id, payload["artifact_path"]))
+        assert len(data) == 64, f"artifact size mismatch: stored {len(data)}"
+        assert ct  # whatever httpbin sent should round-trip
+    finally:
+        try:
+            asyncio.run(svc.delete(workspace_id, payload["artifact_path"]))
+        except Exception:
+            pass
+
+
+@pytest.mark.integration
+@pytest.mark.slow
 def test_file_tool_sandbox_isolated_across_workspaces(
     alice_client: httpx.Client,
     user_factory,
