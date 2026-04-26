@@ -1676,6 +1676,7 @@ class AgentExecutionWorkflow:
                 tool_args=tool_args,
                 server_instance_id=None,
                 workspace_id=workspace_id,
+                task_id=str(self.state.task_id),
                 tools=self.state.agent_config.get("tools"),
             )
 

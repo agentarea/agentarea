@@ -108,6 +108,57 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 		slog.String("instance_name", instanceName),
 		slog.String("image", spec.Image))
 
+	// Idempotency: if a configmap already exists for this instanceName but
+	// belongs to a DIFFERENT instance_id, delete ALL managed resources first
+	// so the create starts clean. If it already belongs to THIS instance_id,
+	// the resources are already provisioned — return success immediately.
+	existingCM := &corev1.ConfigMap{}
+	cmName := fmt.Sprintf("mcp-%s", instanceName)
+	cmErr := k.client.Get(ctx, types.NamespacedName{Namespace: k.k8sConfig.Namespace, Name: cmName}, existingCM)
+	if cmErr != nil && !errors.IsNotFound(cmErr) {
+		return nil, fmt.Errorf("failed to check for existing resources: %w", cmErr)
+	}
+	if cmErr == nil {
+		existingID := existingCM.Data["instance-id"]
+		if existingID == spec.InstanceID {
+			// Verify the Deployment also exists — if not, the previous run
+			// crashed partway through; fall through to re-create.
+			existingDeploy := &appsv1.Deployment{}
+			deployErr := k.client.Get(ctx, types.NamespacedName{
+				Namespace: k.k8sConfig.Namespace,
+				Name:      fmt.Sprintf("mcp-%s", instanceName),
+			}, existingDeploy)
+			if deployErr == nil {
+				k.logger.Info("Resources already exist for this instance — returning early (idempotent)",
+					slog.String("instance_id", spec.InstanceID))
+				return &InstanceResult{
+					ID:          spec.InstanceID,
+					Name:        spec.Name,
+					URL:         k.k8sConfig.GetInstanceURL(instanceName),
+					InternalURL: k.k8sConfig.GetInternalServiceURL(instanceName, spec.Port),
+					Status:      "starting",
+					CreatedAt:   time.Now(),
+				}, nil
+			}
+			// Deployment missing — fall through to re-create (configmap will be
+			// overwritten or partial resources cleaned before retry).
+			k.logger.Warn("ConfigMap exists for this instance but Deployment is missing, re-creating",
+				slog.String("instance_id", spec.InstanceID))
+			if err := k.cleanupResources(ctx, instanceName); err != nil {
+				return nil, fmt.Errorf("failed to clean up partial resources for %s: %w", instanceName, err)
+			}
+		} else {
+			// Different instance owns these resources — clean up before re-creating.
+			k.logger.Info("Stale resources found for different instance, cleaning up",
+				slog.String("instance_name", instanceName),
+				slog.String("existing_instance_id", existingID),
+				slog.String("new_instance_id", spec.InstanceID))
+			if err := k.cleanupResources(ctx, instanceName); err != nil {
+				return nil, fmt.Errorf("failed to clean up stale resources for %s: %w", instanceName, err)
+			}
+		}
+	}
+
 	// Create resources in order
 	resources := []func(context.Context, string, *InstanceSpec) error{
 		k.createConfigMap,
@@ -124,37 +175,26 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 				slog.String("instance_name", instanceName),
 				slog.String("error", err.Error()))
 
-			// Best effort cleanup
-			k.cleanupResources(ctx, instanceName)
+			// Best effort cleanup — log but don't override the original error
+			if cleanupErr := k.cleanupResources(ctx, instanceName); cleanupErr != nil {
+				k.logger.Warn("Cleanup after failed create also failed",
+					slog.String("instance_name", instanceName),
+					slog.String("cleanup_error", cleanupErr.Error()))
+			}
 			return nil, fmt.Errorf("failed to create kubernetes resources: %w", err)
 		}
 	}
 
-	// Wait for deployment to be ready
-	if err := k.waitForDeploymentReady(ctx, instanceName); err != nil {
-		k.logger.Error("Deployment not ready, cleaning up",
-			slog.String("instance_name", instanceName),
-			slog.String("error", err.Error()))
-
-		k.cleanupResources(ctx, instanceName)
-		return nil, fmt.Errorf("deployment not ready: %w", err)
-	}
-
-	// Get deployment UID for instance ID
-	deployment := &appsv1.Deployment{}
-	if err := k.client.Get(ctx, types.NamespacedName{
-		Namespace: k.k8sConfig.Namespace,
-		Name:      fmt.Sprintf("mcp-%s", instanceName),
-	}, deployment); err != nil {
-		return nil, fmt.Errorf("failed to get deployment after creation: %w", err)
-	}
-
+	// Return immediately (ack-only) — Python's verify() retries list_tools
+	// until the pod is ready, which can take > 60s on cold pulls. Blocking
+	// here until the deployment is Ready causes the caller's HTTP timeout to
+	// fire, which cancels this context and triggers spurious cleanup.
 	result := &InstanceResult{
-		ID:          string(deployment.UID),
+		ID:          spec.InstanceID,
 		Name:        spec.Name,
 		URL:         k.k8sConfig.GetInstanceURL(instanceName),
 		InternalURL: k.k8sConfig.GetInternalServiceURL(instanceName, spec.Port),
-		Status:      "running",
+		Status:      "starting",
 		CreatedAt:   time.Now(),
 	}
 

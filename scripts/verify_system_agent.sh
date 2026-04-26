@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, '/app')
 from sqlalchemy import create_engine, text
 
-engine = create_engine('postgresql+psycopg2://postgres:postgres@db:5432/aiagents')
+engine = create_engine('postgresql+psycopg2://postgres:postgres@db:5432/agentarea')
 with engine.connect() as conn:
     result = conn.execute(text(\"SELECT COUNT(*) FROM agents WHERE workspace_id = 'system'\"))
     print(result.scalar())
@@ -34,7 +34,7 @@ import sys
 sys.path.insert(0, '/app')
 from sqlalchemy import create_engine, text
 
-engine = create_engine('postgresql+psycopg2://postgres:postgres@db:5432/aiagents')
+engine = create_engine('postgresql+psycopg2://postgres:postgres@db:5432/agentarea')
 with engine.connect() as conn:
     result = conn.execute(text(\"SELECT id, name, workspace_id, created_by FROM agents WHERE workspace_id = 'system'\"))
     for row in result:

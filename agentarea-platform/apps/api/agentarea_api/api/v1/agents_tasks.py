@@ -594,6 +594,55 @@ async def get_agent_task_status(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+class TaskArtifactItem(BaseModel):
+    """A single artifact stored under a task's workspace scope."""
+
+    path: str
+    size: int
+    content_type: str | None
+    last_modified: str | None
+    download_url: str
+
+
+@router.get("/{task_id}/artifacts", response_model=list[TaskArtifactItem])
+async def list_task_artifacts(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    expires_in: int = Query(3600, ge=60, le=86400),
+    task_service: TaskService = Depends(get_read_task_service),
+) -> list[TaskArtifactItem]:
+    """List artifacts the agent produced under ``tasks/{task_id}/``.
+
+    Workspace-scoped: the task must belong to the caller's workspace, or we
+    return 404. Each item carries a presigned download URL valid for
+    ``expires_in`` seconds (default 1 hour, capped at 24h).
+    """
+    from agentarea_common.artifacts import ArtifactService
+
+    task = await task_service.get_task(task_id)
+    if not task or str(task.agent_id) != str(agent_id):
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    svc = ArtifactService()
+    prefix = f"tasks/{task_id}/"
+    objects = await svc.list(user_context.workspace_id, prefix=prefix)
+
+    items: list[TaskArtifactItem] = []
+    for obj in objects:
+        url = await svc.presigned_url(user_context.workspace_id, obj.path, expires_in=expires_in)
+        items.append(
+            TaskArtifactItem(
+                path=obj.path,
+                size=obj.size,
+                content_type=obj.content_type,
+                last_modified=obj.last_modified,
+                download_url=url,
+            )
+        )
+    return items
+
+
 @router.delete("/{task_id}")
 async def cancel_agent_task(
     agent_id: UUID,
@@ -700,17 +749,17 @@ async def resume_agent_task(
         if status.get("status") == "unknown":
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Check if task is in a resumable state
+        # Reject only terminal states. Signal-based pause does NOT flip
+        # Temporal's external status to "paused" (the workflow keeps the
+        # "running" execution status while its internal handler waits on
+        # the pause flag), so gating on "paused/blocked" here would 400
+        # every legitimate resume right after a pause. The resume signal
+        # is itself a no-op on workflows that aren't paused, so accepting
+        # it from "running" is safe.
         current_status = status.get("status", "").lower()
         if current_status in ["completed", "failed", "cancelled"]:
             raise HTTPException(
                 status_code=400, detail=f"Cannot resume task in '{current_status}' state"
-            )
-
-        if current_status not in ["paused", "blocked"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot resume task that is not paused/blocked (current status: {current_status})",
             )
 
         # Resume the workflow

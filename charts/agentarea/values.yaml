@@ -689,49 +689,6 @@ jobs:
   dbMigration:
     enabled: true
 
-# agentarea-operator — watches RegistrySync and LLMProviderConfig CRs and
-# reconciles them into the database. Replaces the legacy bootstrap Job for
-# catalog data.
-operator:
-  enabled: true
-  image:
-    repository: "agentarea/agentarea-operator"
-    tag: ""          # defaults to chart appVersion
-    pullPolicy: ""   # defaults to global pullPolicy
-  # Suffix appended to DATABASE_URL (e.g. "?sslmode=require" for managed PG)
-  postgresSslSuffix: ""
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-  nodeSelector: {}
-  tolerations: []
-
-# RegistrySync CRs rendered into the cluster. Each entry becomes one
-# RegistrySync custom resource that the operator reconciles.
-#
-# type:   mcp_servers | skills | llm_providers | llm_models | default_agents
-# source: {type: url, url: "https://..."}
-#         {type: file, url: "/mounted/path.yaml"}
-#         {type: configMap, configMapRef: {name: "...", key: "..."}}
-# syncIntervalSeconds: optional override (default: 21600 = 6h)
-registries: []
-# Example:
-#   registries:
-#     - name: mcp-official
-#       type: mcp_servers
-#       source:
-#         type: url
-#         url: https://registry.modelcontextprotocol.io/servers.json
-#     - name: default-skills
-#       type: skills
-#       source:
-#         type: configMap
-#         configMapRef: {name: catalog-seed, key: skills.yaml}
-
 # Ory Kratos Identity Server
 kratos:
   enabled: true

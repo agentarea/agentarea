@@ -14,6 +14,10 @@ type KubernetesConfig struct {
 	// Runtime configuration
 	RuntimeClass string `json:"runtime_class"`
 
+	// Image pull policy (IfNotPresent, Always, Never). Defaults to IfNotPresent
+	// which is safe for k3d/local dev; production clusters should set Always.
+	ImagePullPolicy string `json:"image_pull_policy"`
+
 	// Gateway API configuration
 	GatewayName      string `json:"gateway_name"`
 	GatewayNamespace string `json:"gateway_namespace"`
@@ -126,11 +130,12 @@ type CertManagerConfig struct {
 // DefaultKubernetesConfig returns default Kubernetes configuration
 func DefaultKubernetesConfig() KubernetesConfig {
 	return KubernetesConfig{
-		Enabled:      false,
-		Namespace:    "agentarea",
-		Domain:       "mcp.local",
-		IngressClass: "nginx",
-		StorageClass: "standard",
+		Enabled:         false,
+		Namespace:       "agentarea",
+		Domain:          "mcp.local",
+		IngressClass:    "nginx",
+		StorageClass:    "standard",
+		ImagePullPolicy: "IfNotPresent",
 
 		DefaultRequests: ResourceRequirements{
 			CPU:    "100m",
@@ -261,9 +266,15 @@ func (k *KubernetesConfig) GetInstanceURL(instanceName string) string {
 	return fmt.Sprintf("%s://%s/mcp/%s", protocol, k.Domain, instanceName)
 }
 
-// GetInternalServiceURL generates the internal Kubernetes service URL
+// GetInternalServiceURL generates the internal Kubernetes service URL.
+//
+// The backend-created Service always exposes port 80 → TargetPort spec.Port,
+// so callers must reach the Service on 80 (the provided port arg is the
+// container's internal port and is ignored for URL construction — kept in the
+// signature for API compatibility).
 func (k *KubernetesConfig) GetInternalServiceURL(instanceName string, port int) string {
-	return fmt.Sprintf("http://mcp-%s.%s.svc.cluster.local:%d", instanceName, k.Namespace, port)
+	_ = port
+	return fmt.Sprintf("http://mcp-%s.%s.svc.cluster.local:80", instanceName, k.Namespace)
 }
 
 // GetIngressAnnotations returns ingress annotations based on configuration

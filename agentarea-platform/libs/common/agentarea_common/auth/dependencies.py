@@ -48,6 +48,29 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
     user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
 
 
+def _apply_workspace_override(user_context: UserContext, requested: str | None) -> None:
+    """Validate and apply an optional X-Workspace-ID header override.
+
+    Without this guard, any authenticated user could read/write another
+    workspace by setting X-Workspace-ID to that workspace's id.
+    """
+    if not requested or requested == user_context.workspace_id:
+        return
+    accessible = user_context.accessible_workspaces or [user_context.workspace_id]
+    if requested not in accessible:
+        logger.warning(
+            "Rejected X-Workspace-ID override: user=%s requested=%s accessible=%s",
+            user_context.user_id,
+            requested,
+            accessible,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of the requested workspace",
+        )
+    user_context.workspace_id = requested
+
+
 # Security schemes
 # Required authentication - raises 401 with RFC 9728 resource_metadata if no token
 # NOTE: We use auto_error=False and raise manually so the WWW-Authenticate header
@@ -91,12 +114,13 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
         except Exception:
             logger.debug("Failed to increment API key access count", exc_info=True)
 
-        # workspace_id from header takes precedence, fallback to record's workspace
-        workspace_id = request.headers.get("X-Workspace-ID") or str(record.workspace_id)
-
+        # Default to the workspace the API key was issued for. Any X-Workspace-ID
+        # override is applied in get_user_context/get_optional_user AFTER
+        # accessible_workspaces has been resolved, so it cannot escape the key
+        # owner's membership.
         return UserContext(
             user_id=str(record.created_by),
-            workspace_id=workspace_id,
+            workspace_id=str(record.workspace_id),
             roles=[],
         )
 
@@ -167,9 +191,11 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         if not subject:
             return None
 
-        # workspace_id from token ext claims (set during consent) or header or subject
+        # Default workspace from ext claims (set during consent) or subject.
+        # Any X-Workspace-ID override is validated in the outer dispatcher
+        # against accessible_workspaces.
         ext = payload.get("ext", {})
-        workspace_id = request.headers.get("X-Workspace-ID") or ext.get("workspace_id") or subject
+        workspace_id = ext.get("workspace_id") or subject
 
         return UserContext(
             user_id=subject,
@@ -227,6 +253,7 @@ async def get_user_context(
                 headers={"WWW-Authenticate": _www_authenticate_bearer()},
             )
         await _resolve_accessible_workspaces(user_context)
+        _apply_workspace_override(user_context, request.headers.get("X-Workspace-ID"))
         ContextManager.set_context(user_context)
         logger.debug(
             f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
@@ -255,18 +282,18 @@ async def get_user_context(
                 headers={"WWW-Authenticate": _www_authenticate_bearer()},
             )
 
-        # Get workspace from header, fallback to user_id
-        workspace_id = request.headers.get("X-Workspace-ID") or auth_result.token.user_id
-
-        # Create user context
+        # Default workspace is the user's personal workspace (= user_id).
+        # Any X-Workspace-ID override is validated against accessible_workspaces
+        # below — setting a header alone must NEVER grant access.
         user_context = UserContext(
             user_id=auth_result.token.user_id,
-            workspace_id=workspace_id,
+            workspace_id=auth_result.token.user_id,
             roles=[],  # TODO: Extract roles from token or database
         )
 
         # Resolve which workspaces this user can access
         await _resolve_accessible_workspaces(user_context)
+        _apply_workspace_override(user_context, request.headers.get("X-Workspace-ID"))
 
         # Set context in ContextManager for backward compatibility
         ContextManager.set_context(user_context)
@@ -332,6 +359,10 @@ async def get_optional_user(
             logger.debug("Optional API key authentication failed: invalid or expired key")
             return None
         await _resolve_accessible_workspaces(user_context)
+        try:
+            _apply_workspace_override(user_context, request.headers.get("X-Workspace-ID"))
+        except HTTPException:
+            return None
         ContextManager.set_context(user_context)
         logger.debug(
             f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
@@ -349,18 +380,20 @@ async def get_optional_user(
             logger.debug(f"Optional authentication failed: {auth_result.error}")
             return None
 
-        # Get workspace from header, fallback to user_id
-        workspace_id = request.headers.get("X-Workspace-ID") or auth_result.token.user_id
-
-        # Create user context
+        # Default workspace is the user's personal workspace (= user_id).
+        # See the required-auth path above for the threat model.
         user_context = UserContext(
             user_id=auth_result.token.user_id,
-            workspace_id=workspace_id,
+            workspace_id=auth_result.token.user_id,
             roles=[],
         )
 
         # Resolve accessible workspaces
         await _resolve_accessible_workspaces(user_context)
+        try:
+            _apply_workspace_override(user_context, request.headers.get("X-Workspace-ID"))
+        except HTTPException:
+            return None
 
         # Set context in ContextManager
         ContextManager.set_context(user_context)

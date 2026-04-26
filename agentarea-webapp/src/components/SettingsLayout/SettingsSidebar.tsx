@@ -26,9 +26,8 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
-
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.8";
 
 export function SettingsSidebarContent() {
   const pathname = usePathname();

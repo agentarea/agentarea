@@ -63,11 +63,16 @@ class WorkspaceImportExportService:
             except Exception as e:
                 logger.warning(f"Failed to build skill lookup: {e}")
 
-        # Get all workspace-scoped resources (exclude system resources)
+        # Get all workspace-scoped resources (exclude system resources).
+        # Refetch each agent with its skills eager-loaded to avoid a
+        # MissingGreenlet error when the lazy relationship is accessed outside
+        # the original async session scope.
         agents = await self.agent_service.list()
-
-        # Filter out system agents
-        workspace_agents = [agent for agent in agents if agent.workspace_id != "system"]
+        workspace_agents_raw = [a for a in agents if a.workspace_id != "system"]
+        workspace_agents: list[Agent] = []
+        for a in workspace_agents_raw:
+            full = await self.agent_service.get_with_skills(a.id)
+            workspace_agents.append(full or a)
 
         # Convert to YAML schemas
         agents_yaml: list[dict[str, Any]] = []

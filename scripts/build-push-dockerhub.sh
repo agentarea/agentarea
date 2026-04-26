@@ -138,6 +138,11 @@ for component_info in "${COMPONENTS[@]}"; do
   for tag in "${TAGS[@]}"; do
     TAG_ARGS="${TAG_ARGS} --tag ${tag}"
   done
+
+  BUILD_ARGS=""
+  if [ "$component" = "frontend" ]; then
+    BUILD_ARGS="${BUILD_ARGS} --build-arg APP_VERSION=${VERSION}"
+  fi
   
   echo -e "${BLUE}========================================${NC}"
   echo -e "${BLUE}Processing: $component${NC}"
@@ -153,6 +158,7 @@ for component_info in "${COMPONENTS[@]}"; do
     --platform linux/amd64 \
     --file "${PROJECT_ROOT}/${context}/${dockerfile}" \
     $TAG_ARGS \
+    $BUILD_ARGS \
     --push \
     --cache-from type=registry,ref=${IMAGE_NAME}:buildcache \
     --cache-to type=registry,ref=${IMAGE_NAME}:buildcache,mode=max \
@@ -193,4 +199,3 @@ else
   echo -e "${RED}Failed to build and push $FAILED component(s)${NC}"
   exit 1
 fi
-

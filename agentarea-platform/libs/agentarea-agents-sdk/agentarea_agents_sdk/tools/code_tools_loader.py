@@ -92,12 +92,18 @@ def get_code_tool_class(tool_name: str):
         return None
 
 
-def create_code_tool_instance(tool_name: str, toolset_config: dict = None):
+def create_code_tool_instance(
+    tool_name: str,
+    toolset_config: dict | None = None,
+    extra_kwargs: dict | None = None,
+):
     """Create an instance of a code tool with optional toolset configuration.
 
     Args:
         tool_name: Name of the tool to create (publisher/name format, e.g., "agentarea/calculator")
         toolset_config: Optional configuration for toolsets (which methods to enable)
+        extra_kwargs: Runtime-injected kwargs (e.g. workspace-scoped base_dir
+            for file tools). Merged on top of toolset_config.
 
     Returns:
         Tool instance or None if creation fails
@@ -107,13 +113,17 @@ def create_code_tool_instance(tool_name: str, toolset_config: dict = None):
     if not tool_class:
         return None
 
+    kwargs: dict = {}
+    if toolset_config:
+        kwargs.update(toolset_config)
+    if extra_kwargs:
+        kwargs.update(extra_kwargs)
+
     try:
-        if toolset_config:
-            # This is a toolset - create with specific method configuration
-            logger.debug(f"Creating toolset {tool_name} with config: {toolset_config}")
-            tool_instance = tool_class(**toolset_config)
+        if kwargs:
+            logger.debug(f"Creating {tool_name} with kwargs: {list(kwargs)}")
+            tool_instance = tool_class(**kwargs)
         else:
-            # This is a regular tool - create with default constructor
             logger.debug(f"Creating regular tool {tool_name}")
             tool_instance = tool_class()
 

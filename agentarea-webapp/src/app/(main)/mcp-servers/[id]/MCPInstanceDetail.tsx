@@ -6,19 +6,17 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   Check,
   Container,
   Copy,
   Link as LinkIcon,
   Pencil,
-  Play,
   ExternalLink,
   Github,
   Globe,
   RefreshCw,
   Server,
-  Square,
-  Trash2,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +30,7 @@ import { getMCPInstanceHealth } from "@/lib/api";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
 } from "@/lib/server-actions";
+import { verifyInstance } from "./actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
@@ -83,9 +82,30 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
     container_status: string;
   } | null>(null);
 
-  const canStart = instance.status !== "running" && instance.status !== "starting" && instance.status !== "connected";
-  const canStop = instance.status === "running" || instance.status === "starting";
+  // Stuck detection: in_progress verification older than 30s
+  const verification = (instance as any).verification as {
+    status: string;
+    at?: string | null;
+    error?: { message: string; code?: string | null } | null;
+  } | null | undefined;
 
+  const isStuck = verification?.status === "in_progress" &&
+    verification.at &&
+    (Date.now() - new Date(verification.at).getTime()) > 30_000;
+
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const handleVerify = async () => {
+    setIsVerifying(true);
+    try {
+      await verifyInstance(instance.id);
+      router.refresh();
+    } catch {
+      // error visible through page refresh
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   // Editable config state
   const [isEditingConfig, setIsEditingConfig] = useState(false);
@@ -141,20 +161,21 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
     }
   }, [searchParams, instance.id, router, t]);
 
-  // Poll for status updates during transient states
+  // Poll while verification is in_progress
   useEffect(() => {
-    const transient = ["starting", "stopping", "pending", "validating"];
-    if (!transient.includes(instance.status)) return;
-
-    const interval = setInterval(() => router.refresh(), 3000);
+    if (verification?.status !== "in_progress") return;
+    const interval = setInterval(() => router.refresh(), 2000);
     return () => clearInterval(interval);
-  }, [instance.status, router]);
+  }, [verification?.status, router]);
 
-  // Fetch connection URL when instance is running (skip for URL-type and bundle-type)
+  // Derive running state from verification
+  const isVerificationSucceeded = verification?.status === "succeeded";
+
+  // Fetch connection URL when instance is verified (skip for URL-type and bundle-type)
   const jsonSpecType = (instance.json_spec?.type as string) || "docker";
   useEffect(() => {
     if (jsonSpecType === "url" || jsonSpecType === "bundle") return;
-    if (instance.status === "running" && instance.name) {
+    if (isVerificationSucceeded && instance.name) {
       setIsLoadingUrl(true);
       getMCPInstanceHealth(instance.name)
         .then(({ health_check }) => {
@@ -174,7 +195,7 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
         .catch(console.error)
         .finally(() => setIsLoadingUrl(false));
     }
-  }, [instance.status, instance.name, jsonSpecType]);
+  }, [isVerificationSucceeded, instance.name, jsonSpecType]);
 
   const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
   const secretEnvNames = (instance.json_spec?.env_vars ?? []) as string[];
@@ -226,6 +247,48 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Stuck verification banner */}
+            {isStuck && (
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>Verification may be stuck. You can retry manually.</span>
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={handleVerify}
+                  isLoading={isVerifying}
+                  disabled={isVerifying}
+                >
+                  Verify
+                </Button>
+              </div>
+            )}
+
+            {/* Failed verification banner */}
+            {verification?.status === "failed" && verification.error && (
+              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  <span>Verification failed</span>
+                </div>
+                <p className="text-sm text-destructive/80">{verification.error.message}</p>
+                {verification.error.code && (
+                  <p className="font-mono text-xs text-destructive/60">Code: {verification.error.code}</p>
+                )}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={handleVerify}
+                  isLoading={isVerifying}
+                  disabled={isVerifying}
+                >
+                  Retry Verification
+                </Button>
+              </div>
+            )}
+
             {/* Spec info — repo, website, description from server spec */}
             {serverSpec && (() => {
               const spec = (serverSpec as any).json_spec as Record<string, any> | undefined;
@@ -296,8 +359,8 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
               </div>
             </div>
 
-            {/* Connection URL - Show when running/connected, or always for URL-type/bundle-type */}
-            {(instance.status === "running" || instance.status === "connected" || isUrlType || isBundleType) && (
+            {/* Connection URL - Show when verified, or always for URL-type/bundle-type */}
+            {(isVerificationSucceeded || isUrlType || isBundleType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4 text-muted-foreground" />

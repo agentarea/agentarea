@@ -7,6 +7,7 @@ from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/model-specs", tags=["model-specs"])
 
@@ -145,25 +146,32 @@ async def create_model_spec(
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Create a new model specification."""
-    # Check if model spec already exists for this provider
     existing = await model_spec_repo.get_by_provider_and_model(
         data.provider_spec_id, data.model_name
     )
     if existing:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail=f"Model specification '{data.model_name}' already exists for this provider",
         )
 
-    created_spec = await model_spec_repo.create(
-        provider_spec_id=str(data.provider_spec_id),
-        model_name=data.model_name,
-        display_name=data.display_name,
-        description=data.description,
-        context_window=data.context_window,
-        default_context_strategy=data.default_context_strategy,
-        is_active=data.is_active,
-    )
+    try:
+        created_spec = await model_spec_repo.create(
+            provider_spec_id=str(data.provider_spec_id),
+            model_name=data.model_name,
+            display_name=data.display_name,
+            description=data.description,
+            context_window=data.context_window,
+            default_context_strategy=data.default_context_strategy,
+            is_active=data.is_active,
+        )
+    except IntegrityError:
+        # Concurrent insert raced past the pre-check and tripped the
+        # uq_model_specs_provider_model unique constraint.
+        raise HTTPException(
+            status_code=409,
+            detail=f"Model specification '{data.model_name}' already exists for this provider",
+        ) from None
     return ModelSpecResponse.from_domain(created_spec)
 
 

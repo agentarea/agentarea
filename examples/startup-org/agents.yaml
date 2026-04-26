@@ -45,7 +45,7 @@ mcp_instances:
     description: "Database access for backend development"
     server_spec_id: "a789b012-3456-789a-bcde-f0123456789a"
     env_vars:
-      POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@db:5432/aiagents"
+      POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@db:5432/agentarea"
 
   - name: "docker"
     description: "Container management for DevOps"

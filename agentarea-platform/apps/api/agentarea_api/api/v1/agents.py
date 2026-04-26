@@ -113,7 +113,7 @@ class AgentCreate(BaseModel):
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
-    agent_type: str
+    agent_type: str = "stateless"
 
 
 class AgentUpdate(BaseModel):

@@ -3,7 +3,7 @@
 	k8s-setup k8s-test k8s-build-images helm-test helm-gen \
 	mcp-start mcp-stop mcp-test \
 	test-e2e test-mcp cleanup-validation \
-	lint-go build-go
+	lint-go build-go preflight
 
 .DEFAULT_GOAL := help
 
@@ -123,6 +123,9 @@ mcp-test-echo: ## Test MCP echo server (detailed)
 	@bash agentarea-mcp-manager/scripts/test-echo.sh
 
 ##@ Testing
+
+preflight: ## Run all CI checks locally before pushing (lint, tests, schema, helm). Use SKIP=python,go,schema,env-tpl,helm-docs,helm-lint to skip groups.
+	@bash scripts/preflight.sh
 
 test-e2e: ## Run end-to-end tests
 	@python scripts/test_e2e.py

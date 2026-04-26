@@ -13,6 +13,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - AWS_REGION=${RUSTFS_REGION}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
       - AWS_ENDPOINT_URL=http://rustfs:9000
       # Database settings
       - POSTGRES_HOST=db
@@ -57,6 +58,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - AWS_REGION=${RUSTFS_REGION}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
       - AWS_ENDPOINT_URL=http://rustfs:9000
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -71,7 +73,7 @@ services:
     command: ["agentarea-api", "migrate"]
     working_dir: /app/apps/api
 
-  # Create auxiliary databases (temporal, kratos, hydra) — idempotent.
+  # Create the main app database and auxiliary databases — idempotent.
   postgres_init:
     image: postgres:18
     environment:
@@ -84,7 +86,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -140,7 +142,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=postgres  # Default postgres DB; postgres_init creates aux DBs (temporal, kratos, hydra)
+      - POSTGRES_DB=postgres  # Maintenance DB; postgres_init creates the main app DB plus aux DBs
     ports:
       - "5432:5432"
     volumes:
@@ -232,32 +234,6 @@ services:
       timeout: 10s
       retries: 10
       start_period: 120s
-
-  temporal-admin-tools:
-    image: temporalio/admin-tools:1.28
-    container_name: agentarea-temporal-admin-tools
-    depends_on:
-      - temporal
-    environment:
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
-    networks:
-      - temporal-network
-    stdin_open: true
-    tty: true
-
-  temporal-ui:
-    container_name: agentarea-temporal-ui
-    depends_on:
-      temporal:
-        condition: service_healthy
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
-    image: temporalio/ui:2.39.0
-    networks:
-      - temporal-network
-    ports:
-      - 8082:8080
 
   # AgentArea Worker Service
   agentarea-worker:
@@ -409,15 +385,6 @@ services:
   #     db:
   #       condition: service_healthy
   #   restart: unless-stopped
-
-  # MailSlurper for email testing (catches emails in development)
-  mailslurper:
-    image: oryd/mailslurper:latest-smtps
-    ports:
-      - "4436:4436" # web UI
-      - "4437:4437" # SMTP
-    networks:
-      - auth-network
 
   # # Hydra OAuth2 Client Setup
   # hydra-migrate:

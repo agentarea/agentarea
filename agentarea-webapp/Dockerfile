@@ -20,6 +20,8 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+ARG APP_VERSION=0.0.0
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 COPY --from=deps /app/node_modules ./node_modules
 # Copy packages without their node_modules (we use TypeScript source directly)
 COPY --from=deps /app/packages ./packages
@@ -33,8 +35,10 @@ RUN --mount=type=cache,id=nextjs-cache,target=/app/.next/cache \
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
+ARG APP_VERSION=0.0.0
 
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs

@@ -95,6 +95,7 @@ dev = [
     "agentarea-api",
     "agentarea-worker",
     "pytest-env>=1.1.5",
+    "schemathesis>=3.39",
 ]
 
 test = [
@@ -221,7 +222,7 @@ env = [
     "POSTGRES_PORT=5432", 
     "POSTGRES_USER=postgres",
     "POSTGRES_PASSWORD=postgres",
-    "POSTGRES_DB=aiagents",
+    "POSTGRES_DB=agentarea",
     
     # Redis (docker-compose redis service mapped to localhost:6379) 
     "REDIS_URL=redis://localhost:6379",

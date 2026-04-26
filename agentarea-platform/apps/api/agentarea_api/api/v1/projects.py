@@ -268,6 +268,12 @@ def _get_s3_client():
     return get_s3_client()
 
 
+def _get_s3_public_client():
+    from agentarea_common.config.aws import get_s3_public_client
+
+    return get_s3_public_client()
+
+
 def _get_bucket() -> str:
     from agentarea_common.config.aws import get_aws_settings
 
@@ -341,7 +347,9 @@ async def download_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    client = _get_s3_client()
+    # Presigned URLs must point at PUBLIC_S3_ENDPOINT — internal RustFS host
+    # is not reachable from the browser.
+    client = _get_s3_public_client()
     bucket = _get_bucket()
     key = f"{project.minio_prefix}{file_path}"
 

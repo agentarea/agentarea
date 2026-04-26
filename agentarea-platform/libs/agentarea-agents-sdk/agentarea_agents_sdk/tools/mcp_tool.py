@@ -118,9 +118,12 @@ class MCPToolFactory:
             # RUNNING = container-based instance is alive.
             # CONNECTED = remote URL endpoint reachable, or bundle aggregating other instances.
             # Both are "ready for tool discovery" per MCPInstanceStatus.
+            # in_progress is expected transient during async creation — not an error.
             if status not in ("running", "connected"):
                 logger.info(
-                    f"MCP server instance {server_instance_id} status={status!r}; skipping tool discovery"
+                    "MCP instance not verified-succeeded (status=%s); "
+                    "this is expected transient during async creation — skipping tool discovery",
+                    status,
                 )
                 return []
 

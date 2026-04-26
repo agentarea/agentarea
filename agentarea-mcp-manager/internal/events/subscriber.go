@@ -111,170 +111,15 @@ func (s *EventSubscriber) handleMessage(ctx context.Context, msg *redis.Message)
 	}
 }
 
-// handleInstanceCreated processes MCP instance creation events (shared format)
-func (s *EventSubscriber) handleInstanceCreated(ctx context.Context, payload string) {
-	s.logger.Info("Parsing shared format event", slog.String("payload", payload))
-
-	// Parse using shared framework-independent format
-	event, err := ParseSharedEvent(payload)
-	if err != nil {
-		s.logger.Error("Failed to parse shared event",
-			slog.String("error", err.Error()),
-			slog.String("payload", payload))
-		return
-	}
-
-	s.logger.Info("Parsed shared event",
-		slog.String("event_id", event.ID),
-		slog.String("event_type", event.Type),
-		slog.String("correlation_id", event.CorrelationID))
-
-	// Extract data from the shared format
-	instanceID, _ := event.GetDataString("instance_id")
-	name, _ := event.GetDataString("name")
-	serverSpecID, _ := event.GetDataString("server_spec_id")
-	jsonSpec, _ := event.GetDataMap("json_spec")
-
-	if instanceID == "" {
-		s.logger.Error("Missing instance_id in event data")
-		return
-	}
-
-	s.logger.Info("Processing MCP instance creation",
-		slog.String("instance_id", instanceID),
-		slog.String("name", name),
-		slog.Any("json_spec", jsonSpec))
-
-	// Create MCP server instance model
-	instance := &models.MCPServerInstance{
-		InstanceID:   instanceID,
-		Name:         name,
-		ServerSpecID: serverSpecID,
-		JSONSpec:     jsonSpec,
-		Status:       "pending",
-	}
-
-	// Get the appropriate provider and create the instance
-	provider, err := s.providerManager.GetProvider(instance)
-	if err != nil {
-		s.logger.Error("Failed to get provider",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-		return
-	}
-
-	if err := provider.CreateInstance(ctx, instance); err != nil {
-		s.logger.Error("Failed to create MCP instance",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-	} else {
-		s.logger.Info("Successfully created MCP instance",
-			slog.String("instance_id", instanceID))
-	}
-}
-
-// handleInstanceDeleted processes MCP instance deletion events (shared format)
-func (s *EventSubscriber) handleInstanceDeleted(ctx context.Context, payload string) {
-	event, err := ParseSharedEvent(payload)
-	if err != nil {
-		s.logger.Error("Failed to parse shared event",
-			slog.String("error", err.Error()))
-		return
-	}
-
-	instanceID, _ := event.GetDataString("instance_id")
-	name, _ := event.GetDataString("name")
-
-	s.logger.Info("Processing MCP instance deletion",
-		slog.String("instance_id", instanceID))
-
-	// Try Kubernetes provider first
-	kubernetesProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]any{"type": "kubernetes"},
-	})
-	if err := kubernetesProvider.DeleteInstance(ctx, instanceID, name); err != nil {
-		s.logger.Debug("Kubernetes provider deletion failed",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-	}
-
-	// Try Docker provider
-	dockerProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]any{"type": "docker"},
-	})
-	if err := dockerProvider.DeleteInstance(ctx, instanceID, name); err != nil {
-		s.logger.Debug("Docker provider deletion failed",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-	}
-
-	// Try URL provider
-	urlProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]any{"type": "url"},
-	})
-	if err := urlProvider.DeleteInstance(ctx, instanceID, name); err != nil {
-		s.logger.Debug("URL provider deletion failed",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-	}
-
-	s.logger.Info("Processed MCP instance deletion",
-		slog.String("instance_id", instanceID))
-}
-
 // tryHandleInstanceCreated attempts to parse and handle instance creation using shared format.
 // Returns true if successful, false if parsing failed (caller should try legacy format).
-func (s *EventSubscriber) tryHandleInstanceCreated(ctx context.Context, payload string) bool {
-	// Try to parse as shared format
-	event, err := ParseSharedEvent(payload)
-	if err != nil {
-		s.logger.Debug("Failed to parse as shared format, will try legacy",
-			slog.String("error", err.Error()))
-		return false
-	}
-
-	// Validate required fields
-	instanceID, ok := event.GetDataString("instance_id")
-	if !ok || instanceID == "" {
-		s.logger.Debug("Missing instance_id in shared format, will try legacy")
-		return false
-	}
-
-	s.logger.Info("Successfully parsed shared format event",
-		slog.String("event_id", event.ID),
-		slog.String("event_type", event.Type))
-
-	// Extract data
-	name, _ := event.GetDataString("name")
-	serverSpecID, _ := event.GetDataString("server_spec_id")
-	jsonSpec, _ := event.GetDataMap("json_spec")
-
-	// Create instance
-	instance := &models.MCPServerInstance{
-		InstanceID:   instanceID,
-		Name:         name,
-		ServerSpecID: serverSpecID,
-		JSONSpec:     jsonSpec,
-		Status:       "pending",
-	}
-
-	provider, err := s.providerManager.GetProvider(instance)
-	if err != nil {
-		s.logger.Error("Failed to get provider",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-		return true // Parsed successfully, but failed to process
-	}
-
-	if err := provider.CreateInstance(ctx, instance); err != nil {
-		s.logger.Error("Failed to create MCP instance",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-	} else {
-		s.logger.Info("Successfully created MCP instance",
-			slog.String("instance_id", instanceID))
-	}
-
+func (s *EventSubscriber) tryHandleInstanceCreated(_ context.Context, payload string) bool {
+	// Phase 1: Python verify() calls POST /instances synchronously and owns
+	// provisioning. Acting on this event causes a double-create race with the
+	// HTTP path, leaving orphan configmaps/secrets. Return true to signal
+	// "handled" so the caller skips the legacy path.
+	s.logger.Debug("Ignoring tryHandleInstanceCreated event (provisioning is owned by Python verify())",
+		slog.String("payload", payload))
 	return true
 }
 
@@ -340,53 +185,11 @@ type LegacyEventData struct {
 	Data      map[string]any `json:"data"`
 }
 
-// handleLegacyInstanceCreated handles old format events
-func (s *EventSubscriber) handleLegacyInstanceCreated(ctx context.Context, payload string) {
-	s.logger.Info("Handling legacy format event", slog.String("payload", payload))
-
-	// Try to parse as legacy FastStream format
-	var message LegacyEventMessage
-	if err := json.Unmarshal([]byte(payload), &message); err != nil {
-		s.logger.Error("Failed to parse legacy event",
-			slog.String("error", err.Error()))
-		return
-	}
-
-	var eventData LegacyEventData
-	if err := json.Unmarshal([]byte(message.Data), &eventData); err != nil {
-		s.logger.Error("Failed to parse legacy event data",
-			slog.String("error", err.Error()))
-		return
-	}
-
-	// Extract fields
-	instanceID, _ := eventData.Data["instance_id"].(string)
-	name, _ := eventData.Data["name"].(string)
-	serverSpecID, _ := eventData.Data["server_spec_id"].(string)
-	jsonSpec, _ := eventData.Data["json_spec"].(map[string]any)
-
-	s.logger.Info("Processing legacy MCP instance creation",
-		slog.String("instance_id", instanceID))
-
-	instance := &models.MCPServerInstance{
-		InstanceID:   instanceID,
-		Name:         name,
-		ServerSpecID: serverSpecID,
-		JSONSpec:     jsonSpec,
-		Status:       "pending",
-	}
-
-	provider, err := s.providerManager.GetProvider(instance)
-	if err != nil {
-		s.logger.Error("Failed to get provider",
-			slog.String("error", err.Error()))
-		return
-	}
-
-	if err := provider.CreateInstance(ctx, instance); err != nil {
-		s.logger.Error("Failed to create MCP instance",
-			slog.String("error", err.Error()))
-	}
+// handleLegacyInstanceCreated is a no-op — provisioning is owned by Python
+// verify() since Phase 1 of the MCP lifecycle refactor.
+func (s *EventSubscriber) handleLegacyInstanceCreated(_ context.Context, payload string) {
+	s.logger.Debug("Ignoring legacy InstanceCreated event (provisioning is owned by Python verify())",
+		slog.String("payload", payload))
 }
 
 // handleLegacyInstanceDeleted handles old format deletion events

@@ -84,24 +84,21 @@ code_tools:
         display_name: "Delete File"
         description: "Delete a file"
 
-  # Web Search Toolset
+  # Web Toolset — fetches URLs, persists binary responses to ArtifactService
   agentarea/web:
     display_name: "Web Tools"
-    description: "Search the web and fetch information from websites"
+    description: "Fetch URLs; binary responses are stored as task artifacts"
     class_path: "agentarea_agents_sdk.tools.web_toolset.WebToolset"
     category: "information"
     enabled_by_default: false
     requires_user_confirmation: true
     available_methods:
-      - name: "search_web"
-        display_name: "Web Search"
-        description: "Search the web for information"
       - name: "fetch_webpage"
-        display_name: "Fetch Webpage"
-        description: "Fetch content from a specific webpage"
+        display_name: "Fetch URL"
+        description: "Fetch a URL; binary responses are saved as artifacts"
       - name: "extract_text"
         display_name: "Extract Text"
-        description: "Extract text content from HTML"
+        description: "Strip HTML to plain text"
 
   # ── Platform Tools ─────────────────────────────────────────────
   # These wrap platform services and are available both to internal

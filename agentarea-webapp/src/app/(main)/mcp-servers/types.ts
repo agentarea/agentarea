@@ -51,7 +51,7 @@ export interface UnifiedConnection {
   name: string;
   description?: string | null;
   type: ConnectionType;
-  status: string;
+  verificationStatus?: string;
   toolCount: number;
   original: MCPInstance | OpenAPIConnection;
 }

@@ -32,7 +32,7 @@ func BuildConnStr(logger *slog.Logger) string {
 	}
 	dbName := os.Getenv("POSTGRES_DB")
 	if dbName == "" {
-		dbName = "aiagents"
+		dbName = "agentarea"
 	}
 
 	sslMode := os.Getenv("POSTGRES_SSLMODE")

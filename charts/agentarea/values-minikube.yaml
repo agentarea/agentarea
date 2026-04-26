@@ -116,10 +116,6 @@ kratos:
       cpu: 100m
       memory: 128Mi
 
-# Operator is opt-in for local dev
-operator:
-  enabled: false
-
 # Disable jobs for local dev
 jobs:
   dbMigration:

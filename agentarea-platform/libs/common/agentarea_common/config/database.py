@@ -27,7 +27,7 @@ class DatabaseSettings(BaseAppSettings):
     POSTGRES_PASSWORD: str = "postgres"  # noqa: S105
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: str = "5432"
-    POSTGRES_DB: str = "aiagents"
+    POSTGRES_DB: str = "agentarea"
     pool_size: int = 20  # Increased from 5 to handle more concurrent SSE connections
     max_overflow: int = 30  # Increased from 10 to handle bursts
     pool_timeout: int = 30  # Timeout for getting connection from pool

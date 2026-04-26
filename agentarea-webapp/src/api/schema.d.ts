@@ -497,6 +497,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Task Artifacts
+         * @description List artifacts the agent produced under ``tasks/{task_id}/``.
+         *
+         *     Workspace-scoped: the task must belong to the caller's workspace, or we
+         *     return 404. Each item carries a presigned download URL valid for
+         *     ``expires_in`` seconds (default 1 hour, capped at 24h).
+         */
+        get: operations["list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/{task_id}/command": {
         parameters: {
             query?: never;
@@ -891,14 +915,16 @@ export interface paths {
         /**
          * List Mcp Server Instances
          * @description List all MCP server instances in the workspace.
-         *
-         *     Access Control:
-         *         Returns all instances within the current user's workspace (workspace isolation).
-         *         All users in the same workspace can see all workspace instances.
          */
         get: operations["list_mcp_server_instances_v1_mcp_server_instances__get"];
         put?: never;
-        /** Create Mcp Server Instance */
+        /**
+         * Create Mcp Server Instance
+         * @description Create a new MCP server instance.
+         *
+         *     Returns 201 for url/bundle (synchronous verification completed).
+         *     Returns 202 for docker/command (background verification in progress).
+         */
         post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
         delete?: never;
         options?: never;
@@ -917,8 +943,7 @@ export interface paths {
         put?: never;
         /**
          * Check Mcp Server Instance Configuration
-         * @description Check if an MCP server instance configuration is valid by validating it
-         *     through the golang manager.
+         * @description Check if an MCP server instance configuration is valid via the Go manager.
          */
         post: operations["check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post"];
         delete?: never;
@@ -936,11 +961,31 @@ export interface paths {
         };
         /**
          * Get Containers Health
-         * @description Get health status of all MCP containers by proxying to the golang manager.
+         * @description Get health status of all MCP containers by proxying to the Go manager.
          */
         get: operations["get_containers_health_v1_mcp_server_instances_health_containers_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Instance Spec
+         * @description Stateless spec validation. For type=url, probes with list_tools (3s budget).
+         */
+        post: operations["validate_instance_spec_v1_mcp_server_instances_validate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -959,9 +1004,6 @@ export interface paths {
         /**
          * Validate Connection
          * @description Test a connection to an MCP server without creating an instance.
-         *
-         *     Returns tools list on success, or auth/connection error on failure.
-         *     Use this to validate credentials before creating an instance.
          */
         post: operations["validate_connection_v1_mcp_server_instances_validate_connection_post"];
         delete?: never;
@@ -989,26 +1031,6 @@ export interface paths {
         patch: operations["update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch"];
         trace?: never;
     };
-    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Discover Instance Tools
-         * @description Trigger tool discovery for a specific MCP server instance.
-         */
-        post: operations["discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/mcp-server-instances/{instance_id}/environment": {
         parameters: {
             query?: never;
@@ -1016,12 +1038,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Instance Environment
-         * @description Get environment variables for an MCP server instance.
-         *
-         *     Note: This endpoint should have proper authentication and authorization in production.
-         */
+        /** Get Instance Environment */
         get: operations["get_instance_environment_v1_mcp_server_instances__instance_id__environment_get"];
         put?: never;
         post?: never;
@@ -1040,10 +1057,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Create Oauth Link
-         * @description Generate an OAuth-protected shareable link for a container MCP instance.
-         */
+        /** Create Oauth Link */
         post: operations["create_oauth_link_v1_mcp_server_instances__instance_id__oauth_link_post"];
         delete?: never;
         options?: never;
@@ -1058,10 +1072,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Oauth Links
-         * @description List all active OAuth links for an MCP server instance.
-         */
+        /** List Oauth Links */
         get: operations["list_oauth_links_v1_mcp_server_instances__instance_id__oauth_links_get"];
         put?: never;
         post?: never;
@@ -1083,45 +1094,8 @@ export interface paths {
         /**
          * Probe Instance Auth
          * @description Probe a URL-type MCP instance to detect its auth requirements.
-         *
-         *     Returns the supported auth methods (oauth, credentials, none) and
-         *     any hints from the spec's env_schema for pre-filling the credential form.
          */
         post: operations["probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start Mcp Server Instance */
-        post: operations["start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stop Mcp Server Instance */
-        post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1138,13 +1112,33 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Test Mcp Auth
+         * Run Test Auth
          * @description Test the authentication configuration attached to an MCP server instance.
-         *
-         *     Attempts to connect to the MCP endpoint with the configured auth headers and
-         *     returns a diagnostic result without executing any tools.
          */
-        post: operations["test_mcp_auth_v1_mcp_server_instances__instance_id__test_auth_post"];
+        post: operations["run_test_auth_v1_mcp_server_instances__instance_id__test_auth_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Mcp Server Instance
+         * @description Run verification on an MCP server instance and return the fresh result synchronously.
+         *
+         *     HTTP 200 regardless of verification outcome — the call itself succeeded.
+         *     Check verification.status in the response to determine success/failure.
+         */
+        post: operations["verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1163,66 +1157,6 @@ export interface paths {
         put?: never;
         /** Create Mcp Server */
         post: operations["create_mcp_server_v1_mcp_servers__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/from-template/{template_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Mcp Server From Template
-         * @description Create an MCP server from a template.
-         */
-        post: operations["create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mcp Server Templates
-         * @description Get all available MCP server templates from the YAML configuration.
-         */
-        get: operations["get_mcp_server_templates_v1_mcp_servers_templates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/templates/{template_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mcp Server Template
-         * @description Get a specific MCP server template by key.
-         */
-        get: operations["get_mcp_server_template_v1_mcp_servers_templates__template_key__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3216,7 +3150,10 @@ export interface components {
         AgentCreate: {
             /** A2Ui Enabled */
             a2ui_enabled?: boolean | null;
-            /** Agent Type */
+            /**
+             * Agent Type
+             * @default stateless
+             */
             agent_type: string;
             /** Description */
             description: string;
@@ -3925,17 +3862,27 @@ export interface components {
             json_spec: {
                 [key: string]: unknown;
             };
+            /** Last Dispatch */
+            last_dispatch?: {
+                [key: string]: unknown;
+            } | null;
             /** Name */
             name: string;
             /** Server Spec Id */
             server_spec_id: string | null;
-            /** Status */
-            status: string;
+            /** Tools */
+            tools?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
+            /** Verification */
+            verification: {
+                [key: string]: unknown;
+            };
         };
         /** MCPServerInstanceUpdate */
         MCPServerInstanceUpdate: {
@@ -3947,8 +3894,6 @@ export interface components {
             } | null;
             /** Name */
             name?: string | null;
-            /** Status */
-            status?: string | null;
         };
         /** MCPServerResponse */
         MCPServerResponse: {
@@ -4934,6 +4879,22 @@ export interface components {
             /** Updates Flagged */
             updates_flagged: number;
         };
+        /**
+         * TaskArtifactItem
+         * @description A single artifact stored under a task's workspace scope.
+         */
+        TaskArtifactItem: {
+            /** Content Type */
+            content_type: string | null;
+            /** Download Url */
+            download_url: string;
+            /** Last Modified */
+            last_modified: string | null;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
         /** TaskCommandPayload */
         TaskCommandPayload: {
             /** Budget Usd */
@@ -5425,20 +5386,24 @@ export interface components {
             /** Updated */
             updated: number;
         };
-        /** ValidateConnectionRequest */
-        ValidateConnectionRequest: {
+        /** ValidateRequest */
+        ValidateRequest: {
             /**
-             * Headers
-             * @description HTTP headers to send (e.g. Authorization)
+             * Endpoint Url
+             * @description For type=url: the MCP endpoint URL
              */
+            endpoint_url?: string | null;
+            /** Headers */
             headers?: {
                 [key: string]: string;
             };
+            /** Name */
+            name?: string | null;
             /**
-             * Url
-             * @description MCP server endpoint URL to test
+             * Type
+             * @description Instance type: url, docker, command, bundle
              */
-            url: string;
+            type: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -6428,6 +6393,40 @@ export interface operations {
             };
         };
     };
+    list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get: {
+        parameters: {
+            query?: {
+                expires_in?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskArtifactItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     send_task_command_v1_agents__agent_id__tasks__task_id__command_post: {
         parameters: {
             query?: never;
@@ -7236,7 +7235,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7310,6 +7309,39 @@ export interface operations {
             };
         };
     };
+    validate_instance_spec_v1_mcp_server_instances_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     validate_connection_v1_mcp_server_instances_validate_connection_post: {
         parameters: {
             query?: never;
@@ -7319,7 +7351,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ValidateConnectionRequest"];
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -7427,37 +7461,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -7601,7 +7604,7 @@ export interface operations {
             };
         };
     };
-    start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post: {
+    run_test_auth_v1_mcp_server_instances__instance_id__test_auth_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7632,38 +7635,7 @@ export interface operations {
             };
         };
     };
-    stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_mcp_auth_v1_mcp_server_instances__instance_id__test_auth_post: {
+    verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7750,96 +7722,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post: {
-        parameters: {
-            query: {
-                server_name: string;
-                server_description?: string;
-                version?: string;
-            };
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_mcp_server_templates_v1_mcp_servers_templates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-        };
-    };
-    get_mcp_server_template_v1_mcp_servers_templates__template_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             /** @description Validation Error */
