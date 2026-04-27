@@ -177,6 +177,137 @@ class MCPServersToolset(Toolset):
             )
 
     @tool_method
+    async def list_specs(
+        self,
+        is_public: bool = False,
+        tag: str = "",
+        search: str = "",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> str:
+        """List MCP server specs (templates) available in the workspace."""
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            _secret_mgr,
+        ):
+            from agentarea_mcp.application.service import MCPServerService
+
+            service = MCPServerService(
+                repository_factory=repo_factory,
+                event_broker=event_broker,
+            )
+            servers, total = await service.list_servers(
+                is_public=is_public if is_public else None,
+                tag=tag or None,
+                search=search or None,
+                limit=limit,
+                offset=offset,
+            )
+            return json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": str(s.id),
+                            "name": s.name,
+                            "description": s.description,
+                            "version": s.version,
+                            "tags": s.tags,
+                            "is_public": s.is_public,
+                            "remote_url": s.remote_url,
+                            "docker_image_url": s.docker_image_url,
+                            "status": s.status,
+                        }
+                        for s in servers
+                    ],
+                    "total": total,
+                },
+                default=str,
+            )
+
+    @tool_method
+    async def get_spec(self, spec_id: str) -> str:
+        """Get an MCP server spec (template) by ID."""
+        from uuid import UUID
+
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            _secret_mgr,
+        ):
+            from agentarea_mcp.application.service import MCPServerService
+
+            service = MCPServerService(
+                repository_factory=repo_factory,
+                event_broker=event_broker,
+            )
+            server = await service.get(UUID(spec_id))
+            if not server:
+                return json.dumps({"error": "MCP server spec not found"})
+            return json.dumps(
+                {
+                    "id": str(server.id),
+                    "name": server.name,
+                    "description": server.description,
+                    "version": server.version,
+                    "tags": server.tags,
+                    "env_schema": server.env_schema,
+                    "remote_url": server.remote_url,
+                    "docker_image_url": server.docker_image_url,
+                    "status": server.status,
+                    "registry_url": server.registry_url,
+                },
+                default=str,
+            )
+
+    @tool_method
+    async def delete_spec(self, spec_id: str) -> str:
+        """Delete an MCP server spec (template) by ID."""
+        from uuid import UUID
+
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            _secret_mgr,
+        ):
+            from agentarea_mcp.application.service import MCPServerService
+
+            service = MCPServerService(
+                repository_factory=repo_factory,
+                event_broker=event_broker,
+            )
+            deleted = await service.delete_mcp_server(UUID(spec_id))
+            return json.dumps({"deleted": deleted})
+
+    @tool_method
+    async def delete_instance(self, instance_id: str) -> str:
+        """Delete an MCP server instance."""
+        from uuid import UUID
+
+        async with platform_context() as (
+            _session,
+            _user_ctx,
+            repo_factory,
+            event_broker,
+            secret_mgr,
+        ):
+            from agentarea_mcp.application.service import MCPServerInstanceService
+
+            service = MCPServerInstanceService(
+                repository_factory=repo_factory,
+                event_broker=event_broker,
+                secret_manager=secret_mgr,
+            )
+            deleted = await service.delete_instance(UUID(instance_id))
+            return json.dumps({"deleted": deleted})
+
+    @tool_method
     async def verify(self, instance_id: str) -> str:
         """Run end-to-end verification on an MCP server instance.
 
