@@ -73,10 +73,15 @@ async def fetch_and_parse_spec(
     if original_host:
         request_headers.setdefault("Host", original_host)
 
+    # We connect to a pinned IP (anti-DNS-rebinding) but the TLS cert is issued
+    # for the original hostname — pass sni_hostname so SNI + cert validation use
+    # the original host instead of the IP we connect to.
+    extensions = {"sni_hostname": original_host} if original_host else None
+
     async with httpx.AsyncClient(
         timeout=30, headers=request_headers, follow_redirects=False, verify=True
     ) as client:
-        async with client.stream("GET", fetch_url) as resp:
+        async with client.stream("GET", fetch_url, extensions=extensions) as resp:
             resp.raise_for_status()
             chunks: list[bytes] = []
             total = 0
