@@ -285,6 +285,7 @@ class MCPToolRequest(BaseModel):
     server_instance_id: UUID | None = None
     workspace_id: str  # Required - must be provided explicitly
     task_id: str | None = None  # Scopes artifact-style tools to a task
+    agent_id: UUID | None = None  # Calling agent — used by self-referential tools (e.g. triggers)
     tools: list[dict[str, Any]] | None = None
 
 

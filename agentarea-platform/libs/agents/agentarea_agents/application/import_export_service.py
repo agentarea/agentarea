@@ -554,31 +554,36 @@ class WorkspaceImportExportService:
 
         # Create or update agent
         if existing_agent and options.override_existing:
-            # Update existing
+            from agentarea_agents.schemas.dto import AgentUpdate
+
             updated_agent = await self.agent_service.update_agent(
                 id=UUID(str(existing_agent.id)),
-                name=agent_yaml.name,
-                description=agent_yaml.description,
-                tools=tools_list,
-                skill_ids=skill_ids,
-                agent_type=agent_yaml.agent_type,
+                payload=AgentUpdate(
+                    name=agent_yaml.name,
+                    description=agent_yaml.description,
+                    tools=agent_yaml.tools,
+                    skill_ids=skill_ids,
+                    agent_type=agent_yaml.agent_type,
+                ),
             )
             if updated_agent is None:
                 raise RuntimeError(f"Failed to update agent '{agent_yaml.name}'")
             return updated_agent
         else:
-            # Create new (without model_id as per requirements)
+            from agentarea_agents.schemas.dto import AgentCreate
+
             new_agent = await self.agent_service.create_agent(
-                name=agent_yaml.name,
-                description=agent_yaml.description,
-                instruction=agent_yaml.instruction,
-                model_id="",  # Empty string as per requirements (not None to avoid type error)
-                tools=tools_list,
-                events_config=None,  # No events for imported agents
-                planning=agent_yaml.planning,
-                a2ui_enabled=agent_yaml.a2ui_enabled,
-                skill_ids=skill_ids,
-                agent_type=agent_yaml.agent_type,
+                AgentCreate(
+                    name=agent_yaml.name,
+                    description=agent_yaml.description,
+                    instruction=agent_yaml.instruction,
+                    model_id="",  # Set later by caller
+                    tools=agent_yaml.tools,
+                    planning=agent_yaml.planning,
+                    a2ui_enabled=agent_yaml.a2ui_enabled,
+                    skill_ids=skill_ids,
+                    agent_type=agent_yaml.agent_type,
+                )
             )
             return new_agent
 

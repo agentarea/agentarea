@@ -247,6 +247,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     server_instance_id=None,
                     workspace_id=workspace_id,
                     task_id=str(state.task_id) if state.task_id else None,
+                    agent_id=state.agent_id if state.agent_id else None,
                     tools=state.agent_config.get("tools"),
                 )
 
