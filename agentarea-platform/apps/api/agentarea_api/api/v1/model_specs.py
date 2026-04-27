@@ -88,24 +88,11 @@ async def list_model_specs(
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """List model specifications with optional filtering."""
-    model_specs = await model_spec_repo.list(
+    model_specs = await model_spec_repo.list_specs(
         provider_spec_id=provider_spec_id,
         is_active=is_active,
     )
     return [ModelSpecResponse.from_domain(spec) for spec in model_specs]
-
-
-@router.get("/{model_spec_id}", response_model=ModelSpecResponse)
-async def get_model_spec(
-    model_spec_id: UUID,
-    user_context: UserContextDep,
-    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
-):
-    """Get a specific model specification by ID."""
-    model_spec = await model_spec_repo.get(model_spec_id)
-    if not model_spec:
-        raise HTTPException(status_code=404, detail="Model specification not found")
-    return ModelSpecResponse.from_domain(model_spec)
 
 
 @router.get("/by-provider/{provider_spec_id}", response_model=list[ModelSpecResponse])
@@ -116,7 +103,7 @@ async def list_model_specs_by_provider(
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """List all model specifications for a specific provider."""
-    model_specs = await model_spec_repo.list(
+    model_specs = await model_spec_repo.list_specs(
         provider_spec_id=provider_spec_id,
         is_active=is_active,
     )
@@ -136,6 +123,19 @@ async def get_model_spec_by_provider_and_name(
         raise HTTPException(
             status_code=404, detail=f"Model specification '{model_name}' not found for provider"
         )
+    return ModelSpecResponse.from_domain(model_spec)
+
+
+@router.get("/{model_spec_id}", response_model=ModelSpecResponse)
+async def get_model_spec(
+    model_spec_id: UUID,
+    user_context: UserContextDep,
+    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+):
+    """Get a specific model specification by ID."""
+    model_spec = await model_spec_repo.get_with_relations(model_spec_id)
+    if not model_spec:
+        raise HTTPException(status_code=404, detail="Model specification not found")
     return ModelSpecResponse.from_domain(model_spec)
 
 
@@ -172,6 +172,7 @@ async def create_model_spec(
             status_code=409,
             detail=f"Model specification '{data.model_name}' already exists for this provider",
         ) from None
+    created_spec = await model_spec_repo.get_with_relations(created_spec.id) or created_spec
     return ModelSpecResponse.from_domain(created_spec)
 
 
@@ -183,23 +184,13 @@ async def update_model_spec(
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Update a model specification."""
-    model_spec = await model_spec_repo.get(model_spec_id)
+    model_spec = await model_spec_repo.get_with_relations(model_spec_id)
     if not model_spec:
         raise HTTPException(status_code=404, detail="Model specification not found")
 
-    # Update fields if provided
-    if data.display_name is not None:
-        model_spec.display_name = data.display_name
-    if data.description is not None:
-        model_spec.description = data.description
-    if data.context_window is not None:
-        model_spec.context_window = data.context_window
-    if data.default_context_strategy is not None:
-        model_spec.default_context_strategy = data.default_context_strategy
-    if data.is_active is not None:
-        model_spec.is_active = data.is_active
-
-    updated_spec = await model_spec_repo.update(model_spec)
+    updates = data.model_dump(exclude_none=True)
+    updated_spec = await model_spec_repo.update(model_spec_id, **updates)
+    updated_spec = await model_spec_repo.get_with_relations(model_spec_id) or updated_spec
     return ModelSpecResponse.from_domain(updated_spec)
 
 
@@ -235,4 +226,5 @@ async def upsert_model_spec(
         default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )
+    upserted_spec = await model_spec_repo.get_with_relations(upserted_spec.id) or upserted_spec
     return ModelSpecResponse.from_domain(upserted_spec)

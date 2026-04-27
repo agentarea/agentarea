@@ -74,7 +74,6 @@ class Project(BaseModel, WorkspaceScopedMixin):
         ForeignKey("projects.id", ondelete="SET NULL"),
         nullable=True,
     )
-    minio_prefix: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # Relationships
     skills: Mapped[list] = relationship(
