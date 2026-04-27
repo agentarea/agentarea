@@ -23,7 +23,7 @@ router = APIRouter(prefix="/network", tags=["network"])
 
 class NetworkNode(BaseModel):
     id: str
-    type: Literal["agent", "mcp_instance", "skill", "trigger"]
+    type: Literal["agent", "mcp_instance", "openapi_connection", "skill", "trigger"]
     label: str
     status: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -184,23 +184,59 @@ async def get_network_topology(
             logger.warning(f"Failed to fetch triggers: {e}")
             return []
 
-    agents, (skills, skill_members), mcp_instances, triggers = await asyncio.gather(
+    async def fetch_openapi_connections() -> list:
+        try:
+            from agentarea_openapi.domain.models import OpenAPIConnection
+
+            async with db.session() as session:
+                query = select(OpenAPIConnection).where(
+                    OpenAPIConnection.workspace_id.in_(accessible_workspaces)
+                )
+                result = await session.execute(query)
+                return list(result.scalars().all())
+        except Exception as e:
+            logger.warning(f"Failed to fetch OpenAPI connections: {e}")
+            return []
+
+    (
+        agents,
+        (skills, skill_members),
+        mcp_instances,
+        triggers,
+        openapi_connections,
+    ) = await asyncio.gather(
         fetch_agents(),
         fetch_skills(),
         fetch_mcp_instances(),
         fetch_triggers(),
+        fetch_openapi_connections(),
     )
 
     nodes: list[NetworkNode] = []
     edges: list[NetworkEdge] = []
+
+    # --- Lookup maps for resolving agent.tools references ---
+    agent_name_to_id: dict[str, str] = {a.name: str(a.id) for a in agents}
+    openapi_name_to_id: dict[str, str] = {c.name: str(c.id) for c in openapi_connections}
+    openapi_id_set: set[str] = {str(c.id) for c in openapi_connections}
+
+    # Skills that are exposed as separate egress nodes (visible in the graph).
+    # Non-egress skills are folded into the owning agent's badge instead.
+    egress_skill_ids: set[str] = {
+        str(s.id) for s in skills if getattr(s, "network_scope", None) == "egress"
+    }
 
     # --- Build agent nodes ---
     for agent in agents:
         agent_id = str(agent.id)
 
         skills_data = []
+        embedded_skills_count = 0
         if hasattr(agent, "skills") and agent.skills:
             skills_data = [{"id": str(skill.id), "name": skill.name} for skill in agent.skills]
+            embedded_skills_count = sum(
+                1 for s in agent.skills if str(s.id) not in egress_skill_ids
+            )
 
         tools_config = None
         if hasattr(agent, "tools_config") and agent.tools_config:
@@ -231,6 +267,9 @@ async def get_network_topology(
                         "model_id": getattr(agent, "model_id", None),
                         "description": getattr(agent, "description", None),
                         "skills": skills_data if skills_data else None,
+                        "embedded_skills_count": (
+                            embedded_skills_count if embedded_skills_count > 0 else None
+                        ),
                         "tools_config": tools_config,
                         "model_info": model_info,
                     }.items()
@@ -239,8 +278,11 @@ async def get_network_topology(
             )
         )
 
-        # Agent → Skill edges (eagerly loaded via selectinload)
+        # Agent → Skill edges — only for skills with outbound (egress) access.
+        # Non-egress skills are surfaced via metadata.embedded_skills_count.
         for skill in agent.skills:
+            if str(skill.id) not in egress_skill_ids:
+                continue
             edges.append(
                 NetworkEdge(
                     id=f"{agent_id}-{skill.id}-has_skill",
@@ -250,7 +292,7 @@ async def get_network_topology(
                 )
             )
 
-        # Agent → MCP edges (via agent.tools JSON field)
+        # Agent.tools → emit MCP, OpenAPI, and delegate-to-agent edges.
         if agent.tools:
             tools_data = (
                 agent.tools
@@ -259,27 +301,69 @@ async def get_network_topology(
                 if isinstance(agent.tools, dict)
                 else []
             )
-            seen_servers: set[str] = set()
+            seen_mcp: set[str] = set()
+            seen_openapi: set[str] = set()
+            seen_delegates: set[str] = set()
             for tool in tools_data:
-                if isinstance(tool, dict):
-                    server_id = (
-                        tool.get("tool_server_id")
-                        or tool.get("server_id")
-                        or tool.get("mcp_instance_id")
-                    )
-                    if server_id and str(server_id) not in seen_servers:
-                        seen_servers.add(str(server_id))
+                if not isinstance(tool, dict):
+                    continue
+                tool_type = tool.get("type")
+                settings = tool.get("settings") or {}
+
+                if tool_type == "agent":
+                    target_name = tool.get("name")
+                    target_id = agent_name_to_id.get(target_name) if target_name else None
+                    if target_id and target_id != agent_id and target_id not in seen_delegates:
+                        seen_delegates.add(target_id)
                         edges.append(
                             NetworkEdge(
-                                id=f"{agent_id}-{server_id}-uses_mcp",
+                                id=f"{agent_id}-{target_id}-delegates_to",
                                 source=agent_id,
-                                target=str(server_id),
-                                relation="uses_mcp",
+                                target=target_id,
+                                relation="delegates_to",
                             )
                         )
+                    continue
 
-    # --- Build skill nodes ---
+                if tool_type == "openapi":
+                    conn_id = settings.get("openapi_connection_id")
+                    if conn_id and str(conn_id) in openapi_id_set:
+                        target_id = str(conn_id)
+                    else:
+                        target_id = openapi_name_to_id.get(tool.get("name") or "")
+                    if target_id and target_id not in seen_openapi:
+                        seen_openapi.add(target_id)
+                        edges.append(
+                            NetworkEdge(
+                                id=f"{agent_id}-{target_id}-uses_openapi",
+                                source=agent_id,
+                                target=target_id,
+                                relation="uses_openapi",
+                            )
+                        )
+                    continue
+
+                # Fallback: legacy MCP entries identified by id fields.
+                server_id = (
+                    tool.get("tool_server_id")
+                    or tool.get("server_id")
+                    or tool.get("mcp_instance_id")
+                )
+                if server_id and str(server_id) not in seen_mcp:
+                    seen_mcp.add(str(server_id))
+                    edges.append(
+                        NetworkEdge(
+                            id=f"{agent_id}-{server_id}-uses_mcp",
+                            source=agent_id,
+                            target=str(server_id),
+                            relation="uses_mcp",
+                        )
+                    )
+
+    # --- Build skill nodes — only for skills with outbound (egress) access. ---
     for skill in skills:
+        if str(skill.id) not in egress_skill_ids:
+            continue
         nodes.append(
             NetworkNode(
                 id=str(skill.id),
@@ -298,9 +382,12 @@ async def get_network_topology(
         )
 
     # --- Skill → Skill edges (bundle membership: child is member_of parent) ---
+    # Only between skills that are still part of the visible graph (egress).
     for row in skill_members:
         parent_id = str(row.parent_skill_id)
         child_id = str(row.child_skill_id)
+        if parent_id not in egress_skill_ids or child_id not in egress_skill_ids:
+            continue
         edges.append(
             NetworkEdge(
                 id=f"{child_id}-{parent_id}-member_of",
@@ -324,6 +411,32 @@ async def get_network_topology(
                     for k, v in {
                         "tool_count": len(instance.get_available_tools()),
                         "network_scope": instance.network_scope,
+                    }.items()
+                    if v is not None
+                },
+            )
+        )
+
+    # --- Build OpenAPI connection nodes (always external/egress) ---
+    for conn in openapi_connections:
+        conn_id = str(conn.id)
+        try:
+            tool_count = len(conn.available_tools or [])
+        except Exception:
+            tool_count = 0
+        nodes.append(
+            NetworkNode(
+                id=conn_id,
+                type="openapi_connection",
+                label=getattr(conn, "name", None) or conn_id,
+                status=getattr(conn, "status", None),
+                metadata={
+                    k: v
+                    for k, v in {
+                        "base_url": getattr(conn, "base_url", None),
+                        "description": getattr(conn, "description", None),
+                        "tool_count": tool_count,
+                        "network_scope": "egress",
                     }.items()
                     if v is not None
                 },

@@ -13,7 +13,7 @@ import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-act
 
 interface NetworkNodeData {
   id: string;
-  type: "agent" | "mcp_instance" | "skill" | "trigger";
+  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
   label: string;
   status?: string | null;
   metadata: Record<string, any>;

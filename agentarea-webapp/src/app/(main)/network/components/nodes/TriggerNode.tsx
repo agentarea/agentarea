@@ -1,32 +1,31 @@
 "use client";
 
 import { type NodeProps } from "@xyflow/react";
-import { Zap } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Clock, Globe, Zap } from "lucide-react";
 import NodeCard from "./NodeCard";
 
 export default function TriggerNode({ data }: NodeProps) {
   const d = data as Record<string, any>;
   const triggerType: string = d.metadata?.trigger_type || "unknown";
   const isIngress = triggerType === "webhook";
+  const isSchedule = triggerType === "schedule" || triggerType === "cron";
+
+  const Icon = isIngress ? Globe : isSchedule ? Clock : Zap;
+  const subtitle = isIngress
+    ? "Webhook"
+    : isSchedule
+      ? "Schedule"
+      : triggerType.charAt(0).toUpperCase() + triggerType.slice(1);
+
   return (
     <NodeCard
-      icon={<Zap className="h-3.5 w-3.5" />}
-      category={`Trigger / ${isIngress ? "Ingress" : "Private"}`}
+      icon={<Icon className="h-6 w-6" />}
       label={d.label}
-      color="amber"
-      riskLevel={isIngress ? "warning" : "none"}
+      subtitle={subtitle}
+      color={isIngress ? "amber" : "neutral"}
       hasTarget={false}
-      metadata={
-        <div className="flex items-center gap-1.5">
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-            {triggerType}
-          </Badge>
-          {d.status && (
-            <span className="text-[10px] text-muted-foreground">{d.status}</span>
-          )}
-        </div>
-      }
+      dimmed={d._dimmed}
+      highlighted={d._highlighted}
     />
   );
 }
