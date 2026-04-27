@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -376,6 +377,9 @@ class MCPServerInstanceService:
             # Synchronous verify — blocks until succeeded or failed
             verification = await verify(instance)
             instance.verification = dict(verification)
+            refresh_result = self.repository.session.refresh(instance)
+            if inspect.isawaitable(refresh_result):
+                await refresh_result
 
         elif is_bundle_type:
             # Validate all members are succeeded before persisting the bundle

@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from agentarea_projects.domain.models import Project
 from agentarea_projects.infrastructure.repository import ProjectRepository
@@ -23,16 +23,14 @@ class ProjectService:
         instructions: str | None = None,
         parent_project_id: UUID | str | None = None,
     ) -> Project:
-        """Create a new project, auto-generating minio_prefix."""
-        project_id = uuid4()
-        minio_prefix = f"projects/{project_id}/files/"
+        """Create a new project. Files are stored under ``projects/{id}/`` in
+        ``ArtifactService`` (workspace-scoped); the prefix is fully derived
+        from the project id and not persisted."""
         return await self.repository.create(
-            id=project_id,
             name=name,
             description=description,
             instructions=instructions,
             parent_project_id=str(parent_project_id) if parent_project_id else None,
-            minio_prefix=minio_prefix,
         )
 
     async def get(self, project_id: UUID | str) -> Project | None:

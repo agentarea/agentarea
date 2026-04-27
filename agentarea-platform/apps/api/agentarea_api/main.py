@@ -241,7 +241,10 @@ def create_app() -> FastAPI:
     # is guaranteed to be initialised before any request reaches the handler.
     app.mount("/mcp", _mcp_app)
 
-    logger.info("Native MCP server mounted at /mcp with %d platform tools", 23)
+    from agentarea_api.tools import get_platform_tools
+
+    _tool_count = sum(len(ts._tool_methods) for ts in get_platform_tools())
+    logger.info("Native MCP server mounted at /mcp with %d platform tools", _tool_count)
 
     # Register workspace error handlers
     register_workspace_error_handlers(app)

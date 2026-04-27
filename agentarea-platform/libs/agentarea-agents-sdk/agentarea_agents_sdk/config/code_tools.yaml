@@ -230,6 +230,39 @@ code_tools:
         display_name: "Delete Secret"
         description: "Delete a secret"
 
+  agentarea/triggers:
+    display_name: "Triggers"
+    description: "Schedule agents on cron expressions or wire them to webhooks"
+    class_path: "agentarea_triggers.agent_tool.TriggersAgentToolset"
+    category: "platform"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    available_methods:
+      - name: "list"
+        display_name: "List Triggers"
+        description: "List triggers, optionally filtered by agent or active state"
+      - name: "get"
+        display_name: "Get Trigger"
+        description: "Get a trigger by id"
+      - name: "create_cron"
+        display_name: "Create Cron Trigger"
+        description: "Create a cron-based trigger that fires the given agent on a schedule"
+      - name: "create_webhook"
+        display_name: "Create Webhook Trigger"
+        description: "Create a webhook trigger; inbound URL is /webhooks/{webhook_id}"
+      - name: "delete"
+        display_name: "Delete Trigger"
+        description: "Delete a trigger and its schedule"
+      - name: "enable"
+        display_name: "Enable Trigger"
+        description: "Resume a trigger's schedule"
+      - name: "disable"
+        display_name: "Disable Trigger"
+        description: "Pause a trigger's schedule"
+      - name: "get_history"
+        display_name: "Get Trigger History"
+        description: "List recent execution attempts for a trigger"
+
 # Categories help organize tools in the UI
 categories:
   - id: "utility"

@@ -15,6 +15,7 @@ from . import (
     agents_well_known,
     api_keys,
     audit,
+    files,
     inbox,
     mcp_auth_configs,
     mcp_oauth_connect,
@@ -31,6 +32,7 @@ from . import (
     registries,
     skills,
     triggers,
+    wallet,
     workspace_config,
 )
 
@@ -59,6 +61,7 @@ protected_v1_router = APIRouter(
 
 # Core agent operations - PROTECTED
 protected_v1_router.include_router(agents.router)
+protected_v1_router.include_router(wallet.router)
 protected_v1_router.include_router(agents_tasks.router)
 protected_v1_router.include_router(agents_tasks.global_tasks_router)
 
@@ -119,3 +122,6 @@ protected_v1_router.include_router(audit.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)
+
+# Workspace files (read-only listing of S3 objects under workspaces/{workspace_id}/) - PROTECTED
+protected_v1_router.include_router(files.router)

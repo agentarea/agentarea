@@ -12,13 +12,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import IntegrityError
-
 from agentarea_api.api.deps.services import get_model_spec_repository
 from agentarea_api.api.v1.model_specs import router
 from agentarea_common.auth import UserContext, get_user_context
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 
 def _spec(provider_spec_id, model_name="gpt-4"):
@@ -70,8 +69,10 @@ def _payload(provider_spec_id):
 
 def test_create_returns_200_when_no_duplicate(client, repo):
     provider_spec_id = uuid4()
+    spec = _spec(provider_spec_id)
     repo.get_by_provider_and_model.return_value = None
-    repo.create.return_value = _spec(provider_spec_id)
+    repo.create.return_value = spec
+    repo.get_with_relations.return_value = spec
 
     resp = client.post("/v1/model-specs/", json=_payload(provider_spec_id))
 
