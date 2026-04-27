@@ -389,6 +389,80 @@ class SkillService:
 
         return await repo.update(str(skill_id), **update_data)
 
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def replace_package_from_files(
+        self,
+        skill_id: UUID | str,
+        files: dict[str, str],
+    ) -> Skill:
+        """Replace a package-mode skill's file tree with the given map.
+
+        Overwrites by S3 key, then deletes any orphaned keys (present in old
+        package but absent in the new map). Same crash window as
+        ``create_from_zip``: a failure mid-write leaves a partial package.
+
+        Requires the skill to be package-mode (``s3_path`` set). Multi-file
+        edits on content-mode skills must go through delete + recreate.
+
+        Args:
+            skill_id: The skill ID.
+            files: Map of relative path -> file text content. Must include a
+                root-level ``SKILL.md`` (case-insensitive).
+
+        Returns:
+            Updated Skill entity.
+
+        Raises:
+            ValueError: skill not found, skill is content-mode, or files
+                missing SKILL.md.
+        """
+        import io
+        import zipfile
+
+        repo = self._get_repository()
+        skill = await repo.get_by_id(skill_id)
+        if not skill:
+            raise ValueError(f"Skill not found: {skill_id}")
+        if not skill.s3_path:
+            raise ValueError(
+                f"Skill {skill_id} is content-mode; multi-file edits not supported. "
+                "Delete and recreate as a package."
+            )
+
+        skill_md_keys = [k for k in files if k.lower() in ("skill.md", "skill.markdown")]
+        if not skill_md_keys:
+            raise ValueError("files must include a SKILL.md at the root")
+        new_skill_md_text = files[skill_md_keys[0]]
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for path, text in files.items():
+                zf.writestr(path, text)
+
+        old_keys = {f.path for f in await self.storage_service.list_files(skill.s3_path)}
+        new_keys = set(files.keys())
+
+        await self.storage_service.store_package_from_zip(
+            skill_id=str(skill.id),
+            workspace_id=self.user_context.workspace_id,
+            zip_data=buffer.getvalue(),
+        )
+
+        orphans = old_keys - new_keys
+        if orphans:
+            prefix = skill.s3_path.rstrip("/") + "/"
+            self.storage_service.client.delete_objects(
+                Bucket=self.storage_service.bucket_name,
+                Delete={"Objects": [{"Key": f"{prefix}{p}"} for p in orphans]},
+            )
+
+        skill = await repo.update(str(skill.id), content=new_skill_md_text)
+        logger.info(
+            f"Replaced package for skill {skill_id}: {len(files)} files written, "
+            f"{len(orphans)} orphans removed"
+        )
+        return skill
+
     @audited("skill.delete", resource_type="skill", resource_id_param="skill_id")
     async def delete(self, skill_id: UUID | str) -> bool:
         """Delete a skill and clean up S3 storage.
