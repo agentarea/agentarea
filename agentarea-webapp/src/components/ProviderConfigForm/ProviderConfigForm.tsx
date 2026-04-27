@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import {
-  createModelInstanceAction as createModelInstance,
+  bulkCreateModelInstancesAction as bulkCreateModelInstances,
   createProviderConfigAction as createProviderConfig,
   deleteModelInstanceAction as deleteModelInstance,
   listProviderSpecsAction as listProviderSpecs,
@@ -70,10 +70,12 @@ export default function ProviderConfigForm({
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
 
-  // Load provider specs and model specs on component mount
-  const loadData = async () => {
+  // Load provider specs and model specs.
+  // Pass { silent: true } to refresh without unmounting the form (used after
+  // Discover Models so the child component keeps its local UI state).
+  const loadData = async (opts?: { silent?: boolean }) => {
     try {
-      setIsLoading(true);
+      if (!opts?.silent) setIsLoading(true);
       const [providerSpecsResponse, providerSpecsWithModelsResponse] =
         await Promise.all([
           listProviderSpecs(),
@@ -161,6 +163,8 @@ export default function ProviderConfigForm({
 
   const watchedProviderId = watch("provider_spec_id");
   const watchedName = watch("name");
+  const watchedApiKey = watch("api_key");
+  const watchedEndpointUrl = watch("endpoint_url");
 
   const selectedProvider = providerSpecs?.find?.(
     (spec) => spec.id === watchedProviderId
@@ -176,23 +180,9 @@ export default function ProviderConfigForm({
     );
   }, [modelSpecs, selectedProvider]);
 
-  // Auto-select all models when provider changes
-  useEffect(() => {
-    if (
-      selectedProvider &&
-      availableModels.length > 0 &&
-      !isEdit &&
-      showModelSelection
-    ) {
-      const allModels = availableModels.map((model) => ({
-        modelSpecId: model.id,
-        instanceName: `${selectedProvider.name} ${model.display_name}`,
-        description: model.description || "",
-        isPublic: false,
-      }));
-      setSelectedModels(allModels);
-    }
-  }, [selectedProvider, availableModels, isEdit, showModelSelection]);
+  // Auto-selection of models lives in <ModelInstances> and only fires after
+  // the user runs Discover, so the form no longer pre-fills selectedModels
+  // from the registry on provider change.
 
   // Generate name for preselected provider
   useEffect(() => {
@@ -337,37 +327,51 @@ export default function ProviderConfigForm({
         );
       }
 
-      // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
-      if (!isEdit && selectedModels.length > 0 && showModelSelection) {
-        const modelCreationPromises = selectedModels.map(async (model) => {
-          const { data, error } = await createModelInstance({
+      // Step 2: Create model instances via the bulk endpoint to avoid N
+      // round-trips when the user selects hundreds of models from a discovered
+      // catalog. Deletes stay as individual calls (rare, small N).
+      const bulkCreate = async (
+        rows: { modelSpecId: string; instanceName: string; description: string; isPublic: boolean }[]
+      ) => {
+        if (rows.length === 0) return { created: 0 };
+        const { data, error } = await bulkCreateModelInstances({
+          items: rows.map((m) => ({
             provider_config_id: providerConfig.id,
-            model_spec_id: model.modelSpecId,
-            name: model.instanceName,
-            description: model.description,
-            is_public: model.isPublic,
-          });
-
-          if (error || !data) {
-            throw new Error(
-              `Failed to create model instance "${model.instanceName}": ${
-                (error as { message?: string })?.message || "Unknown error"
-              }`
-            );
-          }
-
-          return data;
+            model_spec_id: m.modelSpecId,
+            name: m.instanceName,
+            description: m.description,
+            is_public: m.isPublic,
+          })),
         });
+        if (error || !data) {
+          const detail =
+            (error as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg ||
+            (error as { message?: string })?.message ||
+            "Unknown error";
+          throw new Error(`Failed to create model instances: ${detail}`);
+        }
+        const result = data as {
+          succeeded_count: number;
+          failed_count: number;
+          failed: { index: number; model_spec_id: string; error: string }[];
+        };
+        if (result.failed_count > 0) {
+          const sample = result.failed.slice(0, 3).map((f) => f.error).join("; ");
+          toast.error(
+            `Failed to create ${result.failed_count} of ${rows.length} model instances. ${sample}`
+          );
+        }
+        return { created: result.succeeded_count };
+      };
 
-        await Promise.all(modelCreationPromises);
+      if (!isEdit && selectedModels.length > 0 && showModelSelection) {
+        const { created } = await bulkCreate(selectedModels);
         toast.success(
           t(
             isEdit
               ? "toast.configurationUpdated"
               : "toast.configurationCreated",
-            {
-              modelCount: selectedModels.length,
-            }
+            { modelCount: created }
           )
         );
       } else if (isEdit && showModelSelection) {
@@ -389,29 +393,9 @@ export default function ProviderConfigForm({
           (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
         );
 
-        // Create new model instances
+        // Create new model instances in one bulk request
         if (modelsToCreate.length > 0) {
-          const createPromises = modelsToCreate.map(async (model) => {
-            const { data, error } = await createModelInstance({
-              provider_config_id: providerConfig.id,
-              model_spec_id: model.modelSpecId,
-              name: model.instanceName,
-              description: model.description,
-              is_public: model.isPublic,
-            });
-
-            if (error || !data) {
-              throw new Error(
-                `Failed to create model instance "${model.instanceName}": ${
-                  (error as { message?: string })?.message || "Unknown error"
-                }`
-              );
-            }
-
-            return data;
-          });
-
-          await Promise.all(createPromises);
+          await bulkCreate(modelsToCreate);
         }
 
         // Delete removed model instances
@@ -569,7 +553,9 @@ export default function ProviderConfigForm({
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
               providerConfigId={isEdit && initialData ? initialData.id : undefined}
-              onModelsDiscovered={loadData}
+              apiKey={watchedApiKey}
+              endpointUrl={watchedEndpointUrl}
+              onModelsDiscovered={() => loadData({ silent: true })}
             />
           )}
         </div>
