@@ -44,6 +44,7 @@ export const {
   // OpenAPI Connections API
   listOpenAPIConnections,
   createOpenAPIConnection,
+  updateOpenAPIConnection,
   deleteOpenAPIConnection,
   getOpenAPIConnection,
   discoverOpenAPITools,
@@ -86,6 +87,7 @@ export const {
   // Model Instance API
   listModelInstances,
   createModelInstance,
+  bulkCreateModelInstances,
   testModelInstance,
   getModelInstance,
   deleteModelInstance,
@@ -198,6 +200,10 @@ export const {
   uploadProjectFile,
   downloadProjectFile,
   deleteProjectFile,
+
+  // Workspace Files API (read-only)
+  listWorkspaceFiles,
+  downloadWorkspaceFile,
 
   // Wallet API
   getAgentWallet,
