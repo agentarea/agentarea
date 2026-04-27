@@ -8,6 +8,7 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
 )
+from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_event_stream_service,
@@ -18,6 +19,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from sqlalchemy import text
 from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.task_service import TaskService
@@ -641,6 +643,71 @@ async def list_task_artifacts(
             )
         )
     return items
+
+
+class TaskSummary(BaseModel):
+    """Headline rollup for a single task, derived from the event log.
+
+    Backed by the ``task_summary`` Postgres view. Stable contract — when
+    the view's implementation moves to a materialized view or projection
+    table, this shape stays the same. Per-tool breakdowns and per-artifact
+    lists are deliberately not here; they live in their own endpoints so
+    this stays small and additive.
+    """
+
+    task_id: UUID
+    agent_id: UUID
+    workspace_id: str
+    status: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_ms: float | None = None
+    iterations: int = 0
+    llm_calls: int = 0
+    llm_calls_failed: int = 0
+    tools_called: int = 0
+    tools_failed: int = 0
+    delegations_started: int = 0
+    delegations_completed: int = 0
+    delegations_failed: int = 0
+    cost_usd: float = 0.0
+    final_response: str | None = None
+    last_error: str | None = None
+
+
+@router.get("/{task_id}/summary", response_model=TaskSummary)
+async def get_task_summary(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    session: ReadDatabaseSessionDep,
+) -> TaskSummary:
+    """Per-task rollup derived from the event log via the ``task_summary`` view.
+
+    Workspace-scoped: the row must belong to the caller's workspace and
+    the agent must match, or we return 404 (same shape as other task
+    endpoints — no information leak).
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT * FROM task_summary "
+                "WHERE task_id = :task_id "
+                "AND workspace_id = :workspace_id "
+                "AND agent_id = :agent_id"
+            ),
+            {
+                "task_id": str(task_id),
+                "workspace_id": user_context.workspace_id,
+                "agent_id": str(agent_id),
+            },
+        )
+    ).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return TaskSummary(**dict(row))
 
 
 @router.delete("/{task_id}")

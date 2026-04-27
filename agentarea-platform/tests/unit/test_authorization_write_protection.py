@@ -6,6 +6,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.schemas.dto import AgentUpdate
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ async def test_cannot_update_system_agent_from_regular_workspace(
     mock_repo.get_by_id.return_value = system_agent
 
     with pytest.raises(PermissionError, match="Cannot modify agent"):
-        await service.update_agent(id=system_agent.id, name="Hacked Name")
+        await service.update_agent(id=system_agent.id, payload=AgentUpdate(name="Hacked Name"))
 
 
 @pytest.mark.asyncio
@@ -97,7 +98,9 @@ async def test_can_update_own_workspace_agent(
     mock_repo.get_by_id.return_value = regular_agent
     mock_repo.update_from_entity.return_value = regular_agent
 
-    result = await service.update_agent(id=regular_agent.id, name="Updated Name")
+    result = await service.update_agent(
+        id=regular_agent.id, payload=AgentUpdate(name="Updated Name")
+    )
     assert result is not None
 
 
@@ -123,7 +126,7 @@ async def test_authz_denies_cross_workspace_writes(regular_user_context, system_
     mock_repo.get_by_id.return_value = system_agent
 
     with pytest.raises(PermissionError, match="Cannot modify agent"):
-        await service.update_agent(id=system_agent.id, name="Hacked")
+        await service.update_agent(id=system_agent.id, payload=AgentUpdate(name="Hacked"))
 
 
 @pytest.mark.asyncio
@@ -134,5 +137,7 @@ async def test_authz_allows_own_workspace(regular_user_context, regular_agent, a
     mock_repo.get_by_id.return_value = regular_agent
     mock_repo.update_from_entity.return_value = regular_agent
 
-    result = await service.update_agent(id=regular_agent.id, name="Updated")
+    result = await service.update_agent(
+        id=regular_agent.id, payload=AgentUpdate(name="Updated")
+    )
     assert result is not None

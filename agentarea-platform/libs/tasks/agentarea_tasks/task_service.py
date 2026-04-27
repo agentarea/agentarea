@@ -56,22 +56,24 @@ class TaskService(BaseTaskService):
         except ImportError:
             self.agent_repository = None
 
-    async def _validate_agent_exists(self, agent_id: UUID) -> None:
-        """Validate that the agent exists before processing tasks.
+    async def _validate_agent_exists(self, agent_id: UUID):
+        """Validate that the agent exists and return the loaded entity for reuse.
 
-        Args:
-            agent_id: The agent ID to validate
+        Returns the agent so callers can reuse it (e.g. for ``metadata.agent_name``)
+        without a second repository round-trip. Returns ``None`` only when no
+        agent_repository is wired up (test/standalone mode).
 
         Raises:
-            ValueError: If agent doesn't exist or agent_repository is not available
+            ValueError: If the agent does not exist.
         """
         if not self.agent_repository:
             logger.warning("Agent repository not available - skipping agent validation")
-            return
+            return None
 
         agent = await self.agent_repository.get(agent_id)
         if not agent:
             raise ValueError(f"Agent with ID {agent_id} does not exist")
+        return agent
 
     @audited("task.create", resource_type="task")
     async def create_task_from_params(
@@ -98,19 +100,30 @@ class TaskService(BaseTaskService):
         return await self.create_task(task)
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
-        """Submit a task for execution through the task manager.
+        """Submit a pre-built SimpleTask. Thin alias delegating to the canonical
+        ``create_and_execute_task_with_workflow`` so A2A and MCP callers get the
+        same metadata enrichment, channel routing, and defaults as REST.
 
-        This method validates the agent exists before submitting to avoid
-        failures later in the Temporal workflow.
+        The caller's id, title, query, task_parameters, and metadata are
+        preserved (passed through as overrides). Defaults still applied:
+        - ``metadata.created_via="api"`` if not set
+        - ``enable_agent_communication=True`` (A2A is agent-to-agent by definition)
+        - ``requires_human_approval=False``
         """
-        # Validate agent exists first (fail fast)
-        await self._validate_agent_exists(task.agent_id)
-
-        # First persist the task
-        created_task = await self.create_task(task)
-
-        # Then submit to task manager for execution
-        return await self.task_manager.submit_task(created_task)
+        meta = task.metadata or {}
+        return await self.create_and_execute_task_with_workflow(
+            agent_id=task.agent_id,
+            description=task.description or task.query,
+            workspace_id=task.workspace_id,
+            parameters=task.task_parameters or {},
+            user_id=task.user_id,
+            enable_agent_communication=meta.get("enable_agent_communication", True),
+            requires_human_approval=meta.get("requires_human_approval", False),
+            task_id=task.id,
+            title=task.title,
+            query=task.query,
+            metadata_overrides=meta or None,
+        )
 
     async def route_or_submit_task(self, task: SimpleTask) -> SimpleTask:
         """Route message to an active workflow if one exists, otherwise submit a new task.
@@ -467,56 +480,68 @@ class TaskService(BaseTaskService):
         user_id: str | None = None,
         enable_agent_communication: bool = True,
         requires_human_approval: bool = False,
+        *,
+        task_id: UUID | None = None,
+        title: str | None = None,
+        query: str | None = None,
+        metadata_overrides: dict[str, Any] | None = None,
+        status: str = "pending",
     ) -> SimpleTask:
-        """Create a task and execute it using workflow.
+        """Canonical entry point for creating and executing a task via Temporal workflow.
+
+        REST handlers, A2A handlers, and MCP tools all funnel through this
+        method (directly or via ``submit_task``) so behaviour stays consistent.
 
         Args:
             agent_id: The agent to execute the task
-            description: Task description
-            workspace_id: Workspace ID (required for proper multi-tenancy isolation)
-            parameters: Task parameters
+            description: Task description (used as default for title/query)
+            workspace_id: Workspace ID (required for multi-tenancy isolation)
+            parameters: Task parameters (channel_origin.chat_id triggers routing)
             user_id: User ID
-            enable_agent_communication: Whether to enable agent communication
-            requires_human_approval: Whether this task requires human approval before running
+            enable_agent_communication: Whether agent-to-agent calls are allowed
+            requires_human_approval: Whether to gate the task on human approval
+            task_id: Pre-assign the task id (A2A echoes it back in JSON-RPC reply)
+            title: Override the default title (defaults to ``description``)
+            query: Override the default query string (defaults to ``description``)
+            metadata_overrides: Caller metadata merged on top of canonical defaults
+                (so canonical fields like ``enable_agent_communication`` win unless
+                the caller explicitly sets them).
+            status: Initial task status (default ``pending``)
 
         Returns:
-            Created task with workflow execution info
+            Created task with workflow execution info, or the routed-into existing
+            task when ``channel_origin.chat_id`` matches an active workflow.
         """
-        from uuid import uuid4
+        # Validate agent exists; reuse the loaded entity for metadata.agent_name
+        # so we don't pay for a second repository round-trip.
+        agent = await self._validate_agent_exists(agent_id)
+        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
 
-        # Validate agent exists first
-        await self._validate_agent_exists(agent_id)
+        new_task_id = task_id or uuid4()
 
-        # Generate task ID
-        task_id = uuid4()
-
-        # Get agent name for metadata (if available)
-        agent_name = "unknown"
-        if self.agent_repository:
-            try:
-                agent = await self.agent_repository.get(agent_id)
-                if agent:
-                    agent_name = agent.name
-            except Exception as e:
-                logger.warning(f"Could not get agent name for {agent_id}: {e}")
+        # Build canonical metadata. Caller overrides are merged in first so the
+        # canonical fields (enable_agent_communication, requires_human_approval,
+        # created_via) always reflect the explicit args.
+        metadata: dict[str, Any] = {}
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+        metadata.setdefault("created_via", "api")
+        metadata["agent_name"] = agent_name
+        metadata["enable_agent_communication"] = enable_agent_communication
+        metadata["requires_human_approval"] = requires_human_approval
 
         # Create task
         task = SimpleTask(
-            id=task_id,
-            title=description,
+            id=new_task_id,
+            title=title or description,
             description=description,
-            query=description,
+            query=query or description,
             user_id=user_id,
             workspace_id=workspace_id,  # Required, no fallback
             agent_id=agent_id,
-            status="pending",
+            status=status,
             task_parameters=parameters or {},
-            metadata={
-                "created_via": "api",
-                "agent_name": agent_name,
-                "enable_agent_communication": enable_agent_communication,
-                "requires_human_approval": requires_human_approval,
-            },
+            metadata=metadata,
         )
 
         # Try routing to active workflow if channel_origin is present
