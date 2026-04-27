@@ -3,7 +3,6 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
-from agentarea_tasks.domain.models import SimpleTask
 
 from .base import platform_context, platform_read_context
 
@@ -12,8 +11,24 @@ class RunsToolset(Toolset):
     """Start, list, get, and cancel agent runs."""
 
     @tool_method
-    async def start(self, agent_id: str, message: str) -> str:
-        """Start a new agent run with the given message."""
+    async def start(
+        self,
+        agent_id: str,
+        message: str,
+        parameters_json: str = "",
+        enable_agent_communication: bool = True,
+        requires_human_approval: bool = False,
+    ) -> str:
+        """Start a new agent run with the given message.
+
+        Routes through ``TaskService.create_and_execute_task_with_workflow`` so
+        REST, MCP and A2A share the same execution path. Optional knobs:
+
+        - ``parameters_json``: JSON-encoded task parameters dict (e.g. for
+          ``channel_origin`` routing or model overrides).
+        - ``enable_agent_communication``: allow agent-to-agent calls (default True).
+        - ``requires_human_approval``: gate the task on human approval (default False).
+        """
         from uuid import UUID
 
         async with platform_context() as (
@@ -30,6 +45,16 @@ class RunsToolset(Toolset):
                 get_temporal_workflow_service,
             )
 
+            parameters: dict = {}
+            if parameters_json:
+                try:
+                    parsed = json.loads(parameters_json)
+                except json.JSONDecodeError as exc:
+                    return json.dumps({"error": f"parameters_json must be valid JSON: {exc}"})
+                if not isinstance(parsed, dict):
+                    return json.dumps({"error": "parameters_json must decode to an object"})
+                parameters = parsed
+
             task_manager = await _create_task_manager(repo_factory)
             workflow_service = await get_temporal_workflow_service()
             service = TaskService(
@@ -38,17 +63,17 @@ class RunsToolset(Toolset):
                 task_manager=task_manager,
                 workflow_service=workflow_service,
             )
-            task = SimpleTask(
-                title=message[:100],
-                description=message,
-                query=message,
-                user_id=user_ctx.user_id,
+            submitted = await service.create_and_execute_task_with_workflow(
                 agent_id=UUID(agent_id),
+                description=message,
                 workspace_id=user_ctx.workspace_id,
-                task_parameters={},
-                status="submitted",
+                parameters=parameters,
+                user_id=user_ctx.user_id,
+                enable_agent_communication=enable_agent_communication,
+                requires_human_approval=requires_human_approval,
+                title=message[:100],
+                metadata_overrides={"created_via": "mcp"},
             )
-            submitted = await service.submit_task(task)
             return json.dumps(
                 {"run_id": str(submitted.id), "status": submitted.status},
                 default=str,
