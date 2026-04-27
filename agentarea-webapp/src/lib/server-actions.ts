@@ -35,6 +35,7 @@ import {
   createProviderConfig,
   updateProviderConfig,
   createModelInstance,
+  bulkCreateModelInstances,
   deleteModelInstance,
   discoverModels,
   discoverModelsPreview,
@@ -58,6 +59,7 @@ import {
   deleteOpenAPIConnection,
   discoverOpenAPITools,
   createOpenAPIConnection,
+  updateOpenAPIConnection,
   previewOpenAPISpec,
   listMCPServerInstances,
   listProjects,
@@ -75,6 +77,8 @@ import {
   uploadProjectFile,
   downloadProjectFile,
   deleteProjectFile,
+  listWorkspaceFiles,
+  downloadWorkspaceFile,
   getAgentWallet,
   createAgentWallet,
   updateAgentWallet,
@@ -268,6 +272,12 @@ export async function createModelInstanceAction(
   return await createModelInstance(instance);
 }
 
+export async function bulkCreateModelInstancesAction(
+  body: components["schemas"]["ModelInstanceBulkCreateRequest"]
+) {
+  return await bulkCreateModelInstances(body);
+}
+
 export async function deleteModelInstanceAction(instanceId: string) {
   return await deleteModelInstance(instanceId);
 }
@@ -416,6 +426,13 @@ export async function discoverOpenAPIToolsAction(connectionId: string) {
 
 export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
   return await createOpenAPIConnection(body);
+}
+
+export async function updateOpenAPIConnectionAction(
+  connectionId: string,
+  body: Parameters<typeof updateOpenAPIConnection>[1]
+) {
+  return await updateOpenAPIConnection(connectionId, body);
 }
 
 export async function listMCPServerInstancesAction() {
@@ -575,6 +592,14 @@ export async function downloadProjectFileAction(projectId: string, filePath: str
 
 export async function deleteProjectFileAction(projectId: string, filePath: string) {
   return await deleteProjectFile(projectId, filePath);
+}
+
+export async function listWorkspaceFilesAction() {
+  return await listWorkspaceFiles();
+}
+
+export async function downloadWorkspaceFileAction(filePath: string) {
+  return await downloadWorkspaceFile(filePath);
 }
 
 export async function previewOpenAPISpecAction(body: {
