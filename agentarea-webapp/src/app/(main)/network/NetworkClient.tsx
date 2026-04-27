@@ -6,14 +6,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
-import NodeDetailPanel from "./components/NodeDetailPanel";
+import NetworkLegend from "./components/NetworkLegend";
+import NodeDetailDrawer from "./components/NodeDetailDrawer";
 import { useNetwork } from "./NetworkProvider";
 import DataFlowView from "./views/DataFlowView";
 import OrgChartView from "./views/OrgChartView";
 
 interface NetworkNodeData {
   id: string;
-  type: "agent" | "mcp_instance" | "skill" | "trigger";
+  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
   label: string;
   status?: string | null;
   metadata: Record<string, any>;
@@ -65,6 +66,10 @@ export default function NetworkClient() {
     null
   );
 
+  const handleSelect = (node: NetworkNodeData | null) => {
+    setSelectedNode(node);
+  };
+
   if (loading && !topology) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -84,18 +89,33 @@ export default function NetworkClient() {
     );
   }
 
+  const highlightId = selectedNode?.id ?? null;
+
   return (
     <div className="relative h-full w-full">
       {view === "dataflow" ? (
-        <DataFlowView topology={topology} onNodeClick={setSelectedNode} />
+        <DataFlowView
+          topology={topology}
+          onNodeClick={handleSelect}
+          highlightId={highlightId}
+          onPaneClick={() => handleSelect(null)}
+        />
       ) : (
-        <OrgChartView topology={topology} onNodeClick={setSelectedNode} />
+        <OrgChartView
+          topology={topology}
+          onNodeClick={handleSelect}
+          highlightId={highlightId}
+          onPaneClick={() => handleSelect(null)}
+        />
       )}
 
-      {selectedNode && (
-        <NodeDetailPanel
+      <NetworkLegend />
+
+      {selectedNode && topology && (
+        <NodeDetailDrawer
           node={selectedNode}
-          onClose={() => setSelectedNode(null)}
+          topology={topology}
+          onClose={() => handleSelect(null)}
         />
       )}
     </div>

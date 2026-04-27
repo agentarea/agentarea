@@ -7,19 +7,16 @@ import NodeCard from "./NodeCard";
 export default function SkillNode({ data }: NodeProps) {
   const d = data as Record<string, any>;
   const scope: string = d.metadata?.network_scope || "private";
+  const subtitle = scope === "egress" ? "Skill · Egress" : "Skill";
+
   return (
     <NodeCard
-      icon={<Sparkles className="h-3.5 w-3.5" />}
-      category={`Skill / ${scope}`}
+      icon={<Sparkles className="h-6 w-6" />}
       label={d.label}
+      subtitle={subtitle}
       color="purple"
-      metadata={
-        d.metadata?.description ? (
-          <span className="text-[10px] text-muted-foreground line-clamp-1">
-            {d.metadata.description}
-          </span>
-        ) : null
-      }
+      dimmed={d._dimmed}
+      highlighted={d._highlighted}
     />
   );
 }
