@@ -1,6 +1,8 @@
 """Project-files HTTP API end-to-end.
 
-Files for a project live in S3/RustFS under ``project.minio_prefix``.
+Files for a project live in S3/RustFS under
+``workspaces/{workspace_id}/projects/{project_id}/...``, served by
+``ArtifactService``.
 The endpoints we exercise here:
 
   POST   /v1/projects/{id}/files          (multipart upload)
@@ -50,7 +52,6 @@ def test_project_file_upload_list_download_delete_roundtrip(
     listing = alice_client.get(f"/v1/projects/{project_id}/files")
     assert listing.status_code == 200, listing.text[:200]
     listed = listing.json()
-    assert listed["prefix"], "list response missing prefix"
     paths = [f["path"] for f in listed["files"]]
     assert filename in paths, f"{filename!r} not in {paths!r}"
     [item] = [f for f in listed["files"] if f["path"] == filename]
@@ -59,7 +60,7 @@ def test_project_file_upload_list_download_delete_roundtrip(
     dl = alice_client.get(f"/v1/projects/{project_id}/files/{filename}")
     assert dl.status_code == 200, dl.text[:200]
     payload = dl.json()
-    assert payload["key"].endswith(filename)
+    assert payload["path"] == filename
     url = payload["url"]
     assert url.startswith("http"), url
 
@@ -95,15 +96,8 @@ def test_project_file_download_404_when_missing(
     alice_client: httpx.Client,
 ) -> None:
     project_id = _create_project(alice_client, "files-missing")
-    # Presigned URL generation always succeeds (S3 doesn't pre-check),
-    # but fetching it must 4xx.
     dl = alice_client.get(f"/v1/projects/{project_id}/files/never.txt")
-    assert dl.status_code == 200
-    with httpx.Client(timeout=10.0) as http:
-        resp = http.get(dl.json()["url"])
-    assert resp.status_code in (403, 404), (
-        f"missing object surfaced as {resp.status_code}: {resp.text[:120]!r}"
-    )
+    assert dl.status_code == 404, dl.text[:200]
 
 
 @pytest.mark.integration
