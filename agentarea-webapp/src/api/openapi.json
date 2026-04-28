@@ -199,6 +199,43 @@
         "title": "APIKeyResponse",
         "type": "object"
       },
+      "AcceptInvitationBody": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "AcceptInvitationBody",
+        "type": "object"
+      },
+      "AcceptInvitationResponse": {
+        "properties": {
+          "invitation_id": {
+            "format": "uuid",
+            "title": "Invitation Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "user_id",
+          "invitation_id"
+        ],
+        "title": "AcceptInvitationResponse",
+        "type": "object"
+      },
       "AgentAuthentication": {
         "properties": {
           "credentials": {
@@ -404,6 +441,8 @@
         "type": "object"
       },
       "AgentCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating an agent.\n\n``model_id`` accepts either a model-instance UUID configured in the\nworkspace, or a recognized provider identifier (e.g. ``gpt-4o``,\n``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -414,13 +453,23 @@
                 "type": "null"
               }
             ],
+            "description": "Expose this agent over the A2UI protocol.",
             "title": "A2Ui Enabled"
           },
           "agent_type": {
+            "default": "stateless",
+            "description": "'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).",
+            "enum": [
+              "stateless",
+              "stateful"
+            ],
             "title": "Agent Type",
             "type": "string"
           },
           "description": {
+            "default": "",
+            "description": "Short summary of what the agent does.",
+            "maxLength": 1000,
             "title": "Description",
             "type": "string"
           },
@@ -432,17 +481,25 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Event subscriptions that auto-trigger this agent."
           },
           "instruction": {
+            "default": "",
+            "description": "System prompt / behavioural instructions for the agent.",
+            "maxLength": 20000,
             "title": "Instruction",
             "type": "string"
           },
           "model_id": {
+            "description": "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').",
             "title": "Model Id",
             "type": "string"
           },
           "name": {
+            "description": "Human-readable agent name (unique per workspace).",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -455,6 +512,7 @@
                 "type": "null"
               }
             ],
+            "description": "Enable explicit planning step before execution.",
             "title": "Planning"
           },
           "skill_ids": {
@@ -470,6 +528,7 @@
                 "type": "null"
               }
             ],
+            "description": "UUIDs of skills to attach to the agent.",
             "title": "Skill Ids"
           },
           "tools": {
@@ -484,15 +543,13 @@
                 "type": "null"
               }
             ],
+            "description": "Tools attached to the agent (code/mcp/agent/openapi).",
             "title": "Tools"
           }
         },
         "required": [
           "name",
-          "description",
-          "instruction",
-          "model_id",
-          "agent_type"
+          "model_id"
         ],
         "title": "AgentCreate",
         "type": "object"
@@ -603,6 +660,21 @@
               }
             ],
             "title": "Planning"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
           },
           "status": {
             "title": "Status",
@@ -717,6 +789,8 @@
         "type": "object"
       },
       "AgentUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for an agent. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -728,6 +802,21 @@
               }
             ],
             "title": "A2Ui Enabled"
+          },
+          "agent_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stateless",
+                  "stateful"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Type"
           },
           "capabilities": {
             "anyOf": [
@@ -746,6 +835,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -767,6 +857,7 @@
           "instruction": {
             "anyOf": [
               {
+                "maxLength": 20000,
                 "type": "string"
               },
               {
@@ -789,6 +880,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -854,6 +947,151 @@
         "title": "AssociationBody",
         "type": "object"
       },
+      "AuditEventResponse": {
+        "description": "Audit event response schema.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_id": {
+            "title": "Actor Id",
+            "type": "string"
+          },
+          "actor_type": {
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changes"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_metadata": {
+            "additionalProperties": true,
+            "title": "Event Metadata",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "resource_type": {
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "source_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor_id",
+          "actor_type",
+          "workspace_id",
+          "source_ip",
+          "user_agent",
+          "request_id",
+          "action",
+          "resource_type",
+          "resource_id",
+          "changes",
+          "event_metadata"
+        ],
+        "title": "AuditEventResponse",
+        "type": "object"
+      },
+      "AuditLogListResponse": {
+        "description": "Paginated audit log response.",
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "events",
+          "next_cursor"
+        ],
+        "title": "AuditLogListResponse",
+        "type": "object"
+      },
       "Body_import_workspace_config_file_v1_workspace_import_file_post": {
         "properties": {
           "file": {
@@ -898,9 +1136,9 @@
         "title": "Body_upload_skill_v1_skills_upload_post",
         "type": "object"
       },
-      "CompoundMCPCreateRequest": {
+      "CreateInvitationBody": {
         "properties": {
-          "description": {
+          "email": {
             "anyOf": [
               {
                 "type": "string"
@@ -909,164 +1147,21 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Email"
           },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "routing_mode": {
-            "default": "parallel",
-            "description": "parallel | fallback | conditional",
-            "title": "Routing Mode",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "CompoundMCPCreateRequest",
-        "type": "object"
-      },
-      "CompoundMCPMemberRequest": {
-        "properties": {
-          "config": {
-            "additionalProperties": true,
-            "title": "Config",
-            "type": "object"
-          },
-          "mcp_instance_id": {
-            "format": "uuid",
-            "title": "Mcp Instance Id",
-            "type": "string"
-          },
-          "order": {
-            "default": 0,
-            "title": "Order",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "mcp_instance_id"
-        ],
-        "title": "CompoundMCPMemberRequest",
-        "type": "object"
-      },
-      "CompoundMCPMemberResponse": {
-        "properties": {
-          "config": {
-            "additionalProperties": true,
-            "title": "Config",
-            "type": "object"
-          },
-          "mcp_instance_id": {
-            "format": "uuid",
-            "title": "Mcp Instance Id",
-            "type": "string"
-          },
-          "namespace": {
-            "title": "Namespace",
-            "type": "string"
-          },
-          "order": {
-            "title": "Order",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "mcp_instance_id",
-          "order",
-          "config",
-          "namespace"
-        ],
-        "title": "CompoundMCPMemberResponse",
-        "type": "object"
-      },
-      "CompoundMCPResponse": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
+          "expires_in_days": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "routing_mode": {
-            "title": "Routing Mode",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
+            "title": "Expires In Days"
           }
         },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "routing_mode",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "CompoundMCPResponse",
-        "type": "object"
-      },
-      "CompoundMCPUpdateRequest": {
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "routing_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Routing Mode"
-          }
-        },
-        "title": "CompoundMCPUpdateRequest",
+        "title": "CreateInvitationBody",
         "type": "object"
       },
       "CreateWalletRequest": {
@@ -1122,6 +1217,230 @@
         "title": "CreateWalletRequest",
         "type": "object"
       },
+      "DiscoverPreviewModelResponse": {
+        "properties": {
+          "context_window": {
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_cost_per_token": {
+            "default": 0.0,
+            "title": "Input Cost Per Token",
+            "type": "number"
+          },
+          "is_new": {
+            "default": false,
+            "title": "Is New",
+            "type": "boolean"
+          },
+          "max_output_tokens": {
+            "default": 4096,
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "output_cost_per_token": {
+            "default": 0.0,
+            "title": "Output Cost Per Token",
+            "type": "number"
+          },
+          "supports_function_calling": {
+            "default": false,
+            "title": "Supports Function Calling",
+            "type": "boolean"
+          },
+          "supports_reasoning": {
+            "default": false,
+            "title": "Supports Reasoning",
+            "type": "boolean"
+          },
+          "supports_vision": {
+            "default": false,
+            "title": "Supports Vision",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "model_name",
+          "display_name",
+          "context_window"
+        ],
+        "title": "DiscoverPreviewModelResponse",
+        "type": "object"
+      },
+      "DiscoverPreviewRequest": {
+        "properties": {
+          "api_key": {
+            "title": "Api Key",
+            "type": "string"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
+          },
+          "provider_key": {
+            "title": "Provider Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_key",
+          "api_key"
+        ],
+        "title": "DiscoverPreviewRequest",
+        "type": "object"
+      },
+      "DiscoverPreviewResponse": {
+        "properties": {
+          "discovered": {
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverPreviewModelResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "new_models": {
+            "title": "New Models",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discovered",
+          "new_models",
+          "models"
+        ],
+        "title": "DiscoverPreviewResponse",
+        "type": "object"
+      },
+      "DiscoveredModelResponse": {
+        "properties": {
+          "context_window": {
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "input_cost_per_token": {
+            "default": 0.0,
+            "title": "Input Cost Per Token",
+            "type": "number"
+          },
+          "is_new": {
+            "default": false,
+            "title": "Is New",
+            "type": "boolean"
+          },
+          "max_output_tokens": {
+            "default": 4096,
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "output_cost_per_token": {
+            "default": 0.0,
+            "title": "Output Cost Per Token",
+            "type": "number"
+          },
+          "supports_function_calling": {
+            "default": false,
+            "title": "Supports Function Calling",
+            "type": "boolean"
+          },
+          "supports_reasoning": {
+            "default": false,
+            "title": "Supports Reasoning",
+            "type": "boolean"
+          },
+          "supports_vision": {
+            "default": false,
+            "title": "Supports Vision",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model_name",
+          "display_name",
+          "context_window"
+        ],
+        "title": "DiscoveredModelResponse",
+        "type": "object"
+      },
+      "DiscoveryResponse": {
+        "properties": {
+          "discovered": {
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredModelResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "new_models": {
+            "title": "New Models",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discovered",
+          "new_models",
+          "models"
+        ],
+        "title": "DiscoveryResponse",
+        "type": "object"
+      },
       "EscalationResolution": {
         "properties": {
           "approved": {
@@ -1146,6 +1465,7 @@
         "type": "object"
       },
       "EventConfig": {
+        "description": "One event subscription for an agent.",
         "properties": {
           "config": {
             "anyOf": [
@@ -1157,14 +1477,17 @@
                 "type": "null"
               }
             ],
+            "description": "Event-specific configuration.",
             "title": "Config"
           },
           "enabled": {
             "default": true,
+            "description": "Whether this subscription is active.",
             "title": "Enabled",
             "type": "boolean"
           },
           "event_type": {
+            "description": "Event type the agent listens to.",
             "title": "Event Type",
             "type": "string"
           }
@@ -1176,6 +1499,7 @@
         "type": "object"
       },
       "EventsConfig": {
+        "description": "Per-agent event subscriptions.",
         "properties": {
           "events": {
             "anyOf": [
@@ -1417,14 +1741,18 @@
         "type": "object"
       },
       "HeaderInput": {
+        "additionalProperties": false,
+        "description": "One custom HTTP header attached to an OpenAPI connection.\n\nNon-safe header names (e.g. ``Authorization``) are stored encrypted in the\nsecret manager \u2014 pass the plaintext value here at create/update time.",
         "properties": {
           "name": {
+            "description": "HTTP header name. Allowed characters: letters, digits, '-', '_'.",
             "maxLength": 256,
             "title": "Name",
             "type": "string"
           },
           "value": {
             "default": "",
+            "description": "Header value. May not contain CR, LF, or NUL bytes.",
             "maxLength": 8192,
             "title": "Value",
             "type": "string"
@@ -1437,6 +1765,7 @@
         "type": "object"
       },
       "HeaderOutput": {
+        "description": "Header metadata returned in API responses (secret values are masked).",
         "properties": {
           "name": {
             "title": "Name",
@@ -1538,6 +1867,199 @@
           "success"
         ],
         "title": "ImportResult",
+        "type": "object"
+      },
+      "InboxResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskWithAgent"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "InboxResponse",
+        "type": "object"
+      },
+      "InvitationCreatedResponse": {
+        "description": "Same as InvitationResponse plus the plaintext token, returned ONCE.",
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accepted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By User Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invited_by": {
+            "title": "Invited By",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "email",
+          "invited_by",
+          "status",
+          "expires_at",
+          "accepted_at",
+          "accepted_by_user_id",
+          "created_at",
+          "token"
+        ],
+        "title": "InvitationCreatedResponse",
+        "type": "object"
+      },
+      "InvitationResponse": {
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accepted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By User Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invited_by": {
+            "title": "Invited By",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "email",
+          "invited_by",
+          "status",
+          "expires_at",
+          "accepted_at",
+          "accepted_by_user_id",
+          "created_at"
+        ],
+        "title": "InvitationResponse",
         "type": "object"
       },
       "JSONRPCError": {
@@ -1762,6 +2284,8 @@
         "type": "object"
       },
       "MCPServerCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating an MCP server spec (catalog template).\n\nEither ``docker_image_url`` (for container-based servers) or\n``remote_url`` (for HTTP-based servers like GitHub Copilot) should be\nsupplied. ``env_schema`` describes the variables an instance built from\nthis spec needs to provide; secret entries (``isSecret: true``) are\nrouted through the secret manager rather than stored in plaintext.",
         "properties": {
           "cmd": {
             "anyOf": [
@@ -1775,18 +2299,25 @@
                 "type": "null"
               }
             ],
-            "description": "Custom command to override container CMD (useful for switching between stdio and HTTP modes)",
+            "description": "Custom command override for container CMD (e.g. switching between stdio and HTTP modes).",
             "title": "Cmd"
           },
           "description": {
-            "description": "Description of the MCP server",
+            "description": "Short summary of what this MCP server provides.",
             "title": "Description",
             "type": "string"
           },
           "docker_image_url": {
-            "description": "Docker image URL",
-            "title": "Docker Image Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Docker image URL for container-based MCP servers.",
+            "title": "Docker Image Url"
           },
           "env_schema": {
             "anyOf": [
@@ -1801,22 +2332,61 @@
                 "type": "null"
               }
             ],
-            "description": "Environment variable schema",
+            "description": "Environment-variable schema entries (KeyValueInput from the MCP registry). Each item has at least 'name' and 'description'; mark secrets with 'isSecret: true'.",
             "title": "Env Schema"
           },
           "is_public": {
             "default": false,
-            "description": "Whether the server is public",
+            "description": "If true, the spec is visible across workspaces.",
             "title": "Is Public",
             "type": "boolean"
           },
+          "json_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw ServerJSON spec as published by the MCP registry.",
+            "title": "Json Spec"
+          },
           "name": {
-            "description": "Name of the MCP server",
+            "description": "Human-readable MCP server name (unique per workspace).",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
+          "registry_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source registry URL the spec was imported from.",
+            "title": "Registry Url"
+          },
+          "remote_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Remote endpoint URL for HTTP-based MCP servers.",
+            "title": "Remote Url"
+          },
           "tags": {
-            "description": "Tags for categorization",
+            "description": "Tags used for search and categorization.",
             "items": {
               "type": "string"
             },
@@ -1825,20 +2395,21 @@
           },
           "version": {
             "default": "1.0.0",
-            "description": "Version of the MCP server",
+            "description": "Semantic version of the MCP server spec.",
             "title": "Version",
             "type": "string"
           }
         },
         "required": [
           "name",
-          "description",
-          "docker_image_url"
+          "description"
         ],
         "title": "MCPServerCreate",
         "type": "object"
       },
-      "MCPServerInstanceCreateRequest": {
+      "MCPServerInstanceCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating an MCP server instance.\n\n``json_spec`` carries the connection configuration. Common shapes:\n\n- ``{\"type\": \"url\", \"endpoint_url\": \"https://...\"}``\n- ``{\"type\": \"docker\", \"environment\": {...}, \"env_vars\": [...]}``\n- ``{\"type\": \"command\", \"command\": [...], \"environment\": {...}}``\n- ``{\"type\": \"bundle\", \"members\": [\"<instance-id>\", ...]}``\n\nFor URL-type instances the service synchronously verifies the endpoint;\ndocker/command kick off background verification.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -1849,7 +2420,7 @@
                 "type": "null"
               }
             ],
-            "description": "ID of the auth config to use",
+            "description": "ID of an MCP auth config (OAuth/credentials) to attach.",
             "title": "Auth Config Id"
           },
           "description": {
@@ -1861,17 +2432,19 @@
                 "type": "null"
               }
             ],
-            "description": "Description of the instance",
+            "description": "Optional human-readable description of the instance.",
             "title": "Description"
           },
           "json_spec": {
             "additionalProperties": true,
-            "description": "Configuration specification as JSON",
+            "description": "Connection configuration. Must include 'type' ('url' | 'docker' | 'command' | 'bundle'); other keys depend on type.",
             "title": "Json Spec",
             "type": "object"
           },
           "name": {
-            "description": "Name of the MCP server instance",
+            "description": "Display name for this MCP server instance (unique per workspace).",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -1884,7 +2457,7 @@
                 "type": "null"
               }
             ],
-            "description": "ID of the MCP server spec (optional)",
+            "description": "ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.). Optional for ad-hoc URL instances.",
             "title": "Server Spec Id"
           }
         },
@@ -1892,13 +2465,17 @@
           "name",
           "json_spec"
         ],
-        "title": "MCPServerInstanceCreateRequest",
+        "title": "MCPServerInstanceCreate",
         "type": "object"
       },
       "MCPServerInstanceResponse": {
         "properties": {
           "auth_config_id": {
             "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
               {
                 "type": "string"
               },
@@ -1934,6 +2511,18 @@
             "title": "Json Spec",
             "type": "object"
           },
+          "last_dispatch": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dispatch"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1949,14 +2538,30 @@
             ],
             "title": "Server Spec Id"
           },
-          "status": {
-            "title": "Status",
-            "type": "string"
+          "tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
           },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "verification": {
+            "additionalProperties": true,
+            "title": "Verification",
+            "type": "object"
           }
         },
         "required": [
@@ -1965,7 +2570,7 @@
           "description",
           "server_spec_id",
           "json_spec",
-          "status",
+          "verification",
           "created_at",
           "updated_at"
         ],
@@ -1973,6 +2578,8 @@
         "type": "object"
       },
       "MCPServerInstanceUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for an MCP server instance. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "description": {
             "anyOf": [
@@ -2000,6 +2607,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -2007,17 +2616,6 @@
               }
             ],
             "title": "Name"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
           }
         },
         "title": "MCPServerInstanceUpdate",
@@ -2069,9 +2667,43 @@
             "title": "Is Public",
             "type": "boolean"
           },
+          "json_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Spec"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "registry_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Url"
+          },
+          "remote_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Url"
           },
           "status": {
             "title": "Status",
@@ -2112,6 +2744,8 @@
         "type": "object"
       },
       "MCPServerUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for an MCP server spec. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "cmd": {
             "anyOf": [
@@ -2125,7 +2759,6 @@
                 "type": "null"
               }
             ],
-            "description": "Custom command to override container CMD",
             "title": "Cmd"
           },
           "description": {
@@ -2137,7 +2770,6 @@
                 "type": "null"
               }
             ],
-            "description": "Description of the MCP server",
             "title": "Description"
           },
           "docker_image_url": {
@@ -2149,8 +2781,22 @@
                 "type": "null"
               }
             ],
-            "description": "Docker image URL",
             "title": "Docker Image Url"
+          },
+          "env_schema": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Schema"
           },
           "is_public": {
             "anyOf": [
@@ -2161,10 +2807,34 @@
                 "type": "null"
               }
             ],
-            "description": "Whether the server is public",
             "title": "Is Public"
           },
+          "json_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Spec"
+          },
           "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "registry_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -2173,8 +2843,18 @@
                 "type": "null"
               }
             ],
-            "description": "Name of the MCP server",
-            "title": "Name"
+            "title": "Registry Url"
+          },
+          "remote_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Url"
           },
           "status": {
             "anyOf": [
@@ -2185,7 +2865,7 @@
                 "type": "null"
               }
             ],
-            "description": "Status of the MCP server",
+            "description": "Lifecycle status of the spec (e.g. 'active', 'deprecated').",
             "title": "Status"
           },
           "tags": {
@@ -2200,7 +2880,6 @@
                 "type": "null"
               }
             ],
-            "description": "Tags for categorization",
             "title": "Tags"
           },
           "version": {
@@ -2212,7 +2891,6 @@
                 "type": "null"
               }
             ],
-            "description": "Version of the MCP server",
             "title": "Version"
           }
         },
@@ -2246,6 +2924,124 @@
           }
         },
         "title": "MPPConfigSchema",
+        "type": "object"
+      },
+      "MemberResponse": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invitation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitation Id"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "user_id",
+          "joined_at",
+          "invitation_id"
+        ],
+        "title": "MemberResponse",
+        "type": "object"
+      },
+      "ModelInstanceBulkCreateRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInstanceCreate"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ModelInstanceBulkCreateRequest",
+        "type": "object"
+      },
+      "ModelInstanceBulkCreateResponse": {
+        "properties": {
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInstanceBulkFailure"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "failed_count": {
+            "title": "Failed Count",
+            "type": "integer"
+          },
+          "succeeded": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInstanceResponse"
+            },
+            "title": "Succeeded",
+            "type": "array"
+          },
+          "succeeded_count": {
+            "title": "Succeeded Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "succeeded",
+          "failed",
+          "succeeded_count",
+          "failed_count"
+        ],
+        "title": "ModelInstanceBulkCreateResponse",
+        "type": "object"
+      },
+      "ModelInstanceBulkFailure": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "model_spec_id": {
+            "title": "Model Spec Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "model_spec_id",
+          "error"
+        ],
+        "title": "ModelInstanceBulkFailure",
         "type": "object"
       },
       "ModelInstanceCreate": {
@@ -2697,6 +3493,7 @@
             "enum": [
               "agent",
               "mcp_instance",
+              "openapi_connection",
               "skill",
               "trigger"
             ],
@@ -2860,6 +3657,8 @@
         "type": "object"
       },
       "OpenAPIConnectionCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating an OpenAPI connection.\n\nThe connection ties a base URL (where requests are sent) to an\nOpenAPI 3.x specification (which is parsed eagerly into a tool list).\nProvide either ``spec_url`` or ``spec_content`` \u2014 not both required.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -2871,9 +3670,11 @@
                 "type": "null"
               }
             ],
+            "description": "Optional MCPAuthConfig UUID for OAuth2 token rotation. When set, tokens are minted/refreshed on the connection's behalf.",
             "title": "Auth Config Id"
           },
           "base_url": {
+            "description": "Base URL for API requests, e.g. 'https://api.example.com'.",
             "maxLength": 500,
             "title": "Base Url",
             "type": "string"
@@ -2890,6 +3691,7 @@
                 "type": "null"
               }
             ],
+            "description": "Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.",
             "title": "Custom Headers"
           },
           "description": {
@@ -2901,10 +3703,13 @@
                 "type": "null"
               }
             ],
+            "description": "Optional human-readable summary of what this API exposes.",
             "title": "Description"
           },
           "name": {
+            "description": "Display name for the connection (unique per workspace).",
             "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -2918,6 +3723,7 @@
                 "type": "null"
               }
             ],
+            "description": "Inline OpenAPI 3.x spec as a JSON object. Use instead of ``spec_url`` when the spec host is unreachable from the API.",
             "title": "Spec Content"
           },
           "spec_url": {
@@ -2929,6 +3735,7 @@
                 "type": "null"
               }
             ],
+            "description": "URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.",
             "title": "Spec Url"
           }
         },
@@ -3034,6 +3841,8 @@
         "type": "object"
       },
       "OpenAPIConnectionUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for an OpenAPI connection. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -3045,6 +3854,7 @@
                 "type": "null"
               }
             ],
+            "description": "Optional MCPAuthConfig UUID for OAuth2 token rotation.",
             "title": "Auth Config Id"
           },
           "base_url": {
@@ -3071,6 +3881,7 @@
                 "type": "null"
               }
             ],
+            "description": "Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.",
             "title": "Custom Headers"
           },
           "description": {
@@ -3088,6 +3899,7 @@
             "anyOf": [
               {
                 "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -3309,30 +4121,39 @@
         "type": "object"
       },
       "ProjectCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating a project.\n\nA project is a workspace-scoped container that groups skills, agents,\nMCP server instances, and uploaded files under a shared identity and\noptional parent project.",
         "properties": {
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "Short summary of the project's purpose.",
             "title": "Description"
           },
           "instructions": {
             "anyOf": [
               {
+                "maxLength": 20000,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "System-level instructions or notes shared across the project's agents.",
             "title": "Instructions"
           },
           "name": {
+            "description": "Human-readable project name (unique per workspace).",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -3345,6 +4166,7 @@
                 "type": "null"
               }
             ],
+            "description": "UUID of the parent project, if this is a sub-project.",
             "title": "Parent Project Id"
           }
         },
@@ -3356,8 +4178,8 @@
       },
       "ProjectFileDownloadResponse": {
         "properties": {
-          "key": {
-            "title": "Key",
+          "path": {
+            "title": "Path",
             "type": "string"
           },
           "url": {
@@ -3367,20 +4189,23 @@
         },
         "required": [
           "url",
-          "key"
+          "path"
         ],
         "title": "ProjectFileDownloadResponse",
         "type": "object"
       },
       "ProjectFileInfo": {
         "properties": {
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
           "last_modified": {
-            "title": "Last Modified",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
           },
           "path": {
             "title": "Path",
@@ -3393,9 +4218,7 @@
         },
         "required": [
           "path",
-          "key",
-          "size",
-          "last_modified"
+          "size"
         ],
         "title": "ProjectFileInfo",
         "type": "object"
@@ -3408,15 +4231,10 @@
             },
             "title": "Files",
             "type": "array"
-          },
-          "prefix": {
-            "title": "Prefix",
-            "type": "string"
           }
         },
         "required": [
-          "files",
-          "prefix"
+          "files"
         ],
         "title": "ProjectFileListResponse",
         "type": "object"
@@ -3489,10 +4307,6 @@
             "title": "Mcp Instances",
             "type": "array"
           },
-          "minio_prefix": {
-            "title": "Minio Prefix",
-            "type": "string"
-          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3528,8 +4342,7 @@
           "name",
           "description",
           "instructions",
-          "parent_project_id",
-          "minio_prefix"
+          "parent_project_id"
         ],
         "title": "ProjectResponse",
         "type": "object"
@@ -3554,30 +4367,50 @@
         "type": "object"
       },
       "ProjectUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for a project. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "New project description.",
             "title": "Description"
           },
           "instructions": {
             "anyOf": [
               {
+                "maxLength": 20000,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "New project-level instructions.",
             "title": "Instructions"
           },
           "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New project name.",
+            "title": "Name"
+          },
+          "parent_project_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -3586,17 +4419,34 @@
                 "type": "null"
               }
             ],
-            "title": "Name"
+            "description": "New parent project UUID, or null to detach.",
+            "title": "Parent Project Id"
           }
         },
         "title": "ProjectUpdate",
         "type": "object"
       },
       "ProviderConfigCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating an LLM provider configuration.",
         "properties": {
           "api_key": {
+            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
             "title": "Api Key",
             "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional human-readable description of this configuration.",
+            "title": "Description"
           },
           "endpoint_url": {
             "anyOf": [
@@ -3607,18 +4457,24 @@
                 "type": "null"
               }
             ],
+            "description": "Optional custom endpoint URL (e.g. for self-hosted or proxied providers). Leave unset to use the provider's default.",
             "title": "Endpoint Url"
           },
           "is_public": {
             "default": false,
+            "description": "If True, the configuration is visible to all workspace members; otherwise it is scoped to the creator.",
             "title": "Is Public",
             "type": "boolean"
           },
           "name": {
+            "description": "Human-readable label for this provider configuration.",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
           "provider_spec_id": {
+            "description": "UUID of the provider specification (e.g. OpenAI, Anthropic) this configuration targets. Look up via list_specs.",
             "format": "uuid",
             "title": "Provider Spec Id",
             "type": "string"
@@ -3730,17 +4586,34 @@
         "type": "object"
       },
       "ProviderConfigUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for an existing provider configuration. Unset = unchanged.",
         "properties": {
           "api_key": {
             "anyOf": [
               {
+                "minLength": 1,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "New API key. Replaces the previously stored secret.",
             "title": "Api Key"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New description for the configuration.",
+            "title": "Description"
           },
           "endpoint_url": {
             "anyOf": [
@@ -3751,6 +4624,7 @@
                 "type": "null"
               }
             ],
+            "description": "New endpoint URL, or empty string to clear.",
             "title": "Endpoint Url"
           },
           "is_active": {
@@ -3762,17 +4636,33 @@
                 "type": "null"
               }
             ],
+            "description": "Activate or deactivate the configuration.",
             "title": "Is Active"
+          },
+          "is_public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Toggle workspace-wide visibility.",
+            "title": "Is Public"
           },
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "New human-readable label for the configuration.",
             "title": "Name"
           }
         },
@@ -4700,23 +5590,116 @@
         "title": "SyncResponse",
         "type": "object"
       },
-      "TaskCreate": {
+      "TaskArtifactItem": {
+        "description": "A single artifact stored under a task's workspace scope.",
         "properties": {
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "enable_agent_communication": {
+          "content_type": {
             "anyOf": [
               {
-                "type": "boolean"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "default": true,
-            "title": "Enable Agent Communication"
+            "title": "Content Type"
+          },
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size",
+          "content_type",
+          "last_modified",
+          "download_url"
+        ],
+        "title": "TaskArtifactItem",
+        "type": "object"
+      },
+      "TaskCommandPayload": {
+        "properties": {
+          "budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Usd"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "model_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Instance Id"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "TaskCommandPayload",
+        "type": "object"
+      },
+      "TaskCreate": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
           },
           "parameters": {
             "additionalProperties": true,
@@ -4897,6 +5880,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "total_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost"
           }
         },
         "required": [
@@ -4908,6 +5902,139 @@
           "created_at"
         ],
         "title": "TaskResponse",
+        "type": "object"
+      },
+      "TaskSummary": {
+        "description": "Headline rollup for a single task, derived from the event log.\n\nBacked by the ``task_summary`` Postgres view. Stable contract \u2014 when\nthe view's implementation moves to a materialized view or projection\ntable, this shape stays the same. Per-tool breakdowns and per-artifact\nlists are deliberately not here; they live in their own endpoints so\nthis stays small and additive.",
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "cost_usd": {
+            "default": 0.0,
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "delegations_completed": {
+            "default": 0,
+            "title": "Delegations Completed",
+            "type": "integer"
+          },
+          "delegations_failed": {
+            "default": 0,
+            "title": "Delegations Failed",
+            "type": "integer"
+          },
+          "delegations_started": {
+            "default": 0,
+            "title": "Delegations Started",
+            "type": "integer"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "final_response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Response"
+          },
+          "iterations": {
+            "default": 0,
+            "title": "Iterations",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "llm_calls": {
+            "default": 0,
+            "title": "Llm Calls",
+            "type": "integer"
+          },
+          "llm_calls_failed": {
+            "default": 0,
+            "title": "Llm Calls Failed",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "tools_called": {
+            "default": 0,
+            "title": "Tools Called",
+            "type": "integer"
+          },
+          "tools_failed": {
+            "default": 0,
+            "title": "Tools Failed",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "workspace_id",
+          "status"
+        ],
+        "title": "TaskSummary",
         "type": "object"
       },
       "TaskWithAgent": {
@@ -4970,6 +6097,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "total_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost"
           }
         },
         "required": [
@@ -5005,7 +6143,8 @@
             "enum": [
               "code",
               "mcp",
-              "agent"
+              "agent",
+              "openapi"
             ],
             "title": "Type",
             "type": "string"
@@ -5092,9 +6231,7 @@
           "allowed_tools": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
+                "items": {},
                 "type": "array"
               },
               {
@@ -5128,6 +6265,17 @@
             ],
             "title": "Disabled Methods"
           },
+          "openapi_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Connection Id"
+          },
           "requires_user_confirmation": {
             "anyOf": [
               {
@@ -5143,15 +6291,18 @@
         "title": "ToolSettingsYAML",
         "type": "object"
       },
-      "TriggerCreateRequest": {
-        "description": "Request model for creating a trigger.",
+      "TriggerCreate": {
+        "additionalProperties": false,
+        "description": "Payload for creating a trigger.\n\nA trigger fires an agent \u2014 either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration.",
         "properties": {
           "agent_id": {
+            "description": "UUID of the agent to invoke when the trigger fires.",
             "format": "uuid",
             "title": "Agent Id",
             "type": "string"
           },
           "allowed_methods": {
+            "description": "HTTP methods accepted on the webhook endpoint.",
             "items": {
               "type": "string"
             },
@@ -5173,6 +6324,7 @@
           },
           "conditions": {
             "additionalProperties": true,
+            "description": "Optional conditions evaluated against event data before firing.",
             "title": "Conditions",
             "type": "object"
           },
@@ -5185,16 +6337,49 @@
                 "type": "null"
               }
             ],
+            "description": "5- or 6-field cron expression (required when trigger_type='cron').",
             "title": "Cron Expression"
+          },
+          "data_extractor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Polling extractor identifier (e.g. 'mailslurper', 'imap').",
+            "title": "Data Extractor"
+          },
+          "data_extractor_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connection/auth details for the polling extractor.",
+            "title": "Data Extractor Config"
           },
           "description": {
             "default": "",
+            "description": "Short summary of what this trigger does.",
             "maxLength": 1000,
             "title": "Description",
             "type": "string"
           },
+          "enabled": {
+            "default": true,
+            "description": "Whether the trigger is active immediately on creation.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
           "event_types": {
-            "description": "Event types to filter (empty = all events)",
+            "description": "Event types to filter on (empty list = accept all events).",
             "items": {
               "type": "string"
             },
@@ -5203,12 +6388,14 @@
           },
           "failure_threshold": {
             "default": 5,
+            "description": "Auto-disable after this many consecutive failed executions.",
             "maximum": 100.0,
             "minimum": 1.0,
             "title": "Failure Threshold",
             "type": "integer"
           },
           "name": {
+            "description": "Human-readable trigger name.",
             "maxLength": 255,
             "minLength": 1,
             "title": "Name",
@@ -5216,20 +6403,29 @@
           },
           "task_parameters": {
             "additionalProperties": true,
+            "description": "Parameters merged into the task created when the trigger fires.",
             "title": "Task Parameters",
             "type": "object"
           },
           "timezone": {
             "default": "UTC",
+            "description": "IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').",
             "title": "Timezone",
             "type": "string"
           },
           "trigger_type": {
+            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.",
+            "enum": [
+              "cron",
+              "webhook",
+              "polling"
+            ],
             "title": "Trigger Type",
             "type": "string"
           },
           "validation_rules": {
             "additionalProperties": true,
+            "description": "Per-channel validation rules (signature secrets, allowed senders, etc).",
             "title": "Validation Rules",
             "type": "object"
           },
@@ -5243,6 +6439,7 @@
                 "type": "null"
               }
             ],
+            "description": "Channel-specific configuration (bot tokens, signing keys, etc).",
             "title": "Webhook Config"
           },
           "webhook_id": {
@@ -5254,10 +6451,12 @@
                 "type": "null"
               }
             ],
+            "description": "Public webhook path segment. Auto-generated if omitted for webhook triggers.",
             "title": "Webhook Id"
           },
           "webhook_type": {
             "default": "generic",
+            "description": "Channel type: 'generic', 'telegram', 'slack', 'discord', etc.",
             "title": "Webhook Type",
             "type": "string"
           }
@@ -5267,7 +6466,27 @@
           "agent_id",
           "trigger_type"
         ],
-        "title": "TriggerCreateRequest",
+        "title": "TriggerCreate",
+        "type": "object"
+      },
+      "TriggerExecuteRequest": {
+        "description": "Request model for executing a trigger via the event service.",
+        "properties": {
+          "channel_origin": {
+            "additionalProperties": true,
+            "title": "Channel Origin",
+            "type": "object"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "title": "TriggerExecuteRequest",
         "type": "object"
       },
       "TriggerExecutionResponse": {
@@ -5408,6 +6627,17 @@
               }
             ],
             "title": "Cron Expression"
+          },
+          "data_extractor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Extractor"
           },
           "description": {
             "title": "Description",
@@ -5610,8 +6840,9 @@
         "title": "TriggerStatusResponse",
         "type": "object"
       },
-      "TriggerUpdateRequest": {
-        "description": "Request model for updating a trigger.",
+      "TriggerUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for a trigger. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "allowed_methods": {
             "anyOf": [
@@ -5675,6 +6906,18 @@
             ],
             "title": "Description"
           },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).",
+            "title": "Enabled"
+          },
           "failure_threshold": {
             "anyOf": [
               {
@@ -5687,17 +6930,6 @@
               }
             ],
             "title": "Failure Threshold"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
           },
           "name": {
             "anyOf": [
@@ -5771,7 +7003,7 @@
             "title": "Webhook Type"
           }
         },
-        "title": "TriggerUpdateRequest",
+        "title": "TriggerUpdate",
         "type": "object"
       },
       "UpdateAllResponse": {
@@ -5870,6 +7102,50 @@
           }
         },
         "title": "UpdateWalletRequest",
+        "type": "object"
+      },
+      "ValidateRequest": {
+        "properties": {
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For type=url: the MCP endpoint URL",
+            "title": "Endpoint Url"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "type": {
+            "description": "Instance type: url, docker, command, bundle",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "ValidateRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -6059,6 +7335,88 @@
         "title": "WalletResponse",
         "type": "object"
       },
+      "WorkspaceFileDownloadResponse": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "path"
+        ],
+        "title": "WorkspaceFileDownloadResponse",
+        "type": "object"
+      },
+      "WorkspaceFileInfo": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "WorkspaceFileInfo",
+        "type": "object"
+      },
+      "WorkspaceFileListResponse": {
+        "properties": {
+          "directories": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Directories",
+            "type": "array"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFileInfo"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "WorkspaceFileListResponse",
+        "type": "object"
+      },
       "X402ConfigSchema": {
         "properties": {
           "facilitator_url": {
@@ -6126,13 +7484,49 @@
             "title": "Id",
             "type": "string"
           },
+          "input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.0,
+            "title": "Input Cost Per Token"
+          },
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
           },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 4096,
+            "title": "Max Output Tokens"
+          },
           "model_name": {
             "title": "Model Name",
             "type": "string"
+          },
+          "output_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.0,
+            "title": "Output Cost Per Token"
           },
           "provider_key": {
             "anyOf": [
@@ -6159,6 +7553,42 @@
           "provider_spec_id": {
             "title": "Provider Spec Id",
             "type": "string"
+          },
+          "supports_function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Function Calling"
+          },
+          "supports_reasoning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Reasoning"
+          },
+          "supports_vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Vision"
           },
           "updated_at": {
             "format": "date-time",
@@ -6211,17 +7641,89 @@
             "title": "Id",
             "type": "string"
           },
+          "input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.0,
+            "title": "Input Cost Per Token"
+          },
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 4096,
+            "title": "Max Output Tokens"
           },
           "model_name": {
             "title": "Model Name",
             "type": "string"
           },
+          "output_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.0,
+            "title": "Output Cost Per Token"
+          },
           "provider_spec_id": {
             "title": "Provider Spec Id",
             "type": "string"
+          },
+          "supports_function_calling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Function Calling"
+          },
+          "supports_reasoning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Reasoning"
+          },
+          "supports_vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Supports Vision"
           },
           "updated_at": {
             "format": "date-time",
@@ -7638,6 +9140,152 @@
         ]
       }
     },
+    "/v1/agents/{agent_id}/tasks/{task_id}/artifacts": {
+      "get": {
+        "description": "List artifacts the agent produced under ``tasks/{task_id}/``.\n\nWorkspace-scoped: the task must belong to the caller's workspace, or we\nreturn 404. Each item carries a presigned download URL valid for\n``expires_in`` seconds (default 1 hour, capped at 24h).",
+        "operationId": "list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expires_in",
+            "required": false,
+            "schema": {
+              "default": 3600,
+              "maximum": 86400,
+              "minimum": 60,
+              "title": "Expires In",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskArtifactItem"
+                  },
+                  "title": "Response List Task Artifacts V1 Agents  Agent Id  Tasks  Task Id  Artifacts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Task Artifacts",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/command": {
+      "post": {
+        "description": "Send a command to a running task workflow.",
+        "operationId": "send_task_command_v1_agents__agent_id__tasks__task_id__command_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCommandPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Task Command",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
     "/v1/agents/{agent_id}/tasks/{task_id}/events": {
       "get": {
         "description": "Get paginated task execution events for the specified task from database.",
@@ -8042,6 +9690,67 @@
           }
         ],
         "summary": "Get Agent Task Status",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/summary": {
+      "get": {
+        "description": "Per-task rollup derived from the event log via the ``task_summary`` view.\n\nWorkspace-scoped: the row must belong to the caller's workspace and\nthe agent must match, or we return 404 (same shape as other task\nendpoints \u2014 no information leak).",
+        "operationId": "get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Task Summary",
         "tags": [
           "v1",
           "protected",
@@ -8693,19 +10402,199 @@
         ]
       }
     },
-    "/v1/compound-mcps/": {
+    "/v1/audit-logs/": {
       "get": {
-        "operationId": "list_compound_mcps_v1_compound_mcps__get",
+        "description": "List audit events for the current workspace.",
+        "operationId": "list_audit_logs_v1_audit_logs__get",
+        "parameters": [
+          {
+            "description": "Filter by action (e.g. agent.create)",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by action (e.g. agent.create)",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Filter by actor ID",
+            "in": "query",
+            "name": "actor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by actor ID",
+              "title": "Actor Id"
+            }
+          },
+          {
+            "description": "Filter by resource type",
+            "in": "query",
+            "name": "resource_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by resource type",
+              "title": "Resource Type"
+            }
+          },
+          {
+            "description": "Filter by resource ID",
+            "in": "query",
+            "name": "resource_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by resource ID",
+              "title": "Resource Id"
+            }
+          },
+          {
+            "description": "Events after this time (ISO 8601)",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events after this time (ISO 8601)",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Events before this time (ISO 8601)",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events before this time (ISO 8601)",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "Cursor for pagination",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cursor for pagination",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Max events to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Max events to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CompoundMCPResponse"
-                  },
-                  "title": "Response List Compound Mcps V1 Compound Mcps  Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/AuditLogListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Audit Logs",
+        "tags": [
+          "v1",
+          "protected",
+          "audit"
+        ]
+      }
+    },
+    "/v1/files": {
+      "get": {
+        "operationId": "list_workspace_files_v1_files_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceFileListResponse"
                 }
               }
             },
@@ -8717,169 +10606,173 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Compound Mcps",
+        "summary": "List Workspace Files",
         "tags": [
           "v1",
           "protected",
-          "compound-mcps"
+          "files"
         ]
-      },
+      }
+    },
+    "/v1/files/{file_path}": {
+      "get": {
+        "operationId": "download_workspace_file_v1_files__file_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceFileDownloadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Workspace File",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/inbox/": {
+      "get": {
+        "description": "List tasks requiring user attention.\n\nReturns tasks with actionable statuses (waiting_for_approval, completed, failed),\nordered by most recently updated first. Includes total count for badge/pagination.",
+        "operationId": "get_inbox_items_v1_inbox__get",
+        "parameters": [
+          {
+            "description": "Filter to a specific inbox status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to a specific inbox status",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Filter by agent ID",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by agent ID",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Inbox Items",
+        "tags": [
+          "v1",
+          "protected",
+          "inbox"
+        ]
+      }
+    },
+    "/v1/invitations/accept": {
       "post": {
-        "operationId": "create_compound_mcp_v1_compound_mcps__post",
+        "description": "Accept an invitation as the authenticated user.\n\nIdempotent: accepting twice (or accepting when already a member)\nreturns the same membership.",
+        "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CompoundMCPCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompoundMCPResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Compound Mcp",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
-        ]
-      }
-    },
-    "/v1/compound-mcps/{compound_id}": {
-      "delete": {
-        "operationId": "delete_compound_mcp_v1_compound_mcps__compound_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Compound Mcp",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
-        ]
-      },
-      "get": {
-        "operationId": "get_compound_mcp_v1_compound_mcps__compound_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompoundMCPResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Compound Mcp",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
-        ]
-      },
-      "put": {
-        "operationId": "update_compound_mcp_v1_compound_mcps__compound_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompoundMCPUpdateRequest"
+                "$ref": "#/components/schemas/AcceptInvitationBody"
               }
             }
           },
@@ -8890,7 +10783,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CompoundMCPResponse"
+                  "$ref": "#/components/schemas/AcceptInvitationResponse"
                 }
               }
             },
@@ -8912,176 +10805,11 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Compound Mcp",
+        "summary": "Accept Invitation",
         "tags": [
           "v1",
           "protected",
-          "compound-mcps"
-        ]
-      }
-    },
-    "/v1/compound-mcps/{compound_id}/members": {
-      "get": {
-        "operationId": "list_compound_mcp_members_v1_compound_mcps__compound_id__members_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CompoundMCPMemberResponse"
-                  },
-                  "title": "Response List Compound Mcp Members V1 Compound Mcps  Compound Id  Members Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Compound Mcp Members",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
-        ]
-      },
-      "post": {
-        "operationId": "add_compound_mcp_member_v1_compound_mcps__compound_id__members_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompoundMCPMemberRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompoundMCPMemberResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Add Compound Mcp Member",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
-        ]
-      }
-    },
-    "/v1/compound-mcps/{compound_id}/members/{instance_id}": {
-      "delete": {
-        "operationId": "remove_compound_mcp_member_v1_compound_mcps__compound_id__members__instance_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "compound_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Compound Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Instance Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Remove Compound Mcp Member",
-        "tags": [
-          "v1",
-          "protected",
-          "compound-mcps"
+          "workspace-invitations"
         ]
       }
     },
@@ -9510,9 +11238,147 @@
         ]
       }
     },
+    "/v1/mcp-oauth/authorize": {
+      "get": {
+        "description": "Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.\n\n1. Look up the MCP instance's remote URL\n2. Discover the authorization server (RFC 9728 \u2192 RFC 8414)\n3. Dynamically register as an OAuth client (RFC 7591)\n4. Generate PKCE pair and state\n5. Redirect user to the authorization endpoint",
+        "operationId": "oauth_authorize_v1_mcp_oauth_authorize_get",
+        "parameters": [
+          {
+            "description": "MCP instance to connect",
+            "in": "query",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "description": "MCP instance to connect",
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Frontend URL to redirect after OAuth completes",
+            "in": "query",
+            "name": "return_to",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Frontend URL to redirect after OAuth completes",
+              "title": "Return To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Authorize",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-oauth-connect"
+        ]
+      }
+    },
+    "/v1/mcp-oauth/callback": {
+      "get": {
+        "description": "OAuth callback \u2014 exchange code for token and store in MCPAuthConfig.\n\nThis endpoint does NOT require auth (the user is mid-redirect from the\nremote AS). The state token proves the flow was initiated by our /authorize.",
+        "operationId": "oauth_callback_v1_mcp_oauth_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "title": "State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "title": "Error",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "required": false,
+            "schema": {
+              "title": "Error Description",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Oauth Callback",
+        "tags": [
+          "v1",
+          "public",
+          "mcp-oauth-connect"
+        ]
+      }
+    },
     "/v1/mcp-server-instances/": {
       "get": {
-        "description": "List all MCP server instances in the workspace.\n\nAccess Control:\n    Returns all instances within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace instances.",
+        "description": "List all MCP server instances in the workspace.",
         "operationId": "list_mcp_server_instances_v1_mcp_server_instances__get",
         "responses": {
           "200": {
@@ -9543,19 +11409,20 @@
         ]
       },
       "post": {
+        "description": "Create a new MCP server instance.\n\nReturns 201 for url/bundle (synchronous verification completed).\nReturns 202 for docker/command (background verification in progress).",
         "operationId": "create_mcp_server_instance_v1_mcp_server_instances__post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MCPServerInstanceCreateRequest"
+                "$ref": "#/components/schemas/MCPServerInstanceCreate"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -9591,7 +11458,7 @@
     },
     "/v1/mcp-server-instances/check": {
       "post": {
-        "description": "Check if an MCP server instance configuration is valid by validating it\nthrough the golang manager.",
+        "description": "Check if an MCP server instance configuration is valid via the Go manager.",
         "operationId": "check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post",
         "requestBody": {
           "content": {
@@ -9640,7 +11507,7 @@
     },
     "/v1/mcp-server-instances/health/containers": {
       "get": {
-        "description": "Get health status of all MCP containers by proxying to the golang manager.",
+        "description": "Get health status of all MCP containers by proxying to the Go manager.",
         "operationId": "get_containers_health_v1_mcp_server_instances_health_containers_get",
         "responses": {
           "200": {
@@ -9658,6 +11525,102 @@
           }
         ],
         "summary": "Get Containers Health",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/validate": {
+      "post": {
+        "description": "Stateless spec validation. For type=url, probes with list_tools (3s budget).",
+        "operationId": "validate_instance_spec_v1_mcp_server_instances_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Validate Instance Spec",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/validate-connection": {
+      "post": {
+        "description": "Test a connection to an MCP server without creating an instance.",
+        "operationId": "validate_connection_v1_mcp_server_instances_validate_connection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Data",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Validate Connection",
         "tags": [
           "v1",
           "protected",
@@ -9819,58 +11782,8 @@
         ]
       }
     },
-    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
-      "post": {
-        "description": "Trigger tool discovery for a specific MCP server instance.",
-        "operationId": "discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Instance Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Discover Instance Tools",
-        "tags": [
-          "v1",
-          "protected",
-          "mcp-server-instances"
-        ]
-      }
-    },
     "/v1/mcp-server-instances/{instance_id}/environment": {
       "get": {
-        "description": "Get environment variables for an MCP server instance.\n\nNote: This endpoint should have proper authentication and authorization in production.",
         "operationId": "get_instance_environment_v1_mcp_server_instances__instance_id__environment_get",
         "parameters": [
           {
@@ -9919,7 +11832,6 @@
     },
     "/v1/mcp-server-instances/{instance_id}/oauth-link": {
       "post": {
-        "description": "Generate an OAuth-protected shareable link for a container MCP instance.",
         "operationId": "create_oauth_link_v1_mcp_server_instances__instance_id__oauth_link_post",
         "parameters": [
           {
@@ -9980,7 +11892,6 @@
     },
     "/v1/mcp-server-instances/{instance_id}/oauth-links": {
       "get": {
-        "description": "List all active OAuth links for an MCP server instance.",
         "operationId": "list_oauth_links_v1_mcp_server_instances__instance_id__oauth_links_get",
         "parameters": [
           {
@@ -10027,9 +11938,10 @@
         ]
       }
     },
-    "/v1/mcp-server-instances/{instance_id}/start": {
+    "/v1/mcp-server-instances/{instance_id}/probe": {
       "post": {
-        "operationId": "start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post",
+        "description": "Probe a URL-type MCP instance to detect its auth requirements.",
+        "operationId": "probe_instance_auth_v1_mcp_server_instances__instance_id__probe_post",
         "parameters": [
           {
             "in": "path",
@@ -10067,55 +11979,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Start Mcp Server Instance",
-        "tags": [
-          "v1",
-          "protected",
-          "mcp-server-instances"
-        ]
-      }
-    },
-    "/v1/mcp-server-instances/{instance_id}/stop": {
-      "post": {
-        "operationId": "stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Instance Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Stop Mcp Server Instance",
+        "summary": "Probe Instance Auth",
         "tags": [
           "v1",
           "protected",
@@ -10125,8 +11989,8 @@
     },
     "/v1/mcp-server-instances/{instance_id}/test-auth": {
       "post": {
-        "description": "Test the authentication configuration attached to an MCP server instance.\n\nAttempts to connect to the MCP endpoint with the configured auth headers and\nreturns a diagnostic result without executing any tools.",
-        "operationId": "test_mcp_auth_v1_mcp_server_instances__instance_id__test_auth_post",
+        "description": "Test the authentication configuration attached to an MCP server instance.",
+        "operationId": "run_test_auth_v1_mcp_server_instances__instance_id__test_auth_post",
         "parameters": [
           {
             "in": "path",
@@ -10164,7 +12028,56 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Test Mcp Auth",
+        "summary": "Run Test Auth",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/{instance_id}/verify": {
+      "post": {
+        "description": "Run verification on an MCP server instance and return the fresh result synchronously.\n\nHTTP 200 regardless of verification outcome \u2014 the call itself succeeded.\nCheck verification.status in the response to determine success/failure.",
+        "operationId": "verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Verify Mcp Server Instance",
         "tags": [
           "v1",
           "protected",
@@ -10338,171 +12251,6 @@
           }
         ],
         "summary": "Create Mcp Server",
-        "tags": [
-          "v1",
-          "protected",
-          "mcp-servers"
-        ]
-      }
-    },
-    "/v1/mcp-servers/from-template/{template_key}": {
-      "post": {
-        "description": "Create an MCP server from a template.",
-        "operationId": "create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "template_key",
-            "required": true,
-            "schema": {
-              "title": "Template Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "server_name",
-            "required": true,
-            "schema": {
-              "title": "Server Name",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "server_description",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Server Description",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "version",
-            "required": false,
-            "schema": {
-              "default": "latest",
-              "title": "Version",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MCPServerResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Mcp Server From Template",
-        "tags": [
-          "v1",
-          "protected",
-          "mcp-servers"
-        ]
-      }
-    },
-    "/v1/mcp-servers/templates": {
-      "get": {
-        "description": "Get all available MCP server templates from the YAML configuration.",
-        "operationId": "get_mcp_server_templates_v1_mcp_servers_templates_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response Get Mcp Server Templates V1 Mcp Servers Templates Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Mcp Server Templates",
-        "tags": [
-          "v1",
-          "protected",
-          "mcp-servers"
-        ]
-      }
-    },
-    "/v1/mcp-servers/templates/{template_key}": {
-      "get": {
-        "description": "Get a specific MCP server template by key.",
-        "operationId": "get_mcp_server_template_v1_mcp_servers_templates__template_key__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "template_key",
-            "required": true,
-            "schema": {
-              "title": "Template Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Mcp Server Template V1 Mcp Servers Templates  Template Key  Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Mcp Server Template",
         "tags": [
           "v1",
           "protected",
@@ -10847,6 +12595,55 @@
           }
         ],
         "summary": "Create Model Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "model-instances"
+        ]
+      }
+    },
+    "/v1/model-instances/bulk": {
+      "post": {
+        "description": "Create many model instances in a single request.\n\nPartial-success semantics: each item is created independently and per-item\nfailures are returned in `failed` rather than aborting the whole batch.\nUse this from UIs that let users select N models from a discovered list to\navoid N HTTP round-trips.",
+        "operationId": "create_model_instances_bulk_v1_model_instances_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelInstanceBulkCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelInstanceBulkCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Model Instances Bulk",
         "tags": [
           "v1",
           "protected",
@@ -11883,54 +13680,6 @@
         ]
       }
     },
-    "/v1/openapi-connections/{connection_id}/test": {
-      "post": {
-        "operationId": "check_connection_v1_openapi_connections__connection_id__test_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "connection_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Connection Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Check Connection",
-        "tags": [
-          "v1",
-          "protected",
-          "openapi-connections"
-        ]
-      }
-    },
     "/v1/projects/": {
       "get": {
         "description": "List all projects in the current workspace.",
@@ -12305,7 +14054,7 @@
     },
     "/v1/projects/{project_id}/files": {
       "get": {
-        "description": "List all files in a project's MinIO prefix.",
+        "description": "List files under the project's prefix.",
         "operationId": "list_project_files_v1_projects__project_id__files_get",
         "parameters": [
           {
@@ -12354,7 +14103,7 @@
         ]
       },
       "post": {
-        "description": "Upload a file to a project's MinIO prefix.",
+        "description": "Upload a file to a project's workspace-scoped artifact prefix.",
         "operationId": "upload_project_file_v1_projects__project_id__files_post",
         "parameters": [
           {
@@ -12408,7 +14157,7 @@
     },
     "/v1/projects/{project_id}/files/{file_path}": {
       "delete": {
-        "description": "Delete a file from a project's MinIO prefix.",
+        "description": "Delete a file from the project's prefix.",
         "operationId": "delete_project_file_v1_projects__project_id__files__file_path__delete",
         "parameters": [
           {
@@ -12459,7 +14208,7 @@
         ]
       },
       "get": {
-        "description": "Download a file from a project's MinIO prefix (presigned URL).",
+        "description": "Generate a presigned URL for a project file.",
         "operationId": "download_project_file_v1_projects__project_id__files__file_path__get",
         "parameters": [
           {
@@ -12906,6 +14655,55 @@
         ]
       }
     },
+    "/v1/provider-configs/discover-preview": {
+      "post": {
+        "description": "Discover models from a provider API using the provided API key, without requiring a saved config.",
+        "operationId": "discover_models_preview_v1_provider_configs_discover_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Discover Models Preview",
+        "tags": [
+          "v1",
+          "protected",
+          "provider-configs"
+        ]
+      }
+    },
     "/v1/provider-configs/with-instances": {
       "get": {
         "description": "List provider configurations with their model instances.",
@@ -13081,8 +14879,67 @@
           "provider-configs"
         ]
       },
+      "patch": {
+        "description": "Partially update a provider configuration.",
+        "operationId": "patch_provider_config_v1_provider_configs__config_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Config Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Provider Config",
+        "tags": [
+          "v1",
+          "protected",
+          "provider-configs"
+        ]
+      },
       "put": {
-        "description": "Update a provider configuration.",
+        "description": "Update a provider configuration (full replace via PUT).",
         "operationId": "update_provider_config_v1_provider_configs__config_id__put",
         "parameters": [
           {
@@ -13134,6 +14991,57 @@
           }
         ],
         "summary": "Update Provider Config",
+        "tags": [
+          "v1",
+          "protected",
+          "provider-configs"
+        ]
+      }
+    },
+    "/v1/provider-configs/{config_id}/discover": {
+      "post": {
+        "description": "Discover available models from the provider API and sync to model specs.",
+        "operationId": "discover_models_v1_provider_configs__config_id__discover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Config Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Discover Models",
         "tags": [
           "v1",
           "protected",
@@ -14848,6 +16756,57 @@
         ]
       }
     },
+    "/v1/tasks/{task_id}": {
+      "get": {
+        "description": "Get a single task by ID across all agents.",
+        "operationId": "get_task_by_id_v1_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWithAgent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Task By Id",
+        "tags": [
+          "v1",
+          "protected",
+          "tasks"
+        ]
+      }
+    },
     "/v1/triggers/": {
       "get": {
         "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
@@ -14956,13 +16915,13 @@
         ]
       },
       "post": {
-        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    request: Trigger creation request data\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    secret_manager: Injected secret manager for credential storage\n\nReturns:\n    The created trigger\n\nRaises:\n    HTTPException: If validation fails or creation errors occur",
+        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
         "operationId": "create_trigger_v1_triggers__post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TriggerCreateRequest"
+                "$ref": "#/components/schemas/TriggerCreate"
               }
             }
           },
@@ -14996,6 +16955,40 @@
           }
         ],
         "summary": "Create Trigger",
+        "tags": [
+          "v1",
+          "protected",
+          "triggers"
+        ]
+      }
+    },
+    "/v1/triggers/catalog": {
+      "get": {
+        "description": "Get the trigger catalog \u2014 available trigger types with metadata and events.",
+        "operationId": "get_catalog_v1_triggers_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Catalog V1 Triggers Catalog Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Catalog",
         "tags": [
           "v1",
           "protected",
@@ -15163,7 +17156,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. If channel_credentials are provided,\nthey replace the existing credentials in the secret store.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: Trigger update request data\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    secret_manager: Injected secret manager for credential storage\n\nReturns:\n    The updated trigger\n\nRaises:\n    HTTPException: If trigger not found or validation fails",
+        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. If channel_credentials are provided,\nthey replace the existing credentials in the secret store.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {
@@ -15181,7 +17174,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TriggerUpdateRequest"
+                "$ref": "#/components/schemas/TriggerUpdate"
               }
             }
           },
@@ -15402,6 +17395,69 @@
         "tags": [
           "v1",
           "protected",
+          "triggers"
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/execute": {
+      "post": {
+        "description": "Execute a trigger with the provided event data.\n\nCalled by the Go event service when a polling channel receives new messages.\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: Events and channel origin data\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
+        "operationId": "execute_trigger_v1_triggers__trigger_id__execute_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerExecuteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Execute Trigger V1 Triggers  Trigger Id  Execute Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Execute Trigger",
+        "tags": [
+          "v1",
+          "public",
           "triggers"
         ]
       }
@@ -15885,6 +17941,276 @@
           "v1",
           "protected",
           "workspace-config"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace_id}/invitations": {
+      "get": {
+        "description": "List pending invitations for the workspace. Tokens are NOT returned.",
+        "operationId": "list_invitations_v1_workspaces__workspace_id__invitations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationResponse"
+                  },
+                  "title": "Response List Invitations V1 Workspaces  Workspace Id  Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Invitations",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      },
+      "post": {
+        "description": "Create an invitation link for the given workspace.\n\nThe plaintext ``token`` is returned exactly once in the response.\nThe caller delivers it however they want (link, email, Slack).",
+        "operationId": "create_invitation_v1_workspaces__workspace_id__invitations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationCreatedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Invitation",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace_id}/invitations/{invitation_id}": {
+      "delete": {
+        "description": "Revoke a pending invitation. Idempotent \u2014 already-resolved invitations are no-ops.",
+        "operationId": "revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Invitation",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace_id}/members": {
+      "get": {
+        "operationId": "list_members_v1_workspaces__workspace_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponse"
+                  },
+                  "title": "Response List Members V1 Workspaces  Workspace Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Members",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace_id}/members/{user_id}": {
+      "delete": {
+        "description": "Remove a member from the workspace. Self-removal allowed; removing\nothers requires the caller to be a member of the workspace (owner-only\ncheck belongs to the permissions PR).",
+        "operationId": "remove_member_v1_workspaces__workspace_id__members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Member",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
         ]
       }
     },

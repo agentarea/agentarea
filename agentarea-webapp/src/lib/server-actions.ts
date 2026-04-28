@@ -221,7 +221,7 @@ export async function listSkillsAction() {
 }
 
 export async function createMCPServerInstanceAction(
-  instance: components["schemas"]["MCPServerInstanceCreateRequest"]
+  instance: components["schemas"]["MCPServerInstanceCreate"]
 ) {
   return await createMCPServerInstance(instance);
 }

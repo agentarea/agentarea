@@ -325,7 +325,7 @@ export function createApiClient(client: Client) {
     },
 
     createMCPServerInstance: async (
-      instance: components["schemas"]["MCPServerInstanceCreateRequest"]
+      instance: components["schemas"]["MCPServerInstanceCreate"]
     ) => {
       const { data, error } = await client.POST("/v1/mcp-server-instances/", {
         body: instance,

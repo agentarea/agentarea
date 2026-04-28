@@ -902,6 +902,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Accept an invitation as the authenticated user.
+         *
+         *     Idempotent: accepting twice (or accepting when already a member)
+         *     returns the same membership.
+         */
+        post: operations["accept_invitation_v1_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-auth-configs/": {
         parameters: {
             query?: never;
@@ -3083,6 +3106,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invitations
+         * @description List pending invitations for the workspace. Tokens are NOT returned.
+         */
+        get: operations["list_invitations_v1_workspaces__workspace_id__invitations_get"];
+        put?: never;
+        /**
+         * Create Invitation
+         * @description Create an invitation link for the given workspace.
+         *
+         *     The plaintext ``token`` is returned exactly once in the response.
+         *     The caller delivers it however they want (link, email, Slack).
+         */
+        post: operations["create_invitation_v1_workspaces__workspace_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invitation
+         * @description Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops.
+         */
+        delete: operations["revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_v1_workspaces__workspace_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description Remove a member from the workspace. Self-removal allowed; removing
+         *     others requires the caller to be a member of the workspace (owner-only
+         *     check belongs to the permissions PR).
+         */
+        delete: operations["remove_member_v1_workspaces__workspace_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/health": {
         parameters: {
             query?: never;
@@ -3240,6 +3349,23 @@ export interface components {
             name: string;
             /** Token Prefix */
             token_prefix: string;
+        };
+        /** AcceptInvitationBody */
+        AcceptInvitationBody: {
+            /** Token */
+            token: string;
+        };
+        /** AcceptInvitationResponse */
+        AcceptInvitationResponse: {
+            /**
+             * Invitation Id
+             * Format: uuid
+             */
+            invitation_id: string;
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** AgentAuthentication */
         AgentAuthentication: {
@@ -3551,6 +3677,13 @@ export interface components {
              * @description ZIP file containing the skill package
              */
             file: string;
+        };
+        /** CreateInvitationBody */
+        CreateInvitationBody: {
+            /** Email */
+            email?: string | null;
+            /** Expires In Days */
+            expires_in_days?: number | null;
         };
         /** CreateWalletRequest */
         CreateWalletRequest: {
@@ -3934,6 +4067,71 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * InvitationCreatedResponse
+         * @description Same as InvitationResponse plus the plaintext token, returned ONCE.
+         */
+        InvitationCreatedResponse: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Accepted By User Id */
+            accepted_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invited By */
+            invited_by: string;
+            /** Status */
+            status: string;
+            /** Token */
+            token: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** InvitationResponse */
+        InvitationResponse: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Accepted By User Id */
+            accepted_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invited By */
+            invited_by: string;
+            /** Status */
+            status: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /** JSONRPCError */
         JSONRPCError: {
             /** Code */
@@ -4295,6 +4493,25 @@ export interface components {
             session_budget_usd: number;
             /** Stripe Profile Id */
             stripe_profile_id?: string | null;
+        };
+        /** MemberResponse */
+        MemberResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invitation Id */
+            invitation_id: string | null;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** ModelInstanceBulkCreateRequest */
         ModelInstanceBulkCreateRequest: {
@@ -4867,7 +5084,7 @@ export interface components {
         ProviderConfigCreate: {
             /**
              * Api Key
-             * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses.
+             * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.
              */
             api_key: string;
             /**
@@ -7879,6 +8096,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_v1_invitations_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11946,6 +12196,163 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_v1_workspaces__workspace_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invitation_v1_workspaces__workspace_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_v1_workspaces__workspace_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_v1_workspaces__workspace_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

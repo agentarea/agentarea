@@ -42,9 +42,7 @@ const defaultProject: AccountExperienceConfiguration = {
   default_redirect_url: "/ui/welcome",
   error_ui_url: "/ui/error",
   default_locale: "en",
-  enabled_locales: ["en"],
   locale_behavior: "force_default",
-  translations: [],
 }
 
 /**
