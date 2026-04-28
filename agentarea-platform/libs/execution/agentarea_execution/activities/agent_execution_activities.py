@@ -114,7 +114,6 @@ _mcp_dispatch_failed_total = _make_counter(
 
 # Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
 _last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-_last_dispatch_flush_task: asyncio.Task | None = None
 
 
 async def _flush_last_dispatch_loop(get_session) -> None:
