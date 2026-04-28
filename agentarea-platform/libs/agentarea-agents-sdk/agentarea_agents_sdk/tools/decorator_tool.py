@@ -9,7 +9,6 @@ from .base_tool import BaseTool
 from .tool_definition import (
     ToolDefinition,
     ToolsetMetadata,
-    build_method_schema,
     build_tool_definition,
 )
 
@@ -95,7 +94,18 @@ class Toolset(ABC):
 
     @property
     def name(self) -> str:
-        """Get toolset name from class name (snake_case)."""
+        """Toolset name.
+
+        Prefers the last segment of ``@toolset(namespace="publisher/name")``
+        when the metadata is set — necessary because mechanical CamelCase
+        →snake_case mangles initialisms (``OpenAPIConnectionsToolset`` would
+        become ``open_a_p_i_connections``). Falls back to a class-name
+        derivation for legacy toolsets without ``@toolset``.
+        """
+        meta = getattr(self.__class__, "__toolset_meta__", None)
+        if meta and meta.namespace:
+            return meta.namespace.rsplit("/", 1)[-1]
+
         class_name = self.__class__.__name__
         # Convert CamelCase to snake_case
         import re

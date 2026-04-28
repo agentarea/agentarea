@@ -1,11 +1,11 @@
 """Project application service."""
 
 import logging
-from typing import Any
 from uuid import UUID
 
 from agentarea_projects.domain.models import Project
 from agentarea_projects.infrastructure.repository import ProjectRepository
+from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -16,22 +16,34 @@ class ProjectService:
     def __init__(self, repository: ProjectRepository):
         self.repository = repository
 
-    async def create(
-        self,
-        name: str,
-        description: str | None = None,
-        instructions: str | None = None,
-        parent_project_id: UUID | str | None = None,
-    ) -> Project:
-        """Create a new project. Files are stored under ``projects/{id}/`` in
-        ``ArtifactService`` (workspace-scoped); the prefix is fully derived
-        from the project id and not persisted."""
+    async def create_project(self, payload: ProjectCreate) -> Project:
+        """Create a new project.
+
+        Files are stored under ``projects/{id}/`` in ``ArtifactService``
+        (workspace-scoped); the prefix is fully derived from the project id
+        and is not persisted on the row.
+        """
         return await self.repository.create(
-            name=name,
-            description=description,
-            instructions=instructions,
-            parent_project_id=str(parent_project_id) if parent_project_id else None,
+            name=payload.name,
+            description=payload.description,
+            instructions=payload.instructions,
+            parent_project_id=(
+                str(payload.parent_project_id) if payload.parent_project_id else None
+            ),
         )
+
+    async def update_project(
+        self,
+        project_id: UUID | str,
+        payload: ProjectUpdate,
+    ) -> Project | None:
+        """Apply a partial update to a project. Only fields explicitly set on
+        the payload are written — unset fields remain unchanged.
+        """
+        patch = payload.model_dump(exclude_unset=True)
+        if "parent_project_id" in patch and patch["parent_project_id"] is not None:
+            patch["parent_project_id"] = str(patch["parent_project_id"])
+        return await self.repository.update(project_id, **patch)
 
     async def get(self, project_id: UUID | str) -> Project | None:
         """Get a project by ID."""
@@ -44,14 +56,6 @@ class ProjectService:
     ) -> list[Project]:
         """List all projects in the current workspace."""
         return await self.repository.list_all(limit=limit, offset=offset)
-
-    async def update(
-        self,
-        project_id: UUID | str,
-        **kwargs: Any,
-    ) -> Project | None:
-        """Update a project's fields."""
-        return await self.repository.update(project_id, **kwargs)
 
     async def delete(self, project_id: UUID | str) -> bool:
         """Delete a project."""

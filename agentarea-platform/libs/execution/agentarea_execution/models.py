@@ -72,7 +72,6 @@ class AgentExecutionRequest(BaseModel):
     # Execution configuration
     timeout_seconds: int = 300
     max_reasoning_iterations: int = 10
-    enable_agent_communication: bool = False
     requires_human_approval: bool = False
     budget_usd: Money | None = None  # Optional budget limit in USD
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .decorator_tool import Toolset, tool_method
+from .tool_definition import toolset
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,13 @@ class InMemoryStorage:
         self._data.pop((workspace_id, path.lstrip("/")), None)
 
 
+@toolset(
+    namespace="agentarea/files",
+    display_name="File Operations",
+    description="Read, write, list, and search files in the agent's workspace storage.",
+    category="utility",
+    requires_user_confirmation=True,
+)
 class FileToolset(Toolset):
     """Workspace-scoped file operations on top of a StorageClient.
 

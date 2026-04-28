@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from typing import Any
 from uuid import UUID
 
@@ -12,96 +11,17 @@ from agentarea_common.config import get_settings
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
+from agentarea_openapi.schemas.dto import (
+    HeaderOutput,
+    OpenAPIConnectionCreate,
+    OpenAPIConnectionUpdate,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/openapi-connections", tags=["openapi-connections"])
-
-
-class HeaderInput(BaseModel):
-    name: str = Field(..., max_length=256)
-    value: str = Field("", max_length=8192)
-
-    @field_validator("name")
-    @classmethod
-    def validate_header_name(cls, v: str) -> str:
-        if not re.match(r"^[a-zA-Z0-9\-_]+$", v.strip()):
-            raise ValueError("Header name contains invalid characters")
-        return v.strip()
-
-    @field_validator("value")
-    @classmethod
-    def validate_header_value(cls, v: str) -> str:
-        if "\r" in v or "\n" in v or "\x00" in v:
-            raise ValueError("Header value contains invalid characters")
-        return v
-
-
-class HeaderOutput(BaseModel):
-    name: str
-    secret: bool
-    value: str | None = None
-
-
-class OpenAPIConnectionCreate(BaseModel):
-    name: str = Field(..., max_length=255)
-    base_url: str = Field(..., max_length=500)
-    description: str | None = None
-    spec_url: str | None = None
-    spec_content: dict[str, Any] | None = None
-    auth_config_id: UUID | None = None
-    custom_headers: list[HeaderInput] | None = None
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, v: str) -> str:
-        try:
-            validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
-        except ValueError as e:
-            raise ValueError(str(e)) from e
-        return v
-
-    @field_validator("spec_url")
-    @classmethod
-    def validate_spec_url(cls, v: str | None) -> str | None:
-        if v is not None:
-            try:
-                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
-            except ValueError as e:
-                raise ValueError(str(e)) from e
-        return v
-
-
-class OpenAPIConnectionUpdate(BaseModel):
-    name: str | None = Field(None, max_length=255)
-    description: str | None = None
-    base_url: str | None = Field(None, max_length=500)
-    spec_url: str | None = None
-    spec_content: dict[str, Any] | None = None
-    auth_config_id: UUID | None = None
-    custom_headers: list[HeaderInput] | None = None
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, v: str | None) -> str | None:
-        if v is not None:
-            try:
-                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
-            except ValueError as e:
-                raise ValueError(str(e)) from e
-        return v
-
-    @field_validator("spec_url")
-    @classmethod
-    def validate_spec_url(cls, v: str | None) -> str | None:
-        if v is not None:
-            try:
-                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
-            except ValueError as e:
-                raise ValueError(str(e)) from e
-        return v
 
 
 class OpenAPIConnectionResponse(BaseModel):
@@ -221,18 +141,7 @@ async def create_connection(
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
     try:
-        headers_raw = (
-            [h.model_dump() for h in request.custom_headers] if request.custom_headers else None
-        )
-        conn = await service.create_connection(
-            name=request.name,
-            base_url=request.base_url,
-            description=request.description,
-            spec_url=request.spec_url,
-            spec_content=request.spec_content,
-            auth_config_id=request.auth_config_id,
-            custom_headers=headers_raw,
-        )
+        conn = await service.create_connection(request)
         resp = OpenAPIConnectionResponse.model_validate(conn)
         resp.custom_headers = _format_headers(conn.custom_headers)
         return resp
@@ -288,29 +197,13 @@ async def update_connection(
     request: OpenAPIConnectionUpdate,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):
-    fields = request.model_dump(exclude_unset=True)
-    if not fields:
+    if not request.model_fields_set:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    # Handle headers separately (needs secret management)
-    if "custom_headers" in fields:
-        raw_headers = fields.pop("custom_headers")
-        if raw_headers is not None:
-            conn = await service.update_headers(
-                connection_id,
-                [h if isinstance(h, dict) else h.model_dump() for h in raw_headers],
-            )
-            if not conn:
-                raise HTTPException(status_code=404, detail="Connection not found")
-            # Apply remaining fields if any
-            if fields:
-                conn = await service.update_connection(connection_id, **fields)
-        elif fields:
-            conn = await service.update_connection(connection_id, **fields)
-        else:
-            conn = await service.get_connection(connection_id)
-    else:
-        conn = await service.update_connection(connection_id, **fields)
+    try:
+        conn = await service.update_connection(connection_id, request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")

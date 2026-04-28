@@ -35,9 +35,5 @@ def downgrade() -> None:
             server_default="",
         ),
     )
-    op.execute(
-        sa.text(
-            "UPDATE projects SET minio_prefix = 'projects/' || id::text || '/files/'"
-        )
-    )
+    op.execute(sa.text("UPDATE projects SET minio_prefix = 'projects/' || id::text || '/files/'"))
     op.alter_column("projects", "minio_prefix", server_default=None)

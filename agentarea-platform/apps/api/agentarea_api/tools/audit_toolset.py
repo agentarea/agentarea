@@ -5,10 +5,17 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
 
 
+@toolset(
+    namespace="agentarea/audit",
+    display_name="Audit Log",
+    description="Inspect workspace audit log entries.",
+    category="platform",
+)
 class AuditToolset(Toolset):
     """Query the workspace audit log (read-only)."""
 

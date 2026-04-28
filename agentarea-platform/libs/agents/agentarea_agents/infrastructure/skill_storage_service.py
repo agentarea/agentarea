@@ -51,7 +51,8 @@ class SkillStorageService:
     @property
     def bucket_name(self) -> str:
         """S3 bucket name. Skills share the artifacts bucket and live under
-        the ``skills/`` prefix — keeps storage to one bucket per workspace."""
+        the ``skills/`` prefix — keeps storage to one bucket per workspace.
+        """
         return self.settings.ARTIFACTS_BUCKET_NAME
 
     def _get_s3_prefix(self, workspace_id: str, skill_id: str) -> str:

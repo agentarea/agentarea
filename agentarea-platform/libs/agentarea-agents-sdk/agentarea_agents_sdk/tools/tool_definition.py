@@ -47,8 +47,8 @@ class ToolsetMetadata(BaseModel):
     """Class-level metadata for a Toolset.
 
     Replaces the per-toolset block in ``code_tools.yaml``: namespace
-    (publisher/name), human display label, category, admin/visibility flags.
-    Stamped onto the class via ``@toolset(...)``.
+    (publisher/name), human display label, category. Stamped onto the
+    class via ``@toolset(...)``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -57,9 +57,14 @@ class ToolsetMetadata(BaseModel):
     display_name: str = ""
     description: str = ""
     category: str = ""
-    admin: bool = False
     enabled_by_default: bool = False
     requires_user_confirmation: bool = False
+
+
+# Decorator-driven registry: every ``@toolset(namespace=...)``-decorated class
+# self-registers here at import time. Replaces the legacy ``code_tools.yaml`` —
+# the class IS the source of truth, no parallel YAML to drift against.
+_TOOLSET_REGISTRY: dict[str, type] = {}
 
 
 def toolset(
@@ -68,27 +73,56 @@ def toolset(
     display_name: str = "",
     description: str = "",
     category: str = "",
-    admin: bool = False,
     enabled_by_default: bool = False,
     requires_user_confirmation: bool = False,
+    register: bool = True,
 ) -> Callable[[type], type]:
-    """Stamp ``ToolsetMetadata`` on a Toolset subclass."""
+    """Stamp ``ToolsetMetadata`` on a Toolset subclass and (by default) register it.
+
+    Args:
+        register: If False, only stamps metadata without adding the class to the
+            global lookup registry. Use when the class shares a ``namespace`` with
+            another implementation that should win the lookup. (Example: the
+            platform-side ``TriggersToolset`` and the agent-side
+            ``TriggersAgentToolset`` both manage triggers but expose different
+            surfaces; the agent variant owns the namespace in the registry.)
+    """
 
     meta = ToolsetMetadata(
         namespace=namespace,
         display_name=display_name,
         description=description,
         category=category,
-        admin=admin,
         enabled_by_default=enabled_by_default,
         requires_user_confirmation=requires_user_confirmation,
     )
 
     def decorator(cls: type) -> type:
         cls.__toolset_meta__ = meta
+        if register:
+            existing = _TOOLSET_REGISTRY.get(namespace)
+            if existing is not None and existing is not cls:
+                raise RuntimeError(
+                    f"Toolset namespace collision: {namespace!r} is already "
+                    f"registered to {existing.__module__}.{existing.__name__}; "
+                    f"cannot also register {cls.__module__}.{cls.__name__}. "
+                    "Pass register=False on one of them."
+                )
+            _TOOLSET_REGISTRY[namespace] = cls
         return cls
 
     return decorator
+
+
+def get_toolset_registry() -> dict[str, type]:
+    """Return the live decorator-driven Toolset registry (namespace → class).
+
+    Importing this module triggers all ``@toolset(...)`` decorators that have
+    already been imported elsewhere; callers that need the full catalog should
+    ensure all toolset modules are imported before reading the registry (see
+    ``code_tools_loader.ensure_all_toolsets_imported``).
+    """
+    return _TOOLSET_REGISTRY
 
 
 def _is_basemodel(annotation: Any) -> bool:
@@ -131,8 +165,8 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
     if not fields:
         return {"type": "object", "properties": {}}
 
-    Model = create_model(f"{method.__name__}_args", **fields)  # type: ignore[call-overload]
-    return Model.model_json_schema()
+    args_model = create_model(f"{method.__name__}_args", **fields)  # type: ignore[call-overload]
+    return args_model.model_json_schema()
 
 
 def build_tool_definition(

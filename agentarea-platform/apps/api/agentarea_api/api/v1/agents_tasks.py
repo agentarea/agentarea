@@ -19,13 +19,14 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from sqlalchemy import text
 from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,6 @@ global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 class TaskCreate(BaseModel):
     description: str
     parameters: dict[str, Any] = {}
-    enable_agent_communication: bool | None = True
     requires_human_approval: bool | None = False
     project_id: str | None = None
 
@@ -298,14 +298,17 @@ async def create_task_for_agent_with_stream(
             )
 
             # Create and execute task using service layer
-            task = await task_service.create_and_execute_task_with_workflow(
+            payload = RunCreate(
                 agent_id=agent_id,
                 description=data.description,
-                workspace_id=user_context.workspace_id,
                 parameters=data.parameters,
-                user_id=user_context.user_id,
-                enable_agent_communication=data.enable_agent_communication or True,
                 requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+            )
+            task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
             )
 
             # Send task created event
@@ -415,15 +418,19 @@ async def create_task_for_agent_sync(
 ):
     """Create and execute a task for the specified agent (synchronous response)."""
     try:
-        # Create and execute task using service layer
-        task = await task_service.create_and_execute_task_with_workflow(
+        # Create and execute task using shared payload-style entry point so REST
+        # /sync, REST streaming and MCP toolset all share the same lifecycle.
+        payload = RunCreate(
             agent_id=agent_id,
             description=data.description,
-            workspace_id=user_context.workspace_id,
             parameters=data.parameters,
-            user_id=user_context.user_id,
-            enable_agent_communication=data.enable_agent_communication or True,
             requires_human_approval=data.requires_human_approval or False,
+            project_id=data.project_id,
+        )
+        task = await task_service.start_run(
+            payload,
+            workspace_id=user_context.workspace_id,
+            user_id=user_context.user_id,
         )
 
         # Convert to API response format
@@ -689,20 +696,24 @@ async def get_task_summary(
     endpoints — no information leak).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT * FROM task_summary "
-                "WHERE task_id = :task_id "
-                "AND workspace_id = :workspace_id "
-                "AND agent_id = :agent_id"
-            ),
-            {
-                "task_id": str(task_id),
-                "workspace_id": user_context.workspace_id,
-                "agent_id": str(agent_id),
-            },
+        (
+            await session.execute(
+                text(
+                    "SELECT * FROM task_summary "
+                    "WHERE task_id = :task_id "
+                    "AND workspace_id = :workspace_id "
+                    "AND agent_id = :agent_id"
+                ),
+                {
+                    "task_id": str(task_id),
+                    "workspace_id": user_context.workspace_id,
+                    "agent_id": str(agent_id),
+                },
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
 
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")

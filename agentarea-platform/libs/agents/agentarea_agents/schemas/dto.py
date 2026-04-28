@@ -12,8 +12,9 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from agentarea_agents.schemas.import_export import ToolConfigYAML
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from agentarea_agents.schemas.import_export import ToolConfigYAML
 
 
 class EventConfig(BaseModel):
@@ -60,8 +61,7 @@ class AgentCreate(BaseModel):
     )
     model_id: str = Field(
         description=(
-            "Model instance UUID or provider model identifier "
-            "(e.g. 'gpt-4o', 'claude-3-5-sonnet')."
+            "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet')."
         ),
     )
     tools: list[ToolConfigYAML] | None = Field(

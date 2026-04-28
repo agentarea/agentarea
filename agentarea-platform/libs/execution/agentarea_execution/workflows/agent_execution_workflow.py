@@ -903,9 +903,7 @@ class AgentExecutionWorkflow:
             # Future "mode=conversation" delegations would opt in here.
             if self._awaiting_input:
                 if self._is_delegation_child():
-                    workflow.logger.info(
-                        "Delegated child completed — exiting without await_input"
-                    )
+                    workflow.logger.info("Delegated child completed — exiting without await_input")
                     break
                 await self._await_follow_up()
                 # If we got a new message, continue the loop

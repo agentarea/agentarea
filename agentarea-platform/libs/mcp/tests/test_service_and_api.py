@@ -13,6 +13,7 @@ from agentarea_mcp.application.service import (
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION, VERIFICATION_SCHEMA_VERSION
+from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
 
 
 # ---------------------------------------------------------------------------
@@ -179,8 +180,10 @@ class TestServiceCreateInstance:
         with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
              patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
             inst = await svc.create_instance(
-                name="url-inst",
-                json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
+                MCPServerInstanceCreate(
+                    name="url-inst",
+                    json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
+                )
             )
 
         assert inst is not None
@@ -199,8 +202,10 @@ class TestServiceCreateInstance:
         with patch("agentarea_mcp.application.service.verify", side_effect=fake_verify), \
              patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
             inst = await svc.create_instance(
-                name="docker-inst",
-                json_spec={"type": "docker"},
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    json_spec={"type": "docker"},
+                )
             )
 
         assert inst is not None
@@ -221,8 +226,10 @@ class TestServiceCreateInstance:
 
         with patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
             inst = await svc.create_instance(
-                name="bundle-inst",
-                json_spec={"type": "bundle", "members": [str(m_id)]},
+                MCPServerInstanceCreate(
+                    name="bundle-inst",
+                    json_spec={"type": "bundle", "members": [str(m_id)]},
+                )
             )
 
         assert inst is not None
@@ -242,8 +249,10 @@ class TestServiceCreateInstance:
         with patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
             with pytest.raises(ValueError) as exc_info:
                 await svc.create_instance(
-                    name="bad-bundle",
-                    json_spec={"type": "bundle", "members": [str(m_id)]},
+                    MCPServerInstanceCreate(
+                        name="bad-bundle",
+                        json_spec={"type": "bundle", "members": [str(m_id)]},
+                    )
                 )
 
         assert "failing-member" in str(exc_info.value)

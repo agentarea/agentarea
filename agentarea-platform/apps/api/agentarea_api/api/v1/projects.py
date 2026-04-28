@@ -9,6 +9,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
+from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, field_validator
 
@@ -36,19 +37,6 @@ ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
-
-
-class ProjectCreate(BaseModel):
-    name: str
-    description: str | None = None
-    instructions: str | None = None
-    parent_project_id: str | None = None
-
-
-class ProjectUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    instructions: str | None = None
 
 
 class AssociationBody(BaseModel):
@@ -123,12 +111,7 @@ async def create_project(
     service: ProjectServiceDep,
 ):
     """Create a new project."""
-    project = await service.create(
-        name=data.name,
-        description=data.description,
-        instructions=data.instructions,
-        parent_project_id=data.parent_project_id,
-    )
+    project = await service.create_project(data)
     return ProjectResponse.model_validate(project)
 
 
@@ -165,8 +148,7 @@ async def update_project(
     service: ProjectServiceDep,
 ):
     """Update a project's fields."""
-    update_data = data.model_dump(exclude_none=True)
-    project = await service.update(project_id, **update_data)
+    project = await service.update_project(project_id, data)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return ProjectResponse.model_validate(project)
@@ -304,7 +286,7 @@ async def list_project_files(
     objects = await svc.list(user_context.workspace_id, prefix=project_prefix)
     files = [
         ProjectFileInfo(
-            path=obj.path[len(project_prefix):],
+            path=obj.path[len(project_prefix) :],
             size=obj.size,
             last_modified=obj.last_modified,
         )

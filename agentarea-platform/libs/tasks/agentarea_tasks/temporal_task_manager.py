@@ -134,9 +134,6 @@ class TemporalTaskManager(BaseTaskManager):
                 workspace_id=task.workspace_id,
                 task_query=task.query,
                 task_parameters=task.task_parameters or {},
-                enable_agent_communication=bool(
-                    (task.metadata or {}).get("enable_agent_communication", False)
-                ),
                 requires_human_approval=bool(
                     (task.metadata or {}).get("requires_human_approval", False)
                 ),
@@ -154,7 +151,6 @@ class TemporalTaskManager(BaseTaskManager):
                 "task_parameters": execution_request.task_parameters,
                 "timeout_seconds": execution_request.timeout_seconds,
                 "max_reasoning_iterations": execution_request.max_reasoning_iterations,
-                "enable_agent_communication": execution_request.enable_agent_communication,
                 "requires_human_approval": execution_request.requires_human_approval,
                 "workflow_metadata": execution_request.workflow_metadata,
             }

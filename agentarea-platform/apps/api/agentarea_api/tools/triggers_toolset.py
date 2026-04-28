@@ -1,10 +1,21 @@
-"""TriggersToolset — manage cron and webhook triggers."""
+"""TriggersToolset — manage cron and webhook triggers.
+
+Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
+but the source of truth for ``create_cron``/``create_webhook`` is the
+Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
+contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity
+between toolset kwargs and DTO fields.
+"""
+
+from __future__ import annotations
 
 import json
 from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_triggers.schemas.dto import TriggerCreate
 
 from .base import platform_context, platform_read_context
 
@@ -49,6 +60,17 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
     }
 
 
+@toolset(
+    namespace="agentarea/triggers",
+    display_name="Triggers",
+    description="Schedule agents on cron expressions or wire them to webhooks.",
+    category="platform",
+    # Shares namespace with TriggersAgentToolset (agent self-management). The
+    # agent variant owns the registry lookup; this platform variant is exposed
+    # only via ``get_platform_tools()`` for the /mcp surface, so we skip
+    # registration to avoid the collision.
+    register=False,
+)
 class TriggersToolset(Toolset):
     """Manage triggers: list, get, create cron/webhook, update, delete, enable/disable, history."""
 
@@ -87,24 +109,40 @@ class TriggersToolset(Toolset):
         cron_expression: str,
         description: str = "",
         timezone: str = "UTC",
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
     ) -> str:
-        """Create a cron-based trigger that fires the given agent on a schedule."""
-        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
-            from agentarea_triggers.domain.enums import TriggerType
-            from agentarea_triggers.domain.models import TriggerCreate
+        """Create a cron-based trigger that fires the given agent on a schedule.
 
+        ``cron_expression`` is a 5- or 6-field expression evaluated in
+        ``timezone`` (default UTC). For one-shot reminders set day-of-month +
+        month so the cron only matches the intended date.
+
+        ``task_parameters`` are merged into every task created when the trigger
+        fires. ``conditions`` is an optional rule/LLM condition map evaluated
+        against event data before firing.
+        """
+        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
-            data = TriggerCreate(
+            payload = TriggerCreate(
                 name=name,
                 description=description,
                 agent_id=UUID(agent_id),
-                trigger_type=TriggerType.CRON,
+                trigger_type="cron",
                 cron_expression=cron_expression,
                 timezone=timezone,
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
+            )
+            trigger = await service.create_trigger_from_payload(
+                payload,
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            trigger = await service.create_trigger(data)
             return json.dumps(_trigger_summary(trigger), default=str)
 
     @tool_method
@@ -112,27 +150,44 @@ class TriggersToolset(Toolset):
         self,
         name: str,
         agent_id: str,
-        webhook_id: str,
+        webhook_id: str = "",
         description: str = "",
         webhook_type: str = "generic",
+        allowed_methods: list[str] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
+        event_types: list[str] | None = None,
     ) -> str:
-        """Create a webhook trigger. Inbound webhook URL becomes /webhooks/{webhook_id}."""
-        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
-            from agentarea_triggers.domain.enums import TriggerType
-            from agentarea_triggers.domain.models import TriggerCreate
+        """Create a webhook trigger. Inbound webhook URL becomes /webhooks/{webhook_id}.
 
+        If ``webhook_id`` is empty, a URL-safe id is auto-generated server-side.
+        ``webhook_type`` must be a registered channel ('generic', 'telegram',
+        'slack', 'discord', 'github', etc.). ``event_types`` filters which
+        channel events fire the trigger (empty = all events).
+        """
+        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
-            data = TriggerCreate(
+            payload = TriggerCreate(
                 name=name,
                 description=description,
                 agent_id=UUID(agent_id),
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_id=webhook_id,
+                trigger_type="webhook",
+                webhook_id=webhook_id or None,
                 webhook_type=webhook_type,
+                allowed_methods=allowed_methods or ["POST"],
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
+                event_types=event_types or [],
+            )
+            trigger = await service.create_trigger_from_payload(
+                payload,
                 created_by=user_ctx.user_id,
                 workspace_id=user_ctx.workspace_id,
             )
-            trigger = await service.create_trigger(data)
             return json.dumps(_trigger_summary(trigger), default=str)
 
     @tool_method

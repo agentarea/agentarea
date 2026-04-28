@@ -12,6 +12,7 @@ from agentarea_llm.application.model_discovery_service import ModelDiscoveryServ
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import ProviderConfig  # type: ignore
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -20,20 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/provider-configs", tags=["provider-configs"])
 
 
-# Provider Config schemas
-class ProviderConfigCreate(BaseModel):
-    provider_spec_id: UUID
-    name: str
-    api_key: str
-    endpoint_url: str | None = None
-    is_public: bool = False
-
-
-class ProviderConfigUpdate(BaseModel):
-    name: str | None = None
-    api_key: str | None = None
-    endpoint_url: str | None = None
-    is_active: bool | None = None
+__all__ = ["ProviderConfigCreate", "ProviderConfigUpdate", "router"]
 
 
 class ProviderConfigResponse(BaseModel):
@@ -187,12 +175,8 @@ async def create_provider_config(
 ):
     """Create a new provider configuration."""
     config = await provider_service.create_provider_config(
-        provider_spec_id=data.provider_spec_id,
-        name=data.name,
-        api_key=data.api_key,
-        endpoint_url=data.endpoint_url,
+        payload=data,
         created_by=str(user_context.user_id),
-        is_public=data.is_public,
     )
     return ProviderConfigResponse.from_domain(config)
 
@@ -359,13 +343,27 @@ async def update_provider_config(
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
-    """Update a provider configuration."""
+    """Update a provider configuration (full replace via PUT)."""
     config = await provider_service.update_provider_config(
         config_id=config_id,
-        name=data.name,
-        api_key=data.api_key,
-        endpoint_url=data.endpoint_url,
-        is_active=data.is_active,
+        payload=data,
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+    return ProviderConfigResponse.from_domain(config)
+
+
+@router.patch("/{config_id}", response_model=ProviderConfigResponse)
+async def patch_provider_config(
+    config_id: UUID,
+    data: ProviderConfigUpdate,
+    user_context: UserContextDep,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Partially update a provider configuration."""
+    config = await provider_service.update_provider_config(
+        config_id=config_id,
+        payload=data,
     )
     if not config:
         raise HTTPException(status_code=404, detail="Provider configuration not found")

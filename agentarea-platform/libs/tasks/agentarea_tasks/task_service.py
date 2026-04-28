@@ -20,6 +20,7 @@ from .domain.base_service import BaseTaskService
 from .domain.interfaces import BaseTaskManager
 from .domain.models import SimpleTask
 from .infrastructure.repository import TaskRepository
+from .schemas.dto import RunCreate
 
 if TYPE_CHECKING:
     from agentarea_common.base import RepositoryFactory
@@ -107,7 +108,6 @@ class TaskService(BaseTaskService):
         The caller's id, title, query, task_parameters, and metadata are
         preserved (passed through as overrides). Defaults still applied:
         - ``metadata.created_via="api"`` if not set
-        - ``enable_agent_communication=True`` (A2A is agent-to-agent by definition)
         - ``requires_human_approval=False``
         """
         meta = task.metadata or {}
@@ -117,12 +117,51 @@ class TaskService(BaseTaskService):
             workspace_id=task.workspace_id,
             parameters=task.task_parameters or {},
             user_id=task.user_id,
-            enable_agent_communication=meta.get("enable_agent_communication", True),
             requires_human_approval=meta.get("requires_human_approval", False),
             task_id=task.id,
             title=task.title,
             query=task.query,
             metadata_overrides=meta or None,
+        )
+
+    async def start_run(
+        self,
+        payload: RunCreate,
+        *,
+        workspace_id: str,
+        user_id: str | None = None,
+        created_via: str = "api",
+    ) -> SimpleTask:
+        """Start a new agent run from a validated DTO.
+
+        This is the payload-style public entry shared by REST, MCP toolset,
+        and any other surface that wants the Pydantic-validated contract
+        instead of building a ``SimpleTask`` by hand. Internally it delegates
+        to ``create_and_execute_task_with_workflow`` so all lifecycle, channel
+        routing, and metadata defaults stay in a single place.
+
+        Args:
+            payload: Validated run parameters (agent_id, description, etc.).
+            workspace_id: Owning workspace (multi-tenancy isolation; required).
+            user_id: User initiating the run, when authenticated.
+            created_via: Source tag stored on ``metadata.created_via``
+                (defaults to ``"api"``; toolset overrides to ``"mcp"``).
+
+        Returns:
+            The created (or routed-into) ``SimpleTask`` with execution info.
+        """
+        metadata_overrides: dict[str, Any] = {"created_via": created_via}
+        if payload.project_id is not None:
+            metadata_overrides["project_id"] = payload.project_id
+
+        return await self.create_and_execute_task_with_workflow(
+            agent_id=payload.agent_id,
+            description=payload.description,
+            workspace_id=workspace_id,
+            parameters=payload.parameters,
+            user_id=user_id,
+            requires_human_approval=payload.requires_human_approval,
+            metadata_overrides=metadata_overrides,
         )
 
     async def route_or_submit_task(self, task: SimpleTask) -> SimpleTask:
@@ -440,7 +479,6 @@ class TaskService(BaseTaskService):
     async def execute_task(
         self,
         task_id: UUID,
-        enable_agent_communication: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Execute a task (legacy method - prefer using submit_task)."""
         # Get the task
@@ -478,7 +516,6 @@ class TaskService(BaseTaskService):
         workspace_id: str,
         parameters: dict[str, Any] | None = None,
         user_id: str | None = None,
-        enable_agent_communication: bool = True,
         requires_human_approval: bool = False,
         *,
         task_id: UUID | None = None,
@@ -498,14 +535,11 @@ class TaskService(BaseTaskService):
             workspace_id: Workspace ID (required for multi-tenancy isolation)
             parameters: Task parameters (channel_origin.chat_id triggers routing)
             user_id: User ID
-            enable_agent_communication: Whether agent-to-agent calls are allowed
             requires_human_approval: Whether to gate the task on human approval
             task_id: Pre-assign the task id (A2A echoes it back in JSON-RPC reply)
             title: Override the default title (defaults to ``description``)
             query: Override the default query string (defaults to ``description``)
-            metadata_overrides: Caller metadata merged on top of canonical defaults
-                (so canonical fields like ``enable_agent_communication`` win unless
-                the caller explicitly sets them).
+            metadata_overrides: Caller metadata merged on top of canonical defaults.
             status: Initial task status (default ``pending``)
 
         Returns:
@@ -520,14 +554,13 @@ class TaskService(BaseTaskService):
         new_task_id = task_id or uuid4()
 
         # Build canonical metadata. Caller overrides are merged in first so the
-        # canonical fields (enable_agent_communication, requires_human_approval,
-        # created_via) always reflect the explicit args.
+        # canonical fields (requires_human_approval, created_via) always reflect
+        # the explicit args.
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
         metadata.setdefault("created_via", "api")
         metadata["agent_name"] = agent_name
-        metadata["enable_agent_communication"] = enable_agent_communication
         metadata["requires_human_approval"] = requires_human_approval
 
         # Create task
@@ -584,7 +617,6 @@ class TaskService(BaseTaskService):
         user_id: str,
         agent_id: UUID,
         task_parameters: dict[str, Any] | None = None,
-        enable_agent_communication: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Create a task and immediately start execution."""
         # Create the task
@@ -598,7 +630,7 @@ class TaskService(BaseTaskService):
         )
 
         # Execute it
-        async for event in self.execute_task(task.id, enable_agent_communication):
+        async for event in self.execute_task(task.id):
             yield event
 
     async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:

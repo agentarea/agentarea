@@ -401,7 +401,6 @@ class TestJWTTokenHandler:
 class TestJWTTestUtils:
     """Test suite for JWT test utilities."""
 
-    @pytest.mark.xfail(reason="Requires environment variables for Workflow settings")
     def test_generate_test_jwt_token_basic(self):
         """Test basic JWT token generation."""
         token = generate_test_jwt_token(user_id="test-user", workspace_id="test-workspace")
@@ -444,7 +443,6 @@ class TestJWTTestUtils:
         assert context.workspace_id == "test-workspace"
         assert context.roles == ["admin"]
 
-    @pytest.mark.xfail(reason="Requires environment variables for Workflow settings")
     def test_create_admin_test_token(self):
         """Test admin test token creation."""
         token = create_admin_test_token()
@@ -454,7 +452,6 @@ class TestJWTTestUtils:
         assert "user" in payload["roles"]
         assert payload["email"] == "admin@example.com"
 
-    @pytest.mark.xfail(reason="Requires environment variables for Workflow settings")
     def test_create_basic_test_token(self):
         """Test basic test token creation."""
         token = create_basic_test_token()
@@ -462,7 +459,6 @@ class TestJWTTestUtils:
         payload = jwt.decode(token, options={"verify_signature": False})
         assert payload["roles"] == ["user"]
 
-    @pytest.mark.xfail(reason="Requires environment variables for Workflow settings")
     def test_create_expired_test_token(self):
         """Test expired test token creation."""
         token = create_expired_test_token()

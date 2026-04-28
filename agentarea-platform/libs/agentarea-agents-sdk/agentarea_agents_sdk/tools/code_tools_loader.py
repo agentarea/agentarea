@@ -1,95 +1,103 @@
-"""Loader for code tools configuration from YAML."""
+"""Decorator-driven code tools loader.
 
-import importlib
+Replaces the legacy ``code_tools.yaml``: every ``@toolset(namespace=...)``-
+decorated class self-registers in ``_TOOLSET_REGISTRY`` at import time. This
+module exposes the same public surface (``get_code_tools_metadata``,
+``get_code_tool_class``, ``create_code_tool_instance``) consumed by the agent
+runtime, import/export, and MCP registry — but reads from the live registry
+instead of a YAML file. The class IS the source of truth.
+"""
+
+from __future__ import annotations
+
 import logging
-from pathlib import Path
 from typing import Any
 
-import yaml
+from .tool_definition import ToolsetMetadata, get_toolset_registry
 
 logger = logging.getLogger(__name__)
 
 
-def load_code_tools_config() -> dict[str, Any]:
-    """Load code tools configuration from YAML file.
-
-    Returns:
-        Dict containing code tools configuration
+def _ensure_all_toolsets_imported() -> None:
+    """Eager-import every module that defines a ``@toolset(...)`` class so the
+    registry is populated before lookup. Failures are logged but not fatal —
+    a missing optional dependency (e.g. ``agentarea_api.*`` in a worker-only
+    install) should not crash the loader.
     """
-    # Load config from package-level config directory
-    config_path = Path(__file__).parent.parent / "config" / "code_tools.yaml"
+    # Agent-runtime SDK code tools (calculator, math, file, web).
+    sdk_modules = [
+        "agentarea_agents_sdk.tools.calculate_tool",
+        "agentarea_agents_sdk.tools.math_toolset",
+        "agentarea_agents_sdk.tools.file_toolset",
+        "agentarea_agents_sdk.tools.web_toolset",
+    ]
+    # Platform toolsets exposed both to agents (via this loader) and to MCP
+    # clients (via apps/api ``get_platform_tools``).
+    platform_modules = [
+        "agentarea_api.tools.agents_toolset",
+        "agentarea_api.tools.runs_toolset",
+        "agentarea_api.tools.skills_toolset",
+        "agentarea_api.tools.projects_toolset",
+        "agentarea_api.tools.openapi_connections_toolset",
+        "agentarea_api.tools.mcp_servers_toolset",
+        "agentarea_api.tools.providers_toolset",
+        "agentarea_api.tools.models_toolset",
+        "agentarea_api.tools.secrets_toolset",
+        "agentarea_api.tools.audit_toolset",
+        "agentarea_api.tools.network_toolset",
+        "agentarea_api.tools.workspace_config_toolset",
+        "agentarea_api.tools.inbox_toolset",
+        "agentarea_api.tools.files_toolset",
+    ]
+    # Cross-package toolsets that don't live under apps/api but still register.
+    extension_modules = [
+        "agentarea_triggers.agent_tool",
+    ]
 
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            config = yaml.safe_load(f)
+    import importlib
 
-        logger.info(f"Loaded code tools config with {len(config.get('code_tools', {}))} tools")
-        return config
+    for mod_name in sdk_modules + platform_modules + extension_modules:
+        try:
+            importlib.import_module(mod_name)
+        except Exception as exc:
+            logger.debug("Skipping toolset module %s: %s", mod_name, exc)
 
-    except Exception as e:
-        logger.error(f"Failed to load code tools config: {e}")
-        # Return minimal config with just calculator
-        return {
-            "code_tools": {
-                "agentarea/calculator": {
-                    "display_name": "Calculator",
-                    "description": (
-                        "Perform basic mathematical calculations like addition, "
-                        "subtraction, multiplication, division"
-                    ),
-                    "class_path": "agentarea_agents_sdk.tools.calculate_tool.CalculateTool",
-                    "category": "utility",
-                    "enabled_by_default": False,
-                    "requires_user_confirmation": False,
-                }
-            },
-            "categories": [
-                {"id": "utility", "name": "Utility Tools", "description": "Basic utility functions"}
-            ],
-        }
+
+def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
+    return {
+        "namespace": meta.namespace,
+        "display_name": meta.display_name,
+        "description": meta.description,
+        "category": meta.category,
+        "enabled_by_default": meta.enabled_by_default,
+        "requires_user_confirmation": meta.requires_user_confirmation,
+        "class_path": f"{cls.__module__}.{cls.__name__}",
+    }
 
 
 def get_code_tools_metadata() -> dict[str, dict[str, Any]]:
-    """Get metadata for all code tools.
+    """Return metadata for every registered toolset, keyed by namespace.
 
-    Returns:
-        Dict mapping tool names (publisher/name format) to their metadata
+    Mirrors the old YAML shape (``name -> {display_name, description, ...}``)
+    so existing consumers (import/export, MCP registry) keep working.
     """
-    config = load_code_tools_config()
-    return config.get("code_tools", {})
+    _ensure_all_toolsets_imported()
+    registry = get_toolset_registry()
+    return {ns: _meta_to_dict(cls.__toolset_meta__, cls) for ns, cls in registry.items()}
 
 
 def get_code_tool_class(tool_name: str):
-    """Dynamically load a code tool class by name.
+    """Look up a registered Toolset class by its ``namespace``.
 
-    Args:
-        tool_name: Name of the tool to load (publisher/name format, e.g., "agentarea/calculator")
-
-    Returns:
-        Tool class or None if not found
+    Returns ``None`` if not found (mirrors legacy behaviour so callers can
+    log+skip rather than crash).
     """
-    metadata = get_code_tools_metadata()
-
-    if tool_name not in metadata:
-        logger.error(f"Tool {tool_name} not found in code tools config")
-        return None
-
-    tool_info = metadata[tool_name]
-    class_path = tool_info.get("class_path")
-
-    if not class_path:
-        logger.error(f"No class_path specified for tool {tool_name}")
-        return None
-
-    try:
-        module_name, class_name = class_path.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-        tool_class = getattr(module, class_name)
-        return tool_class
-
-    except Exception as e:
-        logger.error(f"Failed to load tool class {class_path}: {e}")
-        return None
+    _ensure_all_toolsets_imported()
+    registry = get_toolset_registry()
+    cls = registry.get(tool_name)
+    if cls is None:
+        logger.error("Toolset %s not found in registry", tool_name)
+    return cls
 
 
 def create_code_tool_instance(
@@ -97,20 +105,21 @@ def create_code_tool_instance(
     toolset_config: dict | None = None,
     extra_kwargs: dict | None = None,
 ):
-    """Create an instance of a code tool with optional toolset configuration.
+    """Instantiate a registered toolset by namespace, merging optional kwargs.
 
     Args:
-        tool_name: Name of the tool to create (publisher/name format, e.g., "agentarea/calculator")
-        toolset_config: Optional configuration for toolsets (which methods to enable)
-        extra_kwargs: Runtime-injected kwargs (e.g. workspace-scoped base_dir
-            for file tools). Merged on top of toolset_config.
+        tool_name: Toolset namespace (e.g. ``agentarea/files``).
+        toolset_config: Per-method config (e.g. ``disabled_methods``) passed
+            to the constructor when the class supports it.
+        extra_kwargs: Runtime-injected dependencies (storage client, workspace
+            id, default agent id, etc.). Merged on top of ``toolset_config``.
 
     Returns:
-        Tool instance or None if creation fails
+        Instantiated tool, or ``None`` if the class is missing or constructor
+        raised.
     """
-    tool_class = get_code_tool_class(tool_name)
-
-    if not tool_class:
+    cls = get_code_tool_class(tool_name)
+    if cls is None:
         return None
 
     kwargs: dict = {}
@@ -121,14 +130,10 @@ def create_code_tool_instance(
 
     try:
         if kwargs:
-            logger.debug(f"Creating {tool_name} with kwargs: {list(kwargs)}")
-            tool_instance = tool_class(**kwargs)
-        else:
-            logger.debug(f"Creating regular tool {tool_name}")
-            tool_instance = tool_class()
-
-        return tool_instance
-
-    except Exception as e:
-        logger.error(f"Failed to create tool instance {tool_name}: {e}")
+            logger.debug("Creating %s with kwargs: %s", tool_name, list(kwargs))
+            return cls(**kwargs)
+        logger.debug("Creating %s with default constructor", tool_name)
+        return cls()
+    except Exception as exc:
+        logger.error("Failed to create tool instance %s: %s", tool_name, exc)
         return None

@@ -9,6 +9,12 @@ from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.schemas.dto import (
+    MCPServerInstanceCreate,
+)
+from agentarea_mcp.schemas.dto import (
+    MCPServerInstanceUpdate as MCPServerInstanceUpdateDTO,
+)
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
@@ -17,18 +23,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mcp-server-instances", tags=["mcp-server-instances"])
 
 
-class MCPServerInstanceCreateRequest(BaseModel):
-    name: str = Field(..., description="Name of the MCP server instance")
-    description: str | None = Field(None, description="Description of the instance")
-    server_spec_id: str | None = Field(None, description="ID of the MCP server spec (optional)")
-    json_spec: dict[str, Any] = Field(..., description="Configuration specification as JSON")
-    auth_config_id: str | None = Field(None, description="ID of the auth config to use")
-
-
-class MCPServerInstanceUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    json_spec: dict[str, Any] | None = None
+# Backwards-compatible aliases — the canonical DTOs live in agentarea_mcp.schemas.dto.
+MCPServerInstanceCreateRequest = MCPServerInstanceCreate
+MCPServerInstanceUpdate = MCPServerInstanceUpdateDTO
 
 
 class MCPServerInstanceResponse(BaseModel):
@@ -139,13 +136,7 @@ async def create_mcp_server_instance(
     Returns 202 for docker/command (background verification in progress).
     """
     try:
-        instance = await service.create_instance(
-            name=data.name,
-            description=data.description,
-            server_spec_id=data.server_spec_id,
-            json_spec=data.json_spec,
-            auth_config_id=data.auth_config_id,
-        )
+        instance = await service.create_instance(data)
 
         if not instance:
             raise HTTPException(status_code=500, detail="Failed to create MCP instance")
@@ -303,12 +294,7 @@ async def update_mcp_server_instance(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    instance = await service.update_instance(
-        id=instance_id,
-        name=data.name,
-        description=data.description,
-        json_spec=data.json_spec,
-    )
+    instance = await service.update_instance(instance_id, data)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
     return MCPServerInstanceResponse.from_domain(instance)
