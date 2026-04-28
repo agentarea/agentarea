@@ -4431,7 +4431,8 @@
         "description": "Payload for creating an LLM provider configuration.",
         "properties": {
           "api_key": {
-            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
+            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses.",
+            "minLength": 1,
             "title": "Api Key",
             "type": "string"
           },

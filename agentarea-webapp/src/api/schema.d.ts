@@ -5084,7 +5084,7 @@ export interface components {
         ProviderConfigCreate: {
             /**
              * Api Key
-             * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.
+             * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses.
              */
             api_key: string;
             /**

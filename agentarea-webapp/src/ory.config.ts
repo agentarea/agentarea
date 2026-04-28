@@ -10,6 +10,7 @@ const config: OryClientConfiguration = {
   project: {
     default_locale: "en",
     default_redirect_url: "/",
+    enabled_locales: ["en"],
     error_ui_url: "/auth/error",
     locale_behavior: "force_default",
     name: "AgentArea",
@@ -21,6 +22,7 @@ const config: OryClientConfiguration = {
     recovery_ui_url: "/auth/recovery",
     login_ui_url: "/auth/login",
     settings_ui_url: "/settings",
+    translations: [],
   },
 };
 
