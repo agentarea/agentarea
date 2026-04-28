@@ -34,6 +34,7 @@ from . import (
     triggers,
     wallet,
     workspace_config,
+    workspace_invitations,
 )
 
 # ============================================================================
@@ -87,6 +88,9 @@ protected_v1_router.include_router(triggers.router)
 
 # Workspace configuration import/export - PROTECTED
 protected_v1_router.include_router(workspace_config.router)
+
+# Workspace invitations + memberships - PROTECTED
+protected_v1_router.include_router(workspace_invitations.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
