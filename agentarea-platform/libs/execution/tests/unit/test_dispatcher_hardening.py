@@ -99,31 +99,10 @@ class TestLastDispatchFlushBatching:
     @pytest.mark.asyncio
     async def test_flush_batches_100_rows_in_single_pass(self):
         """Flush loop drains up to 100 items per sleep cycle."""
-        import agentarea_execution.activities.agent_execution_activities as mod
-
         queue = asyncio.Queue(maxsize=1000)
         for i in range(150):
             await queue.put((f"inst-{i}", {"status": "succeeded", "at": "t"}))
 
-        executed_batches: list[list] = []
-
-        async def fake_session_cm():
-            class FakeSession:
-                async def execute(self, stmt):
-                    pass
-
-                async def commit(self):
-                    pass
-
-                async def __aenter__(self):
-                    return self
-
-                async def __aexit__(self, *args):
-                    pass
-
-            return FakeSession()
-
-        # Extract one batch manually (simulating one flush cycle)
         batch: list = []
         try:
             while len(batch) < 100:
@@ -131,18 +110,12 @@ class TestLastDispatchFlushBatching:
         except asyncio.QueueEmpty:
             pass
 
-        executed_batches.append(batch)
-
-        # First batch must be exactly 100 (queue had 150)
-        assert len(executed_batches[0]) == 100
-        # Remaining items still in queue
+        assert len(batch) == 100
         assert queue.qsize() == 50
 
     @pytest.mark.asyncio
     async def test_flush_handles_partial_batch(self):
         """Flush loop handles fewer than 100 items gracefully."""
-        import agentarea_execution.activities.agent_execution_activities as mod
-
         queue = asyncio.Queue(maxsize=1000)
         for i in range(7):
             await queue.put((f"inst-{i}", {"status": "succeeded", "at": "t"}))

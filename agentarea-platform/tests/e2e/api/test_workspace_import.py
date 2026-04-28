@@ -11,7 +11,7 @@ from tests.e2e.api.conftest import create_agent
 
 @pytest.mark.integration
 def test_workspace_import_yaml_roundtrip(alice_client: httpx.Client, llm_model: str) -> None:
-    agent_id = create_agent(
+    create_agent(
         alice_client,
         llm_model,
         name="import-test-agent",
@@ -42,7 +42,7 @@ def test_workspace_import_yaml_roundtrip(alice_client: httpx.Client, llm_model: 
 
 @pytest.mark.integration
 def test_workspace_import_file_roundtrip(alice_client: httpx.Client, llm_model: str) -> None:
-    agent_id = create_agent(
+    create_agent(
         alice_client,
         llm_model,
         name="import-file-agent",
@@ -85,7 +85,7 @@ def test_workspace_import_is_workspace_scoped(
 
     export_resp = alice_client.get("/v1/workspace/export").raise_for_status()
 
-    bob_import = bob_client.post(
+    bob_client.post(
         "/v1/workspace/import",
         json={"yaml_content": export_resp.text, "override_existing": True},
     )

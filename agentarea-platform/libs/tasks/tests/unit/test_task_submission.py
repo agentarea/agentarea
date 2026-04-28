@@ -57,18 +57,7 @@ def _make_service(temporal_executor=None):
         event_broker=event_broker,
         task_manager=task_manager,
     )
-    # Bypass the audit decorator on create_task by replacing with passthrough
-    # (BaseTaskService.create_task already validates + emits events; we just
-    # need it to round-trip the SimpleTask without hitting audit/db plumbing).
-    original_create_task = service.create_task
-
-    async def _create_task(task: SimpleTask) -> SimpleTask:
-        await original_create_task.__wrapped__(service, task) if hasattr(
-            original_create_task, "__wrapped__"
-        ) else None
-        return task
-
-    # Most cases skip the heavy create_task — short-circuit for unit isolation.
+    # Short-circuit create_task for unit isolation (bypasses audit decorator + db plumbing).
     service.create_task = AsyncMock(side_effect=lambda t: t)
 
     return service, {
