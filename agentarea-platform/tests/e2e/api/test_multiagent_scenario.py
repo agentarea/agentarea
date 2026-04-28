@@ -493,17 +493,17 @@ def test_agent_can_read_back_file_it_wrote(
 
     # All three file actions must have actually been invoked. Code tools
     # in DYNAMIC mode are exposed as a single function per toolset (e.g.
-    # ``file``) with an ``action`` arg the LLM picks — so the event's
+    # ``files``) with an ``action`` arg the LLM picks — so the event's
     # tool_name is the toolset, and we read the action from the args.
     file_actions = [
         (e["metadata"].get("arguments") or {}).get("action")
         for e in events
         if e["event_type"] == "ToolCallStarted"
-        and e["metadata"]["tool_name"] == "file"
+        and e["metadata"]["tool_name"] == "files"
     ]
     for required in ("save_file", "list_files", "read_file"):
         assert required in file_actions, (
-            f"agent didn't call file/{required}; file actions seen: {file_actions}"
+            f"agent didn't call files/{required}; file actions seen: {file_actions}"
         )
 
     # And the artifact actually exists on the side: the artifact list

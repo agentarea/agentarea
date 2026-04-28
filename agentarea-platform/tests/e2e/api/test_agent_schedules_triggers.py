@@ -26,7 +26,7 @@ from tests.e2e.api.conftest import _psql, create_agent, wait_for_workflow
 def _trigger_create_calls(events: list[dict]) -> list[dict]:
     """Return every successful create_cron call the agent made.
 
-    The platform exposes the toolset under tool_name="triggers_agent" with a
+    The platform exposes the toolset under tool_name="triggers" with a
     multi-method dispatch shape (``action`` + ``<action>_<param>`` arg keys).
     """
     calls: list[dict] = []
@@ -34,7 +34,7 @@ def _trigger_create_calls(events: list[dict]) -> list[dict]:
         if ev["event_type"] != "ToolCallCompleted":
             continue
         md = ev.get("metadata", {})
-        if md.get("tool_name") != "triggers_agent":
+        if md.get("tool_name") != "triggers":
             continue
         args = md.get("arguments") or {}
         if args.get("action") != "create_cron":

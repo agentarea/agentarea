@@ -69,7 +69,7 @@ RESOURCES = [
             "description": "isolation test",
             "instruction": "behave",
             "model_id": "gpt-4",
-            "agent_type": "chat",
+            "agent_type": "stateless",
         },
     ),
     ResourceSpec(

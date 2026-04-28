@@ -144,7 +144,7 @@ def _create_agent_with_skills(
         "description": "task orchestration e2e",
         "instruction": instruction,
         "model_id": model_id,
-        "agent_type": "chat",
+        "agent_type": "stateless",
     }
     if tools:
         body["tools"] = tools

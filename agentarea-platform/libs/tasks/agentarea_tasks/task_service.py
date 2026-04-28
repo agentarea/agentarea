@@ -27,6 +27,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Terminal Temporal statuses that may upgrade a stale DB status.
+# In-flight Temporal statuses ("running", "unknown") never overwrite the DB
+# because the workflow may legitimately stay alive in await_follow_up
+# after the activity has already persisted "completed" to the DB.
+_TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
+
 
 class TaskService(BaseTaskService):
     """High-level service for task management that orchestrates persistence and execution."""
@@ -454,20 +460,25 @@ class TaskService(BaseTaskService):
     async def _enrich_task_with_workflow_status(self, task: SimpleTask) -> SimpleTask:
         """Enrich a task with current workflow status.
 
+        Temporal is the recovery oracle for terminal states; the DB is the
+        source of truth otherwise. The workflow may stay alive in
+        await_follow_up after writing "completed" to the DB, so a live
+        Temporal "running" status must not overwrite a persisted DB status.
+
         Args:
             task: The task to enrich
 
         Returns:
-            Task with updated status and result from workflow
+            Task with status upgraded to terminal if Temporal reports one
         """
         if not task.execution_id or not self.workflow_service:
             return task
 
         try:
             workflow_status = await self.workflow_service.get_workflow_status(task.execution_id)
-            if workflow_status.get("status") != "unknown":
-                # Update task with workflow status
-                task.status = workflow_status.get("status", task.status)
+            wf_state = workflow_status.get("status")
+            if wf_state in _TERMINAL_WORKFLOW_STATUSES:
+                task.status = wf_state
                 if workflow_status.get("result"):
                     task.result = workflow_status.get("result")
         except Exception as e:

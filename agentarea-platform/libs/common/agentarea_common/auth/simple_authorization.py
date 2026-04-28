@@ -1,4 +1,4 @@
-"""OSS authorization service — user's workspace + system workspace."""
+"""OSS authorization service — pure policy, no infrastructure access."""
 
 from .authorization import SYSTEM_WORKSPACE_ID, AuthorizationService
 from .context import UserContext
@@ -7,8 +7,12 @@ from .context import UserContext
 class SimpleAuthorizationService(AuthorizationService):
     """OSS implementation of workspace access control.
 
-    Grants read access to the user's own workspace and the system workspace.
-    Write access is limited to the user's own workspace.
+    Pure policy: own workspace + system workspace.
+
+    Workspace memberships (added by accepting invitations) are resolved by
+    the request-scoped dependency in ``auth.dependencies``, not here, so
+    this service stays free of infrastructure dependencies and can run as
+    a singleton without leaking SQL sessions across requests.
 
     Enterprise replaces this with ReBAC-based resolution.
     """

@@ -31,10 +31,11 @@ class ProviderConfigCreate(BaseModel):
         description="Human-readable label for this provider configuration.",
     )
     api_key: str = Field(
-        min_length=1,
         description=(
             "Secret API key for the provider. Stored encrypted in the "
-            "secret manager; never returned in responses."
+            "secret manager; never returned in responses. May be empty "
+            "for proxies that accept keyless traffic — the backend "
+            "suppresses the Authorization header when this is empty."
         ),
     )
     endpoint_url: str | None = Field(

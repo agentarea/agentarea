@@ -11,7 +11,7 @@ import yaml
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
     _SPEC_MAX_SIZE,
-    build_pinned_url,
+    build_pinned_target,
     validate_url,
 )
 from agentarea_openapi.domain.models import OpenAPIConnection
@@ -67,20 +67,34 @@ async def fetch_and_parse_spec(
     """
     resolved_ips = validate_url(url, allow_private=allow_private)
 
-    # Build the fetch URL from validated components to prevent SSRF.
-    # validate_url ensures scheme is http(s) and hostname is not private.
-    # build_pinned_url constructs a fresh URL from the validated IP.
+    # SSRF defenses: validate_url has confirmed scheme ∈ {http,https} and that
+    # every resolved address is non-private (or allow_private). build_pinned_target
+    # returns the destination identifiers (scheme/host/port) and the path/query as
+    # separate, validated fields so the HTTP sink never receives a single string
+    # that mixes user-controlled path data into the destination.
+    target = build_pinned_target(url, resolved_ips[0] if resolved_ips else None)
+
     request_headers = dict(headers or {})
-    fetch_url, original_host, _path = build_pinned_url(
-        url, resolved_ips[0] if resolved_ips else None
+    if target.original_host:
+        request_headers.setdefault("Host", target.original_host)
+
+    # Construct the request URL from the validated components. scheme/host come
+    # from sanitized values (literal scheme + resolved-and-vetted IP); the path
+    # only addresses a resource on that already-vetted destination.
+    fetch_url = httpx.URL(
+        scheme=target.scheme,
+        host=target.host,
+        port=target.port,
+        path=target.path,
+        query=target.raw_query,
     )
-    if original_host:
-        request_headers.setdefault("Host", original_host)
 
     # We connect to a pinned IP (anti-DNS-rebinding) but the TLS cert is issued
     # for the original hostname — pass sni_hostname so SNI + cert validation use
     # the original host instead of the IP we connect to.
-    extensions = {"sni_hostname": original_host} if original_host else None
+    extensions = (
+        {"sni_hostname": target.original_host} if target.original_host else None
+    )
 
     async with httpx.AsyncClient(
         timeout=30, headers=request_headers, follow_redirects=False, verify=True

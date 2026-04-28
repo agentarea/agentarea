@@ -126,7 +126,7 @@ def _first_save_result(events: list[dict]) -> str:
         if e["event_type"] != "ToolCallCompleted":
             continue
         md = e.get("metadata", {})
-        if md.get("tool_name") != "file":
+        if md.get("tool_name") != "files":
             continue
         args = md.get("arguments") or {}
         if args.get("action") != "save_file":
@@ -181,7 +181,7 @@ def test_agent_file_tool_writes_persist_in_workspace_sandbox(
     ).raise_for_status().json()["id"]
 
     events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
-    completed = _tool_events(events, "ToolCallCompleted", "file")
+    completed = _tool_events(events, "ToolCallCompleted", "files")
     assert completed, "file tool never produced a ToolCallCompleted event"
 
     result = _first_save_result(events)
@@ -267,7 +267,7 @@ def test_agent_file_tool_round_trip_read_after_write(
     events = wait_for_workflow(alice_client, agent_id, task_id, timeout=180.0)
 
     # Tool layer: the save AND the read both succeeded.
-    tool_events = _tool_events(events, "ToolCallCompleted", "file")
+    tool_events = _tool_events(events, "ToolCallCompleted", "files")
     actions = [
         (e["metadata"].get("arguments") or {}).get("action") for e in tool_events
     ]
@@ -356,7 +356,7 @@ def test_agent_file_tool_lists_its_own_writes(
 
     # Tool event for list_files must contain both names.
     list_events = [
-        e for e in _tool_events(events, "ToolCallCompleted", "file")
+        e for e in _tool_events(events, "ToolCallCompleted", "files")
         if (e["metadata"].get("arguments") or {}).get("action") == "list_files"
     ]
     assert list_events, "list_files never produced a ToolCallCompleted event"
@@ -565,7 +565,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
         e["metadata"].get("result", "")
         for e in eve_events
         if e["event_type"] == "ToolCallCompleted"
-        and e.get("metadata", {}).get("tool_name") == "file"
+        and e.get("metadata", {}).get("tool_name") == "files"
         and e["metadata"].get("arguments", {}).get("action") == "list_files"
     ]
     for listing in listings:

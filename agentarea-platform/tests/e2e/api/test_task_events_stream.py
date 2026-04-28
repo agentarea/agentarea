@@ -40,7 +40,7 @@ def test_task_events_stream_returns_sse(
         )
 
         try:
-            for line in response.iter_text():
+            for line in response.iter_lines():
                 if line.startswith("data: "):
                     events.append(json.loads(line[6:]))
         except httpx.ReadTimeout:

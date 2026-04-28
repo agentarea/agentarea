@@ -38,6 +38,7 @@ class AgentSummary(BaseModel):
     display_name="Agent Management",
     description="Create, list, update, delete agents.",
     category="platform",
+    register=False,
 )
 class _AgentsTestToolset(Toolset):
     """Test toolset mirroring the AgentsToolset surface."""

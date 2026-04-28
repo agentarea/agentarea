@@ -284,7 +284,7 @@ def create_agent(
         "description": description,
         "instruction": instruction,
         "model_id": model_id,
-        "agent_type": "chat",
+        "agent_type": "stateless",
     }
     if tools:
         body["tools"] = tools

@@ -217,9 +217,9 @@ def test_a2a_tasks_cancel_terminates_running_task(
     assert body.get("error") is None, f"cancel error: {body.get('error')}"
 
     task = _poll_a2a_task(
-        alice_client, agent_id, task_id, {"cancelled", "failed", "completed"}, timeout=30.0
+        alice_client, agent_id, task_id, {"canceled", "failed", "completed"}, timeout=30.0
     )
-    assert task["status"]["state"] in ("cancelled", "failed", "completed")
+    assert task["status"]["state"] in ("canceled", "failed", "completed")
 
 
 @pytest.mark.integration
