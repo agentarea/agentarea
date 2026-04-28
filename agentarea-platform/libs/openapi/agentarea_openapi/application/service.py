@@ -16,6 +16,10 @@ from agentarea_openapi.application.url_validator import (
 )
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
+from agentarea_openapi.schemas.dto import (
+    OpenAPIConnectionCreate,
+    OpenAPIConnectionUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,32 +119,24 @@ class OpenAPIConnectionService:
         self._secret_manager = secret_manager
         self._allow_private_urls = allow_private_urls
 
-    async def create_connection(
-        self,
-        name: str,
-        base_url: str,
-        description: str | None = None,
-        spec_url: str | None = None,
-        spec_content: dict[str, Any] | None = None,
-        auth_config_id: UUID | None = None,
-        custom_headers: list[dict[str, str]] | None = None,
-    ) -> OpenAPIConnection:
+    async def create_connection(self, payload: OpenAPIConnectionCreate) -> OpenAPIConnection:
         # Validate URLs at creation time (SSRF protection)
-        validate_url(base_url, allow_private=self._allow_private_urls)
-        if spec_url:
-            validate_url(spec_url, allow_private=self._allow_private_urls)
+        validate_url(payload.base_url, allow_private=self._allow_private_urls)
+        if payload.spec_url:
+            validate_url(payload.spec_url, allow_private=self._allow_private_urls)
 
         # Pre-generate ID so secrets can be stored atomically
         conn_id = uuid4()
 
         processed_headers = None
-        if custom_headers:
-            processed_headers = await self._store_headers(custom_headers, connection_id=conn_id)
+        if payload.custom_headers:
+            raw_headers = [h.model_dump() for h in payload.custom_headers]
+            processed_headers = await self._store_headers(raw_headers, connection_id=conn_id)
 
         # Eagerly resolve spec + tools so callers get a ready-to-use connection
         # in a single request. Pasted JSON is parsed in-place; spec_url is fetched.
-        resolved_spec: dict[str, Any] | None = spec_content
-        if resolved_spec is None and spec_url:
+        resolved_spec: dict[str, Any] | None = payload.spec_content
+        if resolved_spec is None and payload.spec_url:
             resolved_headers = {
                 h["name"]: h.get("value", "")
                 for h in (processed_headers or [])
@@ -149,7 +145,7 @@ class OpenAPIConnectionService:
             # Secret headers resolved below via resolve_headers once conn exists;
             # for initial fetch, non-secret headers are enough for most public specs.
             resolved_spec = await fetch_and_parse_spec(
-                spec_url,
+                payload.spec_url,
                 allow_private=self._allow_private_urls,
                 headers=resolved_headers or None,
             )
@@ -160,12 +156,12 @@ class OpenAPIConnectionService:
 
         conn = await self._repo.create(
             id=conn_id,
-            name=name,
-            base_url=base_url,
-            description=description,
-            spec_url=spec_url,
+            name=payload.name,
+            base_url=payload.base_url,
+            description=payload.description,
+            spec_url=payload.spec_url,
             spec_content=resolved_spec,
-            auth_config_id=auth_config_id,
+            auth_config_id=payload.auth_config_id,
             custom_headers=processed_headers,
             available_tools=available_tools,
         )
@@ -269,14 +265,32 @@ class OpenAPIConnectionService:
         )
 
     async def update_connection(
-        self, connection_id: UUID, **fields: Any
+        self,
+        connection_id: UUID,
+        payload: OpenAPIConnectionUpdate,
     ) -> OpenAPIConnection | None:
+        """Apply a partial update. Headers are processed separately so secrets stay atomic."""
+        patch = payload.model_dump(exclude_unset=True)
+
+        # custom_headers are routed through update_headers (secret manager).
+        if "custom_headers" in patch:
+            raw_headers = patch.pop("custom_headers")
+            if raw_headers is not None:
+                conn = await self.update_headers(connection_id, raw_headers)
+                if not conn:
+                    return None
+
         # Validate URLs on update (SSRF protection)
-        if fields.get("base_url"):
-            validate_url(fields["base_url"], allow_private=self._allow_private_urls)
-        if fields.get("spec_url"):
-            validate_url(fields["spec_url"], allow_private=self._allow_private_urls)
-        return await self._repo.update(str(connection_id), **fields)
+        if patch.get("base_url"):
+            validate_url(patch["base_url"], allow_private=self._allow_private_urls)
+        if patch.get("spec_url"):
+            validate_url(patch["spec_url"], allow_private=self._allow_private_urls)
+
+        if patch:
+            return await self._repo.update(str(connection_id), **patch)
+
+        # No non-header fields — return current state (post-header-update or untouched).
+        return await self._repo.get_by_id(str(connection_id))
 
     async def delete_connection(self, connection_id: UUID) -> bool:
         conn = await self._repo.get_by_id(str(connection_id))

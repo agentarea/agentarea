@@ -3,10 +3,18 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_context, platform_read_context
 
 
+@toolset(
+    namespace="agentarea/workspace_files",
+    display_name="Workspace Files",
+    description="List, fetch download URLs for, and delete workspace files.",
+    category="platform",
+    requires_user_confirmation=True,
+)
 class FilesToolset(Toolset):
     """List, fetch download URLs for, and delete workspace files."""
 

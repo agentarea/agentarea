@@ -19,6 +19,11 @@ from agentarea_agents.infrastructure.github_skill_importer import (
 )
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+from agentarea_agents.schemas.skills_dto import (
+    SkillCreateFromContent,
+    SkillEditMetadata,
+    SkillImportFromGithub,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,16 +81,12 @@ class SkillService:
     @audited("skill.create", resource_type="skill")
     async def create_from_content(
         self,
-        content: str,
-        name: str | None = None,
-        description: str | None = None,
+        payload: SkillCreateFromContent,
     ) -> Skill:
         """Create a skill from raw markdown content.
 
         Args:
-            content: Raw markdown content with optional YAML frontmatter.
-            name: Optional name override (extracted from frontmatter if not provided).
-            description: Optional description override.
+            payload: Pydantic DTO with content + optional name/description overrides.
 
         Returns:
             Created Skill entity.
@@ -93,18 +94,18 @@ class SkillService:
         repo = self._get_repository()
 
         # Parse content
-        parsed = self._parser.parse_content(content)
+        parsed = self._parser.parse_content(payload.content)
 
         # Use provided values or fall back to parsed values
-        skill_name = name or parsed.metadata.name
-        skill_description = description or parsed.metadata.description
+        skill_name = payload.name or parsed.metadata.name
+        skill_description = payload.description or parsed.metadata.description
 
         # Create skill
         skill = await repo.create(
             name=skill_name,
             description=skill_description,
             source_type=SkillSourceType.CONTENT.value,
-            content=content,
+            content=payload.content,
             source_url=None,
             s3_path=None,
         )
@@ -122,8 +123,9 @@ class SkillService:
         """Create a skill from an uploaded ZIP file.
 
         Args:
-            zip_data: ZIP file as bytes or file-like object.
-            name: Optional name override.
+            zip_data: ZIP file as bytes or file-like object (binary, not in DTO).
+            name: Optional name override (typically from
+                :class:`SkillCreateFromArchive` / :class:`SkillCreateFromFiles`).
             description: Optional description override.
 
         Returns:
@@ -176,16 +178,12 @@ class SkillService:
     @audited("skill.create", resource_type="skill")
     async def create_from_github(
         self,
-        github_url: str,
-        name: str | None = None,
-        description: str | None = None,
+        payload: SkillImportFromGithub,
     ) -> Skill:
         """Create a skill from a GitHub repository.
 
         Args:
-            github_url: GitHub repository URL.
-            name: Optional name override.
-            description: Optional description override.
+            payload: Pydantic DTO with github_url + optional name/description.
 
         Returns:
             Created Skill entity.
@@ -197,7 +195,7 @@ class SkillService:
         repo = self._get_repository()
 
         # Download repository as ZIP
-        zip_data = await self.github_importer.download_repo(github_url)
+        zip_data = await self.github_importer.download_repo(payload.github_url)
 
         # Parse and extract from ZIP
         import io
@@ -206,8 +204,8 @@ class SkillService:
         parsed, _manifest = self._parser.extract_main_skill_from_zip(zip_buffer)
 
         # Use provided values or fall back to parsed values
-        skill_name = name or parsed.metadata.name
-        skill_description = description or parsed.metadata.description
+        skill_name = payload.name or parsed.metadata.name
+        skill_description = payload.description or parsed.metadata.description
 
         # Create skill record
         skill = await repo.create(
@@ -215,7 +213,7 @@ class SkillService:
             description=skill_description,
             source_type=SkillSourceType.GITHUB.value,
             content=parsed.raw_content,
-            source_url=github_url,
+            source_url=payload.github_url,
             s3_path=None,  # Will be updated after upload
         )
 
@@ -233,7 +231,9 @@ class SkillService:
             s3_path=s3_path,
         )
 
-        logger.info(f"Created skill '{skill_name}' from GitHub: {github_url} (id={skill.id})")
+        logger.info(
+            f"Created skill '{skill_name}' from GitHub: {payload.github_url} (id={skill.id})"
+        )
         return skill
 
     @audited("skill.create", resource_type="skill")
@@ -358,36 +358,47 @@ class SkillService:
     async def update(
         self,
         skill_id: UUID | str,
-        name: str | None = None,
-        description: str | None = None,
-        content: str | None = None,
+        payload: SkillEditMetadata,
     ) -> Skill | None:
-        """Update a skill.
+        """Update a skill's metadata (name and/or description).
+
+        Uses ``model_dump(exclude_unset=True)`` so omitted fields are left
+        unchanged (true PATCH semantics). Never touches files or content; for
+        content/file edits use :meth:`set_content` or
+        :meth:`replace_package_from_files`.
 
         Args:
             skill_id: The skill ID.
-            name: Optional new name.
-            description: Optional new description.
-            content: Optional new content (only for content-type skills).
+            payload: SkillEditMetadata with optional name / description.
 
         Returns:
             Updated Skill entity or None if not found.
         """
         repo = self._get_repository()
 
-        # Build update dict
-        update_data = {}
-        if name is not None:
-            update_data["name"] = name
-        if description is not None:
-            update_data["description"] = description
-        if content is not None:
-            update_data["content"] = content
-
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
         if not update_data:
             return await repo.get_by_id(skill_id)
 
         return await repo.update(str(skill_id), **update_data)
+
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def set_content(
+        self,
+        skill_id: UUID | str,
+        content: str,
+    ) -> Skill | None:
+        """Replace the SKILL.md content of a content-mode skill.
+
+        Args:
+            skill_id: The skill ID.
+            content: New SKILL.md text (UTF-8).
+
+        Returns:
+            Updated Skill entity or None if not found.
+        """
+        repo = self._get_repository()
+        return await repo.update(str(skill_id), content=content)
 
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def replace_package_from_files(

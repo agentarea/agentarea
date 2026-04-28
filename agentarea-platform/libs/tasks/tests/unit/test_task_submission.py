@@ -2,7 +2,7 @@
 
 These tests pin the contract between `submit_task`, `create_and_execute_task_with_workflow`,
 and `task_manager.submit_task` so that A2A, MCP, and REST stay aligned. Drift here was the
-root cause of A2A losing `enable_agent_communication` and channel routing.
+root cause of A2A losing channel routing and metadata defaults.
 """
 
 from __future__ import annotations
@@ -139,8 +139,8 @@ async def test_submit_task_preserves_caller_provided_id_metadata_and_parameters(
 
 
 @pytest.mark.asyncio
-async def test_create_and_execute_sets_default_metadata_and_enables_agent_communication():
-    """REST callers rely on metadata.created_via and enable_agent_communication=True default."""
+async def test_create_and_execute_sets_default_metadata():
+    """REST callers rely on metadata.created_via, agent_name, requires_human_approval defaults."""
     service, mocks = _make_service()
     agent_id = uuid4()
 
@@ -153,21 +153,8 @@ async def test_create_and_execute_sets_default_metadata_and_enables_agent_commun
 
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
     assert submitted.metadata["created_via"] == "api"
-    assert submitted.metadata["enable_agent_communication"] is True
     assert submitted.metadata["requires_human_approval"] is False
     assert submitted.metadata["agent_name"] == "stub-agent"
-
-
-@pytest.mark.asyncio
-async def test_submit_task_defaults_enable_agent_communication_when_metadata_silent():
-    """A2A is agent-to-agent by definition — must default to enable_agent_communication=True."""
-    service, mocks = _make_service()
-    task = _build_task()  # metadata has no enable_agent_communication
-
-    await service.submit_task(task)
-
-    submitted = mocks["task_manager"].submit_task.await_args.args[0]
-    assert submitted.metadata.get("enable_agent_communication") is True
 
 
 @pytest.mark.asyncio
@@ -251,4 +238,5 @@ async def test_create_and_execute_accepts_task_id_override_for_a2a_callers():
     assert submitted.title == "A2A Message Task"
     assert submitted.metadata["task_source"] == "a2a_protocol"
     # Canonical defaults still applied
-    assert submitted.metadata["enable_agent_communication"] is True
+    assert submitted.metadata["created_via"] == "api"
+    assert submitted.metadata["requires_human_approval"] is False

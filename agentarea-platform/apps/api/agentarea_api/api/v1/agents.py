@@ -9,8 +9,6 @@ from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.dto import (
     AgentCreate,
     AgentUpdate,
-    EventConfig,
-    EventsConfig,
 )
 from agentarea_agents.schemas.import_export import ToolConfigYAML
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
@@ -187,9 +185,7 @@ class ToolResponse(BaseModel):
     mcp_instance_name: str | None = None
 
 
-def _mcp_tool_response(
-    tool: dict[str, Any], instance
-) -> ToolResponse | None:
+def _mcp_tool_response(tool: dict[str, Any], instance) -> ToolResponse | None:
     """Normalize persisted MCP tool metadata to the public tool response."""
     function = tool.get("function") if isinstance(tool.get("function"), dict) else tool
     name = function.get("name")

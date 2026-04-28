@@ -8,49 +8,11 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
+from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
-
-
-class MCPServerCreate(BaseModel):
-    name: str = Field(..., description="Name of the MCP server")
-    description: str = Field(..., description="Description of the MCP server")
-    docker_image_url: str | None = Field(
-        default=None, description="Docker image URL (for container-based servers)"
-    )
-    remote_url: str | None = Field(
-        default=None, description="Remote URL (for HTTP-based servers like GitHub Copilot)"
-    )
-    version: str = Field(default="1.0.0", description="Version of the MCP server")
-    tags: list[str] = Field(default_factory=list, description="Tags for categorization")
-    is_public: bool = Field(default=False, description="Whether the server is public")
-    env_schema: list[dict[str, Any]] | None = Field(
-        default_factory=list, description="Environment variable schema"
-    )
-    cmd: list[str] | None = Field(
-        default=None,
-        description="Custom command to override container CMD "
-        "(useful for switching between stdio and HTTP modes)",
-    )
-
-
-class MCPServerUpdate(BaseModel):
-    name: str | None = Field(None, description="Name of the MCP server")
-    description: str | None = Field(None, description="Description of the MCP server")
-    docker_image_url: str | None = Field(None, description="Docker image URL")
-    version: str | None = Field(None, description="Version of the MCP server")
-    tags: list[str] | None = Field(None, description="Tags for categorization")
-    is_public: bool | None = Field(None, description="Whether the server is public")
-    status: str | None = Field(None, description="Status of the MCP server")
-    cmd: list[str] | None = Field(None, description="Custom command to override container CMD")
-    remote_url: str | None = Field(None, description="Remote URL for HTTP-based MCP servers")
-    env_schema: list[dict[str, Any]] | None = Field(None, description="Environment variable schema")
-    json_spec: dict[str, Any] | None = Field(
-        None, description="Raw ServerJSON spec from MCP registry"
-    )
-    registry_url: str | None = Field(None, description="Source registry URL")
 
 
 class MCPServerResponse(BaseModel):
@@ -97,17 +59,7 @@ async def create_mcp_server(
     user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
-    server = await mcp_server_service.create_mcp_server(
-        name=data.name,
-        description=data.description,
-        docker_image_url=data.docker_image_url,
-        version=data.version,
-        tags=data.tags,
-        is_public=data.is_public,
-        env_schema=data.env_schema,
-        cmd=data.cmd,
-        remote_url=data.remote_url,
-    )
+    server = await mcp_server_service.create_mcp_server(data)
     return MCPServerResponse.from_domain(server)
 
 
@@ -157,16 +109,7 @@ async def update_mcp_server(
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     await require_permission("edit", "mcp_server", str(server_id), user_context.user_id)
-    server = await mcp_server_service.update_mcp_server(
-        id=server_id,
-        name=data.name,
-        description=data.description,
-        docker_image_url=data.docker_image_url,
-        version=data.version,
-        tags=data.tags,
-        is_public=data.is_public,
-        status=data.status,
-    )
+    server = await mcp_server_service.update_mcp_server(server_id, data)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")
     return MCPServerResponse.from_domain(server)

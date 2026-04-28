@@ -1,12 +1,17 @@
 """NetworkToolset — workspace topology overview."""
 
-import json
-
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
 
 
+@toolset(
+    namespace="agentarea/network",
+    display_name="Network",
+    description="Inspect workspace network topology (agents, skills, MCP instances, triggers).",
+    category="platform",
+)
 class NetworkToolset(Toolset):
     """Inspect the workspace network topology (agents, skills, MCP instances, triggers)."""
 

@@ -6,6 +6,13 @@ verbs cover authoring (file map), bulk import (ZIP), and external import
 to avoid overloading; reads come in inline-text and presigned-URL flavors via
 a single ``get_file`` verb.
 
+Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
+but the source of truth is the Pydantic DTOs in
+``agentarea_agents.schemas.skills_dto`` — ``SkillCreateFromFiles``,
+``SkillCreateFromArchive``, ``SkillImportFromGithub``, ``SkillEditMetadata``,
+and ``SkillEditContent``. The contract test in
+``tests/unit/test_mcp_rest_parity.py`` enforces parity.
+
 This toolset is distinct from the SDK-side ``SkillActivationTool`` (in
 ``agentarea_agents_sdk.skills.skill_toolset``) — that one exposes a single
 ``activate_skill`` entry point for agents to load a skill into their context.
@@ -18,7 +25,15 @@ import zipfile
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents.schemas.skills_dto import (
+    SkillCreateFromArchive,
+    SkillCreateFromFiles,
+    SkillEditContent,
+    SkillEditMetadata,
+    SkillImportFromGithub,
+)
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_context, platform_read_context
 
@@ -67,9 +82,16 @@ def _skill_summary(skill: Any) -> dict[str, Any]:
     }
 
 
+@toolset(
+    namespace="agentarea/skills",
+    display_name="Skills",
+    description="Manage workspace skills (multi-file authoring, GitHub import, archive upload).",
+    category="platform",
+)
 class SkillsToolset(Toolset):
     """Manage skills end-to-end: create from files / archive / GitHub, edit
-    metadata or content (mode-aware), browse and read package files, delete."""
+    metadata or content (mode-aware), browse and read package files, delete.
+    """
 
     @tool_method
     async def list(self) -> str:
@@ -115,9 +137,22 @@ class SkillsToolset(Toolset):
         if not _has_skill_md(normalized):
             return json.dumps({"error": "files must include a SKILL.md at the root"})
 
+        # The DTO is the source of truth for the wire schema. Build it after
+        # the toolset-side limit checks so the LLM gets the more helpful
+        # validation messages first; SkillCreateFromFiles still guards us
+        # against shape drift.
+        try:
+            payload = SkillCreateFromFiles(
+                files=normalized,
+                name=name or None,
+                description=description or None,
+            )
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path, text in normalized.items():
+            for path, text in payload.files.items():
                 zf.writestr(path, text)
 
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -126,12 +161,12 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill = await service.create_from_zip(
                 zip_data=buffer.getvalue(),
-                name=name or None,
-                description=description or None,
+                name=payload.name,
+                description=payload.description,
             )
-            payload = _skill_summary(skill)
-            payload["file_count"] = len(normalized)
-            return json.dumps(payload, default=str)
+            summary = _skill_summary(skill)
+            summary["file_count"] = len(payload.files)
+            return json.dumps(summary, default=str)
 
     @tool_method
     async def create_from_archive(
@@ -141,9 +176,21 @@ class SkillsToolset(Toolset):
         description: str = "",
     ) -> str:
         """Create a skill from a base64-encoded ZIP archive. Use for binary
-        helpers or pre-built bundles. For inline text-only packages prefer create()."""
+        helpers or pre-built bundles. For inline text-only packages prefer create().
+        """
+        # Validate the textual fields via the DTO; the binary blob is decoded
+        # outside the model because Pydantic-validating raw base64 buys us
+        # nothing here.
         try:
-            zip_bytes = base64.b64decode(zip_base64, validate=True)
+            payload = SkillCreateFromArchive(
+                zip_base64=zip_base64,
+                name=name or None,
+                description=description or None,
+            )
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        try:
+            zip_bytes = base64.b64decode(payload.zip_base64, validate=True)
         except Exception as exc:
             return json.dumps({"error": f"Invalid base64: {exc}"})
 
@@ -153,8 +200,8 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill = await service.create_from_zip(
                 zip_data=zip_bytes,
-                name=name or None,
-                description=description or None,
+                name=payload.name,
+                description=payload.description,
             )
             return json.dumps(_skill_summary(skill), default=str)
 
@@ -166,18 +213,23 @@ class SkillsToolset(Toolset):
         description: str = "",
     ) -> str:
         """Import a skill package from a public GitHub repository URL."""
-        async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
-            from agentarea_agents.application.skill_service import SkillService
-
-            service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            skill = await service.create_from_github(
+        try:
+            payload = SkillImportFromGithub(
                 github_url=github_url,
                 name=name or None,
                 description=description or None,
             )
-            payload = _skill_summary(skill)
-            payload["source_url"] = skill.source_url
-            return json.dumps(payload, default=str)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+
+        async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
+            from agentarea_agents.application.skill_service import SkillService
+
+            service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
+            skill = await service.create_from_github(payload)
+            summary = _skill_summary(skill)
+            summary["source_url"] = skill.source_url
+            return json.dumps(summary, default=str)
 
     @tool_method
     async def edit_metadata(
@@ -187,15 +239,23 @@ class SkillsToolset(Toolset):
         description: str = "",
     ) -> str:
         """Update a skill's name and/or description. Never touches files."""
+        # Build patch with only the fields the caller actually set so we get
+        # true PATCH semantics through SkillEditMetadata.model_dump(exclude_unset=True).
+        patch: dict[str, str] = {}
+        if name:
+            patch["name"] = name
+        if description:
+            patch["description"] = description
+        try:
+            payload = SkillEditMetadata.model_validate(patch)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            skill = await service.update(
-                UUID(skill_id),
-                name=name or None,
-                description=description or None,
-            )
+            skill = await service.update(UUID(skill_id), payload)
             if not skill:
                 return json.dumps({"error": "Skill not found"})
             return json.dumps(
@@ -218,6 +278,14 @@ class SkillsToolset(Toolset):
             return json.dumps({"error": err})
         normalized = _normalize_files(files)
 
+        # Validate the payload up front via the DTO so the wire schema and
+        # service layer agree on shape (even though we dispatch to two
+        # different service methods depending on skill mode).
+        try:
+            SkillEditContent(files=normalized)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
 
@@ -239,7 +307,7 @@ class SkillsToolset(Toolset):
                         }
                     )
                 key = next(iter(normalized))
-                updated = await service.update(UUID(skill_id), content=normalized[key])
+                updated = await service.set_content(UUID(skill_id), normalized[key])
                 return json.dumps(
                     {
                         "id": str(updated.id),
@@ -275,7 +343,8 @@ class SkillsToolset(Toolset):
     @tool_method
     async def list_files(self, skill_id: str, include_urls: bool = False) -> str:
         """List files inside a skill package. Set include_urls=True for bulk
-        hydration with a presigned download URL per file (one round-trip)."""
+        hydration with a presigned download URL per file (one round-trip).
+        """
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
 
@@ -299,7 +368,8 @@ class SkillsToolset(Toolset):
     ) -> str:
         """Read one file from a skill package. Returns inline UTF-8 text by
         default; set as_url=True to receive a presigned download URL instead
-        (use for binary files or large reads)."""
+        (use for binary files or large reads).
+        """
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
 

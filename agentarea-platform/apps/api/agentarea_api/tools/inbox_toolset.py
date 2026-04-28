@@ -4,12 +4,19 @@ import json
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
 
 INBOX_STATUSES = ["waiting_for_approval", "completed", "failed"]
 
 
+@toolset(
+    namespace="agentarea/inbox",
+    display_name="Inbox",
+    description="Inspect agent inbox messages awaiting human input.",
+    category="platform",
+)
 class InboxToolset(Toolset):
     """List tasks awaiting user action (waiting_for_approval, completed, failed)."""
 

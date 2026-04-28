@@ -37,6 +37,8 @@ from .logging_utils import (
     generate_correlation_id,
     set_correlation_id,
 )
+from .schemas.dto import TriggerCreate as TriggerCreatePayload
+from .schemas.dto import TriggerUpdate as TriggerUpdatePayload
 from .temporal_schedule_manager import TemporalScheduleManager
 
 logger = TriggerLogger(__name__)
@@ -162,6 +164,37 @@ class TriggerService:
                 trigger_name=trigger_data.name,
                 agent_id=str(trigger_data.agent_id),
             ) from None
+
+    async def create_trigger_from_payload(
+        self, payload: TriggerCreatePayload, created_by: str, workspace_id: str | None = None
+    ) -> Trigger:
+        """Create a trigger from the REST/MCP DTO.
+
+        Thin wrapper around :meth:`create_trigger` that converts the
+        single source-of-truth DTO (``agentarea_triggers.schemas.dto.TriggerCreate``)
+        into the internal domain value object before delegating.
+
+        Args:
+            payload: The Pydantic create DTO from REST body or MCP tool kwargs.
+            created_by: User id stamped onto the trigger (server-derived).
+            workspace_id: Workspace id stamped onto the trigger (server-derived).
+
+        Returns:
+            The created trigger.
+        """
+        domain_payload = payload.to_domain(created_by=created_by, workspace_id=workspace_id)
+        return await self.create_trigger(domain_payload)
+
+    async def update_trigger_from_payload(
+        self, trigger_id: UUID, payload: TriggerUpdatePayload
+    ) -> Trigger:
+        """Update a trigger from the REST/MCP DTO.
+
+        Thin wrapper around :meth:`update_trigger` that converts the
+        single source-of-truth DTO into the internal domain value object.
+        """
+        domain_payload = payload.to_domain()
+        return await self.update_trigger(trigger_id, domain_payload)
 
     async def get_trigger(self, trigger_id: UUID) -> Trigger | None:
         """Get a trigger by ID.

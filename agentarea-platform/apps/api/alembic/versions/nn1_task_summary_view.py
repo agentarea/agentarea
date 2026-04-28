@@ -21,7 +21,6 @@ Revises: mm1_drop_project_minio_prefix
 
 from alembic import op
 
-
 revision = "nn1_task_summary_view"
 down_revision = "mm1_drop_project_minio_prefix"
 branch_labels = None

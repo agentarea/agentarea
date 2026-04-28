@@ -9,6 +9,11 @@ This toolset is constructed per task by ``agent_execution_activities`` with
 ``default_agent_id``/``default_workspace_id``/``default_user_id`` injected via
 ``extra_kwargs``. The agent therefore doesn't need to know its own id — every
 ``create_cron`` call defaults to scheduling the calling agent.
+
+Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
+but the source of truth for ``create_cron``/``create_webhook`` is the
+Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
+contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 
 def _trigger_summary(trigger: Any) -> dict[str, Any]:
@@ -33,6 +39,12 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
     }
 
 
+@toolset(
+    namespace="agentarea/triggers",
+    display_name="Triggers",
+    description="Schedule agents on cron expressions or wire them to webhooks.",
+    category="platform",
+)
 class TriggersAgentToolset(Toolset):
     """Schedule the calling agent on a cron expression, list/disable/delete its own triggers.
 
@@ -77,16 +89,13 @@ class TriggersAgentToolset(Toolset):
         """Open a session + repo factory + trigger service for one call."""
         from agentarea_common.auth.context import UserContext
         from agentarea_common.base.repository_factory import RepositoryFactory
-        from agentarea_common.config import get_settings
-        from agentarea_common.config import get_database
+        from agentarea_common.config import get_database, get_settings
 
         from .temporal_schedule_manager import TemporalScheduleManager
         from .trigger_service import TriggerService
 
         if not self._default_workspace_id or not self._default_user_id:
-            raise RuntimeError(
-                "TriggersAgentToolset is missing workspace_id/user_id context"
-            )
+            raise RuntimeError("TriggersAgentToolset is missing workspace_id/user_id context")
 
         database = get_database()
         if database is None:
@@ -121,6 +130,28 @@ class TriggersAgentToolset(Toolset):
             raise
 
     @tool_method
+    async def list(self, active_only: bool = False, limit: int = 50) -> str:
+        """List triggers in the workspace (optionally only active ones)."""
+        session, _user_ctx, service = await self._open()
+        try:
+            triggers = await service.list_triggers(active_only=active_only, limit=limit)
+            return json.dumps([_trigger_summary(t) for t in triggers], default=str)
+        finally:
+            await session.close()
+
+    @tool_method
+    async def get(self, trigger_id: str) -> str:
+        """Get a trigger by ID."""
+        session, _user_ctx, service = await self._open()
+        try:
+            trigger = await service.get_trigger(UUID(trigger_id))
+            if not trigger:
+                return json.dumps({"error": "Trigger not found"})
+            return json.dumps(_trigger_summary(trigger), default=str)
+        finally:
+            await session.close()
+
+    @tool_method
     async def create_cron(
         self,
         name: str,
@@ -128,6 +159,10 @@ class TriggersAgentToolset(Toolset):
         description: str = "",
         timezone: str = "UTC",
         agent_id: str = "",
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
     ) -> str:
         """Create a cron-based trigger that fires the given (or calling) agent on a schedule.
 
@@ -137,24 +172,33 @@ class TriggersAgentToolset(Toolset):
 
         ``agent_id`` defaults to the calling agent — pass it explicitly only to
         schedule a different agent in the same workspace.
+
+        ``task_parameters`` are merged into every task created when the trigger
+        fires. ``conditions`` is an optional rule/LLM condition map evaluated
+        against event data before firing.
         """
+        from .schemas.dto import TriggerCreate
+
         session, _user_ctx, service = await self._open()
         try:
-            from .domain.enums import TriggerType
-            from .domain.models import TriggerCreate
-
             target_agent_id = self._resolve_agent_id(agent_id or None)
-            data = TriggerCreate(
+            payload = TriggerCreate(
                 name=name,
                 description=description,
                 agent_id=UUID(target_agent_id),
-                trigger_type=TriggerType.CRON,
+                trigger_type="cron",
                 cron_expression=cron_expression,
                 timezone=timezone,
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
+            )
+            trigger = await service.create_trigger_from_payload(
+                payload,
                 created_by=self._default_user_id or "agent",
                 workspace_id=self._default_workspace_id or "",
             )
-            trigger = await service.create_trigger(data)
             await session.commit()
             return json.dumps(_trigger_summary(trigger), default=str)
         except Exception as exc:
@@ -164,14 +208,71 @@ class TriggersAgentToolset(Toolset):
             await session.close()
 
     @tool_method
-    async def list(self, active_only: bool = False, limit: int = 50) -> str:
-        """List triggers in the workspace (optionally only active ones)."""
+    async def create_webhook(
+        self,
+        name: str,
+        description: str = "",
+        webhook_id: str = "",
+        webhook_type: str = "generic",
+        agent_id: str = "",
+        allowed_methods: list[str] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        conditions: dict[str, Any] | None = None,
+        enabled: bool = True,
+        failure_threshold: int = 5,
+        event_types: list[str] | None = None,
+    ) -> str:
+        """Create a webhook trigger that fires the calling agent on inbound HTTP.
+
+        ``agent_id`` defaults to the calling agent. ``webhook_id`` is the
+        public path segment; if empty a URL-safe id is auto-generated.
+        ``webhook_type`` must be a registered channel ('generic', 'telegram',
+        'slack', 'discord', 'github', etc.). ``event_types`` filters which
+        channel events actually fire the trigger (empty = all).
+        """
+        from .schemas.dto import TriggerCreate
+
         session, _user_ctx, service = await self._open()
         try:
-            triggers = await service.list_triggers(active_only=active_only, limit=limit)
-            return json.dumps(
-                [_trigger_summary(t) for t in triggers], default=str
+            target_agent_id = self._resolve_agent_id(agent_id or None)
+            payload = TriggerCreate(
+                name=name,
+                description=description,
+                agent_id=UUID(target_agent_id),
+                trigger_type="webhook",
+                webhook_id=webhook_id or None,
+                webhook_type=webhook_type,
+                allowed_methods=allowed_methods or ["POST"],
+                task_parameters=task_parameters or {},
+                conditions=conditions or {},
+                enabled=enabled,
+                failure_threshold=failure_threshold,
+                event_types=event_types or [],
             )
+            trigger = await service.create_trigger_from_payload(
+                payload,
+                created_by=self._default_user_id or "agent",
+                workspace_id=self._default_workspace_id or "",
+            )
+            await session.commit()
+            return json.dumps(_trigger_summary(trigger), default=str)
+        except Exception as exc:
+            await session.rollback()
+            return json.dumps({"error": f"create_webhook failed: {exc}"})
+        finally:
+            await session.close()
+
+    @tool_method
+    async def enable(self, trigger_id: str) -> str:
+        """Enable a trigger (resumes its schedule for cron triggers)."""
+        session, _user_ctx, service = await self._open()
+        try:
+            ok = await service.enable_trigger(UUID(trigger_id))
+            await session.commit()
+            return json.dumps({"enabled": ok})
+        except Exception as exc:
+            await session.rollback()
+            return json.dumps({"error": f"enable failed: {exc}"})
         finally:
             await session.close()
 
@@ -200,5 +301,30 @@ class TriggersAgentToolset(Toolset):
         except Exception as exc:
             await session.rollback()
             return json.dumps({"error": f"delete failed: {exc}"})
+        finally:
+            await session.close()
+
+    @tool_method
+    async def get_history(self, trigger_id: str, limit: int = 50, offset: int = 0) -> str:
+        """Get recent execution history for a trigger."""
+        session, _user_ctx, service = await self._open()
+        try:
+            executions = await service.get_execution_history(
+                UUID(trigger_id), limit=limit, offset=offset
+            )
+            return json.dumps(
+                [
+                    {
+                        "id": str(e.id),
+                        "status": getattr(e.status, "value", str(e.status)),
+                        "executed_at": e.executed_at.isoformat() if e.executed_at else None,
+                        "execution_time_ms": e.execution_time_ms,
+                        "error_message": e.error_message,
+                        "task_id": str(e.task_id) if e.task_id else None,
+                    }
+                    for e in executions
+                ],
+                default=str,
+            )
         finally:
             await session.close()

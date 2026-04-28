@@ -10,6 +10,11 @@ from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubRateLimitError,
     GitHubSkillImporterError,
 )
+from agentarea_agents.schemas.skills_dto import (
+    SkillCreateFromContent,
+    SkillEditMetadata,
+    SkillImportFromGithub,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.base import RepositoryFactoryDep
@@ -156,15 +161,19 @@ async def create_skill(
     try:
         if request.content:
             skill = await skill_service.create_from_content(
-                content=request.content,
-                name=request.name,
-                description=request.description,
+                SkillCreateFromContent(
+                    content=request.content,
+                    name=request.name,
+                    description=request.description,
+                ),
             )
         else:
             skill = await skill_service.create_from_github(
-                github_url=request.github_url,
-                name=request.name,
-                description=request.description,
+                SkillImportFromGithub(
+                    github_url=request.github_url,
+                    name=request.name,
+                    description=request.description,
+                ),
             )
 
         return SkillResponse.from_skill(skill)
@@ -293,15 +302,22 @@ async def update_skill(
 ):
     """Update a skill."""
     await require_permission("edit", "skill", str(skill_id), user_context.user_id)
-    skill = await skill_service.update(
-        skill_id,
-        name=request.name,
-        description=request.description,
-        content=request.content,
-    )
 
+    # Build metadata patch with PATCH semantics (only fields the client sent).
+    metadata_patch_fields = request.model_dump(
+        exclude_unset=True,
+        include={"name", "description"},
+    )
+    metadata_payload = SkillEditMetadata.model_validate(metadata_patch_fields)
+
+    skill = await skill_service.update(skill_id, metadata_payload)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+
+    if request.content is not None:
+        skill = await skill_service.set_content(skill_id, request.content)
+        if not skill:
+            raise HTTPException(status_code=404, detail="Skill not found")
 
     return SkillResponse.from_skill(skill)
 

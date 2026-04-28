@@ -44,14 +44,8 @@ class AgentService(BaseCrudService[Agent]):
 
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
-        tools = (
-            [t.model_dump(exclude_none=True) for t in payload.tools]
-            if payload.tools
-            else None
-        )
-        events_config = (
-            payload.events_config.model_dump() if payload.events_config else None
-        )
+        tools = [t.model_dump(exclude_none=True) for t in payload.tools] if payload.tools else None
+        events_config = payload.events_config.model_dump() if payload.events_config else None
 
         agent = Agent(
             name=payload.name,

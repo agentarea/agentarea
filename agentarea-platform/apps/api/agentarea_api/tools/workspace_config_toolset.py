@@ -3,10 +3,17 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
 
 
+@toolset(
+    namespace="agentarea/workspace_config",
+    display_name="Workspace Config",
+    description="Export workspace configuration as YAML.",
+    category="platform",
+)
 class WorkspaceConfigToolset(Toolset):
     """Export the workspace's agents, MCP instances, and provider configs as YAML."""
 
@@ -35,9 +42,7 @@ class WorkspaceConfigToolset(Toolset):
             from agentarea_mcp.application.service import MCPServerInstanceService
 
             authz = resolve(AuthorizationService)
-            agent_service = AgentService(
-                repo_factory, broker, authorization_service=authz
-            )
+            agent_service = AgentService(repo_factory, broker, authorization_service=authz)
             mcp_instance_service = MCPServerInstanceService(
                 repository_factory=repo_factory,
                 event_broker=broker,

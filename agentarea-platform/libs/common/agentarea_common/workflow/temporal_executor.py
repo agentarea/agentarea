@@ -216,7 +216,6 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     task_parameters=args.get("task_parameters", {}),
                     timeout_seconds=args.get("timeout_seconds", 300),
                     max_reasoning_iterations=args.get("max_reasoning_iterations", 10),
-                    enable_agent_communication=args.get("enable_agent_communication", False),
                     requires_human_approval=args.get("requires_human_approval", False),
                     workflow_metadata=args.get("workflow_metadata", {}),
                 )

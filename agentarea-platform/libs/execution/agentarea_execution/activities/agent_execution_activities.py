@@ -756,9 +756,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if not instance:
                         continue
 
-                    available = instance.tools or (instance.json_spec or {}).get(
-                        "available_tools"
-                    ) or []
+                    available = (
+                        instance.tools or (instance.json_spec or {}).get("available_tools") or []
+                    )
                     if not any(t.get("name") == request.tool_name for t in available):
                         continue
 

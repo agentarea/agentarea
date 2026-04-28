@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from agentarea_agents_sdk.tools import (
     ToolDefinition,
@@ -38,7 +38,6 @@ class AgentSummary(BaseModel):
     display_name="Agent Management",
     description="Create, list, update, delete agents.",
     category="platform",
-    admin=False,
 )
 class _AgentsTestToolset(Toolset):
     """Test toolset mirroring the AgentsToolset surface."""
@@ -71,7 +70,6 @@ class TestToolsetMetadata:
         assert meta.namespace == "agentarea/agents"
         assert meta.display_name == "Agent Management"
         assert meta.category == "platform"
-        assert meta.admin is False
 
     def test_instance_metadata_property(self):
         ts = _AgentsTestToolset()

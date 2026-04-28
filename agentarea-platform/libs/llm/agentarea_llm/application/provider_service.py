@@ -18,6 +18,7 @@ from agentarea_llm.infrastructure.provider_config_repository import (
     ProviderConfigRepository,
 )
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 
 
 class ProviderService:
@@ -92,22 +93,16 @@ class ProviderService:
 
     async def create_provider_config(
         self,
-        provider_spec_id: UUID,
-        name: str,
-        api_key: str,
-        endpoint_url: str | None = None,
+        payload: ProviderConfigCreate,
         created_by: str = "",
-        is_public: bool = False,
     ) -> ProviderConfig:
         """Create a new provider configuration and store its API key in the secret manager.
 
         Args:
-            provider_spec_id (UUID): The provider specification ID.
-            name (str): Name of the provider configuration.
-            api_key (str): API key for the provider.
-            endpoint_url (Optional[str]): Optional endpoint URL.
-            created_by (Optional[str]): Optional user who created this config.
-            is_public (bool): Whether the configuration is public.
+            payload: Validated create-payload sourced from
+                :class:`ProviderConfigCreate` (REST and MCP toolset both
+                construct this DTO).
+            created_by: ID of the user creating the config (for audit).
 
         Returns:
             ProviderConfig: The created provider configuration.
@@ -115,15 +110,16 @@ class ProviderService:
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
-            provider_spec_id=provider_spec_id,
-            name=name,
-            endpoint_url=endpoint_url,
+            provider_spec_id=payload.provider_spec_id,
+            name=payload.name,
+            description=payload.description,
+            endpoint_url=payload.endpoint_url,
             created_by=created_by,
-            is_public=is_public,
+            is_public=payload.is_public,
         )
         secret_name = f"provider_config_{config_id}"
         config.api_key = secret_name
-        await self.secret_manager.set_secret(secret_name, api_key)
+        await self.secret_manager.set_secret(secret_name, payload.api_key)
 
         return await self.provider_config_repo.create_config(config)
 
@@ -162,37 +158,41 @@ class ProviderService:
     async def update_provider_config(
         self,
         config_id: UUID,
-        name: str | None = None,
-        api_key: str | None = None,
-        endpoint_url: str | None = None,
-        is_active: bool | None = None,
+        payload: ProviderConfigUpdate,
     ) -> ProviderConfig | None:
-        """Update an existing provider configuration and update the secret if the API key changes.
+        """Update an existing provider configuration; rotate the secret on API key change.
 
         Args:
-            config_id (UUID): The configuration ID.
-            name (Optional[str]): New name.
-            api_key (Optional[str]): New API key.
-            endpoint_url (Optional[str]): New endpoint URL.
-            is_active (Optional[bool]): New active status.
+            config_id: The configuration ID to update.
+            payload: Patch payload sourced from :class:`ProviderConfigUpdate`.
+                Only fields explicitly set on the model are applied
+                (``model_dump(exclude_unset=True)``).
 
         Returns:
-            Optional[ProviderConfig]: The updated provider configuration if found, else None.
+            Optional[ProviderConfig]: The updated configuration, or ``None``
+            if no config exists for ``config_id``.
         """
         config = await self.provider_config_repo.get_by_id(config_id)
         if not config:
             return None
 
-        if name is not None:
-            config.name = name
-        if api_key is not None:
-            config.api_key = api_key
+        patch = payload.model_dump(exclude_unset=True)
+
+        if "name" in patch:
+            config.name = patch["name"]
+        if "description" in patch:
+            config.description = patch["description"]
+        if "endpoint_url" in patch:
+            config.endpoint_url = patch["endpoint_url"]
+        if "is_active" in patch:
+            config.is_active = patch["is_active"]
+        if "is_public" in patch:
+            config.is_public = patch["is_public"]
+        if "api_key" in patch and patch["api_key"] is not None:
             secret_name = f"provider_config_{config.id}"
-            await self.secret_manager.set_secret(secret_name, api_key)
-        if endpoint_url is not None:
-            config.endpoint_url = endpoint_url
-        if is_active is not None:
-            config.is_active = is_active
+            await self.secret_manager.set_secret(secret_name, patch["api_key"])
+            # Domain field stores the secret name, not the raw key.
+            config.api_key = secret_name
 
         return await self.provider_config_repo.update_config(config)
 

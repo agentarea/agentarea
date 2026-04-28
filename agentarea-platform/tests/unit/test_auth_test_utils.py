@@ -1,7 +1,5 @@
 """Unit tests for authentication test utilities."""
 
-from unittest.mock import Mock, patch
-
 import jwt
 import pytest
 from agentarea_common.auth import UserContext
@@ -18,13 +16,9 @@ from jwt.exceptions import ExpiredSignatureError
 class TestGenerateTestJWTToken:
     """Test cases for generate_test_jwt_token function."""
 
-    @patch("agentarea_common.auth.test_utils.get_settings")
-    def test_generate_token_with_all_claims(self, mock_get_settings):
+    def test_generate_token_with_all_claims(self, monkeypatch):
         """Test token generation with all possible claims."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret"
-        mock_get_settings.return_value = mock_settings
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
 
         token = generate_test_jwt_token(
             user_id="test-user",
@@ -46,13 +40,9 @@ class TestGenerateTestJWTToken:
         assert "iat" in payload
         assert "exp" in payload
 
-    @patch("agentarea_common.auth.test_utils.get_settings")
-    def test_generate_token_minimal_claims(self, mock_get_settings):
+    def test_generate_token_minimal_claims(self, monkeypatch):
         """Test token generation with minimal required claims."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret"
-        mock_get_settings.return_value = mock_settings
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
 
         token = generate_test_jwt_token(user_id="minimal-user", workspace_id="minimal-workspace")
 
@@ -127,13 +117,9 @@ class TestCreateTestUserContext:
 class TestTokenHelpers:
     """Test cases for token helper functions."""
 
-    @patch("agentarea_common.auth.test_utils.get_settings")
-    def test_create_admin_test_token(self, mock_get_settings):
+    def test_create_admin_test_token(self, monkeypatch):
         """Test creating admin test token."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret"
-        mock_get_settings.return_value = mock_settings
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
 
         token = create_admin_test_token()
 
@@ -143,13 +129,9 @@ class TestTokenHelpers:
         assert "user" in payload["roles"]
         assert payload["email"] == "admin@example.com"
 
-    @patch("agentarea_common.auth.test_utils.get_settings")
-    def test_create_basic_test_token(self, mock_get_settings):
+    def test_create_basic_test_token(self, monkeypatch):
         """Test creating basic test token."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret"
-        mock_get_settings.return_value = mock_settings
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
 
         token = create_basic_test_token()
 
@@ -158,13 +140,9 @@ class TestTokenHelpers:
         assert payload["roles"] == ["user"]
         assert "email" not in payload
 
-    @patch("agentarea_common.auth.test_utils.get_settings")
-    def test_create_expired_test_token(self, mock_get_settings):
+    def test_create_expired_test_token(self, monkeypatch):
         """Test creating expired test token."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret"
-        mock_get_settings.return_value = mock_settings
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
 
         token = create_expired_test_token()
 
