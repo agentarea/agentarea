@@ -10,8 +10,8 @@ const config: OryClientConfiguration = {
   project: {
     default_locale: "en",
     default_redirect_url: "/",
-    error_ui_url: "/auth/error",
     enabled_locales: ["en"],
+    error_ui_url: "/auth/error",
     locale_behavior: "force_default",
     name: "AgentArea",
     registration_enabled: true,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Tag, Bot, Clock, Globe, List, Key, Code2, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -178,23 +179,20 @@ export function CreateTriggerForm({
       key={entry.id}
       type="button"
       onClick={() => setSelectedId(entry.id)}
-      title={entry.description}
       className={cn(
-        "flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition-colors w-[72px] shrink-0",
+        "flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm transition-colors text-left w-full",
         selectedId === entry.id
           ? "border-primary bg-primary/10 text-primary"
-          : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
+          : "border-border hover:border-primary/50 hover:bg-muted/50 text-foreground"
       )}
     >
-      <span className="text-[10px] leading-tight font-medium line-clamp-2">
-        {entry.name}
-      </span>
+      <span className="font-medium truncate">{entry.name}</span>
     </button>
   );
 
   return (
-    <form action={formAction} className="overflow-auto h-full">
-      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-5">
+    <form id="create-trigger-form" action={formAction} className="overflow-auto h-full">
+      <div className="form-content lg:max-w-xl lg:mx-auto space-y-6 py-5">
         {isEditing && (
           <input type="hidden" name="id" value={initialData.id} />
         )}
@@ -208,10 +206,7 @@ export function CreateTriggerForm({
 
         {/* Catalog Picker */}
         {!isEditing ? (
-          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {t("triggerType")}
-            </div>
+          <div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -224,24 +219,24 @@ export function CreateTriggerForm({
             </div>
             <div className="max-h-72 overflow-y-auto">
               {filteredEntries ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {filteredEntries.map(renderCard)}
                   {filteredEntries.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-4 w-full text-center">
+                    <p className="text-sm text-muted-foreground py-4 col-span-2 text-center">
                       No triggers found for &ldquo;{search}&rdquo;
                     </p>
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {kinds.map((kind) => {
                     const entries = catalog.filter((e) => e.kind === kind);
                     return (
                       <div key={kind}>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        <p className="text-xs text-muted-foreground mb-1.5 mt-3">
                           {kindLabels[kind] ?? kind}
                         </p>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-2 gap-1.5">
                           {entries.map(renderCard)}
                         </div>
                       </div>
@@ -250,20 +245,9 @@ export function CreateTriggerForm({
                 </div>
               )}
             </div>
-            {selected && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {selected.name}
-                </span>{" "}
-                &mdash; {selected.description}
-              </p>
-            )}
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
-            {selected && (
-              <span className="text-lg">{selected.icon}</span>
-            )}
+          <div className="flex items-center gap-3">
             <div>
               <p className="text-sm font-medium">
                 {selected?.name ?? initialData.trigger_type}
@@ -275,69 +259,64 @@ export function CreateTriggerForm({
           </div>
         )}
 
-        {/* Basic Info */}
-        <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Basic Info
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-sm">
-                {t("name")} <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                placeholder={t("namePlaceholder")}
-                defaultValue={initialData?.name || ""}
-                required
-              />
-              {state.errors?.name && (
-                <p className="text-sm text-destructive">{state.errors.name[0]}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agent_id" className="text-sm">
-                {t("agent")} <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                name="agent_id"
-                defaultValue={initialData?.agent_id || ""}
-              >
-                <SelectTrigger id="agent_id">
-                  <SelectValue placeholder={t("selectAgent")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {state.errors?.agent_id && (
-                <p className="text-sm text-destructive">
-                  {state.errors.agent_id[0]}
-                </p>
-              )}
-            </div>
-          </div>
+        {/* Name */}
+        <div className="grid gap-2">
+          <FormLabel htmlFor="name" icon={Tag} required>
+            {t("name")}
+          </FormLabel>
+          <Input
+            id="name"
+            name="name"
+            placeholder={t("namePlaceholder")}
+            defaultValue={initialData?.name || ""}
+            required
+          />
+          {state.errors?.name && (
+            <p className="text-sm text-destructive">{state.errors.name[0]}</p>
+          )}
+        </div>
+
+        {/* Agent */}
+        <div className="grid gap-2">
+          <FormLabel htmlFor="agent_id" icon={Bot} required>
+            {t("agent")}
+          </FormLabel>
+          <Select
+            name="agent_id"
+            defaultValue={initialData?.agent_id || ""}
+          >
+            <SelectTrigger id="agent_id">
+              <SelectValue placeholder={t("selectAgent")} />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {state.errors?.agent_id && (
+            <p className="text-sm text-destructive">
+              {state.errors.agent_id[0]}
+            </p>
+          )}
         </div>
 
         {/* Cron config */}
         {triggerType === "cron" && (
-          <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Schedule
+          <>
+            <div className="grid gap-2">
+              <CronScheduler
+                name="cron_expression"
+                defaultValue={initialData?.config?.cron_expression || selected?.default_cron || ""}
+              />
             </div>
-            <CronScheduler
-              name="cron_expression"
-              defaultValue={initialData?.config?.cron_expression || selected?.default_cron || ""}
-            />
-            <div className="space-y-1.5">
-              <Label htmlFor="timezone" className="text-sm">
+
+            <div className="grid gap-2">
+              <FormLabel htmlFor="timezone" icon={Clock}>
                 {t("timezone")}
-              </Label>
+              </FormLabel>
               <Select
                 name="timezone"
                 defaultValue={initialData?.config?.timezone || "UTC"}
@@ -354,16 +333,16 @@ export function CreateTriggerForm({
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          </>
         )}
 
         {/* Webhook config */}
         {triggerType === "webhook" && (
           <>
-            <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="grid gap-2">
+              <FormLabel icon={Globe}>
                 {t("allowedMethods")}
-              </div>
+              </FormLabel>
               <div className="flex flex-wrap gap-3">
                 {HTTP_METHODS.map((method) => (
                   <div key={method} className="flex items-center gap-2">
@@ -385,13 +364,12 @@ export function CreateTriggerForm({
             </div>
 
             {availableEvents.length > 0 && (
-              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="grid gap-2">
+                <FormLabel icon={List}>
                   Event Types
-                </div>
+                </FormLabel>
                 <p className="text-xs text-muted-foreground">
-                  Select which events trigger execution. Leave empty to accept
-                  all.
+                  Select which events trigger execution. Leave empty to accept all.
                 </p>
                 <input
                   type="hidden"
@@ -423,30 +401,26 @@ export function CreateTriggerForm({
                 )}
               </div>
             )}
-
           </>
         )}
 
-        {/* Channel Credentials — shown for any trigger with credential_fields */}
+        {/* Credentials */}
         {credentialFields.length > 0 && (
-          <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Credentials
-            </div>
+          <>
             <p className="text-xs text-muted-foreground">
               {selected?.data_extractor
                 ? "Required to connect to the service."
                 : "Add signing credentials to verify webhook authenticity. Stored securely."}
             </p>
             {credentialFields.map((field) => (
-              <div key={field.key} className="space-y-1.5">
-                <Label
+              <div key={field.key} className="grid gap-2">
+                <FormLabel
                   htmlFor={`cred_${field.key}`}
-                  className="text-sm"
+                  icon={Key}
+                  required={!!selected?.data_extractor}
                 >
                   {field.label}
-                  {selected?.data_extractor && <span className="text-red-500"> *</span>}
-                </Label>
+                </FormLabel>
                 <Input
                   id={`cred_${field.key}`}
                   name={`credential_${field.key}`}
@@ -457,54 +431,49 @@ export function CreateTriggerForm({
                 />
               </div>
             ))}
-          </div>
+          </>
         )}
 
-        {/* Advanced */}
-        <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Advanced
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="task_parameters" className="text-sm">
-                {t("taskParameters")}
-              </Label>
-              <Textarea
-                id="task_parameters"
-                name="task_parameters"
-                placeholder={t("taskParametersPlaceholder")}
-                defaultValue={
-                  initialData?.task_parameters
-                    ? JSON.stringify(initialData.task_parameters, null, 2)
-                    : ""
-                }
-                className="font-mono min-h-[100px]"
-              />
-              {state.errors?.task_parameters && (
-                <p className="text-sm text-destructive">
-                  {state.errors.task_parameters[0]}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="failure_threshold" className="text-sm">
-                {t("failureThreshold")}
-              </Label>
-              <Input
-                id="failure_threshold"
-                name="failure_threshold"
-                type="number"
-                min={1}
-                placeholder={t("failureThresholdPlaceholder")}
-                defaultValue={initialData?.failure_threshold || ""}
-              />
-            </div>
-          </div>
+        {/* Task Parameters */}
+        <div className="grid gap-2">
+          <FormLabel htmlFor="task_parameters" icon={Code2} optional>
+            {t("taskParameters")}
+          </FormLabel>
+          <Textarea
+            id="task_parameters"
+            name="task_parameters"
+            placeholder={t("taskParametersPlaceholder")}
+            defaultValue={
+              initialData?.task_parameters
+                ? JSON.stringify(initialData.task_parameters, null, 2)
+                : ""
+            }
+            className="font-mono min-h-[100px]"
+          />
+          {state.errors?.task_parameters && (
+            <p className="text-sm text-destructive">
+              {state.errors.task_parameters[0]}
+            </p>
+          )}
+        </div>
+
+        {/* Failure Threshold */}
+        <div className="grid gap-2">
+          <FormLabel htmlFor="failure_threshold" icon={AlertTriangle} optional>
+            {t("failureThreshold")}
+          </FormLabel>
+          <Input
+            id="failure_threshold"
+            name="failure_threshold"
+            type="number"
+            min={1}
+            placeholder={t("failureThresholdPlaceholder")}
+            defaultValue={initialData?.failure_threshold || ""}
+          />
         </div>
 
         {/* Submit */}
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-2">
           <Button type="submit" disabled={isPending || !selected}>
             {isPending
               ? "..."

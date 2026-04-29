@@ -114,7 +114,6 @@ _mcp_dispatch_failed_total = _make_counter(
 
 # Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
 _last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-_last_dispatch_flush_task: asyncio.Task | None = None
 
 
 async def _flush_last_dispatch_loop(get_session) -> None:
@@ -625,6 +624,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             "workspace_id": str(request.workspace_id),
                             "base_prefix": base_prefix,
                         }
+                    elif tool_name == "agentarea/triggers":
+                        # The triggers tool defaults agent_id/workspace_id/user_id to
+                        # the calling task so the LLM never has to know its own id.
+                        extra_kwargs = {
+                            "default_agent_id": str(request.agent_id),
+                            "default_workspace_id": str(request.workspace_id),
+                            "default_user_id": str(user_context.user_id),
+                            "event_broker": dependencies.event_broker,
+                        }
 
                     # Create and register the code tool instance
                     tool_instance = create_code_tool_instance(
@@ -747,7 +755,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if not instance:
                         continue
 
-                    available = (instance.json_spec or {}).get("available_tools") or []
+                    available = (
+                        instance.tools or (instance.json_spec or {}).get("available_tools") or []
+                    )
                     if not any(t.get("name") == request.tool_name for t in available):
                         continue
 

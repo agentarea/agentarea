@@ -114,11 +114,7 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
             workspace_id = auth_result.token.claims.get("workspace_id")
 
         if not workspace_id:
-            logger.warning(
-                f"Token missing workspace_id claim for user {auth_result.token.user_id}. "
-                "A2A requests require workspace_id in token."
-            )
-            return None
+            workspace_id = auth_result.token.user_id
 
         return {
             "user_id": auth_result.token.user_id,

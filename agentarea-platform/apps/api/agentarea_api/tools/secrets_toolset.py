@@ -3,10 +3,17 @@
 import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_context
 
 
+@toolset(
+    namespace="agentarea/secrets",
+    display_name="Secrets",
+    description="Manage workspace secrets (names only, values are encrypted).",
+    category="platform",
+)
 class SecretsToolset(Toolset):
     """Manage workspace secrets: list, create, delete."""
 

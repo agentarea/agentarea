@@ -72,7 +72,6 @@ class AgentExecutionRequest(BaseModel):
     # Execution configuration
     timeout_seconds: int = 300
     max_reasoning_iterations: int = 10
-    enable_agent_communication: bool = False
     requires_human_approval: bool = False
     budget_usd: Money | None = None  # Optional budget limit in USD
 
@@ -285,6 +284,7 @@ class MCPToolRequest(BaseModel):
     server_instance_id: UUID | None = None
     workspace_id: str  # Required - must be provided explicitly
     task_id: str | None = None  # Scopes artifact-style tools to a task
+    agent_id: UUID | None = None  # Calling agent — used by self-referential tools (e.g. triggers)
     tools: list[dict[str, Any]] | None = None
 
 

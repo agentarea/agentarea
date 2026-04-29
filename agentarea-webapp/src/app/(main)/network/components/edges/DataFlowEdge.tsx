@@ -1,6 +1,6 @@
 "use client";
 
-import { getSmoothStepPath, type EdgeProps } from "@xyflow/react";
+import { getBezierPath, type EdgeProps } from "@xyflow/react";
 
 export default function DataFlowEdge({
   id,
@@ -12,24 +12,35 @@ export default function DataFlowEdge({
   targetPosition,
   data,
 }: EdgeProps) {
-  const [edgePath] = getSmoothStepPath({
+  const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 16,
+    curvature: 0.35,
   });
-  const isRisk = data?.isRisk as boolean | undefined;
+
   const isInactive = data?.isInactive as boolean | undefined;
+  const dimmed = data?.dimmed as boolean | undefined;
+  const highlighted = data?.highlighted as boolean | undefined;
 
-  const stroke = isRisk ? "#f97316" : "#d4d4d8";
-  const strokeWidth = isRisk ? 2 : 1.5;
+  let stroke = "#a1a1aa";
+  let strokeWidth = 1.25;
+  let opacity = 0.55;
+
+  if (highlighted) {
+    stroke = "#2563eb";
+    strokeWidth = 2;
+    opacity = 1;
+  } else if (dimmed) {
+    stroke = "#d4d4d8";
+    strokeWidth = 1;
+    opacity = 0.18;
+  }
+
   const strokeDasharray = isInactive ? "5,5" : undefined;
-
-  const midX = (sourceX + targetX) / 2;
-  const midY = (sourceY + targetY) / 2;
 
   return (
     <>
@@ -42,7 +53,7 @@ export default function DataFlowEdge({
           refY="3"
           orient="auto"
         >
-          <path d="M0,0 L0,6 L6,3 z" fill={stroke} />
+          <path d="M0,0 L0,6 L6,3 z" fill={stroke} opacity={opacity} />
         </marker>
       </defs>
       <path
@@ -51,20 +62,10 @@ export default function DataFlowEdge({
         fill="none"
         stroke={stroke}
         strokeWidth={strokeWidth}
+        strokeOpacity={opacity}
         strokeDasharray={strokeDasharray}
         markerEnd={`url(#arrow-${id})`}
       />
-      {isRisk && (
-        <text
-          x={midX}
-          y={midY - 8}
-          textAnchor="middle"
-          fontSize="11"
-          fill="#f97316"
-        >
-          ⚠
-        </text>
-      )}
     </>
   );
 }

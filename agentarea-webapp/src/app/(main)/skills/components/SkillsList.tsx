@@ -2,10 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/EmptyState";
 import SkillsTable from "./SkillsTable";
 import SkillsCard from "./SkillsCard";
-import SkillsEmptyState from "./SkillsEmptyState";
 import type { Skill } from "@/types/skill";
 
 interface SkillsListProps {
@@ -14,43 +13,44 @@ interface SkillsListProps {
   searchQuery: string;
 }
 
-export default function SkillsList({ 
-  skills, 
+export default function SkillsList({
+  skills,
   viewMode,
-  searchQuery 
+  searchQuery,
 }: SkillsListProps) {
   const router = useRouter();
-
   const t = useTranslations("SkillsPage");
 
   const hasSkills = skills.length > 0;
 
-  // No skills at all (and no search query) -> Global empty state
   if (!hasSkills && !searchQuery) {
     return (
-      <SkillsEmptyState onCreateClick={() => router.push("/skills/create")} />
+      <EmptyState
+        title={t("noSkills")}
+        description={t("noSkillsDescription")}
+        iconsType="skills"
+        action={{
+          label: t("addSkill"),
+          onClick: () => router.push("/skills/create"),
+        }}
+      />
     );
   }
 
-  // No results found for search query
   if (!hasSkills && searchQuery) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-center">
-        <p className="text-lg font-medium text-muted-foreground">
-          {t("noMatchingSkills", { query: searchQuery })}
-        </p>
-        <Button 
-          variant="link" 
-          onClick={() => router.push("/skills")}
-          className="mt-2"
-        >
-          {t("clearSearch")}
-        </Button>
-      </div>
+      <EmptyState
+        title={t("noMatchingSkills", { query: searchQuery })}
+        description={t("noMatchingSkillsDescription")}
+        iconsType="skills"
+        action={{
+          label: t("clearSearch"),
+          onClick: () => router.push("/skills"),
+        }}
+      />
     );
   }
 
-  // Render list/grid
   return (
     <>
       {viewMode === "grid" ? (

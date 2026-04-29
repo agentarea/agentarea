@@ -114,12 +114,11 @@ class MCPToolFactory:
                     f"MCP server instance {server_instance_id} not found during tool discovery"
                 )
                 return []
-            status = getattr(server_instance, "status", None)
-            # RUNNING = container-based instance is alive.
-            # CONNECTED = remote URL endpoint reachable, or bundle aggregating other instances.
-            # Both are "ready for tool discovery" per MCPInstanceStatus.
-            # in_progress is expected transient during async creation — not an error.
-            if status not in ("running", "connected"):
+            verification = getattr(server_instance, "verification", None) or {}
+            status = verification.get("status") or getattr(server_instance, "status", None)
+            # RUNNING/CONNECTED are legacy runtime statuses; SUCCEEDED is the
+            # current verification payload status for URL instances.
+            if status not in ("running", "connected", "succeeded"):
                 logger.info(
                     "MCP instance not verified-succeeded (status=%s); "
                     "this is expected transient during async creation — skipping tool discovery",
@@ -127,9 +126,12 @@ class MCPToolFactory:
                 )
                 return []
 
-            # Read discovered tools from instance's json_spec
+            # Read discovered tools from the dedicated column first. Older rows
+            # may still carry them in json_spec.available_tools.
+            tools_data = getattr(server_instance, "tools", None)
             json_spec = getattr(server_instance, "json_spec", None) or {}
-            tools_data = json_spec.get("available_tools")
+            if not tools_data:
+                tools_data = json_spec.get("available_tools")
 
             if not tools_data:
                 # Fallback: try service discovery methods
@@ -172,7 +174,7 @@ class MCPToolFactory:
                     name = t.get("name") if isinstance(t, dict) else None
                     if not name:
                         continue
-                    description = t.get("description", f"MCP tool: {name}")
+                    description = t.get("description") or f"MCP tool: {name}"
                     # Support different schema keys
                     schema = (
                         t.get("inputSchema")

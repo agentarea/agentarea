@@ -68,38 +68,80 @@ def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
     return resolved_ips
 
 
-def build_pinned_url(url: str, resolved_ip: str | None = None) -> tuple[str, str, str]:
-    """Build a new URL from validated IP to prevent DNS rebinding.
+class PinnedTarget:
+    """Validated, ready-to-fetch destination split into independent components.
 
-    Constructs the URL from scratch using the validated IP address rather than
-    modifying the original URL, so static analysis can verify no tainted data
-    reaches the HTTP client.
+    Holding scheme/host/port separately from path/query lets the HTTP client
+    layer construct the request URL without ever concatenating raw user input
+    with the destination identifiers — the destination is fully determined by
+    `scheme` (allowlisted) and `host` (a `validate_url`-vetted IP), regardless
+    of the path.
+    """
 
-    If resolved_ip is None (allow_private mode), resolves DNS inline to still
-    construct the URL from a known IP.
+    __slots__ = ("scheme", "host", "port", "path", "raw_query", "original_host")
 
-    Returns (pinned_url, original_hostname, path).
+    def __init__(
+        self,
+        scheme: str,
+        host: str,
+        port: int | None,
+        path: str,
+        raw_query: bytes,
+        original_host: str,
+    ) -> None:
+        self.scheme = scheme
+        self.host = host
+        self.port = port
+        self.path = path
+        self.raw_query = raw_query
+        self.original_host = original_host
+
+
+def build_pinned_target(url: str, resolved_ip: str | None = None) -> PinnedTarget:
+    """Build a validated PinnedTarget for an outbound HTTP request.
+
+    Splits the destination identifiers (scheme/host/port) — which determine
+    where the request actually goes — from the path/query, which only address
+    a resource on the already-vetted destination. Callers construct the
+    request URL from this struct via the HTTP client's URL constructor; the
+    HTTP sink only ever sees an URL whose destination components come from
+    the allowlist + the resolved-IP path through `validate_url`.
+
+    If `resolved_ip` is None (allow_private mode), DNS is resolved inline so
+    the request still targets a concrete address.
     """
     parsed = urlparse(url)
-    hostname = parsed.hostname or ""
+    original_host = parsed.hostname or ""
+    # Scheme is constrained to two literal constants — no taint reaches the sink.
     scheme = "https" if parsed.scheme == "https" else "http"
 
-    # Resolve IP if not provided (allow_private mode)
     if resolved_ip is None:
         try:
-            results = socket.getaddrinfo(hostname, None)
-            resolved_ip = results[0][4][0] if results else hostname
+            results = socket.getaddrinfo(original_host, None)
+            resolved_ip = results[0][4][0] if results else original_host
         except socket.gaierror:
-            resolved_ip = hostname
+            resolved_ip = original_host
 
-    # Wrap IPv6 in brackets
-    ip_host = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
-    # Build netloc from validated IP + original port
-    netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    # Reconstruct path/query from parsed components
-    path = parsed.path or "/"
-    query = f"?{parsed.query}" if parsed.query else ""
-    fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+    return PinnedTarget(
+        scheme=scheme,
+        host=resolved_ip,
+        port=parsed.port,
+        path=parsed.path or "/",
+        raw_query=parsed.query.encode("ascii", errors="replace") if parsed.query else b"",
+        original_host=original_host,
+    )
 
-    pinned = f"{scheme}://{netloc}{path}{query}{fragment}"
-    return pinned, hostname, path
+
+def build_pinned_url(url: str, resolved_ip: str | None = None) -> tuple[str, str, str]:
+    """Backwards-compatible wrapper around :func:`build_pinned_target`.
+
+    Returns ``(pinned_url, original_host, path)`` to match the prior API.
+    Prefer :func:`build_pinned_target` in new code so the destination
+    components stay separated from the user-controlled path.
+    """
+    target = build_pinned_target(url, resolved_ip)
+    ip_host = f"[{target.host}]" if ":" in target.host else target.host
+    netloc = f"{ip_host}:{target.port}" if target.port else ip_host
+    query = f"?{target.raw_query.decode('ascii')}" if target.raw_query else ""
+    pinned = f"{target.scheme}://{netloc}{target.path}{query}"
+    return pinned, target.original_host, target.path

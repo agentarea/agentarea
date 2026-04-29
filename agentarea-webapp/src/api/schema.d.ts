@@ -661,6 +661,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Summary
+         * @description Per-task rollup derived from the event log via the ``task_summary`` view.
+         *
+         *     Workspace-scoped: the row must belong to the caller's workspace and
+         *     the agent must match, or we return 404 (same shape as other task
+         *     endpoints — no information leak).
+         */
+        get: operations["get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wallet
+         * @description Get wallet configuration for an agent (no decrypted credentials).
+         */
+        get: operations["get_wallet_v1_agents__agent_id__wallet_get"];
+        /**
+         * Update Wallet
+         * @description Update wallet configuration.
+         */
+        put: operations["update_wallet_v1_agents__agent_id__wallet_put"];
+        /**
+         * Create Wallet
+         * @description Create a wallet for an agent.
+         */
+        post: operations["create_wallet_v1_agents__agent_id__wallet_post"];
+        /**
+         * Delete Wallet
+         * @description Delete wallet and associated credentials.
+         */
+        delete: operations["delete_wallet_v1_agents__agent_id__wallet_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wallet Balance
+         * @description Get current service budget status.
+         */
+        get: operations["get_wallet_balance_v1_agents__agent_id__wallet_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/fund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fund Wallet
+         * @description Update the service budget amount.
+         */
+        post: operations["fund_wallet_v1_agents__agent_id__wallet_fund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/wallet/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Payment History
+         * @description Get paginated payment history for an agent.
+         */
+        get: operations["get_payment_history_v1_agents__agent_id__wallet_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-keys/": {
         parameters: {
             query?: never;
@@ -729,6 +845,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspace Files */
+        get: operations["list_workspace_files_v1_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Workspace File */
+        get: operations["download_workspace_file_v1_files__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/inbox/": {
         parameters: {
             query?: never;
@@ -746,6 +896,29 @@ export interface paths {
         get: operations["get_inbox_items_v1_inbox__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Accept an invitation as the authenticated user.
+         *
+         *     Idempotent: accepting twice (or accepting when already a member)
+         *     returns the same membership.
+         */
+        post: operations["accept_invitation_v1_invitations_accept_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1223,6 +1396,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/model-instances/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Model Instances Bulk
+         * @description Create many model instances in a single request.
+         *
+         *     Partial-success semantics: each item is created independently and per-item
+         *     failures are returned in `failed` rather than aborting the whole batch.
+         *     Use this from UIs that let users select N models from a discovered list to
+         *     avoid N HTTP round-trips.
+         */
+        post: operations["create_model_instances_bulk_v1_model_instances_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/model-instances/test": {
         parameters: {
             query?: never;
@@ -1585,13 +1783,13 @@ export interface paths {
         };
         /**
          * List Project Files
-         * @description List all files in a project's MinIO prefix.
+         * @description List files under the project's prefix.
          */
         get: operations["list_project_files_v1_projects__project_id__files_get"];
         put?: never;
         /**
          * Upload Project File
-         * @description Upload a file to a project's MinIO prefix.
+         * @description Upload a file to a project's workspace-scoped artifact prefix.
          */
         post: operations["upload_project_file_v1_projects__project_id__files_post"];
         delete?: never;
@@ -1609,14 +1807,14 @@ export interface paths {
         };
         /**
          * Download Project File
-         * @description Download a file from a project's MinIO prefix (presigned URL).
+         * @description Generate a presigned URL for a project file.
          */
         get: operations["download_project_file_v1_projects__project_id__files__file_path__get"];
         put?: never;
         post?: never;
         /**
          * Delete Project File
-         * @description Delete a file from a project's MinIO prefix.
+         * @description Delete a file from the project's prefix.
          */
         delete: operations["delete_project_file_v1_projects__project_id__files__file_path__delete"];
         options?: never;
@@ -1802,7 +2000,7 @@ export interface paths {
         get: operations["get_provider_config_v1_provider_configs__config_id__get"];
         /**
          * Update Provider Config
-         * @description Update a provider configuration.
+         * @description Update a provider configuration (full replace via PUT).
          */
         put: operations["update_provider_config_v1_provider_configs__config_id__put"];
         post?: never;
@@ -1813,7 +2011,11 @@ export interface paths {
         delete: operations["delete_provider_config_v1_provider_configs__config_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Provider Config
+         * @description Partially update a provider configuration.
+         */
+        patch: operations["patch_provider_config_v1_provider_configs__config_id__patch"];
         trace?: never;
     };
     "/v1/provider-configs/{config_id}/discover": {
@@ -2352,16 +2554,16 @@ export interface paths {
          *     store under key ``channel_cred:{webhook_type}:{trigger_id}``.
          *
          *     Args:
-         *         request: Trigger creation request data
-         *         user_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *         secret_manager: Injected secret manager for credential storage
+         *         payload: Trigger creation DTO (single source of truth shared with MCP toolset).
+         *         user_context: Authentication context.
+         *         trigger_service: Injected trigger service.
+         *         secret_manager: Injected secret manager for credential storage.
          *
          *     Returns:
-         *         The created trigger
+         *         The created trigger.
          *
          *     Raises:
-         *         HTTPException: If validation fails or creation errors occur
+         *         HTTPException: If validation fails or creation errors occur.
          */
         post: operations["create_trigger_v1_triggers__post"];
         delete?: never;
@@ -2472,17 +2674,17 @@ export interface paths {
          *     they replace the existing credentials in the secret store.
          *
          *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         request: Trigger update request data
-         *         user_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *         secret_manager: Injected secret manager for credential storage
+         *         trigger_id: The unique identifier of the trigger.
+         *         payload: Trigger update DTO (single source of truth shared with MCP toolset).
+         *         user_context: Authentication context.
+         *         trigger_service: Injected trigger service.
+         *         secret_manager: Injected secret manager for credential storage.
          *
          *     Returns:
-         *         The updated trigger
+         *         The updated trigger.
          *
          *     Raises:
-         *         HTTPException: If trigger not found or validation fails
+         *         HTTPException: If trigger not found or validation fails.
          */
         put: operations["update_trigger_v1_triggers__trigger_id__put"];
         post?: never;
@@ -2904,6 +3106,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invitations
+         * @description List pending invitations for the workspace. Tokens are NOT returned.
+         */
+        get: operations["list_invitations_v1_workspaces__workspace_id__invitations_get"];
+        put?: never;
+        /**
+         * Create Invitation
+         * @description Create an invitation link for the given workspace.
+         *
+         *     The plaintext ``token`` is returned exactly once in the response.
+         *     The caller delivers it however they want (link, email, Slack).
+         */
+        post: operations["create_invitation_v1_workspaces__workspace_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invitation
+         * @description Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops.
+         */
+        delete: operations["revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_v1_workspaces__workspace_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description Remove a member from the workspace. Self-removal allowed; removing
+         *     others requires the caller to be a member of the workspace (owner-only
+         *     check belongs to the permissions PR).
+         */
+        delete: operations["remove_member_v1_workspaces__workspace_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/health": {
         parameters: {
             query?: never;
@@ -3062,6 +3350,23 @@ export interface components {
             /** Token Prefix */
             token_prefix: string;
         };
+        /** AcceptInvitationBody */
+        AcceptInvitationBody: {
+            /** Token */
+            token: string;
+        };
+        /** AcceptInvitationResponse */
+        AcceptInvitationResponse: {
+            /**
+             * Invitation Id
+             * Format: uuid
+             */
+            invitation_id: string;
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /** AgentAuthentication */
         AgentAuthentication: {
             /** Credentials */
@@ -3146,29 +3451,65 @@ export interface components {
              */
             version: string;
         };
-        /** AgentCreate */
+        /**
+         * AgentCreate
+         * @description Payload for creating an agent.
+         *
+         *     ``model_id`` accepts either a model-instance UUID configured in the
+         *     workspace, or a recognized provider identifier (e.g. ``gpt-4o``,
+         *     ``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).
+         */
         AgentCreate: {
-            /** A2Ui Enabled */
+            /**
+             * A2Ui Enabled
+             * @description Expose this agent over the A2UI protocol.
+             */
             a2ui_enabled?: boolean | null;
             /**
              * Agent Type
+             * @description 'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).
              * @default stateless
+             * @enum {string}
              */
-            agent_type: string;
-            /** Description */
+            agent_type: "stateless" | "stateful";
+            /**
+             * Description
+             * @description Short summary of what the agent does.
+             * @default
+             */
             description: string;
+            /** @description Event subscriptions that auto-trigger this agent. */
             events_config?: components["schemas"]["EventsConfig"] | null;
-            /** Instruction */
+            /**
+             * Instruction
+             * @description System prompt / behavioural instructions for the agent.
+             * @default
+             */
             instruction: string;
-            /** Model Id */
+            /**
+             * Model Id
+             * @description Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').
+             */
             model_id: string;
-            /** Name */
+            /**
+             * Name
+             * @description Human-readable agent name (unique per workspace).
+             */
             name: string;
-            /** Planning */
+            /**
+             * Planning
+             * @description Enable explicit planning step before execution.
+             */
             planning?: boolean | null;
-            /** Skill Ids */
+            /**
+             * Skill Ids
+             * @description UUIDs of skills to attach to the agent.
+             */
             skill_ids?: string[] | null;
-            /** Tools */
+            /**
+             * Tools
+             * @description Tools attached to the agent (code/mcp/agent/openapi).
+             */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
         /** AgentProvider */
@@ -3232,10 +3573,15 @@ export interface components {
             /** Tags */
             tags?: string[] | null;
         };
-        /** AgentUpdate */
+        /**
+         * AgentUpdate
+         * @description Patch payload for an agent. All fields optional — unset = unchanged.
+         */
         AgentUpdate: {
             /** A2Ui Enabled */
             a2ui_enabled?: boolean | null;
+            /** Agent Type */
+            agent_type?: ("stateless" | "stateful") | null;
             /** Capabilities */
             capabilities?: string[] | null;
             /** Description */
@@ -3331,6 +3677,31 @@ export interface components {
              * @description ZIP file containing the skill package
              */
             file: string;
+        };
+        /** CreateInvitationBody */
+        CreateInvitationBody: {
+            /** Email */
+            email?: string | null;
+            /** Expires In Days */
+            expires_in_days?: number | null;
+        };
+        /** CreateWalletRequest */
+        CreateWalletRequest: {
+            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
+            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
+            /**
+             * Service Budget Period
+             * @default execution
+             */
+            service_budget_period: string;
+            /**
+             * Service Budget Usd
+             * @default 0
+             */
+            service_budget_usd: number;
+            /** Wallet Type */
+            wallet_type: string;
+            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
         };
         /** DiscoverPreviewModelResponse */
         DiscoverPreviewModelResponse: {
@@ -3465,21 +3836,34 @@ export interface components {
             /** Escalation Id */
             escalation_id: string;
         };
-        /** EventConfig */
+        /**
+         * EventConfig
+         * @description One event subscription for an agent.
+         */
         EventConfig: {
-            /** Config */
+            /**
+             * Config
+             * @description Event-specific configuration.
+             */
             config?: {
                 [key: string]: unknown;
             } | null;
             /**
              * Enabled
+             * @description Whether this subscription is active.
              * @default true
              */
             enabled: boolean;
-            /** Event Type */
+            /**
+             * Event Type
+             * @description Event type the agent listens to.
+             */
             event_type: string;
         };
-        /** EventsConfig */
+        /**
+         * EventsConfig
+         * @description Per-agent event subscriptions.
+         */
         EventsConfig: {
             /** Events */
             events?: components["schemas"]["EventConfig"][] | null;
@@ -3566,6 +3950,11 @@ export interface components {
              */
             trigger_id: string;
         };
+        /** FundWalletRequest */
+        FundWalletRequest: {
+            /** Service Budget Usd */
+            service_budget_usd: number;
+        };
         /** GovernanceOverlay */
         GovernanceOverlay: {
             /** Category */
@@ -3580,17 +3969,30 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** HeaderInput */
+        /**
+         * HeaderInput
+         * @description One custom HTTP header attached to an OpenAPI connection.
+         *
+         *     Non-safe header names (e.g. ``Authorization``) are stored encrypted in the
+         *     secret manager — pass the plaintext value here at create/update time.
+         */
         HeaderInput: {
-            /** Name */
+            /**
+             * Name
+             * @description HTTP header name. Allowed characters: letters, digits, '-', '_'.
+             */
             name: string;
             /**
              * Value
+             * @description Header value. May not contain CR, LF, or NUL bytes.
              * @default
              */
             value: string;
         };
-        /** HeaderOutput */
+        /**
+         * HeaderOutput
+         * @description Header metadata returned in API responses (secret values are masked).
+         */
         HeaderOutput: {
             /** Name */
             name: string;
@@ -3664,6 +4066,71 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
+        };
+        /**
+         * InvitationCreatedResponse
+         * @description Same as InvitationResponse plus the plaintext token, returned ONCE.
+         */
+        InvitationCreatedResponse: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Accepted By User Id */
+            accepted_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invited By */
+            invited_by: string;
+            /** Status */
+            status: string;
+            /** Token */
+            token: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** InvitationResponse */
+        InvitationResponse: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Accepted By User Id */
+            accepted_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invited By */
+            invited_by: string;
+            /** Status */
+            status: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** JSONRPCError */
         JSONRPCError: {
@@ -3760,85 +4227,119 @@ export interface components {
             /** Name */
             name?: string | null;
         };
-        /** MCPServerCreate */
+        /**
+         * MCPServerCreate
+         * @description Payload for creating an MCP server spec (catalog template).
+         *
+         *     Either ``docker_image_url`` (for container-based servers) or
+         *     ``remote_url`` (for HTTP-based servers like GitHub Copilot) should be
+         *     supplied. ``env_schema`` describes the variables an instance built from
+         *     this spec needs to provide; secret entries (``isSecret: true``) are
+         *     routed through the secret manager rather than stored in plaintext.
+         */
         MCPServerCreate: {
             /**
              * Cmd
-             * @description Custom command to override container CMD (useful for switching between stdio and HTTP modes)
+             * @description Custom command override for container CMD (e.g. switching between stdio and HTTP modes).
              */
             cmd?: string[] | null;
             /**
              * Description
-             * @description Description of the MCP server
+             * @description Short summary of what this MCP server provides.
              */
             description: string;
             /**
              * Docker Image Url
-             * @description Docker image URL (for container-based servers)
+             * @description Docker image URL for container-based MCP servers.
              */
             docker_image_url?: string | null;
             /**
              * Env Schema
-             * @description Environment variable schema
+             * @description Environment-variable schema entries (KeyValueInput from the MCP registry). Each item has at least 'name' and 'description'; mark secrets with 'isSecret: true'.
              */
             env_schema?: {
                 [key: string]: unknown;
             }[] | null;
             /**
              * Is Public
-             * @description Whether the server is public
+             * @description If true, the spec is visible across workspaces.
              * @default false
              */
             is_public: boolean;
             /**
+             * Json Spec
+             * @description Raw ServerJSON spec as published by the MCP registry.
+             */
+            json_spec?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Name
-             * @description Name of the MCP server
+             * @description Human-readable MCP server name (unique per workspace).
              */
             name: string;
             /**
+             * Registry Url
+             * @description Source registry URL the spec was imported from.
+             */
+            registry_url?: string | null;
+            /**
              * Remote Url
-             * @description Remote URL (for HTTP-based servers like GitHub Copilot)
+             * @description Remote endpoint URL for HTTP-based MCP servers.
              */
             remote_url?: string | null;
             /**
              * Tags
-             * @description Tags for categorization
+             * @description Tags used for search and categorization.
              */
             tags?: string[];
             /**
              * Version
-             * @description Version of the MCP server
+             * @description Semantic version of the MCP server spec.
              * @default 1.0.0
              */
             version: string;
         };
-        /** MCPServerInstanceCreateRequest */
-        MCPServerInstanceCreateRequest: {
+        /**
+         * MCPServerInstanceCreate
+         * @description Payload for creating an MCP server instance.
+         *
+         *     ``json_spec`` carries the connection configuration. Common shapes:
+         *
+         *     - ``{"type": "url", "endpoint_url": "https://..."}``
+         *     - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
+         *     - ``{"type": "command", "command": [...], "environment": {...}}``
+         *     - ``{"type": "bundle", "members": ["<instance-id>", ...]}``
+         *
+         *     For URL-type instances the service synchronously verifies the endpoint;
+         *     docker/command kick off background verification.
+         */
+        MCPServerInstanceCreate: {
             /**
              * Auth Config Id
-             * @description ID of the auth config to use
+             * @description ID of an MCP auth config (OAuth/credentials) to attach.
              */
             auth_config_id?: string | null;
             /**
              * Description
-             * @description Description of the instance
+             * @description Optional human-readable description of the instance.
              */
             description?: string | null;
             /**
              * Json Spec
-             * @description Configuration specification as JSON
+             * @description Connection configuration. Must include 'type' ('url' | 'docker' | 'command' | 'bundle'); other keys depend on type.
              */
             json_spec: {
                 [key: string]: unknown;
             };
             /**
              * Name
-             * @description Name of the MCP server instance
+             * @description Display name for this MCP server instance (unique per workspace).
              */
             name: string;
             /**
              * Server Spec Id
-             * @description ID of the MCP server spec (optional)
+             * @description ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.). Optional for ad-hoc URL instances.
              */
             server_spec_id?: string | null;
         };
@@ -3884,7 +4385,10 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** MCPServerInstanceUpdate */
+        /**
+         * MCPServerInstanceUpdate
+         * @description Patch payload for an MCP server instance. All fields optional — unset = unchanged.
+         */
         MCPServerInstanceUpdate: {
             /** Description */
             description?: string | null;
@@ -3941,72 +4445,98 @@ export interface components {
             /** Version */
             version: string;
         };
-        /** MCPServerUpdate */
+        /**
+         * MCPServerUpdate
+         * @description Patch payload for an MCP server spec. All fields optional — unset = unchanged.
+         */
         MCPServerUpdate: {
-            /**
-             * Cmd
-             * @description Custom command to override container CMD
-             */
+            /** Cmd */
             cmd?: string[] | null;
-            /**
-             * Description
-             * @description Description of the MCP server
-             */
+            /** Description */
             description?: string | null;
-            /**
-             * Docker Image Url
-             * @description Docker image URL
-             */
+            /** Docker Image Url */
             docker_image_url?: string | null;
-            /**
-             * Env Schema
-             * @description Environment variable schema
-             */
+            /** Env Schema */
             env_schema?: {
                 [key: string]: unknown;
             }[] | null;
-            /**
-             * Is Public
-             * @description Whether the server is public
-             */
+            /** Is Public */
             is_public?: boolean | null;
-            /**
-             * Json Spec
-             * @description Raw ServerJSON spec from MCP registry
-             */
+            /** Json Spec */
             json_spec?: {
                 [key: string]: unknown;
             } | null;
-            /**
-             * Name
-             * @description Name of the MCP server
-             */
+            /** Name */
             name?: string | null;
-            /**
-             * Registry Url
-             * @description Source registry URL
-             */
+            /** Registry Url */
             registry_url?: string | null;
-            /**
-             * Remote Url
-             * @description Remote URL for HTTP-based MCP servers
-             */
+            /** Remote Url */
             remote_url?: string | null;
             /**
              * Status
-             * @description Status of the MCP server
+             * @description Lifecycle status of the spec (e.g. 'active', 'deprecated').
              */
             status?: string | null;
-            /**
-             * Tags
-             * @description Tags for categorization
-             */
+            /** Tags */
             tags?: string[] | null;
-            /**
-             * Version
-             * @description Version of the MCP server
-             */
+            /** Version */
             version?: string | null;
+        };
+        /** MPPConfigSchema */
+        MPPConfigSchema: {
+            /** Payment Method Types */
+            payment_method_types?: string[];
+            /**
+             * Session Budget Usd
+             * @default 10
+             */
+            session_budget_usd: number;
+            /** Stripe Profile Id */
+            stripe_profile_id?: string | null;
+        };
+        /** MemberResponse */
+        MemberResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invitation Id */
+            invitation_id: string | null;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** ModelInstanceBulkCreateRequest */
+        ModelInstanceBulkCreateRequest: {
+            /** Items */
+            items: components["schemas"]["ModelInstanceCreate"][];
+        };
+        /** ModelInstanceBulkCreateResponse */
+        ModelInstanceBulkCreateResponse: {
+            /** Failed */
+            failed: components["schemas"]["ModelInstanceBulkFailure"][];
+            /** Failed Count */
+            failed_count: number;
+            /** Succeeded */
+            succeeded: components["schemas"]["ModelInstanceResponse"][];
+            /** Succeeded Count */
+            succeeded_count: number;
+        };
+        /** ModelInstanceBulkFailure */
+        ModelInstanceBulkFailure: {
+            /** Error */
+            error: string;
+            /** Index */
+            index: number;
+            /** Model Spec Id */
+            model_spec_id: string;
         };
         /** ModelInstanceCreate */
         ModelInstanceCreate: {
@@ -4170,7 +4700,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "agent" | "mcp_instance" | "skill" | "trigger";
+            type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
         };
         /** NetworkTopologyResponse */
         NetworkTopologyResponse: {
@@ -4242,23 +4772,51 @@ export interface components {
             /** Token */
             token: string;
         };
-        /** OpenAPIConnectionCreate */
+        /**
+         * OpenAPIConnectionCreate
+         * @description Payload for creating an OpenAPI connection.
+         *
+         *     The connection ties a base URL (where requests are sent) to an
+         *     OpenAPI 3.x specification (which is parsed eagerly into a tool list).
+         *     Provide either ``spec_url`` or ``spec_content`` — not both required.
+         */
         OpenAPIConnectionCreate: {
-            /** Auth Config Id */
+            /**
+             * Auth Config Id
+             * @description Optional MCPAuthConfig UUID for OAuth2 token rotation. When set, tokens are minted/refreshed on the connection's behalf.
+             */
             auth_config_id?: string | null;
-            /** Base Url */
+            /**
+             * Base Url
+             * @description Base URL for API requests, e.g. 'https://api.example.com'.
+             */
             base_url: string;
-            /** Custom Headers */
+            /**
+             * Custom Headers
+             * @description Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.
+             */
             custom_headers?: components["schemas"]["HeaderInput"][] | null;
-            /** Description */
+            /**
+             * Description
+             * @description Optional human-readable summary of what this API exposes.
+             */
             description?: string | null;
-            /** Name */
+            /**
+             * Name
+             * @description Display name for the connection (unique per workspace).
+             */
             name: string;
-            /** Spec Content */
+            /**
+             * Spec Content
+             * @description Inline OpenAPI 3.x spec as a JSON object. Use instead of ``spec_url`` when the spec host is unreachable from the API.
+             */
             spec_content?: {
                 [key: string]: unknown;
             } | null;
-            /** Spec Url */
+            /**
+             * Spec Url
+             * @description URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.
+             */
             spec_url?: string | null;
         };
         /** OpenAPIConnectionResponse */
@@ -4294,13 +4852,22 @@ export interface components {
             /** Updated At */
             updated_at: unknown;
         };
-        /** OpenAPIConnectionUpdate */
+        /**
+         * OpenAPIConnectionUpdate
+         * @description Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
+         */
         OpenAPIConnectionUpdate: {
-            /** Auth Config Id */
+            /**
+             * Auth Config Id
+             * @description Optional MCPAuthConfig UUID for OAuth2 token rotation.
+             */
             auth_config_id?: string | null;
             /** Base Url */
             base_url?: string | null;
-            /** Custom Headers */
+            /**
+             * Custom Headers
+             * @description Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.
+             */
             custom_headers?: components["schemas"]["HeaderInput"][] | null;
             /** Description */
             description?: string | null;
@@ -4312,6 +4879,17 @@ export interface components {
             } | null;
             /** Spec Url */
             spec_url?: string | null;
+        };
+        /** PaginatedPaymentsResponse */
+        PaginatedPaymentsResponse: {
+            /** Items */
+            items: components["schemas"]["PaymentRecordResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** PaginatedResponse[MCPServerResponse] */
         PaginatedResponse_MCPServerResponse_: {
@@ -4326,6 +4904,37 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaymentRecordResponse */
+        PaymentRecordResponse: {
+            /** Agent Id */
+            agent_id: string;
+            /** Amount Usd */
+            amount_usd: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Execution Id */
+            execution_id: string;
+            /** Id */
+            id: string;
+            /** Protocol */
+            protocol: string;
+            /** Protocol Metadata */
+            protocol_metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Recipient */
+            recipient: string;
+            /** Status */
+            status: string;
+            /** Tool Call Id */
+            tool_call_id: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Tx Hash */
+            tx_hash?: string | null;
+        };
         /** ProjectAgentRef */
         ProjectAgentRef: {
             /**
@@ -4336,30 +4945,47 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** ProjectCreate */
+        /**
+         * ProjectCreate
+         * @description Payload for creating a project.
+         *
+         *     A project is a workspace-scoped container that groups skills, agents,
+         *     MCP server instances, and uploaded files under a shared identity and
+         *     optional parent project.
+         */
         ProjectCreate: {
-            /** Description */
+            /**
+             * Description
+             * @description Short summary of the project's purpose.
+             */
             description?: string | null;
-            /** Instructions */
+            /**
+             * Instructions
+             * @description System-level instructions or notes shared across the project's agents.
+             */
             instructions?: string | null;
-            /** Name */
+            /**
+             * Name
+             * @description Human-readable project name (unique per workspace).
+             */
             name: string;
-            /** Parent Project Id */
+            /**
+             * Parent Project Id
+             * @description UUID of the parent project, if this is a sub-project.
+             */
             parent_project_id?: string | null;
         };
         /** ProjectFileDownloadResponse */
         ProjectFileDownloadResponse: {
-            /** Key */
-            key: string;
+            /** Path */
+            path: string;
             /** Url */
             url: string;
         };
         /** ProjectFileInfo */
         ProjectFileInfo: {
-            /** Key */
-            key: string;
             /** Last Modified */
-            last_modified: string;
+            last_modified?: string | null;
             /** Path */
             path: string;
             /** Size */
@@ -4369,8 +4995,6 @@ export interface components {
         ProjectFileListResponse: {
             /** Files */
             files: components["schemas"]["ProjectFileInfo"][];
-            /** Prefix */
-            prefix: string;
         };
         /** ProjectMcpInstanceRef */
         ProjectMcpInstanceRef: {
@@ -4405,8 +5029,6 @@ export interface components {
              * @default []
              */
             mcp_instances: components["schemas"]["ProjectMcpInstanceRef"][];
-            /** Minio Prefix */
-            minio_prefix: string;
             /** Name */
             name: string;
             /** Parent Project Id */
@@ -4429,31 +5051,67 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** ProjectUpdate */
+        /**
+         * ProjectUpdate
+         * @description Patch payload for a project. All fields optional — unset = unchanged.
+         */
         ProjectUpdate: {
-            /** Description */
+            /**
+             * Description
+             * @description New project description.
+             */
             description?: string | null;
-            /** Instructions */
+            /**
+             * Instructions
+             * @description New project-level instructions.
+             */
             instructions?: string | null;
-            /** Name */
+            /**
+             * Name
+             * @description New project name.
+             */
             name?: string | null;
+            /**
+             * Parent Project Id
+             * @description New parent project UUID, or null to detach.
+             */
+            parent_project_id?: string | null;
         };
-        /** ProviderConfigCreate */
+        /**
+         * ProviderConfigCreate
+         * @description Payload for creating an LLM provider configuration.
+         */
         ProviderConfigCreate: {
-            /** Api Key */
+            /**
+             * Api Key
+             * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses.
+             */
             api_key: string;
-            /** Endpoint Url */
+            /**
+             * Description
+             * @description Optional human-readable description of this configuration.
+             */
+            description?: string | null;
+            /**
+             * Endpoint Url
+             * @description Optional custom endpoint URL (e.g. for self-hosted or proxied providers). Leave unset to use the provider's default.
+             */
             endpoint_url?: string | null;
             /**
              * Is Public
+             * @description If True, the configuration is visible to all workspace members; otherwise it is scoped to the creator.
              * @default false
              */
             is_public: boolean;
-            /** Name */
+            /**
+             * Name
+             * @description Human-readable label for this provider configuration.
+             */
             name: string;
             /**
              * Provider Spec Id
              * Format: uuid
+             * @description UUID of the provider specification (e.g. OpenAI, Anthropic) this configuration targets. Look up via list_specs.
              */
             provider_spec_id: string;
         };
@@ -4495,15 +5153,40 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
-        /** ProviderConfigUpdate */
+        /**
+         * ProviderConfigUpdate
+         * @description Patch payload for an existing provider configuration. Unset = unchanged.
+         */
         ProviderConfigUpdate: {
-            /** Api Key */
+            /**
+             * Api Key
+             * @description New API key. Replaces the previously stored secret.
+             */
             api_key?: string | null;
-            /** Endpoint Url */
+            /**
+             * Description
+             * @description New description for the configuration.
+             */
+            description?: string | null;
+            /**
+             * Endpoint Url
+             * @description New endpoint URL, or empty string to clear.
+             */
             endpoint_url?: string | null;
-            /** Is Active */
+            /**
+             * Is Active
+             * @description Activate or deactivate the configuration.
+             */
             is_active?: boolean | null;
-            /** Name */
+            /**
+             * Is Public
+             * @description Toggle workspace-wide visibility.
+             */
+            is_public?: boolean | null;
+            /**
+             * Name
+             * @description New human-readable label for the configuration.
+             */
             name?: string | null;
         };
         /** ProviderSpecResponse */
@@ -4913,11 +5596,6 @@ export interface components {
             /** Description */
             description: string;
             /**
-             * Enable Agent Communication
-             * @default true
-             */
-            enable_agent_communication: boolean | null;
-            /**
              * Parameters
              * @default {}
              */
@@ -5011,6 +5689,87 @@ export interface components {
             status: string;
             /** Total Cost */
             total_cost?: number | null;
+        };
+        /**
+         * TaskSummary
+         * @description Headline rollup for a single task, derived from the event log.
+         *
+         *     Backed by the ``task_summary`` Postgres view. Stable contract — when
+         *     the view's implementation moves to a materialized view or projection
+         *     table, this shape stays the same. Per-tool breakdowns and per-artifact
+         *     lists are deliberately not here; they live in their own endpoints so
+         *     this stays small and additive.
+         */
+        TaskSummary: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /**
+             * Cost Usd
+             * @default 0
+             */
+            cost_usd: number;
+            /**
+             * Delegations Completed
+             * @default 0
+             */
+            delegations_completed: number;
+            /**
+             * Delegations Failed
+             * @default 0
+             */
+            delegations_failed: number;
+            /**
+             * Delegations Started
+             * @default 0
+             */
+            delegations_started: number;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Final Response */
+            final_response?: string | null;
+            /**
+             * Iterations
+             * @default 0
+             */
+            iterations: number;
+            /** Last Error */
+            last_error?: string | null;
+            /**
+             * Llm Calls
+             * @default 0
+             */
+            llm_calls: number;
+            /**
+             * Llm Calls Failed
+             * @default 0
+             */
+            llm_calls_failed: number;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /**
+             * Tools Called
+             * @default 0
+             */
+            tools_called: number;
+            /**
+             * Tools Failed
+             * @default 0
+             */
+            tools_failed: number;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /**
          * TaskWithAgent
@@ -5107,16 +5866,25 @@ export interface components {
             requires_user_confirmation?: boolean | null;
         };
         /**
-         * TriggerCreateRequest
-         * @description Request model for creating a trigger.
+         * TriggerCreate
+         * @description Payload for creating a trigger.
+         *
+         *     A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
+         *     or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
+         *     channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
+         *     ``data_extractor`` configuration.
          */
-        TriggerCreateRequest: {
+        TriggerCreate: {
             /**
              * Agent Id
              * Format: uuid
+             * @description UUID of the agent to invoke when the trigger fires.
              */
             agent_id: string;
-            /** Allowed Methods */
+            /**
+             * Allowed Methods
+             * @description HTTP methods accepted on the webhook endpoint.
+             */
             allowed_methods?: string[];
             /**
              * Channel Credentials
@@ -5125,58 +5893,99 @@ export interface components {
             channel_credentials?: {
                 [key: string]: unknown;
             } | null;
-            /** Conditions */
+            /**
+             * Conditions
+             * @description Optional conditions evaluated against event data before firing.
+             */
             conditions?: {
                 [key: string]: unknown;
             };
-            /** Cron Expression */
+            /**
+             * Cron Expression
+             * @description 5- or 6-field cron expression (required when trigger_type='cron').
+             */
             cron_expression?: string | null;
-            /** Data Extractor */
+            /**
+             * Data Extractor
+             * @description Polling extractor identifier (e.g. 'mailslurper', 'imap').
+             */
             data_extractor?: string | null;
-            /** Data Extractor Config */
+            /**
+             * Data Extractor Config
+             * @description Connection/auth details for the polling extractor.
+             */
             data_extractor_config?: {
                 [key: string]: unknown;
             } | null;
             /**
              * Description
+             * @description Short summary of what this trigger does.
              * @default
              */
             description: string;
             /**
+             * Enabled
+             * @description Whether the trigger is active immediately on creation.
+             * @default true
+             */
+            enabled: boolean;
+            /**
              * Event Types
-             * @description Event types to filter (empty = all events)
+             * @description Event types to filter on (empty list = accept all events).
              */
             event_types?: string[];
             /**
              * Failure Threshold
+             * @description Auto-disable after this many consecutive failed executions.
              * @default 5
              */
             failure_threshold: number;
-            /** Name */
+            /**
+             * Name
+             * @description Human-readable trigger name.
+             */
             name: string;
-            /** Task Parameters */
+            /**
+             * Task Parameters
+             * @description Parameters merged into the task created when the trigger fires.
+             */
             task_parameters?: {
                 [key: string]: unknown;
             };
             /**
              * Timezone
+             * @description IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').
              * @default UTC
              */
             timezone: string;
-            /** Trigger Type */
-            trigger_type: string;
-            /** Validation Rules */
+            /**
+             * Trigger Type
+             * @description 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+             * @enum {string}
+             */
+            trigger_type: "cron" | "webhook" | "polling";
+            /**
+             * Validation Rules
+             * @description Per-channel validation rules (signature secrets, allowed senders, etc).
+             */
             validation_rules?: {
                 [key: string]: unknown;
             };
-            /** Webhook Config */
+            /**
+             * Webhook Config
+             * @description Channel-specific configuration (bot tokens, signing keys, etc).
+             */
             webhook_config?: {
                 [key: string]: unknown;
             } | null;
-            /** Webhook Id */
+            /**
+             * Webhook Id
+             * @description Public webhook path segment. Auto-generated if omitted for webhook triggers.
+             */
             webhook_id?: string | null;
             /**
              * Webhook Type
+             * @description Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
              * @default generic
              */
             webhook_type: string;
@@ -5335,10 +6144,10 @@ export interface components {
             trigger_id: string;
         };
         /**
-         * TriggerUpdateRequest
-         * @description Request model for updating a trigger.
+         * TriggerUpdate
+         * @description Patch payload for a trigger. All fields optional — unset = unchanged.
          */
-        TriggerUpdateRequest: {
+        TriggerUpdate: {
             /** Allowed Methods */
             allowed_methods?: string[] | null;
             /**
@@ -5356,10 +6165,13 @@ export interface components {
             cron_expression?: string | null;
             /** Description */
             description?: string | null;
+            /**
+             * Enabled
+             * @description Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).
+             */
+            enabled?: boolean | null;
             /** Failure Threshold */
             failure_threshold?: number | null;
-            /** Is Active */
-            is_active?: boolean | null;
             /** Name */
             name?: string | null;
             /** Task Parameters */
@@ -5385,6 +6197,20 @@ export interface components {
             errors: number;
             /** Updated */
             updated: number;
+        };
+        /** UpdateWalletRequest */
+        UpdateWalletRequest: {
+            credentials?: components["schemas"]["WalletCredentialsSchema"] | null;
+            mpp_config?: components["schemas"]["MPPConfigSchema"] | null;
+            /** Service Budget Period */
+            service_budget_period?: string | null;
+            /** Service Budget Usd */
+            service_budget_usd?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Wallet Type */
+            wallet_type?: string | null;
+            x402_config?: components["schemas"]["X402ConfigSchema"] | null;
         };
         /** ValidateRequest */
         ValidateRequest: {
@@ -5417,6 +6243,107 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WalletBalanceResponse */
+        WalletBalanceResponse: {
+            /** Remaining */
+            remaining: number;
+            /** Service Budget Period */
+            service_budget_period: string;
+            /** Service Budget Usd */
+            service_budget_usd: number;
+            /** Total Spent Current Period */
+            total_spent_current_period: number;
+        };
+        /** WalletCredentialsSchema */
+        WalletCredentialsSchema: {
+            /** Mpp Tempo Key */
+            mpp_tempo_key?: string | null;
+            /** X402 Private Key */
+            x402_private_key?: string | null;
+        };
+        /** WalletResponse */
+        WalletResponse: {
+            /** Agent Id */
+            agent_id: string;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Has Credentials
+             * @default false
+             */
+            has_credentials: boolean;
+            /** Id */
+            id: string;
+            /** Mpp Config */
+            mpp_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Service Budget Period */
+            service_budget_period: string;
+            /** Service Budget Usd */
+            service_budget_usd: number;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Wallet Type */
+            wallet_type: string;
+            /** X402 Config */
+            x402_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkspaceFileDownloadResponse */
+        WorkspaceFileDownloadResponse: {
+            /** Path */
+            path: string;
+            /** Url */
+            url: string;
+        };
+        /** WorkspaceFileInfo */
+        WorkspaceFileInfo: {
+            /** Content Type */
+            content_type?: string | null;
+            /** Last Modified */
+            last_modified?: string | null;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** WorkspaceFileListResponse */
+        WorkspaceFileListResponse: {
+            /**
+             * Directories
+             * @default []
+             */
+            directories: string[];
+            /** Files */
+            files: components["schemas"]["WorkspaceFileInfo"][];
+        };
+        /** X402ConfigSchema */
+        X402ConfigSchema: {
+            /**
+             * Facilitator Url
+             * @default https://x402.org/facilitator
+             */
+            facilitator_url: string;
+            /**
+             * Network
+             * @default eip155:8453
+             */
+            network: string;
+            /**
+             * Scheme
+             * @default exact
+             */
+            scheme: string;
+            /**
+             * Signer Type
+             * @default evm
+             */
+            signer_type: string;
         };
         /** ModelSpecResponse */
         agentarea_api__api__v1__model_specs__ModelSpecResponse: {
@@ -6666,6 +7593,276 @@ export interface operations {
             };
         };
     };
+    get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_wallet_v1_agents__agent_id__wallet_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_wallet_v1_agents__agent_id__wallet_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_wallet_v1_agents__agent_id__wallet_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_wallet_v1_agents__agent_id__wallet_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_wallet_balance_v1_agents__agent_id__wallet_balance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletBalanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fund_wallet_v1_agents__agent_id__wallet_fund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FundWalletRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_payment_history_v1_agents__agent_id__wallet_payments_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by protocol (x402, mpp) */
+                protocol?: string | null;
+                /** @description Filter by status */
+                status?: string | null;
+                /** @description Filter from date */
+                from_date?: string | null;
+                /** @description Filter to date */
+                to_date?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPaymentsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_api_keys_v1_api_keys__get: {
         parameters: {
             query?: never;
@@ -6825,6 +8022,57 @@ export interface operations {
             };
         };
     };
+    list_workspace_files_v1_files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFileListResponse"];
+                };
+            };
+        };
+    };
+    download_workspace_file_v1_files__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFileDownloadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_inbox_items_v1_inbox__get: {
         parameters: {
             query?: {
@@ -6848,6 +8096,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_v1_invitations_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7230,7 +8511,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MCPServerInstanceCreateRequest"];
+                "application/json": components["schemas"]["MCPServerInstanceCreate"];
             };
         };
         responses: {
@@ -7916,6 +9197,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_model_instances_bulk_v1_model_instances_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelInstanceBulkCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelInstanceBulkCreateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9263,6 +10577,41 @@ export interface operations {
             };
         };
     };
+    patch_provider_config_v1_provider_configs__config_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     discover_models_v1_provider_configs__config_id__discover_post: {
         parameters: {
             query?: never;
@@ -10301,7 +11650,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TriggerCreateRequest"];
+                "application/json": components["schemas"]["TriggerCreate"];
             };
         };
         responses: {
@@ -10433,7 +11782,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TriggerUpdateRequest"];
+                "application/json": components["schemas"]["TriggerUpdate"];
             };
         };
         responses: {
@@ -10847,6 +12196,163 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_v1_workspaces__workspace_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invitation_v1_workspaces__workspace_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_v1_workspaces__workspace_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_v1_workspaces__workspace_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

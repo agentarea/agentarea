@@ -102,7 +102,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         Returns:
             List of tool dictionaries with name, description, and schema
         """
-        return self.json_spec.get("available_tools", [])
+        return self.tools or self.json_spec.get("available_tools", [])
 
     def set_available_tools(self, tools: list[dict[str, Any]]) -> None:
         """Set the available tools for this MCP server instance.

@@ -20,11 +20,18 @@ from .domain.base_service import BaseTaskService
 from .domain.interfaces import BaseTaskManager
 from .domain.models import SimpleTask
 from .infrastructure.repository import TaskRepository
+from .schemas.dto import RunCreate
 
 if TYPE_CHECKING:
     from agentarea_common.base import RepositoryFactory
 
 logger = logging.getLogger(__name__)
+
+# Terminal Temporal statuses that may upgrade a stale DB status.
+# In-flight Temporal statuses ("running", "unknown") never overwrite the DB
+# because the workflow may legitimately stay alive in await_follow_up
+# after the activity has already persisted "completed" to the DB.
+_TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
 
 
 class TaskService(BaseTaskService):
@@ -56,22 +63,24 @@ class TaskService(BaseTaskService):
         except ImportError:
             self.agent_repository = None
 
-    async def _validate_agent_exists(self, agent_id: UUID) -> None:
-        """Validate that the agent exists before processing tasks.
+    async def _validate_agent_exists(self, agent_id: UUID):
+        """Validate that the agent exists and return the loaded entity for reuse.
 
-        Args:
-            agent_id: The agent ID to validate
+        Returns the agent so callers can reuse it (e.g. for ``metadata.agent_name``)
+        without a second repository round-trip. Returns ``None`` only when no
+        agent_repository is wired up (test/standalone mode).
 
         Raises:
-            ValueError: If agent doesn't exist or agent_repository is not available
+            ValueError: If the agent does not exist.
         """
         if not self.agent_repository:
             logger.warning("Agent repository not available - skipping agent validation")
-            return
+            return None
 
         agent = await self.agent_repository.get(agent_id)
         if not agent:
             raise ValueError(f"Agent with ID {agent_id} does not exist")
+        return agent
 
     @audited("task.create", resource_type="task")
     async def create_task_from_params(
@@ -98,19 +107,68 @@ class TaskService(BaseTaskService):
         return await self.create_task(task)
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
-        """Submit a task for execution through the task manager.
+        """Submit a pre-built SimpleTask. Thin alias delegating to the canonical
+        ``create_and_execute_task_with_workflow`` so A2A and MCP callers get the
+        same metadata enrichment, channel routing, and defaults as REST.
 
-        This method validates the agent exists before submitting to avoid
-        failures later in the Temporal workflow.
+        The caller's id, title, query, task_parameters, and metadata are
+        preserved (passed through as overrides). Defaults still applied:
+        - ``metadata.created_via="api"`` if not set
+        - ``requires_human_approval=False``
         """
-        # Validate agent exists first (fail fast)
-        await self._validate_agent_exists(task.agent_id)
+        meta = task.metadata or {}
+        return await self.create_and_execute_task_with_workflow(
+            agent_id=task.agent_id,
+            description=task.description or task.query,
+            workspace_id=task.workspace_id,
+            parameters=task.task_parameters or {},
+            user_id=task.user_id,
+            requires_human_approval=meta.get("requires_human_approval", False),
+            task_id=task.id,
+            title=task.title,
+            query=task.query,
+            metadata_overrides=meta or None,
+        )
 
-        # First persist the task
-        created_task = await self.create_task(task)
+    async def start_run(
+        self,
+        payload: RunCreate,
+        *,
+        workspace_id: str,
+        user_id: str | None = None,
+        created_via: str = "api",
+    ) -> SimpleTask:
+        """Start a new agent run from a validated DTO.
 
-        # Then submit to task manager for execution
-        return await self.task_manager.submit_task(created_task)
+        This is the payload-style public entry shared by REST, MCP toolset,
+        and any other surface that wants the Pydantic-validated contract
+        instead of building a ``SimpleTask`` by hand. Internally it delegates
+        to ``create_and_execute_task_with_workflow`` so all lifecycle, channel
+        routing, and metadata defaults stay in a single place.
+
+        Args:
+            payload: Validated run parameters (agent_id, description, etc.).
+            workspace_id: Owning workspace (multi-tenancy isolation; required).
+            user_id: User initiating the run, when authenticated.
+            created_via: Source tag stored on ``metadata.created_via``
+                (defaults to ``"api"``; toolset overrides to ``"mcp"``).
+
+        Returns:
+            The created (or routed-into) ``SimpleTask`` with execution info.
+        """
+        metadata_overrides: dict[str, Any] = {"created_via": created_via}
+        if payload.project_id is not None:
+            metadata_overrides["project_id"] = payload.project_id
+
+        return await self.create_and_execute_task_with_workflow(
+            agent_id=payload.agent_id,
+            description=payload.description,
+            workspace_id=workspace_id,
+            parameters=payload.parameters,
+            user_id=user_id,
+            requires_human_approval=payload.requires_human_approval,
+            metadata_overrides=metadata_overrides,
+        )
 
     async def route_or_submit_task(self, task: SimpleTask) -> SimpleTask:
         """Route message to an active workflow if one exists, otherwise submit a new task.
@@ -402,20 +460,25 @@ class TaskService(BaseTaskService):
     async def _enrich_task_with_workflow_status(self, task: SimpleTask) -> SimpleTask:
         """Enrich a task with current workflow status.
 
+        Temporal is the recovery oracle for terminal states; the DB is the
+        source of truth otherwise. The workflow may stay alive in
+        await_follow_up after writing "completed" to the DB, so a live
+        Temporal "running" status must not overwrite a persisted DB status.
+
         Args:
             task: The task to enrich
 
         Returns:
-            Task with updated status and result from workflow
+            Task with status upgraded to terminal if Temporal reports one
         """
         if not task.execution_id or not self.workflow_service:
             return task
 
         try:
             workflow_status = await self.workflow_service.get_workflow_status(task.execution_id)
-            if workflow_status.get("status") != "unknown":
-                # Update task with workflow status
-                task.status = workflow_status.get("status", task.status)
+            wf_state = workflow_status.get("status")
+            if wf_state in _TERMINAL_WORKFLOW_STATUSES:
+                task.status = wf_state
                 if workflow_status.get("result"):
                     task.result = workflow_status.get("result")
         except Exception as e:
@@ -427,7 +490,6 @@ class TaskService(BaseTaskService):
     async def execute_task(
         self,
         task_id: UUID,
-        enable_agent_communication: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Execute a task (legacy method - prefer using submit_task)."""
         # Get the task
@@ -465,58 +527,65 @@ class TaskService(BaseTaskService):
         workspace_id: str,
         parameters: dict[str, Any] | None = None,
         user_id: str | None = None,
-        enable_agent_communication: bool = True,
         requires_human_approval: bool = False,
+        *,
+        task_id: UUID | None = None,
+        title: str | None = None,
+        query: str | None = None,
+        metadata_overrides: dict[str, Any] | None = None,
+        status: str = "pending",
     ) -> SimpleTask:
-        """Create a task and execute it using workflow.
+        """Canonical entry point for creating and executing a task via Temporal workflow.
+
+        REST handlers, A2A handlers, and MCP tools all funnel through this
+        method (directly or via ``submit_task``) so behaviour stays consistent.
 
         Args:
             agent_id: The agent to execute the task
-            description: Task description
-            workspace_id: Workspace ID (required for proper multi-tenancy isolation)
-            parameters: Task parameters
+            description: Task description (used as default for title/query)
+            workspace_id: Workspace ID (required for multi-tenancy isolation)
+            parameters: Task parameters (channel_origin.chat_id triggers routing)
             user_id: User ID
-            enable_agent_communication: Whether to enable agent communication
-            requires_human_approval: Whether this task requires human approval before running
+            requires_human_approval: Whether to gate the task on human approval
+            task_id: Pre-assign the task id (A2A echoes it back in JSON-RPC reply)
+            title: Override the default title (defaults to ``description``)
+            query: Override the default query string (defaults to ``description``)
+            metadata_overrides: Caller metadata merged on top of canonical defaults.
+            status: Initial task status (default ``pending``)
 
         Returns:
-            Created task with workflow execution info
+            Created task with workflow execution info, or the routed-into existing
+            task when ``channel_origin.chat_id`` matches an active workflow.
         """
-        from uuid import uuid4
+        # Validate agent exists; reuse the loaded entity for metadata.agent_name
+        # so we don't pay for a second repository round-trip.
+        agent = await self._validate_agent_exists(agent_id)
+        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
 
-        # Validate agent exists first
-        await self._validate_agent_exists(agent_id)
+        new_task_id = task_id or uuid4()
 
-        # Generate task ID
-        task_id = uuid4()
-
-        # Get agent name for metadata (if available)
-        agent_name = "unknown"
-        if self.agent_repository:
-            try:
-                agent = await self.agent_repository.get(agent_id)
-                if agent:
-                    agent_name = agent.name
-            except Exception as e:
-                logger.warning(f"Could not get agent name for {agent_id}: {e}")
+        # Build canonical metadata. Caller overrides are merged in first so the
+        # canonical fields (requires_human_approval, created_via) always reflect
+        # the explicit args.
+        metadata: dict[str, Any] = {}
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+        metadata.setdefault("created_via", "api")
+        metadata["agent_name"] = agent_name
+        metadata["requires_human_approval"] = requires_human_approval
 
         # Create task
         task = SimpleTask(
-            id=task_id,
-            title=description,
+            id=new_task_id,
+            title=title or description,
             description=description,
-            query=description,
+            query=query or description,
             user_id=user_id,
             workspace_id=workspace_id,  # Required, no fallback
             agent_id=agent_id,
-            status="pending",
+            status=status,
             task_parameters=parameters or {},
-            metadata={
-                "created_via": "api",
-                "agent_name": agent_name,
-                "enable_agent_communication": enable_agent_communication,
-                "requires_human_approval": requires_human_approval,
-            },
+            metadata=metadata,
         )
 
         # Try routing to active workflow if channel_origin is present
@@ -559,7 +628,6 @@ class TaskService(BaseTaskService):
         user_id: str,
         agent_id: UUID,
         task_parameters: dict[str, Any] | None = None,
-        enable_agent_communication: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Create a task and immediately start execution."""
         # Create the task
@@ -573,7 +641,7 @@ class TaskService(BaseTaskService):
         )
 
         # Execute it
-        async for event in self.execute_task(task.id, enable_agent_communication):
+        async for event in self.execute_task(task.id):
             yield event
 
     async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:

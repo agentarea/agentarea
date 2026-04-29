@@ -4,10 +4,12 @@ import logging
 from typing import Annotated, Any
 from uuid import UUID
 
+from agentarea_common.artifacts import ArtifactService
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
+from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, field_validator
 
@@ -37,19 +39,6 @@ ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 # ---------------------------------------------------------------------------
 
 
-class ProjectCreate(BaseModel):
-    name: str
-    description: str | None = None
-    instructions: str | None = None
-    parent_project_id: str | None = None
-
-
-class ProjectUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    instructions: str | None = None
-
-
 class AssociationBody(BaseModel):
     id: str
 
@@ -77,19 +66,17 @@ class ProjectMcpInstanceRef(BaseModel):
 
 class ProjectFileInfo(BaseModel):
     path: str
-    key: str
     size: int
-    last_modified: str
+    last_modified: str | None = None
 
 
 class ProjectFileListResponse(BaseModel):
     files: list[ProjectFileInfo]
-    prefix: str
 
 
 class ProjectFileDownloadResponse(BaseModel):
     url: str
-    key: str
+    path: str
 
 
 class ProjectResponse(BaseModel):
@@ -100,7 +87,6 @@ class ProjectResponse(BaseModel):
     description: str | None
     instructions: str | None
     parent_project_id: str | None
-    minio_prefix: str
     skills: list[ProjectSkillRef] = []
     mcp_instances: list[ProjectMcpInstanceRef] = []
     agents: list[ProjectAgentRef] = []
@@ -125,12 +111,7 @@ async def create_project(
     service: ProjectServiceDep,
 ):
     """Create a new project."""
-    project = await service.create(
-        name=data.name,
-        description=data.description,
-        instructions=data.instructions,
-        parent_project_id=data.parent_project_id,
-    )
+    project = await service.create_project(data)
     return ProjectResponse.model_validate(project)
 
 
@@ -167,8 +148,7 @@ async def update_project(
     service: ProjectServiceDep,
 ):
     """Update a project's fields."""
-    update_data = data.model_dump(exclude_none=True)
-    project = await service.update(project_id, **update_data)
+    project = await service.update_project(project_id, data)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return ProjectResponse.model_validate(project)
@@ -258,26 +238,14 @@ async def remove_agent_from_project(
 
 
 # ---------------------------------------------------------------------------
-# File endpoints (MinIO / S3)
+# File endpoints — backed by ArtifactService under
+# ``workspaces/{workspace_id}/projects/{project_id}/...``
 # ---------------------------------------------------------------------------
 
 
-def _get_s3_client():
-    from agentarea_common.config.aws import get_s3_client
-
-    return get_s3_client()
-
-
-def _get_s3_public_client():
-    from agentarea_common.config.aws import get_s3_public_client
-
-    return get_s3_public_client()
-
-
-def _get_bucket() -> str:
-    from agentarea_common.config.aws import get_aws_settings
-
-    return get_aws_settings().S3_BUCKET_NAME
+def _project_path(project_id: UUID, rel: str = "") -> str:
+    rel = rel.lstrip("/")
+    return f"projects/{project_id}/{rel}" if rel else f"projects/{project_id}/"
 
 
 @router.post("/{project_id}/files", status_code=204)
@@ -287,21 +255,18 @@ async def upload_project_file(
     user_context: UserContextDep,
     service: ProjectServiceDep,
 ):
-    """Upload a file to a project's MinIO prefix."""
+    """Upload a file to a project's workspace-scoped artifact prefix."""
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    client = _get_s3_client()
-    bucket = _get_bucket()
-    key = f"{project.minio_prefix}{file.filename}"
-
+    svc = ArtifactService()
     content = await file.read()
-    client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=content,
-        ContentType=file.content_type or "application/octet-stream",
+    await svc.put(
+        user_context.workspace_id,
+        _project_path(project_id, file.filename or "unnamed"),
+        content,
+        content_type=file.content_type,
     )
 
 
@@ -311,28 +276,23 @@ async def list_project_files(
     user_context: UserContextDep,
     service: ProjectServiceDep,
 ):
-    """List all files in a project's MinIO prefix."""
+    """List files under the project's prefix."""
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    client = _get_s3_client()
-    bucket = _get_bucket()
-
-    paginator = client.get_paginator("list_objects_v2")
-    files = []
-    for page in paginator.paginate(Bucket=bucket, Prefix=project.minio_prefix):
-        for obj in page.get("Contents", []):
-            relative_path = obj["Key"][len(project.minio_prefix) :]
-            files.append(
-                {
-                    "path": relative_path,
-                    "key": obj["Key"],
-                    "size": obj["Size"],
-                    "last_modified": obj["LastModified"].isoformat(),
-                }
-            )
-    return {"files": files, "prefix": project.minio_prefix}
+    svc = ArtifactService()
+    project_prefix = _project_path(project_id)
+    objects = await svc.list(user_context.workspace_id, prefix=project_prefix)
+    files = [
+        ProjectFileInfo(
+            path=obj.path[len(project_prefix) :],
+            size=obj.size,
+            last_modified=obj.last_modified,
+        )
+        for obj in objects
+    ]
+    return ProjectFileListResponse(files=files)
 
 
 @router.get("/{project_id}/files/{file_path:path}", response_model=ProjectFileDownloadResponse)
@@ -342,27 +302,17 @@ async def download_project_file(
     user_context: UserContextDep,
     service: ProjectServiceDep,
 ):
-    """Download a file from a project's MinIO prefix (presigned URL)."""
+    """Generate a presigned URL for a project file."""
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Presigned URLs must point at PUBLIC_S3_ENDPOINT — internal RustFS host
-    # is not reachable from the browser.
-    client = _get_s3_public_client()
-    bucket = _get_bucket()
-    key = f"{project.minio_prefix}{file_path}"
-
-    try:
-        url = client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket, "Key": key},
-            ExpiresIn=3600,
-        )
-        return {"url": url, "key": key}
-    except Exception as e:
-        logger.error("Failed to generate presigned URL for %s: %s", key, e)
-        raise HTTPException(status_code=404, detail="File not found") from e
+    svc = ArtifactService()
+    full_path = _project_path(project_id, file_path)
+    if not await svc.exists(user_context.workspace_id, full_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    url = await svc.presigned_url(user_context.workspace_id, full_path)
+    return ProjectFileDownloadResponse(url=url, path=file_path)
 
 
 @router.delete("/{project_id}/files/{file_path:path}", status_code=204)
@@ -372,13 +322,10 @@ async def delete_project_file(
     user_context: UserContextDep,
     service: ProjectServiceDep,
 ):
-    """Delete a file from a project's MinIO prefix."""
+    """Delete a file from the project's prefix."""
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    client = _get_s3_client()
-    bucket = _get_bucket()
-    key = f"{project.minio_prefix}{file_path}"
-
-    client.delete_object(Bucket=bucket, Key=key)
+    svc = ArtifactService()
+    await svc.delete(user_context.workspace_id, _project_path(project_id, file_path))

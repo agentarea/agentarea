@@ -23,6 +23,7 @@ import httpx
 
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import StorageClient
+from .tool_definition import toolset
 
 _TEXT_CONTENT_TYPES: tuple[str, ...] = (
     "text/",
@@ -92,6 +93,13 @@ def _filename_from_url(url: str, content_type: str | None) -> str:
     return name + (ext or ".bin")
 
 
+@toolset(
+    namespace="agentarea/web",
+    display_name="Web Tools",
+    description="Fetch URLs; binary responses are stored as task artifacts.",
+    category="information",
+    requires_user_confirmation=True,
+)
 class WebToolset(Toolset):
     """Fetch URLs and route binary responses to artifact storage.
 

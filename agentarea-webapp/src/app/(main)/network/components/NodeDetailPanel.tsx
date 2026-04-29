@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Bot, Plug, Sparkles, Zap } from "lucide-react";
+import { X, Bot, Globe, Plug, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ModelInfo from "@/components/TaskInfoPanel/components/ModelInfo";
@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface NetworkNodeData {
   id: string;
-  type: "agent" | "mcp_instance" | "skill" | "trigger";
+  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
   label: string;
   status?: string | null;
   metadata: Record<string, any>;
@@ -19,6 +19,11 @@ interface NetworkNodeData {
 const TYPE_CONFIG = {
   agent: { icon: Bot, color: "text-blue-500", href: (id: string) => `/agents/${id}` },
   mcp_instance: { icon: Plug, color: "text-green-500", href: (id: string) => `/mcp-servers/${id}` },
+  openapi_connection: {
+    icon: Globe,
+    color: "text-rose-500",
+    href: (id: string) => `/mcp-servers/openapi/${id}`,
+  },
   skill: { icon: Sparkles, color: "text-purple-500", href: (id: string) => `/skills/${id}` },
   trigger: { icon: Zap, color: "text-amber-500", href: (id: string) => `/triggers/${id}` },
 };

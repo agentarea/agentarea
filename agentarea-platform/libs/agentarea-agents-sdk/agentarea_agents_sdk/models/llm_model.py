@@ -281,7 +281,14 @@ class LLMModel:
         OpenAI-compatible /v1/chat/completions endpoint (Ollama, vLLM, etc.).
         """
         base_url = self._get_base_url()
-        url = f"{base_url}/v1/chat/completions"
+        # OpenAI-SDK convention is that the base URL ends in /v1 (e.g.
+        # https://api.openai.com/v1, http://localhost:1234/v1). Tolerate both
+        # forms — endpoint_url with or without a trailing /v1 — so users can
+        # paste either the proxy root or the standard /v1 base URL.
+        suffix = (
+            "/chat/completions" if base_url.rstrip("/").endswith("/v1") else "/v1/chat/completions"
+        )
+        url = f"{base_url.rstrip('/')}{suffix}"
 
         normalized_messages = self._normalize_messages(request.messages)
 

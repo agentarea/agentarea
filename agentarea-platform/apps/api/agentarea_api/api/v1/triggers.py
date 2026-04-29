@@ -32,18 +32,14 @@ from agentarea_api.api.v1.a2a_auth import (
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
-from agentarea_triggers.domain.enums import TriggerType, WebhookType
-from agentarea_triggers.domain.models import (
-    TriggerCreate,
-    TriggerUpdate,
-)
+from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
     TriggerNotFoundError,
     TriggerService,
     TriggerValidationError,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 TRIGGERS_AVAILABLE = True
 
@@ -214,101 +210,6 @@ class TriggerExecutionResponse(BaseModel):
         )
 
 
-class TriggerCreateRequest(BaseModel):
-    """Request model for creating a trigger."""
-
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(default="", max_length=1000)
-    agent_id: UUID
-    trigger_type: str
-    task_parameters: dict[str, Any] = Field(default_factory=dict)
-    conditions: dict[str, Any] = Field(default_factory=dict)
-
-    # Business logic safety
-    failure_threshold: int = Field(default=5, ge=1, le=100)
-
-    # Cron-specific fields
-    cron_expression: str | None = None
-    timezone: str = Field(default="UTC")
-    data_extractor: str | None = None
-    data_extractor_config: dict[str, Any] | None = None
-
-    # Webhook-specific fields
-    webhook_id: str | None = None
-    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
-    webhook_type: str = Field(default="generic")
-    validation_rules: dict[str, Any] = Field(default_factory=dict)
-    webhook_config: dict[str, Any] | None = None
-    event_types: list[str] = Field(
-        default_factory=list, description="Event types to filter (empty = all events)"
-    )
-
-    # Channel credentials — stored encrypted, never returned in responses
-    channel_credentials: dict[str, Any] | None = Field(
-        None,
-        description="Channel credentials (bot_token, SMTP password, etc). "
-        "Stored encrypted in the secret store. Never returned in responses.",
-    )
-
-    @field_validator("trigger_type")
-    @classmethod
-    def validate_trigger_type(cls, v: str) -> str:
-        """Validate trigger type."""
-        valid_types = ["cron", "webhook", "polling"]
-        if v.lower() not in valid_types:
-            raise ValueError(f"Invalid trigger type. Must be one of: {valid_types}")
-        return v.lower()
-
-    @field_validator("webhook_type")
-    @classmethod
-    def validate_webhook_type(cls, v: str) -> str:
-        """Validate webhook type."""
-        valid_types = list(CHANNEL_EVENTS.keys())
-        if v.lower() not in valid_types:
-            raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
-        return v.lower()
-
-
-class TriggerUpdateRequest(BaseModel):
-    """Request model for updating a trigger."""
-
-    name: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = Field(None, max_length=1000)
-    is_active: bool | None = None
-    task_parameters: dict[str, Any] | None = None
-    conditions: dict[str, Any] | None = None
-
-    # Business logic safety
-    failure_threshold: int | None = Field(None, ge=1, le=100)
-
-    # Cron-specific fields
-    cron_expression: str | None = None
-    timezone: str | None = None
-
-    # Channel credentials — stored encrypted, never returned in responses
-    channel_credentials: dict[str, Any] | None = Field(
-        None,
-        description="Channel credentials to update. Pass to rotate credentials.",
-    )
-
-    # Webhook-specific fields
-    allowed_methods: list[str] | None = None
-    webhook_type: str | None = None
-    validation_rules: dict[str, Any] | None = None
-    webhook_config: dict[str, Any] | None = None
-
-    @field_validator("webhook_type")
-    @classmethod
-    def validate_webhook_type(cls, v: str | None) -> str | None:
-        """Validate webhook type."""
-        if v is None:
-            return v
-        valid_types = list(CHANNEL_EVENTS.keys())
-        if v.lower() not in valid_types:
-            raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
-        return v.lower()
-
-
 class TriggerStatusResponse(BaseModel):
     """Response model for trigger status information."""
 
@@ -396,81 +297,6 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
     return raw is not None
 
 
-def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) -> Any:
-    """Convert API request to domain model for creation."""
-    if not TRIGGERS_AVAILABLE:
-        return None
-
-    # Import here to avoid issues when triggers not available
-
-    # Convert string enums to domain enums
-    if request.trigger_type == "cron":
-        trigger_type = TriggerType.CRON
-    elif request.trigger_type == "polling":
-        trigger_type = TriggerType.POLLING
-    else:
-        trigger_type = TriggerType.WEBHOOK
-    webhook_type = (
-        WebhookType(request.webhook_type) if request.webhook_type else WebhookType.GENERIC
-    )
-
-    # Auto-generate webhook_id for webhook triggers if not provided
-    webhook_id = request.webhook_id
-    if trigger_type == TriggerType.WEBHOOK and not webhook_id:
-        import secrets
-
-        webhook_id = secrets.token_urlsafe(16)
-
-    return TriggerCreate(
-        name=request.name,
-        description=request.description,
-        agent_id=request.agent_id,
-        trigger_type=trigger_type,
-        task_parameters=request.task_parameters,
-        conditions=request.conditions,
-        created_by=created_by,
-        failure_threshold=request.failure_threshold,
-        cron_expression=request.cron_expression,
-        timezone=request.timezone,
-        data_extractor=request.data_extractor,
-        data_extractor_config=request.data_extractor_config,
-        webhook_id=webhook_id,
-        allowed_methods=request.allowed_methods,
-        webhook_type=webhook_type,
-        validation_rules=request.validation_rules,
-        webhook_config=request.webhook_config,
-        event_types=request.event_types,
-    )
-
-
-def _convert_to_domain_update(request: TriggerUpdateRequest) -> Any:
-    """Convert API request to domain model for update."""
-    if not TRIGGERS_AVAILABLE:
-        return None
-
-    # Import here to avoid issues when triggers not available
-
-    # Convert webhook type if provided
-    webhook_type = None
-    if request.webhook_type:
-        webhook_type = WebhookType(request.webhook_type)
-
-    return TriggerUpdate(
-        name=request.name,
-        description=request.description,
-        is_active=request.is_active,
-        task_parameters=request.task_parameters,
-        conditions=request.conditions,
-        failure_threshold=request.failure_threshold,
-        cron_expression=request.cron_expression,
-        timezone=request.timezone,
-        allowed_methods=request.allowed_methods,
-        webhook_type=webhook_type,
-        validation_rules=request.validation_rules,
-        webhook_config=request.webhook_config,
-    )
-
-
 # API Endpoints
 
 
@@ -494,7 +320,7 @@ async def get_channel_events(
 
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
-    request: TriggerCreateRequest,
+    payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     secret_manager: BaseSecretManagerDep = None,
@@ -508,33 +334,36 @@ async def create_trigger(
     store under key ``channel_cred:{webhook_type}:{trigger_id}``.
 
     Args:
-        request: Trigger creation request data
-        user_context: Authentication context
-        trigger_service: Injected trigger service
-        secret_manager: Injected secret manager for credential storage
+        payload: Trigger creation DTO (single source of truth shared with MCP toolset).
+        user_context: Authentication context.
+        trigger_service: Injected trigger service.
+        secret_manager: Injected secret manager for credential storage.
 
     Returns:
-        The created trigger
+        The created trigger.
 
     Raises:
-        HTTPException: If validation fails or creation errors occur
+        HTTPException: If validation fails or creation errors occur.
     """
     _check_triggers_availability()
 
     try:
-        # Convert API request to domain model
         if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
-        created_by = user_context.user_id
-        trigger_data = _convert_to_domain_create(request, created_by)
-        trigger_data.workspace_id = user_context.workspace_id
+
+        # Convert DTO -> domain create. Done up-front so we can fold polling
+        # channel credentials into ``data_extractor_config`` before persisting.
+        trigger_data = payload.to_domain(
+            created_by=user_context.user_id,
+            workspace_id=user_context.workspace_id,
+        )
 
         # For polling extractors, merge credentials into extractor config
         # so the Go polling service can read them (e.g. bot_token for Telegram).
-        if trigger_data.data_extractor and request.channel_credentials:
+        if trigger_data.data_extractor and payload.channel_credentials:
             trigger_data.data_extractor_config = {
                 **(trigger_data.data_extractor_config or {}),
-                **request.channel_credentials,
+                **payload.channel_credentials,
             }
 
         # Create trigger
@@ -542,13 +371,13 @@ async def create_trigger(
 
         # Also store credentials encrypted in secret store for Python outbound delivery
         has_creds = False
-        if request.channel_credentials and secret_manager:
+        if payload.channel_credentials and secret_manager:
             # Channel type for secret key: use webhook_type or derive from data_extractor.
             # Extractor names like "mailslurper" map to channel type via suffix stripping.
-            extractor = request.data_extractor or ""
-            channel_type = request.webhook_type or extractor.removesuffix("_polling") or "generic"
+            extractor = payload.data_extractor or ""
+            channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
-            await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
             has_creds = True
             logger.info(f"Stored channel credentials for trigger {trigger.id}")
 
@@ -715,7 +544,7 @@ async def get_trigger(
 @router.put("/{trigger_id}", response_model=TriggerResponse)
 async def update_trigger(
     trigger_id: UUID,
-    request: TriggerUpdateRequest,
+    payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     secret_manager: BaseSecretManagerDep = None,
@@ -727,30 +556,29 @@ async def update_trigger(
     they replace the existing credentials in the secret store.
 
     Args:
-        trigger_id: The unique identifier of the trigger
-        request: Trigger update request data
-        user_context: Authentication context
-        trigger_service: Injected trigger service
-        secret_manager: Injected secret manager for credential storage
+        trigger_id: The unique identifier of the trigger.
+        payload: Trigger update DTO (single source of truth shared with MCP toolset).
+        user_context: Authentication context.
+        trigger_service: Injected trigger service.
+        secret_manager: Injected secret manager for credential storage.
 
     Returns:
-        The updated trigger
+        The updated trigger.
 
     Raises:
-        HTTPException: If trigger not found or validation fails
+        HTTPException: If trigger not found or validation fails.
     """
     _check_triggers_availability()
 
     try:
-        # Convert API request to domain model
-        trigger_update = _convert_to_domain_update(request)
+        trigger_update = payload.to_domain()
 
         # Update trigger
         updated_trigger = await trigger_service.update_trigger(trigger_id, trigger_update)
 
         # Update channel credentials if provided
         has_creds = False
-        if request.channel_credentials and secret_manager:
+        if payload.channel_credentials and secret_manager:
             # Determine channel type from the updated trigger
             channel_type = "generic"
             if hasattr(updated_trigger, "webhook_type"):
@@ -759,7 +587,7 @@ async def update_trigger(
             elif hasattr(updated_trigger, "data_extractor") and updated_trigger.data_extractor:
                 channel_type = updated_trigger.data_extractor.removesuffix("_polling")
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
-            await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
             has_creds = True
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
         elif secret_manager:

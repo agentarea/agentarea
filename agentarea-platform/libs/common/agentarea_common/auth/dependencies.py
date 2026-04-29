@@ -41,11 +41,41 @@ def _www_authenticate_bearer() -> str:
 
 
 async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
-    """Populate accessible_workspaces on UserContext via AuthorizationService."""
+    """Populate accessible_workspaces on UserContext.
+
+    Combines the policy-level static list from ``AuthorizationService``
+    (own workspace + system workspace, plus enterprise overrides) with
+    the dynamic list of workspaces the user has joined via accepted
+    invitations. Membership resolution lives at the request boundary,
+    not inside ``AuthorizationService``, so the auth domain service has
+    no infrastructure dependencies and stays singleton-safe.
+    """
+    from agentarea_common.config.database import get_database
     from agentarea_common.di.container import resolve
+    from agentarea_common.workspaces.repository import WorkspaceMembershipRepository
 
     authz = resolve(AuthorizationService)
-    user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
+    accessible = list(await authz.get_accessible_workspaces(user_context))
+
+    try:
+        database = get_database()
+        async with database.async_session_factory() as session:
+            repo = WorkspaceMembershipRepository(session)
+            memberships = await repo.list_for_user(user_context.user_id)
+        for membership in memberships:
+            if membership.workspace_id not in accessible:
+                accessible.append(membership.workspace_id)
+    except Exception as exc:
+        # Membership lookup failures must not lock the user out of their
+        # own workspace — degrade to the static policy list.
+        logger.warning(
+            "Could not resolve workspace memberships for user %s: %s",
+            user_context.user_id,
+            exc,
+            exc_info=True,
+        )
+
+    user_context.accessible_workspaces = accessible
 
 
 def _apply_workspace_override(user_context: UserContext, requested: str | None) -> None:

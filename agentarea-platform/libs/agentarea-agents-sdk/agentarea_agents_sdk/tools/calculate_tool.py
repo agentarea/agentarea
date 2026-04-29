@@ -3,8 +3,15 @@
 from typing import Any
 
 from .base_tool import BaseTool
+from .tool_definition import toolset
 
 
+@toolset(
+    namespace="agentarea/calculator",
+    display_name="Calculator",
+    description="Perform basic mathematical calculations like addition, subtraction, multiplication, division.",
+    category="utility",
+)
 class CalculateTool(BaseTool):
     """Tool that performs basic mathematical calculations.
 

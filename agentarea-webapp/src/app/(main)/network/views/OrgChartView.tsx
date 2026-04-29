@@ -14,12 +14,14 @@ import "@xyflow/react/dist/style.css";
 import DataFlowEdge from "../components/edges/DataFlowEdge";
 import AgentNode from "../components/nodes/AgentNode";
 import MCPNode from "../components/nodes/MCPNode";
+import OpenAPINode from "../components/nodes/OpenAPINode";
 import SkillNode from "../components/nodes/SkillNode";
 import TriggerNode from "../components/nodes/TriggerNode";
+import { computeHighlightSets } from "../utils/highlight";
 
 interface NetworkNodeData {
   id: string;
-  type: "agent" | "mcp_instance" | "skill" | "trigger";
+  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
   label: string;
   status?: string | null;
   metadata: Record<string, any>;
@@ -42,19 +44,23 @@ interface TopologyResponse {
 interface Props {
   topology: TopologyResponse;
   onNodeClick?: (node: NetworkNodeData) => void;
+  highlightId?: string | null;
+  onPaneClick?: () => void;
 }
 
 const NODE_W: Record<string, number> = {
-  agent: 240,
-  mcp_instance: 200,
-  skill: 200,
-  trigger: 200,
+  agent: 128,
+  mcp_instance: 128,
+  openapi_connection: 128,
+  skill: 128,
+  trigger: 128,
 };
-const NODE_H = 90;
+const NODE_H = 110;
 
 const nodeTypes = {
   agent: AgentNode,
   mcp_instance: MCPNode,
+  openapi_connection: OpenAPINode,
   skill: SkillNode,
   trigger: TriggerNode,
 };
@@ -69,7 +75,7 @@ function layout(
 ): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 80 });
+  g.setGraph({ rankdir: "TB", nodesep: 28, ranksep: 60 });
 
   nodes.forEach((n) => {
     g.setNode(n.id, {
@@ -90,29 +96,52 @@ function layout(
   };
 }
 
-export default function OrgChartView({ topology, onNodeClick }: Props) {
+export default function OrgChartView({
+  topology,
+  onNodeClick,
+  highlightId,
+  onPaneClick,
+}: Props) {
   const { nodes, edges } = useMemo(() => {
     const nodeIds = new Set(topology.nodes.map((n) => n.id));
+    const highlight = computeHighlightSets(highlightId, topology.edges);
 
-    const flowNodes: Node[] = topology.nodes.map((n) => ({
-      id: n.id,
-      type: n.type,
-      position: { x: 0, y: 0 },
-      data: { ...n },
-    }));
+    const flowNodes: Node[] = topology.nodes.map((n) => {
+      const isHighlighted = !!highlight?.nodes.has(n.id);
+      const isDimmed = !!highlight && !isHighlighted;
+      return {
+        id: n.id,
+        type: n.type,
+        position: { x: 0, y: 0 },
+        data: {
+          ...n,
+          _dimmed: isDimmed,
+          _highlighted: isHighlighted && n.id === highlightId,
+        },
+      };
+    });
 
     const flowEdges: Edge[] = topology.edges
       .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
-      .map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: "dataflow",
-        data: { relation: e.relation },
-      }));
+      .map((e) => {
+        const isHighlightedEdge = !!highlight?.edges.has(e.id);
+        const isDimmedEdge = !!highlight && !isHighlightedEdge;
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: "dataflow",
+          data: {
+            relation: e.relation,
+            highlighted: isHighlightedEdge,
+            dimmed: isDimmedEdge,
+          },
+          zIndex: isHighlightedEdge ? 2 : 0,
+        };
+      });
 
     return layout(flowNodes, flowEdges);
-  }, [topology]);
+  }, [topology, highlightId]);
 
   return (
     <div className="h-full w-full">
@@ -121,10 +150,12 @@ export default function OrgChartView({ topology, onNodeClick }: Props) {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        nodesConnectable={false}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}
         maxZoom={2}
+        onPaneClick={onPaneClick}
         onNodeClick={(_, node) => {
           const networkNode = topology.nodes.find((n) => n.id === node.id);
           if (networkNode) onNodeClick?.(networkNode);

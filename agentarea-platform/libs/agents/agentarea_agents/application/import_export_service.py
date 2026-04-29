@@ -477,18 +477,30 @@ class WorkspaceImportExportService:
         if existing_skill and options.override_existing:
             await self.skill_service.delete(existing_skill.id)
 
-        # Create skill from appropriate source
+        # Create skill from appropriate source.
+        # The DTOs are the source of truth for create_from_content /
+        # create_from_github; create_from_path is internal-only and keeps its
+        # kwargs because it accepts a filesystem path resolved at import time.
+        from agentarea_agents.schemas.skills_dto import (
+            SkillCreateFromContent,
+            SkillImportFromGithub,
+        )
+
         if skill_yaml.content:
             skill = await self.skill_service.create_from_content(
-                content=skill_yaml.content,
-                name=skill_yaml.name,
-                description=skill_yaml.description,
+                SkillCreateFromContent(
+                    content=skill_yaml.content,
+                    name=skill_yaml.name,
+                    description=skill_yaml.description,
+                ),
             )
         elif skill_yaml.github:
             skill = await self.skill_service.create_from_github(
-                github_url=skill_yaml.github,
-                name=skill_yaml.name,
-                description=skill_yaml.description,
+                SkillImportFromGithub(
+                    github_url=skill_yaml.github,
+                    name=skill_yaml.name,
+                    description=skill_yaml.description,
+                ),
             )
         elif skill_yaml.path:
             skill = await self.skill_service.create_from_path(
@@ -531,11 +543,6 @@ class WorkspaceImportExportService:
                 f"Agent '{agent_yaml.name}' already exists. Use override_existing=true to replace."
             )
 
-        # Convert tools to list of dicts
-        tools_list = None
-        if agent_yaml.tools:
-            tools_list = [tool.model_dump(exclude_none=True) for tool in agent_yaml.tools]
-
         # Resolve skill_names to skill_ids
         skill_ids: list[UUID] | None = None
         if agent_yaml.skill_names and skill_name_to_id:
@@ -554,31 +561,36 @@ class WorkspaceImportExportService:
 
         # Create or update agent
         if existing_agent and options.override_existing:
-            # Update existing
+            from agentarea_agents.schemas.dto import AgentUpdate
+
             updated_agent = await self.agent_service.update_agent(
                 id=UUID(str(existing_agent.id)),
-                name=agent_yaml.name,
-                description=agent_yaml.description,
-                tools=tools_list,
-                skill_ids=skill_ids,
-                agent_type=agent_yaml.agent_type,
+                payload=AgentUpdate(
+                    name=agent_yaml.name,
+                    description=agent_yaml.description,
+                    tools=agent_yaml.tools,
+                    skill_ids=skill_ids,
+                    agent_type=agent_yaml.agent_type,
+                ),
             )
             if updated_agent is None:
                 raise RuntimeError(f"Failed to update agent '{agent_yaml.name}'")
             return updated_agent
         else:
-            # Create new (without model_id as per requirements)
+            from agentarea_agents.schemas.dto import AgentCreate
+
             new_agent = await self.agent_service.create_agent(
-                name=agent_yaml.name,
-                description=agent_yaml.description,
-                instruction=agent_yaml.instruction,
-                model_id="",  # Empty string as per requirements (not None to avoid type error)
-                tools=tools_list,
-                events_config=None,  # No events for imported agents
-                planning=agent_yaml.planning,
-                a2ui_enabled=agent_yaml.a2ui_enabled,
-                skill_ids=skill_ids,
-                agent_type=agent_yaml.agent_type,
+                AgentCreate(
+                    name=agent_yaml.name,
+                    description=agent_yaml.description,
+                    instruction=agent_yaml.instruction,
+                    model_id="",  # Set later by caller
+                    tools=agent_yaml.tools,
+                    planning=agent_yaml.planning,
+                    a2ui_enabled=agent_yaml.a2ui_enabled,
+                    skill_ids=skill_ids,
+                    agent_type=agent_yaml.agent_type,
+                )
             )
             return new_agent
 
@@ -606,24 +618,33 @@ class WorkspaceImportExportService:
             json_spec["env_vars"] = mcp_yaml.env_vars
 
         # Create or update instance
+        from agentarea_mcp.schemas.dto import (
+            MCPServerInstanceCreate,
+            MCPServerInstanceUpdate,
+        )
+
         if existing_instance and options.override_existing:
             # Update existing
             from uuid import UUID
 
             updated_instance = await self.mcp_instance_service.update_instance(
-                id=UUID(str(existing_instance.id)),
-                name=mcp_yaml.name,
-                description=mcp_yaml.description,
-                json_spec=json_spec,
+                UUID(str(existing_instance.id)),
+                MCPServerInstanceUpdate(
+                    name=mcp_yaml.name,
+                    description=mcp_yaml.description,
+                    json_spec=json_spec,
+                ),
             )
             return updated_instance
         else:
             # Create new
             new_instance = await self.mcp_instance_service.create_instance(
-                name=mcp_yaml.name,
-                description=mcp_yaml.description,
-                server_spec_id=mcp_yaml.server_spec_id,
-                json_spec=json_spec,
+                MCPServerInstanceCreate(
+                    name=mcp_yaml.name,
+                    description=mcp_yaml.description,
+                    server_spec_id=mcp_yaml.server_spec_id,
+                    json_spec=json_spec,
+                )
             )
             return new_instance
 
@@ -660,24 +681,30 @@ class WorkspaceImportExportService:
         provider_spec_id = UUID(provider_yaml.provider_spec_id)
 
         # Create or update config
+        from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
+
         if existing_config and options.override_existing:
             # Update existing
             from uuid import UUID
 
             updated_config = await self.provider_service.update_provider_config(
                 config_id=UUID(str(existing_config.id)),
-                name=provider_yaml.name,
-                api_key=api_key,
-                endpoint_url=provider_yaml.endpoint_url,
+                payload=ProviderConfigUpdate(
+                    name=provider_yaml.name,
+                    api_key=api_key,
+                    endpoint_url=provider_yaml.endpoint_url,
+                ),
             )
             return updated_config
         else:
             # Create new
             new_config = await self.provider_service.create_provider_config(
-                provider_spec_id=provider_spec_id,
-                name=provider_yaml.name,
-                api_key=api_key,
-                endpoint_url=provider_yaml.endpoint_url,
+                payload=ProviderConfigCreate(
+                    provider_spec_id=provider_spec_id,
+                    name=provider_yaml.name,
+                    api_key=api_key,
+                    endpoint_url=provider_yaml.endpoint_url,
+                ),
                 created_by=str(self.repository_factory.user_context.user_id),
             )
             return new_config

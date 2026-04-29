@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileJson2, Trash2, RefreshCw } from "lucide-react";
+import { FileJson2, Pencil, Trash2, RefreshCw } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,12 @@ import {
   getOpenAPIConnectionAction as getOpenAPIConnection,
   deleteOpenAPIConnectionAction as deleteOpenAPIConnection,
   discoverOpenAPIToolsAction as discoverOpenAPITools,
+  updateOpenAPIConnectionAction as updateOpenAPIConnection,
 } from "@/lib/server-actions";
 import { OpenAPIConnection } from "../../types";
 import { ToolsTable } from "../../components/ToolsTable";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
+import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
 
 export default function OpenAPIConnectionDetailPage() {
   const params = useParams();
@@ -26,6 +28,8 @@ export default function OpenAPIConnectionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingHeaders, setEditingHeaders] = useState(false);
+  const [savingHeaders, setSavingHeaders] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -66,6 +70,32 @@ export default function OpenAPIConnectionDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to discover tools");
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleSaveHeaders = async (rows: { name: string; value: string }[]) => {
+    setSavingHeaders(true);
+    setError(null);
+    try {
+      const { error: saveError } = await updateOpenAPIConnection(connectionId, {
+        custom_headers: rows,
+      });
+      if (saveError) {
+        setError((saveError as any)?.detail || "Failed to save headers");
+        return;
+      }
+      const { data, error: loadError } = await getOpenAPIConnection(connectionId);
+      if (loadError) {
+        setError((loadError as any)?.detail || "Failed to reload connection");
+      } else {
+        setConnection(data as any);
+        setEditingHeaders(false);
+      }
+    } catch (err) {
+      console.error("Failed to save headers", err);
+      setError(err instanceof Error ? err.message : "Failed to save headers");
+    } finally {
+      setSavingHeaders(false);
     }
   };
 
@@ -163,6 +193,44 @@ export default function OpenAPIConnectionDetailPage() {
           </div>
         </div>
 
+        {/* Custom Headers */}
+        <div className="space-y-2">
+          {editingHeaders ? (
+            <CustomHeadersEditor
+              initial={connection.custom_headers || []}
+              saving={savingHeaders}
+              onSave={handleSaveHeaders}
+              onCancel={() => setEditingHeaders(false)}
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {`Custom Headers (${connection.custom_headers?.length ?? 0})`}
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setEditingHeaders(true)}
+                >
+                  <Pencil className="mr-1 h-3 w-3" />
+                  {connection.custom_headers && connection.custom_headers.length > 0
+                    ? "Edit"
+                    : "Add"}
+                </Button>
+              </div>
+              {connection.custom_headers && connection.custom_headers.length > 0 ? (
+                <CustomHeadersList headers={connection.custom_headers} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No custom headers. Click Add to set Authorization or any
+                  other request header your provider needs.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Tools */}
         {connection.available_tools.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -174,14 +242,6 @@ export default function OpenAPIConnectionDetailPage() {
           <ToolsTable
             tools={connection.available_tools}
             label={`Available Tools (${connection.available_tools.length})`}
-          />
-        )}
-
-        {/* Custom Headers */}
-        {connection.custom_headers && connection.custom_headers.length > 0 && (
-          <CustomHeadersList
-            headers={connection.custom_headers}
-            label={`Custom Headers (${connection.custom_headers.length})`}
           />
         )}
       </div>

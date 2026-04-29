@@ -5,7 +5,6 @@ from unittest.mock import Mock, patch
 import jwt
 import pytest
 from agentarea_common.auth import UserContext, get_user_context
-from agentarea_common.auth.context_manager import ContextManager
 from agentarea_common.auth.jwt_handler import JWTTokenHandler
 from fastapi import HTTPException, Request
 
@@ -227,82 +226,3 @@ class TestGetUserContext:
         assert exc_info.value.status_code == 401
 
 
-class TestIntegration:
-    """Integration tests for the complete authentication flow."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Outdated test - needs refactoring for auth provider architecture")
-    @patch("agentarea_common.auth.jwt_handler.get_settings")
-    async def test_end_to_end_authentication_flow(self, mock_get_settings):
-        """Test the complete authentication flow from request to context."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret-key"
-        mock_settings.app.JWT_ALGORITHM = "HS256"
-        mock_get_settings.return_value = mock_settings
-
-        # Create a valid JWT token
-        payload = {
-            "sub": "integration-user-123",
-            "workspace_id": "integration-workspace-456",
-            "roles": ["user", "developer"],
-        }
-        token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
-
-        # Create mock request with token
-        mock_request = Mock(spec=Request)
-        mock_request.headers = {"authorization": f"Bearer {token}"}
-
-        # Clear any existing context
-        ContextManager.clear_context()
-
-        # Call the dependency
-        result = await get_user_context(mock_request)
-
-        # Verify the result
-        assert isinstance(result, UserContext)
-        assert result.user_id == "integration-user-123"
-        assert result.workspace_id == "integration-workspace-456"
-        assert result.roles == ["user", "developer"]
-
-        # Verify context was set in ContextManager
-        context_from_manager = ContextManager.get_context()
-        assert context_from_manager == result
-        assert context_from_manager.user_id == "integration-user-123"
-        assert context_from_manager.workspace_id == "integration-workspace-456"
-
-    @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Outdated test - needs refactoring for auth provider architecture")
-    @patch("agentarea_common.auth.jwt_handler.get_settings")
-    async def test_context_isolation_between_requests(self, mock_get_settings):
-        """Test that context is properly isolated between different requests."""
-        # Setup settings mock
-        mock_settings = Mock()
-        mock_settings.app.JWT_SECRET_KEY = "test-secret-key"
-        mock_settings.app.JWT_ALGORITHM = "HS256"
-        mock_get_settings.return_value = mock_settings
-
-        # First request
-        payload1 = {"sub": "user-1", "workspace_id": "workspace-1"}
-        token1 = jwt.encode(payload1, "test-secret-key", algorithm="HS256")
-        mock_request1 = Mock(spec=Request)
-        mock_request1.headers = {"authorization": f"Bearer {token1}"}
-
-        result1 = await get_user_context(mock_request1)
-        assert result1.user_id == "user-1"
-        assert result1.workspace_id == "workspace-1"
-
-        # Second request (simulating different context)
-        payload2 = {"sub": "user-2", "workspace_id": "workspace-2"}
-        token2 = jwt.encode(payload2, "test-secret-key", algorithm="HS256")
-        mock_request2 = Mock(spec=Request)
-        mock_request2.headers = {"authorization": f"Bearer {token2}"}
-
-        result2 = await get_user_context(mock_request2)
-        assert result2.user_id == "user-2"
-        assert result2.workspace_id == "workspace-2"
-
-        # Verify context manager has the latest context
-        current_context = ContextManager.get_context()
-        assert current_context.user_id == "user-2"
-        assert current_context.workspace_id == "workspace-2"

@@ -6,30 +6,70 @@ from collections.abc import Callable
 from typing import Any, get_type_hints
 
 from .base_tool import BaseTool
+from .tool_definition import (
+    ToolDefinition,
+    ToolsetMetadata,
+    build_tool_definition,
+)
 
 
-def tool_method(func: Callable = None):
-    """Decorator to mark a method as a tool function.
+class ToolMethodMetadata:
+    """Per-method metadata stamped by ``@tool_method(...)``."""
 
-    The description is automatically extracted from the method's docstring.
-    Can be used as @tool_method or @tool_method()
+    __slots__ = ("display_name", "description", "requires_user_confirmation")
+
+    def __init__(
+        self,
+        *,
+        display_name: str = "",
+        description: str = "",
+        requires_user_confirmation: bool = False,
+    ) -> None:
+        self.display_name = display_name
+        self.description = description
+        self.requires_user_confirmation = requires_user_confirmation
+
+
+def tool_method(
+    func: Callable | None = None,
+    *,
+    display_name: str = "",
+    description: str = "",
+    requires_user_confirmation: bool = False,
+):
+    """Mark a method as a tool function.
+
+    Description falls back to the docstring's first line. Optional metadata
+    (``display_name``, ``requires_user_confirmation``) is exposed via
+    ``method._tool_meta`` and surfaces in ``ToolsetMetadata``-driven UIs.
+
+    Usage:
+        @tool_method
+        async def list(self): ...
+
+        @tool_method(display_name="Create Agent")
+        async def create(self, payload: AgentCreate) -> AgentSummary: ...
     """
 
     def decorator(f: Callable) -> Callable:
         f._is_tool_method = True
-        # Extract description from docstring
-        if f.__doc__:
-            # Get first line of docstring as description
-            f._tool_description = f.__doc__.strip().split("\n")[0]
+        if description:
+            resolved_desc = description
+        elif f.__doc__:
+            resolved_desc = f.__doc__.strip().split("\n")[0]
         else:
-            f._tool_description = f"Method: {f.__name__}"
+            resolved_desc = f"Method: {f.__name__}"
+        f._tool_description = resolved_desc
+        f._tool_meta = ToolMethodMetadata(
+            display_name=display_name or f.__name__.replace("_", " ").title(),
+            description=resolved_desc,
+            requires_user_confirmation=requires_user_confirmation,
+        )
         return f
 
-    # Support both @tool_method and @tool_method()
     if func is None:
         return decorator
-    else:
-        return decorator(func)
+    return decorator(func)
 
 
 class Toolset(ABC):
@@ -54,7 +94,18 @@ class Toolset(ABC):
 
     @property
     def name(self) -> str:
-        """Get toolset name from class name (snake_case)."""
+        """Toolset name.
+
+        Prefers the last segment of ``@toolset(namespace="publisher/name")``
+        when the metadata is set — necessary because mechanical CamelCase
+        →snake_case mangles initialisms (``OpenAPIConnectionsToolset`` would
+        become ``open_a_p_i_connections``). Falls back to a class-name
+        derivation for legacy toolsets without ``@toolset``.
+        """
+        meta = getattr(self.__class__, "__toolset_meta__", None)
+        if meta and meta.namespace:
+            return meta.namespace.rsplit("/", 1)[-1]
+
         class_name = self.__class__.__name__
         # Convert CamelCase to snake_case
         import re
@@ -70,7 +121,29 @@ class Toolset(ABC):
     @property
     def description(self) -> str:
         """Get tool description from class docstring."""
+        meta = getattr(self.__class__, "__toolset_meta__", None)
+        if meta and meta.description:
+            return meta.description
         return self.__class__.__doc__ or f"Tool: {self.name}"
+
+    @property
+    def metadata(self) -> ToolsetMetadata | None:
+        """Class-level ``ToolsetMetadata`` if the class is decorated with ``@toolset``."""
+        return getattr(self.__class__, "__toolset_meta__", None)
+
+    def get_tool_definitions(self, *, name_prefix: str | None = None) -> list[ToolDefinition]:
+        """One ``ToolDefinition`` per ``@tool_method`` — canonical MCP shape.
+
+        ``name_prefix`` defaults to the toolset's ``name`` (snake_case class name)
+        and is joined with the method name as ``{prefix}_{method}`` to match the
+        existing MCPToolAdapter naming convention.
+        """
+        prefix = name_prefix if name_prefix is not None else self.name
+        defs: list[ToolDefinition] = []
+        for method_name, method in self._tool_methods.items():
+            tool_name = f"{prefix}_{method_name}" if prefix else method_name
+            defs.append(build_tool_definition(tool_name=tool_name, method=method))
+        return defs
 
     def get_schema(self) -> dict[str, Any]:
         """Generate OpenAI function schema from decorated methods."""

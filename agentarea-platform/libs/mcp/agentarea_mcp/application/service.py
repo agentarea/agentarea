@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -28,6 +29,12 @@ from agentarea_mcp.domain.verification_types import (
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
+)
+from agentarea_mcp.schemas.dto import (
+    MCPServerCreate,
+    MCPServerInstanceCreate,
+    MCPServerInstanceUpdate,
+    MCPServerUpdate,
 )
 from agentarea_mcp.verification import verify
 
@@ -133,32 +140,19 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.event_broker = event_broker
 
     @audited("mcp_server.create", resource_type="mcp_server")
-    async def create_mcp_server(
-        self,
-        name: str,
-        description: str,
-        docker_image_url: str | None = None,
-        version: str = "1.0.0",
-        tags: list[str] | None = None,
-        is_public: bool = False,
-        env_schema: list[dict[str, Any]] | None = None,
-        cmd: list[str] | None = None,
-        json_spec: dict[str, Any] | None = None,
-        remote_url: str | None = None,
-        registry_url: str | None = None,
-    ) -> MCPServer:
+    async def create_mcp_server(self, payload: MCPServerCreate) -> MCPServer:
         server = MCPServer(
-            name=name,
-            description=description,
-            docker_image_url=docker_image_url,
-            version=version,
-            tags=tags or [],
-            is_public=is_public,
-            env_schema=env_schema or [],
-            cmd=cmd,
-            remote_url=remote_url,
-            json_spec=json_spec,
-            registry_url=registry_url,
+            name=payload.name,
+            description=payload.description,
+            docker_image_url=payload.docker_image_url,
+            version=payload.version,
+            tags=payload.tags or [],
+            is_public=payload.is_public,
+            env_schema=payload.env_schema or [],
+            cmd=payload.cmd,
+            remote_url=payload.remote_url,
+            json_spec=payload.json_spec,
+            registry_url=payload.registry_url,
         )
         server = await self.create(server)
 
@@ -173,39 +167,38 @@ class MCPServerService(BaseCrudService[MCPServer]):
     async def update_mcp_server(
         self,
         id: UUID,
-        name: str | None = None,
-        description: str | None = None,
-        docker_image_url: str | None = None,
-        version: str | None = None,
-        tags: list[str] | None = None,
-        is_public: bool | None = None,
-        status: str | None = None,
-        env_schema: list[dict[str, Any]] | None = None,
-        cmd: list[str] | None = None,
-        json_spec: dict[str, Any] | None = None,
+        payload: MCPServerUpdate,
     ) -> MCPServer | None:
         server = await self.get(id)
         if not server:
             return None
 
-        if name is not None:
-            server.name = name
-        if description is not None:
-            server.description = description
-        if docker_image_url is not None:
-            server.docker_image_url = docker_image_url
-        if version is not None:
-            server.version = version
-        if tags is not None:
-            server.tags = tags
-        if is_public is not None:
-            server.is_public = is_public
-        if status is not None:
-            server.status = status
-        if env_schema is not None:
-            server.env_schema = env_schema
-        if cmd is not None:
-            server.cmd = cmd
+        patch = payload.model_dump(exclude_unset=True)
+
+        if "name" in patch:
+            server.name = patch["name"]
+        if "description" in patch:
+            server.description = patch["description"]
+        if "docker_image_url" in patch:
+            server.docker_image_url = patch["docker_image_url"]
+        if "remote_url" in patch:
+            server.remote_url = patch["remote_url"]
+        if "version" in patch:
+            server.version = patch["version"]
+        if "tags" in patch:
+            server.tags = patch["tags"]
+        if "is_public" in patch:
+            server.is_public = patch["is_public"]
+        if "status" in patch:
+            server.status = patch["status"]
+        if "env_schema" in patch:
+            server.env_schema = patch["env_schema"]
+        if "cmd" in patch:
+            server.cmd = patch["cmd"]
+        if "json_spec" in patch:
+            server.json_spec = patch["json_spec"]
+        if "registry_url" in patch:
+            server.registry_url = patch["registry_url"]
 
         server = await self.update(server)
 
@@ -323,15 +316,13 @@ class MCPServerInstanceService:
         return spec, secret_env_vars
 
     @audited("mcp_instance.create", resource_type="mcp_instance")
-    async def create_instance(
-        self,
-        name: str,
-        description: str | None = None,
-        server_spec_id: str | None = None,
-        json_spec: dict[str, Any] | None = None,
-        auth_config_id: str | None = None,
-    ) -> MCPServerInstance | None:
-        spec = _normalize_url_keys(json_spec or {})
+    async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
+        name = payload.name
+        description = payload.description
+        server_spec_id = payload.server_spec_id
+        auth_config_id = payload.auth_config_id
+
+        spec = _normalize_url_keys(payload.json_spec or {})
 
         if not server_spec_id:
             validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
@@ -376,6 +367,9 @@ class MCPServerInstanceService:
             # Synchronous verify — blocks until succeeded or failed
             verification = await verify(instance)
             instance.verification = dict(verification)
+            refresh_result = self.repository.session.refresh(instance)
+            if inspect.isawaitable(refresh_result):
+                await refresh_result
 
         elif is_bundle_type:
             # Validate all members are succeeded before persisting the bundle
@@ -445,19 +439,18 @@ class MCPServerInstanceService:
     async def update_instance(
         self,
         id: UUID,
-        name: str | None = None,
-        description: str | None = None,
-        json_spec: dict[str, Any] | None = None,
-        status: str | None = None,
+        payload: MCPServerInstanceUpdate,
     ) -> MCPServerInstance | None:
-        update_kwargs: dict[str, Any] = {}
-        if name is not None:
-            update_kwargs["name"] = name
-        if description is not None:
-            update_kwargs["description"] = description
+        patch = payload.model_dump(exclude_unset=True)
 
-        if json_spec is not None:
-            json_spec = _normalize_url_keys(json_spec)
+        update_kwargs: dict[str, Any] = {}
+        if "name" in patch:
+            update_kwargs["name"] = patch["name"]
+        if "description" in patch:
+            update_kwargs["description"] = patch["description"]
+
+        if "json_spec" in patch and patch["json_spec"] is not None:
+            json_spec = _normalize_url_keys(patch["json_spec"])
             instance = await self.repository.get_by_id(id)
             if instance:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(

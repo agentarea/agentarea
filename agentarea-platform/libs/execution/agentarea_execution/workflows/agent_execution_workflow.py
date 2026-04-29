@@ -113,6 +113,10 @@ class AgentExecutionWorkflow:
         self._paused = False
         self._pause_reason = ""
         self._awaiting_input = False
+        # Metadata passed in at workflow start (set in _initialize_workflow).
+        # Used to detect e.g. agent_delegation children that must terminate
+        # immediately on completion rather than entering await_input.
+        self._workflow_metadata: dict[str, Any] = {}
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
         # A2UI action queue — frontend signals land here, workflow loop drains them
@@ -328,6 +332,7 @@ class AgentExecutionWorkflow:
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
+        self._workflow_metadata = dict(request.workflow_metadata or {})
 
         # Initialize helpers
         self.event_manager = EventManager(
@@ -890,8 +895,16 @@ class AgentExecutionWorkflow:
             # Execute iteration
             await self._execute_iteration()
 
-            # If agent completed the task, wait for follow-up messages
+            # If agent completed the task, wait for follow-up messages.
+            # Exception: a workflow spawned via agent delegation has no
+            # end-user owning its conversation — its parent is awaiting the
+            # result via execute_child_workflow. Sitting in await_input
+            # would block the parent until DELEGATION_TIMEOUT cancels us.
+            # Future "mode=conversation" delegations would opt in here.
             if self._awaiting_input:
+                if self._is_delegation_child():
+                    workflow.logger.info("Delegated child completed — exiting without await_input")
+                    break
                 await self._await_follow_up()
                 # If we got a new message, continue the loop
                 if not self._awaiting_input:
@@ -920,6 +933,15 @@ class AgentExecutionWorkflow:
                 await workflow.wait_condition(lambda: not self._paused)
 
         return {"iterations_completed": self.state.current_iteration}
+
+    def _is_delegation_child(self) -> bool:
+        """True iff this workflow was spawned via parent's delegation tool.
+
+        Identified by ``workflow_metadata.source == "agent_delegation"`` set
+        in ``_execute_agent_delegation``. Such children have no end-user
+        owning their conversation, so they must not enter await_input.
+        """
+        return (self._workflow_metadata or {}).get("source") == "agent_delegation"
 
     async def _await_follow_up(self) -> None:
         """Wait for a follow-up user message or timeout.
@@ -1677,6 +1699,7 @@ class AgentExecutionWorkflow:
                 server_instance_id=None,
                 workspace_id=workspace_id,
                 task_id=str(self.state.task_id),
+                agent_id=UUID(self.state.agent_id) if self.state.agent_id else None,
                 tools=self.state.agent_config.get("tools"),
             )
 
@@ -2295,16 +2318,34 @@ class AgentExecutionWorkflow:
                 parent_close_policy=ParentClosePolicy.TERMINATE,
             )
 
-            # Extract result
+            # Build a structured envelope for the parent's LLM. Same shape
+            # for success and failure so the parent can branch on `status`.
+            # `final_response` is the child's own narrative; `task_id` lets
+            # the parent call get_task_summary later for the full record.
             if child_result.success:
-                result_text = child_result.final_response or "(Agent completed without response)"
+                envelope: dict[str, Any] = {
+                    "status": "completed",
+                    "agent": agent_name,
+                    "task_id": str(child_task_id),
+                    "final_response": child_result.final_response
+                    or "(Agent completed without response)",
+                    "iterations": child_result.reasoning_iterations_used,
+                    "cost_usd": float(child_result.total_cost),
+                }
             else:
-                result_text = child_result.error_message or "(Agent failed without details)"
+                envelope = {
+                    "status": "failed",
+                    "agent": agent_name,
+                    "task_id": str(child_task_id),
+                    "error": child_result.error_message or "(Agent failed without details)",
+                    "iterations": child_result.reasoning_iterations_used,
+                    "cost_usd": float(child_result.total_cost),
+                }
 
             self.state.messages.append(
                 Message(
                     role="tool",
-                    content=result_text,
+                    content=json.dumps(envelope),
                     tool_call_id=tool_call.id,
                     name=tool_name,
                 )
@@ -2315,7 +2356,9 @@ class AgentExecutionWorkflow:
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
+                    "target_agent_id": agent_id,
                     "target_agent_name": agent_name,
+                    "child_task_id": str(child_task_id),
                     "success": child_result.success,
                     "iteration": self.state.current_iteration,
                     "child_iterations": child_result.reasoning_iterations_used,
@@ -2334,21 +2377,38 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
+            # Surface the failure to the parent's LLM as a tool message and
+            # continue. Re-raising here would propagate out of asyncio.gather
+            # and abort sibling delegations — wrong semantics for fan-out
+            # where each child's success/failure should be independent.
             workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}", exc_info=True)
+
+            error_payload = {
+                "status": "failed",
+                "agent": agent_name,
+                "error": str(e),
+            }
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=json.dumps(error_payload),
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
 
             self.event_manager.add_event(
                 EventTypes.AGENT_DELEGATION_FAILED,
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
+                    "target_agent_id": agent_id,
                     "target_agent_name": agent_name,
                     "error": str(e),
                     "iteration": self.state.current_iteration,
                 },
             )
             await self._publish_events_immediately()
-
-            raise
 
     async def _compact_context_if_needed(self) -> bool:
         """Check context usage and compact if threshold exceeded.

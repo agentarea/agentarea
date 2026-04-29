@@ -7,7 +7,12 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
+from agentarea_agents.application.agent_service import AgentService
+from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
+    DatabaseSessionDep,
+    get_agent_service,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -137,6 +142,16 @@ async def get_wallet_service(
     )
 
 
+async def ensure_agent_exists(
+    agent_id: UUID,
+    agent_service: AgentService = Depends(get_agent_service),
+) -> None:
+    """Reject wallet operations for agents outside the caller's workspace."""
+    agent = await agent_service.get(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -146,6 +161,7 @@ async def get_wallet_service(
 async def create_wallet(
     agent_id: UUID,
     request: CreateWalletRequest,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Create a wallet for an agent."""
@@ -175,6 +191,7 @@ async def create_wallet(
 @router.get("", response_model=WalletResponse)
 async def get_wallet(
     agent_id: UUID,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Get wallet configuration for an agent (no decrypted credentials)."""
@@ -191,6 +208,7 @@ async def get_wallet(
 async def update_wallet(
     agent_id: UUID,
     request: UpdateWalletRequest,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update wallet configuration."""
@@ -229,6 +247,7 @@ async def update_wallet(
 @router.delete("", status_code=204)
 async def delete_wallet(
     agent_id: UUID,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Delete wallet and associated credentials."""
@@ -243,6 +262,7 @@ async def delete_wallet(
 @router.get("/balance", response_model=WalletBalanceResponse)
 async def get_wallet_balance(
     agent_id: UUID,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Get current service budget status."""
@@ -266,6 +286,7 @@ async def get_wallet_balance(
 @router.get("/payments", response_model=PaginatedPaymentsResponse)
 async def get_payment_history(
     agent_id: UUID,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
     protocol: str | None = Query(None, description="Filter by protocol (x402, mpp)"),
     status: str | None = Query(None, description="Filter by status"),
@@ -298,6 +319,7 @@ async def get_payment_history(
 async def fund_wallet(
     agent_id: UUID,
     request: FundWalletRequest,
+    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update the service budget amount."""

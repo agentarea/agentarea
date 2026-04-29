@@ -5,11 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_api.api.v1.wallet import ensure_agent_exists, get_wallet_service, router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from agentarea_api.api.v1.wallet import router, get_wallet_service
-
 
 # ------------------------------------------------------------------
 # Fixtures
@@ -60,6 +58,7 @@ def client(mock_service):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_wallet_service] = lambda: mock_service
+    app.dependency_overrides[ensure_agent_exists] = lambda: None
     return TestClient(app)
 
 

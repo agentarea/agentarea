@@ -101,3 +101,28 @@ openspec
 # Local playground key (not checked in)
 /key
 .omx/
+
+# Marketing artifacts (generated, not source)
+output/
+
+# Imported skills (managed externally; lockfile is local-only)
+skills-lock.json
+
+# AI editor / agent tool config dirs (per-user noise)
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.kilocode/
+.kiro/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.qwen/
+.roo/
+.windsurf/
+.zencoder/

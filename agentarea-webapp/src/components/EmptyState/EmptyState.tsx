@@ -39,6 +39,7 @@ type EmptyStateProps = {
     | "llm"
     | "mcp"
     | "payments"
+    | "skills"
     | "tasks"
     | "triggers";
   action?: {
@@ -80,7 +81,9 @@ export default function EmptyState({
                     ? [Zap, Clock, Timer]
                     : iconsType === "audit"
                       ? [ScrollText, Shield, Clock]
-                      : [Bot, Blocks, ChevronsLeftRightEllipsis]
+                      : iconsType === "skills"
+                        ? [Sparkles, Zap, Blocks]
+                        : [Bot, Blocks, ChevronsLeftRightEllipsis]
     : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
   return (

@@ -6,6 +6,10 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
+from agentarea_agents.schemas.dto import (
+    AgentCreate,
+    AgentUpdate,
+)
 from agentarea_agents.schemas.import_export import ToolConfigYAML
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_api.api.deps.services import (
@@ -93,42 +97,6 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         )
 
 
-class EventConfig(BaseModel):
-    event_type: str
-    config: dict | None = None
-    enabled: bool = True
-
-
-class EventsConfig(BaseModel):
-    events: list[EventConfig] | None = None
-
-
-class AgentCreate(BaseModel):
-    name: str
-    description: str
-    instruction: str
-    model_id: str
-    tools: list[ToolConfigYAML] | None = None
-    events_config: EventsConfig | None = None
-    planning: bool | None = None
-    a2ui_enabled: bool | None = None
-    skill_ids: list[UUID] | None = None
-    agent_type: str = "stateless"
-
-
-class AgentUpdate(BaseModel):
-    name: str | None = None
-    capabilities: list[str] | None = None
-    description: str | None = None
-    instruction: str | None = None
-    model_id: str | None = None
-    tools: list[ToolConfigYAML] | None = None
-    events_config: EventsConfig | None = None
-    planning: bool | None = None
-    a2ui_enabled: bool | None = None
-    skill_ids: list[UUID] | None = None
-
-
 class AgentResponse(BaseModel):
     id: UUID
     name: str
@@ -202,18 +170,7 @@ async def create_agent(
                 ),
             )
 
-    agent = await agent_service.create_agent(
-        name=data.name,
-        description=data.description,
-        instruction=data.instruction,
-        model_id=data.model_id,
-        tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
-        events_config=data.events_config.model_dump() if data.events_config else None,
-        planning=data.planning,
-        a2ui_enabled=data.a2ui_enabled,
-        skill_ids=data.skill_ids,
-        agent_type=data.agent_type,
-    )
+    agent = await agent_service.create_agent(data)
     return AgentResponse.from_domain(agent)
 
 
@@ -226,6 +183,22 @@ class ToolResponse(BaseModel):
     input_schema: dict[str, Any]
     mcp_instance_id: UUID | None = None
     mcp_instance_name: str | None = None
+
+
+def _mcp_tool_response(tool: dict[str, Any], instance) -> ToolResponse | None:
+    """Normalize persisted MCP tool metadata to the public tool response."""
+    function = tool.get("function") if isinstance(tool.get("function"), dict) else tool
+    name = function.get("name")
+    if not name:
+        return None
+    return ToolResponse(
+        name=name,
+        type="mcp",
+        description=function.get("description") or f"MCP tool: {name}",
+        input_schema=function.get("parameters") or function.get("inputSchema") or {},
+        mcp_instance_id=instance.id,
+        mcp_instance_name=instance.name,
+    )
 
 
 @router.get("/tools", response_model=list[ToolResponse])
@@ -277,31 +250,15 @@ async def get_all_tools(
             if instance:
                 mcp_tools = instance.get_available_tools()
                 for tool in mcp_tools:
-                    tools.append(
-                        ToolResponse(
-                            name=tool["function"]["name"],
-                            type="mcp",
-                            description=tool["function"].get("description", ""),
-                            input_schema=tool["function"].get("parameters", {}),
-                            mcp_instance_id=instance.id,
-                            mcp_instance_name=instance.name,
-                        )
-                    )
+                    if response := _mcp_tool_response(tool, instance):
+                        tools.append(response)
         else:
             instances = await mcp_service.list()
             for instance in instances:
                 mcp_tools = instance.get_available_tools()
                 for tool in mcp_tools:
-                    tools.append(
-                        ToolResponse(
-                            name=tool["function"]["name"],
-                            type="mcp",
-                            description=tool["function"].get("description", ""),
-                            input_schema=tool["function"].get("parameters", {}),
-                            mcp_instance_id=instance.id,
-                            mcp_instance_name=instance.name,
-                        )
-                    )
+                    if response := _mcp_tool_response(tool, instance):
+                        tools.append(response)
 
     return tools
 
@@ -351,17 +308,7 @@ async def update_agent(
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
 
-    agent = await agent_service.update_agent(
-        id=agent_id,
-        name=data.name,
-        description=data.description,
-        model_id=data.model_id,
-        tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
-        events_config=data.events_config.model_dump() if data.events_config else None,
-        planning=data.planning,
-        a2ui_enabled=data.a2ui_enabled,
-        skill_ids=data.skill_ids,
-    )
+    agent = await agent_service.update_agent(id=agent_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = await agent_service.get_with_skills(agent_id)

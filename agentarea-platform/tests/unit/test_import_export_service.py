@@ -125,12 +125,12 @@ provider_configs: []
         assert len(result.errors) == 0
 
         mock_agent_service.create_agent.assert_called_once()
-        call_kwargs = mock_agent_service.create_agent.call_args.kwargs
-        assert call_kwargs["name"] == "Test Agent"
-        assert call_kwargs["description"] == "A test agent"
-        assert call_kwargs["instruction"] == "You are a test agent"
-        assert call_kwargs["model_id"] == ""  # Empty string as per implementation
-        assert call_kwargs["planning"] is False
+        payload = mock_agent_service.create_agent.call_args.args[0]
+        assert payload.name == "Test Agent"
+        assert payload.description == "A test agent"
+        assert payload.instruction == "You are a test agent"
+        assert payload.model_id == ""  # Empty string as per implementation
+        assert payload.planning is False
 
     @pytest.mark.asyncio
     async def test_import_agent_with_tools(self, import_export_service, mock_agent_service):
@@ -154,11 +154,11 @@ provider_configs: []
         assert result.success is True
         assert result.created_agents == 1
 
-        call_kwargs = mock_agent_service.create_agent.call_args.kwargs
-        assert call_kwargs["tools"] is not None
-        assert len(call_kwargs["tools"]) == 1
-        assert call_kwargs["tools"][0]["type"] == "code"
-        assert call_kwargs["tools"][0]["name"] == "agentarea/calculator"
+        payload = mock_agent_service.create_agent.call_args.args[0]
+        assert payload.tools is not None
+        assert len(payload.tools) == 1
+        assert payload.tools[0].type == "code"
+        assert payload.tools[0].name == "agentarea/calculator"
 
     @pytest.mark.asyncio
     async def test_import_mcp_instance_success(
@@ -189,12 +189,12 @@ provider_configs: []
         assert result.created_provider_configs == 0
 
         mock_mcp_instance_service.create_instance.assert_called_once()
-        call_kwargs = mock_mcp_instance_service.create_instance.call_args.kwargs
-        assert call_kwargs["name"] == "Test Filesystem"
-        assert call_kwargs["description"] == "Test file access"
-        assert call_kwargs["server_spec_id"] == "a1b2c3d4-e5f6-789a-bcde-123456789abc"
-        assert "json_spec" in call_kwargs
-        assert call_kwargs["json_spec"]["env_vars"]["FILESYSTEM_ROOT"] == "/workspace"
+        payload = mock_mcp_instance_service.create_instance.call_args.args[0]
+        assert payload.name == "Test Filesystem"
+        assert payload.description == "Test file access"
+        assert str(payload.server_spec_id) == "a1b2c3d4-e5f6-789a-bcde-123456789abc"
+        assert payload.json_spec is not None
+        assert payload.json_spec["env_vars"]["FILESYSTEM_ROOT"] == "/workspace"
 
     @pytest.mark.asyncio
     async def test_import_provider_config_success(
@@ -224,10 +224,11 @@ provider_configs:
 
         mock_provider_service.create_provider_config.assert_called_once()
         call_kwargs = mock_provider_service.create_provider_config.call_args.kwargs
-        assert call_kwargs["name"] == "Test OpenAI"
-        assert str(call_kwargs["provider_spec_id"]) == "932f3839-af2a-455e-80c6-c58fa97e312c"
-        assert call_kwargs["api_key"] == "sk-test123"
-        assert call_kwargs["endpoint_url"] == "https://api.openai.com"
+        payload = call_kwargs["payload"]
+        assert payload.name == "Test OpenAI"
+        assert str(payload.provider_spec_id) == "932f3839-af2a-455e-80c6-c58fa97e312c"
+        assert payload.api_key == "sk-test123"
+        assert payload.endpoint_url == "https://api.openai.com"
 
     @pytest.mark.asyncio
     async def test_import_provider_config_missing_api_key(
@@ -713,9 +714,10 @@ provider_configs: []
         assert result.success is True
         assert result.created_skills == 1
         mock_skill_service.create_from_content.assert_called_once()
-        call_kwargs = mock_skill_service.create_from_content.call_args.kwargs
-        assert call_kwargs["name"] == "Test Skill"
-        assert call_kwargs["description"] == "A test skill"
+        # Service now takes a SkillCreateFromContent payload as a positional arg.
+        (call_payload,) = mock_skill_service.create_from_content.call_args.args
+        assert call_payload.name == "Test Skill"
+        assert call_payload.description == "A test skill"
 
     @pytest.mark.asyncio
     async def test_import_skill_from_github(
@@ -740,9 +742,10 @@ provider_configs: []
         assert result.success is True
         assert result.created_skills == 1
         mock_skill_service.create_from_github.assert_called_once()
-        call_kwargs = mock_skill_service.create_from_github.call_args.kwargs
-        assert call_kwargs["github_url"] == "https://github.com/owner/skill-repo"
-        assert call_kwargs["name"] == "GitHub Skill"
+        # Service now takes a SkillImportFromGithub payload as a positional arg.
+        (call_payload,) = mock_skill_service.create_from_github.call_args.args
+        assert call_payload.github_url == "https://github.com/owner/skill-repo"
+        assert call_payload.name == "GitHub Skill"
 
     @pytest.mark.asyncio
     async def test_import_skill_from_path(
@@ -808,9 +811,9 @@ provider_configs: []
         assert result.created_agents == 1
 
         # Verify agent was created with skill_ids
-        call_kwargs = mock_agent_service.create_agent.call_args.kwargs
-        assert call_kwargs["skill_ids"] is not None
-        assert skill_id in call_kwargs["skill_ids"]
+        payload = mock_agent_service.create_agent.call_args.args[0]
+        assert payload.skill_ids is not None
+        assert skill_id in payload.skill_ids
 
     @pytest.mark.asyncio
     async def test_import_agent_with_unknown_skill_fails(

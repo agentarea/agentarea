@@ -11,7 +11,7 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,77 @@ async def create_model_instance(
         is_public=data.is_public,
     )
     return ModelInstanceResponse.from_domain(instance)
+
+
+# Cap matches the largest realistic provider catalog (OpenRouter has ~350).
+_BULK_MAX_ITEMS = 500
+
+
+class ModelInstanceBulkCreateRequest(BaseModel):
+    items: list[ModelInstanceCreate] = Field(..., min_length=1, max_length=_BULK_MAX_ITEMS)
+
+
+class ModelInstanceBulkFailure(BaseModel):
+    index: int
+    model_spec_id: str
+    error: str
+
+
+class ModelInstanceBulkCreateResponse(BaseModel):
+    succeeded: list[ModelInstanceResponse]
+    failed: list[ModelInstanceBulkFailure]
+    succeeded_count: int
+    failed_count: int
+
+
+@router.post("/bulk", response_model=ModelInstanceBulkCreateResponse)
+async def create_model_instances_bulk(
+    data: ModelInstanceBulkCreateRequest,
+    user_context: UserContextDep,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Create many model instances in a single request.
+
+    Partial-success semantics: each item is created independently and per-item
+    failures are returned in `failed` rather than aborting the whole batch.
+    Use this from UIs that let users select N models from a discovered list to
+    avoid N HTTP round-trips.
+    """
+    succeeded: list[ModelInstanceResponse] = []
+    failed: list[ModelInstanceBulkFailure] = []
+
+    for index, item in enumerate(data.items):
+        try:
+            instance = await provider_service.create_model_instance(
+                provider_config_id=item.provider_config_id,
+                model_spec_id=item.model_spec_id,
+                name=item.name,
+                description=item.description,
+                is_public=item.is_public,
+            )
+            succeeded.append(ModelInstanceResponse.from_domain(instance))
+        except Exception as e:
+            logger.warning(
+                "Bulk create failed for item %d (model_spec_id=%s): %s",
+                index,
+                item.model_spec_id,
+                e,
+                exc_info=True,
+            )
+            failed.append(
+                ModelInstanceBulkFailure(
+                    index=index,
+                    model_spec_id=str(item.model_spec_id),
+                    error=str(e),
+                )
+            )
+
+    return ModelInstanceBulkCreateResponse(
+        succeeded=succeeded,
+        failed=failed,
+        succeeded_count=len(succeeded),
+        failed_count=len(failed),
+    )
 
 
 @router.get("/", response_model=list[ModelInstanceResponse])

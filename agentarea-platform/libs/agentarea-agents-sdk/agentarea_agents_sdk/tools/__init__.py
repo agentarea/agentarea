@@ -11,6 +11,13 @@ from .file_toolset import FileToolset
 from .mcp_tool import MCPTool, MCPToolFactory
 from .tasks_toolset import TasksToolset
 from .tool_catalog import ToolCatalog
+from .tool_definition import (
+    ToolDefinition,
+    ToolsetMetadata,
+    build_method_schema,
+    build_tool_definition,
+    toolset,
+)
 from .tool_executor import ToolExecutor
 from .tool_manager import ToolManager
 from .tool_provider import (
@@ -33,6 +40,11 @@ __all__ = [
     "MCPTool",
     "MCPToolFactory",
     "tool_method",
+    "toolset",
+    "ToolDefinition",
+    "ToolsetMetadata",
+    "build_method_schema",
+    "build_tool_definition",
     "ToolExecutionError",
     "ToolExecutor",
     "ToolManager",

@@ -325,7 +325,7 @@ export function createApiClient(client: Client) {
     },
 
     createMCPServerInstance: async (
-      instance: components["schemas"]["MCPServerInstanceCreateRequest"]
+      instance: components["schemas"]["MCPServerInstanceCreate"]
     ) => {
       const { data, error } = await client.POST("/v1/mcp-server-instances/", {
         body: instance,
@@ -619,6 +619,16 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.POST("/v1/model-instances/", {
         body: instance,
       });
+      return { data, error };
+    },
+
+    bulkCreateModelInstances: async (
+      body: components["schemas"]["ModelInstanceBulkCreateRequest"]
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/model-instances/bulk" as any,
+        { body: body as any }
+      );
       return { data, error };
     },
 
@@ -1161,6 +1171,17 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    updateOpenAPIConnection: async (
+      connectionId: string,
+      body: components["schemas"]["OpenAPIConnectionUpdate"]
+    ) => {
+      const { data, error } = await client.PATCH(
+        `/v1/openapi-connections/${connectionId}` as any,
+        { body: body as any }
+      );
+      return { data, error };
+    },
+
     discoverOpenAPITools: async (connectionId: string) => {
       const { data, error } = await client.POST(
         "/v1/openapi-connections/{connection_id}/discover-tools",
@@ -1390,6 +1411,22 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/files/{file_path}" as any,
         {
           params: { path: { project_id: projectId, file_path: filePath } },
+        }
+      );
+      return { data, error };
+    },
+
+    // Workspace Files API (read-only)
+    listWorkspaceFiles: async () => {
+      const { data, error } = await client.GET("/v1/files" as any, {} as any);
+      return { data, error };
+    },
+
+    downloadWorkspaceFile: async (filePath: string) => {
+      const { data, error } = await client.GET(
+        "/v1/files/{file_path}" as any,
+        {
+          params: { path: { file_path: filePath } },
         }
       );
       return { data, error };

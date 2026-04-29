@@ -1,11 +1,17 @@
 """Test utilities for JWT token generation and authentication testing."""
 
+import os
 from datetime import UTC, datetime, timedelta
 
 import jwt
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.config.settings import get_settings
+
+# Default secret used when no explicit key and no JWT_SECRET_KEY env var is set.
+# These helpers are test-only — they intentionally avoid pulling the full app
+# Settings cluster (which depends on Temporal/Workflow env vars and would force
+# every JWT-helper caller to bootstrap unrelated configuration).
+_DEFAULT_TEST_JWT_SECRET = "agentarea-test-secret-key-not-for-prod"  # noqa: S105
 
 
 def generate_test_jwt_token(
@@ -35,8 +41,7 @@ def generate_test_jwt_token(
         roles = ["user"]
 
     if secret_key is None:
-        settings = get_settings()
-        secret_key = settings.app.JWT_SECRET_KEY
+        secret_key = os.environ.get("JWT_SECRET_KEY", _DEFAULT_TEST_JWT_SECRET)
 
     # Create token payload
     now = datetime.now(UTC)

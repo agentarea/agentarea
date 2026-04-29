@@ -5,11 +5,10 @@ import pytest
 # Mark all async tests in this module
 pytestmark = pytest.mark.asyncio
 from datetime import UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.jwt_handler import JWTTokenHandler
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
@@ -298,30 +297,6 @@ class TestWorkspaceErrorHandling:
 
         # Assert - Should return False, not raise an error
         assert result is False
-
-    @pytest.mark.xfail(reason="Requires refactoring for auth provider architecture")
-    @patch("agentarea_common.auth.dependencies.ContextManager")
-    async def test_dependency_context_manager_error_handling(
-        self, mock_context_manager, mock_request
-    ):
-        """Test error handling in get_user_context dependency."""
-        # Arrange
-        mock_auth_provider = AsyncMock()
-        mock_auth_result = Mock()
-        mock_auth_result.is_authenticated = False
-        mock_auth_result.token = None
-        mock_auth_result.error = "Invalid token"
-        mock_auth_provider.verify_token.return_value = mock_auth_result
-
-        with patch(
-            "agentarea_common.auth.dependencies.get_auth_provider", return_value=mock_auth_provider
-        ):
-            # Act & Assert
-            with pytest.raises((InvalidJWTToken, MissingWorkspaceContext, HTTPException)) as exc_info:
-                from fastapi.security import HTTPAuthorizationCredentials
-                credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid")
-                await get_user_context(mock_request, credentials)
-
 
     async def test_repository_database_error_propagation(self, repository, mock_session):
         """Test that database errors are properly propagated."""

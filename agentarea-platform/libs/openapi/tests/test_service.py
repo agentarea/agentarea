@@ -7,6 +7,10 @@ import pytest
 
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_openapi.domain.models import OpenAPIConnection
+from agentarea_openapi.schemas.dto import (
+    OpenAPIConnectionCreate,
+    OpenAPIConnectionUpdate,
+)
 
 
 SAMPLE_SPEC = {
@@ -102,11 +106,12 @@ class TestCreateConnection:
         """SSRF: base_url is validated at creation time."""
         with patch("agentarea_openapi.application.service.validate_url") as mock_validate:
             mock_validate.side_effect = ValueError("private IP")
+            payload = OpenAPIConnectionCreate.model_construct(
+                name="Test",
+                base_url="http://169.254.169.254/latest",
+            )
             with pytest.raises(ValueError, match="private IP"):
-                await service.create_connection(
-                    name="Test",
-                    base_url="http://169.254.169.254/latest",
-                )
+                await service.create_connection(payload)
 
     @pytest.mark.asyncio
     async def test_validates_spec_url_on_create(self, service):
@@ -114,12 +119,13 @@ class TestCreateConnection:
         with patch("agentarea_openapi.application.service.validate_url") as mock_validate:
             # First call (base_url) succeeds, second (spec_url) fails
             mock_validate.side_effect = [[], ValueError("private IP")]
+            payload = OpenAPIConnectionCreate.model_construct(
+                name="Test",
+                base_url="https://api.example.com",
+                spec_url="http://169.254.169.254/latest",
+            )
             with pytest.raises(ValueError, match="private IP"):
-                await service.create_connection(
-                    name="Test",
-                    base_url="https://api.example.com",
-                    spec_url="http://169.254.169.254/latest",
-                )
+                await service.create_connection(payload)
 
     @pytest.mark.asyncio
     async def test_pregenerates_uuid(self, service):
@@ -129,10 +135,11 @@ class TestCreateConnection:
         )
 
         with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
-            await service.create_connection(
+            payload = OpenAPIConnectionCreate.model_construct(
                 name="Test",
                 base_url="https://api.example.com",
             )
+            await service.create_connection(payload)
 
         # Verify that `id` was passed to repo.create
         call_kwargs = service._repo.create.call_args.kwargs
@@ -154,10 +161,15 @@ class TestUpdateConnection:
         """SSRF: base_url is validated on update too."""
         with patch("agentarea_openapi.application.service.validate_url") as mock_validate:
             mock_validate.side_effect = ValueError("private IP")
+            payload = OpenAPIConnectionUpdate.model_construct(
+                base_url="http://169.254.169.254/latest",
+            )
+            # Mark base_url as explicitly set so model_dump(exclude_unset=True) includes it.
+            payload.__pydantic_fields_set__.add("base_url")
             with pytest.raises(ValueError, match="private IP"):
                 await service.update_connection(
                     connection_id="some-id",
-                    base_url="http://169.254.169.254/latest",
+                    payload=payload,
                 )
 
 

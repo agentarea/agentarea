@@ -5,8 +5,15 @@ import math
 from collections.abc import Callable
 
 from .decorator_tool import Toolset, tool_method
+from .tool_definition import toolset
 
 
+@toolset(
+    namespace="agentarea/math",
+    display_name="Math Toolset",
+    description="Mathematical operations including addition, subtraction, multiplication, division, and more.",
+    category="math",
+)
 class MathToolset(Toolset):
     """
     A toolset for mathematical operations including basic arithmetic, advanced
