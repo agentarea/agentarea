@@ -78,7 +78,7 @@ class PinnedTarget:
     of the path.
     """
 
-    __slots__ = ("scheme", "host", "port", "path", "raw_query", "original_host")
+    __slots__ = ("host", "original_host", "path", "port", "raw_query", "scheme")
 
     def __init__(
         self,
