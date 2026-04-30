@@ -209,9 +209,9 @@ export function CreateTriggerForm({
     email: Mail,
     webhook: Webhook,
   };
-  const kindOrder = ["schedule", "messaging", "event"];
-  const kinds = [...new Set(catalog.map((e) => e.kind))];
-  const orderedKinds = kindOrder.filter((k) => kinds.includes(k));
+  const kindOrder: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
+  const kinds = new Set(catalog.map((e) => e.kind));
+  const orderedKinds = kindOrder.filter((k) => kinds.has(k));
 
   useEffect(() => {
     if (!activeTab || isEditing) return;
