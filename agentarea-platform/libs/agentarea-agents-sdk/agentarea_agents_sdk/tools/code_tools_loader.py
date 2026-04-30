@@ -30,6 +30,7 @@ def _ensure_all_toolsets_imported() -> None:
         "agentarea_agents_sdk.tools.math_toolset",
         "agentarea_agents_sdk.tools.file_toolset",
         "agentarea_agents_sdk.tools.web_toolset",
+        "agentarea_agents_sdk.tools.shell_toolset",
     ]
     # Platform toolsets exposed both to agents (via this loader) and to MCP
     # clients (via apps/api ``get_platform_tools``).

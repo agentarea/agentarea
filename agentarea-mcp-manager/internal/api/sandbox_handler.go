@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/features"
@@ -40,10 +41,20 @@ func (h *Handler) executeSandbox(c *gin.Context) {
 	if features.IsEnabled(features.WarmPool) {
 		if k8sBackend, ok := h.backend.(*backends.KubernetesBackend); ok {
 			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
-				if pod, err := wpClient.FindAvailablePod(c.Request.Context()); err == nil {
+				// When workflow_id is set, route every call to the same pod
+				// so /workspace/wf-<id>/ persists across calls. When empty,
+				// any waiting pod will do (legacy stateless path).
+				var pod *corev1.Pod
+				var err error
+				if req.WorkflowID != "" {
+					pod, err = wpClient.FindOrAssignPodForWorkflow(c.Request.Context(), req.WorkflowID)
+				} else {
+					pod, err = wpClient.FindAvailablePod(c.Request.Context())
+				}
+				if err == nil {
 					result, err := wpClient.ExecuteInPod(c.Request.Context(), pod, req)
 					if err != nil {
-						h.logger.Error("Warm pool execution failed", "error", err, "pod", pod.Name)
+						h.logger.Error("Warm pool execution failed", "error", err, "pod", pod.Name, "workflow_id", req.WorkflowID)
 						c.JSON(http.StatusInternalServerError, gin.H{
 							"error":   "execution_failed",
 							"message": err.Error(),
@@ -78,6 +89,68 @@ func (h *Handler) executeSandbox(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// deleteSandboxWorkflow tears down the sandbox state for a finished workflow.
+// In K8s production: deletes the warm pool pod assigned to this workflow id;
+// the DaemonSet/Deployment replenishes the pool, emptyDir state goes with
+// the pod. In dev: forwards a workspace cleanup request to the standalone
+// activation service so the host-mounted /workspace/wf-<id>/ is wiped.
+func (h *Handler) deleteSandboxWorkflow(c *gin.Context) {
+	workflowID := c.Param("id")
+	if workflowID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "workflow id is required"})
+		return
+	}
+
+	if features.IsEnabled(features.WarmPool) {
+		if k8sBackend, ok := h.backend.(*backends.KubernetesBackend); ok {
+			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
+				if err := wpClient.DeletePodForWorkflow(c.Request.Context(), workflowID); err != nil {
+					h.logger.Error("warm pool pod delete failed", "workflow_id", workflowID, "error", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "delete_failed", "message": err.Error()})
+					return
+				}
+				c.Status(http.StatusNoContent)
+				return
+			}
+		}
+	}
+
+	executorURL := os.Getenv("SANDBOX_EXECUTOR_URL")
+	if executorURL == "" {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	if err := forwardWorkspaceCleanup(c, executorURL, workflowID); err != nil {
+		h.logger.Error("workspace cleanup forward failed", "workflow_id", workflowID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cleanup_failed", "message": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func forwardWorkspaceCleanup(c *gin.Context, executorURL, workflowID string) error {
+	body, err := json.Marshal(map[string]string{"workflow_id": workflowID})
+	if err != nil {
+		return fmt.Errorf("marshal cleanup request: %w", err)
+	}
+	url := fmt.Sprintf("%s/workspace/cleanup", executorURL)
+	httpReq, err := http.NewRequestWithContext(c.Request.Context(), "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create cleanup request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("cleanup request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("cleanup returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // forwardToExecutor sends the execute request to a standalone sandbox executor container.

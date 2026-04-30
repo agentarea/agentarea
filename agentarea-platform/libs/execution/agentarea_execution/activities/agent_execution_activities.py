@@ -37,6 +37,7 @@ except ImportError:
         return _NoopCounter()
 
 
+from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk import (
     GoalProgressEvaluator,
     LLMModel,
@@ -632,6 +633,28 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             "default_workspace_id": str(request.workspace_id),
                             "default_user_id": str(user_context.user_id),
                             "event_broker": dependencies.event_broker,
+                        }
+                    elif tool_name == "agentarea/shell":
+                        # The shell tool routes bash commands to the sandbox
+                        # and needs to know which task it's running for.
+                        # The activity is the only seam that has access to
+                        # the Temporal context, so we build a typed
+                        # ToolInvocationContext here and inject it; the
+                        # toolset reads ctx.workflow_id without needing to
+                        # know anything about Temporal.
+                        try:
+                            wf_id = activity.info().workflow_id
+                        except Exception:
+                            wf_id = ""
+                        extra_kwargs = {
+                            "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "ctx": ToolInvocationContext(
+                                workflow_id=wf_id,
+                                task_id=str(request.task_id) if request.task_id else "",
+                                workspace_id=str(request.workspace_id),
+                                user_id=str(user_context.user_id),
+                                agent_id=str(request.agent_id),
+                            ),
                         }
 
                     # Create and register the code tool instance
@@ -1384,23 +1407,28 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request to an available warm pool pod for isolated execution.
         """
         import httpx
-        from agentarea_common.config.mcp import MCPManagerSettings
+        from agentarea_common.config.mcp import MCPSettings
 
-        mcp_settings = MCPManagerSettings()
+        mcp_settings = MCPSettings()
         url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/execute"
+
+        payload: dict[str, Any] = {
+            "script_content": request.script_content,
+            "script_name": request.script_name,
+            "args": request.args,
+            "env": request.env,
+            "timeout_seconds": request.timeout_seconds,
+        }
+        # Resolve task scope from Temporal context — the workflow stays
+        # oblivious to sandbox internals.
+        try:
+            payload["workflow_id"] = activity.info().workflow_id
+        except Exception:
+            pass
 
         try:
             async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
-                resp = await client.post(
-                    url,
-                    json={
-                        "script_content": request.script_content,
-                        "script_name": request.script_name,
-                        "args": request.args,
-                        "env": request.env,
-                        "timeout_seconds": request.timeout_seconds,
-                    },
-                )
+                resp = await client.post(url, json=payload)
 
                 if resp.status_code != 200:
                     logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")

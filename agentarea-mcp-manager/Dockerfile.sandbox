@@ -20,8 +20,14 @@ FROM alpine:3.20
 
 RUN apk add --no-cache \
     ca-certificates \
-    python3 \
+    bash \
+    curl \
+    git \
+    jq \
     nodejs \
+    npm \
+    python3 \
+    py3-pip \
     dumb-init \
     && rm -rf /var/cache/apk/*
 
