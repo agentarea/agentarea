@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import yaml
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
@@ -122,7 +123,7 @@ class OpenAPIConnectionService:
     def __init__(
         self,
         repository_factory: Any,
-        secret_manager: Any | None = None,
+        secret_manager: BaseSecretManager,
         allow_private_urls: bool = False,
     ) -> None:
         self._repo: OpenAPIConnectionRepository = repository_factory.create_repository(
@@ -201,10 +202,6 @@ class OpenAPIConnectionService:
             entry: dict[str, Any] = {"name": header_name, "secret": is_secret}
 
             if is_secret:
-                if self._secret_manager is None:
-                    raise ValueError(
-                        "Secret manager required to store sensitive headers. Configure a secret manager."
-                    )
                 if header_value:
                     key = _secret_key(connection_id, header_name)
                     await self._secret_manager.set_secret(key, header_value)
@@ -233,7 +230,7 @@ class OpenAPIConnectionService:
 
     async def _delete_header_secrets(self, conn: OpenAPIConnection) -> None:
         """Remove all secret header values from the secret manager."""
-        if not self._secret_manager or not conn.custom_headers:
+        if not conn.custom_headers:
             return
         for h in conn.custom_headers:
             if h.get("secret"):

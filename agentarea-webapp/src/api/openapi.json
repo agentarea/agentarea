@@ -2448,22 +2448,15 @@
             "title": "Name",
             "type": "string"
           },
-          "server_spec_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.). Optional for ad-hoc URL instances.",
+          "server_spec_id": {"type": "string",
+            "description": "ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).",
             "title": "Server Spec Id"
           }
         },
         "required": [
           "name",
-          "json_spec"
+          "json_spec",
+          "server_spec_id"
         ],
         "title": "MCPServerInstanceCreate",
         "type": "object"
@@ -2527,15 +2520,7 @@
             "title": "Name",
             "type": "string"
           },
-          "server_spec_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+          "server_spec_id": {"type": "string",
             "title": "Server Spec Id"
           },
           "tools": {
@@ -7138,7 +7123,7 @@
             "title": "Name"
           },
           "type": {
-            "description": "Instance type: url, docker, command, bundle",
+            "description": "Instance type: url, docker, command",
             "title": "Type",
             "type": "string"
           }
@@ -11410,7 +11395,7 @@
         ]
       },
       "post": {
-        "description": "Create a new MCP server instance.\n\nReturns 201 for url/bundle (synchronous verification completed).\nReturns 202 for docker/command (background verification in progress).",
+        "description": "Create a new MCP server instance.\n\nReturns 201 for url (synchronous verification completed).\nReturns 202 for docker/command (background verification in progress).",
         "operationId": "create_mcp_server_instance_v1_mcp_server_instances__post",
         "requestBody": {
           "content": {

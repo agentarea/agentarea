@@ -35,7 +35,7 @@ def _make_instance(
     inst.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
     inst.last_dispatch = None
     inst.tools = None
-    inst.server_spec_id = None
+    inst.server_spec_id = "test-spec-id"
     inst.auth_config_id = None
     inst.get_configured_env_vars = MagicMock(return_value=[])
 
@@ -54,7 +54,13 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
 
     repo = MagicMock()
     repo.user_context = MagicMock()
+    repo.user_context.user_id = str(uuid.uuid4())
+    repo.user_context.workspace_id = str(uuid.uuid4())
     repo.session = MagicMock()
+    repo.session.add = MagicMock()
+    repo.session.commit = AsyncMock()
+    repo.session.refresh = AsyncMock()
+    repo.session.rollback = AsyncMock()
 
     async def get_by_id(id_):
         return instances.get(str(id_))
@@ -100,7 +106,14 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
     svc.env_service.get_instance_environment = AsyncMock(return_value={})
     svc.db = MagicMock()
 
-    svc.mcp_server_repository.get_by_id = AsyncMock(return_value=None)
+    server_spec = MagicMock()
+    server_spec.id = "test-spec-id"
+    server_spec.remote_url = None
+    server_spec.cmd = None
+    server_spec.docker_image_url = "test-image:latest"
+    server_spec.json_spec = {"type": "docker", "image": "test-image:latest"}
+    server_spec.env_schema = []
+    svc.mcp_server_repository.get_by_id = AsyncMock(return_value=server_spec)
 
     return svc
 
@@ -169,6 +182,14 @@ class TestServiceCreateInstance:
     async def test_url_type_sync_verify(self):
         """URL type runs verify() synchronously and returns 201-like result."""
         svc = _make_service()
+        url_spec = MagicMock()
+        url_spec.id = "test-spec-id"
+        url_spec.remote_url = "http://test.example.com/mcp"
+        url_spec.cmd = None
+        url_spec.docker_image_url = None
+        url_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
+        url_spec.env_schema = []
+        svc.mcp_server_repository.get_by_id = AsyncMock(return_value=url_spec)
 
         fake_verification = {
             "schema_version": 1,
@@ -182,6 +203,7 @@ class TestServiceCreateInstance:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="url-inst",
+                    server_spec_id="test-spec-id",
                     json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
                 )
             )
@@ -204,6 +226,7 @@ class TestServiceCreateInstance:
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="docker-inst",
+                    server_spec_id="test-spec-id",
                     json_spec={"type": "docker"},
                 )
             )
@@ -213,50 +236,26 @@ class TestServiceCreateInstance:
         await asyncio.sleep(0)
         assert len(verify_called) == 1
 
-    @pytest.mark.asyncio
-    async def test_bundle_validates_members_succeed(self):
-        """Bundle creation succeeds when all members have succeeded verification."""
-        m_id = uuid.uuid4()
-        member = _make_instance(
-            "docker",
-            verification={"schema_version": 1, "status": "succeeded", "at": "x", "error": None},
-            instance_id=m_id,
-        )
-        svc = _make_service({str(m_id): member})
-
-        with patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            inst = await svc.create_instance(
-                MCPServerInstanceCreate(
-                    name="bundle-inst",
-                    json_spec={"type": "bundle", "members": [str(m_id)]},
-                )
+    def test_bundle_create_payload_is_rejected(self):
+        """Bundle is no longer a valid MCP server instance type."""
+        with pytest.raises(ValueError, match="bundle"):
+            MCPServerInstanceCreate(
+                name="bundle-inst",
+                server_spec_id="test-spec-id",
+                json_spec={"type": "bundle", "members": [str(uuid.uuid4())]},
             )
 
-        assert inst is not None
-
-    @pytest.mark.asyncio
-    async def test_bundle_rejects_non_ready_member(self):
-        """Bundle creation raises ValueError when any member is not succeeded."""
-        m_id = uuid.uuid4()
-        member = _make_instance(
-            "docker",
-            verification={"schema_version": 1, "status": "failed", "at": "x", "error": None},
-            instance_id=m_id,
-            name="failing-member",
-        )
-        svc = _make_service({str(m_id): member})
-
-        with patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            with pytest.raises(ValueError) as exc_info:
-                await svc.create_instance(
-                    MCPServerInstanceCreate(
-                        name="bad-bundle",
-                        json_spec={"type": "bundle", "members": [str(m_id)]},
-                    )
-                )
-
-        assert "failing-member" in str(exc_info.value)
-        assert "not ready" in str(exc_info.value)
+    def test_secret_heuristic_marks_known_credentials(self):
+        svc = _make_service()
+        assert svc._is_secret_header_name("Authorization")
+        assert svc._is_secret_header_name("X-Api-Key")
+        assert svc._is_secret_header_name("X-Custom-Token")
+        assert svc._is_secret_header_name("X-Auth-User")
+        assert not svc._is_secret_header_name("User-Agent")
+        assert svc._is_secret_env_name("GITHUB_TOKEN")
+        assert svc._is_secret_env_name("DATABASE_DSN")
+        assert svc._is_secret_env_name("ADMIN_PASSWORD")
+        assert not svc._is_secret_env_name("LOG_LEVEL")
 
 
 # ---------------------------------------------------------------------------

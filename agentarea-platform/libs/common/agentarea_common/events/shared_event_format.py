@@ -119,7 +119,7 @@ def create_mcp_instance_created_event(
     instance_id: str,
     name: str,
     json_spec: dict[str, Any],
-    server_spec_id: str | None = None,
+    server_spec_id: str,
     correlation_id: str | None = None,
 ) -> dict[str, Any]:
     """Create an MCP instance created event."""

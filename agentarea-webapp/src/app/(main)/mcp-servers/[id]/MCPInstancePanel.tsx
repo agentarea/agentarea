@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Clock, Hash } from "lucide-react";
+import { Clock, Hash, Link as LinkIcon } from "lucide-react";
 import {
   InfoPanelBody,
   InfoPanelExpandableText,
@@ -21,6 +21,11 @@ export default function MCPInstancePanel({
   serverSpec: MCPServer | null;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail");
+  const apiBaseUrl =
+    typeof window !== "undefined"
+      ? (window as any).__ENV__?.CLIENT_API_URL || ""
+      : "";
+  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
 
   return (
     <InfoPanelShell>
@@ -83,6 +88,20 @@ export default function MCPInstancePanel({
               </div>
             </div>
         </InfoPanelSection>
+
+          <InfoPanelSection
+            title="Expose via AgentArea"
+            contentClassName="space-y-2 text-xs"
+          >
+            <p className="text-xs text-muted-foreground">
+              Other agents and tools can connect to this MCP through AgentArea at:
+            </p>
+            <InfoPanelField label="Proxy URL" icon={LinkIcon}>
+              <InfoPanelValueBox mono className="break-all">
+                {agentareaProxyUrl}
+              </InfoPanelValueBox>
+            </InfoPanelField>
+          </InfoPanelSection>
 
           {serverSpec && (
             <InfoPanelSection

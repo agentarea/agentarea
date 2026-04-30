@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
 from agentarea_common.infrastructure.database import db
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_triggers.infrastructure.orm import TriggerORM
@@ -84,11 +85,24 @@ async def main(workspace_id: str, created_by: str) -> None:
     async with db.session() as session:
         mcp_rows: list[MCPServerInstance] = []
         for name, scope in MCP_NAMES:
+            spec = MCPServer(
+                name=f"{name}-spec-{suffix}",
+                description=f"Demo MCP server spec: {name}",
+                remote_url=f"https://{name}.example/mcp",
+                version="1.0.0",
+                tags=["demo"],
+                is_public=False,
+                json_spec={"type": "url", "endpoint_url": f"https://{name}.example/mcp"},
+                workspace_id=workspace_id,
+                created_by=created_by,
+            )
+            session.add(spec)
+            await session.flush()
             mcp = MCPServerInstance(
                 name=f"{name}-{suffix}",
                 description=f"Demo MCP server: {name}",
-                server_spec_id=None,
-                json_spec={"type": "url", "endpoint_url": f"https://{name}.example/mcp"},
+                server_spec_id=str(spec.id),
+                json_spec={},
                 network_scope=scope,
                 workspace_id=workspace_id,
                 created_by=created_by,

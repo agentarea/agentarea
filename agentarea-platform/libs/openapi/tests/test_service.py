@@ -32,7 +32,7 @@ class TestDiscoverTools:
     def service(self):
         mock_factory = AsyncMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        return OpenAPIConnectionService(repository_factory=mock_factory)
+        return OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
 
     @pytest.mark.asyncio
     async def test_discover_from_spec_content(self, service):
@@ -97,7 +97,7 @@ class TestCreateConnection:
     def service(self):
         mock_factory = AsyncMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        svc = OpenAPIConnectionService(repository_factory=mock_factory)
+        svc = OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
         svc._repo = AsyncMock()
         return svc
 
@@ -152,7 +152,7 @@ class TestUpdateConnection:
     def service(self):
         mock_factory = AsyncMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        svc = OpenAPIConnectionService(repository_factory=mock_factory)
+        svc = OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
         svc._repo = AsyncMock()
         return svc
 

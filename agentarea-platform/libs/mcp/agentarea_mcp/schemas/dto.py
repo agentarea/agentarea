@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+INSTANCE_TRANSPORT_FIELDS = frozenset({"type", "endpoint_url", "image", "command", "args"})
 
 # ---------------------------------------------------------------------------
 # MCP server spec (a.k.a. "template") — catalog entry that an instance can
@@ -127,8 +129,6 @@ class MCPServerInstanceCreate(BaseModel):
     - ``{"type": "url", "endpoint_url": "https://..."}``
     - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
     - ``{"type": "command", "command": [...], "environment": {...}}``
-    - ``{"type": "bundle", "members": ["<instance-id>", ...]}``
-
     For URL-type instances the service synchronously verifies the endpoint;
     docker/command kick off background verification.
     """
@@ -144,17 +144,16 @@ class MCPServerInstanceCreate(BaseModel):
         default=None,
         description="Optional human-readable description of the instance.",
     )
-    server_spec_id: str | None = Field(
-        default=None,
+    server_spec_id: str = Field(
         description=(
             "ID of an existing MCP server spec to derive defaults from "
-            "(env_schema, secret routing, etc.). Optional for ad-hoc URL instances."
+            "(env_schema, secret routing, etc.)."
         ),
     )
     json_spec: dict[str, Any] = Field(
         description=(
             "Connection configuration. Must include 'type' "
-            "('url' | 'docker' | 'command' | 'bundle'); other keys depend on type."
+            "('url' | 'docker' | 'command'); other keys depend on type."
         ),
     )
     auth_config_id: str | None = Field(
@@ -170,6 +169,20 @@ class MCPServerInstanceCreate(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v
 
+    @field_validator("server_spec_id")
+    @classmethod
+    def _strip_server_spec_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("server_spec_id is required")
+        return v
+
+    @model_validator(mode="after")
+    def _reject_bundle_instances(self) -> MCPServerInstanceCreate:
+        if (self.json_spec or {}).get("type") == "bundle":
+            raise ValueError("bundle is not a valid MCP server instance type")
+        return self
+
 
 class MCPServerInstanceUpdate(BaseModel):
     """Patch payload for an MCP server instance. All fields optional — unset = unchanged."""
@@ -179,3 +192,14 @@ class MCPServerInstanceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     json_spec: dict[str, Any] | None = None
+
+    @field_validator("json_spec")
+    @classmethod
+    def _reject_transport_field_updates(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is None:
+            return v
+        transport_fields = sorted(INSTANCE_TRANSPORT_FIELDS.intersection(v))
+        if transport_fields:
+            fields = ", ".join(transport_fields)
+            raise ValueError(f"Instance json_spec cannot update transport fields: {fields}")
+        return v

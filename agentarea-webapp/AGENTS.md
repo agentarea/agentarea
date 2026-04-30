@@ -16,6 +16,7 @@ Next.js 14+ app router frontend. Ory Kratos auth. SSE for real-time updates. npm
 | Auth | src/lib/auth.ts, src/app/auth/ |
 | Types | src/types/ |
 | UI components | src/components/ui/ (shadcn) |
+| Design tokens | Design.md |
 
 ## STRUCTURE
 
