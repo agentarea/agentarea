@@ -183,7 +183,9 @@ export function MyMCPsSection({
       header: "Tools",
       render: (_: unknown, item: any) => {
         const inst = item._instance || item;
-        const count = (inst.json_spec?.available_tools as any[])?.length ?? 0;
+        const count = (inst.tools as any[] | undefined)?.length
+          ?? (inst.json_spec?.available_tools as any[] | undefined)?.length
+          ?? 0;
         return count > 0 ? <span className="text-sm text-muted-foreground">{count}</span> : <span className="text-sm text-gray-400">-</span>;
       },
     },

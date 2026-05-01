@@ -151,13 +151,20 @@ func (c *Client) ActivatePod(ctx context.Context, pod *corev1.Pod, req Activatio
 	return nil
 }
 
-// ExecuteRequest holds script execution parameters
+// ExecuteRequest holds script execution parameters.
+//
+// WorkflowID, when set, opts the call into per-workflow workspace
+// persistence: the activation service routes the script to
+// /workspace/wf-<id>/ and keeps it across calls. Cleanup is the caller's
+// responsibility — invoke DELETE /sandbox/workflow/:id when the workflow
+// completes.
 type ExecuteRequest struct {
 	ScriptContent  string            `json:"script_content"`
 	ScriptName     string            `json:"script_name"`
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
-	TimeoutSeconds int              `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	WorkflowID     string            `json:"workflow_id,omitempty"`
 }
 
 // ExecuteResponse holds script execution result
@@ -242,6 +249,60 @@ func (c *Client) ReturnToPool(ctx context.Context, pod *corev1.Pod) error {
 
 	_, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	return err
+}
+
+// FindOrAssignPodForWorkflow returns the warm pool pod assigned to a given
+// workflow id, allocating one if needed. Pod stickiness is what gives the
+// per-workflow sandbox its state — every call routed through the same pod
+// hits the same /workspace/wf-<id>/ directory. Labels:
+//   - mcp.agentarea.io/workflow-id=<id>  (lookup key)
+//   - mcp.agentarea.io/status=assigned   (excludes from FindAvailablePod)
+func (c *Client) FindOrAssignPodForWorkflow(ctx context.Context, workflowID string) (*corev1.Pod, error) {
+	selector := fmt.Sprintf("mcp.agentarea.io/workflow-id=%s", workflowID)
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for workflow %s: %w", workflowID, err)
+	}
+	if len(pods.Items) > 0 {
+		return &pods.Items[0], nil
+	}
+
+	pod, err := c.FindAvailablePod(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("no warm pod to assign to workflow %s: %w", workflowID, err)
+	}
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels["mcp.agentarea.io/workflow-id"] = workflowID
+	pod.Labels["mcp.agentarea.io/status"] = "assigned"
+	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign pod to workflow %s: %w", workflowID, err)
+	}
+	return updated, nil
+}
+
+// DeletePodForWorkflow deletes any pod labeled with the given workflow id.
+// The DaemonSet/Deployment that manages the warm pool replenishes the
+// deleted pod automatically; emptyDir state goes with the pod.
+func (c *Client) DeletePodForWorkflow(ctx context.Context, workflowID string) error {
+	selector := fmt.Sprintf("mcp.agentarea.io/workflow-id=%s", workflowID)
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list pods for workflow %s: %w", workflowID, err)
+	}
+	for _, pod := range pods.Items {
+		if err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+			return fmt.Errorf("failed to delete pod %s for workflow %s: %w", pod.Name, workflowID, err)
+		}
+	}
+	return nil
 }
 
 // LabelStatefulPod labels an existing pod as stateful for a specific agent.

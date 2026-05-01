@@ -10,6 +10,7 @@ from agentarea_mcp.application.service import MCPServerInstanceService, derive_b
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.schemas.dto import (
+    MCPServerCreate,
     MCPServerInstanceCreate,
 )
 from agentarea_mcp.schemas.dto import (
@@ -32,7 +33,7 @@ class MCPServerInstanceResponse(BaseModel):
     id: UUID
     name: str
     description: str | None
-    server_spec_id: str | None
+    server_spec_id: str
     json_spec: dict[str, Any]
     verification: dict[str, Any]
     last_dispatch: dict[str, Any] | None = None
@@ -95,9 +96,21 @@ class MCPServerInstanceResponse(BaseModel):
 
 class ValidateRequest(BaseModel):
     name: str | None = None
-    type: str = Field(..., description="Instance type: url, docker, command, bundle")
+    type: str = Field(..., description="Instance type: url, docker, command")
     endpoint_url: str | None = Field(None, description="For type=url: the MCP endpoint URL")
     headers: dict[str, str] = Field(default_factory=dict)
+
+
+class MCPServerInstanceCreateWithoutSpec(BaseModel):
+    name: str
+    description: str | None = None
+    json_spec: dict[str, Any] = Field(default_factory=dict)
+    auth_config_id: str | None = None
+
+
+class MCPServerConnectionCreateRequest(BaseModel):
+    server: MCPServerCreate
+    instance: MCPServerInstanceCreateWithoutSpec
 
 
 @router.post("/validate")
@@ -118,7 +131,7 @@ async def validate_instance_spec(
         return {"valid": True, "errors": []}
 
     if data.type == "bundle":
-        return {"valid": True, "errors": []}
+        return {"valid": False, "errors": ["bundle is not a valid MCP server instance type"]}
 
     return {"valid": False, "errors": [f"Unknown type: {data.type}"]}
 
@@ -132,7 +145,7 @@ async def create_mcp_server_instance(
 ):
     """Create a new MCP server instance.
 
-    Returns 201 for url/bundle (synchronous verification completed).
+    Returns 201 for url (synchronous verification completed).
     Returns 202 for docker/command (background verification in progress).
     """
     try:
@@ -153,6 +166,47 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("create_mcp_server_instance failed")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.post("/with-spec", status_code=201, response_model=MCPServerInstanceResponse)
+async def create_mcp_server_connection(
+    data: MCPServerConnectionCreateRequest,
+    response: Response,
+    user_context: UserContextDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Create an MCP server spec and instance in one transaction."""
+    try:
+        instance_payload = MCPServerInstanceCreate.model_construct(
+            name=data.instance.name,
+            description=data.instance.description,
+            server_spec_id="",
+            json_spec=data.instance.json_spec,
+            auth_config_id=data.instance.auth_config_id,
+        )
+        instance = await service.create_instance_with_spec(data.server, instance_payload)
+        if not instance:
+            raise HTTPException(status_code=500, detail="Failed to create MCP instance")
+
+        server_spec = await service.mcp_server_repository.get_by_id(instance.server_spec_id)
+        instance_type = "docker"
+        if server_spec:
+            if server_spec.remote_url:
+                instance_type = "url"
+            elif server_spec.cmd:
+                instance_type = "command"
+            elif server_spec.json_spec:
+                instance_type = server_spec.json_spec.get("type", instance_type)
+        if instance_type in ("docker", "command"):
+            response.status_code = 202
+        return MCPServerInstanceResponse.from_domain(instance)
+    except MCPValidationError as e:
+        raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("create_mcp_server_connection failed")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
@@ -269,6 +323,8 @@ async def get_mcp_server_instance(
     instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+    if not instance.server_spec_id:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
     instance_type = (instance.json_spec or {}).get("type", "")
     if instance_type == "bundle":
@@ -334,6 +390,31 @@ async def verify_mcp_server_instance(
         logger.error("verify_instance failed for %s: %s", instance_id, e, exc_info=True)
         raise HTTPException(
             status_code=500, detail="Verification failed due to internal error"
+        ) from e
+
+
+@router.post("/{instance_id}/discover-tools")
+async def discover_mcp_server_instance_tools(
+    instance_id: UUID,
+    user_context: UserContextDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Re-discover the tools exposed by an MCP server instance.
+
+    Re-runs verification (which calls list_tools on the server using any
+    OAuth/API-key credentials linked via auth_config_id) and persists the
+    refreshed tool list. Returns {tools, verification}.
+    """
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+
+    try:
+        return await service.discover_and_store_tools(instance_id)
+    except Exception as e:
+        logger.error("discover_and_store_tools failed for %s: %s", instance_id, e, exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Tool discovery failed due to internal error"
         ) from e
 
 

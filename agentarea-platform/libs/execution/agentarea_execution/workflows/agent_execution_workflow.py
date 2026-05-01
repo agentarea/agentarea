@@ -2177,7 +2177,9 @@ class AgentExecutionWorkflow:
             )
             return
 
-        # Execute via MCP Manager sandbox
+        # Execute via MCP Manager sandbox. The activity layer owns scoping
+        # to the current task — workflow code stays oblivious to sandbox
+        # internals.
         script_args_list = [script_args] if script_args else []
         result = await workflow.execute_activity(
             Activities.EXECUTE_SKILL_SCRIPT,

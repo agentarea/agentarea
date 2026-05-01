@@ -17,6 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { QUICK_TASK_OPEN_EVENT } from "@/components/QuickTask/QuickTaskDialog";
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import { NavMain } from "./NavMain";
@@ -27,17 +28,10 @@ export function AppSidebarContent({ data }: { data: any }) {
   const { open } = useSidebar();
   const router = useRouter();
 
-  // Cmd+J → open workplace (new task)
-  React.useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
-        e.preventDefault();
-        router.push("/workplace");
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [router]);
+  const openQuickTask = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(QUICK_TASK_OPEN_EVENT));
+  }, []);
 
   return (
     <>
@@ -46,19 +40,20 @@ export function AppSidebarContent({ data }: { data: any }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
+              size="sm"
               className={cn(
-                "w-full justify-start gap-2",
-                !open && "justify-center px-2"
+                "group h-8 w-full justify-start gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                !open && "justify-center px-0"
               )}
-              onClick={() => router.push("/workplace")}
+              onClick={openQuickTask}
             >
-              <SquarePen className="h-4 w-4 shrink-0" />
+              <SquarePen className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
               {open && (
                 <>
-                  <span className="flex-1 text-left">New Task</span>
-                  <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
-                    <span className="text-xs">&#8984;</span>J
+                  <span className="flex-1 truncate text-left">New task</span>
+                  <kbd className="pointer-events-none ml-auto hidden h-[18px] select-none items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1 font-mono text-[10px] font-medium text-muted-foreground/70 sm:flex">
+                    <span className="text-[11px] leading-none">&#8984;</span>J
                   </kbd>
                 </>
               )}
@@ -66,7 +61,7 @@ export function AppSidebarContent({ data }: { data: any }) {
           </TooltipTrigger>
           {!open && (
             <TooltipContent side="right">
-              New Task <kbd className="ml-1 text-[10px]">&#8984;J</kbd>
+              New task <kbd className="ml-1 text-[10px]">&#8984;J</kbd>
             </TooltipContent>
           )}
         </Tooltip>

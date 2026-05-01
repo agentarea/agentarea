@@ -19,7 +19,7 @@ class MCPValidationError(Exception):
 
 
 class MCPConfigurationValidator:
-    """Validates MCP instance configurations."""
+    """Validates MCP server spec transport configuration."""
 
     # Configuration for the golang MCP manager
     MCP_MANAGER_BASE_URL = "http://mcp-manager"  # Use service name for Docker networking
@@ -27,10 +27,10 @@ class MCPConfigurationValidator:
 
     @staticmethod
     def validate_json_spec(json_spec: dict[str, Any]) -> list[str]:
-        """Validate a JSON specification for MCP instance creation.
+        """Validate MCP server spec transport fields.
 
         Supports two spec types:
-        - "docker" (default): requires "image" and "port"
+        - "docker" (default): requires "image"
         - "command": requires "command" field; runs via supergateway sandbox
 
         Args:
@@ -84,22 +84,15 @@ class MCPConfigurationValidator:
                         if not isinstance(value, str):
                             errors.append(f"Header '{key}' value must be a string")
         elif spec_type == "bundle":
-            # Bundle type: our internal concept for grouping MCP instances.
-            # Not a registry json_spec type — no container needed, validated separately.
-            if "members" not in json_spec:
-                errors.append("Required field 'members' is missing for type 'bundle'")
-            elif not isinstance(json_spec["members"], list) or not json_spec["members"]:
-                errors.append("Field 'members' must be a non-empty list of instance IDs")
+            errors.append("bundle is not a valid MCP server instance type")
         else:
-            # Docker type (default): requires "image" and "port"
+            # Docker type (default): requires "image"
             if "image" not in json_spec:
                 errors.append("Required field 'image' is missing")
             elif not isinstance(json_spec["image"], str) or not json_spec["image"].strip():
                 errors.append("Field 'image' must be a non-empty string")
 
-            if "port" not in json_spec:
-                errors.append("Required field 'port' is missing")
-            elif (
+            if "port" in json_spec and (
                 not isinstance(json_spec["port"], int)
                 or json_spec["port"] < 1
                 or json_spec["port"] > 65535

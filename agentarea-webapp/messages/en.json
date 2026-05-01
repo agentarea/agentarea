@@ -1249,11 +1249,38 @@
     "errorWhileCancelling": "An error occurred while cancelling the task",
     "unexpectedError": "An unexpected error occurred"
   },
+  "QuickTask": {
+    "title": "New task",
+    "loading": "Loading agents…",
+    "selectAgent": "Select agent",
+    "noAgentsShort": "No agents yet",
+    "placeholder": "Describe a task for {agentName}…",
+    "placeholderGeneric": "What do you want to do?",
+    "attach": "Attach files",
+    "send": "Send",
+    "toSend": "to send",
+    "toCreate": "to create",
+    "errorCreate": "Couldn't create the task. Try again.",
+    "noAgents": {
+      "title": "No agents yet",
+      "subtitle": "Create your first agent to start firing off tasks.",
+      "openWorkplace": "Open Workplace",
+      "createAgent": "Create agent"
+    }
+  },
   "WorkplacePage": {
     "workplace": "Workplace",
     "failedToLoadAgents": "Failed to load agents",
     "noAgentsAvailable": "No agents available.",
-    "createFirstAgent": "Create your first agent to get started."
+    "createFirstAgent": "Create your first agent to get started.",
+    "onboarding": {
+      "noAgentTitle": "No agent yet",
+      "noAgentSubtitle": "Create an agent to start chatting in this workspace.",
+      "noProviderSubtitle": "Connect a language model first, then add an agent.",
+      "createAgentAction": "Create agent",
+      "connectLLMAction": "Connect LLM",
+      "disabledPlaceholder": "Create an agent to start chatting…"
+    }
   },
   "BuiltinToolIconGrid": {
     "title": "Built-in Tools",

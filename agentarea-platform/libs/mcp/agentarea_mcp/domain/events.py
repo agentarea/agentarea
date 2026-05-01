@@ -35,9 +35,7 @@ class MCPServerDeployed(DomainEvent):
 
 
 class MCPServerInstanceCreated(DomainEvent):
-    def __init__(
-        self, instance_id: str, server_spec_id: str | None, name: str, json_spec: dict[str, Any]
-    ):
+    def __init__(self, instance_id: str, server_spec_id: str, name: str, json_spec: dict[str, Any]):
         super().__init__(
             instance_id=instance_id, server_spec_id=server_spec_id, name=name, json_spec=json_spec
         )
@@ -48,7 +46,7 @@ class MCPServerInstanceCreated(DomainEvent):
 
 
 class MCPServerInstanceUpdated(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str, status: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str, name: str, status: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
@@ -63,7 +61,7 @@ class MCPServerInstanceDeleted(DomainEvent):
 
 
 class MCPServerInstanceStarted(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str, name: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
@@ -71,7 +69,7 @@ class MCPServerInstanceStarted(DomainEvent):
 
 
 class MCPServerInstanceStopped(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str, name: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id

@@ -31,9 +31,10 @@ class TestVerificationTypes:
 
 
 class TestMCPServerInstanceModel:
-    def _make_instance(self, json_spec=None, **kwargs):
+    def _make_instance(self, json_spec=None, server_spec_id="test-spec-id", **kwargs):
         return MCPServerInstance(
             name="test-instance",
+            server_spec_id=server_spec_id,
             json_spec=json_spec or {},
             **kwargs,
         )

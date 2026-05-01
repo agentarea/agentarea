@@ -67,6 +67,10 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Sandbox execution (uses warm pool pods for isolated script execution)
 	router.POST("/sandbox/execute", h.executeSandbox)
+	// Per-workflow sandbox teardown — invoked by Temporal workflow finalizer.
+	// Warm pool path: deletes the pod assigned to this workflow.
+	// Dev path: forwards to the standalone executor's /workspace/cleanup.
+	router.DELETE("/sandbox/workflow/:id", h.deleteSandboxWorkflow)
 
 	// Legacy container endpoints for backward compatibility (only when container manager is available)
 	if h.containerManager != nil {

@@ -208,7 +208,9 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   }
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
-  const tools = (instance.json_spec?.available_tools ?? []) as Array<{name: string; description: string}>;
+  const tools = ((instance as any).tools
+    ?? instance.json_spec?.available_tools
+    ?? []) as Array<{name: string; description: string}>;
 
   // Determine MCP type
   const specType = (instance.json_spec?.type as string) || "docker";
@@ -229,12 +231,6 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   const bundleEndpointUrl = isBundleType ? `/mcp/${instance.id}` : null;
   const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
   const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
-
-  // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea
-  const apiBaseUrl = typeof window !== "undefined"
-    ? (window as any).__ENV__?.CLIENT_API_URL || ""
-    : "";
-  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
 
   const envTableData = Object.entries(envVars).map(([key, value]) => ({
     id: key,
@@ -336,31 +332,9 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
               );
             })()}
 
-            {/* AgentArea proxy URL - always shown so agents can connect through AgentArea */}
-            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
-              <div className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  AgentArea Proxy URL
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-xs text-muted-foreground">
-                  Connect to this MCP server through AgentArea
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={agentareaProxyUrl}
-                    readOnly
-                    className="font-mono text-sm"
-                  />
-                  <CopyButton text={agentareaProxyUrl} label="proxy URL" />
-                </div>
-              </div>
-            </div>
-
-            {/* Connection URL - Show when verified, or always for URL-type/bundle-type */}
-            {(isVerificationSucceeded || isUrlType || isBundleType) && (
+            {/* Connection URL — only shown for non-URL types since URL-type
+                shows its endpoint inside the External Server card below. */}
+            {!isUrlType && (isVerificationSucceeded || isBundleType) && (
               <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="h-4 w-4 text-muted-foreground" />
@@ -369,16 +343,13 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                   </div>
                 </div>
 
-                {!isUrlType && isLoadingUrl ? (
+                {isLoadingUrl ? (
                   <div className="note">{t("connection.loading")}</div>
                 ) : effectiveConnectionUrl ? (
                   <div className="space-y-3">
-                    {/* Main connection URL */}
                     <div className="space-y-1.5">
                       <div className="text-xs text-muted-foreground">
-                        {isUrlType
-                          ? t("connection.externalEndpoint")
-                          : t("connection.mcpEndpoint")}
+                        {t("connection.mcpEndpoint")}
                       </div>
                       <div className="flex gap-2">
                         <Input
@@ -393,8 +364,7 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                       </div>
                     </div>
 
-                    {/* SSE endpoint URL */}
-                    {sseUrl && !isUrlType && (
+                    {sseUrl && (
                       <div className="space-y-1.5">
                         <div className="text-xs text-muted-foreground">
                           {t("connection.sseEndpoint")}
@@ -410,11 +380,7 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                       </div>
                     )}
 
-                    <p className="note">
-                      {isUrlType
-                        ? t("connection.noteExternal")
-                        : t("connection.note")}
-                    </p>
+                    <p className="note">{t("connection.note")}</p>
                   </div>
                 ) : (
                   <div className="note">{t("connection.notAvailable")}</div>
@@ -549,8 +515,13 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                   ) : (
                     <div className="space-y-2 text-sm">
                       {endpointUrl && (
-                        <div className="rounded bg-muted/40 p-2 font-mono break-all">
-                          {endpointUrl}
+                        <div className="flex gap-2">
+                          <Input
+                            value={endpointUrl}
+                            readOnly
+                            className="font-mono text-sm"
+                          />
+                          <CopyButton text={endpointUrl} label={t("labels.connectionUrl")} />
                         </div>
                       )}
                       {Object.keys(customHeaders).length > 0 && (

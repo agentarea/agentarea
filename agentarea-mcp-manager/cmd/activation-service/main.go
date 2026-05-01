@@ -13,7 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -22,7 +24,26 @@ var (
 	status     = "waiting"
 	mcpProcess *os.Process
 	logger     *slog.Logger
+
+	// lastRequestTime tracks the wall-clock time of the most recent /execute
+	// or /activate call. The idle-timeout watchdog reads this to decide when
+	// to self-exit, which lets K8s reclaim the pod if mcp-manager never
+	// issues an explicit DELETE (worker crash, network partition, etc.).
+	lastRequestMu sync.Mutex
+	lastRequest   = time.Now()
 )
+
+// workspaceRoot is the parent directory for all per-workflow workspaces.
+// In K8s pods this is mounted as an emptyDir so it dies with the pod;
+// in compose it's a plain directory inside the container with the same
+// effect (container removed → directory gone). Overridable via
+// WORKSPACE_ROOT for tests and local dev outside containers.
+var workspaceRoot = func() string {
+	if v := os.Getenv("WORKSPACE_ROOT"); v != "" {
+		return v
+	}
+	return "/workspace"
+}()
 
 // ActivateRequest represents the activation request.
 // The executable is always taken from the image's own ENTRYPOINT (verified by
@@ -62,11 +83,14 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/activate", activateHandler)
 	http.HandleFunc("/execute", executeHandler)
+	http.HandleFunc("/workspace/cleanup", workspaceCleanupHandler)
 
 	port := os.Getenv("ACTIVATION_PORT")
 	if port == "" {
 		port = "8080"
 	}
+
+	startIdleWatchdog()
 
 	// Security: Configure server with timeouts to prevent Slowloris attacks
 	server := &http.Server{
@@ -524,13 +548,21 @@ func buildPathEnv(rootDir string) []string {
 }
 
 // ExecuteRequest represents a script execution request.
-// Scripts run in an isolated workspace directory and are cleaned up after.
+//
+// Workspace lifetime depends on WorkflowID:
+//   - empty: a fresh tempdir is created and removed after the call.
+//   - set:   /workspace/wf-<WorkflowID>/ is created if missing, persisted across
+//            calls with the same WorkflowID, and removed only when the pod is
+//            torn down (deleted by mcp-manager) or the idle-timeout backstop
+//            fires. Files, installed packages, and any state written here
+//            survive between bash calls in the same workflow.
 type ExecuteRequest struct {
 	ScriptContent  string            `json:"script_content"`
 	ScriptName     string            `json:"script_name"`
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
-	TimeoutSeconds int              `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	WorkflowID     string            `json:"workflow_id,omitempty"`
 }
 
 // ExecuteResponse represents the result of script execution.
@@ -546,6 +578,8 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
+
+	noteRequest()
 
 	var req ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -569,43 +603,69 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		timeout = req.TimeoutSeconds
 	}
 
-	// Determine interpreter from file extension
-	ext := filepath.Ext(req.ScriptName)
-	var interpreter string
-	switch ext {
-	case ".py":
-		interpreter = "python3"
-	case ".js":
-		interpreter = "node"
-	case ".sh":
-		interpreter = "sh"
-	default:
-		http.Error(w, fmt.Sprintf(`{"error": "unsupported script type: %s"}`, ext), http.StatusBadRequest)
-		return
-	}
-
-	// Create isolated workspace
-	workspace, err := os.MkdirTemp("", "sandbox-*")
+	// Resolve the workspace.
+	// - WorkflowID set → /workspace/wf-<id>/ (persistent across calls, no cleanup here).
+	// - empty          → fresh tempdir, removed after the call (legacy stateless path).
+	workspace, cleanupWorkspace, err := resolveWorkspace(req.WorkflowID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "failed to create workspace: %v"}`, err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
-	defer os.RemoveAll(workspace)
-
-	// Write script to workspace — use cleaned filename to prevent path traversal
-	cleanName := filepath.Base(req.ScriptName)
-	scriptPath := filepath.Join(workspace, cleanName)
-	if err := os.WriteFile(scriptPath, []byte(req.ScriptContent), 0500); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "failed to write script: %v"}`, err), http.StatusInternalServerError)
-		return
+	if cleanupWorkspace != nil {
+		defer cleanupWorkspace()
 	}
 
-	// Build command
-	cmdArgs := append([]string{scriptPath}, req.Args...)
-	cmd, cmdErr := SafeCommand(interpreter, cmdArgs...)
-	if cmdErr != nil {
-		http.Error(w, fmt.Sprintf(`{"error": "invalid command: %v"}`, cmdErr), http.StatusBadRequest)
-		return
+	// Build the command to run.
+	// "cmd.sh" is the bash-tool shortcut: write content to a workspace
+	// script and exec `sh <path>`. SafeCommand is intentionally NOT used —
+	// its argument sanitiser rejects shell metacharacters, which the script
+	// body legitimately contains. Isolation is provided by the sandbox
+	// itself (pod / container boundary), not by argv-level filtering. We
+	// write to a file (rather than pass content via `sh -c`) so the
+	// untrusted content is never an argv element of exec.Command, which
+	// keeps CodeQL's command-injection taint analysis quiet.
+	var cmd *exec.Cmd
+	if req.ScriptName == "cmd.sh" {
+		scriptPath := filepath.Join(workspace, "cmd.sh")
+		// 0o700 (rwx for owner) so subsequent calls in the same persistent
+		// workflow workspace can rewrite the file. The workspace root is
+		// already isolated per pod / per workflow, so the file is not
+		// reachable by other principals.
+		if err := os.WriteFile(scriptPath, []byte(req.ScriptContent), 0o700); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "failed to write script: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+		cmd = exec.Command("sh", scriptPath) // #nosec G204 -- scriptPath is a constant filename inside an isolated workspace
+	} else {
+		// Determine interpreter from file extension
+		ext := filepath.Ext(req.ScriptName)
+		var interpreter string
+		switch ext {
+		case ".py":
+			interpreter = "python3"
+		case ".js":
+			interpreter = "node"
+		case ".sh":
+			interpreter = "sh"
+		default:
+			http.Error(w, fmt.Sprintf(`{"error": "unsupported script type: %s"}`, ext), http.StatusBadRequest)
+			return
+		}
+
+		// Write script to workspace — use cleaned filename to prevent path traversal
+		cleanName := filepath.Base(req.ScriptName)
+		scriptPath := filepath.Join(workspace, cleanName)
+		if err := os.WriteFile(scriptPath, []byte(req.ScriptContent), 0500); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "failed to write script: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+
+		cmdArgs := append([]string{scriptPath}, req.Args...)
+		cmd, err = SafeCommand(interpreter, cmdArgs...)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "invalid command: %v"}`, err), http.StatusBadRequest)
+			return
+		}
 	}
 	cmd.Dir = workspace
 
@@ -673,6 +733,110 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		"exit_code", stdout.Len(),
 		"elapsed_ms", time.Since(start).Milliseconds(),
 	)
+}
+
+// workspaceCleanupHandler removes /workspace/wf-<id>/ for a finished workflow.
+// Called by mcp-manager (in dev mode where there is no pod to delete) when
+// the workflow finalizer fires. In K8s production this endpoint is unused —
+// the warm pool deletes the entire pod, taking the emptyDir with it.
+func workspaceCleanupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		WorkflowID string `json:"workflow_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+	if err := ValidateWorkflowID(req.WorkflowID); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	dir := filepath.Join(workspaceRoot, "wf-"+req.WorkflowID)
+	if err := ValidateFilePath(workspaceRoot, dir); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		logger.Error("workspace cleanup failed", "workflow_id", req.WorkflowID, "error", err)
+		http.Error(w, fmt.Sprintf(`{"error": "cleanup failed: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	logger.Info("workspace cleaned up", "workflow_id", req.WorkflowID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// noteRequest records the time of the latest request for the idle watchdog.
+func noteRequest() {
+	lastRequestMu.Lock()
+	lastRequest = time.Now()
+	lastRequestMu.Unlock()
+}
+
+// startIdleWatchdog launches a goroutine that exits the process when no
+// /execute or /activate request has arrived for IDLE_TIMEOUT_SECONDS. This
+// is the backstop layer of the cleanup model: primary cleanup is an
+// explicit DELETE from mcp-manager when the workflow finalizer fires; this
+// watchdog only matters when that DELETE never arrives (worker crash,
+// network partition, finalizer bug). Disabled when IDLE_TIMEOUT_SECONDS=0
+// or unset.
+func startIdleWatchdog() {
+	raw := os.Getenv("IDLE_TIMEOUT_SECONDS")
+	if raw == "" {
+		return
+	}
+	timeoutSec, err := strconv.Atoi(raw)
+	if err != nil || timeoutSec <= 0 {
+		logger.Warn("invalid IDLE_TIMEOUT_SECONDS, watchdog disabled", "value", raw)
+		return
+	}
+	timeout := time.Duration(timeoutSec) * time.Second
+	logger.Info("idle watchdog enabled", "timeout_seconds", timeoutSec)
+
+	go func() {
+		check := time.NewTicker(30 * time.Second)
+		defer check.Stop()
+		for range check.C {
+			lastRequestMu.Lock()
+			idle := time.Since(lastRequest)
+			lastRequestMu.Unlock()
+			if idle >= timeout {
+				logger.Info("idle timeout reached, exiting", "idle_seconds", int(idle.Seconds()))
+				os.Exit(0)
+			}
+		}
+	}()
+}
+
+// resolveWorkspace returns the working directory for an /execute call.
+// When workflowID is set the directory is /workspace/wf-<id>/ and persists
+// across calls in that workflow — cleanup happens at pod tear-down. When
+// workflowID is empty the directory is a fresh tempdir and the returned
+// cleanup function removes it after the call (legacy stateless path).
+func resolveWorkspace(workflowID string) (string, func(), error) {
+	if workflowID == "" {
+		dir, err := os.MkdirTemp("", "sandbox-*")
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to create workspace: %w", err)
+		}
+		return dir, func() { _ = os.RemoveAll(dir) }, nil
+	}
+
+	if err := ValidateWorkflowID(workflowID); err != nil {
+		return "", nil, err
+	}
+
+	dir := filepath.Join(workspaceRoot, "wf-"+workflowID)
+	if err := ValidateFilePath(workspaceRoot, dir); err != nil {
+		return "", nil, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", nil, fmt.Errorf("failed to create workflow workspace: %w", err)
+	}
+	return dir, nil, nil
 }
 
 func waitForReady(timeout time.Duration, port int, path string) error {

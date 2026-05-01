@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createMCPServer, createMCPServerInstance } from "@/lib/api";
+import { getServerClient } from "@/lib/server-client";
 
 // Define the header schema for external servers
 const HeaderSchema = z.object({
@@ -11,10 +11,24 @@ const HeaderSchema = z.object({
   value: z.string().min(1, "Header value is required"),
 });
 
+function isSecretHeaderName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower === "authorization" ||
+    lower === "cookie" ||
+    lower === "proxy-authorization" ||
+    lower === "x-api-key" ||
+    lower.startsWith("x-auth-") ||
+    lower.endsWith("-token") ||
+    lower.endsWith("-secret") ||
+    lower.endsWith("-key")
+  );
+}
+
 // Define the schema for validation
 const MCPServerSchema = z
   .object({
-    type: z.enum(["docker", "command", "external", "bundle"], {
+    type: z.enum(["docker", "command", "external"], {
       required_error: "Server type is required",
     }),
     name: z.string().min(1, "Server name is required"),
@@ -43,14 +57,6 @@ const MCPServerSchema = z
       }
       if (data.type === "external") {
         return data.endpointUrl && data.endpointUrl.length > 0;
-      }
-      if (data.type === "bundle") {
-        try {
-          const ids = JSON.parse(data.members || "[]");
-          return Array.isArray(ids) && ids.length > 0;
-        } catch {
-          return false;
-        }
       }
       return true;
     },
@@ -81,7 +87,7 @@ export interface MCPServerFormState {
     _form?: string[]; // General form errors
   };
   fieldValues?: {
-    type: "docker" | "command" | "external" | "bundle";
+    type: "docker" | "command" | "external";
     name: string;
     description: string;
     dockerImageUrl?: string;
@@ -95,7 +101,6 @@ export interface MCPServerFormState {
     }>;
     tags: string[];
     isPublic: boolean;
-    members?: string;
   };
 }
 
@@ -122,7 +127,7 @@ export async function addMCPServer(
   }));
 
   const rawFormData = {
-    type: formData.get("type") as "docker" | "command" | "external" | "bundle",
+    type: formData.get("type") as "docker" | "command" | "external",
     name: formData.get("name") as string,
     description: formData.get("description") as string,
     dockerImageUrl: formData.get("dockerImageUrl") as string,
@@ -179,85 +184,119 @@ export async function addMCPServer(
     };
   }
 
+  const hasAuthorizationHeader = headers.some(
+    (header) => header.key.toLowerCase() === "authorization"
+  );
+  if (authConfigId && hasAuthorizationHeader) {
+    return {
+      message: "Validation failed. Please check the fields.",
+      errors: {
+        headers: headers.map((header) =>
+          header.key.toLowerCase() === "authorization"
+            ? { key: ["Remove Authorization when using an auth config."] }
+            : {}
+        ),
+        _form: ["Remove the Authorization header or disconnect the selected auth config."],
+      },
+      fieldValues: {
+        type: rawFormData.type || "external",
+        name: rawFormData.name,
+        description: rawFormData.description,
+        dockerImageUrl: rawFormData.dockerImageUrl,
+        version: rawFormData.version,
+        command: rawFormData.command,
+        args: rawFormData.args,
+        endpointUrl: rawFormData.endpointUrl,
+        headers: rawFormData.headers,
+        tags: rawFormData.tags ? [rawFormData.tags] : [],
+        isPublic: rawFormData.isPublic,
+      },
+    };
+  }
+
   let response;
   try {
+    const tags = validatedFields.data.tags ? [validatedFields.data.tags] : [];
+    let serverPayload: Record<string, unknown>;
+    let instanceJsonSpec: Record<string, unknown> = {};
+
     if (validatedFields.data.type === "docker") {
-      // Create Docker-based MCP Server
-      response = await createMCPServer({
+      serverPayload = {
         name: validatedFields.data.name,
         description: validatedFields.data.description,
         docker_image_url: validatedFields.data.dockerImageUrl!,
         version: validatedFields.data.version || "1.0.0",
-        tags: validatedFields.data.tags ? [validatedFields.data.tags] : [],
+        tags,
         is_public: validatedFields.data.isPublic,
         env_schema: [],
-      });
+        json_spec: {
+          type: "docker",
+          image: validatedFields.data.dockerImageUrl!,
+        },
+      };
     } else if (validatedFields.data.type === "command") {
-      // Create Command-based MCP Server Instance (npx/uvx via mcp-bridge sandbox)
       const argsArray = validatedFields.data.args
         ? validatedFields.data.args.trim().split(/\s+/)
         : [];
-      const jsonSpec: Record<string, unknown> = {
-        type: "command",
-        command: validatedFields.data.command!,
-        args: argsArray,
-      };
-
-      if (validatedFields.data.tags) {
-        jsonSpec.tags = [validatedFields.data.tags];
-      }
-
-      response = await createMCPServerInstance({
+      serverPayload = {
         name: validatedFields.data.name,
         description: validatedFields.data.description,
-        server_spec_id: null,
-        json_spec: jsonSpec,
-      });
-    } else if (validatedFields.data.type === "bundle") {
-      // Create Bundle MCP Server Instance
-      const memberIds = JSON.parse(validatedFields.data.members || "[]");
-      if (!memberIds.length) {
-        return { message: "Select at least one server to bundle", errors: {} };
-      }
-      response = await createMCPServerInstance({
-        name: validatedFields.data.name,
-        description: validatedFields.data.description,
-        server_spec_id: null,
-        json_spec: { type: "bundle", members: memberIds },
-      });
-    } else {
-      // Create External URL MCP Server Instance
-      const jsonSpec: Record<string, unknown> = {
-        type: "url",
-        endpoint_url: validatedFields.data.endpointUrl!,
+        version: validatedFields.data.version || "1.0.0",
+        tags,
         is_public: validatedFields.data.isPublic,
+        env_schema: [],
+        cmd: [validatedFields.data.command!, ...argsArray],
+        json_spec: {
+          type: "command",
+          command: validatedFields.data.command!,
+          args: argsArray,
+        },
       };
-
+    } else {
+      const headersObject: Record<string, string> = {};
       if (
         validatedFields.data.headers &&
         validatedFields.data.headers.length > 0
       ) {
-        jsonSpec.headers = validatedFields.data.headers.reduce(
-          (acc, header) => ({ ...acc, [header.key]: header.value }),
-          {}
-        );
+        for (const header of validatedFields.data.headers) {
+          headersObject[header.key] = header.value;
+        }
       }
-
-      if (validatedFields.data.tags) {
-        jsonSpec.tags = [validatedFields.data.tags];
-      }
-
-      const instancePayload: any = {
+      serverPayload = {
         name: validatedFields.data.name,
         description: validatedFields.data.description,
-        server_spec_id: null,
-        json_spec: jsonSpec,
+        remote_url: validatedFields.data.endpointUrl!,
+        version: validatedFields.data.version || "1.0.0",
+        tags,
+        is_public: validatedFields.data.isPublic,
+        env_schema: Object.keys(headersObject).map((name) => ({
+          name,
+          description: `HTTP header ${name}`,
+          isSecret: isSecretHeaderName(name),
+        })),
+        json_spec: {
+          type: "url",
+          endpoint_url: validatedFields.data.endpointUrl!,
+        },
       };
-      if (authConfigId) {
-        instancePayload.auth_config_id = authConfigId;
-      }
-      response = await createMCPServerInstance(instancePayload);
+      instanceJsonSpec = Object.keys(headersObject).length
+        ? { headers: headersObject }
+        : {};
     }
+
+    const instancePayload = {
+      name: validatedFields.data.name,
+      description: validatedFields.data.description,
+      json_spec: instanceJsonSpec,
+      ...(authConfigId ? { auth_config_id: authConfigId } : {}),
+    };
+    const client = getServerClient();
+    response = await client.POST("/v1/mcp-server-instances/with-spec" as any, {
+      body: {
+        server: serverPayload,
+        instance: instancePayload,
+      },
+    } as any);
 
     if (response.data) {
       console.log("MCP server added successfully:", response.data);
@@ -307,7 +346,7 @@ export async function addMCPServer(
   }
 
   if (response.data) {
-    redirect("/mcp-servers");
+    redirect(`/mcp-servers/${response.data.id}`);
   } else {
     return {
       message: "Failed to add server after API call.",

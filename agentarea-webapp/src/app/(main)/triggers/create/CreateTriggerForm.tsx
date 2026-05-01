@@ -3,7 +3,27 @@
 import { useState, useEffect, useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Search, Tag, Bot, Clock, Globe, List, Key, Code2, AlertTriangle } from "lucide-react";
+import {
+  Search,
+  Tag,
+  Bot,
+  Clock,
+  Globe,
+  List,
+  Key,
+  Code2,
+  AlertTriangle,
+  MessageSquare,
+  Zap,
+  Send,
+  Hash,
+  Mail,
+  Webhook,
+  Circle,
+  Info,
+  type LucideIcon,
+} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -91,6 +111,7 @@ export function CreateTriggerForm({
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
     initialData?.config?.allowed_methods || ["POST"]
   );
@@ -106,6 +127,9 @@ export function CreateTriggerForm({
         setCatalog(data);
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
+        } else {
+          const firstKind = kindOrder.find((k) => data.some((e) => e.kind === k));
+          if (firstKind) setActiveTab(firstKind);
         }
       })
       .catch(() => {});
@@ -168,27 +192,54 @@ export function CreateTriggerForm({
 
   // Group by kind for default view
   const kindLabels: Record<string, string> = {
-    messaging: "Messaging",
     schedule: "Scheduling",
+    messaging: "Messaging",
     event: "Events",
   };
-  const kinds = [...new Set(catalog.map((e) => e.kind))];
+  const kindIcons: Record<string, LucideIcon> = {
+    schedule: Clock,
+    messaging: MessageSquare,
+    event: Zap,
+  };
+  const triggerIcons: Record<string, LucideIcon> = {
+    cron: Clock,
+    telegram: Send,
+    slack: Hash,
+    discord: MessageSquare,
+    email: Mail,
+    webhook: Webhook,
+  };
+  const kindOrder: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
+  const kinds = new Set(catalog.map((e) => e.kind));
+  const orderedKinds = kindOrder.filter((k) => kinds.has(k));
 
-  const renderCard = (entry: CatalogEntry) => (
-    <button
-      key={entry.id}
-      type="button"
-      onClick={() => setSelectedId(entry.id)}
-      className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm transition-colors text-left w-full",
-        selectedId === entry.id
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border hover:border-primary/50 hover:bg-muted/50 text-foreground"
-      )}
-    >
-      <span className="font-medium truncate">{entry.name}</span>
-    </button>
-  );
+  useEffect(() => {
+    if (!activeTab || isEditing) return;
+    const entries = catalog.filter((e) => e.kind === activeTab);
+    if (entries.length === 1) {
+      setSelectedId(entries[0].id);
+    }
+  }, [activeTab, catalog, isEditing]);
+
+  const renderCard = (entry: CatalogEntry) => {
+    const Icon = triggerIcons[entry.icon] ?? triggerIcons[entry.id] ?? Circle;
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        onClick={() => setSelectedId(entry.id)}
+        className={cn(
+          "flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm transition-colors text-left w-full",
+          selectedId === entry.id
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border hover:border-primary/50 hover:bg-muted/50 text-foreground"
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="font-medium truncate">{entry.name}</span>
+      </button>
+    );
+  };
 
   return (
     <form id="create-trigger-form" action={formAction} className="overflow-auto h-full">
@@ -228,21 +279,34 @@ export function CreateTriggerForm({
                   )}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {kinds.map((kind) => {
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList
+                    className="w-full grid"
+                    style={{
+                      gridTemplateColumns: `repeat(${orderedKinds.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {orderedKinds.map((kind) => {
+                      const KindIcon = kindIcons[kind] ?? Circle;
+                      return (
+                        <TabsTrigger key={kind} value={kind}>
+                          <KindIcon className="h-4 w-4 mr-1.5" />
+                          {kindLabels[kind] ?? kind}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                  {orderedKinds.map((kind) => {
                     const entries = catalog.filter((e) => e.kind === kind);
                     return (
-                      <div key={kind}>
-                        <p className="text-xs text-muted-foreground mb-1.5 mt-3">
-                          {kindLabels[kind] ?? kind}
-                        </p>
+                      <TabsContent key={kind} value={kind}>
                         <div className="grid grid-cols-2 gap-1.5">
                           {entries.map(renderCard)}
                         </div>
-                      </div>
+                      </TabsContent>
                     );
                   })}
-                </div>
+                </Tabs>
               )}
             </div>
           </div>
@@ -255,6 +319,51 @@ export function CreateTriggerForm({
               <p className="text-xs text-muted-foreground">
                 {selected?.description}
               </p>
+            </div>
+          </div>
+        )}
+
+        {selected && triggerType === "webhook" && (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1.5">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Webhook endpoint</p>
+                <p className="text-xs text-muted-foreground">
+                  A unique URL will be generated after you create this trigger.
+                  Copy it from the trigger details page and paste it into your{" "}
+                  {selected.name} settings.
+                </p>
+                {selected.webhook_type === "telegram" && (
+                  <p className="text-xs text-muted-foreground">
+                    Use <code>/setwebhook</code> with @BotFather or the Telegram
+                    Bot API.
+                  </p>
+                )}
+                {selected.webhook_type === "slack" && (
+                  <p className="text-xs text-muted-foreground">
+                    Go to your Slack app&apos;s <strong>Event Subscriptions</strong>{" "}
+                    and paste the URL under <strong>Request URL</strong>.
+                  </p>
+                )}
+                {selected.webhook_type === "discord" && (
+                  <p className="text-xs text-muted-foreground">
+                    In your Discord app&apos;s <strong>General Information</strong>,
+                    paste the URL under <strong>Interactions Endpoint URL</strong>.
+                  </p>
+                )}
+                {selected.webhook_type === "gmail" && (
+                  <p className="text-xs text-muted-foreground">
+                    Set up a <strong>Google Cloud Pub/Sub</strong> push
+                    subscription pointing to this URL.
+                  </p>
+                )}
+                {selected.webhook_type === "generic" && (
+                  <p className="text-xs text-muted-foreground">
+                    Send HTTP requests to this URL from any service or script.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}

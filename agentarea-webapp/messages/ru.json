@@ -1255,11 +1255,38 @@
     "errorWhileCancelling": "Произошла ошибка при отмене задачи",
     "unexpectedError": "Произошла непредвиденная ошибка"
   },
+  "QuickTask": {
+    "title": "Новая задача",
+    "loading": "Загружаем агентов…",
+    "selectAgent": "Выберите агента",
+    "noAgentsShort": "Нет агентов",
+    "placeholder": "Опишите задачу для {agentName}…",
+    "placeholderGeneric": "Что вы хотите сделать?",
+    "attach": "Прикрепить файлы",
+    "send": "Отправить",
+    "toSend": "чтобы отправить",
+    "toCreate": "чтобы создать",
+    "errorCreate": "Не удалось создать задачу. Попробуйте снова.",
+    "noAgents": {
+      "title": "Пока нет агентов",
+      "subtitle": "Создайте первого агента, чтобы запускать задачи.",
+      "openWorkplace": "Открыть Workplace",
+      "createAgent": "Создать агента"
+    }
+  },
   "WorkplacePage": {
     "workplace": "Рабочее место",
     "failedToLoadAgents": "Не удалось загрузить агентов",
     "noAgentsAvailable": "Агенты недоступны.",
-    "createFirstAgent": "Создайте своего первого агента, чтобы начать работу."
+    "createFirstAgent": "Создайте своего первого агента, чтобы начать работу.",
+    "onboarding": {
+      "noAgentTitle": "Нет агента",
+      "noAgentSubtitle": "Создайте агента, чтобы начать общение в этом воркспейсе.",
+      "noProviderSubtitle": "Сначала подключите языковую модель, потом создайте агента.",
+      "createAgentAction": "Создать агента",
+      "connectLLMAction": "Подключить LLM",
+      "disabledPlaceholder": "Создайте агента, чтобы начать общение…"
+    }
   },
   "BuiltinToolIconGrid": {
     "title": "Встроенные инструменты",

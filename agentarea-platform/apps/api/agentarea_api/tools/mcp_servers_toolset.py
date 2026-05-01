@@ -289,8 +289,8 @@ class MCPServersToolset(Toolset):
         self,
         name: str,
         json_spec_json: str,
+        server_spec_id: str,
         description: str | None = None,
-        server_spec_id: str | None = None,
         auth_config_id: str | None = None,
     ) -> str:
         """Create a new MCP server instance.
@@ -298,10 +298,10 @@ class MCPServersToolset(Toolset):
         Args:
             name: Display name for the instance (unique per workspace).
             json_spec_json: JSON-encoded connection configuration. Must include
-                ``type`` (``url`` | ``docker`` | ``command`` | ``bundle``);
+                ``type`` (``url`` | ``docker`` | ``command``);
                 other keys depend on type.
             description: Optional human-readable description.
-            server_spec_id: Optional ID of an existing MCP server spec.
+            server_spec_id: ID of an existing MCP server spec.
             auth_config_id: Optional MCPAuthConfig UUID for OAuth/credentials.
         """
         spec = json.loads(json_spec_json) if json_spec_json else {}

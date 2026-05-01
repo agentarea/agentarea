@@ -38,10 +38,30 @@ WHERE (verification->>'status') = 'in_progress'
 """
 
 _NEVER_ATTEMPTED_SQL = """
-SELECT id, name, json_spec, workspace_id, created_by, verification, last_dispatch, tools
-FROM mcp_server_instances
-WHERE (json_spec->>'type') IN ('docker', 'command')
-  AND (verification->>'status') = 'never_attempted'
+SELECT
+  i.id,
+  i.name,
+  i.json_spec,
+  i.workspace_id,
+  i.created_by,
+  i.verification,
+  i.last_dispatch,
+  i.tools,
+  s.json_spec AS server_json_spec,
+  s.docker_image_url,
+  s.remote_url,
+  s.cmd
+FROM mcp_server_instances i
+JOIN mcp_servers s ON s.id::text = i.server_spec_id
+WHERE COALESCE(
+    s.json_spec->>'type',
+    CASE
+      WHEN s.remote_url IS NOT NULL THEN 'url'
+      WHEN s.cmd IS NOT NULL THEN 'command'
+      ELSE 'docker'
+    END
+  ) IN ('docker', 'command')
+  AND (i.verification->>'status') = 'never_attempted'
 """
 
 
@@ -56,7 +76,26 @@ class _InstanceProxy:
     def __init__(self, row):
         self.id = row.id
         self.name = row.name
-        self.json_spec = row.json_spec or {}
+        transport_spec = dict(getattr(row, "server_json_spec", None) or {})
+        remote_url = getattr(row, "remote_url", None)
+        cmd = getattr(row, "cmd", None)
+        docker_image_url = getattr(row, "docker_image_url", None)
+        if remote_url:
+            transport_spec.setdefault("type", "url")
+            transport_spec.setdefault("endpoint_url", remote_url)
+        elif cmd:
+            transport_spec.setdefault("type", "command")
+            if isinstance(cmd, list) and cmd:
+                transport_spec.setdefault("command", cmd[0])
+                if len(cmd) > 1:
+                    transport_spec.setdefault("args", cmd[1:])
+        elif docker_image_url:
+            transport_spec.setdefault("type", "docker")
+            transport_spec.setdefault("image", docker_image_url)
+        else:
+            transport_spec.update(row.json_spec or {})
+            transport_spec.setdefault("type", "docker")
+        self.json_spec = {**transport_spec, **(row.json_spec or {})}
         self.workspace_id = row.workspace_id
         self.created_by = row.created_by
         self.verification = row.verification or {}

@@ -2,6 +2,7 @@ from typing import Any
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, String
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
 Base = declarative_base()
@@ -26,7 +27,9 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     # Remote URL for URL-type MCP servers (e.g. https://api.githubcopilot.com/mcp/)
     remote_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     # Provenance: links back to the registry catalog item this spec was installed from
-    registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
+    registry_item_id: Mapped[str | None] = mapped_column(
+        PG_UUID(as_uuid=False), nullable=True, default=None
+    )
     # Raw ServerJSON spec from MCP registry — source of truth for icons, headers, variables, etc.
     json_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
     # Source registry URL (e.g. https://registry.modelcontextprotocol.io)

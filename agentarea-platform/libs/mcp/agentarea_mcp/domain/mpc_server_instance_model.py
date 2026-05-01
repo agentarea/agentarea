@@ -19,9 +19,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    server_spec_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )  # Nullable for external providers
+    server_spec_id: Mapped[str] = mapped_column(String(255), nullable=False)
     json_spec: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False
     )  # Unified configuration storage
@@ -40,8 +38,8 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     def __init__(
         self,
         name: str,
+        server_spec_id: str,
         description: str | None = None,
-        server_spec_id: str | None = None,
         json_spec: dict[str, Any] | None = None,
         verification: dict | None = None,
         network_scope: str = "private",

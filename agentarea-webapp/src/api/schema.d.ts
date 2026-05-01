@@ -1095,7 +1095,7 @@ export interface paths {
          * Create Mcp Server Instance
          * @description Create a new MCP server instance.
          *
-         *     Returns 201 for url/bundle (synchronous verification completed).
+         *     Returns 201 for url (synchronous verification completed).
          *     Returns 202 for docker/command (background verification in progress).
          */
         post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
@@ -1185,6 +1185,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-server-instances/with-spec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Mcp Server Connection
+         * @description Create an MCP server spec and instance in one transaction.
+         */
+        post: operations["create_mcp_server_connection_v1_mcp_server_instances_with_spec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/{instance_id}": {
         parameters: {
             query?: never;
@@ -1202,6 +1222,30 @@ export interface paths {
         head?: never;
         /** Update Mcp Server Instance */
         patch: operations["update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch"];
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Mcp Server Instance Tools
+         * @description Re-discover the tools exposed by an MCP server instance.
+         *
+         *     Re-runs verification (which calls list_tools on the server using any
+         *     OAuth/API-key credentials linked via auth_config_id) and persists the
+         *     refreshed tool list. Returns {tools, verification}.
+         */
+        post: operations["discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/mcp-server-instances/{instance_id}/environment": {
@@ -4227,6 +4271,11 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** MCPServerConnectionCreateRequest */
+        MCPServerConnectionCreateRequest: {
+            instance: components["schemas"]["MCPServerInstanceCreateWithoutSpec"];
+            server: components["schemas"]["MCPServerCreate"];
+        };
         /**
          * MCPServerCreate
          * @description Payload for creating an MCP server spec (catalog template).
@@ -4309,8 +4358,6 @@ export interface components {
          *     - ``{"type": "url", "endpoint_url": "https://..."}``
          *     - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
          *     - ``{"type": "command", "command": [...], "environment": {...}}``
-         *     - ``{"type": "bundle", "members": ["<instance-id>", ...]}``
-         *
          *     For URL-type instances the service synchronously verifies the endpoint;
          *     docker/command kick off background verification.
          */
@@ -4327,7 +4374,7 @@ export interface components {
             description?: string | null;
             /**
              * Json Spec
-             * @description Connection configuration. Must include 'type' ('url' | 'docker' | 'command' | 'bundle'); other keys depend on type.
+             * @description Connection configuration. Must include 'type' ('url' | 'docker' | 'command'); other keys depend on type.
              */
             json_spec: {
                 [key: string]: unknown;
@@ -4339,9 +4386,22 @@ export interface components {
             name: string;
             /**
              * Server Spec Id
-             * @description ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.). Optional for ad-hoc URL instances.
+             * @description ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).
              */
-            server_spec_id?: string | null;
+            server_spec_id: string;
+        };
+        /** MCPServerInstanceCreateWithoutSpec */
+        MCPServerInstanceCreateWithoutSpec: {
+            /** Auth Config Id */
+            auth_config_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Json Spec */
+            json_spec?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
         };
         /** MCPServerInstanceResponse */
         MCPServerInstanceResponse: {
@@ -4370,7 +4430,7 @@ export interface components {
             /** Name */
             name: string;
             /** Server Spec Id */
-            server_spec_id: string | null;
+            server_spec_id: string;
             /** Tools */
             tools?: {
                 [key: string]: unknown;
@@ -6227,7 +6287,7 @@ export interface components {
             name?: string | null;
             /**
              * Type
-             * @description Instance type: url, docker, command, bundle
+             * @description Instance type: url, docker, command
              */
             type: string;
         };
@@ -8658,6 +8718,39 @@ export interface operations {
             };
         };
     };
+    create_mcp_server_connection_v1_mcp_server_instances_with_spec_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerConnectionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_mcp_server_instance_v1_mcp_server_instances__instance_id__get: {
         parameters: {
             query?: never;
@@ -8742,6 +8835,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
