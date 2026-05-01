@@ -20,7 +20,9 @@ from agentarea_agents_sdk.tools.shell_toolset import ShellToolset
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int = 200, payload: dict[str, Any] | None = None, text: str = "") -> None:
+    def __init__(
+        self, status_code: int = 200, payload: dict[str, Any] | None = None, text: str = ""
+    ) -> None:
         self.status_code = status_code
         self._payload = payload
         self.text = text or json.dumps(payload or {})
@@ -82,7 +84,9 @@ async def test_bash_omits_workflow_id_without_ctx():
 
 @pytest.mark.asyncio
 async def test_bash_returns_stdout_only_on_success():
-    fake = _RecordingClient(_FakeResponse(payload={"stdout": "hello\n", "stderr": "", "exit_code": 0}))
+    fake = _RecordingClient(
+        _FakeResponse(payload={"stdout": "hello\n", "stderr": "", "exit_code": 0})
+    )
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     result = await tool.bash("echo hello")
     assert result == "hello"

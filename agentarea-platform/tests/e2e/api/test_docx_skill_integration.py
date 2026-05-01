@@ -24,7 +24,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
-import json
 import os
 import time
 import uuid
@@ -43,13 +42,9 @@ MCP_MANAGER_URL = os.environ.get("MCP_MANAGER_URL", "http://localhost:7999")
 # OpenRouter / Kimi K2 credentials must come from the environment.
 # DO NOT hardcode keys here — this file is checked into version control.
 OPENROUTER_API_KEY = os.environ.get("DOCX_E2E_OPENROUTER_KEY", "")
-OPENROUTER_ENDPOINT = os.environ.get(
-    "DOCX_E2E_OPENROUTER_ENDPOINT", "https://openrouter.ai/api/v1"
-)
+OPENROUTER_ENDPOINT = os.environ.get("DOCX_E2E_OPENROUTER_ENDPOINT", "https://openrouter.ai/api/v1")
 OPENROUTER_MODEL = os.environ.get("DOCX_E2E_OPENROUTER_MODEL", "moonshotai/kimi-k2.6")
-OPENROUTER_PROVIDER_KEY = os.environ.get(
-    "DOCX_E2E_PROVIDER_KEY", "e2e-openrouter-docx"
-)
+OPENROUTER_PROVIDER_KEY = os.environ.get("DOCX_E2E_PROVIDER_KEY", "e2e-openrouter-docx")
 
 pytestmark = pytest.mark.skipif(
     not OPENROUTER_API_KEY,
@@ -118,24 +113,32 @@ def kimi_model(
     openrouter_provider_spec_id: str,
     kimi_model_spec_id: str,
 ) -> str:
-    pc = alice_client.post(
-        "/v1/provider-configs/",
-        json={
-            "provider_spec_id": openrouter_provider_spec_id,
-            "name": f"docx-e2e-{uuid.uuid4().hex[:6]}",
-            "api_key": OPENROUTER_API_KEY,
-            "endpoint_url": OPENROUTER_ENDPOINT,
-        },
-    ).raise_for_status().json()
+    pc = (
+        alice_client.post(
+            "/v1/provider-configs/",
+            json={
+                "provider_spec_id": openrouter_provider_spec_id,
+                "name": f"docx-e2e-{uuid.uuid4().hex[:6]}",
+                "api_key": OPENROUTER_API_KEY,
+                "endpoint_url": OPENROUTER_ENDPOINT,
+            },
+        )
+        .raise_for_status()
+        .json()
+    )
 
-    mi = alice_client.post(
-        "/v1/model-instances/",
-        json={
-            "provider_config_id": pc["id"],
-            "model_spec_id": kimi_model_spec_id,
-            "name": f"docx-e2e-{uuid.uuid4().hex[:6]}",
-        },
-    ).raise_for_status().json()
+    mi = (
+        alice_client.post(
+            "/v1/model-instances/",
+            json={
+                "provider_config_id": pc["id"],
+                "model_spec_id": kimi_model_spec_id,
+                "name": f"docx-e2e-{uuid.uuid4().hex[:6]}",
+            },
+        )
+        .raise_for_status()
+        .json()
+    )
     return mi["id"]
 
 
@@ -145,8 +148,7 @@ def kimi_model(
 
 SKILL_NAME = "docx-generator"
 SKILL_DESCRIPTION = (
-    "Generate real Microsoft Word (.docx) files for commercial offers, "
-    "letters, and reports."
+    "Generate real Microsoft Word (.docx) files for commercial offers, letters, and reports."
 )
 OUTPUT_FILENAME = "output.docx"
 
@@ -427,14 +429,11 @@ def _read_docx_from_sandbox(workflow_id: str) -> bytes:
         "workflow_id": workflow_id,
         "script_name": "read.sh",
         "script_content": (
-            "if [ ! -f output.docx ]; then echo MISSING; exit 1; fi; "
-            "base64 output.docx"
+            "if [ ! -f output.docx ]; then echo MISSING; exit 1; fi; base64 output.docx"
         ),
         "timeout_seconds": 30,
     }
-    resp = httpx.post(
-        f"{MCP_MANAGER_URL}/sandbox/execute", json=payload, timeout=40.0
-    )
+    resp = httpx.post(f"{MCP_MANAGER_URL}/sandbox/execute", json=payload, timeout=40.0)
     resp.raise_for_status()
     body = resp.json()
     if body.get("exit_code") != 0:
@@ -537,9 +536,7 @@ def test_docx_skill_end_to_end(
     assert "run_skill_script" in tool_names, (
         f"expected run_skill_script in tool calls, got {tool_names!r}"
     )
-    assert "bash" not in tool_names, (
-        f"agent should not have access to bash, got {tool_names!r}"
-    )
+    assert "bash" not in tool_names, f"agent should not have access to bash, got {tool_names!r}"
 
     # Workflow terminal state ------------------------------------------------
     terminal = next(
@@ -577,9 +574,7 @@ def test_docx_skill_end_to_end(
     sha = hashlib.sha256(docx_bytes).hexdigest()
     saved_path = ARTIFACT_DIR / f"{task_id}-{sha[:12]}.docx"
     saved_path.write_bytes(docx_bytes)
-    print(
-        f"[docx-e2e] saved {len(docx_bytes)} bytes to {saved_path} sha256={sha}"
-    )
+    print(f"[docx-e2e] saved {len(docx_bytes)} bytes to {saved_path} sha256={sha}")
 
     # Parse with python-docx -------------------------------------------------
     from docx import Document

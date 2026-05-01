@@ -12,6 +12,7 @@ shared with the rest of the e2e suite, so this file follows the same auth
 flow as every other test instead of forging its own JWT.
 """
 
+import logging
 import os
 import subprocess
 import time
@@ -20,6 +21,8 @@ from uuid import uuid4
 
 import httpx
 import pytest
+
+logger = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.skipif(
@@ -223,10 +226,12 @@ def test_mcp_instance_container_lifecycle(
             f"Container {container_id[:12]} should be removed after instance deletion"
         )
     finally:
+        # Best-effort cleanup; the test has already asserted, and a stale
+        # spec row will not affect subsequent runs (unique-id naming).
         try:
             alice_client.delete(f"/v1/mcp-servers/{spec_id}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("cleanup: failed to delete spec %s: %s", spec_id, exc)
 
 
 @pytest.mark.integration
@@ -278,14 +283,18 @@ def test_multiple_mcp_instances_isolated(
                 pytest.fail(f"No container found for instance {instance_id}")
             container_ids.append(cid)
 
-        assert len(container_ids) == 2, (
-            f"Expected 2 containers, found {len(container_ids)}"
-        )
+        assert len(container_ids) == 2, f"Expected 2 containers, found {len(container_ids)}"
         assert container_ids[0] != container_ids[1], "Containers should have unique IDs"
     finally:
+        # Best-effort cleanup; failures here should not mask the test result.
         for instance_id, spec_id in instances:
             try:
                 alice_client.delete(f"/v1/mcp-server-instances/{instance_id}")
                 alice_client.delete(f"/v1/mcp-servers/{spec_id}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "cleanup: failed to delete instance %s / spec %s: %s",
+                    instance_id,
+                    spec_id,
+                    exc,
+                )

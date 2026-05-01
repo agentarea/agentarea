@@ -37,7 +37,6 @@ except ImportError:
         return _NoopCounter()
 
 
-from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk import (
     GoalProgressEvaluator,
     LLMModel,
@@ -45,6 +44,7 @@ from agentarea_agents_sdk import (
     ToolExecutor,
     ToolManager,
 )
+from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 
 # Local imports
 from agentarea_common.auth.context import UserContext
@@ -1420,11 +1420,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
             "timeout_seconds": request.timeout_seconds,
         }
         # Resolve task scope from Temporal context — the workflow stays
-        # oblivious to sandbox internals.
+        # oblivious to sandbox internals. Activity context is unavailable
+        # only in unit-test paths that call the activity directly; the
+        # sandbox tolerates a missing workflow_id (legacy stateless mode).
         try:
             payload["workflow_id"] = activity.info().workflow_id
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("activity.info() unavailable, running without workflow_id: %s", exc)
 
         try:
             async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
