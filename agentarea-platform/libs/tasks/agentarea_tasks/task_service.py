@@ -17,6 +17,7 @@ from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
 
 from .domain.base_service import BaseTaskService
+from .domain.exceptions import BudgetCapExceededError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import SimpleTask
 from .infrastructure.repository import TaskRepository
@@ -63,6 +64,43 @@ class TaskService(BaseTaskService):
         except ImportError:
             self.agent_repository = None
 
+        # Workspace settings repository for monthly budget cap enforcement.
+        # Optional: in standalone tests the workspaces lib may not be installed.
+        try:
+            from agentarea_workspaces.infrastructure.repository import (
+                WorkspaceSettingsRepository,
+            )
+
+            self.workspace_settings_repository = repository_factory.create_repository(
+                WorkspaceSettingsRepository
+            )
+        except ImportError:
+            self.workspace_settings_repository = None
+
+    async def _enforce_budget_cap(self, workspace_id: str | None) -> None:
+        """Reject task creation if the workspace has hit its monthly cap.
+
+        No-op when:
+        - workspace_settings repo is unavailable (standalone/tests)
+        - workspace_id is missing (legacy call sites)
+        - settings row absent or monthly_cap_usd is null
+        """
+        if not workspace_id or not self.workspace_settings_repository:
+            return
+
+        settings = await self.workspace_settings_repository.get()
+        if not settings or settings.monthly_cap_usd is None:
+            return
+
+        cap = float(settings.monthly_cap_usd)
+        mtd = await self.task_repository.sum_spend_mtd()
+        if mtd >= cap:
+            raise BudgetCapExceededError(
+                workspace_id=workspace_id,
+                current_mtd_usd=mtd,
+                cap_usd=cap,
+            )
+
     async def _validate_agent_exists(self, agent_id: UUID):
         """Validate that the agent exists and return the loaded entity for reuse.
 
@@ -94,6 +132,7 @@ class TaskService(BaseTaskService):
         task_parameters: dict[str, Any] | None = None,
     ) -> SimpleTask:
         """Create a new task from parameters."""
+        await self._enforce_budget_cap(workspace_id)
         task = SimpleTask(
             title=title,
             description=description,
@@ -557,6 +596,11 @@ class TaskService(BaseTaskService):
             Created task with workflow execution info, or the routed-into existing
             task when ``channel_origin.chat_id`` matches an active workflow.
         """
+        # Reject up-front if workspace MTD spend has reached its cap. Catches
+        # all callers (REST, A2A, MCP toolset, agent-to-agent delegation) that
+        # funnel through this canonical entry point.
+        await self._enforce_budget_cap(workspace_id)
+
         # Validate agent exists; reuse the loaded entity for metadata.agent_name
         # so we don't pay for a second repository round-trip.
         agent = await self._validate_agent_exists(agent_id)
