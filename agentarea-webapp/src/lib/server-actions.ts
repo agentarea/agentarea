@@ -1,6 +1,10 @@
 "use server";
 
 import {
+  getWorkspaceSettings,
+  updateWorkspaceSettings,
+} from "@/lib/api-dashboard";
+import {
   getAgent,
   updateAgent,
   listAgents,
@@ -672,4 +676,22 @@ export async function getAgentWalletPaymentsAction(
 
 export async function fundAgentWalletAction(agentId: string, body: any) {
   return await fundAgentWallet(agentId, body);
+}
+
+export async function getWorkspaceSettingsAction() {
+  try {
+    const data = await getWorkspaceSettings();
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : "Failed to load workspace settings" };
+  }
+}
+
+export async function updateWorkspaceSettingsAction(monthly_cap_usd: number | null) {
+  try {
+    const data = await updateWorkspaceSettings(monthly_cap_usd);
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : "Failed to update workspace settings" };
+  }
 }

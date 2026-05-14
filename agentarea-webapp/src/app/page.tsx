@@ -5,7 +5,7 @@ export default async function RootPage() {
   const session = await getServerSession();
 
   if (session?.identity) {
-    redirect("/workplace");
+    redirect("/dashboard");
   } else {
     redirect("/auth/login");
   }

@@ -93,6 +93,7 @@
     }
   },
   "Sidebar": {
+    "dashboard": "Дашборд",
     "home": "Главная",
     "inbox": "Входящие",
     "admin": "Админ",
@@ -298,6 +299,7 @@
     "description": "Описание",
     "tools": "Инструменты",
     "noTools": "Нет инструментов",
+    "overview": "Обзор",
     "createTask": "Создать задачу",
     "activeTasks": "Активные задачи",
     "currentTasks": "Текущие задачи",

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CreditCard,
+  Gauge,
   LayoutGrid,
   List,
   MessagesSquare,
@@ -16,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const TABS = [
+  { key: "", icon: Gauge, labelKey: "overview" },
   { key: "new-task", icon: MessagesSquare, labelKey: "createTask" },
   { key: "tasks", icon: List, labelKey: "currentTasks" },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
@@ -33,9 +35,12 @@ export default function AgentHeaderTabs({ agentId }: { agentId: string }) {
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   useLayoutEffect(() => {
-    const activeIndex = TABS.findIndex(
-      (tab) => pathname === `/agents/${agentId}/${tab.key}`
-    );
+    const activeIndex = TABS.findIndex((tab) => {
+      const tabPath = tab.key
+        ? `/agents/${agentId}/${tab.key}`
+        : `/agents/${agentId}`;
+      return pathname === tabPath;
+    });
     if (activeIndex !== -1 && linkRefs.current[activeIndex]) {
       const activeLink = linkRefs.current[activeIndex]!;
       const container = containerRef.current;
@@ -56,7 +61,9 @@ export default function AgentHeaderTabs({ agentId }: { agentId: string }) {
       className="inline-flex items-center gap-3 py-0 relative"
     >
       {TABS.map((tab, index) => {
-        const href = `/agents/${agentId}/${tab.key}`;
+        const href = tab.key
+          ? `/agents/${agentId}/${tab.key}`
+          : `/agents/${agentId}`;
         const isActive = pathname === href;
         const Icon = tab.icon;
 

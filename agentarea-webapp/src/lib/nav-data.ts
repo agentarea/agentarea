@@ -5,6 +5,7 @@ import {
   FileText,
   FolderKanban,
   GalleryVerticalEnd,
+  Gauge,
   Home,
   Inbox,
   Network,
@@ -40,6 +41,12 @@ export const navData = {
   navSections: [
     {
       items: [
+        {
+          title: "Dashboard",
+          titleKey: "dashboard",
+          url: "/dashboard",
+          icon: Gauge,
+        },
         {
           title: "Home",
           titleKey: "home",

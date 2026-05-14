@@ -93,6 +93,7 @@
     }
   },
   "Sidebar": {
+    "dashboard": "Dashboard",
     "home": "Home",
     "inbox": "Inbox",
     "admin": "Admin",
@@ -333,6 +334,7 @@
     "description": "Description",
     "tools": "Tools",
     "noTools": "No tools",
+    "overview": "Overview",
     "createTask": "Create Task",
     "activeTasks": "Active Tasks",
     "currentTasks": "Current Tasks",
@@ -1138,6 +1140,19 @@
       "importing": "Importing...",
       "success": "Workspace configuration imported successfully",
       "error": "Failed to import workspace configuration"
+    },
+    "budget": {
+      "tabLabel": "Budget",
+      "title": "Monthly Spend Cap",
+      "description": "Set a soft monthly cap for total task spend. New tasks are refused (HTTP 402) when month-to-date spend reaches this value. Running tasks are not killed.",
+      "label": "Monthly cap (USD)",
+      "placeholder": "e.g. 100.00",
+      "save": "Save cap",
+      "saving": "Saving...",
+      "success": "Cap saved",
+      "error": "Failed to save cap",
+      "current": "Current cap",
+      "noCap": "No cap set"
     }
   },
   "SkillsSection": {
