@@ -9,12 +9,14 @@ from fastapi import APIRouter, Depends
 
 # Import core API modules
 from . import (
+    agent_overview,
     agents,
     agents_a2a,
     agents_tasks,
     agents_well_known,
     api_keys,
     audit,
+    dashboard,
     files,
     inbox,
     mcp_auth_configs,
@@ -123,6 +125,10 @@ protected_v1_router.include_router(projects.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
+
+# Dashboard + workspace settings - PROTECTED
+protected_v1_router.include_router(dashboard.router)
+protected_v1_router.include_router(agent_overview.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)
