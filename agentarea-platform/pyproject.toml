@@ -41,7 +41,8 @@ members = [
     "libs/governance",
     "libs/openapi",
     "libs/projects",
-    "libs/registry"
+    "libs/registry",
+    "libs/workspaces"
 ]
 
 [tool.uv]
@@ -67,6 +68,7 @@ agentarea-governance = { workspace = true }
 agentarea-openapi = { workspace = true }
 agentarea-projects = { workspace = true }
 agentarea-registry = { workspace = true }
+agentarea-workspaces = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }

@@ -27,6 +27,7 @@ members = [
     "agentarea-wallet",
     "agentarea-worker",
     "agentarea-workspace",
+    "agentarea-workspaces",
 ]
 constraints = [
     { name = "cryptography", specifier = ">=46.0.7" },
@@ -125,8 +126,11 @@ dependencies = [
     { name = "agentarea-secrets" },
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
+    { name = "agentarea-wallet" },
+    { name = "agentarea-workspaces" },
     { name = "alembic" },
     { name = "click" },
+    { name = "croniter" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "mcp", extra = ["cli"] },
@@ -148,8 +152,11 @@ requires-dist = [
     { name = "agentarea-secrets", editable = "libs/secrets" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
+    { name = "agentarea-wallet", editable = "libs/wallet" },
+    { name = "agentarea-workspaces", editable = "libs/workspaces" },
     { name = "alembic", specifier = ">=1.15.2" },
     { name = "click", specifier = ">=8.1.8" },
+    { name = "croniter", specifier = ">=6.2.2" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "fastmcp", specifier = ">=3.2.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.9.2" },
@@ -418,6 +425,7 @@ source = { editable = "libs/tasks" }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "agentarea-common" },
+    { name = "agentarea-workspaces" },
     { name = "pydantic" },
     { name = "temporalio" },
 ]
@@ -426,6 +434,7 @@ dependencies = [
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.2.8" },
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-workspaces", editable = "libs/workspaces" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "temporalio", specifier = ">=1.0.0" },
 ]
@@ -590,6 +599,23 @@ test = [
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "pytest-xdist", specifier = ">=3.6.0" },
+]
+
+[[package]]
+name = "agentarea-workspaces"
+version = "0.0.1"
+source = { editable = "libs/workspaces" }
+dependencies = [
+    { name = "agentarea-common" },
+    { name = "pydantic" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentarea-common", editable = "libs/common" },
+    { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
 ]
 
 [[package]]
@@ -1260,6 +1286,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/96/38086d58a181aac86d503dfa9c47eb20715a79c3e3acbdf786e92e5c09a8/coverage-7.13.4-cp314-cp314t-win_amd64.whl", hash = "sha256:4c7d3cc01e7350f2f0f6f7036caaf5673fb56b6998889ccfe9e1c1fe75a9c932", size = 224148 },
     { url = "https://files.pythonhosted.org/packages/ce/72/8d10abd3740a0beb98c305e0c3faf454366221c0f37a8bcf8f60020bb65a/coverage-7.13.4-cp314-cp314t-win_arm64.whl", hash = "sha256:23e3f687cf945070d1c90f85db66d11e3025665d8dafa831301a0e0038f3db9b", size = 222172 },
     { url = "https://files.pythonhosted.org/packages/0d/4a/331fe2caf6799d591109bb9c08083080f6de90a823695d412a935622abb2/coverage-7.13.4-py3-none-any.whl", hash = "sha256:1af1641e57cf7ba1bd67d677c9abdbcd6cc2ab7da3bca7fa1e2b7e50e65f2ad0", size = 211242 },
+]
+
+[[package]]
+name = "croniter"
+version = "6.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/de/5832661ed55107b8a09af3f0a2e71e0957226a59eb1dcf0a445cce6daf20/croniter-6.2.2.tar.gz", hash = "sha256:ba60832a5ec8e12e51b8691c3309a113d1cf6526bdf1a48150ce8ec7a532d0ab", size = 113762 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/39/783980e78cb92c2d7bdb1fc7dbc86e94ccc6d58224d76a7f1f51b6c51e30/croniter-6.2.2-py3-none-any.whl", hash = "sha256:a5d17b1060974d36251ea4faf388233eca8acf0d09cbd92d35f4c4ac8f279960", size = 45422 },
 ]
 
 [[package]]

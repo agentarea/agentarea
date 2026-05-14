@@ -12,6 +12,11 @@ except ImportError:
     # Triggers library not yet installed - skip for now
     pass
 
+try:
+    from agentarea_workspaces.domain.models import WorkspaceSettings  # noqa: F401
+except ImportError:
+    pass
+
 config = context.config
 
 if config.config_file_name is not None:
