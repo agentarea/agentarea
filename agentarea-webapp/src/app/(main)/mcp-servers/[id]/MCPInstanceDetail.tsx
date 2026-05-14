@@ -232,6 +232,13 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
   const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
+  // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea.
+  // Rendered as a compact top-row so it stays discoverable without dominating the layout.
+  const apiBaseUrl = typeof window !== "undefined"
+    ? (window as any).__ENV__?.CLIENT_API_URL || ""
+    : "";
+  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
+
   const envTableData = Object.entries(envVars).map(([key, value]) => ({
     id: key,
     key,
@@ -243,6 +250,21 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Connect bar — single-line proxy URL for outbound MCP clients.
+                Kept compact so it doesn't compete with the inbound config below. */}
+            <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <LinkIcon className="h-3.5 w-3.5" />
+                <span>Connect URL</span>
+              </div>
+              <Input
+                value={agentareaProxyUrl}
+                readOnly
+                className="h-8 font-mono text-xs"
+              />
+              <CopyButton text={agentareaProxyUrl} label="Connect URL" />
+            </div>
+
             {/* Stuck verification banner */}
             {isStuck && (
               <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
