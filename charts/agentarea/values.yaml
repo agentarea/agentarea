@@ -43,7 +43,7 @@ global:
     postgresql: "agentarea-postgresql-secret"
     # Redis credentials
     redis: "agentarea-redis-secret"
-    # MinIO/S3 credentials
+    # RustFS/S3 credentials
     rustfs: "agentarea-rustfs-secret"
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
@@ -666,8 +666,8 @@ rustfs:
   persistence:
     enabled: true
     size: 10Gi
-  # Probes are overridable. The rustfs image doesn't implement MinIO's
-  # /minio/health/live path (returns 403), so defaults use TCP probes.
+  # Probes are overridable. The rustfs image doesn't expose an HTTP health path
+  # by default (returns 403), so defaults use TCP probes.
   # Override to httpGet if your image version exposes a working health path.
   readinessProbe:
     tcpSocket:
