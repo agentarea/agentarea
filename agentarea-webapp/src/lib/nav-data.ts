@@ -34,7 +34,7 @@ export const navData = {
       name: "AgentArea",
       logo: GalleryVerticalEnd,
       plan: "Base workspace",
-      logoFile: "/starlogo.svg",
+      logoFile: "/Icon.svg",
     },
   ],
   navSections: [
