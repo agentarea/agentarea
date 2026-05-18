@@ -15,7 +15,7 @@ def _load_module_directly(module_name: str, file_path: str):
 # Load constants first (needed by build_output_summary)
 _constants_path = os.path.join(
     os.path.dirname(__file__),
-    "../../libs/execution/agentarea_execution/workflows/constants.py",
+    "../../agentarea_execution/workflows/constants.py",
 )
 _constants_spec, constants_mod = _load_module_directly("constants", os.path.abspath(_constants_path))
 _constants_spec.loader.exec_module(constants_mod)
