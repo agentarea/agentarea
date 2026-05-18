@@ -10,9 +10,22 @@ from agentarea_llm.domain.models import ProviderSpec
 
 
 class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily removed workspace scoping
-    def __init__(self, session: AsyncSession, user_context: UserContext = None):
+    def __init__(self, session: AsyncSession, user_context: UserContext | None = None):
         super().__init__(session)
         self.model_class = ProviderSpec
+        self.user_context = user_context or UserContext(user_id="system", workspace_id="system")
+
+    def _ensure_scope(self, entity: ProviderSpec) -> ProviderSpec:
+        """Populate required audit scope for globally-addressed provider specs."""
+        if not getattr(entity, "workspace_id", None):
+            entity.workspace_id = self.user_context.workspace_id
+        if not getattr(entity, "created_by", None):
+            entity.created_by = self.user_context.user_id
+        return entity
+
+    async def create(self, entity: ProviderSpec) -> ProviderSpec:
+        """Create a provider spec, filling required workspace audit fields."""
+        return await super().create(self._ensure_scope(entity))
 
     async def get_with_relations(self, id: UUID) -> ProviderSpec | None:
         """Get provider spec by ID with relationships loaded."""
@@ -86,58 +99,6 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
 
         return specs
 
-    async def create_spec(self, entity: ProviderSpec) -> ProviderSpec:
-        """Create a new provider spec from domain entity.
-
-        Note: This method is deprecated. Use create() with field parameters instead.
-        """
-        # Extract fields from the spec entity
-        spec_data = {
-            "id": entity.id,
-            "provider_key": entity.provider_key,
-            "name": entity.name,
-            "description": entity.description,
-            "provider_type": entity.provider_type,
-            "icon": entity.icon,
-            "is_builtin": entity.is_builtin,
-            "created_at": entity.created_at,
-            "updated_at": entity.updated_at,
-        }
-
-        # Remove None values and system fields that will be auto-populated
-        spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        spec_data.pop("created_at", None)
-        spec_data.pop("updated_at", None)
-
-        # Create the spec instance
-        new_spec = ProviderSpec(**spec_data)
-        created_spec = await self.create(new_spec)
-        return await self.get_with_relations(created_spec.id) or created_spec
-
-    async def update_spec(self, entity: ProviderSpec) -> ProviderSpec:
-        """Update an existing provider spec from domain entity.
-
-        Note: This method is deprecated. Use update() with field parameters instead.
-        """
-        # Extract fields from the spec entity
-        spec_data = {
-            "provider_key": entity.provider_key,
-            "name": entity.name,
-            "description": entity.description,
-            "provider_type": entity.provider_type,
-            "icon": entity.icon,
-            "is_builtin": entity.is_builtin,
-        }
-
-        # Remove None values
-        spec_data = {k: v for k, v in spec_data.items() if v is not None}
-
-        # Update fields on the entity
-        for key, value in spec_data.items():
-            setattr(entity, key, value)
-        updated_spec = await self.update(entity)
-        return updated_spec
-
     async def upsert_by_provider_key(self, entity: ProviderSpec) -> ProviderSpec:
         """Upsert provider spec by provider_key - used in bootstrap"""
         existing = await self.get_by_provider_key(entity.provider_key)
@@ -151,4 +112,4 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             return await self.update(existing)
         else:
             # Create new
-            return await self.create(entity)
+            return await self.create(self._ensure_scope(entity))

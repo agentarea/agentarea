@@ -42,7 +42,6 @@ members = [
     "libs/openapi",
     "libs/projects",
     "libs/registry",
-    "libs/workspaces"
 ]
 
 [tool.uv]
@@ -68,7 +67,6 @@ agentarea-governance = { workspace = true }
 agentarea-openapi = { workspace = true }
 agentarea-projects = { workspace = true }
 agentarea-registry = { workspace = true }
-agentarea-workspaces = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }
@@ -237,7 +235,6 @@ env = [
     "APP_ENV=test",
     "DEBUG=false",
     "SECRET_MANAGER_TYPE=local",
-    "USE_LEGACY_TASK_EXECUTION=false",
 ]
 
 [tool.coverage.run]
