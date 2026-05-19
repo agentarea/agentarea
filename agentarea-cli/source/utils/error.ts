@@ -1,8 +1,11 @@
 // Custom error classes for the CLI application
 
 export class CliError extends Error {
-	constructor(message: string, public code: string = 'UNKNOWN_ERROR') {
+	public code: string;
+
+	constructor(message: string, code: string = 'UNKNOWN_ERROR') {
 		super(message);
+		this.code = code;
 		this.name = 'CliError';
 	}
 }

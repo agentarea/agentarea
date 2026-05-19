@@ -5,10 +5,13 @@ import {tokenStorage} from './utils/storage.js';
 import {configManager} from './utils/config.js';
 import {logger} from './utils/logger.js';
 import {AgentsList} from './commands/agentsList.js';
+import {connectClient} from './commands/connect.js';
 
 interface CliOptions {
 	token?: string;
 	apiUrl?: string;
+	scope?: string;
+	name?: string;
 }
 
 export async function handleCliCommand(
@@ -60,6 +63,15 @@ export async function handleCliCommand(
 	if (command === 'agents' && subcommand === 'list') {
 		render(<AgentsList />);
 		return true;
+	}
+
+	if (command === 'connect') {
+		return connectClient(subcommand, {
+			apiUrl: options.apiUrl || 'http://localhost:8000',
+			token: authToken,
+			scope: options.scope,
+			name: options.name,
+		});
 	}
 
 	// No command matched
