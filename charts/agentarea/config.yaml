@@ -115,6 +115,7 @@ groups:
       KUBERNETES_GATEWAY_NAME: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
       KUBERNETES_GATEWAY_NAMESPACE: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
       KUBERNETES_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass | default "" }}'
+      KUBERNETES_POD_SERVICE_ACCOUNT_NAME: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
       KUBERNETES_SECURITY_RUN_AS_NON_ROOT: 'true'
       KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: 'true'
       KUBERNETES_DEFAULT_CPU_REQUEST: '100m'

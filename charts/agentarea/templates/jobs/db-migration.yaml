@@ -29,10 +29,7 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.global.image.pullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       initContainers:
         # Wait for database to be ready
         - name: wait-for-db

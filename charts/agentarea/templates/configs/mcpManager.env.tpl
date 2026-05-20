@@ -15,6 +15,7 @@ KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
 KUBERNETES_GATEWAY_NAME: "{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}"
 KUBERNETES_GATEWAY_NAMESPACE: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
 KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass | default "" }}"
+KUBERNETES_POD_SERVICE_ACCOUNT_NAME: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
 KUBERNETES_SECURITY_RUN_AS_NON_ROOT: "true"
 KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: "true"
 KUBERNETES_DEFAULT_CPU_REQUEST: "100m"
@@ -80,6 +81,11 @@ MCP_FEATURES_ENABLED: "{{ join "," .Values.mcpManager.features.enabled }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_RUNTIME_CLASS
+- name: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
 - name: KUBERNETES_SECURITY_RUN_AS_NON_ROOT
   valueFrom:
     configMapKeyRef:

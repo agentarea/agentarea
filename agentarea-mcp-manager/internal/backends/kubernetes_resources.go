@@ -233,14 +233,14 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 
 	container.VolumeMounts = volumeMounts
 
-		// Determine runtime class based on trust level
+	// Determine runtime class based on trust level
 	runtimeClassName := k.k8sConfig.RuntimeClass
-	
+
 	// If instance specifies a runtime class, use it
 	if spec.RuntimeClass != "" {
 		runtimeClassName = spec.RuntimeClass
 	}
-	
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("mcp-%s", instanceName),
@@ -267,6 +267,9 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						},
 						Containers: []corev1.Container{container},
 						Volumes:    k.createVolumes(spec),
+					}
+					if k.k8sConfig.PodServiceAccountName != "" {
+						spec.ServiceAccountName = k.k8sConfig.PodServiceAccountName
 					}
 					// Only set RuntimeClassName if it's not empty
 					if runtimeClassName != "" {
@@ -432,7 +435,7 @@ func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName st
 	}
 
 	pathPrefix := fmt.Sprintf("/mcp/%s", instanceName)
-	
+
 	// Determine gateway namespace
 	gatewayNs := k.k8sConfig.GatewayNamespace
 	if gatewayNs == "" {
@@ -445,8 +448,8 @@ func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName st
 			Namespace: k.k8sConfig.Namespace,
 			Labels:    k.getCommonLabels(instanceName),
 			Annotations: map[string]string{
-				"agentarea.io/instance-id":  spec.InstanceID,
-				"agentarea.io/workspace-id": spec.WorkspaceID,
+				"agentarea.io/instance-id":   spec.InstanceID,
+				"agentarea.io/workspace-id":  spec.WorkspaceID,
 				"agentarea.io/auth-required": "true",
 			},
 		},

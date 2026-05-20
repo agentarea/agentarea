@@ -73,6 +73,33 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
+Render global image pull secrets for pod specs.
+*/}}
+{{- define "agentarea.imagePullSecrets" -}}
+{{- with .Values.global.image.pullSecrets }}
+imagePullSecrets:
+{{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Render MCP runtime image pull secrets for runtime pod service account.
+*/}}
+{{- define "agentarea.mcpRuntimeImagePullSecrets" -}}
+{{- with .Values.mcpManager.runtime.imagePullSecrets }}
+imagePullSecrets:
+{{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create the name of the MCP runtime service account.
+*/}}
+{{- define "agentarea.mcpRuntimeServiceAccountName" -}}
+{{- default (printf "%s-mcp-runtime" (include "agentarea.fullname" .)) .Values.mcpManager.runtime.serviceAccount.name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
 Frontend URL
 */}}
 {{- define "agentarea.frontendUrl" -}}

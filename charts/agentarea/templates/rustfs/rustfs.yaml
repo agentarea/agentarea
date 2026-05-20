@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: rustfs
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: rustfs
           image: "{{ default "rustfs/rustfs" .Values.rustfs.image.repository }}:{{ default "latest" .Values.rustfs.image.tag }}"
@@ -134,6 +135,7 @@ spec:
         app.kubernetes.io/component: rustfs-bucket-init
     spec:
       restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: s3-client
           image: "amazon/aws-cli:2.17.51"
