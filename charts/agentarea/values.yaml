@@ -520,6 +520,15 @@ mcpManager:
   # Set to "kata-qemu" for Kata Containers (requires Kata runtime)
   # Leave empty "" for standard container runtime
   runtimeClass: ""
+
+  # Runtime MCP server pods use a separate ServiceAccount so their registry
+  # access can point at the managed MCP runtime registry, not platform images.
+  runtime:
+    serviceAccount:
+      create: true
+      name: ""
+    imagePullSecrets: []
+    # - name: agentarea-mcp-runtime-regcred
   
   # Security context - only used when backend is "docker"
   # For "kubernetes" backend, leave empty: {}

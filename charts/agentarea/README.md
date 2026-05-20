@@ -284,6 +284,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.gateway.name | string | `"envoy-gateway"` |  |
 | mcpManager.gateway.namespace | string | `"envoy-gateway-system"` |  |
 | mcpManager.runtimeClass | string | `""` |  |
+| mcpManager.runtime.serviceAccount.create | bool | `true` |  |
+| mcpManager.runtime.serviceAccount.name | string | `""` |  |
+| mcpManager.runtime.imagePullSecrets | list | `[]` |  |
 | mcpManager.securityContext | object | `{}` |  |
 | mcpManager.features.enabled[0] | string | `"gateway_api"` |  |
 | mcpManager.features.enabled[1] | string | `"state_reconciler"` |  |

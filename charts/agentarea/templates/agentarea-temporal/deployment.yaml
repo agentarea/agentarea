@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: temporal
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: temporal
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.image.repository }}:{{ default .Chart.AppVersion .Values.temporal.image.tag }}"
@@ -100,6 +101,7 @@ spec:
         app.kubernetes.io/component: temporal-ui
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: temporal-ui
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporalUi.image.repository }}:{{ default .Chart.AppVersion .Values.temporalUi.image.tag }}"

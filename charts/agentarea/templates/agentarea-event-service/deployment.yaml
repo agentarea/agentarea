@@ -49,10 +49,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.global.image.pullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: event-service
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.eventService.image.repository }}:{{ default .Chart.AppVersion .Values.eventService.image.tag }}"

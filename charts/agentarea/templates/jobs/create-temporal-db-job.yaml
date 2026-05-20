@@ -18,6 +18,7 @@ spec:
         app.kubernetes.io/component: create-temporal-db
     spec:
       restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       initContainers:
         - name: wait-for-db
           image: "postgres:alpine"

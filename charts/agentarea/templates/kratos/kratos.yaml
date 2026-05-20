@@ -130,6 +130,7 @@ spec:
         app.kubernetes.io/component: kratos
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: kratos
           image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/kratos" .Values.kratos.image.repository }}:{{ default "v1.3.1" .Values.kratos.image.tag }}"
@@ -245,6 +246,7 @@ spec:
         app.kubernetes.io/component: kratos-migrate
     spec:
       restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: kratos-migrate
           image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/kratos" .Values.kratos.image.repository }}:{{ default "v1.3.1" .Values.kratos.image.tag }}"
