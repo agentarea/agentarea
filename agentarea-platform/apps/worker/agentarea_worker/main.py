@@ -73,6 +73,10 @@ class AgentAreaWorker:
         self.trigger_worker = None
         self.inbound_subscriber = None
         self.outbound_subscriber = None
+        self.delivery_consumer = None
+        self.delivery_autoclaimer = None
+        self._broker = None
+        self._dedup = None
         self.container_monitor = None
         self.worker_shutdown_event = asyncio.Event()
 
@@ -199,8 +203,17 @@ class AgentAreaWorker:
         logger.info("Worker created and configured")
 
     async def _setup_channel_subscribers(self, dependencies) -> None:
-        """Create inbound + outbound channel subscribers."""
+        """Wire inbound subscriber + outbound delivery pipeline."""
+        from agentarea_common.broker import DedupCache, RedisStreamsBroker
+        from agentarea_triggers.channels import get_adapter
         from agentarea_triggers.channels.adapters import register_all_adapters
+        from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
+        from agentarea_triggers.channels.delivery_consumer import (
+            OUTBOUND_GROUP,
+            OUTBOUND_STREAM,
+            ChannelDeliveryConsumer,
+            ChannelDeliveryEmitter,
+        )
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageSubscriber
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretManager
         from agentarea_triggers.channels.router import ChannelRouter
@@ -209,6 +222,11 @@ class AgentAreaWorker:
         settings = get_settings()
         redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
 
+        # Shared broker + dedup cache backing both the producer side (router
+        # → emitter → stream) and the consumer side (delivery loop).
+        self._broker = RedisStreamsBroker(redis_url)
+        self._dedup = DedupCache(redis_url, prefix="channel-delivery")
+
         # Inbound: Go polling → Redis → Python task execution
         self.inbound_subscriber = InboundMessageSubscriber(
             redis_url=redis_url,
@@ -216,8 +234,8 @@ class AgentAreaWorker:
             workflow_executor=dependencies.workflow_executor,
         )
 
-        # Outbound: workflow events → channel adapters (Telegram, Slack, etc.)
-        # Uses LazySecretManager to resolve credentials from the secret store.
+        # Register adapters; they raise typed Retryable/Fatal errors that the
+        # delivery consumer translates into ACK / requeue / DLQ.
         secret_manager = LazySecretManager(dependencies.secret_manager_factory)
         register_all_adapters(secret_manager)
 
@@ -250,8 +268,21 @@ class AgentAreaWorker:
                 logger.exception("task_lookup failed for task_id=%s", task_id)
                 return None
 
-        router = ChannelRouter(task_lookup=_task_lookup)
+        emitter = ChannelDeliveryEmitter(self._broker)
+        router = ChannelRouter(emitter=emitter, task_lookup=_task_lookup)
         self.outbound_subscriber = ChannelEventSubscriber(router=router, redis_url=redis_url)
+
+        self.delivery_consumer = ChannelDeliveryConsumer(
+            broker=self._broker,
+            dedup=self._dedup,
+            adapter_resolver=get_adapter,
+        )
+        self.delivery_autoclaimer = StreamAutoclaimer(
+            broker=self._broker,
+            stream=OUTBOUND_STREAM,
+            group=OUTBOUND_GROUP,
+            consumer_id="autoclaimer",
+        )
 
     async def run(self) -> None:
         """Run the worker until shutdown signal."""
@@ -260,11 +291,15 @@ class AgentAreaWorker:
 
         logger.info("Worker starting...")
 
-        # Start channel subscribers
+        # Start channel subscribers and delivery pipeline
         if self.inbound_subscriber:
             await self.inbound_subscriber.start()
         if self.outbound_subscriber:
             await self.outbound_subscriber.start()
+        if self.delivery_consumer:
+            await self.delivery_consumer.start()
+        if self.delivery_autoclaimer:
+            await self.delivery_autoclaimer.start()
 
         # Start MCP container monitor in background
         from agentarea_mcp.container_monitor import start_container_monitoring
@@ -319,6 +354,18 @@ class AgentAreaWorker:
         if self.outbound_subscriber:
             await self.outbound_subscriber.stop()
             self.outbound_subscriber = None
+        if self.delivery_autoclaimer:
+            await self.delivery_autoclaimer.stop()
+            self.delivery_autoclaimer = None
+        if self.delivery_consumer:
+            await self.delivery_consumer.stop()
+            self.delivery_consumer = None
+        if self._broker:
+            await self._broker.aclose()
+            self._broker = None
+        if self._dedup:
+            await self._dedup.aclose()
+            self._dedup = None
 
         if self.worker:
             self.worker = None
