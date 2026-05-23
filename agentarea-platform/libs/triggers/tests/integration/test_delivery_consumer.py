@@ -205,6 +205,50 @@ async def test_duplicate_dedup_key_only_sends_once(broker, dedup, streams):
     assert adapter.sent[0][1] == "first"
 
 
+async def test_retryable_error_releases_dedup_key(broker, dedup, streams):
+    """Regression for the M5 race: on RetryableError, the consumer must
+    release the dedup claim so a redelivered/autoclaimed copy can retry.
+    Without release, the next attempt would dedup-hit, ACK, and silently
+    drop the message — turning every transient failure into permanent loss.
+    """
+    key = f"retry-release-{streams['test_id']}"
+
+    # Claim the key as if we just attempted send, then call release.
+    assert await dedup.claim(key) is True
+    assert await dedup.claim(key) is False  # would block a retry
+
+    adapter = FakeAdapter()
+    adapter.fail_count_remaining = 1
+    adapter.fail_kind = RetryableError
+
+    emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
+    consumer = ChannelDeliveryConsumer(
+        broker=broker,
+        dedup=dedup,
+        adapter_resolver=lambda _t: adapter,
+        stream=streams["stream"],
+        group=streams["group"],
+        dlq_stream=streams["dlq"],
+        consumer_id="c-test",
+        block_ms=200,
+    )
+
+    # First, manually release so the consumer's claim succeeds fresh.
+    await dedup.release(key)
+
+    await emitter.submit(
+        channel_type="telegram",
+        channel_config={"chat_id": 7},
+        message="must release on retry",
+        dedup_key=key,
+    )
+    await _drain(consumer, ticks=5)
+
+    # After the consumer ran and hit RetryableError, the dedup key must be
+    # released — a fresh claim must succeed.
+    assert await dedup.claim(key) is True
+
+
 async def test_unknown_channel_type_dead_letters(broker, dedup, streams):
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(

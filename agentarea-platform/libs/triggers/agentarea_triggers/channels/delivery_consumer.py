@@ -177,14 +177,21 @@ class ChannelDeliveryConsumer:
             logger.warning(
                 "delivery retryable %s/%s: %s", channel_type, dedup_key, exc
             )
+            # CRITICAL: release the dedup claim so the broker's redelivery
+            # (or XAUTOCLAIM hand-off to another consumer) can actually
+            # attempt the send again. Without this, the next consumer hits
+            # the still-set dedup key, ACKs, and the message vanishes.
+            await self._dedup.release(dedup_key)
             return  # no ACK → broker redelivers via PEL idle
         except (FatalError, ChannelDeliveryError) as exc:
             await self._dead_letter(msg, f"{type(exc).__name__}: {exc}")
             return
         except Exception:  # noqa: BLE001
-            # Unknown errors: classify as retryable. Prefer over-retry over
-            # silent loss; PEL delivery_count caps the loop in practice.
+            # Unknown errors: same release-then-redeliver pattern. We could
+            # DLQ instead, but we'd rather over-retry than silently bury a
+            # transient error class we forgot to enumerate.
             logger.exception("delivery unexpected error on %s", dedup_key)
+            await self._dedup.release(dedup_key)
             return
 
         await self._broker.ack(self._stream, self._group, msg.id)

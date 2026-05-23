@@ -48,3 +48,14 @@ class DedupCache:
         client = await self._get_client()
         ok = await client.set(f"{self._prefix}:{key}", "1", nx=True, ex=self._ttl)
         return bool(ok)
+
+    async def release(self, key: str) -> None:
+        """Drop a previously-claimed key so a retry can re-claim it.
+
+        Used by the delivery consumer on `RetryableError`: the original
+        attempt did not deliver, so the dedup slot would otherwise persist
+        for the full TTL and cause the broker's redelivery (and any
+        autoclaim hand-off) to dedup-skip the message — silent loss.
+        """
+        client = await self._get_client()
+        await client.delete(f"{self._prefix}:{key}")

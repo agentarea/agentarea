@@ -98,12 +98,17 @@ async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
     adapter, redis_client = pipeline
 
     task_id = str(uuid.uuid4())
+    # Realistic CloudEvents envelope as published by RedisEventBroker:
+    # event_id lives at root ("id"), NOT inside data. The subscriber +
+    # router must pull it from the root for dedup to work in production.
     envelope = {
+        "specversion": "1.0",
         "type": "workflow.WorkflowCompleted",
+        "source": "agentarea-api",
+        "id": str(uuid.uuid4()),
         "aggregate_id": task_id,
         "data": {
             "task_id": task_id,
-            "event_id": str(uuid.uuid4()),
             "original_data": {
                 "result": "Hello from agent",
             },
@@ -135,11 +140,13 @@ async def test_duplicate_publish_results_in_single_delivery(pipeline):
     task_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
     envelope = {
+        "specversion": "1.0",
         "type": "workflow.WorkflowCompleted",
+        "source": "agentarea-api",
+        "id": event_id,
         "aggregate_id": task_id,
         "data": {
             "task_id": task_id,
-            "event_id": event_id,
             "original_data": {"result": "dedup test"},
             "channel_origin": {
                 "type": "telegram",
@@ -155,3 +162,45 @@ async def test_duplicate_publish_results_in_single_delivery(pipeline):
 
     await asyncio.sleep(2.0)
     assert len(adapter.sent) == 1
+
+
+async def test_two_distinct_events_same_task_both_deliver(pipeline):
+    """Regression for the bug where event_id was looked up inside `data`
+    instead of the envelope root: two distinct events on the same task
+    used to dedup-collapse to one delivery. With event_id at root, each
+    event has its own dedup slot and both go through.
+    """
+    adapter, redis_client = pipeline
+
+    task_id = str(uuid.uuid4())
+
+    def make_envelope(event_id: str, body: str) -> dict:
+        return {
+            "specversion": "1.0",
+            "type": "workflow.WorkflowCompleted",
+            "source": "agentarea-api",
+            "id": event_id,
+            "aggregate_id": task_id,
+            "data": {
+                "task_id": task_id,
+                "original_data": {"result": body},
+                "channel_origin": {
+                    "type": "telegram",
+                    "chat_id": "555",
+                    "presentation": "concise",
+                    "trigger_id": str(uuid.uuid4()),
+                },
+            },
+        }
+
+    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(make_envelope(str(uuid.uuid4()), "first")))
+    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(make_envelope(str(uuid.uuid4()), "second")))
+
+    for _ in range(60):
+        if len(adapter.sent) >= 2:
+            break
+        await asyncio.sleep(0.05)
+
+    assert len(adapter.sent) == 2
+    bodies = sorted(msg for _cfg, msg in adapter.sent)
+    assert bodies == ["first", "second"]

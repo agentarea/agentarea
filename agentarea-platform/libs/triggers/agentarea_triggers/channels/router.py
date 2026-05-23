@@ -69,10 +69,20 @@ class ChannelRouter:
         message = adapter.format(event, presentation)
 
         # Dedup key: stable across broker redelivery and pub/sub re-fire.
-        # We key on (task_id, event_type, event id) so the same workflow event
-        # routed twice is the same delivery job.
+        # event_id comes from the CloudEvents envelope root via the pub/sub
+        # bridge (subscriber.py). Falling back to "" would collapse all
+        # events of the same (task_id, event_type) into one dedup slot —
+        # silent loss within the dedup TTL window. We log loudly instead.
         task_id = event.get("task_id") or event.get("aggregate_id") or ""
-        event_id = event.get("data", {}).get("event_id") or ""
+        event_id = event.get("event_id") or event.get("data", {}).get("event_id")
+        if not event_id:
+            logger.warning(
+                "channel routing: missing event_id for task=%s event_type=%s — "
+                "dedup will collapse repeats of this event type into one delivery",
+                task_id,
+                event_type,
+            )
+            event_id = ""
         dedup_key = f"{task_id}:{event_type}:{event_id}"
 
         await self._emitter.submit(

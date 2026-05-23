@@ -155,9 +155,14 @@ class ChannelEventSubscriber:
                 data.get("task_id") or envelope.get("aggregate_id") or data.get("aggregate_id")
             )
 
+            # event_id lives at the CloudEvents envelope root (key "id"),
+            # not inside data. The router needs it to build a stable dedup
+            # key so two distinct workflow events with the same type aren't
+            # mistaken for redeliveries of each other.
             event: dict[str, Any] = {
                 "event_type": event_type,
                 "task_id": task_id,
+                "event_id": envelope.get("id"),
                 "data": data,
                 # channel_origin may be embedded in data by the workflow
                 "channel_origin": data.get("channel_origin"),

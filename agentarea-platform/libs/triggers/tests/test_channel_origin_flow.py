@@ -175,13 +175,27 @@ class TestChannelOriginInTaskParams:
 
 
 class TestRouterWithTaskLookup:
-    """Test ChannelRouter with task_lookup for resolving channel_origin."""
+    """Test ChannelRouter with task_lookup for resolving channel_origin.
+
+    The router now hands off to a `ChannelDeliveryEmitter` instead of
+    calling `adapter.send` inline — the actual delivery is the consumer's
+    job. Tests assert `emitter.submit` was called with the right shape.
+    """
+
+    @pytest.fixture
+    def emitter(self):
+        e = AsyncMock()
+        e.submit = AsyncMock(return_value="msg-id-1")
+        return e
 
     @pytest.mark.asyncio
-    async def test_router_resolves_origin_from_lookup(self):
-        """Router should look up task to find channel_origin."""
-        mock_adapter = AsyncMock()
-        mock_adapter.format.return_value = "formatted"
+    async def test_router_resolves_origin_from_lookup(self, emitter):
+        """Router looks up task params to find channel_origin, then formats
+        + submits to the delivery stream."""
+        from unittest.mock import MagicMock
+        mock_adapter = MagicMock()
+        mock_adapter.format = MagicMock(return_value="formatted")
+        mock_adapter.send = AsyncMock()
         register_adapter("telegram_lookup_test", mock_adapter)
 
         async def mock_task_lookup(task_id: str):
@@ -193,56 +207,71 @@ class TestRouterWithTaskLookup:
                 }
             }
 
-        router = ChannelRouter(task_lookup=mock_task_lookup)
+        router = ChannelRouter(emitter=emitter, task_lookup=mock_task_lookup)
 
         event = {
             "event_type": "WorkflowCompleted",
             "task_id": str(uuid4()),
+            "event_id": str(uuid4()),
             "data": {"result": "Done"},
         }
 
         await router.on_task_event(event)
 
         mock_adapter.format.assert_called_once()
-        mock_adapter.send.assert_called_once()
+        # Router no longer calls send directly — that's the consumer's job.
+        mock_adapter.send.assert_not_called()
+        emitter.submit.assert_called_once()
+        kwargs = emitter.submit.await_args.kwargs
+        assert kwargs["channel_type"] == "telegram_lookup_test"
+        assert kwargs["message"] == "formatted"
 
     @pytest.mark.asyncio
-    async def test_router_caches_lookup_result(self):
-        """Router should cache task lookup results."""
+    async def test_router_caches_lookup_result(self, emitter):
+        """Router caches channel_origin per task to avoid repeated DB lookups
+        across non-terminal events. (Terminal events evict the cache, by
+        design — covered separately below.)
+        """
+        from unittest.mock import MagicMock
         call_count = 0
 
         async def counting_lookup(task_id: str):
             nonlocal call_count
             call_count += 1
-            return {"channel_origin": {"type": "telegram_cache_test", "chat_id": "1", "presentation": "silent"}}
+            return {"channel_origin": {"type": "telegram_cache_test", "chat_id": "1", "presentation": "concise"}}
 
-        mock_adapter = AsyncMock()
-        mock_adapter.format.return_value = "msg"
+        mock_adapter = MagicMock()
+        mock_adapter.format = MagicMock(return_value="msg")
+        mock_adapter.send = AsyncMock()
         register_adapter("telegram_cache_test", mock_adapter)
 
-        router = ChannelRouter(task_lookup=counting_lookup)
+        router = ChannelRouter(emitter=emitter, task_lookup=counting_lookup)
         task_id = str(uuid4())
 
-        # Send two events for same task
-        for event_type in ("WorkflowCompleted", "WorkflowFailed"):
-            await router.on_task_event({"event_type": event_type, "task_id": task_id, "data": {}})
+        # Two non-terminal events on the same task → one lookup.
+        for event_type in ("WorkflowStarted", "ToolCallStarted"):
+            await router.on_task_event({
+                "event_type": event_type,
+                "task_id": task_id,
+                "event_id": str(uuid4()),
+                "data": {},
+            })
 
-        # Lookup should only be called once
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_router_no_lookup_no_origin_skips(self):
-        """Without task_lookup or channel_origin, event is skipped."""
-        router = ChannelRouter(task_lookup=None)
+    async def test_router_no_lookup_no_origin_skips(self, emitter):
+        """Without task_lookup or channel_origin, event is skipped (no submit)."""
+        router = ChannelRouter(emitter=emitter, task_lookup=None)
 
         event = {"event_type": "WorkflowCompleted", "task_id": str(uuid4()), "data": {}}
         await router.on_task_event(event)
-        # Should not raise
+        emitter.submit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_router_clear_cache(self):
+    async def test_router_clear_cache(self, emitter):
         """Cache can be cleared per task or entirely."""
-        router = ChannelRouter()
+        router = ChannelRouter(emitter=emitter)
         router._origin_cache["task1"] = {"type": "telegram"}
         router._origin_cache["task2"] = {"type": "email"}
 
