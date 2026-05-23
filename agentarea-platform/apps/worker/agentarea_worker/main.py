@@ -209,8 +209,6 @@ class AgentAreaWorker:
         from agentarea_triggers.channels.adapters import register_all_adapters
         from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
         from agentarea_triggers.channels.delivery_consumer import (
-            OUTBOUND_GROUP,
-            OUTBOUND_STREAM,
             ChannelDeliveryConsumer,
             ChannelDeliveryEmitter,
         )
@@ -221,11 +219,16 @@ class AgentAreaWorker:
 
         settings = get_settings()
         redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
+        delivery_cfg = settings.channel_delivery
 
         # Shared broker + dedup cache backing both the producer side (router
         # → emitter → stream) and the consumer side (delivery loop).
         self._broker = RedisStreamsBroker(redis_url)
-        self._dedup = DedupCache(redis_url, prefix="channel-delivery")
+        self._dedup = DedupCache(
+            redis_url,
+            prefix="channel-delivery",
+            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+        )
 
         # Inbound: Go polling → Redis → Python task execution
         self.inbound_subscriber = InboundMessageSubscriber(
@@ -268,7 +271,7 @@ class AgentAreaWorker:
                 logger.exception("task_lookup failed for task_id=%s", task_id)
                 return None
 
-        emitter = ChannelDeliveryEmitter(self._broker)
+        emitter = ChannelDeliveryEmitter(self._broker, stream=delivery_cfg.OUTBOUND_STREAM)
         router = ChannelRouter(emitter=emitter, task_lookup=_task_lookup)
         self.outbound_subscriber = ChannelEventSubscriber(router=router, redis_url=redis_url)
 
@@ -276,12 +279,19 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._dedup,
             adapter_resolver=get_adapter,
+            stream=delivery_cfg.OUTBOUND_STREAM,
+            group=delivery_cfg.OUTBOUND_GROUP,
+            dlq_stream=delivery_cfg.OUTBOUND_DLQ,
+            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
+            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
         )
         self.delivery_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=OUTBOUND_STREAM,
-            group=OUTBOUND_GROUP,
+            stream=delivery_cfg.OUTBOUND_STREAM,
+            group=delivery_cfg.OUTBOUND_GROUP,
             consumer_id="autoclaimer",
+            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
+            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
         )
 
     async def run(self) -> None:

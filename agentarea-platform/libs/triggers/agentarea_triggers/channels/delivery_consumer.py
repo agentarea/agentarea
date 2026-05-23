@@ -1,12 +1,16 @@
-"""Durable outbound channel delivery on top of Redis Streams.
+"""Durable outbound channel delivery on top of a `BrokerClient`.
 
-`ChannelDeliveryEmitter` submits a pre-formatted message to the outbound
-stream — that's the producer side, called by `ChannelRouter` instead of
-invoking the adapter inline.
+`ChannelDeliveryEmitter` is the producer side: it takes the formatted
+message + channel config from `ChannelRouter` and writes it onto the
+outbound stream.
 
-`ChannelDeliveryConsumer` is the worker loop: claims via XREADGROUP, dedups,
-calls the adapter, and either ACKs (success), leaves un-ACKed (retryable —
-broker redelivers after PEL idle), or ACKs into the DLQ stream (fatal).
+`ChannelDeliveryConsumer` is the worker loop: claim via the broker,
+dedup, call the adapter, then ACK / requeue / DLQ depending on the
+typed outcome.
+
+Stream / group names are constructor params, never module globals, so
+tests construct their own isolated streams and production wires the
+defaults from `apps/worker/main.py`.
 """
 
 from __future__ import annotations
@@ -19,27 +23,25 @@ from typing import TYPE_CHECKING
 from .exceptions import ChannelDeliveryError, FatalError, RetryableError
 
 if TYPE_CHECKING:
-    from agentarea_common.broker import BrokerClient, DedupCache
+    from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
 
-    from . import ChannelAdapter
+    from . import ChannelAdapter  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-
-OUTBOUND_STREAM = "agentarea.channel.outbound"
-OUTBOUND_DLQ = "agentarea.channel.outbound.dlq"
-OUTBOUND_GROUP = "delivery"
 
 
 class ChannelDeliveryEmitter:
     """Producer side: submit a delivery job to the outbound stream.
 
-    The router formats and resolves channel_origin, then hands the result
-    here. We never block on the actual adapter.send — the worker does it.
+    `stream` is mandatory — it comes from `ChannelDeliverySettings` in
+    production wiring and from per-test fixtures in tests. Keeping it out
+    of module globals avoids tests stomping on each other and the
+    config-vs-code drift that comes with hardcoded names.
     """
 
-    def __init__(self, broker: BrokerClient) -> None:
+    def __init__(self, broker: BrokerClient, *, stream: str) -> None:
         self._broker = broker
+        self._stream = stream
 
     async def submit(
         self,
@@ -55,15 +57,15 @@ class ChannelDeliveryEmitter:
             "message": message,
             "dedup_key": dedup_key,
         }
-        return await self._broker.submit(OUTBOUND_STREAM, fields)
+        return await self._broker.submit(self._stream, fields)
 
 
 class ChannelDeliveryConsumer:
-    """Worker loop: claim outbound stream entries and deliver via adapter.
+    """Worker loop: claim outbound entries, deliver via adapter, settle.
 
     On `RetryableError`: leave un-ACKed; broker redelivers after PEL idle
-    timeout (configured via XAutoclaimer min_idle_ms upstream). On
-    `FatalError` (or unexpected exceptions classified as fatal): ACK and
+    timeout (paired with `StreamAutoclaimer` to recover dead consumers).
+    On `FatalError` (or contract violations classified as fatal): ACK +
     DLQ-emit so the message doesn't loop forever.
     """
 
@@ -73,6 +75,9 @@ class ChannelDeliveryConsumer:
         dedup: DedupCache,
         adapter_resolver,  # Callable[[str], ChannelAdapter | None]
         *,
+        stream: str,
+        group: str,
+        dlq_stream: str,
         consumer_id: str = "c1",
         block_ms: int = 5000,
         batch_size: int = 10,
@@ -80,6 +85,9 @@ class ChannelDeliveryConsumer:
         self._broker = broker
         self._dedup = dedup
         self._resolve_adapter = adapter_resolver
+        self._stream = stream
+        self._group = group
+        self._dlq_stream = dlq_stream
         self._consumer_id = consumer_id
         self._block_ms = block_ms
         self._batch_size = batch_size
@@ -89,13 +97,13 @@ class ChannelDeliveryConsumer:
     async def start(self) -> None:
         if self._running:
             return
-        await self._broker.ensure_group(OUTBOUND_STREAM, OUTBOUND_GROUP, start="0")
+        await self._broker.ensure_group(self._stream, self._group, start="0")
         self._running = True
         self._task = asyncio.create_task(self._run_loop(), name="channel-delivery-consumer")
         logger.info(
             "ChannelDeliveryConsumer started (stream=%s group=%s consumer=%s)",
-            OUTBOUND_STREAM,
-            OUTBOUND_GROUP,
+            self._stream,
+            self._group,
             self._consumer_id,
         )
 
@@ -108,15 +116,15 @@ class ChannelDeliveryConsumer:
             except asyncio.CancelledError:
                 pass
             self._task = None
-        logger.info("ChannelDeliveryConsumer stopped")
+        logger.info("ChannelDeliveryConsumer stopped (stream=%s)", self._stream)
 
     async def _run_loop(self) -> None:
         backoff = 1.0
         while self._running:
             try:
                 msgs = await self._broker.consume(
-                    OUTBOUND_STREAM,
-                    OUTBOUND_GROUP,
+                    self._stream,
+                    self._group,
                     self._consumer_id,
                     count=self._batch_size,
                     block_ms=self._block_ms,
@@ -138,7 +146,7 @@ class ChannelDeliveryConsumer:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
 
-    async def _handle(self, msg) -> None:
+    async def _handle(self, msg: BrokerMessage) -> None:
         fields = msg.fields
         dedup_key = fields.get("dedup_key") or msg.id
 
@@ -146,7 +154,7 @@ class ChannelDeliveryConsumer:
         # autoclaim race) just ACK and return without re-sending.
         if not await self._dedup.claim(dedup_key):
             logger.debug("dedup hit on %s, acking", dedup_key)
-            await self._broker.ack(OUTBOUND_STREAM, OUTBOUND_GROUP, msg.id)
+            await self._broker.ack(self._stream, self._group, msg.id)
             return
 
         channel_type = fields.get("channel_type", "")
@@ -170,27 +178,23 @@ class ChannelDeliveryConsumer:
                 "delivery retryable %s/%s: %s", channel_type, dedup_key, exc
             )
             return  # no ACK → broker redelivers via PEL idle
-        except FatalError as exc:
+        except (FatalError, ChannelDeliveryError) as exc:
             await self._dead_letter(msg, f"{type(exc).__name__}: {exc}")
             return
-        except ChannelDeliveryError as exc:
-            await self._dead_letter(msg, f"{type(exc).__name__}: {exc}")
-            return
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             # Unknown errors: classify as retryable. Prefer over-retry over
-            # silent loss; XAutoclaimer + PEL delivery_count caps the loop.
+            # silent loss; PEL delivery_count caps the loop in practice.
             logger.exception("delivery unexpected error on %s", dedup_key)
-            _ = exc
             return
 
-        await self._broker.ack(OUTBOUND_STREAM, OUTBOUND_GROUP, msg.id)
+        await self._broker.ack(self._stream, self._group, msg.id)
         logger.debug("delivered %s/%s", channel_type, dedup_key)
 
-    async def _dead_letter(self, msg, reason: str) -> None:
+    async def _dead_letter(self, msg: BrokerMessage, reason: str) -> None:
         dlq_fields = {**msg.fields, "fatal_reason": reason[:500]}
         try:
-            await self._broker.submit(OUTBOUND_DLQ, dlq_fields)
+            await self._broker.submit(self._dlq_stream, dlq_fields)
         except Exception:  # noqa: BLE001
             logger.exception("failed to write to DLQ for %s", msg.id)
-        await self._broker.ack(OUTBOUND_STREAM, OUTBOUND_GROUP, msg.id)
+        await self._broker.ack(self._stream, self._group, msg.id)
         logger.error("channel delivery DLQ'd: %s (reason=%s)", msg.id, reason)

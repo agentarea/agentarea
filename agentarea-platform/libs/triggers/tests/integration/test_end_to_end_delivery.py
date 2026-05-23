@@ -33,8 +33,7 @@ WORKFLOW_CHANNEL = "agentarea.events.workflow.WorkflowCompleted"
 
 
 class CapturingTelegramAdapter:
-    """Stand-in for the Telegram HTTP adapter: records what it would send
-    instead of actually hitting api.telegram.org."""
+    """Stand-in for the Telegram HTTP adapter — records would-be sends."""
 
     def __init__(self) -> None:
         self.sent: list[tuple[dict, str]] = []
@@ -49,20 +48,13 @@ class CapturingTelegramAdapter:
 
 @pytest_asyncio.fixture()
 async def pipeline():
-    """Spin up the entire production pipeline rooted at a unique stream so
-    parallel runs don't collide.
-    """
+    """Spin up the entire production pipeline rooted at unique streams."""
     test_id = uuid.uuid4().hex[:8]
     stream = f"e2e:outbound:{test_id}"
     group = "delivery"
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    dlq = f"e2e:outbound:dlq:{test_id}"
 
-    # Patch the module-level stream constants so emitter + consumer agree on
-    # the per-test stream name.
-    import agentarea_triggers.channels.delivery_consumer as dc
-    saved_stream, saved_group = dc.OUTBOUND_STREAM, dc.OUTBOUND_GROUP
-    dc.OUTBOUND_STREAM = stream
-    dc.OUTBOUND_GROUP = group
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
     broker = RedisStreamsBroker(REDIS_URL)
     dedup = DedupCache(REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
@@ -74,21 +66,23 @@ async def pipeline():
     adapter = CapturingTelegramAdapter()
     register_adapter("telegram", adapter)
 
-    emitter = ChannelDeliveryEmitter(broker)
+    emitter = ChannelDeliveryEmitter(broker, stream=stream)
     router = ChannelRouter(emitter=emitter, task_lookup=None)
     subscriber = ChannelEventSubscriber(router=router, redis_url=REDIS_URL)
     consumer = ChannelDeliveryConsumer(
         broker=broker,
         dedup=dedup,
         adapter_resolver=lambda t: adapter if t == "telegram" else None,
+        stream=stream,
+        group=group,
+        dlq_stream=dlq,
         consumer_id="e2e",
         block_ms=200,
     )
 
     await subscriber.start()
     await consumer.start()
-    # Give the pub/sub subscription a beat to actually subscribe before we
-    # start publishing — Redis pub/sub drops messages with no subscribers.
+    # Pub/sub drops messages with no subscribers — wait for psubscribe to land.
     await asyncio.sleep(0.3)
 
     yield adapter, redis_client
@@ -98,11 +92,9 @@ async def pipeline():
     await broker.aclose()
     await dedup.aclose()
     await redis_client.aclose()
-    dc.OUTBOUND_STREAM, dc.OUTBOUND_GROUP = saved_stream, saved_group
 
 
 async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
-    """Drive the full pipeline with a single synthetic completion event."""
     adapter, redis_client = pipeline
 
     task_id = str(uuid.uuid4())
@@ -126,8 +118,6 @@ async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
 
     await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(envelope))
 
-    # Bridge subscriber dispatches → router formats + submits to stream →
-    # consumer reads stream + calls adapter. Wait up to ~3s for all hops.
     for _ in range(60):
         if adapter.sent:
             break
@@ -140,8 +130,6 @@ async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
 
 
 async def test_duplicate_publish_results_in_single_delivery(pipeline):
-    """Same event_id published twice → adapter.send called exactly once
-    (dedup at consumer level)."""
     adapter, redis_client = pipeline
 
     task_id = str(uuid.uuid4())
