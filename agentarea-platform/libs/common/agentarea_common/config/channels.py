@@ -58,4 +58,14 @@ class ChannelDeliverySettings(BaseSettings):
         description="Maximum entries claimed per XREADGROUP fetch.",
     )
 
+    MAX_DELIVERY_ATTEMPTS: int = Field(
+        default=20,
+        description=(
+            "Cap on how many times the broker may redeliver a message before "
+            "it gets dead-lettered. Bounds both transient-failure retry loops "
+            "(adapter outage) and poison messages (always-throwing code) so a "
+            "single bad message can't burn a consumer indefinitely."
+        ),
+    )
+
     model_config = {"env_prefix": "CHANNEL_DELIVERY_", "extra": "ignore"}

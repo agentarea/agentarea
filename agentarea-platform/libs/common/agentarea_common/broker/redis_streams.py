@@ -72,7 +72,8 @@ class RedisStreamsBroker:
             count=count,
             block=block_ms,
         )
-        return _flatten_xread(response)
+        msgs = _flatten_xread(response)
+        return await self._enrich_with_delivery_count(client, stream, group, msgs)
 
     async def ack(self, stream: str, group: str, message_id: str) -> None:
         client = await self._get_client()
@@ -101,7 +102,50 @@ class RedisStreamsBroker:
             return []
         # redis-py shape: (next_id, claimed_entries[, deleted_ids])
         claimed = response[1] if len(response) > 1 else []
-        return [BrokerMessage(id=mid, fields=fields) for mid, fields in claimed]
+        msgs = [BrokerMessage(id=mid, fields=fields) for mid, fields in claimed]
+        return await self._enrich_with_delivery_count(client, stream, group, msgs)
+
+    async def _enrich_with_delivery_count(
+        self,
+        client: redis.Redis,
+        stream: str,
+        group: str,
+        msgs: list[BrokerMessage],
+    ) -> list[BrokerMessage]:
+        """Backfill `delivery_count` on each message via a single
+        `XPENDING ... IDLE 0 min max count` over the claimed batch.
+
+        Redis Streams tracks delivery_count per pending entry; the count
+        only exists once XREADGROUP/XAUTOCLAIM has claimed the entry, so
+        we read it right after the claim. One round-trip per batch.
+        """
+        if not msgs:
+            return msgs
+        ids = [m.id for m in msgs]
+        try:
+            # XPENDING <stream> <group> IDLE 0 <min> <max> <count> bounded
+            # by the batch range. redis-py returns dicts:
+            # [{"message_id", "consumer", "time_since_delivered", "times_delivered"}, ...]
+            pending: Any = await client.xpending_range(
+                stream,
+                group,
+                min=ids[0],
+                max=ids[-1],
+                count=len(ids),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("XPENDING enrich failed, defaulting delivery_count=1: %s", exc)
+            return msgs
+
+        by_id = {p["message_id"]: int(p["times_delivered"]) for p in (pending or [])}
+        return [
+            BrokerMessage(
+                id=m.id,
+                fields=m.fields,
+                delivery_count=by_id.get(m.id, m.delivery_count),
+            )
+            for m in msgs
+        ]
 
 
 def _flatten_xread(response: Any) -> list[BrokerMessage]:

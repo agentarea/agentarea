@@ -249,7 +249,13 @@ async def test_retryable_error_releases_dedup_key(broker, dedup, streams):
     assert await dedup.claim(key) is True
 
 
-async def test_unknown_channel_type_dead_letters(broker, dedup, streams):
+async def test_unknown_channel_type_releases_for_redelivery(broker, dedup, streams):
+    """Unknown channel_type is usually transient (partial rollout / missing
+    adapter registration after deploy). Consumer must release the dedup
+    claim and leave the entry un-ACKed so the broker redelivers — once
+    the adapter ships, recovery is automatic. Only the delivery_count
+    cap (separate test) eventually DLQs true orphans.
+    """
     emitter = ChannelDeliveryEmitter(broker, stream=streams["stream"])
     consumer = ChannelDeliveryConsumer(
         broker=broker,
@@ -260,19 +266,115 @@ async def test_unknown_channel_type_dead_letters(broker, dedup, streams):
         dlq_stream=streams["dlq"],
         consumer_id="c-orphan",
         block_ms=200,
+        max_delivery_attempts=100,  # high so the cap doesn't fire in-test
     )
 
+    key = f"orphan-{streams['test_id']}"
     await emitter.submit(
         channel_type="not_a_real_channel",
         channel_config={"chat_id": 1},
         message="orphan",
-        dedup_key=f"orphan-{streams['test_id']}",
+        dedup_key=key,
     )
     await _drain(consumer)
 
+    # DLQ stays empty — message is still pending for redelivery.
     import redis.asyncio as redis
     client = redis.from_url(REDIS_URL, decode_responses=True)
     try:
-        assert await client.xlen(streams["dlq"]) >= 1
+        assert await client.xlen(streams["dlq"]) == 0
     finally:
         await client.aclose()
+
+    # Dedup key was released — a fresh claim must succeed.
+    assert await dedup.claim(key) is True
+
+
+async def test_delivery_count_cap_dead_letters_poison():
+    """Universal poison-message ceiling: regardless of the failure kind,
+    after `max_delivery_attempts` redeliveries the message goes to DLQ
+    instead of looping forever. Broker reports delivery_count natively
+    via BrokerMessage; consumer guards on it without knowing whether
+    the broker is Redis Streams, NATS, Kafka, etc.
+
+    Pure unit test against a stub broker (no Redis), so the cap path is
+    proven in isolation without waiting for real XPENDING to accumulate.
+    """
+    from agentarea_common.broker import BrokerMessage
+
+    poison = BrokerMessage(
+        id="1-0",
+        fields={
+            "channel_type": "telegram",
+            "channel_config": '{"chat_id": 1}',
+            "message": "poison",
+            "dedup_key": "poison-unit-test",
+        },
+        delivery_count=21,  # over default cap of 20
+    )
+
+    class _StubBroker:
+        def __init__(self, msg: BrokerMessage):
+            self._msg: BrokerMessage | None = msg
+            self.acked: list[str] = []
+            self.dlq_submits: list[tuple[str, dict]] = []
+
+        async def ensure_group(self, *_, **__):
+            pass
+
+        async def consume(self, *_, **__):
+            # Yield to the event loop so consumer.stop() can interrupt.
+            # Without this, a tight stub-driven loop never reaches a
+            # cancellation point and pytest hangs at teardown.
+            await asyncio.sleep(0)
+            m, self._msg = self._msg, None
+            return [m] if m else []
+
+        async def ack(self, _stream, _group, message_id):
+            self.acked.append(message_id)
+
+        async def submit(self, stream, fields):
+            self.dlq_submits.append((stream, dict(fields)))
+            return "dlq-id"
+
+    class _StubDedup:
+        async def claim(self, _key):  # pragma: no cover - cap fires first
+            return True
+
+        async def release(self, _key):  # pragma: no cover
+            pass
+
+    adapter_called = False
+
+    def _adapter_resolver(_t):
+        nonlocal adapter_called
+        adapter_called = True
+        return None  # would only run if cap didn't fire
+
+    stub = _StubBroker(poison)
+    consumer = ChannelDeliveryConsumer(
+        broker=stub,
+        dedup=_StubDedup(),
+        adapter_resolver=_adapter_resolver,
+        stream="ignored",
+        group="ignored",
+        dlq_stream="ignored-dlq",
+        consumer_id="c-poison",
+        block_ms=10,
+        max_delivery_attempts=20,
+    )
+    await consumer.start()
+    # Single iteration is enough — stub yields once then stays empty.
+    for _ in range(20):
+        if stub.acked:
+            break
+        await asyncio.sleep(0.02)
+    await consumer.stop()
+
+    # Poison cap fires BEFORE adapter resolution / dedup claim.
+    assert not adapter_called
+    assert poison.id in stub.acked
+    assert len(stub.dlq_submits) == 1
+    dlq_stream, dlq_fields = stub.dlq_submits[0]
+    assert dlq_stream == "ignored-dlq"
+    assert "max delivery attempts" in dlq_fields["fatal_reason"]

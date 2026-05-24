@@ -14,10 +14,25 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class BrokerMessage:
-    """A message claimed from a broker stream."""
+    """A message claimed from a broker stream.
+
+    `delivery_count` is the universal "how many times has this message
+    been handed to a consumer" counter. The shape is broker-agnostic — each
+    BrokerClient impl populates it from its native primitive:
+
+      - Redis Streams: XPENDING ... delivery_count
+      - NATS JetStream: msg.metadata.num_delivered
+      - AWS SQS: ApproximateReceiveCount
+      - Kafka (no native): broker maintains a side counter
+
+    Consumers use `delivery_count` to cap poison loops and dead-letter
+    messages that have failed too many times, without knowing or caring
+    which broker is underneath.
+    """
 
     id: str  # broker-assigned ID (e.g. "1700000000000-0" for Redis Streams)
     fields: dict[str, str]
+    delivery_count: int = 1
 
 
 class BrokerClient(Protocol):

@@ -24,7 +24,7 @@ from . import register_adapter
 from .exceptions import FatalError, RetryableError
 
 if TYPE_CHECKING:
-    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+    from .secret_reader import SecretReader
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +156,12 @@ class HttpSenderConfig:
 
 def make_http_sender(
     cfg: HttpSenderConfig,
-    secret_manager: BaseSecretManager | None = None,
+    secret_reader: SecretReader,
 ) -> Callable[[dict[str, Any], str], Awaitable[None]]:
     """Build an async send(channel_config, message) function."""
 
     async def send(channel_config: dict[str, Any], message: str) -> None:
-        token = await _resolve_token(secret_manager, channel_config)
+        token = await _resolve_token(secret_reader, channel_config)
         if not token:
             # No credentials = fatal misconfiguration; not retryable.
             raise FatalError("missing channel credentials")
@@ -232,14 +232,17 @@ def _strip_markdown(text: str) -> str:
 
 
 async def _resolve_token(
-    secret_manager: BaseSecretManager | None,
+    secret_reader: SecretReader,
     channel_config: dict[str, Any],
 ) -> str | None:
-    """Resolve bot token from the secret store. Shared by all HTTP senders."""
-    if not secret_manager:
-        logger.error("No secret_manager — cannot resolve channel credentials")
-        return None
+    """Resolve bot token from the secret store. Shared by all HTTP senders.
 
+    Returns None when the credential is genuinely absent or unreadable;
+    `make_http_sender` translates that into `FatalError` so the message
+    DLQs cleanly. We never raise from here because the secret reader is
+    required at boot and a None result means "creds missing" — a
+    classification, not a system failure.
+    """
     trigger_id = channel_config.get("trigger_id")
     if not trigger_id:
         logger.error("No trigger_id in channel_config")
@@ -247,12 +250,17 @@ async def _resolve_token(
 
     ch_type = channel_config.get("type", "unknown")
     secret_name = f"channel_cred:{ch_type}:{trigger_id}"
-    raw = await secret_manager.get_secret(secret_name)
+    raw = await secret_reader.get_secret(secret_name)
     if not raw:
         logger.error("Credentials not found for %s trigger %s", ch_type, trigger_id)
         return None
 
-    creds = json.loads(raw)
+    try:
+        creds = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        # Stored blob is corrupt — caller will surface as FatalError.
+        logger.error("Corrupt credentials blob for %s trigger %s: %s", ch_type, trigger_id, exc)
+        return None
     return creds.get("bot_token")
 
 
@@ -329,8 +337,14 @@ class _ComposedAdapter:
 # ── Registration ──────────────────────────────────────────────────
 
 
-def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> None:
-    """Register all HTTP-based channel adapters."""
+def register_all_adapters(secret_reader: SecretReader) -> None:
+    """Register all HTTP-based channel adapters.
+
+    `secret_reader` is required — channel delivery without a credential
+    store would silently no-op, which is exactly the bug class this whole
+    pipeline rewrite was built to remove. Missing the dep is a boot
+    failure, not a runtime fallback.
+    """
     channels = {
         "slack": (SLACK_MD, SLACK_SENDER),
         "discord": (DISCORD_MD, DISCORD_SENDER),
@@ -339,6 +353,6 @@ def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> No
     for name, (flavor, sender_cfg) in channels.items():
         adapter = _ComposedAdapter(
             formatter=make_formatter(flavor),
-            sender=make_http_sender(sender_cfg, secret_manager),
+            sender=make_http_sender(sender_cfg, secret_reader),
         )
         register_adapter(name, adapter)

@@ -213,7 +213,7 @@ class AgentAreaWorker:
             ChannelDeliveryEmitter,
         )
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageSubscriber
-        from agentarea_triggers.channels.lazy_secret_manager import LazySecretManager
+        from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
         from agentarea_triggers.channels.router import ChannelRouter
         from agentarea_triggers.channels.subscriber import ChannelEventSubscriber
 
@@ -239,8 +239,8 @@ class AgentAreaWorker:
 
         # Register adapters; they raise typed Retryable/Fatal errors that the
         # delivery consumer translates into ACK / requeue / DLQ.
-        secret_manager = LazySecretManager(dependencies.secret_manager_factory)
-        register_all_adapters(secret_manager)
+        secret_reader = LazySecretReader(dependencies.secret_manager_factory)
+        register_all_adapters(secret_reader)
 
         async def _task_lookup(task_id: str) -> dict | None:
             from uuid import UUID
@@ -284,6 +284,7 @@ class AgentAreaWorker:
             dlq_stream=delivery_cfg.OUTBOUND_DLQ,
             block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
             batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
         )
         self.delivery_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
