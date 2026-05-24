@@ -56,11 +56,20 @@ def create_activity_dependencies() -> ActivityDependencies:
 
     secret_manager_factory = SecretManagerFactory(settings.secret_manager)
 
-    # Create dependency container
+    # Shared BrokerClient for outbound channel delivery. Built here (not
+    # inside _setup_channel_subscribers) so the publish_workflow_events
+    # activity can enqueue deliveries directly without going through the
+    # lossy pub/sub bridge.
+    from agentarea_common.broker import RedisStreamsBroker
+    redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
+    broker_client = RedisStreamsBroker(redis_url)
+
     return ActivityDependencies(
         settings=settings,
         event_broker=event_broker,
         secret_manager_factory=secret_manager_factory,
+        broker_client=broker_client,
+        channel_delivery_settings=settings.channel_delivery,
     )
 
 
@@ -72,7 +81,6 @@ class AgentAreaWorker:
         self.worker = None
         self.trigger_worker = None
         self.inbound_subscriber = None
-        self.outbound_subscriber = None
         self.delivery_consumer = None
         self.delivery_autoclaimer = None
         self._broker = None
@@ -203,27 +211,31 @@ class AgentAreaWorker:
         logger.info("Worker created and configured")
 
     async def _setup_channel_subscribers(self, dependencies) -> None:
-        """Wire inbound subscriber + outbound delivery pipeline."""
-        from agentarea_common.broker import DedupCache, RedisStreamsBroker
+        """Wire inbound subscriber + outbound delivery consumer.
+
+        The router-via-pub/sub bridge is gone: `publish_workflow_events_activity`
+        now enqueues channel deliveries directly via `dependencies.broker_client`.
+        This method only wires the *consumer side* (delivery loop +
+        autoclaimer) and the inbound polling subscriber.
+        """
+        from agentarea_common.broker import DedupCache
         from agentarea_triggers.channels import get_adapter
         from agentarea_triggers.channels.adapters import register_all_adapters
         from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
         from agentarea_triggers.channels.delivery_consumer import (
             ChannelDeliveryConsumer,
-            ChannelDeliveryEmitter,
         )
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageSubscriber
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
-        from agentarea_triggers.channels.router import ChannelRouter
-        from agentarea_triggers.channels.subscriber import ChannelEventSubscriber
 
         settings = get_settings()
         redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
         delivery_cfg = settings.channel_delivery
 
-        # Shared broker + dedup cache backing both the producer side (router
-        # → emitter → stream) and the consumer side (delivery loop).
-        self._broker = RedisStreamsBroker(redis_url)
+        # Broker comes from dependencies — same instance the activity uses
+        # for producer-side submits. Shutdown closes it once.
+        assert dependencies.broker_client is not None, "broker_client missing from deps"
+        self._broker = dependencies.broker_client
         self._dedup = DedupCache(
             redis_url,
             prefix="channel-delivery",
@@ -241,39 +253,6 @@ class AgentAreaWorker:
         # delivery consumer translates into ACK / requeue / DLQ.
         secret_reader = LazySecretReader(dependencies.secret_manager_factory)
         register_all_adapters(secret_reader)
-
-        async def _task_lookup(task_id: str) -> dict | None:
-            from uuid import UUID
-
-            from agentarea_common.auth.context import UserContext
-            from agentarea_common.base.repository_factory import RepositoryFactory
-            from agentarea_common.config import get_database
-            from agentarea_tasks.infrastructure.orm import TaskORM
-            from agentarea_tasks.infrastructure.repository import TaskRepository
-
-            try:
-                database = get_database()
-                async with database.async_session_factory() as session:
-                    task_orm = await session.get(TaskORM, UUID(task_id))
-                    if not task_orm:
-                        return None
-                    user_context = UserContext(
-                        user_id=str(task_orm.created_by),
-                        workspace_id=str(task_orm.workspace_id),
-                    )
-                    repo_factory = RepositoryFactory(session, user_context)
-                    task_repo = repo_factory.create_repository(TaskRepository)
-                    task = await task_repo.get_task(UUID(task_id))
-                    if not task:
-                        return None
-                    return task.parameters or {}
-            except Exception:
-                logger.exception("task_lookup failed for task_id=%s", task_id)
-                return None
-
-        emitter = ChannelDeliveryEmitter(self._broker, stream=delivery_cfg.OUTBOUND_STREAM)
-        router = ChannelRouter(emitter=emitter, task_lookup=_task_lookup)
-        self.outbound_subscriber = ChannelEventSubscriber(router=router, redis_url=redis_url)
 
         self.delivery_consumer = ChannelDeliveryConsumer(
             broker=self._broker,
@@ -305,8 +284,6 @@ class AgentAreaWorker:
         # Start channel subscribers and delivery pipeline
         if self.inbound_subscriber:
             await self.inbound_subscriber.start()
-        if self.outbound_subscriber:
-            await self.outbound_subscriber.start()
         if self.delivery_consumer:
             await self.delivery_consumer.start()
         if self.delivery_autoclaimer:
@@ -362,9 +339,6 @@ class AgentAreaWorker:
         if self.inbound_subscriber:
             await self.inbound_subscriber.stop()
             self.inbound_subscriber = None
-        if self.outbound_subscriber:
-            await self.outbound_subscriber.stop()
-            self.outbound_subscriber = None
         if self.delivery_autoclaimer:
             await self.delivery_autoclaimer.stop()
             self.delivery_autoclaimer = None
