@@ -209,6 +209,7 @@ class AgentConfigResult(BaseModel):
     name: str
     description: str
     instruction: str
+    agent_type: str = "stateless"
     model_id: str
     context_window: int = 128000  # From ModelSpec, used for context window management
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
@@ -286,6 +287,7 @@ class MCPToolRequest(BaseModel):
     task_id: str | None = None  # Scopes artifact-style tools to a task
     agent_id: UUID | None = None  # Calling agent — used by self-referential tools (e.g. triggers)
     tools: list[dict[str, Any]] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPToolResult(BaseModel):
@@ -520,7 +522,10 @@ class ExecuteSkillScriptRequest(BaseModel):
     script_name: str  # e.g. "calculator.py" — determines interpreter
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
-    timeout_seconds: int = 30
+    artifact_paths: list[str] = Field(default_factory=list)
+    timeout_seconds: int = 1800
+    workspace_id: str | None = None
+    task_id: str | None = None
 
 
 class ExecuteSkillScriptResult(BaseModel):
@@ -530,6 +535,7 @@ class ExecuteSkillScriptResult(BaseModel):
     stderr: str = ""
     exit_code: int = 0
     execution_time_ms: int = 0
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # === Context Store Activity Models ===

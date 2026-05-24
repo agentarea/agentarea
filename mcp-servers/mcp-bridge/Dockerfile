@@ -16,6 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bridge.py .
+RUN chmod 755 /app/bridge.py
 
 ENV PORT=8080 \
     HOME=/tmp \

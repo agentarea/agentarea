@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,9 +30,12 @@ var (
 	// lastRequestTime tracks the wall-clock time of the most recent /execute
 	// or /activate call. The idle-timeout watchdog reads this to decide when
 	// to self-exit, which lets K8s reclaim the pod if mcp-manager never
-	// issues an explicit DELETE (worker crash, network partition, etc.).
-	lastRequestMu sync.Mutex
-	lastRequest   = time.Now()
+	// issues an explicit DELETE (worker crash, network partition, etc.). Active
+	// requests are tracked separately so a long-running command is never killed
+	// just because it has been quiet for longer than the idle TTL.
+	lastRequestMu  sync.Mutex
+	lastRequest    = time.Now()
+	activeRequests int
 )
 
 // workspaceRoot is the parent directory for all per-workflow workspaces.
@@ -97,7 +102,7 @@ func main() {
 		Addr:         ":" + port,
 		Handler:      nil,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: time.Duration(maxExecutionTimeoutSeconds()+30) * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -119,6 +124,9 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func activateHandler(w http.ResponseWriter, r *http.Request) {
+	beginRequest()
+	defer endRequest()
+
 	start := time.Now()
 
 	if status != "waiting" {
@@ -237,7 +245,7 @@ func activate(req ActivateRequest) error {
 	env := buildEnvironment(imageConfig, req.Env, req.Port, req.MCPImageHash)
 
 	// Step 4: Start MCP process
-	if err := startContainer(extractDir, entrypoint, command, env); err != nil {
+	if err := startContainer(extractDir, imageConfig.WorkingDir, entrypoint, command, env); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -314,6 +322,9 @@ func prepareMCP(image, hash, extractDir string) error {
 	logger.Info("Extracting MCP image")
 	if err := extractImage(imagePath, extractDir); err != nil {
 		return fmt.Errorf("failed to extract: %w", err)
+	}
+	if err := installRuntimeNetworkConfig(extractDir); err != nil {
+		return fmt.Errorf("failed to install runtime network config: %w", err)
 	}
 
 	return nil
@@ -421,6 +432,34 @@ func extractImage(imagePath, extractDir string) error {
 	return nil
 }
 
+func installRuntimeNetworkConfig(rootDir string) error {
+	etcDir := filepath.Join(rootDir, "etc")
+	if err := os.MkdirAll(etcDir, 0755); err != nil {
+		return err
+	}
+
+	for _, name := range []string{"resolv.conf", "hosts", "nsswitch.conf"} {
+		source := filepath.Join("/etc", name)
+		data, err := os.ReadFile(source)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+
+		dest := filepath.Join(etcDir, name)
+		if err := ValidateFilePath(rootDir, dest); err != nil {
+			return err
+		}
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port int, imageHash string) []string {
 	env := make(map[string]string)
 
@@ -444,6 +483,7 @@ func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port 
 
 	// Set activation-specific variables
 	env["MCP_PORT"] = fmt.Sprintf("%d", port)
+	env["PORT"] = fmt.Sprintf("%d", port)
 	env["MCP_IMAGE_HASH"] = imageHash
 
 	// Convert to KEY=value format
@@ -474,16 +514,22 @@ func isValidEnvVarName(name string) bool {
 	return true
 }
 
-func startContainer(rootDir string, entrypoint, command []string, env []string) error {
+func startContainer(rootDir, workingDir string, entrypoint, command []string, env []string) error {
 	// Combine entrypoint and command
 	args := append(entrypoint, command...)
 	if len(args) == 0 {
 		return fmt.Errorf("no command to execute")
 	}
+	containerWorkDir := normalizeContainerWorkDir(workingDir)
+	hostWorkDir := filepath.Join(rootDir, strings.TrimPrefix(containerWorkDir, "/"))
+	if err := os.MkdirAll(hostWorkDir, 0750); err != nil {
+		return fmt.Errorf("failed to prepare working directory: %w", err)
+	}
 
 	logger.Info("Starting container",
 		"executable", args[0],
 		"args", args[1:],
+		"working_dir", containerWorkDir,
 	)
 
 	// Security: Validate the executable path
@@ -491,12 +537,21 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 		return fmt.Errorf("invalid executable: %w", err)
 	}
 
-	// Try chroot first (requires CAP_SYS_CHROOT)
-	cmd, err := SafeCommand("chroot", append([]string{rootDir}, args...)...)
-	if err != nil {
-		return fmt.Errorf("invalid chroot command: %w", err)
-	}
-	cmd.Env = env
+	// Try chroot first (requires CAP_SYS_CHROOT). Use the image WORKDIR so
+	// relative ENTRYPOINT/CMD values like ["python", "bridge.py"] behave as
+	// they do under a regular container runtime.
+	chrootArgs := append(
+		[]string{
+			rootDir,
+			"/bin/sh",
+			"-c",
+			`cd "$MCP_WORKDIR" && exec "$@"`,
+			"--",
+		},
+		args...,
+	)
+	cmd := exec.Command("chroot", chrootArgs...) // #nosec G204 -- argv comes from a hash-verified image config and validated request command args.
+	cmd.Env = append(env, "MCP_WORKDIR="+containerWorkDir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
@@ -513,7 +568,7 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 		if err != nil {
 			return fmt.Errorf("invalid command: %w", err)
 		}
-		cmd.Dir = rootDir
+		cmd.Dir = hostWorkDir
 		cmd.Env = append(env, buildPathEnv(rootDir)...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Setpgid: true,
@@ -530,6 +585,16 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 	logger.Info("Container process started", "pid", mcpProcess.Pid)
 
 	return nil
+}
+
+func normalizeContainerWorkDir(workingDir string) string {
+	if workingDir == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(workingDir, "/") {
+		workingDir = "/" + workingDir
+	}
+	return filepath.Clean(workingDir)
 }
 
 func buildPathEnv(rootDir string) []string {
@@ -552,25 +617,46 @@ func buildPathEnv(rootDir string) []string {
 // Workspace lifetime depends on WorkflowID:
 //   - empty: a fresh tempdir is created and removed after the call.
 //   - set:   /workspace/wf-<WorkflowID>/ is created if missing, persisted across
-//            calls with the same WorkflowID, and removed only when the pod is
-//            torn down (deleted by mcp-manager) or the idle-timeout backstop
-//            fires. Files, installed packages, and any state written here
-//            survive between bash calls in the same workflow.
+//     calls with the same WorkflowID, and removed only when the pod is
+//     torn down (deleted by mcp-manager) or the idle-timeout backstop
+//     fires. Files, installed packages, and any state written here
+//     survive between bash calls in the same workflow.
 type ExecuteRequest struct {
-	ScriptContent  string            `json:"script_content"`
-	ScriptName     string            `json:"script_name"`
-	Args           []string          `json:"args,omitempty"`
-	Env            map[string]string `json:"env,omitempty"`
-	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
-	WorkflowID     string            `json:"workflow_id,omitempty"`
+	ScriptContent  string             `json:"script_content"`
+	ScriptName     string             `json:"script_name"`
+	Args           []string           `json:"args,omitempty"`
+	Env            map[string]string  `json:"env,omitempty"`
+	InputFiles     []SandboxInputFile `json:"input_files,omitempty"`
+	ArtifactPaths  []string           `json:"artifact_paths,omitempty"`
+	TimeoutSeconds int                `json:"timeout_seconds,omitempty"`
+	WorkflowID     string             `json:"workflow_id,omitempty"`
+}
+
+// SandboxInputFile is materialized inside the per-call or per-workflow workspace
+// before the requested script runs.
+type SandboxInputFile struct {
+	Path          string `json:"path"`
+	ContentBase64 string `json:"content_base64"`
+	ContentType   string `json:"content_type,omitempty"`
+}
+
+// SandboxArtifact is a file produced by a sandbox command and requested by the caller.
+type SandboxArtifact struct {
+	Path          string `json:"path"`
+	Name          string `json:"name,omitempty"`
+	ContentType   string `json:"content_type,omitempty"`
+	Size          int64  `json:"size,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 // ExecuteResponse represents the result of script execution.
 type ExecuteResponse struct {
-	Stdout          string `json:"stdout"`
-	Stderr          string `json:"stderr"`
-	ExitCode        int    `json:"exit_code"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
+	Stdout          string            `json:"stdout"`
+	Stderr          string            `json:"stderr"`
+	ExitCode        int               `json:"exit_code"`
+	ExecutionTimeMs int64             `json:"execution_time_ms"`
+	Artifacts       []SandboxArtifact `json:"artifacts,omitempty"`
 }
 
 func executeHandler(w http.ResponseWriter, r *http.Request) {
@@ -579,7 +665,8 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	noteRequest()
+	beginRequest()
+	defer endRequest()
 
 	var req ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -599,7 +686,8 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	timeout := 30
-	if req.TimeoutSeconds > 0 && req.TimeoutSeconds <= 300 {
+	maxTimeout := maxExecutionTimeoutSeconds()
+	if req.TimeoutSeconds > 0 && req.TimeoutSeconds <= maxTimeout {
 		timeout = req.TimeoutSeconds
 	}
 
@@ -613,6 +701,11 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if cleanupWorkspace != nil {
 		defer cleanupWorkspace()
+	}
+
+	if err := materializeInputFiles(workspace, req.InputFiles); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
 	}
 
 	// Build the command to run.
@@ -677,6 +770,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Capture output
 	var stdout, stderr bytes.Buffer
@@ -684,6 +778,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = &stderr
 
 	start := time.Now()
+	artifactSince := start
 
 	// Run with timeout
 	if err := cmd.Start(); err != nil {
@@ -716,23 +811,244 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 			Stderr:          stderr.String(),
 			ExitCode:        exitCode,
 			ExecutionTimeMs: elapsed,
+			Artifacts:       collectArtifacts(workspace, req.ArtifactPaths, artifactSince),
 		})
 
 	case <-time.After(time.Duration(timeout) * time.Second):
-		cmd.Process.Kill()
+		killProcessGroup(cmd.Process)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ExecuteResponse{
 			Stderr:          "execution timed out",
 			ExitCode:        137,
 			ExecutionTimeMs: time.Since(start).Milliseconds(),
+			Artifacts:       collectArtifacts(workspace, req.ArtifactPaths, artifactSince),
 		})
 	}
 
 	logger.Info("Script executed",
 		"script", req.ScriptName,
-		"exit_code", stdout.Len(),
+		"stdout_bytes", stdout.Len(),
 		"elapsed_ms", time.Since(start).Milliseconds(),
 	)
+}
+
+const maxArtifactBytes = 25 * 1024 * 1024
+const maxInputFileBytes = 10 * 1024 * 1024
+const maxAutoArtifacts = 20
+
+func materializeInputFiles(workspace string, files []SandboxInputFile) error {
+	for _, file := range files {
+		if file.Path == "" {
+			return fmt.Errorf("input file path is required")
+		}
+		clean := filepath.Clean(file.Path)
+		if filepath.IsAbs(file.Path) || strings.HasPrefix(clean, "..") || strings.Contains(clean, string(filepath.Separator)+".."+string(filepath.Separator)) {
+			return fmt.Errorf("input file path must be relative and must not contain '..': %s", file.Path)
+		}
+
+		data, err := base64.StdEncoding.DecodeString(file.ContentBase64)
+		if err != nil {
+			return fmt.Errorf("invalid input file content for %s: %w", file.Path, err)
+		}
+		if len(data) > maxInputFileBytes {
+			return fmt.Errorf("input file too large: %s", file.Path)
+		}
+
+		fullPath := filepath.Join(workspace, clean)
+		if err := ValidateFilePath(workspace, fullPath); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+			return fmt.Errorf("failed to create input directory for %s: %w", file.Path, err)
+		}
+		if err := os.WriteFile(fullPath, data, 0o600); err != nil {
+			return fmt.Errorf("failed to write input file %s: %w", file.Path, err)
+		}
+	}
+	return nil
+}
+
+func collectArtifacts(workspace string, paths []string, since time.Time) []SandboxArtifact {
+	if len(paths) == 0 {
+		paths = discoverAutoArtifacts(workspace, since)
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+
+	artifacts := make([]SandboxArtifact, 0, len(paths))
+	for _, requested := range paths {
+		artifact := SandboxArtifact{Path: requested, Name: filepath.Base(requested)}
+		clean := filepath.Clean(requested)
+		if requested == "" || filepath.IsAbs(requested) || strings.HasPrefix(clean, "..") || strings.Contains(clean, string(filepath.Separator)+".."+string(filepath.Separator)) {
+			artifact.Error = "artifact path must be relative and must not contain '..'"
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+
+		fullPath := filepath.Join(workspace, clean)
+		if err := ValidateFilePath(workspace, fullPath); err != nil {
+			artifact.Error = err.Error()
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			artifact.Error = err.Error()
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+		if info.IsDir() {
+			artifact.Error = "artifact path is a directory"
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+		if info.Size() > maxArtifactBytes {
+			artifact.Error = fmt.Sprintf("artifact exceeds %d byte limit", maxArtifactBytes)
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			artifact.Error = err.Error()
+			artifacts = append(artifacts, artifact)
+			continue
+		}
+		contentType := http.DetectContentType(data)
+		artifact.Size = int64(len(data))
+		artifact.ContentType = contentType
+		artifact.ContentBase64 = base64.StdEncoding.EncodeToString(data)
+		artifacts = append(artifacts, artifact)
+	}
+
+	return artifacts
+}
+
+var autoArtifactExtensions = map[string]bool{
+	".csv":  true,
+	".docx": true,
+	".json": true,
+	".md":   true,
+	".pdf":  true,
+	".pptx": true,
+	".txt":  true,
+	".xlsx": true,
+}
+
+var autoArtifactIgnoredDirs = map[string]bool{
+	".cache":        true,
+	".git":          true,
+	".npm":          true,
+	".venv":         true,
+	"__pycache__":   true,
+	"inputs":        true,
+	"node_modules":  true,
+	"site-packages": true,
+}
+
+var autoArtifactIgnoredNames = map[string]bool{
+	"authors":          true,
+	"authors.txt":      true,
+	"cmd.sh":           true,
+	"entry_points.txt": true,
+	"license":          true,
+	"license.md":       true,
+	"license.txt":      true,
+	"licenses.txt":     true,
+	"readme":           true,
+	"readme.md":        true,
+	"readme.txt":       true,
+	"top_level.txt":    true,
+}
+
+type autoArtifactCandidate struct {
+	path    string
+	modTime time.Time
+	size    int64
+}
+
+func discoverAutoArtifacts(workspace string, since time.Time) []string {
+	candidates := make([]autoArtifactCandidate, 0, maxAutoArtifacts)
+	_ = filepath.WalkDir(workspace, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, relErr := filepath.Rel(workspace, path)
+		if relErr != nil || rel == "." {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if entry.IsDir() {
+			if shouldSkipAutoArtifactDir(rel) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if shouldSkipAutoArtifactFile(rel) {
+			return nil
+		}
+		if !autoArtifactExtensions[strings.ToLower(filepath.Ext(rel))] {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil || info.IsDir() || info.Size() <= 0 || info.Size() > maxArtifactBytes {
+			return nil
+		}
+		// Only auto-publish files created or modified by this command. Older
+		// files should already have been persisted by the command that created
+		// them, and this avoids uploading package metadata from prior setup
+		// steps on every no-op command.
+		if !since.IsZero() && info.ModTime().Before(since.Add(-1*time.Second)) {
+			return nil
+		}
+		candidates = append(candidates, autoArtifactCandidate{
+			path:    rel,
+			modTime: info.ModTime(),
+			size:    info.Size(),
+		})
+		return nil
+	})
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].modTime.Equal(candidates[j].modTime) {
+			return candidates[i].path < candidates[j].path
+		}
+		return candidates[i].modTime.After(candidates[j].modTime)
+	})
+	if len(candidates) > maxAutoArtifacts {
+		candidates = candidates[:maxAutoArtifacts]
+	}
+	paths := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		paths = append(paths, candidate.path)
+	}
+	return paths
+}
+
+func shouldSkipAutoArtifactDir(rel string) bool {
+	if rel == "" || rel == "." {
+		return false
+	}
+	for _, part := range strings.Split(rel, "/") {
+		lower := strings.ToLower(part)
+		if autoArtifactIgnoredDirs[lower] || strings.HasSuffix(lower, ".dist-info") || strings.HasSuffix(lower, ".egg-info") {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldSkipAutoArtifactFile(rel string) bool {
+	if rel == "" || strings.HasPrefix(rel, "inputs/") {
+		return true
+	}
+	base := strings.ToLower(filepath.Base(rel))
+	if autoArtifactIgnoredNames[base] {
+		return true
+	}
+	return strings.HasPrefix(base, ".")
 }
 
 // workspaceCleanupHandler removes /workspace/wf-<id>/ for a finished workflow.
@@ -769,11 +1085,44 @@ func workspaceCleanupHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// noteRequest records the time of the latest request for the idle watchdog.
-func noteRequest() {
+// beginRequest/endRequest record activity for the idle watchdog.
+func beginRequest() {
 	lastRequestMu.Lock()
 	lastRequest = time.Now()
+	activeRequests++
 	lastRequestMu.Unlock()
+}
+
+func endRequest() {
+	lastRequestMu.Lock()
+	if activeRequests > 0 {
+		activeRequests--
+	}
+	lastRequest = time.Now()
+	lastRequestMu.Unlock()
+}
+
+func maxExecutionTimeoutSeconds() int {
+	raw := os.Getenv("MAX_EXECUTION_TIMEOUT_SECONDS")
+	if raw == "" {
+		return 1800
+	}
+	timeoutSec, err := strconv.Atoi(raw)
+	if err != nil || timeoutSec <= 0 {
+		logger.Warn("invalid MAX_EXECUTION_TIMEOUT_SECONDS, using default", "value", raw)
+		return 1800
+	}
+	return timeoutSec
+}
+
+func killProcessGroup(process *os.Process) {
+	if process == nil {
+		return
+	}
+	if err := syscall.Kill(-process.Pid, syscall.SIGKILL); err == nil {
+		return
+	}
+	_ = process.Kill()
 }
 
 // startIdleWatchdog launches a goroutine that exits the process when no
@@ -802,8 +1151,9 @@ func startIdleWatchdog() {
 		for range check.C {
 			lastRequestMu.Lock()
 			idle := time.Since(lastRequest)
+			active := activeRequests
 			lastRequestMu.Unlock()
-			if idle >= timeout {
+			if active == 0 && idle >= timeout {
 				logger.Info("idle timeout reached, exiting", "idle_seconds", int(idle.Seconds()))
 				os.Exit(0)
 			}

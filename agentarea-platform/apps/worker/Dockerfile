@@ -41,7 +41,8 @@ COPY --chown=appuser:appuser apps/worker/docker-entrypoint.sh ./docker-entrypoin
 COPY --chown=appuser:appuser pyproject.toml ./
 
 # Make entrypoint executable (small operation, minimal layer impact)
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod 755 /app/docker-entrypoint.sh && \
+    chmod -R a+rX /app/apps /app/libs
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1

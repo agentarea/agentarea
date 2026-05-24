@@ -1,6 +1,6 @@
 """Unit tests for the ShellToolset HTTP wrapper.
 
-The toolset is a thin client over POST /sandbox/execute on mcp-manager.
+The toolset is a thin client over POST /sandbox/executions on mcp-manager.
 These tests pin the contract (payload shape + ToolInvocationContext
 propagation + response formatting) without spinning up the sandbox
 itself — that's covered by the Go-side activation-service tests and the
@@ -48,8 +48,29 @@ class _RecordingClient:
         pass
 
 
-def _ctx(workflow_id: str) -> ToolInvocationContext:
-    return ToolInvocationContext(workflow_id=workflow_id)
+class _Object:
+    def __init__(self, path: str, size: int) -> None:
+        self.path = path
+        self.size = size
+
+
+class _Storage:
+    def __init__(self, objects: dict[str, bytes]) -> None:
+        self.objects = objects
+
+    async def list(self, workspace_id: str, prefix: str = "") -> list[_Object]:
+        return [
+            _Object(path, len(data))
+            for path, data in self.objects.items()
+            if path.startswith(prefix)
+        ]
+
+    async def get(self, workspace_id: str, path: str) -> tuple[bytes, str | None]:
+        return self.objects[path], "application/octet-stream"
+
+
+def _ctx(workflow_id: str, metadata: dict[str, str] | None = None) -> ToolInvocationContext:
+    return ToolInvocationContext(workflow_id=workflow_id, metadata=metadata or {})
 
 
 @pytest.mark.asyncio
@@ -65,11 +86,12 @@ async def test_bash_propagates_workflow_id_from_ctx():
     assert result == "ok"
     assert len(fake.calls) == 1
     url, payload = fake.calls[0]
-    assert url == "http://mcp-manager:8000/sandbox/execute"
-    assert payload["script_name"] == "cmd.sh"
-    assert payload["script_content"] == "echo ok"
+    assert url == "http://mcp-manager:8000/sandbox/executions"
+    assert payload["command"]["script_name"] == "cmd.sh"
+    assert payload["command"]["script_content"] == "echo ok"
     assert payload["workflow_id"] == "task-abc"
-    assert payload["timeout_seconds"] == 30
+    assert payload["command"]["workflow_id"] == "task-abc"
+    assert payload["command"]["timeout_seconds"] == 120
 
 
 @pytest.mark.asyncio
@@ -80,6 +102,35 @@ async def test_bash_omits_workflow_id_without_ctx():
 
     _, payload = fake.calls[0]
     assert "workflow_id" not in payload
+    assert "workflow_id" not in payload["command"]
+
+
+@pytest.mark.asyncio
+async def test_bash_mounts_project_files_as_inputs():
+    fake = _RecordingClient(_FakeResponse(payload={"stdout": "ok", "stderr": "", "exit_code": 0}))
+    storage = _Storage(
+        {
+            "projects/project-1/source.docx": b"docx bytes",
+            "projects/project-1/nested/info.txt": b"hello",
+            "projects/other/skip.txt": b"skip",
+        }
+    )
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w", {"project_id": "project-1"}),
+        storage=storage,
+        workspace_id="workspace-1",
+        http_client=fake,
+    )
+    await tool.bash("find inputs -type f")
+
+    _, payload = fake.calls[0]
+    assert payload["command"]["env"]["AGENTAREA_INPUT_DIR"] == "inputs"
+    assert [item["path"] for item in payload["command"]["input_files"]] == [
+        "inputs/source.docx",
+        "inputs/nested/info.txt",
+    ]
+    assert payload["command"]["input_files"][0]["content_base64"] == "ZG9jeCBieXRlcw=="
 
 
 @pytest.mark.asyncio
@@ -148,10 +199,12 @@ async def test_bash_clamps_unsafe_timeout():
     fake = _RecordingClient(_FakeResponse(payload={"stdout": "", "stderr": "", "exit_code": 0}))
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     await tool.bash("echo x", timeout_seconds=0)
+    await tool.bash("echo x", timeout_seconds=1800)
     await tool.bash("echo x", timeout_seconds=10000)
 
-    assert fake.calls[0][1]["timeout_seconds"] == 30  # 0 → default
-    assert fake.calls[1][1]["timeout_seconds"] == 30  # 10000 → default
+    assert fake.calls[0][1]["command"]["timeout_seconds"] == 120  # 0 → default
+    assert fake.calls[1][1]["command"]["timeout_seconds"] == 1800
+    assert fake.calls[2][1]["command"]["timeout_seconds"] == 120  # 10000 → default
 
 
 @pytest.mark.asyncio
@@ -170,3 +223,5 @@ async def test_concurrent_bash_calls_keep_independent_ctx():
 
     assert fake_a.calls[0][1]["workflow_id"] == "task-A"
     assert fake_b.calls[0][1]["workflow_id"] == "task-B"
+    assert fake_a.calls[0][1]["command"]["workflow_id"] == "task-A"
+    assert fake_b.calls[0][1]["command"]["workflow_id"] == "task-B"

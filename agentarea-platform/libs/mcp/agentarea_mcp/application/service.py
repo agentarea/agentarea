@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -54,6 +55,19 @@ SECRET_HEADER_NAMES = {
     "proxy-authorization",
     "x-api-key",
 }
+
+
+def _lazy_mcp_provisioning_enabled() -> bool:
+    return os.getenv("MCP_LAZY_PROVISIONING_ENABLED", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _is_lazy_instance(instance: MCPServerInstance) -> bool:
+    return bool((instance.json_spec or {}).get("lazy_provisioning"))
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -511,6 +525,12 @@ class MCPServerInstanceService:
             if inspect.isawaitable(refresh_result):
                 await refresh_result
 
+        elif _lazy_mcp_provisioning_enabled() and (spec or {}).get("lazy_provisioning"):
+            logger.info(
+                "Skipping background MCP verification for lazy instance %s",
+                instance.id,
+            )
+
         else:
             # docker/command — fire background verify; monitor will also sweep.
             # Hold a strong reference so the GC doesn't drop the task mid-flight
@@ -816,6 +836,33 @@ class MCPServerInstanceService:
         # Non-bundle: check verification status
         verification = instance.verification or {}
         if verification.get("status") != "succeeded":
+            if _lazy_mcp_provisioning_enabled() and _is_lazy_instance(instance):
+                logger.info(
+                    "Lazy MCP provisioning on first tool call: instance=%s tool=%s",
+                    server_instance_id,
+                    tool_name,
+                )
+                verification = await self.verify_instance(server_instance_id)
+                instance = await self.repository.get_by_id(server_instance_id)
+                if not instance:
+                    return _fail(
+                        f"MCP server instance {server_instance_id} disappeared during provisioning.",
+                        f"MCP server instance {server_instance_id} disappeared during provisioning",
+                    )
+                refresh_result = self.repository.session.refresh(instance)
+                if inspect.isawaitable(refresh_result):
+                    await refresh_result
+            else:
+                reason = verification.get("status", "unknown")
+                v_err = (verification.get("error") or {}).get("message", "")
+                detail = f" ({v_err})" if v_err else ""
+                return _fail(
+                    f"MCP '{instance.name}' is not available (status: {reason}{detail}). "
+                    "Re-verify the instance.",
+                    f"Instance {server_instance_id} verification status: {reason}",
+                )
+
+        if verification.get("status") != "succeeded":
             reason = verification.get("status", "unknown")
             v_err = (verification.get("error") or {}).get("message", "")
             detail = f" ({v_err})" if v_err else ""
@@ -937,25 +984,26 @@ class MCPServerInstanceService:
     ):
         from mcp import ClientSession
 
+        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+
         try:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=30), headers=headers or None
+                streamable_url, timeout=timedelta(seconds=30), headers=headers or None
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
                     return await session.call_tool(tool_name, tool_args)
         except Exception as e:
-            logger.info("Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e)
+            logger.info(
+                "Streamable HTTP call failed for %s (%s), trying SSE at %s",
+                streamable_url,
+                e,
+                sse_url,
+            )
 
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(sse_url, timeout=30, headers=headers or None) as (
             read_stream,
@@ -968,25 +1016,26 @@ class MCPServerInstanceService:
     async def _list_tools_via_mcp(self, mcp_url: str, headers: dict[str, str]):
         from mcp import ClientSession
 
+        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+
         try:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10), headers=headers or None
+                streamable_url, timeout=timedelta(seconds=10), headers=headers or None
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
                     return await session.list_tools()
         except Exception as e:
-            logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, e)
+            logger.info(
+                "Streamable HTTP failed for %s (%s), trying SSE at %s",
+                streamable_url,
+                e,
+                sse_url,
+            )
 
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(sse_url, timeout=10, headers=headers or None) as (
             read_stream,
@@ -995,6 +1044,15 @@ class MCPServerInstanceService:
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 return await session.list_tools()
+
+    @staticmethod
+    def _mcp_transport_urls(mcp_url: str) -> tuple[str, str]:
+        base = mcp_url.rstrip("/")
+        if base.endswith("/sse"):
+            return base[:-4] + "/mcp", base
+        if base.endswith("/mcp"):
+            return base, base[:-4] + "/sse"
+        return base + "/mcp", base + "/sse"
 
     async def validate_connection(
         self, url: str, headers: dict[str, str] | None = None

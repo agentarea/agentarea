@@ -1,16 +1,20 @@
 """Projects CRUD API endpoints."""
 
 import logging
+from pathlib import PurePosixPath
 from typing import Annotated, Any
+from urllib.parse import quote
 from uuid import UUID
 
 from agentarea_common.artifacts import ArtifactService
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
+from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
@@ -248,6 +252,12 @@ def _project_path(project_id: UUID, rel: str = "") -> str:
     return f"projects/{project_id}/{rel}" if rel else f"projects/{project_id}/"
 
 
+def _project_file_download_url(project_id: UUID, file_path: str) -> str:
+    base = get_app_settings().API_BASE_URL.rstrip("/")
+    encoded_path = quote(file_path.lstrip("/"), safe="/")
+    return f"{base}/v1/projects/{project_id}/files/download/{encoded_path}"
+
+
 @router.post("/{project_id}/files", status_code=204)
 async def upload_project_file(
     project_id: UUID,
@@ -295,6 +305,30 @@ async def list_project_files(
     return ProjectFileListResponse(files=files)
 
 
+@router.get("/{project_id}/files/download/{file_path:path}")
+async def stream_project_file(
+    project_id: UUID,
+    file_path: str,
+    user_context: UserContextDep,
+    service: ProjectServiceDep,
+):
+    """Stream a project file through the AgentArea API."""
+    project = await service.get(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    svc = ArtifactService()
+    full_path = _project_path(project_id, file_path)
+    try:
+        data, content_type = await svc.get(user_context.workspace_id, full_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    filename = PurePosixPath(file_path).name or "file.bin"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
+
+
 @router.get("/{project_id}/files/{file_path:path}", response_model=ProjectFileDownloadResponse)
 async def download_project_file(
     project_id: UUID,
@@ -302,7 +336,7 @@ async def download_project_file(
     user_context: UserContextDep,
     service: ProjectServiceDep,
 ):
-    """Generate a presigned URL for a project file."""
+    """Return an AgentArea API URL for a project file."""
     project = await service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -311,7 +345,7 @@ async def download_project_file(
     full_path = _project_path(project_id, file_path)
     if not await svc.exists(user_context.workspace_id, full_path):
         raise HTTPException(status_code=404, detail="File not found")
-    url = await svc.presigned_url(user_context.workspace_id, full_path)
+    url = _project_file_download_url(project_id, file_path)
     return ProjectFileDownloadResponse(url=url, path=file_path)
 
 

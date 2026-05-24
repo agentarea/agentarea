@@ -62,6 +62,7 @@ WHERE COALESCE(
     END
   ) IN ('docker', 'command')
   AND (i.verification->>'status') = 'never_attempted'
+  AND COALESCE((i.json_spec->>'lazy_provisioning')::boolean, false) = false
 """
 
 

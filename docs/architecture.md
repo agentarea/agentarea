@@ -9,6 +9,9 @@
 
 AgentArea is a cloud-native, microservices-based agent management and orchestration platform with event-driven MCP (Model Context Protocol) integration and comprehensive Agent-to-Agent (A2A) communication capabilities.
 
+For sandbox execution boundaries, customer-hosted data-plane options, and the
+runtime replacement contract, see [Sandbox Control Plane and Data Plane](./sandbox-control-data-plane.md).
+
 ### **Core Components**
 - **AgentArea Backend** (FastAPI) - Main API, business logic, and agent orchestration
 - **MCP Infrastructure** (Go) - High-performance container orchestration and MCP server management  
