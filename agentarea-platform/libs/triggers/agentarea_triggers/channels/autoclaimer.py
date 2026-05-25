@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from agentarea_common.broker import BrokerClient
+from agentarea_common.broker import BrokerClient
 
 logger = logging.getLogger(__name__)
 

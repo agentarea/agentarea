@@ -18,6 +18,7 @@ try:
         TaskPolicySnapshotORM,
     )
 except ImportError:
+    # Governance library not yet installed - skip for now
     pass
 
 config = context.config

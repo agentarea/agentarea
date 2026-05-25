@@ -40,11 +40,11 @@ class BrokerClient(Protocol):
 
     async def submit(self, stream: str, fields: dict[str, str]) -> str:
         """Append a message to `stream`. Returns the broker-assigned message id."""
-        ...
+        raise NotImplementedError
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
         """Create the consumer group + stream if absent. Idempotent."""
-        ...
+        raise NotImplementedError
 
     async def consume(
         self,
@@ -57,11 +57,11 @@ class BrokerClient(Protocol):
         """Claim up to `count` un-ACKed messages for this consumer. Blocks
         up to `block_ms` if the stream is empty. Returns [] on timeout.
         """
-        ...
+        raise NotImplementedError
 
     async def ack(self, stream: str, group: str, message_id: str) -> None:
         """Mark `message_id` as delivered for `group`. Removes it from PEL."""
-        ...
+        raise NotImplementedError
 
     async def autoclaim(
         self,
@@ -76,4 +76,4 @@ class BrokerClient(Protocol):
         from dead consumers. Returns the reclaimed batch (now owned by
         `consumer`).
         """
-        ...
+        raise NotImplementedError

@@ -18,14 +18,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING
+
+from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
 
 from .exceptions import ChannelDeliveryError, FatalError, RetryableError
-
-if TYPE_CHECKING:
-    from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
-
-    from . import ChannelAdapter  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

@@ -23,4 +23,5 @@ from typing import Protocol
 class SecretReader(Protocol):
     """Adapter-facing view of a secret store. Read-only by design."""
 
-    async def get_secret(self, name: str) -> str | None: ...
+    async def get_secret(self, name: str) -> str | None:
+        raise NotImplementedError

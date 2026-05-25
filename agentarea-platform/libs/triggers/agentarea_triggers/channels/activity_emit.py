@@ -16,14 +16,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from agentarea_common.broker import BrokerClient
 from agentarea_execution.workflows.visibility import PresentationMode, is_visible
 
 from . import get_adapter
-
-if TYPE_CHECKING:
-    from agentarea_common.broker import BrokerClient
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ class PolicyResolverPort(Protocol):
         Implementations must apply lower-scope-only-tightens validation and
         return an immutable EffectivePolicy snapshot.
         """
-        ...
+        raise NotImplementedError
 
     async def snapshot(
         self,
@@ -41,4 +41,4 @@ class PolicyResolverPort(Protocol):
         effective_policy: EffectivePolicy,
     ) -> None:
         """Persist the immutable policy snapshot before workflow dispatch."""
-        ...
+        raise NotImplementedError
