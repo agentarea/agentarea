@@ -13,10 +13,14 @@ const cli = meow(
 	Commands
 	  (no command)    Interactive TUI mode
 	  agents list     List all agents
+	  connect codex   Connect Codex to Agentarea MCP
+	  connect claude  Connect Claude Code to Agentarea MCP
 
 	Options
 	  --token         JWT authentication token (or use AGENTAREA_TOKEN env var)
 	  --api-url       API server URL (default: http://localhost:8000)
+	  --name          Local Agentarea target name (default: default)
+	  --scope         Connection scope: project or user (default: project)
 
 	Examples
 	  $ agentarea-cli --token=eyJ...
@@ -33,6 +37,14 @@ const cli = meow(
 				type: 'string',
 				default: 'http://localhost:8000',
 			},
+			scope: {
+				type: 'string',
+				default: 'project',
+			},
+			name: {
+				type: 'string',
+				default: 'default',
+			},
 		},
 	},
 );
@@ -46,6 +58,8 @@ if (command) {
 	handleCliCommand(command, subcommand, {
 		token,
 		apiUrl: cli.flags.apiUrl,
+		scope: cli.flags.scope,
+		name: cli.flags.name,
 	}).catch((error) => {
 		console.error('CLI command failed:', error);
 		process.exit(1);
