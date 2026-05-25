@@ -13,7 +13,10 @@ except ImportError:
     pass
 
 try:
-    from agentarea_workspaces.domain.models import WorkspaceSettings  # noqa: F401
+    from agentarea_governance.infrastructure.orm import (  # noqa: F401
+        GovernancePolicyORM,
+        TaskPolicySnapshotORM,
+    )
 except ImportError:
     pass
 
