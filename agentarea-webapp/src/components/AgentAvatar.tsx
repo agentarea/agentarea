@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import {
   type AgentColorToken,
   agentColorVar,
@@ -44,7 +45,6 @@ export function AgentAvatar({
   status,
 }: AgentAvatarProps) {
   const { colorToken, iconKey } = resolveAgentIdentity(agent);
-  const Icon = getAgentIconComponent(iconKey);
   const sizeCls = SIZE_CLASS[size];
 
   return (
@@ -62,7 +62,7 @@ export function AgentAvatar({
         }
         aria-hidden="true"
       >
-        <Icon strokeWidth={2} />
+        {createElement(getAgentIconComponent(iconKey), { strokeWidth: 2 })}
       </span>
       {status && (
         <span
