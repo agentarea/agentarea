@@ -1,4 +1,10 @@
-"""Channel router: subscribes to task events, dispatches to outbound adapters."""
+"""Channel router: subscribes to task events, enqueues durable delivery jobs.
+
+The router resolves channel_origin + formats the message, then submits the
+job to the outbound Redis Stream via `ChannelDeliveryEmitter`. The actual
+adapter call happens in `ChannelDeliveryConsumer` so transient failures
+get retried by the broker instead of silently swallowed.
+"""
 
 import logging
 from collections.abc import Callable, Coroutine
@@ -6,7 +12,8 @@ from typing import Any
 
 from agentarea_execution.workflows.visibility import PresentationMode, is_visible
 
-from . import ChannelAdapter, get_adapter
+from . import get_adapter
+from .delivery_consumer import ChannelDeliveryEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -15,36 +22,26 @@ TaskLookup = Callable[[str], Coroutine[Any, Any, dict[str, Any] | None]]
 
 
 class ChannelRouter:
-    """Routes workflow events to external channel adapters.
+    """Resolves channel context for workflow events and enqueues delivery.
 
-    Sits between the event pipeline (Redis pub/sub) and outbound channel adapters.
-    For each event, resolves the task's channel_origin (from event data or via
-    task lookup) and dispatches to the appropriate adapter with presentation filtering.
-
-    The router caches channel_origin per task_id to avoid repeated DB lookups.
+    Routing decision (which channel, which formatting, visibility filter) is
+    fast and stateless; the slow part — calling the remote adapter — runs in
+    the delivery consumer. The router caches channel_origin per task_id to
+    avoid repeated DB lookups.
     """
 
-    def __init__(self, task_lookup: TaskLookup | None = None):
-        """Initialize router.
-
-        Args:
-            task_lookup: Async callable that returns task_parameters for a task_id.
-                         Used to resolve channel_origin when not in the event itself.
-        """
+    def __init__(
+        self,
+        emitter: ChannelDeliveryEmitter,
+        task_lookup: TaskLookup | None = None,
+    ):
+        self._emitter = emitter
         self._task_lookup = task_lookup
         self._origin_cache: dict[str, dict[str, Any] | None] = {}
 
     async def on_task_event(self, event: dict[str, Any]) -> None:
-        """Handle a workflow event from the event pipeline.
-
-        Args:
-            event: Dict with keys: event_type, task_id, data, and optionally
-                   channel_origin (injected from task_parameters).
-        """
-        # Try to get channel_origin from the event directly
+        """Handle a workflow event from the event pipeline."""
         channel_origin = event.get("channel_origin")
-
-        # If not on event, resolve from task lookup (with caching)
         if not channel_origin:
             task_id = event.get("task_id") or event.get("aggregate_id")
             if task_id:
@@ -56,7 +53,6 @@ class ChannelRouter:
         event_type = event.get("event_type", "")
         presentation = channel_origin.get("presentation", PresentationMode.CONCISE)
 
-        # Check visibility filter
         if not is_visible(event_type, presentation):
             return
 
@@ -70,16 +66,36 @@ class ChannelRouter:
             logger.warning("No adapter registered for channel type: %s", channel_type)
             return
 
-        await _dispatch(adapter, channel_origin, event, presentation)
+        message = adapter.format(event, presentation)
 
-        # Evict cache entry on terminal events to prevent unbounded growth
+        # Dedup key: stable across broker redelivery and pub/sub re-fire.
+        # event_id comes from the CloudEvents envelope root via the pub/sub
+        # bridge (subscriber.py). Falling back to "" would collapse all
+        # events of the same (task_id, event_type) into one dedup slot —
+        # silent loss within the dedup TTL window. We log loudly instead.
+        task_id = event.get("task_id") or event.get("aggregate_id") or ""
+        event_id = event.get("event_id") or event.get("data", {}).get("event_id")
+        if not event_id:
+            logger.warning(
+                "channel routing: missing event_id for task=%s event_type=%s — "
+                "dedup will collapse repeats of this event type into one delivery",
+                task_id,
+                event_type,
+            )
+            event_id = ""
+        dedup_key = f"{task_id}:{event_type}:{event_id}"
+
+        await self._emitter.submit(
+            channel_type=channel_type,
+            channel_config=channel_origin,
+            message=message,
+            dedup_key=dedup_key,
+        )
+
         if event_type in ("WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"):
-            task_id = event.get("task_id") or event.get("aggregate_id")
-            if task_id:
-                self._origin_cache.pop(str(task_id), None)
+            self._origin_cache.pop(str(task_id), None)
 
     async def _resolve_channel_origin(self, task_id: str) -> dict[str, Any] | None:
-        """Resolve channel_origin for a task, using cache."""
         if task_id in self._origin_cache:
             return self._origin_cache[task_id]
 
@@ -98,31 +114,7 @@ class ChannelRouter:
             return None
 
     def clear_cache(self, task_id: str | None = None) -> None:
-        """Clear cached channel_origin entries."""
         if task_id:
             self._origin_cache.pop(task_id, None)
         else:
             self._origin_cache.clear()
-
-
-async def _dispatch(
-    adapter: ChannelAdapter,
-    channel_config: dict[str, Any],
-    event: dict[str, Any],
-    presentation: str,
-) -> None:
-    """Format and send an event through a channel adapter."""
-    try:
-        message = adapter.format(event, presentation)
-        await adapter.send(channel_config, message)
-        logger.debug(
-            "Dispatched %s to %s",
-            event.get("event_type"),
-            channel_config.get("type"),
-        )
-    except Exception:
-        logger.exception(
-            "Failed to dispatch event %s to channel %s",
-            event.get("event_type"),
-            channel_config.get("type"),
-        )

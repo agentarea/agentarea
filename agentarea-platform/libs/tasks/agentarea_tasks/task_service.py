@@ -8,15 +8,21 @@ High-level service that orchestrates task management by:
 """
 
 import logging
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.money import to_money
+from agentarea_common.ports.policy_resolver import PolicyResolverPort
+from agentarea_governance.domain.policies import (
+    EffectivePolicy,
+    PolicyDocument,
+)
 
 from .domain.base_service import BaseTaskService
+from .domain.exceptions import BudgetCapExceededError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import SimpleTask
 from .infrastructure.repository import TaskRepository
@@ -42,10 +48,16 @@ class TaskService(BaseTaskService):
         repository_factory: "RepositoryFactory",
         event_broker: EventBroker,
         task_manager: BaseTaskManager,
+        policy_resolver: PolicyResolverPort | None = None,
         workflow_service: Any | None = None,
     ):
-        """Initialize with repository factory, event broker, task manager, and
-        optional dependencies.
+        """Initialize with repository factory, event broker, task manager, an
+        optional policy resolver port, and optional workflow service.
+
+        When ``policy_resolver`` is omitted, the governance-backed implementation
+        is constructed lazily from ``repository_factory`` — DI consumers (tests,
+        alternative governance backends) can inject a different port without
+        forcing every call site to wire one up.
         """
         # Create repositories using factory
         task_repository = repository_factory.create_repository(TaskRepository)
@@ -53,6 +65,11 @@ class TaskService(BaseTaskService):
 
         self.repository_factory = repository_factory
         self.task_manager = task_manager
+        if policy_resolver is None:
+            from agentarea_governance.application import GovernancePolicyResolver
+
+            policy_resolver = GovernancePolicyResolver(repository_factory)
+        self.policy_resolver = policy_resolver
         self.workflow_service = workflow_service
 
         # Create agent repository using factory for validation
@@ -62,6 +79,62 @@ class TaskService(BaseTaskService):
             self.agent_repository = repository_factory.create_repository(AgentRepository)
         except ImportError:
             self.agent_repository = None
+
+    async def _resolve_effective_policy(
+        self,
+        *,
+        workspace_id: str | None,
+        agent_id: UUID | None = None,
+        task_id: UUID | None = None,
+        task_policy: PolicyDocument | None = None,
+    ) -> EffectivePolicy:
+        """Resolve workspace/agent/task policy via the injected port."""
+        if not workspace_id:
+            return EffectivePolicy()
+
+        return await self.policy_resolver.resolve(
+            workspace_id=workspace_id,
+            agent_id=agent_id,
+            task_id=task_id,
+            task_policy=task_policy,
+        )
+
+    async def _snapshot_effective_policy(
+        self,
+        *,
+        task_id: UUID,
+        effective_policy: EffectivePolicy,
+    ) -> None:
+        """Persist the immutable policy snapshot via the injected port."""
+        await self.policy_resolver.snapshot(task_id=task_id, effective_policy=effective_policy)
+
+    async def _enforce_budget_cap(
+        self,
+        workspace_id: str | None,
+        effective_policy: EffectivePolicy | None = None,
+    ) -> None:
+        """Reject task creation if the workspace has hit its policy monthly cap.
+
+        No-op when:
+        - workspace_id is missing (legacy call sites)
+        - no policy monthly cap is configured
+        """
+        if not workspace_id:
+            return
+
+        policy = effective_policy or await self._resolve_effective_policy(workspace_id=workspace_id)
+        cap_value = policy.budget.monthly_spend_cap_usd if policy.budget else None
+        if cap_value is None:
+            return
+
+        cap = to_money(cap_value)
+        mtd = to_money(await self.task_repository.sum_spend_mtd())
+        if mtd >= cap:
+            raise BudgetCapExceededError(
+                workspace_id=workspace_id,
+                current_mtd_usd=float(mtd),
+                cap_usd=float(cap),
+            )
 
     async def _validate_agent_exists(self, agent_id: UUID):
         """Validate that the agent exists and return the loaded entity for reuse.
@@ -83,28 +156,68 @@ class TaskService(BaseTaskService):
         return agent
 
     @audited("task.create", resource_type="task")
-    async def create_task_from_params(
+    async def create_task_with_policy(
         self,
-        title: str,
-        description: str,
-        query: str,
-        user_id: str,
+        *,
         agent_id: UUID,
-        workspace_id: str | None = None,
-        task_parameters: dict[str, Any] | None = None,
+        description: str,
+        workspace_id: str,
+        parameters: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        requires_human_approval: bool = False,
+        task_id: UUID | None = None,
+        title: str | None = None,
+        query: str | None = None,
+        metadata_overrides: dict[str, Any] | None = None,
+        status: str = "submitted",
+        task_policy: PolicyDocument | None = None,
     ) -> SimpleTask:
-        """Create a new task from parameters."""
+        """Persist a task with governance snapshot. Does not dispatch to Temporal.
+
+        Canonical persist-only entrypoint used by delegation activities, trigger
+        prepare-only activities, and as the internal building block for
+        ``create_and_execute_task_with_workflow``.
+        """
+        new_task_id = task_id or uuid4()
+        effective_policy = await self._resolve_effective_policy(
+            workspace_id=workspace_id,
+            agent_id=agent_id,
+            task_id=new_task_id,
+            task_policy=task_policy,
+        )
+        await self._enforce_budget_cap(workspace_id, effective_policy)
+
+        agent = await self._validate_agent_exists(agent_id)
+        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
+
+        metadata: dict[str, Any] = {}
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+        metadata.setdefault("created_via", "api")
+        metadata["agent_name"] = agent_name
+        metadata["requires_human_approval"] = requires_human_approval
+
         task = SimpleTask(
-            title=title,
+            id=new_task_id,
+            title=title or description,
             description=description,
-            query=query,
+            query=query or description,
             user_id=user_id,
             workspace_id=workspace_id,
             agent_id=agent_id,
-            task_parameters=task_parameters or {},
-            status="submitted",
+            status=status,
+            task_parameters=parameters or {},
+            metadata=metadata,
         )
-        return await self.create_task(task)
+        stored_task = await self.create_task(task)
+        await self._snapshot_effective_policy(
+            task_id=stored_task.id,
+            effective_policy=effective_policy,
+        )
+        # Hand the just-resolved snapshot to TemporalTaskManager via the
+        # transient field. task_policy_snapshots remains the canonical source.
+        stored_task.effective_policy = effective_policy.to_json_dict()
+        return stored_task
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit a pre-built SimpleTask. Thin alias delegating to the canonical
@@ -167,6 +280,7 @@ class TaskService(BaseTaskService):
             parameters=payload.parameters,
             user_id=user_id,
             requires_human_approval=payload.requires_human_approval,
+            task_policy=payload.task_policy,
             metadata_overrides=metadata_overrides,
         )
 
@@ -366,9 +480,6 @@ class TaskService(BaseTaskService):
     ) -> SimpleTask | None:
         """Update task status and related fields.
 
-        This method provides compatibility with the application layer TaskService
-        that was removed during refactoring.
-
         Args:
             task_id: The task ID to update
             status: The new status
@@ -393,9 +504,6 @@ class TaskService(BaseTaskService):
         self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
     ) -> list[SimpleTask]:
         """List tasks for an agent.
-
-        This method provides compatibility with the application layer TaskService
-        that was removed during refactoring.
 
         Args:
             agent_id: The agent ID to get tasks for
@@ -486,40 +594,6 @@ class TaskService(BaseTaskService):
 
         return task
 
-    # Legacy methods for backward compatibility
-    async def execute_task(
-        self,
-        task_id: UUID,
-    ) -> AsyncGenerator[dict[str, Any], None]:
-        """Execute a task (legacy method - prefer using submit_task)."""
-        # Get the task
-        task = await self.get_task(task_id)
-        if not task:
-            raise ValueError(f"Task {task_id} not found")
-
-        logger.info(f"Starting execution of task {task_id}")
-
-        # Update task status to working
-        task.status = "working"
-        await self.update_task(task)
-
-        try:
-            # For now, just yield a completion event
-            # In a real implementation, this would stream events from the task manager
-            yield {"event_type": "TaskStarted", "task_id": str(task_id)}
-
-            # Submit to task manager
-            await self.task_manager.submit_task(task)
-
-        except Exception as e:
-            logger.error(f"Error executing task {task_id}: {e}")
-            # Update task with error
-            task.status = "failed"
-            task.error_message = str(e)
-            await self.update_task(task)
-            yield {"event_type": "TaskFailed", "task_id": str(task_id), "error": str(e)}
-            raise
-
     async def create_and_execute_task_with_workflow(
         self,
         agent_id: UUID,
@@ -534,6 +608,7 @@ class TaskService(BaseTaskService):
         query: str | None = None,
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "pending",
+        task_policy: PolicyDocument | None = None,
     ) -> SimpleTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -552,97 +627,66 @@ class TaskService(BaseTaskService):
             query: Override the default query string (defaults to ``description``)
             metadata_overrides: Caller metadata merged on top of canonical defaults.
             status: Initial task status (default ``pending``)
+            task_policy: Optional task-scoped policy that may only tighten higher scopes.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
             task when ``channel_origin.chat_id`` matches an active workflow.
         """
-        # Validate agent exists; reuse the loaded entity for metadata.agent_name
-        # so we don't pay for a second repository round-trip.
-        agent = await self._validate_agent_exists(agent_id)
-        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
-
         new_task_id = task_id or uuid4()
 
-        # Build canonical metadata. Caller overrides are merged in first so the
-        # canonical fields (requires_human_approval, created_via) always reflect
-        # the explicit args.
-        metadata: dict[str, Any] = {}
-        if metadata_overrides:
-            metadata.update(metadata_overrides)
-        metadata.setdefault("created_via", "api")
-        metadata["agent_name"] = agent_name
-        metadata["requires_human_approval"] = requires_human_approval
-
-        # Create task
-        task = SimpleTask(
-            id=new_task_id,
-            title=title or description,
-            description=description,
-            query=query or description,
-            user_id=user_id,
-            workspace_id=workspace_id,  # Required, no fallback
-            agent_id=agent_id,
-            status=status,
-            task_parameters=parameters or {},
-            metadata=metadata,
-        )
-
-        # Try routing to active workflow if channel_origin is present
+        # Try routing to an active workflow first — if a follow-up matches an
+        # existing channel session, we never persist a new task or resolve a
+        # new policy snapshot. Routing only needs identity/message fields.
         channel_origin = (parameters or {}).get("channel_origin", {})
         chat_id = channel_origin.get("chat_id") if channel_origin else None
         if chat_id:
-            routed = await self._try_route_to_active_workflow(task, str(chat_id))
+            draft = SimpleTask(
+                id=new_task_id,
+                title=title or description,
+                description=description,
+                query=query or description,
+                user_id=user_id,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                status=status,
+                task_parameters=parameters or {},
+            )
+            routed = await self._try_route_to_active_workflow(draft, str(chat_id))
             if routed:
                 return routed
 
-        # Store task
-        stored_task = await self.create_task(task)
+        # Persist + governance snapshot via the canonical persist-only path.
+        stored_task = await self.create_task_with_policy(
+            agent_id=agent_id,
+            description=description,
+            workspace_id=workspace_id,
+            parameters=parameters,
+            user_id=user_id,
+            requires_human_approval=requires_human_approval,
+            task_id=new_task_id,
+            title=title,
+            query=query,
+            metadata_overrides=metadata_overrides,
+            status=status,
+            task_policy=task_policy,
+        )
 
-        # Set initial status
         stored_task.status = "pending"
 
-        # Execute task using the task manager (which uses AgentExecutionWorkflow)
         try:
-            # Submit task through task manager
             executed_task = await self.task_manager.submit_task(stored_task)
-
-            # Update stored task with execution info
             stored_task.status = executed_task.status
             stored_task.execution_id = executed_task.execution_id
-
-            logger.info(f"Task {task_id} submitted successfully with status {executed_task.status}")
-
+            logger.info(
+                f"Task {new_task_id} submitted successfully with status {executed_task.status}"
+            )
         except Exception as e:
             logger.error(f"Failed to submit task: {e}")
             stored_task.status = "failed"
             stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 
         return stored_task
-
-    async def create_and_execute_task(
-        self,
-        title: str,
-        description: str,
-        query: str,
-        user_id: str,
-        agent_id: UUID,
-        task_parameters: dict[str, Any] | None = None,
-    ) -> AsyncGenerator[dict[str, Any], None]:
-        """Create a task and immediately start execution."""
-        # Create the task
-        task = await self.create_task_from_params(
-            title=title,
-            description=description,
-            query=query,
-            user_id=user_id,
-            agent_id=agent_id,
-            task_parameters=task_parameters,
-        )
-
-        # Execute it
-        async for event in self.execute_task(task.id):
-            yield event
 
     async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
         """Get historical events for a task from the database with proper session management."""

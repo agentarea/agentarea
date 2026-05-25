@@ -405,6 +405,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Overview
+         * @description Aggregate stats + upcoming work for one agent.
+         */
+        get: operations["get_agent_overview_v1_agents__agent_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/": {
         parameters: {
             query?: never;
@@ -3037,6 +3057,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard
+         * @description Aggregate workspace state for the operator dashboard.
+         */
+        get: operations["get_dashboard_v1_workspace_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/export": {
         parameters: {
             query?: never;
@@ -3144,6 +3184,30 @@ export interface paths {
          *     Same as /import but accepts a file upload instead of raw YAML content.
          */
         post: operations["import_workspace_config_file_v1_workspace_import_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace Settings
+         * @description Read the current workspace's settings (cap, etc).
+         */
+        get: operations["get_workspace_settings_v1_workspace_settings_get"];
+        /**
+         * Update Workspace Settings
+         * @description Upsert the current workspace's settings.
+         */
+        put: operations["update_workspace_settings_v1_workspace_settings_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3556,6 +3620,25 @@ export interface components {
              */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
+        /** AgentOverviewResponse */
+        AgentOverviewResponse: {
+            /** Cost Mtd Usd */
+            cost_mtd_usd: number;
+            /** Cost Today Usd */
+            cost_today_usd: number;
+            /** Daily Spend */
+            daily_spend: components["schemas"]["DailySpendPoint"][];
+            /** Daily Tasks */
+            daily_tasks: components["schemas"]["DailyTaskCounts"][];
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Tasks Done Today */
+            tasks_done_today: number;
+            /** Tasks Failed Today */
+            tasks_failed_today: number;
+            /** Upcoming */
+            upcoming: components["schemas"]["UpcomingItem"][];
+        };
         /** AgentProvider */
         AgentProvider: {
             /** Organization */
@@ -3599,6 +3682,28 @@ export interface components {
             status: string;
             /** Tools */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
+        };
+        /** AgentRow */
+        AgentRow: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Cost Mtd Usd */
+            cost_mtd_usd: number;
+            /** Cost Today Usd */
+            cost_today_usd: number;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Name */
+            name: string;
+            /** Recent Task Names */
+            recent_task_names: string[];
+            /** Tasks Done Today */
+            tasks_done_today: number;
+            /** Tasks Failed Today */
+            tasks_failed_today: number;
         };
         /** AgentSkill */
         AgentSkill: {
@@ -3701,6 +3806,15 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** Blockers */
+        Blockers: {
+            /** Failed 24H */
+            failed_24h: components["schemas"]["FailedTaskBlocker"][];
+            /** Hitl */
+            hitl: components["schemas"]["HitlBlocker"][];
+            /** Wallet Exhausted */
+            wallet_exhausted: components["schemas"]["WalletExhaustedBlocker"][];
+        };
         /** Body_import_workspace_config_file_v1_workspace_import_file_post */
         Body_import_workspace_config_file_v1_workspace_import_file_post: {
             /**
@@ -3746,6 +3860,35 @@ export interface components {
             /** Wallet Type */
             wallet_type: string;
             x402_config?: components["schemas"]["X402ConfigSchema"] | null;
+        };
+        /** DailySpendPoint */
+        DailySpendPoint: {
+            /** Date */
+            date: string;
+            /** Usd */
+            usd: number;
+        };
+        /** DailyTaskCounts */
+        DailyTaskCounts: {
+            /** Completed */
+            completed: number;
+            /** Date */
+            date: string;
+            /** Failed */
+            failed: number;
+            /** Input Required */
+            input_required: number;
+        };
+        /** DashboardResponse */
+        DashboardResponse: {
+            /** Agents */
+            agents: components["schemas"]["AgentRow"][];
+            blockers: components["schemas"]["Blockers"];
+            /** Daily Spend */
+            daily_spend: components["schemas"]["DailySpendPoint"][];
+            /** Daily Tasks */
+            daily_tasks: components["schemas"]["DailyTaskCounts"][];
+            spend: components["schemas"]["SpendCard"];
         };
         /** DiscoverPreviewModelResponse */
         DiscoverPreviewModelResponse: {
@@ -3994,6 +4137,28 @@ export interface components {
              */
             trigger_id: string;
         };
+        /** FailedTaskBlocker */
+        FailedTaskBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+        };
         /** FundWalletRequest */
         FundWalletRequest: {
             /** Service Budget Usd */
@@ -4044,6 +4209,28 @@ export interface components {
             secret: boolean;
             /** Value */
             value?: string | null;
+        };
+        /** HitlBlocker */
+        HitlBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
         };
         /**
          * ImportRequest
@@ -5611,6 +5798,24 @@ export interface components {
             /** Version */
             version?: string | null;
         };
+        /** SpendCard */
+        SpendCard: {
+            /** Cap Usd */
+            cap_usd: number | null;
+            /** Mtd Usd */
+            mtd_usd: number;
+            /** Pct Of Cap */
+            pct_of_cap: number | null;
+            /** Projected Eom Usd */
+            projected_eom_usd: number | null;
+            /**
+             * Projection Method
+             * @default linear-mtd
+             */
+            projection_method: string;
+            /** Today Usd */
+            today_usd: number;
+        };
         /** SyncResponse */
         SyncResponse: {
             /** New Specs */
@@ -6251,6 +6456,24 @@ export interface components {
             /** Webhook Type */
             webhook_type?: string | null;
         };
+        /** UpcomingItem */
+        UpcomingItem: {
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /**
+             * Fires At
+             * Format: date-time
+             */
+            fires_at: string;
+            /** Kind */
+            kind: string;
+            /** Task Id */
+            task_id?: string | null;
+            /** Title */
+            title: string;
+            /** Trigger Id */
+            trigger_id?: string | null;
+        };
         /** UpdateAllResponse */
         UpdateAllResponse: {
             /** Errors */
@@ -6322,6 +6545,20 @@ export interface components {
             /** X402 Private Key */
             x402_private_key?: string | null;
         };
+        /** WalletExhaustedBlocker */
+        WalletExhaustedBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /** Budget Usd */
+            budget_usd: number;
+            /** Period */
+            period: string;
+        };
         /** WalletResponse */
         WalletResponse: {
             /** Agent Id */
@@ -6381,6 +6618,16 @@ export interface components {
             directories: string[];
             /** Files */
             files: components["schemas"]["WorkspaceFileInfo"][];
+        };
+        /** WorkspaceSettingsResponse */
+        WorkspaceSettingsResponse: {
+            /** Monthly Cap Usd */
+            monthly_cap_usd: number | null;
+        };
+        /** WorkspaceSettingsUpdate */
+        WorkspaceSettingsUpdate: {
+            /** Monthly Cap Usd */
+            monthly_cap_usd: number | null;
         };
         /** X402ConfigSchema */
         X402ConfigSchema: {
@@ -7159,6 +7406,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_overview_v1_agents__agent_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOverviewResponse"];
                 };
             };
             /** @description Validation Error */
@@ -12241,6 +12519,26 @@ export interface operations {
             };
         };
     };
+    get_dashboard_v1_workspace_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+        };
+    };
     export_workspace_config_v1_workspace_export_get: {
         parameters: {
             query?: never;
@@ -12319,6 +12617,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_settings_v1_workspace_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_workspace_settings_v1_workspace_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSettingsResponse"];
                 };
             };
             /** @description Validation Error */

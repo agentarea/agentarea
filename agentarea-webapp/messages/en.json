@@ -93,6 +93,7 @@
     }
   },
   "Sidebar": {
+    "dashboard": "Dashboard",
     "home": "Home",
     "inbox": "Inbox",
     "admin": "Admin",
@@ -106,7 +107,10 @@
     "mcp": "MCP Servers",
     "projects": "Projects",
     "context": "Context",
-    "platform": "Platform",
+    "work": "Work",
+    "knowledge": "Knowledge",
+    "build": "Build",
+    "govern": "Govern",
     "connections": "Connections",
     "providers": "Providers",
     "providerConfigs": "Models",
@@ -116,6 +120,9 @@
     "modelSpecs": "Model Specs",
     "automation": "Automation",
     "network": "Network",
+    "budgets": "Budgets",
+    "secrets": "Secrets",
+    "policies": "Policies",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -333,6 +340,7 @@
     "description": "Description",
     "tools": "Tools",
     "noTools": "No tools",
+    "overview": "Overview",
     "createTask": "Create Task",
     "activeTasks": "Active Tasks",
     "currentTasks": "Current Tasks",
@@ -900,6 +908,13 @@
     "executionTimeDesc": "Measured from start to completion",
     "started": "Started",
     "ended": "Ended",
+    "activitySummary": "Activity summary",
+    "toolsCalled": "Tools",
+    "toolFailures": "Failures",
+    "modelCalls": "Model",
+    "events": "Events",
+    "calledTools": "Called tools",
+    "learnedSkills": "Learned skills",
     "quickActions": "Quick actions",
     "viewTaskEvents": "View task events",
     "openAgentDetails": "Open agent details",
@@ -1138,6 +1153,19 @@
       "importing": "Importing...",
       "success": "Workspace configuration imported successfully",
       "error": "Failed to import workspace configuration"
+    },
+    "budget": {
+      "tabLabel": "Budget",
+      "title": "Monthly Spend Cap",
+      "description": "Set a soft monthly cap for total task spend. New tasks are refused (HTTP 402) when month-to-date spend reaches this value. Running tasks are not killed.",
+      "label": "Monthly cap (USD)",
+      "placeholder": "e.g. 100.00",
+      "save": "Save cap",
+      "saving": "Saving...",
+      "success": "Cap saved",
+      "error": "Failed to save cap",
+      "current": "Current cap",
+      "noCap": "No cap set"
     }
   },
   "SkillsSection": {

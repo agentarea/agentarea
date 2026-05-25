@@ -367,4 +367,262 @@ The app uses `next-themes` with `attribute="class"`. Toggle between `light`, `da
 
 ---
 
-*Last updated: 2026-04-29*
+## Patterns & Conventions
+
+The token reference above is the *vocabulary*. This section is the
+*grammar* — how the existing pages compose those tokens. Read before
+adding a new page or visual component, and grep an existing file
+referenced here when in doubt.
+
+### Page shell
+
+Every page renders inside `<ContentBlock>` (`src/components/ContentBlock`).
+Pick one of two header shapes:
+
+- `{ title, description?, backLink?, controls? }` — for nested resource
+  pages.
+- `{ breadcrumb: [{label, href?}], description?, controls? }` — for
+  index pages and dashboards.
+
+`<ContentBlock>` already wraps in `flex h-full flex-col overflow-hidden`
+— **do not double-wrap**. Children either go directly inside, or wrap
+in a single `<div className="main-content">` (`h-full space-y-2
+overflow-auto px-4 py-5`) for scrollable lists / dashboards.
+
+For RSC data, lazy-load with `<Suspense>` + a small `LoadingSpinner`:
+
+```tsx
+<Suspense fallback={<div className="flex h-32 items-center justify-center"><LoadingSpinner /></div>}>
+  <FooData />
+</Suspense>
+```
+
+Reference: `src/app/(main)/inbox/page.tsx` (minimal RSC page),
+`src/app/(main)/agents/page.tsx` (page with subheader + controls).
+
+### Surfaces — pick the right one
+
+There are **two** surface kinds. They look similar; they behave
+differently. The difference matters for affordance.
+
+#### a) Clickable list/grid card
+Reach for the `<Card>` atom (`ui/card.tsx`). It composes `card
+card-shadow` from `globals.css`, which **bakes in `cursor-pointer` and
+hover-shadow**. Use it where the whole card is a link.
+
+```tsx
+<Link href={`/agents/${agent.id}`}>
+  <Card className="group h-full p-0 hover:-translate-y-0.5 active:scale-[0.99] hover:border-primary/20">
+    …
+  </Card>
+</Link>
+```
+
+Reference: `src/app/(main)/agents/components/AgentCard.tsx` is the
+flagship pattern.
+
+#### b) Static dashboard widget / panel
+**Do not use `<Card>`** — its `cursor-pointer` makes the user think the
+panel itself is clickable. Build a panel from raw tokens:
+
+```tsx
+<section className="rounded-md border border-zinc-200 bg-white card-shadow dark:border-zinc-700 dark:bg-zinc-800">
+  <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+    <h2 className="text-base font-semibold">Spend</h2>
+    <span className="note">12% of cap</span>
+  </header>
+  <div className="space-y-4 p-4">…</div>
+</section>
+```
+
+Why this shape:
+- Same surface tokens as `.card` (white / zinc-800, zinc border).
+- `.card-shadow` reuses the documented elevation.
+- Explicit `<header>` strip mirrors `ContentBlock` header style and
+  gives the panel an obvious title region.
+- No `cursor-pointer`, no hover-lift — affordance matches the static
+  widget intent.
+
+#### c) List rows inside a panel
+Use `.card-item` (`rounded-md border border-border pr-[7px]
+transition-colors`). Stack them with `space-y-1` or `space-y-2`. Keep
+hover subtle: `hover:bg-muted/40`. Don't apply `.card-shadow` to inner
+rows.
+
+### Tables
+
+Project convention is plain `<table>` with these rules — no heavy table
+library:
+
+- Wrapper: `overflow-x-auto`.
+- `<thead>` row: `text-xs uppercase tracking-wide text-muted-foreground`,
+  cells `pb-2 font-medium`.
+- Body cell font: default (`text-sm`).
+- Numeric cells: `tabular-nums text-right`. Always.
+- Row hover: `hover:bg-muted/40`.
+- Row separator: `border-t border-zinc-200 dark:border-zinc-700`.
+- Cell padding: `py-2 pr-3`.
+- Truncate long strings: wrap `<td>` with `max-w-[260px] truncate`.
+
+Status emphasis: only the **number** turns red, never the row
+(`<span className={count > 0 ? "text-red-600" : undefined}>`).
+
+### Empty states
+
+For full-page or full-section empty: `<EmptyState>` from
+`src/components/EmptyState/`. Provide `title`, `description`,
+`iconsType`, optional `action`.
+
+For *inline* empty inside a panel sub-section (e.g. blockers panel
+with nothing waiting), a single muted line is enough — no decorations:
+
+```tsx
+<div className="py-6 text-center text-sm text-muted-foreground">
+  No blockers — fleet healthy.
+</div>
+```
+
+Don't render an EmptyState inside a panel sub-section — the icon and
+heading are too heavy for that scale.
+
+### Status / banners
+
+Avoid building a status palette. The existing patterns:
+
+- **Inline destructive accent** (e.g. failure count): only the
+  number/value turns `text-red-600`; surrounding row stays neutral.
+- **Pills / tags** (e.g. A2UI marker): `rounded-full bg-blue-100
+  px-2 py-0.5 text-[10px] font-medium text-blue-700` (and dark
+  counterpart).
+- **Banners — use sparingly**, one per page max. Pattern:
+
+```tsx
+<div className="flex items-start gap-2 rounded-md border border-amber-300
+                bg-amber-50 p-3 text-sm text-amber-900
+                dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
+  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+  <div>
+    <div className="font-medium">Approaching monthly cap</div>
+    <div className="text-xs">87% used. Raise the cap or trim spend.</div>
+  </div>
+</div>
+```
+
+Don't add toast notifications for system events (project preference) —
+surface state in-place via banners or inline text.
+
+### Buttons in headers
+
+Header CTA pattern (matches `agents/page.tsx`):
+
+```tsx
+<Button className="shrink-0 gap-2" size="xs">
+  <Plus className="h-5 w-5" />
+  Deploy new agent
+</Button>
+```
+
+`size="xs"` is the dense toolbar button (24px). Default size (36px) is
+for in-form CTAs. Loading state goes through `isLoading` prop — the
+button renders the spinner; don't hand-roll.
+
+### Icons
+
+- Library: `lucide-react`. Don't mix with other icon sets.
+- Sizes: `h-4 w-4` inline with text; `h-5 w-5` inside buttons; `h-4
+  w-4` for section header icons next to a title.
+- Buttons with icons get `gap-2`; section headers with icons get
+  `gap-2`.
+
+### Numerics
+
+- Currency / counts → `tabular-nums` so digit columns align.
+- Currency: `Intl.NumberFormat("en-US", { style: "currency", currency:
+  "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })`.
+  For very small values (< $0.01), expand to 4 fraction digits so the
+  number isn't misleadingly rendered as `$0.00`.
+- Relative time: short forms `just now`, `Nm ago`, `Nh ago`, `Nd ago`.
+  Don't use a heavy date library if you don't already need one.
+
+### Internationalization
+
+- Strings live in `messages/en.json` + `messages/ru.json` under section
+  keys (e.g. `Metadata`, `Common`, `AgentsPage`).
+- Sidebar items have a `titleKey` matched against `Sidebar.*` keys.
+- **Add a new key to *both* locale files in the same change**. A
+  missing key falls back to the literal `Section.key` string —
+  visually broken.
+- New page metadata `title` is plain English in the file but rendered
+  via `getTranslations`.
+
+### Loading
+
+`LoadingSpinner` from `src/components/LoadingSpinner.tsx`. For RSC
+boundaries, use the small spinner pattern from the page-shell section
+above. Don't render large skeleton stacks — the existing UX is
+"spinner → content"; matches the dense-info aesthetic.
+
+### Dark mode is mandatory
+
+Every surface gets a `dark:` counterpart. Common pairs in this codebase:
+
+| Light | Dark |
+|---|---|
+| `bg-white` | `dark:bg-zinc-800` (panel) or `dark:bg-zinc-900` (deeper card) |
+| `border-zinc-200` | `dark:border-zinc-700` |
+| `text-zinc-900` | `dark:text-zinc-100` |
+| `text-zinc-400` | (already neutral) |
+| `bg-muted/40` / `bg-muted` | (already token-driven) |
+
+If you change a surface, change both modes in the same edit. Never
+ship a "we'll do dark mode later" component.
+
+### Anti-patterns
+
+- Using `<Card>` atom for a static dashboard widget — it forces
+  `cursor-pointer` and hover-lift on a non-clickable element. Use the
+  panel pattern in §"Surfaces" instead.
+- Inline `style={{ … }}` for spacing or color — breaks the token
+  system. Allowed only for animated transforms or inline svg patterns.
+- Hardcoding hex in component code — always use tokens
+  (`bg-primary`, `text-muted-foreground`) or the conventional
+  `zinc-*` / `red-*` shorthands.
+- Toast notifications for system events.
+- Custom `h1` / `h2` sizing per page — `globals.css` already defines
+  the scale.
+- Hover-translate / scale on non-clickable elements — confuses
+  affordance.
+- Mixing icon libraries.
+- Skipping i18n keys "for now".
+
+### New-component checklist
+
+- [ ] Uses tokens (`bg-card`, `text-muted-foreground`, etc.) for surfaces.
+- [ ] Light + dark variants present.
+- [ ] No new global CSS unless added to `globals.css` `@layer base|utilities`.
+- [ ] Numeric data uses `tabular-nums`.
+- [ ] If clickable, hover/transition matches the card pattern; if
+      not clickable, no `cursor-pointer`.
+- [ ] Empty state goes through `<EmptyState>` (or muted inline copy
+      for panel sub-sections).
+- [ ] Lucide icon, sized `h-4 w-4` or `h-5 w-5` inline with text.
+- [ ] Strings keyed in `messages/en.json` and `messages/ru.json`.
+- [ ] Page-level component wrapped in `<ContentBlock>`.
+- [ ] Surface choice is intentional — clickable card vs static panel.
+
+### References
+
+- `src/components/ContentBlock/ContentBlock.tsx` — page shell.
+- `src/components/ui/card.tsx` + `globals.css` `.card`/`.card-shadow`/
+  `.card-item` — surface atoms.
+- `src/components/ui/button.tsx` — variants reference.
+- `src/app/(main)/agents/components/AgentCard.tsx` — flagship clickable
+  card pattern.
+- `src/app/(main)/inbox/page.tsx` — minimal RSC page pattern.
+- `src/app/(main)/dashboard/components/*.tsx` — static panel pattern
+  (Spend, Blockers, Agent rows).
+- `src/app/globals.css` — tokens, base styles, utility classes.
+
+---
+
+*Last updated: 2026-05-05*

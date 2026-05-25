@@ -1,17 +1,35 @@
-import EmptyState from "@/components/EmptyState";
 import { getInbox, type TaskWithAgent } from "@/lib/api";
-import TasksList from "@/app/(main)/tasks/components/TasksList";
+import { InboxTabs } from "./InboxTabs";
+import { InboxList } from "./InboxList";
 
-export async function InboxData() {
-  let items: TaskWithAgent[] = [];
+type FilterValue = "all" | "pending" | "completed" | "failed";
+
+interface InboxDataProps {
+  filter: FilterValue;
+}
+
+export async function InboxData({ filter }: InboxDataProps) {
+  let allItems: TaskWithAgent[] = [];
+  let pendingItems: TaskWithAgent[] = [];
+  let completedItems: TaskWithAgent[] = [];
+  let failedItems: TaskWithAgent[] = [];
   let error: string | null = null;
 
   try {
-    const { data, error: fetchError } = await getInbox();
-    if (fetchError) {
+    const [allRes, pendingRes, completedRes, failedRes] = await Promise.all([
+      getInbox(),
+      getInbox({ status: "pending" }),
+      getInbox({ status: "completed" }),
+      getInbox({ status: "failed" }),
+    ]);
+
+    if (allRes.error || pendingRes.error || completedRes.error || failedRes.error) {
       error = "Failed to load inbox";
     } else {
-      items = (data as any)?.items || [];
+      allItems = (allRes.data as any)?.items || [];
+      pendingItems = (pendingRes.data as any)?.items || [];
+      completedItems = (completedRes.data as any)?.items || [];
+      failedItems = (failedRes.data as any)?.items || [];
     }
   } catch {
     error = "Failed to load inbox";
@@ -21,15 +39,24 @@ export async function InboxData() {
     return <div className="py-6 text-center text-red-500">{error}</div>;
   }
 
-  if (items.length === 0) {
-    return (
-      <EmptyState
-        title="No items requiring attention"
-        description="Tasks waiting for approval, completed tasks, and failed tasks will appear here."
-        iconsType="tasks"
-      />
-    );
-  }
+  const counts = {
+    all: allItems.length,
+    pending: pendingItems.length,
+    completed: completedItems.length,
+    failed: failedItems.length,
+  };
 
-  return <TasksList initialTasks={items} viewMode="list" />;
+  const displayItems: Record<FilterValue, TaskWithAgent[]> = {
+    all: allItems,
+    pending: pendingItems,
+    completed: completedItems,
+    failed: failedItems,
+  };
+
+  return (
+    <>
+      <InboxTabs active={filter} counts={counts} />
+      <InboxList items={displayItems[filter]} filter={filter} />
+    </>
+  );
 }

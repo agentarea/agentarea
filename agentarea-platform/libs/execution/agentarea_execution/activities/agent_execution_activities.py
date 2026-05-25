@@ -922,6 +922,38 @@ def make_agent_activities(dependencies: ActivityDependencies):
             events_published = 0
             errors = []
 
+            # Per-invocation cache of task_parameters → channel_origin, used
+            # to avoid N+1 lookups when a single batch carries multiple
+            # events for the same task.
+            channel_origin_cache: dict[str, dict | None] = {}
+
+            async def _resolve_channel_origin(task_id_str: str) -> dict | None:
+                if task_id_str in channel_origin_cache:
+                    return channel_origin_cache[task_id_str]
+                origin: dict | None = None
+                try:
+                    from uuid import UUID as _UUID
+
+                    from agentarea_tasks.infrastructure.repository import (
+                        TaskRepository as _TaskRepository,
+                    )
+
+                    user_context_inner = UserContext(
+                        user_id=request.user_id,
+                        workspace_id=request.workspace_id,
+                    )
+                    async with ActivityContext(container, user_context_inner) as ctx_inner:
+                        session_inner = container._database.async_session_factory()
+                        ctx_inner._sessions.append(session_inner)
+                        task_repo = _TaskRepository(session_inner, user_context_inner)
+                        task = await task_repo.get_task(_UUID(task_id_str))
+                        if task and task.parameters:
+                            origin = task.parameters.get("channel_origin")
+                except Exception:
+                    logger.exception("channel_origin lookup failed for task=%s", task_id_str)
+                channel_origin_cache[task_id_str] = origin
+                return origin
+
             for event_json in request.events_json:
                 try:
                     event = json.loads(event_json)
@@ -989,6 +1021,40 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         except Exception as handler_error:
                             logger.error(f"Failed to handle LLM error event: {handler_error}")
                             errors.append(f"Error handler failed: {handler_error!s}")
+
+                    # 4. Durable outbound channel delivery: enqueue directly
+                    # to the broker stream. Bypasses the lossy pub/sub bridge
+                    # between workflow events and the delivery consumer.
+                    # Temporal activity-level retry covers the previously
+                    # silent failure window (worker crash between event
+                    # receipt and stream submit).
+                    if dependencies.broker_client and dependencies.channel_delivery_settings:
+                        from agentarea_triggers.channels.activity_emit import (
+                            emit_channel_delivery,
+                        )
+
+                        # channel_origin source priority:
+                        #   1. embedded in event.data (workflow has it inline)
+                        #   2. task.parameters via DB lookup (cached per batch)
+                        event_data = (
+                            event.get("data") if isinstance(event.get("data"), dict) else {}
+                        )
+                        channel_origin = event_data.get("channel_origin") if event_data else None
+                        if not channel_origin and task_id and task_id != "unknown":
+                            channel_origin = await _resolve_channel_origin(str(task_id))
+
+                        event_with_id = {
+                            "event_type": event["event_type"],
+                            "event_id": event.get("event_id"),
+                            "task_id": task_id,
+                            "data": event["data"],
+                        }
+                        await emit_channel_delivery(
+                            event=event_with_id,
+                            channel_origin=channel_origin,
+                            broker=dependencies.broker_client,
+                            stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                        )
 
                     events_published += 1
 
@@ -1536,15 +1602,20 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     task_manager=None,
                 )
 
-                task = await task_service.create_task_from_params(
-                    title="Delegation from agent",
-                    description=f"Delegated task to {request.target_agent_name}",
-                    query=request.message,
-                    user_id=request.user_id,
+                task = await task_service.create_task_with_policy(
                     agent_id=UUID(request.target_agent_id),
+                    description=f"Delegated task to {request.target_agent_name}",
                     workspace_id=request.workspace_id,
-                    task_parameters={
+                    user_id=request.user_id,
+                    title="Delegation from agent",
+                    query=request.message,
+                    parameters={
                         "source": "agent_delegation",
+                        "parent_agent_id": request.parent_agent_id,
+                        "parent_task_id": request.parent_task_id,
+                    },
+                    metadata_overrides={
+                        "created_via": "agent_delegation",
                         "parent_agent_id": request.parent_agent_id,
                         "parent_task_id": request.parent_task_id,
                     },

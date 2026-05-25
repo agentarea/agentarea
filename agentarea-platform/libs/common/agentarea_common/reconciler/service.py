@@ -163,6 +163,6 @@ class ReconcilerService:
             if key in skip_fields:
                 continue
             if hasattr(entity, key):
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     value = json.dumps(value)
                 setattr(entity, key, value)

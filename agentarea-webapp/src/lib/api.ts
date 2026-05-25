@@ -144,6 +144,9 @@ export const {
   getTriggerTimeline,
   getTriggerCorrelations,
 
+  // Governance API
+  listGovernancePolicies,
+
   // Audit Logs API
   listAuditLogs,
 

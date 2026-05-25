@@ -41,7 +41,7 @@ members = [
     "libs/governance",
     "libs/openapi",
     "libs/projects",
-    "libs/registry"
+    "libs/registry",
 ]
 
 [tool.uv]
@@ -242,7 +242,6 @@ env = [
     "APP_ENV=test",
     "DEBUG=false",
     "SECRET_MANAGER_TYPE=local",
-    "USE_LEGACY_TASK_EXECUTION=false",
 ]
 
 [tool.coverage.run]

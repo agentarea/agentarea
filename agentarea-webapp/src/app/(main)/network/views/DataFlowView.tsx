@@ -68,10 +68,30 @@ const LANE_X: Record<Lane, number> = {
   external: 840,
 };
 
-const LANE_META: Record<Lane, { label: string; sublabel: string }> = {
-  events: { label: "Events", sublabel: "Triggers · webhooks · schedules" },
-  agents: { label: "Agents", sublabel: "Internal — governed" },
-  external: { label: "External", sublabel: "MCP · OpenAPI · skills (egress)" },
+type LaneTone = "blue" | "neutral" | "rose";
+
+const LANE_META: Record<
+  Lane,
+  { label: string; sublabel: string; tone: LaneTone; iconKey: Lane }
+> = {
+  events: {
+    label: "Events",
+    sublabel: "Triggers · webhooks · schedules",
+    tone: "blue",
+    iconKey: "events",
+  },
+  agents: {
+    label: "Agents",
+    sublabel: "Internal — governed",
+    tone: "neutral",
+    iconKey: "agents",
+  },
+  external: {
+    label: "External",
+    sublabel: "MCP · OpenAPI · skills (egress)",
+    tone: "rose",
+    iconKey: "external",
+  },
 };
 
 const ROW_H = 150;
@@ -79,7 +99,7 @@ const CLUSTER_GAP = 90;
 const NODE_HALF_W = 80;
 const NODE_HALF_H = 60;
 const LANE_PAD = 56;
-const LANE_HEADER = 56;
+const LANE_HEADER = 80;
 
 export default function DataFlowView({
   topology,

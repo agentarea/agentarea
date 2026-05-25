@@ -21,9 +21,10 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from . import register_adapter
+from .exceptions import FatalError, RetryableError
 
 if TYPE_CHECKING:
-    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+    from .secret_reader import SecretReader
 
 logger = logging.getLogger(__name__)
 
@@ -113,19 +114,19 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
         if et == "WorkflowFailed":
             return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
         if et == "WorkflowCancelled":
-            return f"{e['stop']} Task was cancelled."
+            return f"{e['stop']} {esc('Task was cancelled.')}"
         if et == "HumanApprovalRequested":
             q = esc(str(d.get("question", "Approval needed")))
             return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
         if et == "HumanApprovalReceived":
-            return f"{e['check']} Approval received, continuing..."
+            return f"{e['check']} {esc('Approval received, continuing...')}"
 
         if presentation == "concise":
             if et == "WorkflowStarted":
-                return f"{e['hourglass']} Working on it..."
+                return f"{e['hourglass']} {esc('Working on it...')}"
             if et == "ToolCallStarted":
                 tool = d.get("tool_name", "tool")
-                return f"{e['wrench']} Using {i0}{esc(tool)}{i1}..."
+                return f"{e['wrench']} {esc('Using ')}{i0}{esc(tool)}{i1}{esc('...')}"
             if et in ("AgentDelegationStarted", "AgentDelegationCompleted"):
                 agent = d.get("agent_name", "sub-agent")
                 action = "Delegating to" if "Started" in et else "Received from"
@@ -149,18 +150,21 @@ class HttpSenderConfig:
     max_length: int = 3000
     truncation_suffix: str = "\n\n_(truncated)_"
     validate_response: Callable[[httpx.Response], bool] = lambda r: r.is_success
+    should_retry_plain: Callable[[httpx.Response], bool] = lambda _r: False
+    build_plain_payload: Callable[[dict[str, Any], str], dict[str, Any]] | None = None
 
 
 def make_http_sender(
     cfg: HttpSenderConfig,
-    secret_manager: BaseSecretManager | None = None,
+    secret_reader: SecretReader,
 ) -> Callable[[dict[str, Any], str], Awaitable[None]]:
     """Build an async send(channel_config, message) function."""
 
     async def send(channel_config: dict[str, Any], message: str) -> None:
-        token = await _resolve_token(secret_manager, channel_config)
+        token = await _resolve_token(secret_reader, channel_config)
         if not token:
-            return
+            # No credentials = fatal misconfiguration; not retryable.
+            raise FatalError("missing channel credentials")
 
         if len(message) > cfg.max_length:
             message = message[: cfg.max_length - len(cfg.truncation_suffix)] + cfg.truncation_suffix
@@ -176,23 +180,69 @@ def make_http_sender(
                     json=payload,
                     headers={"Authorization": auth, "Content-Type": "application/json"},
                 )
+                if (
+                    not cfg.validate_response(resp)
+                    and cfg.build_plain_payload
+                    and cfg.should_retry_plain(resp)
+                ):
+                    plain_payload = cfg.build_plain_payload(channel_config, message)
+                    resp = await client.post(
+                        url,
+                        json=plain_payload,
+                        headers={"Authorization": auth, "Content-Type": "application/json"},
+                    )
                 if not cfg.validate_response(resp):
-                    logger.error("Channel send error %d: %s", resp.status_code, resp.text[:200])
-        except httpx.HTTPError as e:
-            logger.error("Channel send failed: %s", e)
+                    _raise_for_response(resp)
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as exc:
+            raise RetryableError(f"network: {exc}") from exc
+        except httpx.HTTPError as exc:
+            # Other httpx errors (e.g. protocol issues) — treat as transient.
+            raise RetryableError(f"http error: {exc}") from exc
 
     return send
 
 
+def _raise_for_response(resp: httpx.Response) -> None:
+    """Classify a non-success HTTP response into RetryableError vs FatalError.
+
+    5xx + 429 = transient (broker should redeliver). 4xx = fatal (auth,
+    blocked user, malformed payload — retrying won't fix it).
+    """
+    status = resp.status_code
+    body = resp.text[:200] if resp.text else ""
+    if status == 429:
+        retry_after_hdr = resp.headers.get("Retry-After")
+        retry_after: float | None = None
+        if retry_after_hdr:
+            try:
+                retry_after = float(retry_after_hdr)
+            except ValueError:
+                retry_after = None
+        raise RetryableError(f"rate limited: {body}", retry_after=retry_after)
+    if 500 <= status < 600:
+        raise RetryableError(f"upstream {status}: {body}")
+    raise FatalError(f"upstream {status}: {body}")
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove lightweight markdown/escape markers for plain-text fallback."""
+    for marker in ("\\", "*", "_", "`"):
+        text = text.replace(marker, "")
+    return text
+
+
 async def _resolve_token(
-    secret_manager: BaseSecretManager | None,
+    secret_reader: SecretReader,
     channel_config: dict[str, Any],
 ) -> str | None:
-    """Resolve bot token from the secret store. Shared by all HTTP senders."""
-    if not secret_manager:
-        logger.error("No secret_manager — cannot resolve channel credentials")
-        return None
+    """Resolve bot token from the secret store. Shared by all HTTP senders.
 
+    Returns None when the credential is genuinely absent or unreadable;
+    `make_http_sender` translates that into `FatalError` so the message
+    DLQs cleanly. We never raise from here because the secret reader is
+    required at boot and a None result means "creds missing" — a
+    classification, not a system failure.
+    """
     trigger_id = channel_config.get("trigger_id")
     if not trigger_id:
         logger.error("No trigger_id in channel_config")
@@ -200,12 +250,17 @@ async def _resolve_token(
 
     ch_type = channel_config.get("type", "unknown")
     secret_name = f"channel_cred:{ch_type}:{trigger_id}"
-    raw = await secret_manager.get_secret(secret_name)
+    raw = await secret_reader.get_secret(secret_name)
     if not raw:
         logger.error("Credentials not found for %s trigger %s", ch_type, trigger_id)
         return None
 
-    creds = json.loads(raw)
+    try:
+        creds = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        # Stored blob is corrupt — caller will surface as FatalError.
+        logger.error("Corrupt credentials blob for %s trigger %s: %s", ch_type, trigger_id, exc)
+        return None
     return creds.get("bot_token")
 
 
@@ -249,6 +304,12 @@ TELEGRAM_SENDER = HttpSenderConfig(
     },
     max_length=4096,
     truncation_suffix="\n\n_\\(truncated\\)_",
+    should_retry_plain=lambda r: r.status_code == 400 and "parse" in r.text.lower(),
+    build_plain_payload=lambda cfg, msg: {
+        "chat_id": cfg["chat_id"],
+        "text": _strip_markdown(msg),
+        **({"reply_to_message_id": cfg["message_id"]} if cfg.get("message_id") else {}),
+    },
 )
 
 
@@ -276,8 +337,14 @@ class _ComposedAdapter:
 # ── Registration ──────────────────────────────────────────────────
 
 
-def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> None:
-    """Register all HTTP-based channel adapters."""
+def register_all_adapters(secret_reader: SecretReader) -> None:
+    """Register all HTTP-based channel adapters.
+
+    `secret_reader` is required — channel delivery without a credential
+    store would silently no-op, which is exactly the bug class this whole
+    pipeline rewrite was built to remove. Missing the dep is a boot
+    failure, not a runtime fallback.
+    """
     channels = {
         "slack": (SLACK_MD, SLACK_SENDER),
         "discord": (DISCORD_MD, DISCORD_SENDER),
@@ -286,6 +353,6 @@ def register_all_adapters(secret_manager: BaseSecretManager | None = None) -> No
     for name, (flavor, sender_cfg) in channels.items():
         adapter = _ComposedAdapter(
             formatter=make_formatter(flavor),
-            sender=make_http_sender(sender_cfg, secret_manager),
+            sender=make_http_sender(sender_cfg, secret_reader),
         )
         register_adapter(name, adapter)
