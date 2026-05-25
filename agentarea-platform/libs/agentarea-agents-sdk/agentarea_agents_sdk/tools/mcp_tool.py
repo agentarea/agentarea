@@ -127,9 +127,7 @@ class MCPToolFactory:
             verification = getattr(server_instance, "verification", None) or {}
             status = verification.get("status") or getattr(server_instance, "status", None)
             json_spec = getattr(server_instance, "json_spec", None) or {}
-            tools_data = getattr(server_instance, "tools", None) or json_spec.get(
-                "available_tools"
-            )
+            tools_data = getattr(server_instance, "tools", None) or json_spec.get("available_tools")
             # RUNNING/CONNECTED are legacy runtime statuses; SUCCEEDED is the
             # current verification payload status for URL instances.
             lazy_with_declared_tools = (

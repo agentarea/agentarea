@@ -222,6 +222,7 @@ async def _store_sandbox_artifacts(
 
     return stored_refs
 
+
 # Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
 _last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 

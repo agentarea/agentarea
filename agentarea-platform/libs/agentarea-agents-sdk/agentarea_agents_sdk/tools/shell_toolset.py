@@ -172,7 +172,9 @@ class ShellToolset(Toolset):
             await asyncio.sleep(2)
             resp = await client.get(f"{self._mcp_manager_url}/sandbox/executions/{record['id']}")
             if resp.status_code >= 400:
-                raise SandboxHTTPError(f"sandbox status returned HTTP {resp.status_code}: {resp.text}")
+                raise SandboxHTTPError(
+                    f"sandbox status returned HTTP {resp.status_code}: {resp.text}"
+                )
             try:
                 record = resp.json()
             except ValueError as exc:
