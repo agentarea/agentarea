@@ -100,7 +100,9 @@ class TestA2AAgentToolExecute:
         }
         mock_response = httpx.Response(200, json=rpc_response)
 
-        with patch("agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient") as mock_client_cls:
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -124,7 +126,9 @@ class TestA2AAgentToolExecute:
         }
         mock_response = httpx.Response(200, json=rpc_response)
 
-        with patch("agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient") as mock_client_cls:
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -146,7 +150,9 @@ class TestA2AAgentToolExecute:
         }
         mock_response = httpx.Response(200, json=rpc_response)
 
-        with patch("agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient") as mock_client_cls:
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -162,7 +168,9 @@ class TestA2AAgentToolExecute:
     async def test_execute_http_error(self):
         mock_response = httpx.Response(500)
 
-        with patch("agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient") as mock_client_cls:
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -174,7 +182,9 @@ class TestA2AAgentToolExecute:
 
     @pytest.mark.asyncio
     async def test_execute_timeout(self):
-        with patch("agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient") as mock_client_cls:
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)

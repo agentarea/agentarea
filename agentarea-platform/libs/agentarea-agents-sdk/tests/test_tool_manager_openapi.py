@@ -68,8 +68,7 @@ class TestToolManagerOpenAPIBranch:
         )
 
         openapi_tool_defs = [
-            t for t in result
-            if t.get("function", {}).get("name") in ("listItems", "deleteItem")
+            t for t in result if t.get("function", {}).get("name") in ("listItems", "deleteItem")
         ]
         assert len(openapi_tool_defs) == 2
 
@@ -161,7 +160,10 @@ class TestToolManagerOpenAPIBranch:
                 mcp_server_instance_service=mcp_svc,
             )
 
-        assert any("unknown_exotic_type" in r.message.lower() or "unknown tool type" in r.message.lower() for r in caplog.records)
+        assert any(
+            "unknown_exotic_type" in r.message.lower() or "unknown tool type" in r.message.lower()
+            for r in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_openapi_providers_discovered(self):

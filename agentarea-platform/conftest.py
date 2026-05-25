@@ -87,9 +87,7 @@ def test_user_context():
     """Create test user context."""
     from agentarea_common.auth.context import UserContext
 
-    return UserContext(
-        user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"]
-    )
+    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"])
 
 
 @pytest.fixture
@@ -203,7 +201,9 @@ def pytest_configure(config):
     # Set required Kratos settings for auth
     os.environ.setdefault("KRATOS_ISSUER", "http://localhost:4433")
     os.environ.setdefault("KRATOS_AUDIENCE", "agentarea")
-    os.environ.setdefault("KRATOS_JWKS_B64", base64.b64encode(json.dumps({"keys": []}).encode()).decode())
+    os.environ.setdefault(
+        "KRATOS_JWKS_B64", base64.b64encode(json.dumps({"keys": []}).encode()).decode()
+    )
 
     config.addinivalue_line("markers", "asyncio: mark test as async")
     config.addinivalue_line("markers", "integration: mark test as integration test")

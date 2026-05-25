@@ -67,4 +67,3 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             return list(configs_with_relations)
 
         return configs
-

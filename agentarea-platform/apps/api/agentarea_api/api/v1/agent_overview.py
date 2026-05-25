@@ -72,24 +72,21 @@ async def get_agent_overview(
 
     cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
     activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
-    base_filter = (TaskORM.workspace_id == workspace_id) & (
-        TaskORM.agent_id == agent_id
-    )
+    base_filter = (TaskORM.workspace_id == workspace_id) & (TaskORM.agent_id == agent_id)
 
     # ----- summary metrics -----
     summary_q = select(
-        func.coalesce(
-            func.sum(case((activity_at >= today_start, cost_expr), else_=0)), 0
-        ).label("cost_today"),
-        func.coalesce(
-            func.sum(case((activity_at >= month_start, cost_expr), else_=0)), 0
-        ).label("cost_mtd"),
+        func.coalesce(func.sum(case((activity_at >= today_start, cost_expr), else_=0)), 0).label(
+            "cost_today"
+        ),
+        func.coalesce(func.sum(case((activity_at >= month_start, cost_expr), else_=0)), 0).label(
+            "cost_mtd"
+        ),
         func.coalesce(
             func.sum(
                 case(
                     (
-                        (TaskORM.status == "completed")
-                        & (activity_at >= today_start),
+                        (TaskORM.status == "completed") & (activity_at >= today_start),
                         1,
                     ),
                     else_=0,
@@ -101,8 +98,7 @@ async def get_agent_overview(
             func.sum(
                 case(
                     (
-                        (TaskORM.status == "failed")
-                        & (activity_at >= today_start),
+                        (TaskORM.status == "failed") & (activity_at >= today_start),
                         1,
                     ),
                     else_=0,
@@ -130,9 +126,7 @@ async def get_agent_overview(
         DailySpendPoint(
             date=(spend_since.date() + timedelta(days=i)).isoformat(),
             usd=round(
-                spend_by_day.get(
-                    (spend_since.date() + timedelta(days=i)).isoformat(), 0.0
-                ),
+                spend_by_day.get((spend_since.date() + timedelta(days=i)).isoformat(), 0.0),
                 4,
             ),
         )
@@ -144,12 +138,12 @@ async def get_agent_overview(
     counts_q = (
         select(
             day_col,
-            func.coalesce(
-                func.sum(case((TaskORM.status == "completed", 1), else_=0)), 0
-            ).label("completed"),
-            func.coalesce(
-                func.sum(case((TaskORM.status == "failed", 1), else_=0)), 0
-            ).label("failed"),
+            func.coalesce(func.sum(case((TaskORM.status == "completed", 1), else_=0)), 0).label(
+                "completed"
+            ),
+            func.coalesce(func.sum(case((TaskORM.status == "failed", 1), else_=0)), 0).label(
+                "failed"
+            ),
             func.coalesce(
                 func.sum(case((TaskORM.status == "input_required", 1), else_=0)),
                 0,
@@ -169,9 +163,7 @@ async def get_agent_overview(
     for i in range(14):
         d = (tasks_since.date() + timedelta(days=i)).isoformat()
         c, f, ir = counts_by_day.get(d, (0, 0, 0))
-        daily_tasks.append(
-            DailyTaskCounts(date=d, completed=c, failed=f, input_required=ir)
-        )
+        daily_tasks.append(DailyTaskCounts(date=d, completed=c, failed=f, input_required=ir))
 
     # ----- upcoming work (next 7 days) -----
     upcoming: list[UpcomingItem] = []

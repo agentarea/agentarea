@@ -116,6 +116,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+
 class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, MCPServerInstance, user_context)
@@ -143,4 +144,3 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
         return await self.list_all(
             creator_scoped=creator_scoped, limit=limit, offset=offset, status=status
         )
-

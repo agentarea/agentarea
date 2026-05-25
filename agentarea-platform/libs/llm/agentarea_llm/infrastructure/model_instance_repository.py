@@ -72,4 +72,3 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             return list(instances_with_relations)
 
         return instances
-

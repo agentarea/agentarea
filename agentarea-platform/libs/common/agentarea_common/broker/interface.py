@@ -42,9 +42,7 @@ class BrokerClient(Protocol):
         """Append a message to `stream`. Returns the broker-assigned message id."""
         ...
 
-    async def ensure_group(
-        self, stream: str, group: str, start: str = "$"
-    ) -> None:
+    async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
         """Create the consumer group + stream if absent. Idempotent."""
         ...
 

@@ -106,9 +106,7 @@ class TaskService(BaseTaskService):
         effective_policy: EffectivePolicy,
     ) -> None:
         """Persist the immutable policy snapshot via the injected port."""
-        await self.policy_resolver.snapshot(
-            task_id=task_id, effective_policy=effective_policy
-        )
+        await self.policy_resolver.snapshot(task_id=task_id, effective_policy=effective_policy)
 
     async def _enforce_budget_cap(
         self,

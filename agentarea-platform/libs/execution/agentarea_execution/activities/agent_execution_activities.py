@@ -1036,7 +1036,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         # channel_origin source priority:
                         #   1. embedded in event.data (workflow has it inline)
                         #   2. task.parameters via DB lookup (cached per batch)
-                        event_data = event.get("data") if isinstance(event.get("data"), dict) else {}
+                        event_data = (
+                            event.get("data") if isinstance(event.get("data"), dict) else {}
+                        )
                         channel_origin = event_data.get("channel_origin") if event_data else None
                         if not channel_origin and task_id and task_id != "unknown":
                             channel_origin = await _resolve_channel_origin(str(task_id))

@@ -61,6 +61,7 @@ def create_activity_dependencies() -> ActivityDependencies:
     # activity can enqueue deliveries directly without going through the
     # lossy pub/sub bridge.
     from agentarea_common.broker import RedisStreamsBroker
+
     redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
     broker_client = RedisStreamsBroker(redis_url)
 

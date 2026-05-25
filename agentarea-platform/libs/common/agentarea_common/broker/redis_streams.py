@@ -44,9 +44,7 @@ class RedisStreamsBroker:
         msg_id: str = await client.xadd(stream, fields)
         return msg_id
 
-    async def ensure_group(
-        self, stream: str, group: str, start: str = "$"
-    ) -> None:
+    async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
         client = await self._get_client()
         try:
             await client.xgroup_create(stream, group, id=start, mkstream=True)

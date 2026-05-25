@@ -94,6 +94,7 @@ def _make_tool_with_transport(op, transport, connection=None, headers=None):
 
     async def patched_execute(**kwargs):
         import agentarea_agents_sdk.tools.openapi_tool as mod
+
         with patch.object(mod.httpx, "AsyncClient") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -146,7 +147,11 @@ class TestOpenAPIToolProperties:
 
     def test_get_schema_wraps_input_schema(self):
         op = _make_operation()
-        op["input_schema"] = {"type": "object", "properties": {"x": {"type": "string"}}, "required": []}
+        op["input_schema"] = {
+            "type": "object",
+            "properties": {"x": {"type": "string"}},
+            "required": [],
+        }
         tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, MagicMock())
         schema = tool.get_schema()
         assert schema == {"parameters": op["input_schema"]}
@@ -191,7 +196,11 @@ class TestOpenAPIToolExecuteHappyPath:
         response = httpx.Response(200, json={"items": []})
 
         import agentarea_agents_sdk.tools.openapi_tool as mod
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)):
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)),
+        ):
             op = _make_operation(method="GET", path="/items")
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -212,11 +221,21 @@ class TestOpenAPIToolExecuteHappyPath:
         import agentarea_agents_sdk.tools.openapi_tool as mod
 
         mock_client = _build_mock_client(response)
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation(
                 method="GET",
                 path="/items/{item_id}",
-                parameters=[{"name": "item_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                parameters=[
+                    {
+                        "name": "item_id",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "integer"},
+                    }
+                ],
             )
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute(item_id=42)
@@ -235,12 +254,20 @@ class TestOpenAPIToolExecuteHappyPath:
         import agentarea_agents_sdk.tools.openapi_tool as mod
 
         mock_client = _build_mock_client(response)
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation(
                 method="GET",
                 path="/items",
                 parameters=[
-                    {"name": "page", "in": "query", "required": False, "schema": {"type": "integer"}},
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "integer"},
+                    },
                 ],
             )
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
@@ -260,12 +287,20 @@ class TestOpenAPIToolExecuteHappyPath:
         import agentarea_agents_sdk.tools.openapi_tool as mod
 
         mock_client = _build_mock_client(response)
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation(
                 method="GET",
                 path="/items",
                 parameters=[
-                    {"name": "X-Trace-Id", "in": "header", "required": False, "schema": {"type": "string"}},
+                    {
+                        "name": "X-Trace-Id",
+                        "in": "header",
+                        "required": False,
+                        "schema": {"type": "string"},
+                    },
                 ],
             )
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
@@ -287,7 +322,10 @@ class TestOpenAPIToolExecuteHappyPath:
         import agentarea_agents_sdk.tools.openapi_tool as mod
 
         mock_client = _build_mock_client(response)
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation(
                 name="createItem",
                 method="POST",
@@ -309,7 +347,11 @@ class TestOpenAPIToolExecuteHappyPath:
         response = httpx.Response(200, text="OK", headers={"content-type": "text/plain"})
 
         import agentarea_agents_sdk.tools.openapi_tool as mod
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)):
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)),
+        ):
             op = _make_operation(method="GET", path="/health")
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -326,7 +368,11 @@ class TestOpenAPIToolExecuteHappyPath:
         response = httpx.Response(200, text=large_text, headers={"content-type": "text/plain"})
 
         import agentarea_agents_sdk.tools.openapi_tool as mod
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)):
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)),
+        ):
             op = _make_operation(method="GET", path="/big")
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -366,7 +412,11 @@ class TestOpenAPIToolExecuteErrors:
         assert result["success"] is False
         assert result["error"]
         # Should mention private/SSRF in error
-        assert "private" in result["error"].lower() or "ssrf" in result["error"].lower() or "not allowed" in result["error"].lower()
+        assert (
+            "private" in result["error"].lower()
+            or "ssrf" in result["error"].lower()
+            or "not allowed" in result["error"].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_non_2xx_returns_structured_error(self):
@@ -376,7 +426,11 @@ class TestOpenAPIToolExecuteErrors:
         response = httpx.Response(404, json={"error": "not found"})
 
         import agentarea_agents_sdk.tools.openapi_tool as mod
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)):
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=_build_mock_client(response)),
+        ):
             op = _make_operation()
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -397,7 +451,10 @@ class TestOpenAPIToolExecuteErrors:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
 
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation()
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -418,7 +475,10 @@ class TestOpenAPIToolExecuteErrors:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.request = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
 
-        with _patch_validate_url(), patch.object(mod.httpx, "AsyncClient", return_value=mock_client):
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
             op = _make_operation()
             tool = OpenAPITool(op, _CONNECTION_ID, _CONNECTION_NAME, svc)
             result = await tool.execute()
@@ -486,9 +546,7 @@ class TestOpenAPIToolFactory:
         svc.get_connection = AsyncMock(return_value=None)
         svc.list_connections = AsyncMock(return_value=([conn], 1))
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            _CONNECTION_NAME, None, svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(_CONNECTION_NAME, None, svc)
 
         assert len(tools) == 3
         assert all(isinstance(t, OpenAPITool) for t in tools)
@@ -499,9 +557,7 @@ class TestOpenAPIToolFactory:
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            conn.id, None, svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(conn.id, None, svc)
 
         assert len(tools) == 3
 
@@ -511,9 +567,7 @@ class TestOpenAPIToolFactory:
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            conn.id, ["opA", "opC"], svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(conn.id, ["opA", "opC"], svc)
 
         names = [t.name for t in tools]
         assert "opA" in names
@@ -527,9 +581,7 @@ class TestOpenAPIToolFactory:
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            conn.id, [], svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(conn.id, [], svc)
 
         assert len(tools) == 3
 
@@ -539,9 +591,7 @@ class TestOpenAPIToolFactory:
         svc.get_connection = AsyncMock(return_value=None)
         svc.list_connections = AsyncMock(return_value=([], 0))
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            "nonexistent", None, svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection("nonexistent", None, svc)
 
         assert tools == []
 
@@ -551,9 +601,7 @@ class TestOpenAPIToolFactory:
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            conn.id, None, svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(conn.id, None, svc)
 
         assert tools == []
 
@@ -564,9 +612,7 @@ class TestOpenAPIToolFactory:
         svc.get_connection = AsyncMock(return_value=conn)
 
         # Pass UUID as string — should be parsed and routed to get_connection
-        tools = await OpenAPIToolFactory.create_tools_from_connection(
-            str(conn.id), None, svc
-        )
+        tools = await OpenAPIToolFactory.create_tools_from_connection(str(conn.id), None, svc)
 
         assert len(tools) == 3
         svc.get_connection.assert_called_once()

@@ -307,7 +307,7 @@ async def get_dashboard(
 
     # Most-active agents first
     agents.sort(
-        key=lambda a: (a.last_activity_at or datetime.min),
+        key=lambda a: a.last_activity_at or datetime.min,
         reverse=True,
     )
 
@@ -328,9 +328,7 @@ async def get_dashboard(
         DailySpendPoint(
             date=(spend_since.date() + timedelta(days=i)).isoformat(),
             usd=round(
-                spend_by_day.get(
-                    (spend_since.date() + timedelta(days=i)).isoformat(), 0.0
-                ),
+                spend_by_day.get((spend_since.date() + timedelta(days=i)).isoformat(), 0.0),
                 4,
             ),
         )
@@ -343,12 +341,12 @@ async def get_dashboard(
     daily_tasks_q = (
         select(
             day_col,
-            func.coalesce(
-                func.sum(case((TaskORM.status == "completed", 1), else_=0)), 0
-            ).label("completed"),
-            func.coalesce(
-                func.sum(case((TaskORM.status == "failed", 1), else_=0)), 0
-            ).label("failed"),
+            func.coalesce(func.sum(case((TaskORM.status == "completed", 1), else_=0)), 0).label(
+                "completed"
+            ),
+            func.coalesce(func.sum(case((TaskORM.status == "failed", 1), else_=0)), 0).label(
+                "failed"
+            ),
             func.coalesce(
                 func.sum(case((TaskORM.status == "input_required", 1), else_=0)), 0
             ).label("input_required"),
@@ -367,9 +365,7 @@ async def get_dashboard(
     for i in range(14):
         d = (tasks_since.date() + timedelta(days=i)).isoformat()
         c, f, ir = tasks_by_day.get(d, (0, 0, 0))
-        daily_tasks.append(
-            DailyTaskCounts(date=d, completed=c, failed=f, input_required=ir)
-        )
+        daily_tasks.append(DailyTaskCounts(date=d, completed=c, failed=f, input_required=ir))
 
     return DashboardResponse(
         spend=spend,

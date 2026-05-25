@@ -67,9 +67,7 @@ class WalletRepository(WorkspaceScopedRepository[AgentWallet]):
 
         exhausted: list[AgentWallet] = []
         for wallet in wallets:
-            period_start = (
-                daily_start if wallet.service_budget_period == "daily" else monthly_start
-            )
+            period_start = daily_start if wallet.service_budget_period == "daily" else monthly_start
             spent_q = (
                 select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
                 .where(PaymentRecord.agent_id == str(wallet.agent_id))

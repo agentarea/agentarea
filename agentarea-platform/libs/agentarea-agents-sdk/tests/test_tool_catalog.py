@@ -1,6 +1,5 @@
 """Unit tests for ToolProvider protocol and ToolCatalog."""
 
-
 from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
 from agentarea_agents_sdk.tools.tool_provider import (
     AgentToolProvider,
