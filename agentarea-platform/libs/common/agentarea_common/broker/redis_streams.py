@@ -35,7 +35,7 @@ class RedisStreamsBroker:
         if self._client is not None:
             try:
                 await self._client.aclose()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.debug("Redis aclose suppressed: %s", exc)
             self._client = None
 
@@ -133,7 +133,7 @@ class RedisStreamsBroker:
                 max=ids[-1],
                 count=len(ids),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("XPENDING enrich failed, defaulting delivery_count=1: %s", exc)
             return msgs
 

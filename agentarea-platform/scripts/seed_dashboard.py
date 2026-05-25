@@ -11,9 +11,10 @@ Usage::
         [--user <user_id>] [--agents 3] [--tasks 50] [--cap 25] \
         [--with-blockers] [--reset]
 
-Idempotent for ``workspace_settings`` (upsert) and ``agent_wallets``
-(updated when matching). Tasks are always *appended* — pass ``--reset``
-to wipe seeded rows first (matched by ``task_metadata->>'seed'='dashboard'``).
+Idempotent for the workspace cap policy (governance upsert) and
+``agent_wallets`` (updated when matching). Tasks are always *appended* —
+pass ``--reset`` to wipe seeded rows first
+(matched by ``task_metadata->>'seed'='dashboard'``).
 
 Notes:
 - Inserts directly through SQLAlchemy ORM. No event broker / Temporal wiring.
@@ -34,7 +35,8 @@ from agentarea_agents.domain.models import Agent
 from agentarea_common.infrastructure.database import db
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
-from agentarea_workspaces.domain.models import WorkspaceSettings
+from agentarea_governance.domain.policies import monthly_cap_policy
+from agentarea_governance.infrastructure.orm import GovernancePolicyORM
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -226,17 +228,32 @@ async def seed_tasks(
     return completed, failed, hitl
 
 
-async def upsert_settings(session, workspace_id: str, cap: float | None) -> None:
+async def upsert_settings(
+    session, workspace_id: str, user_id: str, cap: float | None
+) -> None:
+    """Upsert the workspace cap as a governance policy row."""
+    if cap is None:
+        print("workspace cap policy = (none)")
+        return
+
+    document = monthly_cap_policy(cap).to_json_dict()
     stmt = (
-        pg_insert(WorkspaceSettings)
-        .values(workspace_id=workspace_id, monthly_cap_usd=cap)
+        pg_insert(GovernancePolicyORM)
+        .values(
+            workspace_id=workspace_id,
+            created_by=user_id,
+            scope_type="workspace",
+            scope_id=workspace_id,
+            document=document,
+            enabled=True,
+        )
         .on_conflict_do_update(
-            index_elements=["workspace_id"],
-            set_={"monthly_cap_usd": cap},
+            constraint="uq_governance_policies_scope",
+            set_={"document": document, "enabled": True},
         )
     )
     await session.execute(stmt)
-    print(f"workspace_settings.monthly_cap_usd = {cap}")
+    print(f"governance_policies workspace cap = ${cap}")
 
 
 async def exhaust_one_wallet(
@@ -326,7 +343,7 @@ async def main() -> None:
             await reset_seeded(session, args.workspace_id)
 
         cap = args.cap if args.cap and args.cap > 0 else None
-        await upsert_settings(session, args.workspace_id, cap)
+        await upsert_settings(session, args.workspace_id, args.user, cap)
 
         agents = await get_or_create_agents(
             session, args.workspace_id, args.user, args.agents

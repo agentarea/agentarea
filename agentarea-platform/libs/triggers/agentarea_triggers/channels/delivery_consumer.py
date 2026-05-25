@@ -136,7 +136,7 @@ class ChannelDeliveryConsumer:
                 backoff = 1.0
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._running:
                     break
                 logger.error(
@@ -215,7 +215,7 @@ class ChannelDeliveryConsumer:
         except (FatalError, ChannelDeliveryError) as exc:
             await self._dead_letter(msg, f"{type(exc).__name__}: {exc}")
             return
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Unknown errors: same release-then-redeliver pattern. The
             # delivery_count cap (above) bounds the loop for true poison;
             # transient unknowns get a few free retries this way.
@@ -230,7 +230,7 @@ class ChannelDeliveryConsumer:
         dlq_fields = {**msg.fields, "fatal_reason": reason[:500]}
         try:
             await self._broker.submit(self._dlq_stream, dlq_fields)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("failed to write to DLQ for %s", msg.id)
         await self._broker.ack(self._stream, self._group, msg.id)
         logger.error("channel delivery DLQ'd: %s (reason=%s)", msg.id, reason)

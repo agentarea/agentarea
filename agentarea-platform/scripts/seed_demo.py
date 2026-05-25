@@ -17,7 +17,7 @@ Usage::
         [--telegram-token 8156330210:AAH...] \
         [--no-telegram] [--no-automations] [--no-blockers]
 
-Idempotent for upserts (workspace_settings, provider/model, telegram secret).
+Idempotent for upserts (governance workspace cap, provider/model, telegram secret).
 Tasks are *appended* — pass ``--reset`` to wipe seed-tagged rows first.
 
 Skip flags let you re-seed pieces independently. The script prints a summary
@@ -53,7 +53,8 @@ from agentarea_secrets.database_secret_manager import EncryptedSecret
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
-from agentarea_workspaces.domain.models import WorkspaceSettings
+from agentarea_governance.domain.policies import monthly_cap_policy
+from agentarea_governance.infrastructure.orm import GovernancePolicyORM
 from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -220,17 +221,32 @@ def _within_mtd() -> datetime:
 # ── 1. Workspace settings ───────────────────────────────────────────
 
 
-async def upsert_settings(session: AsyncSession, workspace_id: str, cap: float | None) -> None:
+async def upsert_settings(
+    session: AsyncSession, workspace_id: str, user_id: str, cap: float | None
+) -> None:
+    """Upsert the workspace cap as a governance policy row."""
+    if cap is None:
+        print("  governance workspace cap = (none)")
+        return
+
+    document = monthly_cap_policy(cap).to_json_dict()
     stmt = (
-        pg_insert(WorkspaceSettings)
-        .values(workspace_id=workspace_id, monthly_cap_usd=cap)
+        pg_insert(GovernancePolicyORM)
+        .values(
+            workspace_id=workspace_id,
+            created_by=user_id,
+            scope_type="workspace",
+            scope_id=workspace_id,
+            document=document,
+            enabled=True,
+        )
         .on_conflict_do_update(
-            index_elements=["workspace_id"],
-            set_={"monthly_cap_usd": cap},
+            constraint="uq_governance_policies_scope",
+            set_={"document": document, "enabled": True},
         )
     )
     await session.execute(stmt)
-    print(f"  workspace_settings.monthly_cap_usd = {cap}")
+    print(f"  governance workspace cap = ${cap}")
 
 
 # ── 2. LLM: OpenRouter provider + model ─────────────────────────────
@@ -756,7 +772,7 @@ async def main() -> None:
             await reset_seeded(session, args.workspace_id)
 
         print("→ Workspace settings:")
-        await upsert_settings(session, args.workspace_id, cap)
+        await upsert_settings(session, args.workspace_id, args.user, cap)
 
         print("→ LLM provider/model (OpenRouter):")
         model_instance = await upsert_provider_and_model(

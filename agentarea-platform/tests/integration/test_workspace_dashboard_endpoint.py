@@ -1,7 +1,7 @@
 """Integration tests for GET /v1/workspace/dashboard.
 
 Calls get_dashboard() directly against an in-memory SQLite seeded with Agent,
-TaskORM, and WorkspaceSettings rows. The PostgreSQL-only operators
+TaskORM, and GovernancePolicyORM rows. The PostgreSQL-only operators
 (JSON ->> and the Date-cast CTEs) are sidestepped: sum_spend_today,
 sum_spend_mtd, and list_budget_exhausted are patched, and a small session
 proxy intercepts the daily_spend / daily_tasks CTEs. All other queries
@@ -20,13 +20,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from agentarea_agents.domain.models import Agent
+from agentarea_api.api.v1.dashboard import get_dashboard
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
+from agentarea_governance.domain.policies import monthly_cap_policy
+from agentarea_governance.infrastructure.orm import GovernancePolicyORM
 from agentarea_tasks.infrastructure.orm import TaskORM
-from agentarea_workspaces.domain.models import WorkspaceSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-from agentarea_api.api.v1.dashboard import get_dashboard
 
 WORKSPACE_ID = "test-workspace-dashboard-001"
 USER_ID = "test-user-dashboard-001"
@@ -58,14 +58,14 @@ async def engine():
 
     BaseModel.metadata contains every imported ORM (incl. TaskEventORM with
     JSONB and AgentWallet with FK chains). Restricting create_all to the three
-    tables we actually seed avoids the JSONB compile error and FK resolution.
+    tables we actually seed avoids unrelated FK resolution.
     """
     _engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
 
     target_tables = [
         Agent.__table__,
         TaskORM.__table__,
-        WorkspaceSettings.__table__,
+        GovernancePolicyORM.__table__,
     ]
 
     async with _engine.begin() as conn:
@@ -85,7 +85,7 @@ def session_factory(engine):
 
 @pytest.fixture(scope="module")
 async def seeded(session_factory):
-    """Seed Agent + 5 Tasks + WorkspaceSettings.
+    """Seed Agent + 5 Tasks + workspace cap governance policy.
 
     t1 completed today      cost=10  → spend.today, mtd, tasks_done_today
     t2 completed yesterday  cost=5   → spend.mtd only
@@ -203,7 +203,15 @@ async def seeded(session_factory):
             )
         )
 
-        session.add(WorkspaceSettings(workspace_id=WORKSPACE_ID, monthly_cap_usd=MONTHLY_CAP_USD))
+        session.add(
+            GovernancePolicyORM(
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                scope_type="workspace",
+                scope_id=WORKSPACE_ID,
+                document=monthly_cap_policy(MONTHLY_CAP_USD).to_json_dict(),
+            )
+        )
         await session.commit()
 
     return {
@@ -307,11 +315,36 @@ class TestSpendCard:
         result = await _call_dashboard(session_factory, user_context, today_usd=10.0, mtd_usd=15.0)
         assert result.spend.mtd_usd == pytest.approx(15.0, abs=0.01)
 
-    async def test_cap_usd_populated_when_settings_exist(
+    async def test_cap_usd_populated_when_governance_policy_exists(
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context, mtd_usd=15.0)
         assert result.spend.cap_usd == pytest.approx(MONTHLY_CAP_USD, abs=0.01)
+
+    async def test_empty_governance_policy_yields_no_cap(self, session_factory, seeded):
+        policy_workspace_id = "workspace-policy-clear-dashboard-001"
+        policy_context = UserContext(
+            user_id="policy-user-dashboard-002",
+            workspace_id=policy_workspace_id,
+            roles=["user"],
+        )
+
+        async with session_factory() as session:
+            session.add(
+                GovernancePolicyORM(
+                    workspace_id=policy_workspace_id,
+                    created_by=policy_context.user_id,
+                    scope_type="workspace",
+                    scope_id=policy_workspace_id,
+                    document={},
+                )
+            )
+            await session.commit()
+
+        result = await _call_dashboard(session_factory, policy_context, mtd_usd=50.0)
+        assert result.spend.cap_usd is None
+        assert result.spend.pct_of_cap is None
+        assert result.spend.projected_eom_usd is None
 
     async def test_pct_of_cap_is_computed_correctly(self, session_factory, user_context, seeded):
         mtd = 100.0
@@ -326,10 +359,10 @@ class TestSpendCard:
         assert result.spend.projected_eom_usd is not None
         assert result.spend.projected_eom_usd >= 0.0
 
-    async def test_cap_fields_are_none_when_no_settings_row(self, session_factory, seeded):
+    async def test_cap_fields_are_none_when_no_policy_row(self, session_factory, seeded):
         other_context = UserContext(
-            user_id="no-settings-user",
-            workspace_id="workspace-without-settings",
+            user_id="no-policy-user",
+            workspace_id="workspace-without-policy",
             roles=["user"],
         )
         result = await _call_dashboard(session_factory, other_context, mtd_usd=50.0)

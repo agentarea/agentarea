@@ -57,7 +57,8 @@ class BrokerClient(Protocol):
         block_ms: int = 5000,
     ) -> list[BrokerMessage]:
         """Claim up to `count` un-ACKed messages for this consumer. Blocks
-        up to `block_ms` if the stream is empty. Returns [] on timeout."""
+        up to `block_ms` if the stream is empty. Returns [] on timeout.
+        """
         ...
 
     async def ack(self, stream: str, group: str, message_id: str) -> None:
@@ -75,5 +76,6 @@ class BrokerClient(Protocol):
     ) -> list[BrokerMessage]:
         """Reclaim messages that have been pending longer than `min_idle_ms`
         from dead consumers. Returns the reclaimed batch (now owned by
-        `consumer`)."""
+        `consumer`).
+        """
         ...

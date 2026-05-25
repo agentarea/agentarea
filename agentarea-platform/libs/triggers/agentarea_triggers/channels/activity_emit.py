@@ -89,7 +89,7 @@ async def emit_channel_delivery(
             },
         )
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         # Channel emit failures must not break the whole activity batch.
         logger.exception("channel emit failed for event %s", event.get("event_type"))
         return False

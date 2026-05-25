@@ -16,10 +16,11 @@ from agentarea_agents.domain.models import Agent
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.infrastructure.database import get_db_session
+from agentarea_governance.domain.policies import PolicyDocument, PolicyScopeType, monthly_cap_policy
+from agentarea_governance.infrastructure.repository import GovernancePolicyRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_wallet.infrastructure.repository import WalletRepository
-from agentarea_workspaces.infrastructure.repository import WorkspaceSettingsRepository
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import Date, Numeric, case, cast, desc, func, select
@@ -122,6 +123,21 @@ def _project_eom(mtd_usd: float, now: datetime) -> float | None:
     return round(mtd_usd / days_elapsed * days_in_month, 2)
 
 
+async def _get_workspace_policy_cap_usd(
+    factory: RepositoryFactory, workspace_id: str
+) -> float | None:
+    """Read the workspace-scoped monthly cap from governance policies."""
+    policy = await factory.create_repository(GovernancePolicyRepository).get_scope_policy(
+        scope_type=PolicyScopeType.WORKSPACE,
+        scope_id=workspace_id,
+    )
+    if not policy:
+        return None
+    _, document = policy
+    cap = document.budget.monthly_spend_cap_usd if document.budget else None
+    return float(cap) if cap is not None else None
+
+
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
     user_context: UserContextDep,
@@ -131,7 +147,6 @@ async def get_dashboard(
     factory = RepositoryFactory(db_session, user_context)
     task_repo = factory.create_repository(TaskRepository)
     wallet_repo = factory.create_repository(WalletRepository)
-    settings_repo = factory.create_repository(WorkspaceSettingsRepository)
 
     workspace_id = user_context.workspace_id
     today_start = _utc_today_start()
@@ -139,8 +154,7 @@ async def get_dashboard(
     twenty_four_hours_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
 
     # ----- spend card -----
-    settings = await settings_repo.get()
-    cap_usd = float(settings.monthly_cap_usd) if settings and settings.monthly_cap_usd else None
+    cap_usd = await _get_workspace_policy_cap_usd(factory, workspace_id)
     today_usd = await task_repo.sum_spend_today()
     mtd_usd = await task_repo.sum_spend_mtd()
     pct = round(mtd_usd / cap_usd * 100, 2) if cap_usd else None
@@ -381,12 +395,8 @@ async def get_workspace_settings(
 ) -> WorkspaceSettingsResponse:
     """Read the current workspace's settings (cap, etc)."""
     factory = RepositoryFactory(db_session, user_context)
-    settings = await factory.create_repository(WorkspaceSettingsRepository).get()
-    return WorkspaceSettingsResponse(
-        monthly_cap_usd=float(settings.monthly_cap_usd)
-        if settings and settings.monthly_cap_usd is not None
-        else None,
-    )
+    cap = await _get_workspace_policy_cap_usd(factory, user_context.workspace_id)
+    return WorkspaceSettingsResponse(monthly_cap_usd=cap)
 
 
 @router.put("/settings", response_model=WorkspaceSettingsResponse)
@@ -397,11 +407,17 @@ async def update_workspace_settings(
 ) -> WorkspaceSettingsResponse:
     """Upsert the current workspace's settings."""
     factory = RepositoryFactory(db_session, user_context)
-    settings = await factory.create_repository(WorkspaceSettingsRepository).upsert(
-        monthly_cap_usd=payload.monthly_cap_usd,
+    document = (
+        monthly_cap_policy(payload.monthly_cap_usd)
+        if payload.monthly_cap_usd is not None
+        else PolicyDocument()
     )
+    _, saved = await factory.create_repository(GovernancePolicyRepository).upsert_scope_policy(
+        scope_type=PolicyScopeType.WORKSPACE,
+        scope_id=user_context.workspace_id,
+        document=document,
+    )
+    cap = saved.budget.monthly_spend_cap_usd if saved.budget else None
     return WorkspaceSettingsResponse(
-        monthly_cap_usd=float(settings.monthly_cap_usd)
-        if settings.monthly_cap_usd is not None
-        else None,
+        monthly_cap_usd=float(cap) if cap is not None else None,
     )

@@ -79,6 +79,6 @@ class StreamAutoclaimer:
                     )
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("autoclaim error on %s", self._stream)
             await asyncio.sleep(self._interval)

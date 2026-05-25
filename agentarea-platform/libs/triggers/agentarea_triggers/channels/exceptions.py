@@ -31,7 +31,8 @@ class RetryableError(ChannelDeliveryError):
 
 class FatalError(ChannelDeliveryError):
     """Non-retryable failure — ACK and DLQ. Includes 4xx (auth, blocked,
-    malformed) and adapter contract violations (unknown channel type)."""
+    malformed) and adapter contract violations (unknown channel type).
+    """
 
 
 class UnsupportedPayloadError(FatalError):
