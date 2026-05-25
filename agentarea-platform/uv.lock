@@ -27,7 +27,6 @@ members = [
     "agentarea-wallet",
     "agentarea-worker",
     "agentarea-workspace",
-    "agentarea-workspaces",
 ]
 constraints = [
     { name = "cryptography", specifier = ">=46.0.7" },
@@ -125,6 +124,7 @@ dependencies = [
     { name = "agentarea-agents" },
     { name = "agentarea-common" },
     { name = "agentarea-execution" },
+    { name = "agentarea-governance" },
     { name = "agentarea-llm" },
     { name = "agentarea-mcp" },
     { name = "agentarea-openapi" },
@@ -134,7 +134,6 @@ dependencies = [
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
     { name = "agentarea-wallet" },
-    { name = "agentarea-workspaces" },
     { name = "alembic" },
     { name = "click" },
     { name = "croniter" },
@@ -151,6 +150,7 @@ requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-execution", editable = "libs/execution" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-llm", editable = "libs/llm" },
     { name = "agentarea-mcp", editable = "libs/mcp" },
     { name = "agentarea-openapi", editable = "libs/openapi" },
@@ -160,7 +160,6 @@ requires-dist = [
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "agentarea-wallet", editable = "libs/wallet" },
-    { name = "agentarea-workspaces", editable = "libs/workspaces" },
     { name = "alembic", specifier = ">=1.15.2" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "croniter", specifier = ">=6.2.2" },
@@ -273,6 +272,11 @@ provides-extras = ["dev"]
 name = "agentarea-governance"
 version = "0.0.10"
 source = { editable = "libs/governance" }
+dependencies = [
+    { name = "agentarea-common" },
+    { name = "pydantic" },
+    { name = "sqlalchemy" },
+]
 
 [package.optional-dependencies]
 temporal = [
@@ -282,7 +286,10 @@ temporal = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-execution", marker = "extra == 'temporal'", editable = "libs/execution" },
+    { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "temporalio", marker = "extra == 'temporal'", specifier = ">=1.12.0" },
 ]
 provides-extras = ["temporal"]
@@ -432,7 +439,7 @@ source = { editable = "libs/tasks" }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "agentarea-common" },
-    { name = "agentarea-workspaces" },
+    { name = "agentarea-governance" },
     { name = "pydantic" },
     { name = "temporalio" },
 ]
@@ -441,7 +448,7 @@ dependencies = [
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.2.8" },
     { name = "agentarea-common", editable = "libs/common" },
-    { name = "agentarea-workspaces", editable = "libs/workspaces" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "temporalio", specifier = ">=1.0.0" },
 ]
@@ -606,23 +613,6 @@ test = [
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "pytest-xdist", specifier = ">=3.6.0" },
-]
-
-[[package]]
-name = "agentarea-workspaces"
-version = "0.0.1"
-source = { editable = "libs/workspaces" }
-dependencies = [
-    { name = "agentarea-common" },
-    { name = "pydantic" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agentarea-common", editable = "libs/common" },
-    { name = "pydantic", specifier = ">=2.4.2" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
 ]
 
 [[package]]

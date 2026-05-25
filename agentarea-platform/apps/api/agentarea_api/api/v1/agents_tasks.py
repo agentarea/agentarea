@@ -21,8 +21,8 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.config.app import get_app_settings
 from agentarea_common.events.event_stream_service import EventStreamService
+from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
@@ -56,6 +56,7 @@ class TaskCreate(BaseModel):
     parameters: dict[str, Any] = {}
     requires_human_approval: bool | None = False
     project_id: str | None = None
+    task_policy: PolicyDocument | None = None
 
 
 class EscalationResolution(BaseModel):
@@ -307,6 +308,7 @@ async def create_task_for_agent_with_stream(
                 parameters=data.parameters,
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
+                task_policy=data.task_policy,
             )
             task = await task_service.start_run(
                 payload,
@@ -376,6 +378,16 @@ async def create_task_for_agent_with_stream(
                     },
                 )
 
+        except PolicyValidationError as e:
+            yield _format_sse_event(
+                "error",
+                {
+                    "agent_id": str(agent_id),
+                    "error": str(e),
+                    "error_type": "policy_validation_error",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
         except ValueError:
             # Agent validation errors
             yield _format_sse_event(
@@ -429,6 +441,7 @@ async def create_task_for_agent_sync(
             parameters=data.parameters,
             requires_human_approval=data.requires_human_approval or False,
             project_id=data.project_id,
+            task_policy=data.task_policy,
         )
         task = await task_service.start_run(
             payload,
@@ -450,6 +463,8 @@ async def create_task_for_agent_sync(
 
         return task_response
 
+    except PolicyValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
         # Agent validation errors
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -656,9 +671,8 @@ async def _list_task_artifact_items(
 
 
 def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_path: str) -> str:
-    base = get_app_settings().API_BASE_URL.rstrip("/")
     encoded_path = quote(artifact_path.lstrip("/"), safe="/")
-    return f"{base}/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{encoded_path}"
+    return f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{encoded_path}"
 
 
 async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task_id: UUID) -> None:

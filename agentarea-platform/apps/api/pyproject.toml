@@ -12,6 +12,7 @@ dependencies = [
     "agentarea-common",
     "agentarea-agents",
     "agentarea-execution",
+    "agentarea-governance",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-registry",
@@ -36,6 +37,7 @@ dependencies = [
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
 agentarea-execution = { workspace = true }
+agentarea-governance = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-registry = { workspace = true }

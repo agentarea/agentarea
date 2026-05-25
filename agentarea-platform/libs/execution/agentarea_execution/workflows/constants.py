@@ -11,7 +11,7 @@ BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
 
 # Timeout configurations
 ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
-LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=2)
+LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 
@@ -24,6 +24,7 @@ DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for chi
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
+LLM_RETRY_ATTEMPTS: Final[int] = 1
 
 
 # Context window management

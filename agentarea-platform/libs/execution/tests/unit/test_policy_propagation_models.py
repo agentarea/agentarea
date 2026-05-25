@@ -9,6 +9,7 @@ from agentarea_execution.models import (
     MCPToolRequest,
 )
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from agentarea_execution.workflows.constants import LLM_CALL_TIMEOUT, LLM_RETRY_ATTEMPTS
 from agentarea_execution.workflows.models import (
     AgentExecutionState,
     AgentGoal,
@@ -98,6 +99,33 @@ def test_workflow_initialization_stores_effective_policy_from_request():
     source = inspect.getsource(AgentExecutionWorkflow._initialize_workflow)
 
     assert "self.state.effective_policy = request.effective_policy" in source
+
+
+def test_workflow_goal_uses_request_max_reasoning_iterations_by_default():
+    request = AgentExecutionRequest(
+        task_id=uuid4(),
+        agent_id=uuid4(),
+        user_id="user-1",
+        workspace_id="workspace-1",
+        task_query="do work",
+        max_reasoning_iterations=7,
+    )
+
+    workflow_obj = AgentExecutionWorkflow()
+    goal = workflow_obj._build_goal_from_request(request)
+
+    assert goal.max_iterations == 7
+
+
+def test_workflow_iteration_limit_allows_configured_final_iteration():
+    source = inspect.getsource(AgentExecutionWorkflow._should_continue_execution)
+
+    assert "self.state.current_iteration > max_iterations" in source
+
+
+def test_llm_activity_timeout_allows_large_generations_without_retries():
+    assert LLM_CALL_TIMEOUT.total_seconds() == 600
+    assert LLM_RETRY_ATTEMPTS == 1
 
 
 def test_workflow_continue_as_new_and_activity_payloads_carry_effective_policy():

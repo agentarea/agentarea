@@ -727,7 +727,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     # under ``workspaces/{workspace_id}/tasks/{task_id}/`` so
                     # artifacts are grouped by workspace and scoped per task.
                     extra_kwargs: dict = {}
-                    if tool_name in ("agentarea/files", "agentarea/web"):
+                    if tool_name in (
+                        "agentarea/files",
+                        "agentarea/web",
+                        "agentarea/workspace_files",
+                    ):
                         from agentarea_common.artifacts import ArtifactService
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"

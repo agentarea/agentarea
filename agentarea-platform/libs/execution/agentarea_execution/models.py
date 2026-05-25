@@ -77,6 +77,7 @@ class AgentExecutionRequest(BaseModel):
 
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = Field(default_factory=dict)
+    effective_policy: dict[str, Any] | None = None
 
     # Continue-as-new state (populated when workflow restarts with fresh event history)
     continued_state: dict[str, Any] | None = None
@@ -256,6 +257,7 @@ class LLMCallRequest(BaseModel):
     agent_id: str | None = None
     execution_id: str | None = None
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
+    effective_policy: dict[str, Any] | None = None
 
 
 class LLMUsage(BaseModel):
@@ -288,6 +290,7 @@ class MCPToolRequest(BaseModel):
     agent_id: UUID | None = None  # Calling agent — used by self-referential tools (e.g. triggers)
     tools: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    effective_policy: dict[str, Any] | None = None
 
 
 class MCPToolResult(BaseModel):

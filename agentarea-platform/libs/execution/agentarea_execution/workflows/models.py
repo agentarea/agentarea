@@ -114,6 +114,7 @@ class ContinueAsNewState(BaseModel):
     wallet_id: str | None = None
     # Cached model resolution — preserved across continue-as-new
     resolved_model: dict | None = None
+    effective_policy: dict[str, Any] | None = None
 
 
 class AgentExecutionState(BaseModel):
@@ -147,3 +148,4 @@ class AgentExecutionState(BaseModel):
     wallet_id: str | None = None
     # Cached model resolution — resolved once at workflow start
     resolved_model: dict | None = None
+    effective_policy: dict[str, Any] | None = None
