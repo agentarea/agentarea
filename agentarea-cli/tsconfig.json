@@ -11,7 +11,6 @@
 		"allowSyntheticDefaultImports": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"erasableSyntaxOnly": false,
 		"strict": false,
 		"resolveJsonModule": true,
 		"declaration": true,
