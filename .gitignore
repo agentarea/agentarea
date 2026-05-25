@@ -58,6 +58,11 @@ htmlcov/
 .env.test.local
 .env.production.local
 
+# Telegram smoke-test credentials + scratch scripts (hold raw API
+# keys / session files — must never be committed).
+.env.tg.local
+.env.tg.local.d/
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 
