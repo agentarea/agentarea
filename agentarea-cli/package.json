@@ -19,7 +19,7 @@
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
-		"axios": "^1.15.0",
+		"axios": "^1.16.1",
 		"eventsource": "^2.0.2",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
@@ -64,16 +64,24 @@
 	"prettier": "@vdemedes/prettier-config",
 	"overrides": {
 		"@eslint/plugin-kit@<0.3.4": "0.7.1",
+		"axios@>=1.0.0 <1.15.2": "1.16.1",
 		"brace-expansion@<1.1.13": "1.1.14",
+		"brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
 		"diff@>=4.0.0 <4.0.4": "4.0.4",
-		"minimatch@>=3.0.0 <3.1.5": "3.1.5"
+		"fast-uri@<=3.1.1": "3.1.2",
+		"minimatch@>=3.0.0 <3.1.5": "3.1.5",
+		"ws@>=8.0.0 <8.20.1": "8.21.0"
 	},
 	"pnpm": {
 		"overrides": {
 			"@eslint/plugin-kit@<0.3.4": "0.7.1",
+			"axios@>=1.0.0 <1.15.2": "1.16.1",
 			"brace-expansion@<1.1.13": "1.1.14",
+			"brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
 			"diff@>=4.0.0 <4.0.4": "4.0.4",
-			"minimatch@>=3.0.0 <3.1.5": "3.1.5"
+			"fast-uri@<=3.1.1": "3.1.2",
+			"minimatch@>=3.0.0 <3.1.5": "3.1.5",
+			"ws@>=8.0.0 <8.20.1": "8.21.0"
 		}
 	}
 }
