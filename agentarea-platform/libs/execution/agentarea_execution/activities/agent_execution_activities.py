@@ -1541,8 +1541,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
         execution.
         """
         import asyncio
-        import httpx
         import time
+
+        import httpx
         from agentarea_common.config.mcp import MCPSettings
 
         mcp_settings = MCPSettings()

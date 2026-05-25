@@ -509,10 +509,31 @@ export interface paths {
          * @description List artifacts the agent produced under ``tasks/{task_id}/``.
          *
          *     Workspace-scoped: the task must belong to the caller's workspace, or we
-         *     return 404. Each item carries a presigned download URL valid for
-         *     ``expires_in`` seconds (default 1 hour, capped at 24h).
+         *     return 404. Each item carries an AgentArea API download URL, so access
+         *     stays behind our auth, audit, and workspace checks instead of exposing
+         *     object-storage URLs directly.
          */
         get: operations["list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Task Artifact
+         * @description Stream a task artifact through the AgentArea API.
+         */
+        get: operations["download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -854,6 +875,26 @@ export interface paths {
         };
         /** List Workspace Files */
         get: operations["list_workspace_files_v1_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/download/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Workspace File
+         * @description Stream a workspace file through the AgentArea API.
+         */
+        get: operations["stream_workspace_file_v1_files_download__file_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1842,6 +1883,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/files/download/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Project File
+         * @description Stream a project file through the AgentArea API.
+         */
+        get: operations["stream_project_file_v1_projects__project_id__files_download__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/files/{file_path}": {
         parameters: {
             query?: never;
@@ -1851,7 +1912,7 @@ export interface paths {
         };
         /**
          * Download Project File
-         * @description Generate a presigned URL for a project file.
+         * @description Return an AgentArea API URL for a project file.
          */
         get: operations["download_project_file_v1_projects__project_id__files__file_path__get"];
         put?: never;
@@ -7414,6 +7475,39 @@ export interface operations {
             };
         };
     };
+    download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+                artifact_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     send_task_command_v1_agents__agent_id__tasks__task_id__command_post: {
         parameters: {
             query?: never;
@@ -8098,6 +8192,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceFileListResponse"];
+                };
+            };
+        };
+    };
+    stream_workspace_file_v1_files_download__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10243,6 +10368,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_project_file_v1_projects__project_id__files_download__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

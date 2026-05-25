@@ -536,21 +536,19 @@ func startContainer(rootDir, workingDir string, entrypoint, command []string, en
 	if err := SanitizeCommandArg(args[0]); err != nil {
 		return fmt.Errorf("invalid executable: %w", err)
 	}
+	wrapperPath, err := installChrootEntrypointWrapper(rootDir)
+	if err != nil {
+		return fmt.Errorf("failed to prepare chroot entrypoint wrapper: %w", err)
+	}
 
 	// Try chroot first (requires CAP_SYS_CHROOT). Use the image WORKDIR so
 	// relative ENTRYPOINT/CMD values like ["python", "bridge.py"] behave as
 	// they do under a regular container runtime.
-	chrootArgs := append(
-		[]string{
-			rootDir,
-			"/bin/sh",
-			"-c",
-			`cd "$MCP_WORKDIR" && exec "$@"`,
-			"--",
-		},
-		args...,
-	)
-	cmd := exec.Command("chroot", chrootArgs...) // #nosec G204 -- argv comes from a hash-verified image config and validated request command args.
+	chrootArgs := append([]string{rootDir, wrapperPath}, args...)
+	cmd, err := SafeCommand("chroot", chrootArgs...)
+	if err != nil {
+		return fmt.Errorf("invalid chroot command: %w", err)
+	}
 	cmd.Env = append(env, "MCP_WORKDIR="+containerWorkDir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -585,6 +583,19 @@ func startContainer(rootDir, workingDir string, entrypoint, command []string, en
 	logger.Info("Container process started", "pid", mcpProcess.Pid)
 
 	return nil
+}
+
+func installChrootEntrypointWrapper(rootDir string) (string, error) {
+	const wrapperPath = "/agentarea-entrypoint-wrapper"
+	wrapperHostPath := filepath.Join(rootDir, strings.TrimPrefix(wrapperPath, "/"))
+	if err := ValidateFilePath(rootDir, wrapperHostPath); err != nil {
+		return "", err
+	}
+	content := []byte("#!/bin/sh\ncd \"${MCP_WORKDIR:-/}\" || exit 127\nexec \"$@\"\n")
+	if err := os.WriteFile(wrapperHostPath, content, 0o755); err != nil {
+		return "", err
+	}
+	return wrapperPath, nil
 }
 
 func normalizeContainerWorkDir(workingDir string) string {
@@ -837,12 +848,18 @@ const maxInputFileBytes = 10 * 1024 * 1024
 const maxAutoArtifacts = 20
 
 func materializeInputFiles(workspace string, files []SandboxInputFile) error {
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return fmt.Errorf("failed to open workspace root: %w", err)
+	}
+	defer root.Close()
+
 	for _, file := range files {
 		if file.Path == "" {
 			return fmt.Errorf("input file path is required")
 		}
-		clean := filepath.Clean(file.Path)
-		if filepath.IsAbs(file.Path) || strings.HasPrefix(clean, "..") || strings.Contains(clean, string(filepath.Separator)+".."+string(filepath.Separator)) {
+		clean, err := cleanSandboxRelativePath(file.Path)
+		if err != nil {
 			return fmt.Errorf("input file path must be relative and must not contain '..': %s", file.Path)
 		}
 
@@ -854,14 +871,10 @@ func materializeInputFiles(workspace string, files []SandboxInputFile) error {
 			return fmt.Errorf("input file too large: %s", file.Path)
 		}
 
-		fullPath := filepath.Join(workspace, clean)
-		if err := ValidateFilePath(workspace, fullPath); err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+		if err := root.MkdirAll(filepath.Dir(clean), 0o700); err != nil {
 			return fmt.Errorf("failed to create input directory for %s: %w", file.Path, err)
 		}
-		if err := os.WriteFile(fullPath, data, 0o600); err != nil {
+		if err := root.WriteFile(clean, data, 0o600); err != nil {
 			return fmt.Errorf("failed to write input file %s: %w", file.Path, err)
 		}
 	}
@@ -876,24 +889,23 @@ func collectArtifacts(workspace string, paths []string, since time.Time) []Sandb
 		return nil
 	}
 
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return []SandboxArtifact{{Error: fmt.Sprintf("failed to open workspace root: %s", err)}}
+	}
+	defer root.Close()
+
 	artifacts := make([]SandboxArtifact, 0, len(paths))
 	for _, requested := range paths {
 		artifact := SandboxArtifact{Path: requested, Name: filepath.Base(requested)}
-		clean := filepath.Clean(requested)
-		if requested == "" || filepath.IsAbs(requested) || strings.HasPrefix(clean, "..") || strings.Contains(clean, string(filepath.Separator)+".."+string(filepath.Separator)) {
-			artifact.Error = "artifact path must be relative and must not contain '..'"
-			artifacts = append(artifacts, artifact)
-			continue
-		}
-
-		fullPath := filepath.Join(workspace, clean)
-		if err := ValidateFilePath(workspace, fullPath); err != nil {
+		clean, err := cleanSandboxRelativePath(requested)
+		if err != nil {
 			artifact.Error = err.Error()
 			artifacts = append(artifacts, artifact)
 			continue
 		}
 
-		info, err := os.Stat(fullPath)
+		info, err := root.Stat(clean)
 		if err != nil {
 			artifact.Error = err.Error()
 			artifacts = append(artifacts, artifact)
@@ -910,7 +922,7 @@ func collectArtifacts(workspace string, paths []string, since time.Time) []Sandb
 			continue
 		}
 
-		data, err := os.ReadFile(fullPath)
+		data, err := root.ReadFile(clean)
 		if err != nil {
 			artifact.Error = err.Error()
 			artifacts = append(artifacts, artifact)
@@ -924,6 +936,14 @@ func collectArtifacts(workspace string, paths []string, since time.Time) []Sandb
 	}
 
 	return artifacts
+}
+
+func cleanSandboxRelativePath(path string) (string, error) {
+	clean := filepath.Clean(path)
+	if path == "" || filepath.IsAbs(path) || strings.HasPrefix(clean, "..") || strings.Contains(clean, string(filepath.Separator)+".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path must be relative and must not contain '..'")
+	}
+	return clean, nil
 }
 
 var autoArtifactExtensions = map[string]bool{
