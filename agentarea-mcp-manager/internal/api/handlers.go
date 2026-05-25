@@ -11,6 +11,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/templates"
 )
 
@@ -19,6 +20,7 @@ type Handler struct {
 	backend          backends.Backend
 	containerManager *container.Manager // Keep for backward compatibility
 	templateLoader   *templates.Loader
+	sandboxControl   *sandboxcontrol.Service
 	logger           *slog.Logger
 	startTime        time.Time
 	version          string
@@ -26,10 +28,12 @@ type Handler struct {
 
 // NewHandler creates a new API handler
 func NewHandler(backend backends.Backend, containerManager *container.Manager, templateLoader *templates.Loader, logger *slog.Logger, version string) *Handler {
+	sandboxControl := newSandboxControlService(logger)
 	return &Handler{
 		backend:          backend,
 		containerManager: containerManager,
 		templateLoader:   templateLoader,
+		sandboxControl:   sandboxControl,
 		logger:           logger,
 		startTime:        time.Now(),
 		version:          version,
@@ -65,11 +69,13 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/monitoring/status", h.getMonitoringStatus)
 	router.GET("/monitoring/health-summary", h.getHealthSummary)
 
-	// Sandbox execution (uses warm pool pods for isolated script execution)
+	// Sandbox execution (uses the sandbox control plane / warm-pool data plane)
+	router.POST("/sandbox/executions", h.createSandboxExecution)
+	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
+	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
 	router.POST("/sandbox/execute", h.executeSandbox)
 	// Per-workflow sandbox teardown — invoked by Temporal workflow finalizer.
-	// Warm pool path: deletes the pod assigned to this workflow.
-	// Dev path: forwards to the standalone executor's /workspace/cleanup.
+	// Warm pool path: retires the pod assigned to this workflow.
 	router.DELETE("/sandbox/workflow/:id", h.deleteSandboxWorkflow)
 
 	// Legacy container endpoints for backward compatibility (only when container manager is available)

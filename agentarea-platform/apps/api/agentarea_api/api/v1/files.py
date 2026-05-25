@@ -11,14 +11,18 @@ which prepends ``workspaces/{workspace_id}/`` to every key from
 from __future__ import annotations
 
 import logging
+from pathlib import PurePosixPath
 from typing import Annotated
+from urllib.parse import quote
 
 from agentarea_common.artifacts import ArtifactService
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
+from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,12 @@ class WorkspaceFileDownloadResponse(BaseModel):
 
 def _get_artifact_service() -> ArtifactService:
     return ArtifactService()
+
+
+def _workspace_file_download_url(file_path: str) -> str:
+    base = get_app_settings().API_BASE_URL.rstrip("/")
+    encoded_path = quote(file_path.lstrip("/"), safe="/")
+    return f"{base}/v1/files/download/{encoded_path}"
 
 
 async def get_project_service(
@@ -81,6 +91,23 @@ async def list_workspace_files(
     return WorkspaceFileListResponse(files=files, directories=directories)
 
 
+@router.get("/download/{file_path:path}")
+async def stream_workspace_file(
+    file_path: str,
+    user_context: UserContextDep,
+):
+    """Stream a workspace file through the AgentArea API."""
+    svc = _get_artifact_service()
+    try:
+        data, content_type = await svc.get(user_context.workspace_id, file_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    filename = PurePosixPath(file_path).name or "file.bin"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
+
+
 @router.get("/{file_path:path}", response_model=WorkspaceFileDownloadResponse)
 async def download_workspace_file(
     file_path: str,
@@ -89,5 +116,5 @@ async def download_workspace_file(
     svc = _get_artifact_service()
     if not await svc.exists(user_context.workspace_id, file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    url = await svc.presigned_url(user_context.workspace_id, file_path)
+    url = _workspace_file_download_url(file_path)
     return WorkspaceFileDownloadResponse(url=url, path=file_path)

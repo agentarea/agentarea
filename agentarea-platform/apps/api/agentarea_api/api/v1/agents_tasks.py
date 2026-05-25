@@ -1,7 +1,9 @@
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -19,6 +21,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.config.app import get_app_settings
 from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.schemas.dto import RunCreate
@@ -569,6 +572,7 @@ async def get_agent_task_status(
     task_id: UUID,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the execution status of a specific task workflow."""
@@ -578,9 +582,21 @@ async def get_agent_task_status(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
+        task = await task_service.get_task(task_id)
+        if not task or str(task.agent_id) != str(agent_id):
+            raise HTTPException(status_code=404, detail="Task not found")
+
         # Get workflow status using the execution ID pattern
         execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
+        stored_artifacts = await _list_task_artifact_items(
+            agent_id=agent_id,
+            workspace_id=user_context.workspace_id,
+            task_id=task_id,
+        )
+        status_artifacts = status.get("artifacts") or []
+        if stored_artifacts:
+            status_artifacts = [item.model_dump() for item in stored_artifacts]
 
         return {
             "task_id": str(task_id),
@@ -594,7 +610,7 @@ async def get_agent_task_status(
             "result": status.get("result"),
             # A2A-compatible fields for frontend
             "message": status.get("message"),
-            "artifacts": status.get("artifacts"),
+            "artifacts": status_artifacts,
             "session_id": status.get("session_id"),
             "usage_metadata": status.get("usage_metadata"),
         }
@@ -613,6 +629,44 @@ class TaskArtifactItem(BaseModel):
     download_url: str
 
 
+async def _list_task_artifact_items(
+    *,
+    agent_id: UUID,
+    workspace_id: str,
+    task_id: UUID,
+) -> list[TaskArtifactItem]:
+    from agentarea_common.artifacts import ArtifactService
+
+    svc = ArtifactService()
+    prefix = f"tasks/{task_id}/"
+    objects = await svc.list(workspace_id, prefix=prefix)
+
+    items: list[TaskArtifactItem] = []
+    for obj in objects:
+        items.append(
+            TaskArtifactItem(
+                path=obj.path,
+                size=obj.size,
+                content_type=obj.content_type,
+                last_modified=obj.last_modified,
+                download_url=_task_artifact_download_url(agent_id, task_id, obj.path),
+            )
+        )
+    return items
+
+
+def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_path: str) -> str:
+    base = get_app_settings().API_BASE_URL.rstrip("/")
+    encoded_path = quote(artifact_path.lstrip("/"), safe="/")
+    return f"{base}/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{encoded_path}"
+
+
+async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task_id: UUID) -> None:
+    task = await task_service.get_task(task_id)
+    if not task or str(task.agent_id) != str(agent_id):
+        raise HTTPException(status_code=404, detail="Task not found")
+
+
 @router.get("/{task_id}/artifacts", response_model=list[TaskArtifactItem])
 async def list_task_artifacts(
     agent_id: UUID,
@@ -624,32 +678,44 @@ async def list_task_artifacts(
     """List artifacts the agent produced under ``tasks/{task_id}/``.
 
     Workspace-scoped: the task must belong to the caller's workspace, or we
-    return 404. Each item carries a presigned download URL valid for
-    ``expires_in`` seconds (default 1 hour, capped at 24h).
+    return 404. Each item carries an AgentArea API download URL, so access
+    stays behind our auth, audit, and workspace checks instead of exposing
+    object-storage URLs directly.
     """
+    _ = expires_in  # Backwards-compatible no-op; API-controlled links do not expire here.
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+
+    return await _list_task_artifact_items(
+        agent_id=agent_id,
+        workspace_id=user_context.workspace_id,
+        task_id=task_id,
+    )
+
+
+@router.get("/{task_id}/artifacts/files/{artifact_path:path}")
+async def download_task_artifact(
+    agent_id: UUID,
+    task_id: UUID,
+    artifact_path: str,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_read_task_service),
+):
+    """Stream a task artifact through the AgentArea API."""
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+    if not artifact_path.startswith(f"tasks/{task_id}/"):
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
     from agentarea_common.artifacts import ArtifactService
 
-    task = await task_service.get_task(task_id)
-    if not task or str(task.agent_id) != str(agent_id):
-        raise HTTPException(status_code=404, detail="Task not found")
-
     svc = ArtifactService()
-    prefix = f"tasks/{task_id}/"
-    objects = await svc.list(user_context.workspace_id, prefix=prefix)
+    try:
+        data, content_type = await svc.get(user_context.workspace_id, artifact_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Artifact not found") from None
 
-    items: list[TaskArtifactItem] = []
-    for obj in objects:
-        url = await svc.presigned_url(user_context.workspace_id, obj.path, expires_in=expires_in)
-        items.append(
-            TaskArtifactItem(
-                path=obj.path,
-                size=obj.size,
-                content_type=obj.content_type,
-                last_modified=obj.last_modified,
-                download_url=url,
-            )
-        )
-    return items
+    filename = PurePosixPath(artifact_path).name or "artifact.bin"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
 
 
 class TaskSummary(BaseModel):

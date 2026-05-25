@@ -560,6 +560,10 @@ mcpManager:
       repository: agentarea/mcp-runner
       tag: "latest"
       pullPolicy: IfNotPresent
+
+    # Maximum duration of a single sandbox command. Workflow pod lifetime is
+    # controlled separately by MCP Manager workflow lease/idle TTL settings.
+    maxExecutionTimeoutSeconds: 1800
     
     # Number of warm pods per node
     size: 10
@@ -577,6 +581,25 @@ mcpManager:
         memory: 256Mi
   
   resources: {}
+  extraEnv: []
+
+# Sandbox runner data plane. This process consumes sandbox execution requests
+# from Redis Streams and executes them in the selected sandbox backend.
+mcpSandboxRunner:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: "" # Defaults to mcpManager.image.repository
+    tag: ""        # Defaults to mcpManager.image.tag
+  consumerGroup: agentarea-sandbox-runners
+  batchSize: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   extraEnv: []
 
 # Temporal Workflow Engine

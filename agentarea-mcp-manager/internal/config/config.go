@@ -91,7 +91,7 @@ func Load() *Config {
 			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
 			Port:         getEnvInt("SERVER_PORT", 8000),
 			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
-			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 35*time.Minute),
 			// CORS disabled by default for security
 			CORSEnabled:        getEnvBool("CORS_ENABLED", false),
 			CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{}),

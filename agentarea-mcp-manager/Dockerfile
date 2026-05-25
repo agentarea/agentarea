@@ -19,7 +19,8 @@ COPY . .
 # Build the application for target architecture
 ARG TARGETARCH
 ARG TARGETOS
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager \
+    && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/sandbox-runner ./cmd/sandbox-runner
 
 # Runtime stage
 FROM alpine:3.20
@@ -55,6 +56,7 @@ WORKDIR /app
 
 # Copy binary from builder stage
 COPY --from=builder /app/bin/mcp-manager /app/mcp-manager
+COPY --from=builder /app/bin/sandbox-runner /app/sandbox-runner
 
 # Copy startup script
 COPY start-go.sh /app/start.sh

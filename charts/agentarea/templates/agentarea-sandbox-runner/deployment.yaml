@@ -1,0 +1,49 @@
+{{- if and .Values.mcpManager.enabled .Values.mcpSandboxRunner.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-sandbox-runner
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-runner
+spec:
+  replicas: {{ .Values.mcpSandboxRunner.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: sandbox-runner
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: sandbox-runner
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: sandbox-runner
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default .Values.mcpManager.image.repository .Values.mcpSandboxRunner.image.repository }}:{{ default (default .Chart.AppVersion .Values.mcpManager.image.tag) .Values.mcpSandboxRunner.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command:
+            - /app/sandbox-runner
+          env:
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
+            {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            - name: SANDBOX_EXECUTION_REQUEST_STREAM
+              value: {{ default "agentarea.sandbox.execution.requests" .Values.mcpSandboxRunner.requestStream | quote }}
+            - name: SANDBOX_EXECUTION_EVENT_STREAM
+              value: {{ default "agentarea.sandbox.execution.events" .Values.mcpSandboxRunner.eventStream | quote }}
+            - name: SANDBOX_RUNNER_CONSUMER_GROUP
+              value: {{ .Values.mcpSandboxRunner.consumerGroup | quote }}
+            - name: SANDBOX_RUNNER_BATCH_SIZE
+              value: {{ .Values.mcpSandboxRunner.batchSize | quote }}
+            {{- if .Values.mcpSandboxRunner.extraEnv }}
+            {{- toYaml .Values.mcpSandboxRunner.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.mcpSandboxRunner.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

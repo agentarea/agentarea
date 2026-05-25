@@ -481,7 +481,7 @@ func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName st
 									Group: (*gatewayv1.Group)(strPtr("")),
 									Kind:  (*gatewayv1.Kind)(strPtr("Service")),
 									Name:  gatewayv1.ObjectName(fmt.Sprintf("mcp-%s", instanceName)),
-									Port:  (*gatewayv1.PortNumber)(intPtr(int32(spec.Port))),
+									Port:  (*gatewayv1.PortNumber)(intPtr(80)),
 								},
 							},
 						},
@@ -559,6 +559,12 @@ func (k *KubernetesBackend) cleanupResources(ctx context.Context, instanceName s
 
 	// Delete resources in reverse order
 	resources := []client.Object{
+		&gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: k.k8sConfig.Namespace,
+			},
+		},
 		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,
@@ -599,6 +605,26 @@ func (k *KubernetesBackend) cleanupResources(ctx context.Context, instanceName s
 				slog.String("name", resourceName),
 				slog.String("error", err.Error()))
 			lastError = err
+		}
+	}
+
+	warmPods := &corev1.PodList{}
+	if err := k.client.List(ctx, warmPods, client.InNamespace(k.k8sConfig.Namespace), client.MatchingLabels{
+		"mcp.agentarea.io/instance-name": instanceName,
+	}); err != nil {
+		k.logger.Warn("Failed to list warm pods for cleanup",
+			slog.String("instance_name", instanceName),
+			slog.String("error", err.Error()))
+		lastError = err
+	} else {
+		for _, pod := range warmPods.Items {
+			if err := k.client.Delete(ctx, &pod); err != nil && !errors.IsNotFound(err) {
+				k.logger.Warn("Failed to delete warm pod",
+					slog.String("pod", pod.Name),
+					slog.String("instance_name", instanceName),
+					slog.String("error", err.Error()))
+				lastError = err
+			}
 		}
 	}
 
@@ -748,6 +774,19 @@ func (k *KubernetesBackend) findInstanceNameByID(ctx context.Context, instanceID
 					return strings.TrimPrefix(deployment.Name, "mcp-"), nil
 				}
 			}
+		}
+	}
+
+	configMaps := &corev1.ConfigMapList{}
+	if err := k.client.List(ctx, configMaps, client.InNamespace(k.k8sConfig.Namespace), client.MatchingLabels{
+		"app.kubernetes.io/managed-by": "mcp-manager",
+		"app.kubernetes.io/component":  "mcp-server",
+	}); err != nil {
+		return "", fmt.Errorf("failed to list configmaps: %w", err)
+	}
+	for _, configMap := range configMaps.Items {
+		if configMap.Data["instance-id"] == instanceID {
+			return strings.TrimPrefix(configMap.Name, "mcp-"), nil
 		}
 	}
 

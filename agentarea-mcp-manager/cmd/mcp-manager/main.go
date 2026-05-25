@@ -23,6 +23,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/agentarea/mcp-manager/internal/templates"
+	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
 const version = "0.0.10"
@@ -204,6 +205,14 @@ func main() {
 	handler := api.NewHandler(backend, containerManager, templateLoader, logger, version)
 	handler.SetupRoutes(router)
 
+	if features.IsEnabled(features.WarmPool) {
+		if k8sBackend, ok := backend.(*backends.KubernetesBackend); ok {
+			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
+				startSandboxWorkflowGC(ctx, logger, wpClient)
+			}
+		}
+	}
+
 	// Start HTTP server
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -337,4 +346,45 @@ func getLogLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+func startSandboxWorkflowGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) {
+	interval := getDurationEnv("SANDBOX_WORKFLOW_GC_INTERVAL", 30*time.Second)
+	if interval <= 0 {
+		logger.Info("Sandbox workflow GC disabled")
+		return
+	}
+
+	logger.Info("Starting sandbox workflow GC", slog.Duration("interval", interval))
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				deleted, err := client.DeleteExpiredWorkflowPods(ctx, now.UTC())
+				if err != nil {
+					logger.Warn("Sandbox workflow GC failed", slog.String("error", err.Error()))
+					continue
+				}
+				if deleted > 0 {
+					logger.Info("Sandbox workflow GC deleted expired pods", slog.Int("deleted", deleted))
+				}
+			}
+		}
+	}()
+}
+
+func getDurationEnv(name string, fallback time.Duration) time.Duration {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return duration
 }

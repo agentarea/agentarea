@@ -1,9 +1,10 @@
 """Decorator-based tool interface for automatic schema generation."""
 
 import inspect
+import types
 from abc import ABC
 from collections.abc import Callable
-from typing import Any, get_type_hints
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from .base_tool import BaseTool
 from .tool_definition import (
@@ -202,6 +203,14 @@ class Toolset(ABC):
     def _get_parameter_schema(self, param: inspect.Parameter, type_hint: Any) -> dict[str, Any]:
         """Generate schema for a single parameter."""
         schema = {"description": f"Parameter: {param.name}"}
+        origin = get_origin(type_hint)
+        args = get_args(type_hint)
+        union_args = args if origin in (types.UnionType, Union) else ()
+        if union_args and type(None) in union_args:
+            non_none = [arg for arg in union_args if arg is not type(None)]
+            type_hint = non_none[0] if non_none else Any
+            origin = get_origin(type_hint)
+            args = get_args(type_hint)
 
         # Map Python types to JSON schema types
         if type_hint is str or type_hint == str | None:
@@ -212,8 +221,19 @@ class Toolset(ABC):
             schema["type"] = "number"
         elif type_hint is bool or type_hint == bool | None:
             schema["type"] = "boolean"
-        elif type_hint is list:
+        elif type_hint is list or origin is list:
             schema["type"] = "array"
+            item_type = args[0] if args else str
+            if item_type is int:
+                schema["items"] = {"type": "integer"}
+            elif item_type is float:
+                schema["items"] = {"type": "number"}
+            elif item_type is bool:
+                schema["items"] = {"type": "boolean"}
+            elif item_type is dict:
+                schema["items"] = {"type": "object"}
+            else:
+                schema["items"] = {"type": "string"}
         elif type_hint is dict:
             schema["type"] = "object"
         else:

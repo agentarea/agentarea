@@ -16,14 +16,34 @@ RUN go build -o activation-service ./cmd/activation-service/...
 # Runtime stage
 FROM alpine:3.19
 
-# Install base dependencies
+# Install base runtime dependencies used by agent code tools and skill scripts.
+# Include lightweight office-generation libraries so document tasks do not
+# spend reasoning iterations bootstrapping Python packages inside the sandbox.
 RUN apk add --no-cache \
+    bash \
     ca-certificates \
     curl \
-    tar \
+    file \
+    findutils \
+    git \
     gzip \
     iptables \
-    skopeo
+    jq \
+    nodejs \
+    npm \
+    py3-pip \
+    py3-virtualenv \
+    python3 \
+    skopeo \
+    tar \
+    unzip \
+    zip \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+RUN pip3 install --break-system-packages \
+    openpyxl \
+    python-docx \
+    python-pptx
 
 # Create directories
 RUN mkdir -p \

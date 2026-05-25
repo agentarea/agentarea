@@ -388,6 +388,9 @@ func (k *KubernetesBackend) PerformHealthCheck(ctx context.Context, instanceID s
 		Namespace: k.k8sConfig.Namespace,
 		Name:      fmt.Sprintf("mcp-%s", instanceName),
 	}, deployment); err != nil {
+		if errors.IsNotFound(err) {
+			return k.performWarmPodHealthCheck(ctx, instanceName)
+		}
 		return &HealthCheckResult{
 			Healthy:     false,
 			Status:      "error",
@@ -416,6 +419,40 @@ func (k *KubernetesBackend) PerformHealthCheck(ctx context.Context, instanceID s
 		result.Healthy = ready && httpHealthy
 	}
 
+	return result, nil
+}
+
+func (k *KubernetesBackend) performWarmPodHealthCheck(ctx context.Context, instanceName string) (*HealthCheckResult, error) {
+	pods := &corev1.PodList{}
+	if err := k.client.List(ctx, pods, client.InNamespace(k.k8sConfig.Namespace), client.MatchingLabels{
+		"mcp.agentarea.io/instance-name": instanceName,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to list warm pods: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return &HealthCheckResult{
+			Healthy:     false,
+			Status:      "error",
+			ServiceName: instanceName,
+			Error:       "warm pod not found",
+			Timestamp:   time.Now(),
+		}, nil
+	}
+
+	pod := pods.Items[0]
+	ready := pod.Status.Phase == corev1.PodRunning && pod.Labels["mcp.agentarea.io/status"] == "ready"
+	result := &HealthCheckResult{
+		Healthy:     ready,
+		Status:      pod.Labels["mcp.agentarea.io/status"],
+		ServiceName: instanceName,
+		Timestamp:   time.Now(),
+	}
+	if ready {
+		httpHealthy, responseTime := k.performHTTPHealthCheck(ctx, instanceName)
+		result.HTTPReachable = httpHealthy
+		result.ResponseTime = responseTime
+		result.Healthy = httpHealthy
+	}
 	return result, nil
 }
 

@@ -1,12 +1,22 @@
 """MCP tool wrapper using the base tool interface."""
 
 import logging
+import os
 from typing import Any
 from uuid import UUID
 
 from .base_tool import BaseTool, ToolExecutionError
 
 logger = logging.getLogger(__name__)
+
+
+def _lazy_mcp_provisioning_enabled() -> bool:
+    return os.getenv("MCP_LAZY_PROVISIONING_ENABLED", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 class MCPTool(BaseTool):
@@ -116,9 +126,16 @@ class MCPToolFactory:
                 return []
             verification = getattr(server_instance, "verification", None) or {}
             status = verification.get("status") or getattr(server_instance, "status", None)
+            json_spec = getattr(server_instance, "json_spec", None) or {}
+            tools_data = getattr(server_instance, "tools", None) or json_spec.get("available_tools")
             # RUNNING/CONNECTED are legacy runtime statuses; SUCCEEDED is the
             # current verification payload status for URL instances.
-            if status not in ("running", "connected", "succeeded"):
+            lazy_with_declared_tools = (
+                _lazy_mcp_provisioning_enabled()
+                and bool(json_spec.get("lazy_provisioning"))
+                and bool(tools_data)
+            )
+            if status not in ("running", "connected", "succeeded") and not lazy_with_declared_tools:
                 logger.info(
                     "MCP instance not verified-succeeded (status=%s); "
                     "this is expected transient during async creation — skipping tool discovery",
@@ -128,11 +145,6 @@ class MCPToolFactory:
 
             # Read discovered tools from the dedicated column first. Older rows
             # may still carry them in json_spec.available_tools.
-            tools_data = getattr(server_instance, "tools", None)
-            json_spec = getattr(server_instance, "json_spec", None) or {}
-            if not tools_data:
-                tools_data = json_spec.get("available_tools")
-
             if not tools_data:
                 # Fallback: try service discovery methods
                 for method_name in ["list_tools", "get_tools", "discover_tools"]:
