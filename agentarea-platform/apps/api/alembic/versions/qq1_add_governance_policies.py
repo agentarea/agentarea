@@ -8,9 +8,8 @@ Create Date: 2026-05-16
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "qq1_add_governance_policies"
 down_revision: str | None = "pp1_add_workspace_settings"

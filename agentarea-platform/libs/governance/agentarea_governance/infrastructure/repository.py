@@ -108,9 +108,7 @@ class GovernancePolicyRepository:
         for scope_type, scope_id in scopes:
             if not scope_id:
                 continue
-            found = await self.get_scope_policy(
-                scope_type=scope_type, scope_id=scope_id
-            )
+            found = await self.get_scope_policy(scope_type=scope_type, scope_id=scope_id)
             if found:
                 source_id, policy = found
                 source_ids.append(source_id)

@@ -64,7 +64,7 @@ class MPPPaymentClient:
             # Parse MPP challenge from response
             challenge_data = (
                 json.loads(response_body)
-                if isinstance(response_body, (str, bytes))
+                if isinstance(response_body, str | bytes)
                 else response_body
             )
 

@@ -13,9 +13,8 @@ Create Date: 2026-05-16
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "rr1_drop_workspace_settings"
 down_revision: str | None = "qq1_add_governance_policies"

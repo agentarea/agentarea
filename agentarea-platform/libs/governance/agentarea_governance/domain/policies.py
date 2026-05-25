@@ -192,14 +192,10 @@ class PolicyResolver:
             tokens=self._merge_tokens(higher.tokens, lower.tokens),
             tools=self._merge_tools(higher.tools, lower.tools),
             approval=self._merge_approval(higher.approval, lower.approval),
-            content_safety=self._merge_content_safety(
-                higher.content_safety, lower.content_safety
-            ),
+            content_safety=self._merge_content_safety(higher.content_safety, lower.content_safety),
         )
 
-    def _validate_budget(
-        self, higher: BudgetPolicy | None, lower: BudgetPolicy | None
-    ) -> None:
+    def _validate_budget(self, higher: BudgetPolicy | None, lower: BudgetPolicy | None) -> None:
         if not higher or not lower:
             return
         for field in ("monthly_spend_cap_usd", "run_budget_usd", "service_budget_usd"):
@@ -265,7 +261,9 @@ class PolicyResolver:
             service_budget_usd=_min_money(higher.service_budget_usd, lower.service_budget_usd),
         )
 
-    def _merge_tokens(self, higher: TokenPolicy | None, lower: TokenPolicy | None) -> TokenPolicy | None:
+    def _merge_tokens(
+        self, higher: TokenPolicy | None, lower: TokenPolicy | None
+    ) -> TokenPolicy | None:
         if not higher:
             return lower
         if not lower:
@@ -275,7 +273,9 @@ class PolicyResolver:
             max_tokens_per_call=_min_int(higher.max_tokens_per_call, lower.max_tokens_per_call),
         )
 
-    def _merge_tools(self, higher: ToolsPolicy | None, lower: ToolsPolicy | None) -> ToolsPolicy | None:
+    def _merge_tools(
+        self, higher: ToolsPolicy | None, lower: ToolsPolicy | None
+    ) -> ToolsPolicy | None:
         if not higher:
             return lower
         if not lower:

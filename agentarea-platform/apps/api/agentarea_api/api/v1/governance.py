@@ -63,7 +63,9 @@ def _parse_scope_type(scope_type: str) -> PolicyScopeType:
     try:
         return PolicyScopeType(scope_type)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=f"Unsupported policy scope: {scope_type}") from exc
+        raise HTTPException(
+            status_code=422, detail=f"Unsupported policy scope: {scope_type}"
+        ) from exc
 
 
 def _policy_response(record) -> PolicyResponse:
