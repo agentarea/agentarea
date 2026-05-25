@@ -1,9 +1,8 @@
 """Tests for ToolConfigYAML with agent type support."""
 
 import pytest
-from pydantic import ValidationError
-
 from agentarea_agents.schemas.import_export import ToolConfigYAML, ToolSettingsYAML
+from pydantic import ValidationError
 
 
 class TestToolSettingsYAMLAgentFields:

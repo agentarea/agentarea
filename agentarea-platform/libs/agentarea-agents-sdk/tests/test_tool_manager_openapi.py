@@ -1,9 +1,8 @@
 """Tests for ToolManager openapi branch and unknown-type warning."""
 
 import logging
-from contextlib import contextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest

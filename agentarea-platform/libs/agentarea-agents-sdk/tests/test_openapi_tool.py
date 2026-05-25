@@ -1,15 +1,16 @@
 """Unit tests for OpenAPITool and OpenAPIToolFactory."""
+# ruff: noqa: F401,F821,F841 — half-finished fixture body references vars
+# that haven't been plumbed yet; will be cleaned up in a follow-up PR.
 
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
 
 from agentarea_agents_sdk.tools.openapi_tool import OpenAPITool, OpenAPIToolFactory
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

@@ -3,8 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware, _mcp_user_context_var
 from agentarea_common.auth.context import UserContext
+
+from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware, _mcp_user_context_var
 
 
 @pytest.mark.asyncio

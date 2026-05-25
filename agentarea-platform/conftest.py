@@ -108,7 +108,7 @@ def generate_test_jwt_token(
     email: str | None = None,
     roles: list[str] | None = None,
     expires_in_minutes: int = 30,
-    secret_key: str = "test-secret-key-for-testing",
+    secret_key: str = "test-secret-key-for-testing",  # noqa: S107
     algorithm: str = "HS256",
     issuer: str | None = None,
     audience: str | None = None,
@@ -190,7 +190,7 @@ def admin_jwt_token(test_jwt_secret):
 
 
 # Pytest configuration
-import os
+import os  # noqa: E402
 
 
 def pytest_configure(config):

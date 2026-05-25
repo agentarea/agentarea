@@ -234,7 +234,8 @@ class AgentAreaWorker:
 
         # Broker comes from dependencies — same instance the activity uses
         # for producer-side submits. Shutdown closes it once.
-        assert dependencies.broker_client is not None, "broker_client missing from deps"
+        if dependencies.broker_client is None:
+            raise RuntimeError("broker_client missing from deps")
         self._broker = dependencies.broker_client
         self._dedup = DedupCache(
             redis_url,
