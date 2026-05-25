@@ -554,6 +554,71 @@
         "title": "AgentCreate",
         "type": "object"
       },
+      "AgentOverviewResponse": {
+        "properties": {
+          "cost_mtd_usd": {
+            "title": "Cost Mtd Usd",
+            "type": "number"
+          },
+          "cost_today_usd": {
+            "title": "Cost Today Usd",
+            "type": "number"
+          },
+          "daily_spend": {
+            "items": {
+              "$ref": "#/components/schemas/DailySpendPoint"
+            },
+            "title": "Daily Spend",
+            "type": "array"
+          },
+          "daily_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/DailyTaskCounts"
+            },
+            "title": "Daily Tasks",
+            "type": "array"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "tasks_done_today": {
+            "title": "Tasks Done Today",
+            "type": "integer"
+          },
+          "tasks_failed_today": {
+            "title": "Tasks Failed Today",
+            "type": "integer"
+          },
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingItem"
+            },
+            "title": "Upcoming",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cost_today_usd",
+          "cost_mtd_usd",
+          "tasks_done_today",
+          "tasks_failed_today",
+          "last_activity_at",
+          "daily_spend",
+          "daily_tasks",
+          "upcoming"
+        ],
+        "title": "AgentOverviewResponse",
+        "type": "object"
+      },
       "AgentProvider": {
         "properties": {
           "organization": {
@@ -701,6 +766,66 @@
           "status"
         ],
         "title": "AgentResponse",
+        "type": "object"
+      },
+      "AgentRow": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "cost_mtd_usd": {
+            "title": "Cost Mtd Usd",
+            "type": "number"
+          },
+          "cost_today_usd": {
+            "title": "Cost Today Usd",
+            "type": "number"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "recent_task_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recent Task Names",
+            "type": "array"
+          },
+          "tasks_done_today": {
+            "title": "Tasks Done Today",
+            "type": "integer"
+          },
+          "tasks_failed_today": {
+            "title": "Tasks Failed Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agent_id",
+          "name",
+          "tasks_done_today",
+          "tasks_failed_today",
+          "recent_task_names",
+          "last_activity_at",
+          "cost_today_usd",
+          "cost_mtd_usd"
+        ],
+        "title": "AgentRow",
         "type": "object"
       },
       "AgentSkill": {
@@ -1092,6 +1217,38 @@
         "title": "AuditLogListResponse",
         "type": "object"
       },
+      "Blockers": {
+        "properties": {
+          "failed_24h": {
+            "items": {
+              "$ref": "#/components/schemas/FailedTaskBlocker"
+            },
+            "title": "Failed 24H",
+            "type": "array"
+          },
+          "hitl": {
+            "items": {
+              "$ref": "#/components/schemas/HitlBlocker"
+            },
+            "title": "Hitl",
+            "type": "array"
+          },
+          "wallet_exhausted": {
+            "items": {
+              "$ref": "#/components/schemas/WalletExhaustedBlocker"
+            },
+            "title": "Wallet Exhausted",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hitl",
+          "wallet_exhausted",
+          "failed_24h"
+        ],
+        "title": "Blockers",
+        "type": "object"
+      },
       "Body_import_workspace_config_file_v1_workspace_import_file_post": {
         "properties": {
           "file": {
@@ -1215,6 +1372,92 @@
           "wallet_type"
         ],
         "title": "CreateWalletRequest",
+        "type": "object"
+      },
+      "DailySpendPoint": {
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "usd": {
+            "title": "Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "usd"
+        ],
+        "title": "DailySpendPoint",
+        "type": "object"
+      },
+      "DailyTaskCounts": {
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "input_required": {
+            "title": "Input Required",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "completed",
+          "failed",
+          "input_required"
+        ],
+        "title": "DailyTaskCounts",
+        "type": "object"
+      },
+      "DashboardResponse": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentRow"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "blockers": {
+            "$ref": "#/components/schemas/Blockers"
+          },
+          "daily_spend": {
+            "items": {
+              "$ref": "#/components/schemas/DailySpendPoint"
+            },
+            "title": "Daily Spend",
+            "type": "array"
+          },
+          "daily_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/DailyTaskCounts"
+            },
+            "title": "Daily Tasks",
+            "type": "array"
+          },
+          "spend": {
+            "$ref": "#/components/schemas/SpendCard"
+          }
+        },
+        "required": [
+          "spend",
+          "blockers",
+          "agents",
+          "daily_spend",
+          "daily_tasks"
+        ],
+        "title": "DashboardResponse",
         "type": "object"
       },
       "DiscoverPreviewModelResponse": {
@@ -1688,6 +1931,49 @@
         "title": "ExecutionTimelineResponse",
         "type": "object"
       },
+      "FailedTaskBlocker": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "agent_name",
+          "error",
+          "occurred_at"
+        ],
+        "title": "FailedTaskBlocker",
+        "type": "object"
+      },
       "FundWalletRequest": {
         "properties": {
           "service_budget_usd": {
@@ -1792,6 +2078,42 @@
           "secret"
         ],
         "title": "HeaderOutput",
+        "type": "object"
+      },
+      "HitlBlocker": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "agent_id",
+          "agent_name",
+          "description",
+          "created_at"
+        ],
+        "title": "HitlBlocker",
         "type": "object"
       },
       "ImportRequest": {
@@ -2283,6 +2605,22 @@
         "title": "MCPAuthConfigUpdateRequest",
         "type": "object"
       },
+      "MCPServerConnectionCreateRequest": {
+        "properties": {
+          "instance": {
+            "$ref": "#/components/schemas/MCPServerInstanceCreateWithoutSpec"
+          },
+          "server": {
+            "$ref": "#/components/schemas/MCPServerCreate"
+          }
+        },
+        "required": [
+          "server",
+          "instance"
+        ],
+        "title": "MCPServerConnectionCreateRequest",
+        "type": "object"
+      },
       "MCPServerCreate": {
         "additionalProperties": false,
         "description": "Payload for creating an MCP server spec (catalog template).\n\nEither ``docker_image_url`` (for container-based servers) or\n``remote_url`` (for HTTP-based servers like GitHub Copilot) should be\nsupplied. ``env_schema`` describes the variables an instance built from\nthis spec needs to provide; secret entries (``isSecret: true``) are\nrouted through the secret manager rather than stored in plaintext.",
@@ -2409,7 +2747,7 @@
       },
       "MCPServerInstanceCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an MCP server instance.\n\n``json_spec`` carries the connection configuration. Common shapes:\n\n- ``{\"type\": \"url\", \"endpoint_url\": \"https://...\"}``\n- ``{\"type\": \"docker\", \"environment\": {...}, \"env_vars\": [...]}``\n- ``{\"type\": \"command\", \"command\": [...], \"environment\": {...}}``\n- ``{\"type\": \"bundle\", \"members\": [\"<instance-id>\", ...]}``\n\nFor URL-type instances the service synchronously verifies the endpoint;\ndocker/command kick off background verification.",
+        "description": "Payload for creating an MCP server instance.\n\n``json_spec`` carries the connection configuration. Common shapes:\n\n- ``{\"type\": \"url\", \"endpoint_url\": \"https://...\"}``\n- ``{\"type\": \"docker\", \"environment\": {...}, \"env_vars\": [...]}``\n- ``{\"type\": \"command\", \"command\": [...], \"environment\": {...}}``\nFor URL-type instances the service synchronously verifies the endpoint;\ndocker/command kick off background verification.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -2437,7 +2775,7 @@
           },
           "json_spec": {
             "additionalProperties": true,
-            "description": "Connection configuration. Must include 'type' ('url' | 'docker' | 'command' | 'bundle'); other keys depend on type.",
+            "description": "Connection configuration. Must include 'type' ('url' | 'docker' | 'command'); other keys depend on type.",
             "title": "Json Spec",
             "type": "object"
           },
@@ -2448,17 +2786,58 @@
             "title": "Name",
             "type": "string"
           },
-          "server_spec_id": {"type": "string",
+          "server_spec_id": {
             "description": "ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).",
-            "title": "Server Spec Id"
+            "title": "Server Spec Id",
+            "type": "string"
           }
         },
         "required": [
           "name",
-          "json_spec",
-          "server_spec_id"
+          "server_spec_id",
+          "json_spec"
         ],
         "title": "MCPServerInstanceCreate",
+        "type": "object"
+      },
+      "MCPServerInstanceCreateWithoutSpec": {
+        "properties": {
+          "auth_config_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Config Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "json_spec": {
+            "additionalProperties": true,
+            "title": "Json Spec",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MCPServerInstanceCreateWithoutSpec",
         "type": "object"
       },
       "MCPServerInstanceResponse": {
@@ -2520,8 +2899,9 @@
             "title": "Name",
             "type": "string"
           },
-          "server_spec_id": {"type": "string",
-            "title": "Server Spec Id"
+          "server_spec_id": {
+            "title": "Server Spec Id",
+            "type": "string"
           },
           "tools": {
             "anyOf": [
@@ -4416,8 +4796,7 @@
         "description": "Payload for creating an LLM provider configuration.",
         "properties": {
           "api_key": {
-            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses.",
-            "minLength": 1,
+            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
             "title": "Api Key",
             "type": "string"
           },
@@ -5546,6 +5925,65 @@
           }
         },
         "title": "SpecPreviewResponse",
+        "type": "object"
+      },
+      "SpendCard": {
+        "properties": {
+          "cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap Usd"
+          },
+          "mtd_usd": {
+            "title": "Mtd Usd",
+            "type": "number"
+          },
+          "pct_of_cap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Of Cap"
+          },
+          "projected_eom_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Eom Usd"
+          },
+          "projection_method": {
+            "default": "linear-mtd",
+            "title": "Projection Method",
+            "type": "string"
+          },
+          "today_usd": {
+            "title": "Today Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "today_usd",
+          "mtd_usd",
+          "cap_usd",
+          "pct_of_cap",
+          "projected_eom_usd"
+        ],
+        "title": "SpendCard",
         "type": "object"
       },
       "SyncResponse": {
@@ -6992,6 +7430,65 @@
         "title": "TriggerUpdate",
         "type": "object"
       },
+      "UpcomingItem": {
+        "properties": {
+          "cron_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cron Expression"
+          },
+          "fires_at": {
+            "format": "date-time",
+            "title": "Fires At",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
+          }
+        },
+        "required": [
+          "fires_at",
+          "kind",
+          "title"
+        ],
+        "title": "UpcomingItem",
+        "type": "object"
+      },
       "UpdateAllResponse": {
         "properties": {
           "errors": {
@@ -7230,6 +7727,35 @@
         "title": "WalletCredentialsSchema",
         "type": "object"
       },
+      "WalletExhaustedBlocker": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "budget_usd": {
+            "title": "Budget Usd",
+            "type": "number"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name",
+          "budget_usd",
+          "period"
+        ],
+        "title": "WalletExhaustedBlocker",
+        "type": "object"
+      },
       "WalletResponse": {
         "properties": {
           "agent_id": {
@@ -7401,6 +7927,46 @@
           "files"
         ],
         "title": "WorkspaceFileListResponse",
+        "type": "object"
+      },
+      "WorkspaceSettingsResponse": {
+        "properties": {
+          "monthly_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cap Usd"
+          }
+        },
+        "required": [
+          "monthly_cap_usd"
+        ],
+        "title": "WorkspaceSettingsResponse",
+        "type": "object"
+      },
+      "WorkspaceSettingsUpdate": {
+        "properties": {
+          "monthly_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cap Usd"
+          }
+        },
+        "required": [
+          "monthly_cap_usd"
+        ],
+        "title": "WorkspaceSettingsUpdate",
         "type": "object"
       },
       "X402ConfigSchema": {
@@ -8718,6 +9284,57 @@
         "tags": [
           "v1",
           "protected"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/overview": {
+      "get": {
+        "description": "Aggregate stats + upcoming work for one agent.",
+        "operationId": "get_agent_overview_v1_agents__agent_id__overview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Agent Overview",
+        "tags": [
+          "v1",
+          "protected",
+          "dashboard"
         ]
       }
     },
@@ -11614,6 +12231,55 @@
         ]
       }
     },
+    "/v1/mcp-server-instances/with-spec": {
+      "post": {
+        "description": "Create an MCP server spec and instance in one transaction.",
+        "operationId": "create_mcp_server_connection_v1_mcp_server_instances_with_spec_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPServerConnectionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPServerInstanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Mcp Server Connection",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
     "/v1/mcp-server-instances/{instance_id}": {
       "delete": {
         "operationId": "delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete",
@@ -11761,6 +12427,55 @@
           }
         ],
         "summary": "Update Mcp Server Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
+      "post": {
+        "description": "Re-discover the tools exposed by an MCP server instance.\n\nRe-runs verification (which calls list_tools on the server using any\nOAuth/API-key credentials linked via auth_config_id) and persists the\nrefreshed tool list. Returns {tools, verification}.",
+        "operationId": "discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Discover Mcp Server Instance Tools",
         "tags": [
           "v1",
           "protected",
@@ -17777,6 +18492,35 @@
         ]
       }
     },
+    "/v1/workspace/dashboard": {
+      "get": {
+        "description": "Aggregate workspace state for the operator dashboard.",
+        "operationId": "get_dashboard_v1_workspace_dashboard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Dashboard",
+        "tags": [
+          "v1",
+          "protected",
+          "dashboard"
+        ]
+      }
+    },
     "/v1/workspace/export": {
       "get": {
         "description": "Export current workspace configuration as YAML.\n\nThis endpoint exports all workspace-scoped resources:\n- Agents (excluding system default agent)\n- MCP server instances\n- Provider configurations\n\n**Important Notes:**\n- Secrets (API keys, passwords) are replaced with placeholders\n- System-level resources (workspace_id=\"system\") are excluded\n- Only resources in the current workspace are exported\n- References to specs are included (server_spec_id, provider_spec_id)\n\n**Returns:**\nYAML file content that can be saved and later imported",
@@ -17927,6 +18671,82 @@
           "v1",
           "protected",
           "workspace-config"
+        ]
+      }
+    },
+    "/v1/workspace/settings": {
+      "get": {
+        "description": "Read the current workspace's settings (cap, etc).",
+        "operationId": "get_workspace_settings_v1_workspace_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Workspace Settings",
+        "tags": [
+          "v1",
+          "protected",
+          "dashboard"
+        ]
+      },
+      "put": {
+        "description": "Upsert the current workspace's settings.",
+        "operationId": "update_workspace_settings_v1_workspace_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Workspace Settings",
+        "tags": [
+          "v1",
+          "protected",
+          "dashboard"
         ]
       }
     },
