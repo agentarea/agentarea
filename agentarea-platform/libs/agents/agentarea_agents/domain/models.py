@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Boolean, String
+from sqlalchemy import JSON, Boolean, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -12,8 +12,12 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     """Agent model with workspace awareness and audit trail."""
 
     __tablename__ = "agents"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "slug", name="uq_agents_workspace_slug"),
+    )
 
     name: Mapped[str] = mapped_column(String, nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     description: Mapped[str] = mapped_column(String, nullable=True)
     instruction: Mapped[str] = mapped_column(String, nullable=True)

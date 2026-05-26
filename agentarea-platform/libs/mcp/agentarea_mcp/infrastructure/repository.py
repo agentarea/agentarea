@@ -93,6 +93,16 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
 
         return servers, total
 
+    async def get_by_slug(self, slug: str) -> MCPServer | None:
+        """Get MCP server by workspace-scoped slug."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.slug == slug)
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_server_by_id(
         self,
         server_id: str,

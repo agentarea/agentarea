@@ -4,6 +4,8 @@ import re
 from typing import Any, Literal
 from uuid import UUID
 
+from contextlib import suppress
+
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.dto import (
@@ -99,6 +101,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
 
 class AgentResponse(BaseModel):
     id: UUID
+    slug: str
     name: str
     status: str
     description: str | None = None
@@ -129,6 +132,7 @@ class AgentResponse(BaseModel):
 
         return cls(
             id=agent.id,
+            slug=agent.slug,
             name=agent.name,
             status=agent.status,
             description=agent.description,
@@ -141,6 +145,17 @@ class AgentResponse(BaseModel):
             agent_type=agent.agent_type,
             skills=skills,
         )
+
+
+async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUID | None:
+    """Resolve a UUID for an agent referenced by UUID *or* slug.
+
+    Returns the agent's UUID if found in the caller's workspace, else None.
+    """
+    with suppress(ValueError):
+        return UUID(identifier)
+    agent = await agent_service.get_by_slug(identifier)
+    return agent.id if agent else None
 
 
 @router.post("/", response_model=AgentResponse)
@@ -265,12 +280,15 @@ async def get_all_tools(
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
-    agent_id: UUID,
+    agent_id: str,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
-    """Get an agent by ID."""
-    agent = await agent_service.get_with_skills(agent_id)
+    """Get an agent by UUID or workspace-scoped slug."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.get_with_skills(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)
@@ -297,33 +315,39 @@ async def list_agents(
 
 @router.patch("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
-    agent_id: UUID,
+    agent_id: str,
     data: AgentUpdate,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Update an agent."""
-    await require_permission("edit", "agent", str(agent_id), user_context.user_id)
+    """Update an agent (by UUID or workspace-scoped slug)."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await require_permission("edit", "agent", str(resolved_id), user_context.user_id)
     # Validate model_id if it's being updated
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
 
-    agent = await agent_service.update_agent(id=agent_id, payload=data)
+    agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    agent = await agent_service.get_with_skills(agent_id)
+    agent = await agent_service.get_with_skills(resolved_id)
     return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.delete("/{agent_id}")
 async def delete_agent(
-    agent_id: UUID,
+    agent_id: str,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Delete an agent."""
-    await require_permission("delete", "agent", str(agent_id), user_context.user_id)
-    success = await agent_service.delete_agent(agent_id)
+    """Delete an agent (by UUID or workspace-scoped slug)."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await require_permission("delete", "agent", str(resolved_id), user_context.user_id)
+    success = await agent_service.delete_agent(resolved_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}

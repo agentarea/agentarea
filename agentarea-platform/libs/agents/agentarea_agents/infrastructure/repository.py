@@ -24,6 +24,16 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
         agents = await self.list_all(name=name)
         return agents[0] if agents else None
 
+    async def get_by_slug(self, slug: str) -> Agent | None:
+        """Get agent by workspace-scoped slug."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.slug == slug)
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_by_workspace_id(
         self, workspace_id: str, limit: int = 100, offset: int = 0
     ) -> list[Agent]:
