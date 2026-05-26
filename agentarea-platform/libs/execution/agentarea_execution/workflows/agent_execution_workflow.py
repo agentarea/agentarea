@@ -10,6 +10,13 @@ with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
+    from agentarea_agents_sdk.tools.disclosure import (
+        DisclosureContext,
+        NamedLookupPolicy,
+        RevealRequest,
+        ToolCandidate,
+        ToolDisclosurePolicy,
+    )
     from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
     from agentarea_agents_sdk.tools.tool_provider import (
         AgentToolProvider,
@@ -124,6 +131,9 @@ class AgentExecutionWorkflow:
         self._a2ui_action_queue: list[dict[str, Any]] = []
         self._skill_tool: SkillActivationTool | None = None
         self._tool_catalog: ToolCatalog | None = None
+        # OpenAPI disclosure: NamedLookupPolicy when pool is non-empty, else None.
+        # Stateless wrt the policy itself — pool lives in state.searchable_tool_pool.
+        self._disclosure_policy: ToolDisclosurePolicy | None = None
         self._pending_escalations: dict[str, PendingEscalation] = {}
         # Generic message queue — queued user messages drained before each LLM call
         self._message_queue: list[dict[str, Any]] = []
@@ -495,6 +505,32 @@ class AgentExecutionWorkflow:
                         except Exception:  # noqa: S110
                             pass
 
+            # Searchable OpenAPI pool — operations marked load_mode=searchable
+            # are deferred behind a `load_tools` meta-tool. The catalog text
+            # (added later, alongside skill catalog) and the meta-tool
+            # together let the LLM ask for schemas on demand.
+            searchable_entries_raw: list[dict[str, Any]] = []
+            try:
+                raw_entries = tools_result.searchable_entries
+            except AttributeError:
+                raw_entries = []
+            for entry in raw_entries or []:
+                if hasattr(entry, "model_dump"):
+                    searchable_entries_raw.append(entry.model_dump(by_alias=True))
+                elif isinstance(entry, dict):
+                    searchable_entries_raw.append(entry)
+            if searchable_entries_raw:
+                self.state.searchable_tool_pool = searchable_entries_raw
+                self._disclosure_policy = NamedLookupPolicy()
+                meta_tools = self._disclosure_policy.get_meta_tool_definitions(
+                    DisclosureContext(
+                        model_name=str(self.state.agent_config.get("model_id", "")),
+                        context_window=self.state.context_window,
+                        iteration=self.state.current_iteration,
+                    )
+                )
+                available_tools.extend(meta_tools)
+
         # === Built-in completion tool (always present, canonical definition) ===
         # Remove any existing completion/task_complete from discovery — we always
         # use our own definition with correct description and required params.
@@ -745,6 +781,39 @@ class AgentExecutionWorkflow:
         self.state.context_strategy = state.context_strategy
         self.state.history_chunk_counter = state.history_chunk_counter
         self.state.activated_tool_sources = state.activated_tool_sources
+        self.state.searchable_tool_pool = state.searchable_tool_pool
+        self.state.revealed_openapi_tools = state.revealed_openapi_tools
+        # Re-instantiate disclosure policy stateless from pool presence so
+        # post-replay tool dispatch can route load_tools and rebuild the
+        # catalog block on subsequent iterations.
+        if self.state.searchable_tool_pool:
+            self._disclosure_policy = NamedLookupPolicy()
+            # Reconcile previously revealed names against the restored pool.
+            # If a connection's `available_tools` shrunk between runs, drop the
+            # stale schema from `available_tools`, drop the name from the
+            # revealed list, and warn — otherwise the LLM would see a tool it
+            # can no longer execute.
+            pool_names = {c["name"] for c in self.state.searchable_tool_pool}
+            stale = [
+                name
+                for name in self.state.revealed_openapi_tools
+                if name not in pool_names
+            ]
+            if stale:
+                workflow.logger.warning(
+                    "Dropping %d stale revealed OpenAPI tool(s) on continue-as-new: %s",
+                    len(stale),
+                    stale,
+                )
+                stale_set = set(stale)
+                self.state.revealed_openapi_tools = [
+                    n for n in self.state.revealed_openapi_tools if n not in stale_set
+                ]
+                self.state.available_tools = [
+                    t
+                    for t in self.state.available_tools
+                    if (t.get("function", {}) or {}).get("name") not in stale_set
+                ]
         self.state.service_budget_usd = state.service_budget_usd
         self.state.service_cost_used = state.service_cost_used
         self.state.wallet_id = state.wallet_id
@@ -840,6 +909,8 @@ class AgentExecutionWorkflow:
             context_strategy=self.state.context_strategy,
             history_chunk_counter=self.state.history_chunk_counter,
             activated_tool_sources=self.state.activated_tool_sources,
+            searchable_tool_pool=self.state.searchable_tool_pool,
+            revealed_openapi_tools=self.state.revealed_openapi_tools,
             service_budget_usd=self.state.service_budget_usd,
             service_cost_used=self.state.service_cost_used,
             wallet_id=self.state.wallet_id,
@@ -1125,6 +1196,20 @@ class AgentExecutionWorkflow:
                     "the user, pass that relative file path in the shell tool's "
                     "`artifact_paths` argument so it is stored as a task artifact."
                 )
+
+            # Append OpenAPI operation catalog (load_mode=searchable, issue #115).
+            # Pool lives in workflow state; only this name+description block is
+            # sent to the LLM until it explicitly calls load_tools(...).
+            if self._disclosure_policy and self.state.searchable_tool_pool:
+                ctx = DisclosureContext(
+                    model_name=str(self.state.agent_config.get("model_id", "")),
+                    context_window=self.state.context_window,
+                    iteration=self.state.current_iteration,
+                )
+                pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
+                openapi_catalog_text = self._disclosure_policy.render_catalog(pool, ctx)
+                if openapi_catalog_text:
+                    agent_instruction = agent_instruction + openapi_catalog_text
 
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
@@ -1466,6 +1551,7 @@ class AgentExecutionWorkflow:
         script_calls: list[ToolCall] = []
         read_output_calls: list[ToolCall] = []
         activate_source_calls: list[ToolCall] = []
+        load_tools_calls: list[ToolCall] = []
 
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
@@ -1477,6 +1563,8 @@ class AgentExecutionWorkflow:
                 read_output_calls.append(tool_call)
             elif tool_name == "activate_tool_source":
                 activate_source_calls.append(tool_call)
+            elif tool_name == "load_tools":
+                load_tools_calls.append(tool_call)
             elif tool_name == "activate_skill":
                 skill_calls.append(tool_call)
             elif tool_name == "run_skill_script":
@@ -1496,6 +1584,10 @@ class AgentExecutionWorkflow:
         # Execute tool source activations (DYNAMIC mode — local, no activity)
         for tool_call in activate_source_calls:
             await self._execute_activate_tool_source(tool_call)
+
+        # Execute OpenAPI load_tools meta-calls (issue #115 — local, no activity)
+        for tool_call in load_tools_calls:
+            await self._execute_load_openapi_tools(tool_call)
 
         # Execute skill activations (local, no activity needed)
         for tool_call in skill_calls:
@@ -2034,6 +2126,86 @@ class AgentExecutionWorkflow:
             # Fallback: MinIO failure doesn't break agent execution
             workflow.logger.warning(f"Output offload exception for {output_id}: {e}")
             return content
+
+    async def _execute_load_openapi_tools(self, tool_call: ToolCall) -> None:
+        """Reveal OpenAPI operation schemas by exact name (issue #115 — local).
+
+        Mirrors `_execute_activate_tool_source` for the per-tool, name-based
+        case: the LLM picks names from the catalog text already in its prompt
+        and asks us to load their schemas. We dict-look up against
+        `state.searchable_tool_pool` and append matched schemas (deduped) to
+        `state.available_tools`. Names are recorded in
+        `state.revealed_openapi_tools` so continue-as-new can replay them.
+        """
+        try:
+            args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            args = {}
+
+        requested = args.get("tool_names")
+        if not isinstance(requested, list):
+            requested = []
+        requested = [str(n) for n in requested if n]
+
+        if not self._disclosure_policy or not self.state.searchable_tool_pool:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content="Error: no searchable OpenAPI pool available.",
+                    tool_call_id=tool_call.id,
+                    name="load_tools",
+                )
+            )
+            return
+
+        pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
+        ctx = DisclosureContext(
+            model_name=str(self.state.agent_config.get("model_id", "")),
+            context_window=self.state.context_window,
+            iteration=self.state.current_iteration,
+        )
+        result = self._disclosure_policy.reveal(
+            RevealRequest(tool_names=requested), pool, ctx
+        )
+
+        # Dedup against already-loaded tools by function name.
+        existing_names = {
+            (t.get("function", {}) or {}).get("name")
+            for t in self.state.available_tools
+            if t.get("type") == "function"
+        }
+        for schema in result.revealed:
+            name = (schema.get("function", {}) or {}).get("name")
+            if name and name not in existing_names:
+                self.state.available_tools.append(schema)
+                existing_names.add(name)
+
+        revealed_set = set(self.state.revealed_openapi_tools)
+        for name in result.matched_names:
+            if name not in revealed_set:
+                self.state.revealed_openapi_tools.append(name)
+                revealed_set.add(name)
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=result.message
+                or f"Loaded {len(result.matched_names)} OpenAPI operations.",
+                tool_call_id=tool_call.id,
+                name="load_tools",
+            )
+        )
+
+        self.event_manager.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": "load_tools",
+                "tool_call_id": tool_call.id,
+                "matched_names": result.matched_names,
+                "unknown_names": result.unknown_names,
+                "iteration": self.state.current_iteration,
+            },
+        )
 
     async def _execute_activate_tool_source(self, tool_call: ToolCall) -> None:
         """Activate a tool source (DYNAMIC mode) — load full definitions into context."""

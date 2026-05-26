@@ -60,6 +60,11 @@ class ToolSettingsYAML(BaseModel):
     description_override: str | None = None  # For agent tools — custom description
     requires_user_confirmation: bool | None = None  # Require human approval before execution
     openapi_connection_id: str | None = None  # For openapi tools — stable UUID lookup
+    # Disclosure mode for the tool's schemas. "explicit" puts every operation's
+    # full schema into every LLM call (legacy). "searchable" defers schemas
+    # behind a `load_tools` meta-tool, with a name+description catalog in the
+    # system prompt. Currently honored only for openapi tools.
+    load_mode: Literal["explicit", "searchable"] | None = None
 
 
 class ToolConfigYAML(BaseModel):
