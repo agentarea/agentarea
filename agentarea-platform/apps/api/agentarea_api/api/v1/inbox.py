@@ -48,22 +48,21 @@ async def get_inbox_items(
     ordered by most recently updated first. Includes total count for badge/pagination.
     """
     try:
-        import asyncio
-
         query_statuses = [status] if status and status in INBOX_STATUSES else INBOX_STATUSES
         offset = (page - 1) * page_size
 
-        agents_result, tasks, total = await asyncio.gather(
-            agent_service.list(),
-            task_service.task_repository.list_by_statuses(
-                statuses=query_statuses,
-                agent_id=agent_id,
-                limit=page_size,
-                offset=offset,
-            ),
-            task_service.task_repository.count_by_statuses(
-                statuses=query_statuses,
-            ),
+        # Sequential awaits: agent_service and task_service share one AsyncSession
+        # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
+        # single connection ("another operation is in progress").
+        agents_result = await agent_service.list()
+        tasks = await task_service.task_repository.list_by_statuses(
+            statuses=query_statuses,
+            agent_id=agent_id,
+            limit=page_size,
+            offset=offset,
+        )
+        total = await task_service.task_repository.count_by_statuses(
+            statuses=query_statuses,
         )
 
         agent_map = {str(agent.id): agent.name for agent in agents_result}
