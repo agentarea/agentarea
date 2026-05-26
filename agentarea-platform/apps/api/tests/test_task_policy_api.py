@@ -42,6 +42,23 @@ def _app_for(task_service, context: UserContext) -> FastAPI:
     return app
 
 
+def test_task_artifact_download_url_is_api_relative():
+    agent_id = uuid4()
+    task_id = uuid4()
+
+    url = agents_tasks._task_artifact_download_url(
+        agent_id,
+        task_id,
+        f"tasks/{task_id}/report with spaces.html",
+    )
+
+    assert url == (
+        f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/"
+        f"tasks/{task_id}/report%20with%20spaces.html"
+    )
+    assert "agentarea-backend" not in url
+
+
 @pytest.mark.asyncio
 async def test_task_sync_accepts_task_policy_and_passes_typed_payload():
     agent_id = uuid4()

@@ -138,8 +138,8 @@ class TemporalAgentRunner(BaseAgentRunner):
 
         from ..models import LLMCallRequest
         from ..workflows.constants import (
-            DEFAULT_RETRY_ATTEMPTS,
             LLM_CALL_TIMEOUT,
+            LLM_RETRY_ATTEMPTS,
             Activities,
         )
 
@@ -182,7 +182,7 @@ class TemporalAgentRunner(BaseAgentRunner):
             Activities.CALL_LLM,
             args=[llm_request],
             start_to_close_timeout=LLM_CALL_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=RetryPolicy(maximum_attempts=LLM_RETRY_ATTEMPTS),
         )
 
         # Extract usage info and update budget

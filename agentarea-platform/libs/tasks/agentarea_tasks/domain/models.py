@@ -170,6 +170,7 @@ class SimpleTask(BaseModel):
     completed_at: datetime | None = None
     execution_id: str | None = None  # Temporal workflow execution ID or other execution identifier
     metadata: dict[str, Any] = {}  # Additional metadata for task management
+    effective_policy: dict[str, Any] | None = None  # Resolved governance policy passed to execution
 
     @field_validator("result", mode="before")
     @classmethod

@@ -22,6 +22,7 @@ def _workspace_file_download_url(path: str) -> str:
     description="List, fetch download URLs for, and delete workspace files.",
     category="platform",
     requires_user_confirmation=True,
+    register=False,
 )
 class FilesToolset(Toolset):
     """List, fetch download URLs for, and delete workspace files."""

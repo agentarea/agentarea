@@ -29,6 +29,7 @@ def _ensure_all_toolsets_imported() -> None:
         "agentarea_agents_sdk.tools.calculate_tool",
         "agentarea_agents_sdk.tools.math_toolset",
         "agentarea_agents_sdk.tools.file_toolset",
+        "agentarea_agents_sdk.tools.workspace_files_toolset",
         "agentarea_agents_sdk.tools.web_toolset",
         "agentarea_agents_sdk.tools.shell_toolset",
     ]

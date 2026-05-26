@@ -92,6 +92,7 @@ from .constants import (
     EVENT_PUBLISH_TIMEOUT,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
+    LLM_RETRY_ATTEMPTS,
     MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
     TOOL_OUTPUT_OFFLOAD_CHARS,
@@ -332,6 +333,7 @@ class AgentExecutionWorkflow:
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
+        self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
 
         # Initialize helpers
@@ -747,6 +749,7 @@ class AgentExecutionWorkflow:
         self.state.service_cost_used = state.service_cost_used
         self.state.wallet_id = state.wallet_id
         self.state.resolved_model = state.resolved_model
+        self.state.effective_policy = state.effective_policy
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -841,6 +844,7 @@ class AgentExecutionWorkflow:
             service_cost_used=self.state.service_cost_used,
             wallet_id=self.state.wallet_id,
             resolved_model=self.state.resolved_model,
+            effective_policy=self.state.effective_policy,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -867,6 +871,7 @@ class AgentExecutionWorkflow:
             if self.state.goal
             else MAX_ITERATIONS,
             budget_usd=self.state.budget_usd,
+            effective_policy=self.state.effective_policy,
             continued_state=continued_state.model_dump(),
         )
 
@@ -1014,7 +1019,7 @@ class AgentExecutionWorkflow:
 
         # Check maximum iterations
         max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
-        if self.state.current_iteration >= max_iterations:
+        if self.state.current_iteration > max_iterations:
             workflow.logger.info(
                 f"Max iterations reached ({max_iterations}) - terminating workflow"
             )
@@ -1237,6 +1242,7 @@ class AgentExecutionWorkflow:
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
                 resolved_model=self.state.resolved_model,
+                effective_policy=self.state.effective_policy,
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -1244,7 +1250,7 @@ class AgentExecutionWorkflow:
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=RetryPolicy(maximum_attempts=LLM_RETRY_ATTEMPTS),
             )
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -1721,6 +1727,7 @@ class AgentExecutionWorkflow:
                 agent_id=UUID(self.state.agent_id) if self.state.agent_id else None,
                 tools=self.state.agent_config.get("tools"),
                 metadata=self._workflow_metadata or {},
+                effective_policy=self.state.effective_policy,
             )
 
             result_obj = await workflow.execute_activity(
@@ -2334,6 +2341,7 @@ class AgentExecutionWorkflow:
                     "parent_agent_id": self.state.agent_id,
                     "parent_task_id": self.state.task_id,
                 },
+                effective_policy=self.state.effective_policy,
             )
 
             # Start child workflow and await result
@@ -2917,7 +2925,9 @@ class AgentExecutionWorkflow:
             success_criteria=request.task_parameters.get(
                 "success_criteria", ["Task completed successfully"]
             ),
-            max_iterations=request.task_parameters.get("max_iterations", MAX_ITERATIONS),
+            max_iterations=request.task_parameters.get(
+                "max_iterations", request.max_reasoning_iterations
+            ),
             requires_human_approval=request.requires_human_approval,
             context=request.task_parameters,
         )

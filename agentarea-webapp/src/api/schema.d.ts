@@ -3810,6 +3810,16 @@ export interface components {
             /** Tools */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
+        /**
+         * ApprovalPolicy
+         * @description Human approval and escalation requirements.
+         */
+        ApprovalPolicy: {
+            /** Escalation Rules */
+            escalation_rules?: string[];
+            /** Requires Human Approval */
+            requires_human_approval?: boolean | null;
+        };
         /** AssociationBody */
         AssociationBody: {
             /** Id */
@@ -3896,6 +3906,30 @@ export interface components {
              * @description ZIP file containing the skill package
              */
             file: string;
+        };
+        /**
+         * BudgetPolicy
+         * @description Budget-related ceilings.
+         */
+        BudgetPolicy: {
+            /** Monthly Spend Cap Usd */
+            monthly_spend_cap_usd?: number | string | null;
+            /** Run Budget Usd */
+            run_budget_usd?: number | string | null;
+            /** Service Budget Usd */
+            service_budget_usd?: number | string | null;
+        };
+        /**
+         * ContentSafetyPolicy
+         * @description Content-safety governance controls.
+         */
+        ContentSafetyPolicy: {
+            /** Output Sanitizer Enabled */
+            output_sanitizer_enabled?: boolean | null;
+            /** Prompt Injection Detection Enabled */
+            prompt_injection_detection_enabled?: boolean | null;
+            /** Semantic Guard Threshold */
+            semantic_guard_threshold?: number | null;
         };
         /** CreateInvitationBody */
         CreateInvitationBody: {
@@ -5243,6 +5277,17 @@ export interface components {
             /** Tx Hash */
             tx_hash?: string | null;
         };
+        /**
+         * PolicyDocument
+         * @description Source policy document stored per scope.
+         */
+        PolicyDocument: {
+            approval?: components["schemas"]["ApprovalPolicy"] | null;
+            budget?: components["schemas"]["BudgetPolicy"] | null;
+            content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
+            tokens?: components["schemas"]["TokenPolicy"] | null;
+            tools?: components["schemas"]["ToolsPolicy"] | null;
+        };
         /** ProjectAgentRef */
         ProjectAgentRef: {
             /**
@@ -5935,6 +5980,7 @@ export interface components {
              * @default false
              */
             requires_human_approval: boolean | null;
+            task_policy?: components["schemas"]["PolicyDocument"] | null;
         };
         /**
          * TaskEvent
@@ -6137,6 +6183,16 @@ export interface components {
             total_cost?: number | null;
         };
         /**
+         * TokenPolicy
+         * @description Token-related ceilings.
+         */
+        TokenPolicy: {
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Max Tokens Per Call */
+            max_tokens_per_call?: number | null;
+        };
+        /**
          * ToolConfigYAML
          * @description Tool configuration in YAML format.
          */
@@ -6190,6 +6246,16 @@ export interface components {
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */
             requires_user_confirmation?: boolean | null;
+        };
+        /**
+         * ToolsPolicy
+         * @description MCP tool capability restrictions.
+         */
+        ToolsPolicy: {
+            /** Allowed */
+            allowed?: string[] | null;
+            /** Denied */
+            denied?: string[];
         };
         /**
          * TriggerCreate
