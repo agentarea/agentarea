@@ -1477,6 +1477,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp/{instance_id}/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        get: operations["proxy_instance_v1_mcp__instance_id__mcp_get"];
+        put?: never;
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        post: operations["proxy_instance_v1_mcp__instance_id__mcp_post"];
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        delete: operations["proxy_instance_v1_mcp__instance_id__mcp_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/model-instances/": {
         parameters: {
             query?: never;
@@ -4753,7 +4781,7 @@ export interface components {
             /** Description */
             description: string;
             /** Docker Image Url */
-            docker_image_url: string;
+            docker_image_url?: string | null;
             /** Env Schema */
             env_schema: {
                 [key: string]: unknown;
@@ -9712,6 +9740,99 @@ export interface operations {
             header?: never;
             path: {
                 server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
             };
             cookie?: never;
         };

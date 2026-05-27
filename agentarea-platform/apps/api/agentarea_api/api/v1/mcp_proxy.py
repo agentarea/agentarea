@@ -23,7 +23,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from agentarea_api.api.deps.services import DatabaseSessionDep, BaseSecretManagerDep
+from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -157,11 +157,13 @@ async def proxy_instance(
             try:
                 injected = await auth_service.get_auth_headers(auth_config)
                 outbound_headers.update(injected)
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Failed to build outbound auth headers for instance %s", instance_id
                 )
-                raise HTTPException(status_code=502, detail="Upstream auth failed")
+                raise HTTPException(
+                    status_code=502, detail="Upstream auth failed"
+                ) from exc
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     params = dict(request.query_params)
