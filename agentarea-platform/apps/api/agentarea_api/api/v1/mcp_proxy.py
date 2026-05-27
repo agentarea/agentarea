@@ -1,0 +1,197 @@
+"""Per-instance MCP reverse proxy (Streamable HTTP only — no SSE legacy).
+
+Each MCP instance gets a stable governed endpoint:
+
+    POST/GET/DELETE  /v1/mcp/{instance_id}/mcp
+
+The proxy resolves the instance, determines the upstream URL, injects
+outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
+streams the request/response transparently. AgentArea owns access control
+(workspace scoping today; ReBAC next) and audit centrally; downstream MCP
+servers see only governed traffic.
+
+Dispatch by instance type:
+
+* ``url``     -> ``server_spec.remote_url`` (e.g. https://mcp.clickup.com/mcp)
+* ``docker``  -> ``http://mcp-<id>:<port>/mcp``
+* ``command`` -> ``http://mcp-<id>:8080/mcp`` (mcp-bridge)
+* ``compound``-> not yet implemented here; see compound proxy
+"""
+
+import logging
+from typing import Any
+from uuid import UUID
+
+import httpx
+from agentarea_api.api.deps.services import DatabaseSessionDep, BaseSecretManagerDep
+from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+from agentarea_mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
+)
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/mcp", tags=["mcp-proxy"])
+
+# Hop-by-hop headers per RFC 7230 §6.1, plus a few that must not be forwarded
+# when proxying (host is rewritten by httpx; content-length is recomputed).
+_HOP_BY_HOP = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+    }
+)
+
+
+def _filter_inbound_headers(headers) -> dict[str, str]:
+    """Headers we forward upstream (drop hop-by-hop, host, our own auth)."""
+    out: dict[str, str] = {}
+    for k, v in headers.items():
+        lk = k.lower()
+        if lk in _HOP_BY_HOP:
+            continue
+        # Don't forward the user's auth to upstream — we inject our own.
+        if lk == "authorization":
+            continue
+        out[k] = v
+    return out
+
+
+def _filter_outbound_headers(headers) -> dict[str, str]:
+    """Headers we forward back to the client (drop hop-by-hop)."""
+    out: dict[str, str] = {}
+    for k, v in headers.items():
+        if k.lower() in _HOP_BY_HOP:
+            continue
+        out[k] = v
+    return out
+
+
+async def _resolve_upstream_url(instance, server_spec) -> str:
+    """Compute the full upstream MCP endpoint URL for an instance.
+
+    URL-type instances carry their full endpoint URL on the parent server
+    spec (remote_url). Container-backed instances expose MCP at ``/mcp`` on
+    the resolved internal URL.
+    """
+    json_spec: dict[str, Any] = instance.json_spec or {}
+    instance_type = json_spec.get("type") or json_spec.get("server_type")
+    if not instance_type and server_spec is not None:
+        if getattr(server_spec, "remote_url", None):
+            instance_type = "url"
+        elif getattr(server_spec, "cmd", None):
+            instance_type = "command"
+        else:
+            instance_type = "docker"
+
+    if instance_type == "url":
+        legacy = json_spec.get("endpoint_url") or json_spec.get("url")
+        if legacy:
+            return legacy
+        if server_spec is not None and getattr(server_spec, "remote_url", None):
+            return server_spec.remote_url
+        spec_json = getattr(server_spec, "json_spec", None) or {}
+        if spec_json.get("type") == "url":
+            return spec_json.get("endpoint_url") or spec_json.get("url") or ""
+        return ""
+
+    # Container-backed: use the property which builds http://mcp-<id>:port
+    # and append /mcp (the MCP Streamable HTTP endpoint convention).
+    try:
+        base = instance.endpoint_url
+    except ValueError:
+        return ""
+    if not base:
+        return ""
+    return base.rstrip("/") + "/mcp"
+
+
+@router.api_route(
+    "/{instance_id}/mcp",
+    methods=["GET", "POST", "DELETE"],
+)
+async def proxy_instance(
+    instance_id: UUID,
+    request: Request,
+    user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+):
+    """Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream."""
+    instance_repo = MCPServerInstanceRepository(db_session, user_context)
+    instance = await instance_repo.get_by_id(instance_id)
+    if instance is None:
+        raise HTTPException(status_code=404, detail="MCP instance not found")
+
+    server_spec = None
+    if instance.server_spec_id:
+        server_repo = MCPServerRepository(db_session, user_context)
+        server_spec = await server_repo.get_by_id(instance.server_spec_id)
+
+    upstream_url = await _resolve_upstream_url(instance, server_spec)
+    if not upstream_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Instance has no resolvable upstream MCP URL",
+        )
+
+    outbound_headers = _filter_inbound_headers(request.headers)
+    if instance.auth_config_id:
+        auth_repo = MCPAuthConfigRepository(db_session, user_context)
+        auth_config = await auth_repo.get_by_id(instance.auth_config_id)
+        if auth_config is not None:
+            auth_service = MCPAuthService(auth_repo, secret_manager)
+            try:
+                injected = await auth_service.get_auth_headers(auth_config)
+                outbound_headers.update(injected)
+            except Exception:
+                logger.exception(
+                    "Failed to build outbound auth headers for instance %s", instance_id
+                )
+                raise HTTPException(status_code=502, detail="Upstream auth failed")
+
+    body = await request.body() if request.method in ("POST", "DELETE") else None
+    params = dict(request.query_params)
+
+    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))
+    try:
+        upstream_req = client.build_request(
+            request.method,
+            upstream_url,
+            content=body,
+            params=params,
+            headers=outbound_headers,
+        )
+        upstream_resp = await client.send(upstream_req, stream=True)
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        logger.warning("Upstream MCP error for %s: %s", instance_id, exc)
+        raise HTTPException(status_code=502, detail=f"Upstream MCP error: {exc}") from exc
+
+    async def _iter():
+        try:
+            async for chunk in upstream_resp.aiter_raw():
+                yield chunk
+        finally:
+            await upstream_resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        _iter(),
+        status_code=upstream_resp.status_code,
+        headers=_filter_outbound_headers(upstream_resp.headers),
+        media_type=upstream_resp.headers.get("content-type"),
+    )

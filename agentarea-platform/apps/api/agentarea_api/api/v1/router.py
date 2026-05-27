@@ -22,6 +22,7 @@ from . import (
     mcp_auth_configs,
     mcp_oauth_connect,
     mcp_oauth_links,
+    mcp_proxy,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances,
@@ -108,6 +109,9 @@ protected_v1_router.include_router(mcp_oauth_connect.router)
 
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)
+
+# MCP per-instance reverse proxy (Streamable HTTP) - PROTECTED
+protected_v1_router.include_router(mcp_proxy.router)
 
 # Registries (MCP catalog) - PROTECTED
 protected_v1_router.include_router(registries.router)

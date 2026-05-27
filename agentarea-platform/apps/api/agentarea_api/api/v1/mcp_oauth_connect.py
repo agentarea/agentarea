@@ -89,6 +89,29 @@ def _callback_uri(request: Request) -> str:
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
+def _resolve_instance_remote_url(instance, server_spec) -> str | None:
+    """Resolve the remote MCP URL for an instance.
+
+    Transport fields moved from instance.json_spec onto MCPServer columns in
+    PR #151. Newly-created URL instances carry no endpoint_url in their own
+    json_spec — the URL lives on the parent MCPServer's remote_url (or, for
+    legacy specs, in MCPServer.json_spec).
+    """
+    legacy = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get(
+        "url"
+    )
+    if legacy:
+        return legacy
+    if server_spec is None:
+        return None
+    if getattr(server_spec, "remote_url", None):
+        return server_spec.remote_url
+    spec_json = getattr(server_spec, "json_spec", None) or {}
+    if spec_json.get("type") == "url":
+        return spec_json.get("endpoint_url") or spec_json.get("url")
+    return None
+
+
 def _safe_frontend_base(return_to: str) -> str:
     """Validate and normalize frontend redirect base URL.
 
@@ -138,7 +161,10 @@ async def oauth_authorize(
     4. Generate PKCE pair and state
     5. Redirect user to the authorization endpoint
     """
-    from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+    from agentarea_mcp.infrastructure.repository import (
+        MCPServerInstanceRepository,
+        MCPServerRepository,
+    )
 
     # Fetch the instance to get its remote URL
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
@@ -146,8 +172,12 @@ async def oauth_authorize(
     if instance is None:
         raise HTTPException(status_code=404, detail="MCP instance not found")
 
-    json_spec = instance.json_spec or {}
-    mcp_url = json_spec.get("endpoint_url") or json_spec.get("url")
+    server_spec = None
+    if instance.server_spec_id:
+        server_repo = MCPServerRepository(db_session, user_context)
+        server_spec = await server_repo.get_by_id(instance.server_spec_id)
+
+    mcp_url = _resolve_instance_remote_url(instance, server_spec)
     if not mcp_url:
         raise HTTPException(
             status_code=400,
@@ -296,6 +326,16 @@ async def oauth_callback(
             status_code=302,
         )
 
+    # Compute absolute expiry so auth_service doesn't trigger an immediate refresh.
+    import time as _time
+
+    expires_in_raw = tokens.get("expires_in")
+    try:
+        expires_in_seconds = int(expires_in_raw) if expires_in_raw is not None else 3600
+    except (TypeError, ValueError):
+        expires_in_seconds = 3600
+    expires_at = _time.time() + expires_in_seconds
+
     # Create MCPAuthConfig with the token
     from agentarea_common.auth.context import UserContext
 
@@ -323,6 +363,8 @@ async def oauth_callback(
             "token_type": tokens.get("token_type", "bearer"),
             "refresh_token": tokens.get("refresh_token", ""),
             "scope": tokens.get("scope", ""),
+            "expires_at": expires_at,
+            "client_secret": state_data.get("client_secret") or "",
         },
     )
 

@@ -1,24 +1,31 @@
 import {
+  Box,
+  Cloud,
+  Command,
   Container,
-  Server,
+  Cpu,
   Database,
   Folder,
   Github,
   Globe,
-  MessageSquare,
-  Cloud,
-  Terminal,
-  Cpu,
-  Search,
   Mail,
-  Command,
-  Box,
-  FileJson2,
+  MessageSquare,
+  Search,
+  Server,
+  Terminal,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { MCPServer, MCPInstance, OpenAPIConnection } from "../types";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
-import { getConnectionTypes, CONNECTION_TYPE_CONFIG } from "../utils";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
+import {
+  CONNECTION_TYPE_CONFIG,
+  getConnectionTypes,
+  getEffectiveMCPVerificationStatus,
+  getMCPConnectionIconSrc,
+  getMCPConnectionTitle,
+  getMCPInstanceToolCount,
+} from "../utils";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
@@ -32,18 +39,61 @@ interface MCPInstanceCardProps {
 
 function getMCPIcon(name: string) {
   const lower = name.toLowerCase();
-  if (lower.includes("postgres") || lower.includes("sql") || lower.includes("mongo") || lower.includes("redis")) return Database;
+  if (
+    lower.includes("postgres") ||
+    lower.includes("sql") ||
+    lower.includes("mongo") ||
+    lower.includes("redis")
+  )
+    return Database;
   if (lower.includes("file") || lower.includes("fs")) return Folder;
   if (lower.includes("git")) return Github;
-  if (lower.includes("fetch") || lower.includes("http") || lower.includes("web") || lower.includes("browser")) return Globe;
-  if (lower.includes("slack") || lower.includes("discord") || lower.includes("chat")) return MessageSquare;
-  if (lower.includes("drive") || lower.includes("cloud") || lower.includes("aws") || lower.includes("s3")) return Cloud;
+  if (
+    lower.includes("fetch") ||
+    lower.includes("http") ||
+    lower.includes("web") ||
+    lower.includes("browser")
+  )
+    return Globe;
+  if (
+    lower.includes("slack") ||
+    lower.includes("discord") ||
+    lower.includes("chat")
+  )
+    return MessageSquare;
+  if (
+    lower.includes("drive") ||
+    lower.includes("cloud") ||
+    lower.includes("aws") ||
+    lower.includes("s3")
+  )
+    return Cloud;
   if (lower.includes("docker") || lower.includes("kube")) return Container;
-  if (lower.includes("terminal") || lower.includes("shell") || lower.includes("bash")) return Terminal;
+  if (
+    lower.includes("terminal") ||
+    lower.includes("shell") ||
+    lower.includes("bash")
+  )
+    return Terminal;
   if (lower.includes("memory")) return Cpu;
-  if (lower.includes("search") || lower.includes("brave") || lower.includes("google")) return Search;
-  if (lower.includes("mail") || lower.includes("gmail") || lower.includes("outlook")) return Mail;
-  if (lower.includes("linear") || lower.includes("jira") || lower.includes("project")) return Command;
+  if (
+    lower.includes("search") ||
+    lower.includes("brave") ||
+    lower.includes("google")
+  )
+    return Search;
+  if (
+    lower.includes("mail") ||
+    lower.includes("gmail") ||
+    lower.includes("outlook")
+  )
+    return Mail;
+  if (
+    lower.includes("linear") ||
+    lower.includes("jira") ||
+    lower.includes("project")
+  )
+    return Command;
   if (lower.includes("obsidian") || lower.includes("notion")) return Box;
 
   return Server;
@@ -54,52 +104,55 @@ export function MCPInstanceCard({
   serverSpec,
 }: MCPInstanceCardProps) {
   const specType = (instance.json_spec?.type as string) || "docker";
-  const toolCount = ((instance as any).tools as any[] | undefined)?.length
-    ?? (instance.json_spec?.available_tools as any[] | undefined)?.length ?? 0;
+  const toolCount = getMCPInstanceToolCount(instance);
+  const vStatus = getEffectiveMCPVerificationStatus(instance);
 
-  const verification = (instance as any).verification as {
-    status: string;
-  } | null | undefined;
-  const vStatus = verification?.status ?? "never_attempted";
+  const statusColor =
+    {
+      succeeded: "text-green-600 border-green-300",
+      in_progress: "text-amber-600 border-amber-300",
+      failed: "text-red-600 border-red-300",
+      never_attempted: "text-gray-500 border-gray-300",
+    }[vStatus] ?? "text-gray-500 border-gray-300";
 
-  const statusColor = {
-    succeeded: "text-green-600 border-green-300",
-    in_progress: "text-amber-600 border-amber-300",
-    failed: "text-red-600 border-red-300",
-    never_attempted: "text-gray-500 border-gray-300",
-  }[vStatus] ?? "text-gray-500 border-gray-300";
+  const statusLabel =
+    {
+      succeeded: "Verified",
+      in_progress: "Verifying",
+      failed: "Failed",
+      never_attempted: "Not verified",
+    }[vStatus] ?? vStatus;
 
-  const statusLabel = {
-    succeeded: "Verified",
-    in_progress: "Verifying",
-    failed: "Failed",
-    never_attempted: "Not verified",
-  }[vStatus] ?? vStatus;
+  const typeLabel =
+    specType === "command"
+      ? "Command"
+      : specType === "url"
+        ? "External"
+        : specType === "bundle"
+          ? "Bundle"
+          : serverSpec?.name || "Docker";
 
-  const typeLabel = specType === "command" ? "Command" : specType === "url" ? "External" : specType === "bundle" ? "Bundle" : serverSpec?.name || "Docker";
-
-  // Prefer icon from serverSpec json_spec, fall back to name-based Lucide icon
-  const specIcon = (serverSpec as any)?.json_spec?.icons?.[0]?.src as string | undefined;
-  const displayTitle = (serverSpec as any)?.json_spec?.title || instance.name;
+  const providerIcon = getMCPConnectionIconSrc(instance, serverSpec);
+  const displayTitle = getMCPConnectionTitle(instance, serverSpec);
 
   return (
     <LinkedCard
       href={`/mcp-servers/${instance.id}`}
       title={displayTitle}
-      icon={specIcon || getMCPIcon(instance.name)}
+      icon={providerIcon || getMCPIcon(instance.name)}
       type="view"
       subtitle={
         <div className="flex items-center gap-1.5 w-full">
-          <Badge size="sm" variant="outline" className={`h-5 px-1.5 font-normal ${statusColor}`}>
+          <Badge
+            size="sm"
+            variant="outline"
+            className={`h-5 px-1.5 font-normal ${statusColor}`}
+          >
             {statusLabel}
           </Badge>
-          <span className="truncate text-xs text-gray-500">
-            {typeLabel}
-          </span>
+          <span className="truncate text-xs text-gray-500">{typeLabel}</span>
           {toolCount > 0 && (
-            <span className="text-xs text-gray-400">
-              · {toolCount} tools
-            </span>
+            <span className="text-xs text-gray-400">· {toolCount} tools</span>
           )}
         </div>
       }
@@ -111,16 +164,22 @@ interface OpenAPIConnectionCardProps {
   connection: OpenAPIConnection;
 }
 
-export function OpenAPIConnectionCard({ connection }: OpenAPIConnectionCardProps) {
+export function OpenAPIConnectionCard({
+  connection,
+}: OpenAPIConnectionCardProps) {
   return (
     <LinkedCard
       href={`/mcp-servers/openapi/${connection.id}`}
       title={connection.name}
-      icon={FileJson2}
+      icon={<OpenAPIConnectionMark connection={connection} />}
       type="view"
       subtitle={
         <div className="flex items-center gap-1.5">
-          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal text-orange-600 border-orange-300">
+          <Badge
+            size="sm"
+            variant="outline"
+            className="h-5 px-1.5 font-normal text-orange-600 border-orange-300"
+          >
             OpenAPI
           </Badge>
           {connection.available_tools.length > 0 && (
@@ -131,6 +190,42 @@ export function OpenAPIConnectionCard({ connection }: OpenAPIConnectionCardProps
         </div>
       }
     />
+  );
+}
+
+function getOpenAPIConnectionInitials(
+  connection?: Pick<OpenAPIConnection, "base_url" | "name">
+): string {
+  if (!connection) return "API";
+
+  try {
+    const hostname = new URL(connection.base_url).hostname
+      .replace(/^api\./, "")
+      .replace(/^www\./, "");
+    const labels = hostname.split(".").filter(Boolean);
+    const domain = labels.length > 1 ? labels[labels.length - 2] : labels[0];
+    return domain ? domain.slice(0, 2).toUpperCase() : "API";
+  } catch {
+    return connection.name.slice(0, 2).toUpperCase() || "API";
+  }
+}
+
+export function OpenAPIConnectionMark({
+  connection,
+  className,
+}: {
+  connection?: Pick<OpenAPIConnection, "base_url" | "name">;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-6 w-6 items-center justify-center rounded-md bg-zinc-900 text-[9px] font-semibold leading-none tracking-normal text-white dark:bg-zinc-100 dark:text-zinc-950",
+        className
+      )}
+    >
+      {getOpenAPIConnectionInitials(connection)}
+    </span>
   );
 }
 
