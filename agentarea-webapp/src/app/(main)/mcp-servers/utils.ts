@@ -106,7 +106,7 @@ export function getMCPConnectionTitle(
  * Classify an MCP server spec by its connection type based on available fields
  */
 export function getConnectionType(server: {
-  docker_image_url?: string;
+  docker_image_url?: string | null;
   cmd?: string[] | null;
   tags?: string[];
   remote_url?: string | null;
@@ -126,7 +126,7 @@ export function getConnectionType(server: {
  * Get all connection types for a server (some may support multiple)
  */
 export function getConnectionTypes(server: {
-  docker_image_url?: string;
+  docker_image_url?: string | null;
   cmd?: string[] | null;
   tags?: string[];
 }): MCPConnectionType[] {

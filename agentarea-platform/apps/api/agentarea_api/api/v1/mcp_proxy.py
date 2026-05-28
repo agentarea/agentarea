@@ -161,9 +161,7 @@ async def proxy_instance(
                 logger.exception(
                     "Failed to build outbound auth headers for instance %s", instance_id
                 )
-                raise HTTPException(
-                    status_code=502, detail="Upstream auth failed"
-                ) from exc
+                raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     params = dict(request.query_params)

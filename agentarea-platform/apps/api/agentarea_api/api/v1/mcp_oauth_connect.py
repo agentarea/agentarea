@@ -97,9 +97,7 @@ def _resolve_instance_remote_url(instance, server_spec) -> str | None:
     json_spec — the URL lives on the parent MCPServer's remote_url (or, for
     legacy specs, in MCPServer.json_spec).
     """
-    legacy = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get(
-        "url"
-    )
+    legacy = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get("url")
     if legacy:
         return legacy
     if server_spec is None:

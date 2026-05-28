@@ -262,7 +262,7 @@ export function CreateInstanceDialog({
                 </Button>
               }
               showContainerSummary
-              containerImage={mcpServer.docker_image_url}
+              containerImage={mcpServer.docker_image_url ?? undefined}
               containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
             />
           </div>
