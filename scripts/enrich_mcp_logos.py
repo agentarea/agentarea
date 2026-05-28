@@ -50,7 +50,6 @@ DOMAIN_OVERRIDES = {
     "WordPress.com": "wordpress.com",
     "monday.com": "monday.com",
     "CustomGPT.ai": "customgpt.ai",
-    "TigerData Timescale": "tigerdata.com",
 }
 
 HOST_OVERRIDES = {
