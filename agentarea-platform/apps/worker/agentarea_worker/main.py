@@ -82,10 +82,12 @@ class AgentAreaWorker:
         self.worker = None
         self.trigger_worker = None
         self.inbound_subscriber = None
+        self.inbound_autoclaimer = None
         self.delivery_consumer = None
         self.delivery_autoclaimer = None
         self._broker = None
         self._dedup = None
+        self._inbound_dedup = None
         self.container_monitor = None
         self.worker_shutdown_event = asyncio.Event()
 
@@ -205,19 +207,19 @@ class AgentAreaWorker:
             max_concurrent_activities=5,
         )
 
-        # Wire inbound channel message subscriber (Go → Redis → Python)
+        # Wire inbound channel message consumer (event-service → Redis Streams → Python)
         # Wire outbound channel event subscriber (workflow events → Telegram/Slack/Discord)
         await self._setup_channel_subscribers(dependencies)
 
         logger.info("Worker created and configured")
 
     async def _setup_channel_subscribers(self, dependencies) -> None:
-        """Wire inbound subscriber + outbound delivery consumer.
+        """Wire inbound stream consumer + outbound delivery consumer.
 
         The router-via-pub/sub bridge is gone: `publish_workflow_events_activity`
         now enqueues channel deliveries directly via `dependencies.broker_client`.
         This method only wires the *consumer side* (delivery loop +
-        autoclaimer) and the inbound polling subscriber.
+        autoclaimer) and the inbound channel event consumer.
         """
         from agentarea_common.broker import DedupCache
         from agentarea_triggers.channels import get_adapter
@@ -226,7 +228,7 @@ class AgentAreaWorker:
         from agentarea_triggers.channels.delivery_consumer import (
             ChannelDeliveryConsumer,
         )
-        from agentarea_triggers.channels.inbound_subscriber import InboundMessageSubscriber
+        from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
 
         settings = get_settings()
@@ -243,12 +245,32 @@ class AgentAreaWorker:
             prefix="channel-delivery",
             ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
         )
+        self._inbound_dedup = DedupCache(
+            redis_url,
+            prefix="channel-inbound",
+            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+        )
 
-        # Inbound: Go polling → Redis → Python task execution
-        self.inbound_subscriber = InboundMessageSubscriber(
-            redis_url=redis_url,
+        # Inbound: event-service webhook/polling → Redis Streams → Python task execution
+        self.inbound_subscriber = InboundMessageStreamConsumer(
+            broker=self._broker,
+            dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
             workflow_executor=dependencies.workflow_executor,
+            stream=delivery_cfg.INBOUND_STREAM,
+            group=delivery_cfg.INBOUND_GROUP,
+            dlq_stream=delivery_cfg.INBOUND_DLQ,
+            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
+            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
+        )
+        self.inbound_autoclaimer = StreamAutoclaimer(
+            broker=self._broker,
+            stream=delivery_cfg.INBOUND_STREAM,
+            group=delivery_cfg.INBOUND_GROUP,
+            consumer_id="inbound-autoclaimer",
+            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
+            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
         )
 
         # Register adapters; they raise typed Retryable/Fatal errors that the
@@ -286,6 +308,8 @@ class AgentAreaWorker:
         # Start channel subscribers and delivery pipeline
         if self.inbound_subscriber:
             await self.inbound_subscriber.start()
+        if self.inbound_autoclaimer:
+            await self.inbound_autoclaimer.start()
         if self.delivery_consumer:
             await self.delivery_consumer.start()
         if self.delivery_autoclaimer:
@@ -341,6 +365,9 @@ class AgentAreaWorker:
         if self.inbound_subscriber:
             await self.inbound_subscriber.stop()
             self.inbound_subscriber = None
+        if self.inbound_autoclaimer:
+            await self.inbound_autoclaimer.stop()
+            self.inbound_autoclaimer = None
         if self.delivery_autoclaimer:
             await self.delivery_autoclaimer.stop()
             self.delivery_autoclaimer = None
@@ -353,6 +380,9 @@ class AgentAreaWorker:
         if self._dedup:
             await self._dedup.aclose()
             self._dedup = None
+        if self._inbound_dedup:
+            await self._inbound_dedup.aclose()
+            self._inbound_dedup = None
 
         if self.worker:
             self.worker = None

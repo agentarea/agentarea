@@ -4,13 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/agentarea/event-service/internal/broker"
 	"github.com/agentarea/event-service/internal/channels"
 	"github.com/agentarea/event-service/internal/channels/telegram"
 	"github.com/agentarea/event-service/internal/claim"
@@ -31,8 +34,11 @@ func main() {
 
 	slog.Info("event-service starting",
 		"worker_id", cfg.WorkerID,
+		"inbound_stream", cfg.InboundStream,
+		"enable_telegram_polling", cfg.EnableTelegramPolling,
 		"poll_interval", cfg.PollInterval,
 		"max_pollers", cfg.MaxPollers,
+		"port", cfg.Port,
 	)
 
 	// Connect to PostgreSQL
@@ -67,17 +73,31 @@ func main() {
 	}
 	slog.Info("redis connected")
 
-	// Register channel pollers
-	channels.Register("telegram_polling", telegram.NewPoller)
+	// Register dev-only polling channel adapters.
+	if cfg.EnableTelegramPolling {
+		channels.Register("telegram_polling", telegram.NewPoller)
+		slog.Info("telegram getUpdates polling enabled")
+	} else {
+		slog.Info("telegram getUpdates polling disabled")
+	}
 
 	// Build dependencies
-	submitter := submit.NewRedisSubmitter(redisClient)
+	streamBroker := broker.NewRedisStreams(redisClient)
+	submitter := submit.NewStreamSubmitter(streamBroker, cfg.InboundStream)
 	claimer := claim.NewRedisClaimer(redisClient, cfg.WorkerID)
 
 	mgr := polling.NewManager(db, submitter, claimer, cfg.PollInterval, cfg.MaxPollers)
 
 	// Run polling manager (outbound delivery handled by Python worker)
 	errCh := make(chan error, 1)
+
+	healthServer := newHealthServer(cfg.Port)
+	go func() {
+		slog.Info("starting health server", "addr", healthServer.Addr)
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
 
 	go func() {
 		slog.Info("starting polling manager")
@@ -91,5 +111,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("health server shutdown failed", "error", err)
+	}
+
 	slog.Info("event-service stopped")
+}
+
+func newHealthServer(port string) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	return &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 }

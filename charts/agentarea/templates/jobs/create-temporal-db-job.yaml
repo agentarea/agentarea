@@ -1,4 +1,4 @@
-{{- if and .Values.temporal.enabled .Values.postgresql.enabled }}
+{{- if and .Values.temporal.enabled .Values.postgresql.enabled .Values.temporal.database.createJob.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -460,6 +460,11 @@ eventService:
   # Polling configuration
   pollInterval: "30s"
   maxPollers: 10
+  inboundStream: "agentarea.channel.inbound"
+  telegramPolling:
+    # Dev-only fallback for Telegram getUpdates. Production Telegram ingress
+    # should use webhooks.
+    enabled: false
   # Resource limits and requests
   resources: {}
   #   limits:
@@ -613,6 +618,8 @@ temporal:
   # Database configuration
   database:
     name: "temporal"
+    createJob:
+      enabled: true
   
   service:
     type: ClusterIP
@@ -738,6 +745,8 @@ kratos:
   
   database:
     name: "kratos"
+    createJob:
+      enabled: true
 
   configMapOverrideName: ""
   files: {}

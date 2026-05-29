@@ -10,7 +10,22 @@ from pydantic_settings import BaseSettings
 
 
 class ChannelDeliverySettings(BaseSettings):
-    """Configuration for the durable outbound channel delivery pipeline."""
+    """Configuration for durable channel pipelines."""
+
+    INBOUND_STREAM: str = Field(
+        default="agentarea.channel.inbound",
+        description="Broker stream that carries normalized inbound channel events.",
+    )
+
+    INBOUND_GROUP: str = Field(
+        default="inbound",
+        description="Consumer group on INBOUND_STREAM. All worker replicas share one group.",
+    )
+
+    INBOUND_DLQ: str = Field(
+        default="agentarea.channel.inbound.dlq",
+        description="Stream that catches inbound events that exhausted retries or are malformed.",
+    )
 
     OUTBOUND_STREAM: str = Field(
         default="agentarea.channel.outbound",

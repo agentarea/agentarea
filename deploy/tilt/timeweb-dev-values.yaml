@@ -4,8 +4,7 @@ global:
   image:
     registry: ""
     pullPolicy: Always
-    pullSecrets:
-      - name: timeweb-registry
+    pullSecrets: []
   security:
     podSecurityContext: null
     containerSecurityContext: null
@@ -68,7 +67,22 @@ mcpManager:
       memory: 256Mi
 
 eventService:
-  enabled: false
+  enabled: true
+  image:
+    repository: agentarea/agentarea-events
+    tag: "tilt-dev"
+  telegramPolling:
+    enabled: false
+
+temporal:
+  database:
+    createJob:
+      enabled: false
+
+kratos:
+  database:
+    createJob:
+      enabled: false
 
 jobs:
   dbMigration:
