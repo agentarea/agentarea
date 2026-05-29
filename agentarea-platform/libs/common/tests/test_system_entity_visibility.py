@@ -3,14 +3,16 @@
 The AuthorizationService resolves accessible_workspaces on UserContext during auth.
 The base WorkspaceScopedRepository uses accessible_workspaces for query filtering.
 """
-import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
+import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+from agentarea_llm.domain.models import ModelInstance, ProviderConfig
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
-from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 
 
 def _user_context_with_system(workspace_id: str = "ws-1") -> UserContext:
@@ -50,6 +52,56 @@ def test_model_spec_repo_includes_system():
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
     assert "system" in compiled
     assert "ws-1" in compiled
+
+
+@pytest.mark.asyncio
+async def test_provider_config_repo_create_scopes_to_current_workspace(monkeypatch):
+    session = MagicMock()
+    session.commit = AsyncMock()
+    user_context = _user_context_with_system()
+    repo = ProviderConfigRepository(session, user_context)
+    monkeypatch.setattr(repo, "get_with_relations", AsyncMock(return_value=None))
+
+    config = ProviderConfig(
+        provider_spec_id=uuid4(),
+        name="Test provider",
+        api_key="secret-ref",
+        workspace_id="wrong-workspace",
+        created_by="",
+    )
+
+    created = await repo.create_config(config)
+
+    assert created is config
+    assert config.workspace_id == "ws-1"
+    assert config.created_by == "user-1"
+    session.add.assert_called_once_with(config)
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_model_instance_repo_create_scopes_to_current_workspace(monkeypatch):
+    session = MagicMock()
+    session.commit = AsyncMock()
+    user_context = _user_context_with_system()
+    repo = ModelInstanceRepository(session, user_context)
+    monkeypatch.setattr(repo, "get_with_relations", AsyncMock(return_value=None))
+
+    instance = ModelInstance(
+        provider_config_id=uuid4(),
+        model_spec_id=uuid4(),
+        name="Test model",
+        workspace_id="wrong-workspace",
+        created_by="",
+    )
+
+    created = await repo.create_instance(instance)
+
+    assert created is instance
+    assert instance.workspace_id == "ws-1"
+    assert instance.created_by == "user-1"
+    session.add.assert_called_once_with(instance)
+    session.commit.assert_awaited_once()
 
 
 def test_default_user_context_only_own_workspace():
