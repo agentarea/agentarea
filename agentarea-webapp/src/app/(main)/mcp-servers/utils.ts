@@ -3,12 +3,110 @@
  */
 
 export type MCPConnectionType = "docker" | "command" | "url";
+export type MCPVerificationStatus =
+  | "succeeded"
+  | "in_progress"
+  | "failed"
+  | "never_attempted"
+  | string;
+
+type JsonSpecLike = {
+  available_tools?: unknown;
+  icons?: unknown;
+  title?: unknown;
+};
+
+type MCPInstanceLike = {
+  name?: string;
+  tools?: unknown;
+  json_spec?: JsonSpecLike | null;
+  verification?: {
+    status?: string | null;
+  } | null;
+};
+
+type MCPServerLike = {
+  name?: string;
+  json_spec?: JsonSpecLike | null;
+};
+
+function arrayLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function firstIconSrc(spec?: JsonSpecLike | null): string | undefined {
+  const firstIcon = Array.isArray(spec?.icons) ? spec.icons[0] : undefined;
+  if (firstIcon && typeof firstIcon === "object" && "src" in firstIcon) {
+    const src = (firstIcon as { src?: unknown }).src;
+    return typeof src === "string" && src.length > 0 ? src : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Count discovered tools from either the normalized API field or legacy json_spec.
+ */
+export function getMCPInstanceToolCount(instance: MCPInstanceLike): number {
+  return (
+    arrayLength(instance.tools) ||
+    arrayLength(instance.json_spec?.available_tools)
+  );
+}
+
+/**
+ * UI status should reflect actual readiness: if discovery already found tools,
+ * a stale never_attempted/unknown verification state should not render as Setup.
+ */
+export function getEffectiveVerificationStatus(
+  rawStatus: string | null | undefined,
+  toolCount: number
+): MCPVerificationStatus {
+  const status = rawStatus ?? "never_attempted";
+
+  if (status === "failed" || status === "in_progress") {
+    return status;
+  }
+
+  if (toolCount > 0) {
+    return "succeeded";
+  }
+
+  return status;
+}
+
+export function getEffectiveMCPVerificationStatus(
+  instance: MCPInstanceLike
+): MCPVerificationStatus {
+  return getEffectiveVerificationStatus(
+    instance.verification?.status,
+    getMCPInstanceToolCount(instance)
+  );
+}
+
+export function getMCPConnectionIconSrc(
+  instance: MCPInstanceLike,
+  serverSpec?: MCPServerLike | null
+): string | undefined {
+  return (
+    firstIconSrc(instance.json_spec) ?? firstIconSrc(serverSpec?.json_spec)
+  );
+}
+
+export function getMCPConnectionTitle(
+  instance: MCPInstanceLike,
+  serverSpec?: MCPServerLike | null
+): string {
+  const title = serverSpec?.json_spec?.title;
+  return typeof title === "string" && title.length > 0
+    ? title
+    : instance.name || "MCP Server";
+}
 
 /**
  * Classify an MCP server spec by its connection type based on available fields
  */
 export function getConnectionType(server: {
-  docker_image_url?: string;
+  docker_image_url?: string | null;
   cmd?: string[] | null;
   tags?: string[];
   remote_url?: string | null;
@@ -28,13 +126,15 @@ export function getConnectionType(server: {
  * Get all connection types for a server (some may support multiple)
  */
 export function getConnectionTypes(server: {
-  docker_image_url?: string;
+  docker_image_url?: string | null;
   cmd?: string[] | null;
   tags?: string[];
 }): MCPConnectionType[] {
   const types: MCPConnectionType[] = [];
-  if (server.tags?.includes("docker") || server.docker_image_url) types.push("docker");
-  if (server.tags?.includes("command") || (server.cmd && server.cmd.length > 0)) types.push("command");
+  if (server.tags?.includes("docker") || server.docker_image_url)
+    types.push("docker");
+  if (server.tags?.includes("command") || (server.cmd && server.cmd.length > 0))
+    types.push("command");
   if (server.tags?.includes("url") || types.length === 0) types.push("url");
   return types;
 }
@@ -79,53 +179,60 @@ export function getMCPServerCategory(tags: string[]): MCPServerCategory {
   const lowerTags = tags.map((tag) => tag.toLowerCase());
 
   if (
-    lowerTags.some((tag) =>
-      tag.includes("ai") ||
-      tag.includes("llm") ||
-      tag.includes("search") ||
-      tag.includes("memory")
+    lowerTags.some(
+      (tag) =>
+        tag.includes("ai") ||
+        tag.includes("llm") ||
+        tag.includes("search") ||
+        tag.includes("memory")
     )
   ) {
     return "AI";
   }
 
   if (
-    lowerTags.some((tag) =>
-      tag.includes("database") ||
-      tag.includes("data") ||
-      tag.includes("analytics")
+    lowerTags.some(
+      (tag) =>
+        tag.includes("database") ||
+        tag.includes("data") ||
+        tag.includes("analytics")
     )
   ) {
     return "Data";
   }
 
   if (
-    lowerTags.some((tag) =>
-      tag.includes("git") ||
-      tag.includes("repository") ||
-      tag.includes("github")
+    lowerTags.some(
+      (tag) =>
+        tag.includes("git") ||
+        tag.includes("repository") ||
+        tag.includes("github")
     )
   ) {
     return "Dev";
   }
 
   if (
-    lowerTags.some((tag) =>
-      tag.includes("web") || tag.includes("browser") || tag.includes("fetch")
+    lowerTags.some(
+      (tag) =>
+        tag.includes("web") || tag.includes("browser") || tag.includes("fetch")
     )
   ) {
     return "Web";
   }
 
-  if (lowerTags.some((tag) => tag.includes("file") || tag.includes("filesystem"))) {
+  if (
+    lowerTags.some((tag) => tag.includes("file") || tag.includes("filesystem"))
+  ) {
     return "Files";
   }
 
   if (
-    lowerTags.some((tag) =>
-      tag.includes("message") ||
-      tag.includes("slack") ||
-      tag.includes("gmail")
+    lowerTags.some(
+      (tag) =>
+        tag.includes("message") ||
+        tag.includes("slack") ||
+        tag.includes("gmail")
     )
   ) {
     return "Messaging";
@@ -137,18 +244,18 @@ export function getMCPServerCategory(tags: string[]): MCPServerCategory {
 /**
  * Get CSS classes for category badge
  */
-export function getCategoryColorClasses(
-  category: MCPServerCategory
-): string {
+export function getCategoryColorClasses(category: MCPServerCategory): string {
   const colorMap: Record<MCPServerCategory, string> = {
     AI: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800",
     Data: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
     Dev: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800",
     Web: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800",
-    Files: "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800",
+    Files:
+      "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800",
     Messaging:
       "bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-300 dark:border-pink-800",
-    Tools: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/30 dark:text-gray-300 dark:border-gray-800",
+    Tools:
+      "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/30 dark:text-gray-300 dark:border-gray-800",
   };
 
   return colorMap[category];
@@ -161,4 +268,3 @@ export const MCP_CONSTANTS = {
   HEALTH_CHECK_INTERVAL_MS: 60000, // 1 minute
   DEFAULT_CONTAINER_PORT: 8000,
 } as const;
-

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Server, FileJson2, ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,14 +13,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { OpenAPIConnectionMark } from "./MCPCard";
 
 interface ConnectionOption {
   id: "mcp" | "openapi";
   title: string;
   description: string;
-  icon: typeof Server;
   href: string;
   iconClass: string;
+  icon: ReactNode;
 }
 
 const OPTIONS: ConnectionOption[] = [
@@ -29,18 +30,18 @@ const OPTIONS: ConnectionOption[] = [
     title: "Connect MCP Server",
     description:
       "Create a reusable connection from a Docker image, command, or hosted URL.",
-    icon: Server,
     href: "/mcp-servers/add",
-    iconClass: "bg-blue-50 text-blue-600",
+    iconClass: "bg-primary/5",
+    icon: <img src="/mcp.svg" alt="" className="h-5 w-5 object-contain" />,
   },
   {
     id: "openapi",
     title: "OpenAPI Connection",
     description:
       "Wrap a REST API as agent tools by importing its OpenAPI / Swagger spec.",
-    icon: FileJson2,
     href: "/mcp-servers/add-openapi",
-    iconClass: "bg-orange-50 text-orange-600",
+    iconClass: "bg-zinc-100 dark:bg-zinc-800",
+    icon: <OpenAPIConnectionMark className="h-5 w-5 rounded text-[7px]" />,
   },
 ];
 
@@ -74,7 +75,6 @@ export function AddConnectionDropdown() {
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           {OPTIONS.map((option) => {
-            const Icon = option.icon;
             return (
               <button
                 key={option.id}
@@ -93,7 +93,7 @@ export function AddConnectionDropdown() {
                       option.iconClass
                     )}
                   >
-                    <Icon className="h-5 w-5" />
+                    {option.icon}
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>

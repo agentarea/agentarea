@@ -1,35 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
   Container,
   Copy,
-  Link as LinkIcon,
-  Pencil,
   ExternalLink,
   Github,
   Globe,
+  Link as LinkIcon,
+  Pencil,
   RefreshCw,
   Server,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
+import Table from "@/components/Table/Table";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import Table from "@/components/Table/Table";
-import { ToolsTable } from "../components/ToolsTable";
-import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
-import { MCPInstance, MCPServer } from "../types";
 import { getMCPInstanceHealth } from "@/lib/api";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
+  oauthAuthorizeAction,
 } from "@/lib/server-actions";
+import { ToolsTable } from "../components/ToolsTable";
+import { MCPInstance, MCPServer } from "../types";
+import { getEffectiveMCPVerificationStatus } from "../utils";
 import { verifyInstance } from "./actions";
 import MCPInstancePanel from "./MCPInstancePanel";
 
@@ -55,11 +57,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   };
 
   return (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={handleCopy}
-    >
+    <Button variant="outline" size="xs" onClick={handleCopy}>
       {copied ? (
         <Check className="h-4 w-4 text-green-500" />
       ) : (
@@ -69,7 +67,11 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-export default function MCPInstanceDetail({ instance, serverSpec, memberNames = {} }: Props) {
+export default function MCPInstanceDetail({
+  instance,
+  serverSpec,
+  memberNames = {},
+}: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const router = useRouter();
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
@@ -83,17 +85,42 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   } | null>(null);
 
   // Stuck detection: in_progress verification older than 30s
-  const verification = (instance as any).verification as {
-    status: string;
-    at?: string | null;
-    error?: { message: string; code?: string | null } | null;
-  } | null | undefined;
+  const verification = (instance as any).verification as
+    | {
+        status: string;
+        at?: string | null;
+        error?: { message: string; code?: string | null } | null;
+      }
+    | null
+    | undefined;
+  const effectiveVerificationStatus =
+    getEffectiveMCPVerificationStatus(instance);
 
-  const isStuck = verification?.status === "in_progress" &&
+  const isStuck =
+    verification?.status === "in_progress" &&
     verification.at &&
-    (Date.now() - new Date(verification.at).getTime()) > 30_000;
+    Date.now() - new Date(verification.at).getTime() > 30_000;
 
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isStartingOAuth, setIsStartingOAuth] = useState(false);
+
+  const handleOAuthConnect = async () => {
+    setIsStartingOAuth(true);
+    try {
+      const result = await oauthAuthorizeAction(instance.id);
+      if (result.error || !result.data?.authorize_url) {
+        toast.error(
+          result.error || "OAuth discovery failed — this server may not support OAuth"
+        );
+        return;
+      }
+      window.location.href = result.data.authorize_url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start OAuth flow");
+    } finally {
+      setIsStartingOAuth(false);
+    }
+  };
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -117,7 +144,9 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   const handleSaveConfig = async () => {
     setIsSavingConfig(true);
     try {
-      const { updateMCPServerInstanceAction } = await import("@/lib/server-actions");
+      const { updateMCPServerInstanceAction } = await import(
+        "@/lib/server-actions"
+      );
       await updateMCPServerInstanceAction(instance.id, {
         json_spec: {
           ...instance.json_spec,
@@ -137,7 +166,12 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
     setIsRefreshingTools(true);
     try {
       const { error } = await discoverMCPInstanceTools(instance.id);
-      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to refresh tools");
+      if (error)
+        throw new Error(
+          typeof error === "object" && "detail" in error
+            ? String(error.detail)
+            : "Failed to refresh tools"
+        );
       toast.success("Tools refreshed successfully");
       router.refresh();
     } catch (e) {
@@ -169,10 +203,23 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   }, [verification?.status, router]);
 
   // Derive running state from verification
-  const isVerificationSucceeded = verification?.status === "succeeded";
+  const isVerificationSucceeded = effectiveVerificationStatus === "succeeded";
 
-  // Fetch connection URL when instance is verified (skip for URL-type and bundle-type)
-  const jsonSpecType = (instance.json_spec?.type as string) || "docker";
+  // Derive transport type. After PR #151 transport moved to MCPServer columns,
+  // so instance.json_spec.type is empty for newly-created instances — fall back
+  // to the parent server spec (remote_url → url, cmd → command, else docker).
+  const derivedTransportType = ((): string => {
+    const fromInstance = instance.json_spec?.type as string | undefined;
+    if (fromInstance) return fromInstance;
+    if (serverSpec?.remote_url) return "url";
+    const specJson = (serverSpec as any)?.json_spec as
+      | Record<string, any>
+      | undefined;
+    if (specJson?.type) return specJson.type as string;
+    if ((serverSpec as any)?.cmd) return "command";
+    return "docker";
+  })();
+  const jsonSpecType = derivedTransportType;
   useEffect(() => {
     if (jsonSpecType === "url" || jsonSpecType === "bundle") return;
     if (isVerificationSucceeded && instance.name) {
@@ -197,7 +244,10 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
     }
   }, [isVerificationSucceeded, instance.name, jsonSpecType]);
 
-  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
+  const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
+    string,
+    string
+  >;
   const secretEnvNames = (instance.json_spec?.env_vars ?? []) as string[];
   // Merge non-secret env vars with secret env vars (masked)
   const envVars: Record<string, string> = { ...plainEnvVars };
@@ -208,12 +258,12 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
   }
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
-  const tools = ((instance as any).tools
-    ?? instance.json_spec?.available_tools
-    ?? []) as Array<{name: string; description: string}>;
+  const tools = ((instance as any).tools ??
+    instance.json_spec?.available_tools ??
+    []) as Array<{ name: string; description: string }>;
 
-  // Determine MCP type
-  const specType = (instance.json_spec?.type as string) || "docker";
+  // Determine MCP type (uses derivedTransportType — see above)
+  const specType = derivedTransportType;
   const isUrlType = specType === "url";
   const isCommandType = specType === "command";
   const isBundleType = specType === "bundle";
@@ -225,19 +275,30 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
 
   // URL-type fields
   const endpointUrl = instance.json_spec?.endpoint_url as string | undefined;
-  const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
+  const customHeaders = (instance.json_spec?.headers ?? {}) as Record<
+    string,
+    string
+  >;
 
   // Generate SSE endpoint URL from connection URL
   const bundleEndpointUrl = isBundleType ? `/mcp/${instance.id}` : null;
-  const effectiveConnectionUrl = isUrlType ? endpointUrl : isBundleType ? bundleEndpointUrl : connectionUrl;
-  const sseUrl = effectiveConnectionUrl && !isBundleType ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
+  const effectiveConnectionUrl = isUrlType
+    ? endpointUrl
+    : isBundleType
+      ? bundleEndpointUrl
+      : connectionUrl;
+  const sseUrl =
+    effectiveConnectionUrl && !isBundleType
+      ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse`
+      : null;
 
   // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea.
   // Rendered as a compact top-row so it stays discoverable without dominating the layout.
-  const apiBaseUrl = typeof window !== "undefined"
-    ? (window as any).__ENV__?.CLIENT_API_URL || ""
-    : "";
-  const agentareaProxyUrl = `${apiBaseUrl}/mcp/${instance.id}`;
+  const apiBaseUrl =
+    typeof window !== "undefined"
+      ? (window as any).__ENV__?.CLIENT_API_URL || ""
+      : "";
+  const agentareaProxyUrl = `${apiBaseUrl}/v1/mcp/${instance.id}/mcp`;
 
   const envTableData = Object.entries(envVars).map(([key, value]) => ({
     id: key,
@@ -267,10 +328,15 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
 
             {/* Stuck verification banner */}
             {isStuck && (
-              <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
+              >
                 <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>Verification may be stuck. You can retry manually.</span>
+                  <span>
+                    Verification may be stuck. You can retry manually.
+                  </span>
                 </div>
                 <Button
                   size="xs"
@@ -286,73 +352,117 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
 
             {/* Failed verification banner */}
             {verification?.status === "failed" && verification.error && (
-              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2">
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2"
+              >
                 <div className="flex items-center gap-2 text-sm font-medium text-destructive">
                   <XCircle className="h-4 w-4 shrink-0" />
                   <span>Verification failed</span>
                 </div>
-                <p className="text-sm text-destructive/80">{verification.error.message}</p>
+                <p className="text-sm text-destructive/80">
+                  {verification.error.message}
+                </p>
                 {verification.error.code && (
-                  <p className="font-mono text-xs text-destructive/60">Code: {verification.error.code}</p>
+                  <p className="font-mono text-xs text-destructive/60">
+                    Code: {verification.error.code}
+                  </p>
                 )}
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={handleVerify}
-                  isLoading={isVerifying}
-                  disabled={isVerifying}
-                >
-                  Retry Verification
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {isUrlType && (
+                    <Button
+                      size="xs"
+                      onClick={handleOAuthConnect}
+                      isLoading={isStartingOAuth}
+                      disabled={isStartingOAuth || isVerifying}
+                    >
+                      {instance.auth_config_id
+                        ? "Reconnect with OAuth"
+                        : "Connect with OAuth"}
+                    </Button>
+                  )}
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={handleVerify}
+                    isLoading={isVerifying}
+                    disabled={isVerifying || isStartingOAuth}
+                  >
+                    Retry Verification
+                  </Button>
+                </div>
               </div>
             )}
 
             {/* Spec info — repo, website, description from server spec */}
-            {serverSpec && (() => {
-              const spec = (serverSpec as any).json_spec as Record<string, any> | undefined;
-              const repoUrl = spec?.repository?.url as string | undefined;
-              const repoSource = spec?.repository?.source as string | undefined;
-              const websiteUrl = spec?.websiteUrl as string | undefined;
-              const specTitle = spec?.title || serverSpec.name;
-              const specIcon = spec?.icons?.[0]?.src as string | undefined;
-              const specDesc = serverSpec.description;
+            {serverSpec &&
+              (() => {
+                const spec = (serverSpec as any).json_spec as
+                  | Record<string, any>
+                  | undefined;
+                const repoUrl = spec?.repository?.url as string | undefined;
+                const repoSource = spec?.repository?.source as
+                  | string
+                  | undefined;
+                const websiteUrl = spec?.websiteUrl as string | undefined;
+                const specTitle = spec?.title || serverSpec.name;
+                const specIcon = spec?.icons?.[0]?.src as string | undefined;
+                const specDesc = serverSpec.description;
 
-              if (!repoUrl && !websiteUrl && !specDesc) return null;
+                if (!repoUrl && !websiteUrl && !specDesc) return null;
 
-              return (
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
-                  <div className="flex items-center gap-3">
-                    {specIcon && (
-                      <img src={specIcon} alt="" className="h-8 w-8 rounded object-contain shrink-0" />
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {specIcon && (
+                        <img
+                          src={specIcon}
+                          alt=""
+                          className="h-8 w-8 rounded object-contain shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm">{specTitle}</div>
+                        {specDesc && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {specDesc}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {(repoUrl || websiteUrl) && (
+                      <div className="flex items-center gap-3 pt-1">
+                        {repoUrl && (
+                          <a
+                            href={repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {repoSource === "github" ? (
+                              <Github className="h-3.5 w-3.5" />
+                            ) : (
+                              <Globe className="h-3.5 w-3.5" />
+                            )}
+                            {repoSource === "github" ? "GitHub" : "Repository"}
+                          </a>
+                        )}
+                        {websiteUrl && (
+                          <a
+                            href={websiteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Website
+                          </a>
+                        )}
+                      </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm">{specTitle}</div>
-                      {specDesc && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{specDesc}</p>
-                      )}
-                    </div>
                   </div>
-                  {(repoUrl || websiteUrl) && (
-                    <div className="flex items-center gap-3 pt-1">
-                      {repoUrl && (
-                        <a href={repoUrl} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                          {repoSource === "github" ? <Github className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
-                          {repoSource === "github" ? "GitHub" : "Repository"}
-                        </a>
-                      )}
-                      {websiteUrl && (
-                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          Website
-                        </a>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                );
+              })()}
 
             {/* Connection URL — only shown for non-URL types since URL-type
                 shows its endpoint inside the External Server card below. */}
@@ -397,7 +507,10 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                             readOnly
                             className="font-mono text-sm"
                           />
-                          <CopyButton text={sseUrl} label={t("labels.sseUrl")} />
+                          <CopyButton
+                            text={sseUrl}
+                            label={t("labels.sseUrl")}
+                          />
                         </div>
                       </div>
                     )}
@@ -433,11 +546,15 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                   </div>
                   <div>
                     <span className="text-muted-foreground">Response Time</span>
-                    <p className="mt-0.5 font-mono">{health.response_time_ms}ms</p>
+                    <p className="mt-0.5 font-mono">
+                      {health.response_time_ms}ms
+                    </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Container</span>
-                    <p className="mt-0.5 capitalize">{health.container_status}</p>
+                    <p className="mt-0.5 capitalize">
+                      {health.container_status}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -497,7 +614,11 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                       {t("external.title")}
                     </div>
                     {!isEditingConfig && (
-                      <Button variant="ghost" size="xs" onClick={() => setIsEditingConfig(true)}>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setIsEditingConfig(true)}
+                      >
                         <Pencil className="h-3 w-3 mr-1" /> Edit
                       </Button>
                     )}
@@ -506,7 +627,8 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                     <div className="space-y-3">
                       {Object.entries(editHeaders).map(([key, val]) => {
                         const fieldMeta = (
-                          (serverSpec as any)?.json_spec?.remotes?.[0]?.headers ||
+                          (serverSpec as any)?.json_spec?.remotes?.[0]
+                            ?.headers ||
                           (serverSpec?.env_schema as any[]) ||
                           []
                         ).find((h: any) => h.name === key);
@@ -514,22 +636,44 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                           <div key={key} className="space-y-1">
                             <label className="text-xs font-medium">{key}</label>
                             {fieldMeta?.description && (
-                              <p className="text-xs text-muted-foreground">{fieldMeta.description}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {fieldMeta.description}
+                              </p>
                             )}
                             <Input
-                              type={fieldMeta?.isSecret !== false ? "password" : "text"}
+                              type={
+                                fieldMeta?.isSecret !== false
+                                  ? "password"
+                                  : "text"
+                              }
                               value={val}
                               placeholder={fieldMeta?.placeholder || ""}
-                              onChange={(e) => setEditHeaders((prev) => ({ ...prev, [key]: e.target.value }))}
+                              onChange={(e) =>
+                                setEditHeaders((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
                             />
                           </div>
                         );
                       })}
                       <div className="flex gap-2">
-                        <Button size="sm" onClick={handleSaveConfig} disabled={isSavingConfig}>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveConfig}
+                          disabled={isSavingConfig}
+                        >
                           {isSavingConfig ? "Saving..." : "Save"}
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setIsEditingConfig(false); setEditHeaders(customHeaders); }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setIsEditingConfig(false);
+                            setEditHeaders(customHeaders);
+                          }}
+                        >
                           Cancel
                         </Button>
                       </div>
@@ -543,12 +687,17 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                             readOnly
                             className="font-mono text-sm"
                           />
-                          <CopyButton text={endpointUrl} label={t("labels.connectionUrl")} />
+                          <CopyButton
+                            text={endpointUrl}
+                            label={t("labels.connectionUrl")}
+                          />
                         </div>
                       )}
                       {Object.keys(customHeaders).length > 0 && (
                         <div>
-                          <p className="note mb-1">{t("external.customHeaders")}</p>
+                          <p className="note mb-1">
+                            {t("external.customHeaders")}
+                          </p>
                           {Object.entries(customHeaders).map(([key]) => (
                             <div key={key} className="font-mono text-xs">
                               {key}: ••••••
@@ -594,7 +743,9 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
                     onClick={handleRefreshTools}
                     disabled={isRefreshingTools}
                   >
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                      className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                    />
                     Refresh
                   </Button>
                 </div>
@@ -604,14 +755,18 @@ export default function MCPInstanceDetail({ instance, serverSpec, memberNames = 
 
             {tools.length === 0 && (
               <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                <span className="text-sm text-muted-foreground">No tools discovered yet</span>
+                <span className="text-sm text-muted-foreground">
+                  No tools discovered yet
+                </span>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleRefreshTools}
                   disabled={isRefreshingTools}
                 >
-                  <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                  />
                   Discover Tools
                 </Button>
               </div>

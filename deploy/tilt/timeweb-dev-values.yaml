@@ -1,0 +1,90 @@
+global:
+  deploymentEnv: "dev"
+  version: "tilt-dev"
+  image:
+    registry: ""
+    pullPolicy: Always
+    pullSecrets:
+      - name: timeweb-registry
+  security:
+    podSecurityContext: null
+    containerSecurityContext: null
+  api:
+    publicUrl: ""
+  database:
+    ssl: false
+    sslMode: "disable"
+  temporal:
+    namespace: "default"
+
+backend:
+  image:
+    repository: agentarea/agentarea-api
+    tag: "tilt-dev"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 768Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+frontend:
+  image:
+    repository: agentarea/agentarea-frontend
+    tag: "tilt-dev"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 768Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+worker:
+  image:
+    repository: agentarea/agentarea-worker
+    tag: "tilt-dev"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 768Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+mcpManager:
+  enabled: true
+  image:
+    repository: agentarea/agentarea-mcp-manager
+    tag: "tilt-dev"
+  backend: "kubernetes"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 768Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+eventService:
+  enabled: false
+
+jobs:
+  dbMigration:
+    enabled: false
+
+ingress:
+  enabled: false
+
+rustfs:
+  persistence:
+    enabled: false
+
+postgresql:
+  persistence:
+    enabled: false
+
+valkey:
+  dataStorage:
+    enabled: false
