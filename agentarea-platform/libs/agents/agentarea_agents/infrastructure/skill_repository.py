@@ -4,7 +4,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -68,6 +68,53 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
             List of skills with the specified source type.
         """
         return await self.list_all(source_type=source_type)
+
+    async def list_paginated(
+        self,
+        limit: int,
+        offset: int,
+        search: str | None = None,
+        source_type: str | None = None,
+        has_files: bool | None = None,
+        network_scope: str | None = None,
+        from_registry: bool | None = None,
+    ) -> tuple[list[Skill], int]:
+        """List skills with pagination and optional name/description search."""
+        filters = [self._get_workspace_filter()]
+        if search:
+            search_term = f"%{search.strip()}%"
+            filters.append(
+                or_(
+                    self.model_class.name.ilike(search_term),
+                    self.model_class.description.ilike(search_term),
+                    self.model_class.source_url.ilike(search_term),
+                )
+            )
+        if source_type:
+            filters.append(self.model_class.source_type == source_type)
+        if has_files is True:
+            filters.append(self.model_class.s3_path.is_not(None))
+        elif has_files is False:
+            filters.append(self.model_class.s3_path.is_(None))
+        if network_scope:
+            filters.append(self.model_class.network_scope == network_scope)
+        if from_registry is True:
+            filters.append(self.model_class.registry_item_id.is_not(None))
+        elif from_registry is False:
+            filters.append(self.model_class.registry_item_id.is_(None))
+
+        count_query = select(func.count(self.model_class.id)).where(*filters)
+        total = (await self.session.execute(count_query)).scalar_one()
+
+        query = (
+            select(self.model_class)
+            .where(*filters)
+            .order_by(self.model_class.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all()), total
 
     async def add_agent_association(self, skill_id: UUID, agent_id: UUID) -> None:
         """Add an agent-skill association.

@@ -774,9 +774,59 @@ export function createApiClient(client: Client) {
     },
 
     // Skills API
-    listSkills: async () => {
-      const { data, error } = await client.GET("/v1/skills" as any, {});
-      return { data, error };
+    listSkills: async (options: {
+      page?: number;
+      page_size?: number;
+      search?: string;
+      source_type?: string;
+      has_files?: boolean;
+      network_scope?: string;
+      from_registry?: boolean;
+      paginated?: boolean;
+    } = {}) => {
+      const pageSize = options.page_size || (options.paginated ? 50 : 100);
+      const query = (page: number) => ({
+        page,
+        page_size: pageSize,
+        ...(options.search ? { search: options.search } : {}),
+        ...(options.source_type ? { source_type: options.source_type } : {}),
+        ...(options.has_files !== undefined ? { has_files: options.has_files } : {}),
+        ...(options.network_scope ? { network_scope: options.network_scope } : {}),
+        ...(options.from_registry !== undefined ? { from_registry: options.from_registry } : {}),
+      });
+
+      const { data, error } = await client.GET("/v1/skills" as any, {
+        params: { query: query(options.page || 1) } as any,
+      });
+
+      if (options.paginated) {
+        return { data, error };
+      }
+
+      const items = Array.isArray(data) ? data : (data as any)?.items || [];
+      if (error || Array.isArray(data) || !(data as any)?.has_next) {
+        return { data: items, error };
+      }
+
+      const allItems = [...items];
+      let page = (data as any).page || 1;
+      let hasNext = Boolean((data as any).has_next);
+      while (hasNext) {
+        page += 1;
+        const next = await client.GET("/v1/skills" as any, {
+          params: { query: query(page) } as any,
+        });
+        if (next.error) {
+          return { data: allItems, error: next.error };
+        }
+
+        const nextData = next.data as any;
+        const nextItems = Array.isArray(nextData) ? nextData : nextData?.items || [];
+        allItems.push(...nextItems);
+        hasNext = !Array.isArray(nextData) && Boolean(nextData?.has_next);
+      }
+
+      return { data: allItems, error: null };
     },
 
     getSkill: async (skillId: string) => {
