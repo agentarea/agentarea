@@ -2431,7 +2431,7 @@ export interface paths {
         };
         /**
          * List Skills
-         * @description List all skills in the workspace.
+         * @description List skills in the workspace.
          */
         get: operations["list_skills_v1_skills_get"];
         put?: never;
@@ -5274,6 +5274,19 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedResponse[SkillResponse] */
+        PaginatedResponse_SkillResponse_: {
+            /** Has Next */
+            has_next: boolean;
+            /** Items */
+            items: components["schemas"]["SkillResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
         /** PaymentRecordResponse */
         PaymentRecordResponse: {
             /** Agent Id */
@@ -5875,6 +5888,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Network Scope */
+            network_scope: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
@@ -11871,7 +11886,19 @@ export interface operations {
     };
     list_skills_v1_skills_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by source type */
+                source_type?: string | null;
+                /** @description Filter by package-backed skills */
+                has_files?: boolean | null;
+                /** @description Filter by network scope */
+                network_scope?: string | null;
+                /** @description Filter registry-created skills */
+                from_registry?: boolean | null;
+                page?: number;
+                page_size?: number;
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11884,7 +11911,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SkillResponse"][];
+                    "application/json": components["schemas"]["PaginatedResponse_SkillResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
