@@ -1,27 +1,48 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import SkillsTable from "./SkillsTable";
-import SkillsCard from "./SkillsCard";
+import { Button } from "@/components/ui/button";
 import type { Skill } from "@/types/skill";
+import SkillsCard from "./SkillsCard";
+import SkillsTable from "./SkillsTable";
 
 interface SkillsListProps {
   skills: Skill[];
   viewMode: "grid" | "table";
   searchQuery: string;
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export default function SkillsList({
   skills,
   viewMode,
   searchQuery,
+  page,
+  pageSize,
+  total,
 }: SkillsListProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const t = useTranslations("SkillsPage");
 
   const hasSkills = skills.length > 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const goToPage = (nextPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextPage <= 1) {
+      params.delete("page");
+    } else {
+      params.set("page", String(nextPage));
+    }
+    const query = params.toString();
+    router.push(query ? `/skills?${query}` : "/skills");
+  };
 
   if (!hasSkills && !searchQuery) {
     return (
@@ -61,6 +82,31 @@ export default function SkillsList({
         </div>
       ) : (
         <SkillsTable skills={skills} />
+      )}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(page - 1)}
+            disabled={page <= 1}
+            aria-label={t("pagination.previous")}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {t("pagination.pageStatus", { page, totalPages })}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(page + 1)}
+            disabled={page >= totalPages}
+            aria-label={t("pagination.next")}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       )}
     </>
   );

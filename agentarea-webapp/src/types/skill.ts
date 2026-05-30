@@ -1,4 +1,5 @@
-export type SkillSourceType = 'content' | 'github' | 'upload';
+export type SkillSourceType = "content" | "github" | "zip" | "path";
+export type SkillNetworkScope = "private" | "ingress" | "egress";
 
 export interface Skill {
   id: string;
@@ -7,9 +8,18 @@ export interface Skill {
   source_type: SkillSourceType;
   source_url: string | null;
   has_files: boolean;
+  network_scope: SkillNetworkScope;
   workspace_id: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface PaginatedSkills {
+  items: Skill[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
 }
 
 export interface SkillContent {

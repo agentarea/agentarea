@@ -16,7 +16,7 @@ function getSourceIcon(sourceType: string) {
   switch (sourceType) {
     case "github":
       return <Github className="h-4 w-4" />;
-    case "upload":
+    case "zip":
       return <Upload className="h-4 w-4" />;
     default:
       return <FileCode className="h-4 w-4" />;
@@ -32,8 +32,10 @@ export default function SkillsTable({ skills }: SkillsTableProps) {
     switch (sourceType) {
       case "github":
         return tSource("github");
-      case "upload":
-        return tSource("uploaded");
+      case "zip":
+        return tSource("zip");
+      case "path":
+        return tSource("path");
       default:
         return tSource("content");
     }
