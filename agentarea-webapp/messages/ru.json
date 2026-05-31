@@ -855,7 +855,25 @@
     "source": {
       "github": "GitHub",
       "uploaded": "Загружено",
+      "zip": "Загружено",
+      "path": "Путь",
       "content": "Контент"
+    },
+    "filters": {
+      "source": "Источник",
+      "allSources": "Все источники",
+      "files": "Файлы",
+      "allFiles": "Все файлы",
+      "withFiles": "С файлами",
+      "withoutFiles": "Только контент",
+      "scope": "Область",
+      "allScopes": "Все области",
+      "clear": "Сбросить",
+      "scopeValues": {
+        "private": "Приватная",
+        "ingress": "Входящая",
+        "egress": "Исходящая"
+      }
     },
     "create": {
       "title": "Добавить навык",

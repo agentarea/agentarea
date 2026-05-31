@@ -16,6 +16,11 @@ interface UseInfiniteListOptions<T> {
   }) => Promise<PaginatedResult<T>>;
   pageSize?: number;
   search?: string;
+  /**
+   * Extra serialized state (e.g. active filters) that, when changed,
+   * resets pagination and reloads from page 1 — same as a search change.
+   */
+  resetKey?: string;
 }
 
 interface UseInfiniteListReturn<T> {
@@ -33,6 +38,7 @@ export function useInfiniteList<T>({
   fetchPage,
   pageSize = 50,
   search,
+  resetKey,
 }: UseInfiniteListOptions<T>): UseInfiniteListReturn<T> {
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -83,13 +89,13 @@ export function useInfiniteList<T>({
     [pageSize]
   );
 
-  // Reset and reload when search changes
+  // Reset and reload when search or any filter (resetKey) changes
   useEffect(() => {
     setItems([]);
     setPage(1);
     setHasMore(false);
     loadPage(1, search);
-  }, [search, loadPage]);
+  }, [search, resetKey, loadPage]);
 
   // Load next page when sentinel becomes visible
   const sentinelRef = useCallback(

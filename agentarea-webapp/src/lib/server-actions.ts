@@ -220,8 +220,17 @@ export async function createMCPServerAction(
   return await createMCPServer(server);
 }
 
-export async function listSkillsAction() {
-  return await listSkills();
+export async function listSkillsAction(params?: {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  source_type?: string;
+  has_files?: boolean;
+  network_scope?: string;
+  from_registry?: boolean;
+  paginated?: boolean;
+}) {
+  return await listSkills(params);
 }
 
 export async function createMCPServerInstanceAction(
