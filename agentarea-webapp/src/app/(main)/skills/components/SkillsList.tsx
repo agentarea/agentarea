@@ -1,50 +1,100 @@
 "use client";
 
+import { useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { Button } from "@/components/ui/button";
-import type { Skill } from "@/types/skill";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { listSkillsAction } from "@/lib/server-actions";
+import type { PaginatedSkills, Skill } from "@/types/skill";
 import SkillsCard from "./SkillsCard";
 import SkillsTable from "./SkillsTable";
 
+const PAGE_SIZE = 20;
+
 interface SkillsListProps {
-  skills: Skill[];
   viewMode: "grid" | "table";
   searchQuery: string;
-  page: number;
-  pageSize: number;
-  total: number;
+  sourceType: string;
+  hasFiles?: boolean;
+  networkScope: string;
 }
 
 export default function SkillsList({
-  skills,
   viewMode,
   searchQuery,
-  page,
-  pageSize,
-  total,
+  sourceType,
+  hasFiles,
+  networkScope,
 }: SkillsListProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const t = useTranslations("SkillsPage");
 
+  const fetchPage = useCallback(
+    async (params: { page: number; page_size: number; search?: string }) => {
+      const { data } = await listSkillsAction({
+        page: params.page,
+        page_size: params.page_size,
+        search: params.search,
+        source_type: sourceType || undefined,
+        has_files: hasFiles,
+        network_scope: networkScope || undefined,
+        paginated: true,
+      });
+      const result = (data as PaginatedSkills | null) ?? {
+        items: [],
+        total: 0,
+        has_next: false,
+      };
+      return {
+        items: result.items,
+        total: result.total,
+        has_next: result.has_next,
+      };
+    },
+    [sourceType, hasFiles, networkScope]
+  );
+
+  const {
+    items: skills,
+    isLoading,
+    isFetchingMore,
+    hasMore,
+    error,
+    sentinelRef,
+  } = useInfiniteList<Skill>({
+    fetchPage,
+    pageSize: PAGE_SIZE,
+    search: searchQuery || undefined,
+    resetKey: JSON.stringify({ sourceType, hasFiles, networkScope }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 items-center justify-center text-destructive">
+        {t("error.loadSkills") || "Error loading skills"}
+      </div>
+    );
+  }
+
   const hasSkills = skills.length > 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    Boolean(sourceType) ||
+    hasFiles !== undefined ||
+    Boolean(networkScope);
 
-  const goToPage = (nextPage: number) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (nextPage <= 1) {
-      params.delete("page");
-    } else {
-      params.set("page", String(nextPage));
-    }
-    const query = params.toString();
-    router.push(query ? `/skills?${query}` : "/skills");
-  };
-
-  if (!hasSkills && !searchQuery) {
+  if (!hasSkills && !hasActiveFilters) {
     return (
       <EmptyState
         title={t("noSkills")}
@@ -58,7 +108,7 @@ export default function SkillsList({
     );
   }
 
-  if (!hasSkills && searchQuery) {
+  if (!hasSkills && hasActiveFilters) {
     return (
       <EmptyState
         title={t("noMatchingSkills", { query: searchQuery })}
@@ -83,29 +133,12 @@ export default function SkillsList({
       ) : (
         <SkillsTable skills={skills} />
       )}
-      {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => goToPage(page - 1)}
-            disabled={page <= 1}
-            aria-label={t("pagination.previous")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {t("pagination.pageStatus", { page, totalPages })}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => goToPage(page + 1)}
-            disabled={page >= totalPages}
-            aria-label={t("pagination.next")}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+
+      {hasMore && (
+        <div ref={sentinelRef} className="flex justify-center py-6">
+          {isFetchingMore && (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          )}
         </div>
       )}
     </>

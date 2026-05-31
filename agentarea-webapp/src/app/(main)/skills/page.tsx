@@ -1,13 +1,11 @@
-import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import CreateSkillButton from "./components/CreateSkillButton";
-import SkillsContent from "./components/SkillsContent";
 import SkillsFilters from "./components/SkillsFilters";
 import SkillsHeaderTabs from "./components/SkillsHeaderTabs";
+import SkillsList from "./components/SkillsList";
 
 export const metadata = {
   title: "Skills",
@@ -33,11 +31,6 @@ export default async function SkillsPage({
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
       : "";
-  const rawPage =
-    typeof resolvedSearchParams.page === "string"
-      ? Number.parseInt(resolvedSearchParams.page, 10)
-      : 1;
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const sourceType =
     typeof resolvedSearchParams.source_type === "string"
       ? resolvedSearchParams.source_type
@@ -66,37 +59,25 @@ export default async function SkillsPage({
       }}
       subheader={
         <>
-          <SearchInput
-            urlParamName="search"
-            urlPath="/skills"
-            resetParamNames={["page"]}
-          />
-          <SkillsFilters
-            sourceType={sourceType}
-            filesFilter={filesFilter}
-            networkScope={networkScope}
-          />
-          <SkillsHeaderTabs currentTab={viewMode} />
+          <SearchInput urlParamName="search" urlPath="/skills" />
+          <div className="flex shrink-0 items-center gap-3">
+            <SkillsFilters
+              sourceType={sourceType}
+              filesFilter={filesFilter}
+              networkScope={networkScope}
+            />
+            <SkillsHeaderTabs currentTab={viewMode} />
+          </div>
         </>
       }
     >
-      <Suspense
-        key={`${viewMode}-${searchQuery}-${sourceType}-${filesFilter}-${networkScope}-${page}`}
-        fallback={
-          <div className="flex h-64 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
-        <SkillsContent
-          viewMode={viewMode}
-          searchQuery={searchQuery}
-          page={page}
-          sourceType={sourceType}
-          hasFiles={hasFiles}
-          networkScope={networkScope}
-        />
-      </Suspense>
+      <SkillsList
+        viewMode={viewMode}
+        searchQuery={searchQuery}
+        sourceType={sourceType}
+        hasFiles={hasFiles}
+        networkScope={networkScope}
+      />
     </ContentBlock>
   );
 }
