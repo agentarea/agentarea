@@ -18,7 +18,7 @@ class AuthSettings(BaseAppSettings):
     """
 
     KRATOS_JWKS_B64: str
-    KRATOS_ISSUER: str = "https://agentarea.dev"
+    KRATOS_ISSUER: str = "http://localhost:4433"
     KRATOS_AUDIENCE: str = "agentarea-api"
 
 
