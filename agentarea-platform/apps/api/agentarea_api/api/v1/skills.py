@@ -79,6 +79,7 @@ class SkillResponse(BaseModel):
 
     id: str
     name: str
+    slug: str
     description: str | None
     source_type: str
     source_url: str | None
@@ -98,6 +99,7 @@ class SkillResponse(BaseModel):
         return cls(
             id=str(skill.id),
             name=skill.name,
+            slug=skill.slug,
             description=skill.description,
             source_type=skill.source_type,
             source_url=skill.source_url,
