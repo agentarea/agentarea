@@ -798,11 +798,7 @@ class AgentExecutionWorkflow:
             # revealed list, and warn — otherwise the LLM would see a tool it
             # can no longer execute.
             pool_names = {c["name"] for c in self.state.searchable_tool_pool}
-            stale = [
-                name
-                for name in self.state.revealed_openapi_tools
-                if name not in pool_names
-            ]
+            stale = [name for name in self.state.revealed_openapi_tools if name not in pool_names]
             if stale:
                 workflow.logger.warning(
                     "Dropping %d stale revealed OpenAPI tool(s) on continue-as-new: %s",
@@ -2174,9 +2170,7 @@ class AgentExecutionWorkflow:
             context_window=self.state.context_window,
             iteration=self.state.current_iteration,
         )
-        result = self._disclosure_policy.reveal(
-            RevealRequest(tool_names=requested), pool, ctx
-        )
+        result = self._disclosure_policy.reveal(RevealRequest(tool_names=requested), pool, ctx)
 
         # Dedup against already-loaded tools by function name.
         existing_names = {
@@ -2199,8 +2193,7 @@ class AgentExecutionWorkflow:
         self.state.messages.append(
             Message(
                 role="tool",
-                content=result.message
-                or f"Loaded {len(result.matched_names)} OpenAPI operations.",
+                content=result.message or f"Loaded {len(result.matched_names)} OpenAPI operations.",
                 tool_call_id=tool_call.id,
                 name="load_tools",
             )

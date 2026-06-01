@@ -29,9 +29,7 @@ def test_returns_function_definition_for_known_name():
 
 def test_returns_none_for_unknown_name():
     op = {"name": "listCustomers", "description": "x", "inputSchema": {"type": "object"}}
-    assert (
-        OpenAPIToolFactory.get_tool_definition_by_name(_conn(op), "createInvoice") is None
-    )
+    assert OpenAPIToolFactory.get_tool_definition_by_name(_conn(op), "createInvoice") is None
 
 
 def test_returns_none_when_connection_has_no_available_tools():
@@ -51,9 +49,7 @@ def test_matches_slugified_name_too():
         "description": "Slashed and spaced operation name.",
         "inputSchema": {"type": "object"},
     }
-    result = OpenAPIToolFactory.get_tool_definition_by_name(
-        _conn(op), "List_items___orders"
-    )
+    result = OpenAPIToolFactory.get_tool_definition_by_name(_conn(op), "List_items___orders")
     assert result is not None
     assert result["function"]["name"] == "List_items___orders"
 

@@ -220,9 +220,7 @@ class ToolManager:
                         connection_ref, allowed_names, self._openapi_connection_service
                     )
                     for openapi_tool in openapi_tools:
-                        result.explicit_tools.append(
-                            openapi_tool.get_openai_function_definition()
-                        )
+                        result.explicit_tools.append(openapi_tool.get_openai_function_definition())
 
             else:
                 logger.warning(
@@ -281,8 +279,7 @@ class ToolManager:
                 "function": {
                     "name": slugified,
                     "description": description,
-                    "parameters": op.get("inputSchema")
-                    or {"type": "object", "properties": {}},
+                    "parameters": op.get("inputSchema") or {"type": "object", "properties": {}},
                 },
             }
             entries.append(

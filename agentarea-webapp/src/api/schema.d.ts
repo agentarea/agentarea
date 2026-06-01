@@ -6262,6 +6262,8 @@ export interface components {
             description_override?: string | null;
             /** Disabled Methods */
             disabled_methods?: string[] | null;
+            /** Load Mode */
+            load_mode?: ("explicit" | "searchable") | null;
             /** Openapi Connection Id */
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */

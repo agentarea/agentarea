@@ -131,9 +131,7 @@ def test_named_lookup_reveal_matches_known_names():
 
 def test_named_lookup_reveal_reports_unknown_with_valid_preview():
     pool = [_candidate("known")]
-    r = NamedLookupPolicy().reveal(
-        RevealRequest(tool_names=["known", "missing"]), pool, CTX
-    )
+    r = NamedLookupPolicy().reveal(RevealRequest(tool_names=["known", "missing"]), pool, CTX)
     assert r.matched_names == ["known"]
     assert r.unknown_names == ["missing"]
     assert "Unknown names: ['missing']" in r.message
@@ -142,9 +140,7 @@ def test_named_lookup_reveal_reports_unknown_with_valid_preview():
 
 def test_named_lookup_reveal_caps_valid_examples_at_20():
     pool = [_candidate(f"op_{i:03d}") for i in range(50)]
-    r = NamedLookupPolicy().reveal(
-        RevealRequest(tool_names=["nope"]), pool, CTX
-    )
+    r = NamedLookupPolicy().reveal(RevealRequest(tool_names=["nope"]), pool, CTX)
     assert r.unknown_names == ["nope"]
     assert "more available" in r.message
 
