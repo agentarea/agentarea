@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getAgent, getAgentTaskById } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import AgentTaskClient from "./AgentTaskClient";
 
 export const metadata: Metadata = {
@@ -20,12 +20,8 @@ export default async function AgentTaskPage({ params }: Props) {
     getAgentTaskById(id, taskId),
   ]);
 
-  if (!agentResponse.data) {
-    notFound();
-  }
-
-  const agent = agentResponse.data;
-  const task = taskResponse.data;
+  const agent = requireApiData(agentResponse, "agent");
+  const task = requireApiData(taskResponse, "task");
 
   return <AgentTaskClient agent={agent} taskId={taskId} task={task} />;
 }

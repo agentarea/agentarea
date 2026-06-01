@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import ProviderConfigFormWrapper from "../../create/components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderConfig } from "@/lib/api";
+import { notFoundOnApi404 } from "@/lib/server-resource";
+import ProviderConfigFormWrapper from "../../create/components/ProviderConfigFormWrapper";
 
 export const metadata: Metadata = {
   title: "Edit Provider Config",
@@ -28,7 +28,8 @@ export default async function EditProviderConfigPage({
     providerConfig = await getProviderConfig(providerConfigId);
   } catch (error) {
     console.error("Failed to load provider config:", error);
-    notFound();
+    notFoundOnApi404(error);
+    throw error;
   }
 
   return (
@@ -67,4 +68,3 @@ export default async function EditProviderConfigPage({
     </ContentBlock>
   );
 }
-

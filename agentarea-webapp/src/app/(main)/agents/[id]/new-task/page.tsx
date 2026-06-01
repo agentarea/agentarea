@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listModelInstances } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import AgentNewTask from "./components/AgentNewTask";
 
 export const metadata: Metadata = {
@@ -19,11 +19,8 @@ export default async function AgentNewTaskPage({ params }: Props) {
     getAgent(id),
     listModelInstances(),
   ]);
-  if (!agentResponse.data) {
-    notFound();
-  }
 
-  const agent = agentResponse.data;
+  const agent = requireApiData(agentResponse, "agent");
   const modelInstances = modelInstancesResponse.data || [];
   const model = modelInstances.find((m: any) => m.id === agent.model_id);
   const model_info = model

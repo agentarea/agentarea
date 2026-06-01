@@ -2,21 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileJson2, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { FileJson2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatApiError } from "@/lib/api-errors";
 import {
-  getOpenAPIConnectionAction as getOpenAPIConnection,
   deleteOpenAPIConnectionAction as deleteOpenAPIConnection,
   discoverOpenAPIToolsAction as discoverOpenAPITools,
+  getOpenAPIConnectionAction as getOpenAPIConnection,
   updateOpenAPIConnectionAction as updateOpenAPIConnection,
 } from "@/lib/server-actions";
-import { OpenAPIConnection } from "../../types";
-import { ToolsTable } from "../../components/ToolsTable";
-import { CustomHeadersList } from "../../components/CustomHeadersList";
 import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
+import { CustomHeadersList } from "../../components/CustomHeadersList";
+import { ToolsTable } from "../../components/ToolsTable";
+import { OpenAPIConnection } from "../../types";
 
 export default function OpenAPIConnectionDetailPage() {
   const params = useParams();
@@ -34,15 +35,21 @@ export default function OpenAPIConnectionDetailPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data, error: loadError } = await getOpenAPIConnection(connectionId);
-        if (loadError) {
-          setError((loadError as any)?.detail || "Failed to load connection");
+        const result = await getOpenAPIConnection(connectionId);
+        if (result.error || !result.data) {
+          setError(
+            result.status === 404
+              ? "Connection not found"
+              : `Failed to load connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+          );
         } else {
-          setConnection(data as any);
+          setConnection(result.data as any);
         }
       } catch (err) {
         console.error("Failed to load OpenAPI connection", err);
-        setError(err instanceof Error ? err.message : "Failed to load connection");
+        setError(
+          err instanceof Error ? err.message : "Failed to load connection"
+        );
       } finally {
         setLoading(false);
       }
@@ -59,11 +66,15 @@ export default function OpenAPIConnectionDetailPage() {
         setError((discoverError as any)?.detail || "Failed to discover tools");
         return;
       }
-      const { data, error: loadError } = await getOpenAPIConnection(connectionId);
-      if (loadError) {
-        setError((loadError as any)?.detail || "Failed to reload connection");
+      const result = await getOpenAPIConnection(connectionId);
+      if (result.error || !result.data) {
+        setError(
+          result.status === 404
+            ? "Connection not found"
+            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+        );
       } else {
-        setConnection(data as any);
+        setConnection(result.data as any);
       }
     } catch (err) {
       console.error("Failed to discover tools", err);
@@ -84,11 +95,15 @@ export default function OpenAPIConnectionDetailPage() {
         setError((saveError as any)?.detail || "Failed to save headers");
         return;
       }
-      const { data, error: loadError } = await getOpenAPIConnection(connectionId);
-      if (loadError) {
-        setError((loadError as any)?.detail || "Failed to reload connection");
+      const result = await getOpenAPIConnection(connectionId);
+      if (result.error || !result.data) {
+        setError(
+          result.status === 404
+            ? "Connection not found"
+            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+        );
       } else {
-        setConnection(data as any);
+        setConnection(result.data as any);
         setEditingHeaders(false);
       }
     } catch (err) {
@@ -104,7 +119,8 @@ export default function OpenAPIConnectionDetailPage() {
     setDeleting(true);
     setError(null);
     try {
-      const { error: deleteError } = await deleteOpenAPIConnection(connectionId);
+      const { error: deleteError } =
+        await deleteOpenAPIConnection(connectionId);
       if (deleteError) {
         setError((deleteError as any)?.detail || "Failed to delete connection");
         setDeleting(false);
@@ -114,7 +130,9 @@ export default function OpenAPIConnectionDetailPage() {
       router.refresh();
     } catch (err) {
       console.error("Failed to delete connection", err);
-      setError(err instanceof Error ? err.message : "Failed to delete connection");
+      setError(
+        err instanceof Error ? err.message : "Failed to delete connection"
+      );
       setDeleting(false);
     }
   };
@@ -132,7 +150,11 @@ export default function OpenAPIConnectionDetailPage() {
   }
 
   if (!connection) {
-    return <div className="p-8 text-center text-muted-foreground">Connection not found</div>;
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        Connection not found
+      </div>
+    );
   }
 
   return (
@@ -147,12 +169,24 @@ export default function OpenAPIConnectionDetailPage() {
         controls: (
           <div className="flex gap-2">
             {connection.spec_url && (
-              <Button size="xs" variant="outline" onClick={handleDiscover} disabled={discovering}>
-                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${discovering ? "animate-spin" : ""}`} />
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={handleDiscover}
+                disabled={discovering}
+              >
+                <RefreshCw
+                  className={`mr-1 h-3.5 w-3.5 ${discovering ? "animate-spin" : ""}`}
+                />
                 {discovering ? "Refreshing..." : "Refresh from Spec URL"}
               </Button>
             )}
-            <Button size="xs" variant="destructive" onClick={handleDelete} disabled={deleting}>
+            <Button
+              size="xs"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
               <Trash2 className="mr-1 h-3.5 w-3.5" />
               {deleting ? "Deleting..." : "Delete"}
             </Button>
@@ -174,12 +208,22 @@ export default function OpenAPIConnectionDetailPage() {
             <p className="text-xs text-muted-foreground">Type</p>
             <div className="mt-1 flex items-center gap-1.5">
               <FileJson2 className="h-4 w-4 text-orange-500" />
-              <Badge variant="outline" className="text-orange-600 border-orange-300">OpenAPI</Badge>
+              <Badge
+                variant="outline"
+                className="text-orange-600 border-orange-300"
+              >
+                OpenAPI
+              </Badge>
             </div>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Status</p>
-            <Badge variant={connection.status === "active" ? "success" : "destructive"} className="mt-1">
+            <Badge
+              variant={
+                connection.status === "active" ? "success" : "destructive"
+              }
+              className="mt-1"
+            >
               {connection.status}
             </Badge>
           </div>
@@ -189,7 +233,9 @@ export default function OpenAPIConnectionDetailPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Spec URL</p>
-            <p className="mt-1 font-mono text-sm truncate">{connection.spec_url || "—"}</p>
+            <p className="mt-1 font-mono text-sm truncate">
+              {connection.spec_url || "—"}
+            </p>
           </div>
         </div>
 
@@ -214,17 +260,19 @@ export default function OpenAPIConnectionDetailPage() {
                   onClick={() => setEditingHeaders(true)}
                 >
                   <Pencil className="mr-1 h-3 w-3" />
-                  {connection.custom_headers && connection.custom_headers.length > 0
+                  {connection.custom_headers &&
+                  connection.custom_headers.length > 0
                     ? "Edit"
                     : "Add"}
                 </Button>
               </div>
-              {connection.custom_headers && connection.custom_headers.length > 0 ? (
+              {connection.custom_headers &&
+              connection.custom_headers.length > 0 ? (
                 <CustomHeadersList headers={connection.custom_headers} />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  No custom headers. Click Add to set Authorization or any
-                  other request header your provider needs.
+                  No custom headers. Click Add to set Authorization or any other
+                  request header your provider needs.
                 </p>
               )}
             </>
