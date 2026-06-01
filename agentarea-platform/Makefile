@@ -29,8 +29,7 @@ test:
 
 lint:
 	uv run ruff check
-	# TODO: Re-enable pyright after fixing type errors
-	# uv run pyright
+	uv run pyright
 
 format:
 	uv run ruff format
