@@ -564,10 +564,10 @@ class TriggerService:
                 EventEnvelope(
                     event_type="trigger.auto_disabled",
                     data={
-                    "trigger_id": str(trigger_id),
-                    "consecutive_failures": consecutive_failures,
-                    "disabled_at": datetime.utcnow().isoformat(),
-                    "reason": "consecutive_failures_threshold_exceeded",
+                        "trigger_id": str(trigger_id),
+                        "consecutive_failures": consecutive_failures,
+                        "disabled_at": datetime.utcnow().isoformat(),
+                        "reason": "consecutive_failures_threshold_exceeded",
                     },
                 )
             )

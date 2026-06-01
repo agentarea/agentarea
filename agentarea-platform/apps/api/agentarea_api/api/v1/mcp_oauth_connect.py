@@ -46,6 +46,7 @@ class _NoopEventBroker(EventBroker):
     async def publish(self, event: Any) -> None:
         return None
 
+
 # Protected router (requires auth) — /authorize needs user context
 router = APIRouter(prefix="/mcp-oauth", tags=["mcp-oauth-connect"])
 

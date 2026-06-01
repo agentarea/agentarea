@@ -168,11 +168,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             # Webhook-specific fields
             webhook_id=trigger_data.webhook_id,
             allowed_methods=trigger_data.allowed_methods,
-            webhook_type=(
-                _value(trigger_data.webhook_type)
-            )
-            if trigger_data.webhook_type
-            else None,
+            webhook_type=(_value(trigger_data.webhook_type)) if trigger_data.webhook_type else None,
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
         )

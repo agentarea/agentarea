@@ -370,9 +370,7 @@ class TemporalScheduleManager:
                         "actual_time": getattr(action, "actual_time", None).isoformat()
                         if getattr(action, "actual_time", None)
                         else None,
-                        "start_workflow_result": str(
-                            getattr(action, "start_workflow_result", "")
-                        )
+                        "start_workflow_result": str(getattr(action, "start_workflow_result", ""))
                         if getattr(action, "start_workflow_result", None)
                         else None,
                     }

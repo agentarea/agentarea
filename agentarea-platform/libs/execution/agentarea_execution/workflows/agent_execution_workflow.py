@@ -498,7 +498,7 @@ class AgentExecutionWorkflow:
 
             for tool in tools_list or []:
                 try:
-                        available_tools.append(cast(Any, tool).model_dump())  # Pydantic ToolDefinition
+                    available_tools.append(cast(Any, tool).model_dump())  # Pydantic ToolDefinition
                 except AttributeError:
                     if isinstance(tool, dict):
                         available_tools.append(tool)

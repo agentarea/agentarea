@@ -269,7 +269,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
             execution_time_seconds = _duration_seconds(getattr(description, "execution_time", None))
             if getattr(description, "execution_time", None) and execution_time_seconds is None:
-                logger.warning(f"Unexpected execution_time type: {type(description.execution_time)}")
+                logger.warning(
+                    f"Unexpected execution_time type: {type(description.execution_time)}"
+                )
 
             # Get result if workflow is completed
             result = None

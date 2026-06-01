@@ -99,7 +99,9 @@ class ToolExecutor:
                 if callable(fn):
                     try:
                         call_result = fn(server_instance_id)
-                        tools_payload = await call_result if isawaitable(call_result) else call_result
+                        tools_payload = (
+                            await call_result if isawaitable(call_result) else call_result
+                        )
                         if tools_payload is not None:
                             break
                     except Exception as e:

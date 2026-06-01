@@ -475,7 +475,9 @@ class ToolManager:
             tool_type = tool.get("type")
             tool_name = tool.get("name")
             if not isinstance(tool_name, str) or not tool_name:
-                logger.warning("Skipping tool provider with missing name", extra={"tool_config": tool})
+                logger.warning(
+                    "Skipping tool provider with missing name", extra={"tool_config": tool}
+                )
                 continue
             settings = tool.get("settings", {})
             if not isinstance(settings, dict):

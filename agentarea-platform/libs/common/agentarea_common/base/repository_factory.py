@@ -35,4 +35,6 @@ class RepositoryFactory:
         Returns:
             Repository instance with user context injected
         """
-        return cast(T, cast(Any, repository_class)(session=self.session, user_context=self.user_context))
+        return cast(
+            T, cast(Any, repository_class)(session=self.session, user_context=self.user_context)
+        )

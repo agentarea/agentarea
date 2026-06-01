@@ -153,6 +153,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
         from agentarea_mcp.domain import auth_models
         from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+
         _ = auth_models.MCPAuthConfig
 
         try:

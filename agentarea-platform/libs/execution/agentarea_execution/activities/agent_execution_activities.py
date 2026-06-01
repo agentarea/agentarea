@@ -98,6 +98,7 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
         return []
     return [item for item in value if isinstance(item, dict)]
 
+
 # Prometheus counters for MCP dispatch telemetry
 _mcp_last_dispatch_dropped_total = _make_counter(
     "mcp_last_dispatch_dropped_total",

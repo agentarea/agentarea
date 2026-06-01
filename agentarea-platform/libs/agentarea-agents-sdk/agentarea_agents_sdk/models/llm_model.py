@@ -439,7 +439,6 @@ class LLMModel:
 
         response_usage = getattr(response, "usage", None)
         if response_usage:
-
             # Update usage statistics
             usage = LLMUsage(
                 prompt_tokens=getattr(response_usage, "prompt_tokens", 0),

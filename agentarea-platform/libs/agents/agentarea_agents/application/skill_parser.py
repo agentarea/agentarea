@@ -95,9 +95,11 @@ class SkillParser:
 
             description_value = post.get("description")
             allowed_tools_value = post.get("allowed-tools", [])
-            allowed_tools = [
-                str(tool) for tool in allowed_tools_value
-            ] if isinstance(allowed_tools_value, list) else []
+            allowed_tools = (
+                [str(tool) for tool in allowed_tools_value]
+                if isinstance(allowed_tools_value, list)
+                else []
+            )
 
             metadata = SkillMetadata(
                 name=name,

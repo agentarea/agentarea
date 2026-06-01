@@ -46,7 +46,9 @@ class AuditEventResponse(BaseModel):
             action=event.action,
             resource_type=event.resource_type,
             resource_id=event.resource_id,
-            changes=cast(list[dict] | None, event.changes if isinstance(event.changes, list) else None),
+            changes=cast(
+                list[dict] | None, event.changes if isinstance(event.changes, list) else None
+            ),
             event_metadata=event.event_metadata,
         )
 

@@ -110,11 +110,7 @@ class AgentResponse(BaseModel):
         if agent.tools:
             agent_tools = cast(Any, agent.tools)
             if isinstance(agent_tools, list):
-                tools = [
-                    ToolConfigYAML(**tool)
-                    for tool in agent_tools
-                    if isinstance(tool, dict)
-                ]
+                tools = [ToolConfigYAML(**tool) for tool in agent_tools if isinstance(tool, dict)]
             elif isinstance(agent_tools, dict):
                 tools = []
 
