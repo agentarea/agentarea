@@ -21,7 +21,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "pp1_add_agent_mcp_slugs"
-down_revision: str | None = "oo1_add_workspace_invitations"
+down_revision: str | None = "rr1_drop_workspace_settings"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
