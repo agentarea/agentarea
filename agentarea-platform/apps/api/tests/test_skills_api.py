@@ -52,6 +52,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     skill_one = MagicMock()
     skill_one.id = uuid4()
     skill_one.name = "Test Skill"
+    skill_one.slug = "test-skill"
     skill_one.description = "Test Description"
     skill_one.source_type = "github"
     skill_one.source_url = "https://github.com/owner/repo"
@@ -64,6 +65,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     skill_two = MagicMock()
     skill_two.id = uuid4()
     skill_two.name = "Second Skill"
+    skill_two.slug = "second-skill"
     skill_two.description = "Second Description"
     skill_two.source_type = "zip"
     skill_two.source_url = None
@@ -83,6 +85,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     first = data[0]
     second = data[1]
     assert first["name"] == "Test Skill"
+    assert first["slug"] == "test-skill"
     assert first["description"] == "Test Description"
     assert first["source_type"] == "github"
     assert first["source_url"] == "https://github.com/owner/repo"
@@ -90,6 +93,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     assert first["workspace_id"] == "test_workspace"
     assert "content" not in first
     assert second["name"] == "Second Skill"
+    assert second["slug"] == "second-skill"
     assert second["description"] == "Second Description"
     assert second["source_type"] == "zip"
     assert second["source_url"] is None

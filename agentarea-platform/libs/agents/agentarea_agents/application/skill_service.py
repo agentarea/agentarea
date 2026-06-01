@@ -11,6 +11,7 @@ from uuid import UUID
 from agentarea_common.audit import audited
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
+from agentarea_common.utils.slug import generate_slug
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType
@@ -78,6 +79,22 @@ class SkillService:
         """Get skill repository from factory."""
         return self.repository_factory.create_repository(SkillRepository)
 
+    async def _resolve_unique_slug(self, name: str) -> str:
+        """Generate a workspace-unique slug from ``name``.
+
+        Derived once at creation and never re-derived on rename. Collisions
+        within the workspace are disambiguated with ``-2``, ``-3``, … suffixes.
+        """
+        repo = self._get_repository()
+        base = generate_slug(name)
+        if await repo.get_by_slug(base) is None:
+            return base
+        for suffix in range(2, 1000):
+            candidate = f"{base}-{suffix}"
+            if await repo.get_by_slug(candidate) is None:
+                return candidate
+        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
     @audited("skill.create", resource_type="skill")
     async def create_from_content(
         self,
@@ -103,6 +120,7 @@ class SkillService:
         # Create skill
         skill = await repo.create(
             name=skill_name,
+            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.CONTENT.value,
             content=payload.content,
@@ -146,6 +164,7 @@ class SkillService:
         # Create skill record first to get ID
         skill = await repo.create(
             name=skill_name,
+            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.ZIP.value,
             content=parsed.raw_content,
@@ -210,6 +229,7 @@ class SkillService:
         # Create skill record
         skill = await repo.create(
             name=skill_name,
+            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.GITHUB.value,
             content=parsed.raw_content,
@@ -296,6 +316,7 @@ class SkillService:
             # Create skill record
             skill = await repo.create(
                 name=skill_name,
+                slug=await self._resolve_unique_slug(skill_name),
                 description=skill_description,
                 source_type=SkillSourceType.PATH.value,
                 content=content,
@@ -344,6 +365,18 @@ class SkillService:
         """
         repo = self._get_repository()
         return await repo.get_by_name(name)
+
+    async def get_by_slug(self, slug: str) -> Skill | None:
+        """Get a skill by workspace-scoped slug.
+
+        Args:
+            slug: The slug.
+
+        Returns:
+            Skill entity or None if not found.
+        """
+        repo = self._get_repository()
+        return await repo.get_by_slug(slug)
 
     async def list(self) -> list[Skill]:
         """List all skills in the workspace.

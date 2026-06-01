@@ -38,6 +38,22 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_by_slug(self, slug: str) -> Skill | None:
+        """Get a skill by workspace-scoped slug.
+
+        Args:
+            slug: The slug to search for.
+
+        Returns:
+            The skill if found, None otherwise.
+        """
+        query = select(self.model_class).where(
+            self.model_class.slug == slug,
+            self._get_workspace_filter(),
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.
 

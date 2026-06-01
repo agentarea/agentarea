@@ -397,8 +397,10 @@ class RegistryService:
         if not self.skill_repo:
             raise ValueError("Skill repository not available")
         spec = item.spec or {}
+        slug = await self._resolve_unique_slug(self.skill_repo, item.name)
         skill = await self.skill_repo.create(
             name=item.name,
+            slug=slug,
             description=item.description,
             source_type=spec.get("source_type", "content"),
             content=spec.get("content"),
