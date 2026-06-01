@@ -79,6 +79,19 @@ Consequences:
 - The ad-hoc per-tool `requires_user_confirmation` and `goal.requires_human_approval`
   no longer drive approval. The policy engine is the only trigger.
 
+**Who may approve — `ApprovalPolicy.approvers`.** Approvers are stored as
+**Keto-style subject refs** (`user:<id>`, `group:<id>`, or a userset
+`<type>:<id>#<relation>`) — not raw ids — so the data is ReBAC/Keto-native from
+day one and maps 1:1 to Keto subjects with zero migration when that engine lands.
+Resolution is staged: only direct `user:<id>` subjects are resolved now
+(`caller_can_approve` / `is_approver`); group/role/userset subjects are accepted
+and stored but **not resolved** until a membership/roles model exists. Empty
+`approvers` is the soft default (any workspace member) — the zero-trust posture
+for the empty case is tracked in issue #198. Enforcement is **authoritative in
+the workflow** `resolve_escalation` signal (`resolved_by` checked against the
+escalation's approvers); the API forwards the caller's id. 1-of-N (any listed
+approver). The `HUMAN_APPROVAL_REQUESTED` event carries `approvers` for routing.
+
 ### 4. Budget single source of truth
 
 The loop-level PEP (`BudgetTracker`) and the call-level PEP (`CostBudgetGuard`)

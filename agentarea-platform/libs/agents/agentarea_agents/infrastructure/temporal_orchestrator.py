@@ -279,14 +279,21 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return False
 
     async def resolve_escalation_workflow(
-        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+        self,
+        execution_id: str,
+        escalation_id: str,
+        approved: bool,
+        comment: str = "",
+        resolved_by: str = "",
     ) -> bool:
         """Resolve a tool escalation in a Temporal workflow using signals."""
         client = await self._get_client()
 
         try:
             handle = client.get_workflow_handle(execution_id)
-            await handle.signal("resolve_escalation", args=[escalation_id, approved, comment])
+            await handle.signal(
+                "resolve_escalation", args=[escalation_id, approved, comment, resolved_by]
+            )
             logger.info(f"Resolved escalation {escalation_id} in workflow: {execution_id}")
             return True
 

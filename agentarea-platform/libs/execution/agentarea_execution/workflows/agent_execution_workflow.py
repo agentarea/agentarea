@@ -38,6 +38,8 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolCallExtractor,
         build_output_summary,
+        caller_can_approve,
+        policy_approvers,
         policy_requires_approval,
         resolve_effective_budget,
     )
@@ -190,13 +192,27 @@ class AgentExecutionWorkflow:
 
     @workflow.signal
     async def resolve_escalation(
-        self, escalation_id: str, approved: bool, comment: str = ""
+        self, escalation_id: str, approved: bool, comment: str = "", resolved_by: str = ""
     ) -> None:
-        """Signal to approve or deny a specific tool escalation."""
+        """Signal to approve or deny a specific tool escalation.
+
+        Authoritative authorization point: only a designated approver (per the
+        task's ApprovalPolicy) may resolve. Unauthorized signals are ignored so
+        the API/activity boundary cannot bypass policy.
+        """
         if escalation_id in self._pending_escalations:
             esc = self._pending_escalations[escalation_id]
+
+            if not caller_can_approve(esc.approvers, resolved_by):
+                workflow.logger.warning(
+                    f"Unauthorized escalation resolution for {escalation_id} by "
+                    f"'{resolved_by or 'unknown'}'; approvers={esc.approvers}. Ignored."
+                )
+                return
+
             esc.resolved = True
             esc.approved = approved
+            esc.approved_by = resolved_by or None
             esc.deny_comment = comment if not approved else None
 
             # Emit resolved event so history load knows the outcome
@@ -211,12 +227,13 @@ class AgentExecutionWorkflow:
                     "tool_call_id": esc.tool_call_id,
                     "approved": approved,
                     "comment": comment,
+                    "approved_by": resolved_by or None,
                     "iteration": self.state.current_iteration,
                 },
             )
             workflow.logger.info(
-                f"Escalation {escalation_id} resolved: approved={approved}"
-                + (f" comment='{comment}'" if comment else "")
+                f"Escalation {escalation_id} resolved by '{resolved_by or 'unknown'}': "
+                f"approved={approved}" + (f" comment='{comment}'" if comment else "")
             )
 
     @workflow.signal
@@ -1601,6 +1618,7 @@ class AgentExecutionWorkflow:
                 tool_call_id=tool_call.id,
                 tool_name=tool_name,
                 tool_args=tool_args,
+                approvers=policy_approvers(self.state.effective_policy),
             )
             self._pending_escalations[escalation_id] = escalation
 
@@ -1629,6 +1647,7 @@ class AgentExecutionWorkflow:
                     "tool_call_id": tool_call.id,
                     "iteration": self.state.current_iteration,
                     "arguments": tool_args,
+                    "approvers": escalation.approvers,
                     "message": f"Tool '{tool_name}' requires human approval",
                 },
             )

@@ -50,6 +50,24 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
     return tool_name in (approval.get("escalation_rules") or [])
 
 
+def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
+    """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
+    return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
+    """Whether the caller may resolve an escalation.
+
+    Empty ``approvers`` is the soft default — any workspace member may approve
+    (see issue #198 for the zero-trust posture). Otherwise the caller must be a
+    direct user subject ``user:<id>``. Group/userset subjects are stored but not
+    resolved until a membership/roles model exists, so they do not grant approval.
+    """
+    if not approvers:
+        return True
+    return bool(caller_user_id) and f"user:{caller_user_id}" in approvers
+
+
 class EventManager:
     """Manages workflow events with consistent formatting."""
 

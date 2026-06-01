@@ -11,13 +11,53 @@ from enum import StrEnum
 from typing import Any
 
 from agentarea_common.money import Money, to_money
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 RESOLVER_VERSION = "policy-resolver-v1"
 
 
 class PolicyValidationError(ValueError):
     """Raised when a lower-scope policy attempts to weaken a higher scope."""
+
+
+def parse_subject(ref: str) -> tuple[str, str, str | None]:
+    """Parse a Keto-style subject ref into (type, id, relation|None).
+
+    Accepts ``type:id`` (SubjectID, e.g. ``user:alice``) or
+    ``type:id#relation`` (SubjectSet/userset, e.g. ``group:eng#member``).
+    Raises ValueError for anything else (notably a bare id with no type) so the
+    data stays ReBAC/Keto-native and raw ids cannot leak in.
+    """
+    if not isinstance(ref, str) or ":" not in ref:
+        raise ValueError(f"invalid subject ref {ref!r}: expected 'type:id' or 'type:id#relation'")
+    type_, rest = ref.split(":", 1)
+    relation: str | None = None
+    if "#" in rest:
+        id_, relation = rest.split("#", 1)
+    else:
+        id_ = rest
+    if not type_ or not id_ or (relation is not None and not relation):
+        raise ValueError(f"invalid subject ref {ref!r}: empty component")
+    return type_, id_, relation
+
+
+def is_approver(caller_user_id: str, approvers: list[str]) -> bool:
+    """Whether the caller may approve, resolving only direct user subjects.
+
+    Group/role/userset subjects (``group:x``, ``...#relation``) are accepted and
+    stored but not resolved until a membership/roles model exists (issue #198).
+    Empty ``approvers`` is handled by the caller (soft default = any member).
+    """
+    if not caller_user_id:
+        return False
+    for ref in approvers:
+        try:
+            type_, id_, relation = parse_subject(ref)
+        except ValueError:
+            continue
+        if type_ == "user" and relation is None and id_ == caller_user_id:
+            return True
+    return False
 
 
 class PolicyScopeType(StrEnum):
@@ -72,6 +112,17 @@ class ApprovalPolicy(BaseModel):
 
     requires_human_approval: bool | None = None
     escalation_rules: list[str] = Field(default_factory=list)
+    # Who may approve, as Keto-style subject refs: "user:<id>", "group:<id>",
+    # or a userset "<type>:<id>#<relation>". Empty = any workspace member (soft
+    # default — see issue #198 / ADR-005 for the zero-trust posture decision).
+    approvers: list[str] = Field(default_factory=list)
+
+    @field_validator("approvers")
+    @classmethod
+    def _validate_approvers(cls, value: list[str]) -> list[str]:
+        for ref in value:
+            parse_subject(ref)  # raises ValueError on a non subject-ref (e.g. raw id)
+        return value
 
 
 class ContentSafetyPolicy(BaseModel):
@@ -294,6 +345,7 @@ class PolicyResolver:
             requires_human_approval=bool(higher.requires_human_approval)
             or bool(lower.requires_human_approval),
             escalation_rules=_dedupe([*higher.escalation_rules, *lower.escalation_rules]),
+            approvers=_dedupe([*higher.approvers, *lower.approvers]),
         )
 
     def _merge_content_safety(

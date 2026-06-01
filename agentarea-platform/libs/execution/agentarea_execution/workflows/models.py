@@ -64,6 +64,9 @@ class PendingEscalation(BaseModel):
     resolved: bool = False
     approved: bool | None = None
     deny_comment: str | None = None
+    # Subject refs allowed to approve (from ApprovalPolicy.approvers); empty = any member
+    approvers: list[str] = Field(default_factory=list)
+    approved_by: str | None = None  # user id that resolved it (audit)
 
 
 class WorkflowEvent(BaseModel):

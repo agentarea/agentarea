@@ -79,7 +79,12 @@ class ExecutionServiceInterface(ABC):
 
     @abstractmethod
     async def resolve_escalation(
-        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+        self,
+        execution_id: str,
+        escalation_id: str,
+        approved: bool,
+        comment: str = "",
+        resolved_by: str = "",
     ) -> bool:
         """Resolve a tool escalation."""
         pass

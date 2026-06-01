@@ -12,6 +12,7 @@ from agentarea_governance.domain.policies import (
     TokenPolicy,
     ToolsPolicy,
     effective_policy_from_json,
+    is_approver,
 )
 
 
@@ -224,6 +225,38 @@ def test_to_execution_state_emits_content_safety_flags():
 
 def test_to_execution_state_empty_policy_is_empty_state():
     assert PolicyResolver().resolve([]).to_execution_state() == {}
+
+
+def test_approvers_merge_union_across_scopes():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(approval=ApprovalPolicy(approvers=["user:alice"])),
+            PolicyDocument(approval=ApprovalPolicy(approvers=["user:bob", "user:alice"])),
+        ]
+    )
+    assert effective.approval.approvers == ["user:alice", "user:bob"]
+
+
+def test_approvers_must_be_typed_subject_refs_not_raw_ids():
+    with pytest.raises(ValueError, match="subject ref"):
+        ApprovalPolicy(approvers=["alice"])  # raw id without type is rejected
+
+
+def test_approvers_accept_usersets_and_groups():
+    policy = ApprovalPolicy(approvers=["user:alice", "group:security#member", "role:admin"])
+    assert policy.approvers == ["user:alice", "group:security#member", "role:admin"]
+
+
+def test_is_approver_matches_direct_user_only():
+    assert is_approver("alice", ["user:alice", "user:bob"]) is True
+    assert is_approver("carol", ["user:alice", "user:bob"]) is False
+
+
+def test_is_approver_does_not_resolve_usersets_yet():
+    # group/userset subjects are stored but unresolved until a membership model (#198)
+    assert is_approver("alice", ["group:security#member"]) is False
+    # a direct user ref still matches even alongside an unresolved userset
+    assert is_approver("alice", ["group:security#member", "user:alice"]) is True
 
 
 def test_snapshot_roundtrips_losslessly_for_immutability():
