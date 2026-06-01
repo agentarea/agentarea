@@ -81,6 +81,7 @@ from ..models import (
     ResolveAgentToolsResult,
     ResolvedModelInfo,
     ResolveModelRequest,
+    SearchableToolEntry,
     SearchHistoryRequest,
     SearchHistoryResult,
     SkillFileRequest,
@@ -90,7 +91,9 @@ from ..models import (
     StoreHistoryResult,
     StoreOutputRequest,
     StoreOutputResult,
+    ToolDefinition,
     ToolDiscoveryRequest,
+    ToolDiscoveryResult,
     ToolProviderData,
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
@@ -356,8 +359,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
     @activity.defn
     async def discover_available_tools_activity(
         request: ToolDiscoveryRequest,
-    ) -> list[dict[str, Any]]:  # Keep backward compatible
-        """Discover available tools for an agent."""
+    ) -> ToolDiscoveryResult:
+        """Discover available tools for an agent.
+
+        Honors `settings.load_mode` per OpenAPI tool — operations marked
+        `searchable` go into `searchable_entries` (deferred pool) instead of
+        `tools` (the per-call LLM context).
+        """
         user_context = create_user_context(request.user_context_data)
 
         async with ActivityContext(container, user_context) as ctx:
@@ -370,10 +378,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise ValueError(f"Agent {request.agent_id} not found")
 
-            # Use tool manager to discover available tools
+            # Use tool manager to discover available tools (split path).
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
-            all_tools = await tool_manager.discover_available_tools(
+            split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
                 mcp_server_instance_service=mcp_server_instance_service,
@@ -381,7 +389,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 base_url=base_url,
             )
 
-            return all_tools
+            tool_defs = [ToolDefinition(**t) for t in split.explicit_tools]
+            searchable = [
+                SearchableToolEntry(
+                    name=e.get("name", ""),
+                    description=e.get("description", ""),
+                    connection_id=e.get("connection_id", ""),
+                    schema=e.get("schema") or {},
+                    source_type=e.get("source_type", "openapi"),
+                )
+                for e in split.searchable_entries
+            ]
+            return ToolDiscoveryResult(tools=tool_defs, searchable_entries=searchable)
 
     @activity.defn
     async def discover_tool_providers_activity(

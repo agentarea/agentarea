@@ -236,11 +236,28 @@ const ToolConfig = ({
       (f) => f.openapi_connection_id === connection.id
     );
     if (alreadyAdded) return;
+    // Default new OpenAPI attachments to "searchable" — the catalog block in
+    // the system prompt + load_tools meta-tool keeps token cost flat regardless
+    // of spec size (issue #115). Existing entries without load_mode keep their
+    // legacy "explicit" behavior.
     appendOpenapiTool({
       openapi_connection_id: connection.id,
       openapi_connection_name: connection.name,
       allowed_tools: [],
+      load_mode: "searchable",
     });
+  };
+
+  const handleOpenapiLoadModeChange = (
+    connectionId: string,
+    mode: "explicit" | "searchable"
+  ) => {
+    if (!setValue || !openapiFields) return;
+    const index = openapiFields.findIndex(
+      (f) => f.openapi_connection_id === connectionId
+    );
+    if (index === -1) return;
+    setValue(`tools_config.openapi_configs.${index}.load_mode`, mode);
   };
 
   const handleRemoveOpenapiConnection = (connectionId: string) => {
@@ -878,6 +895,12 @@ const ToolConfig = ({
                       ? allTools.length
                       : allowedTools.length;
 
+                  const currentLoadMode =
+                    ((item as any).load_mode as
+                      | "explicit"
+                      | "searchable"
+                      | undefined) ?? "explicit";
+
                   return (
                     <div
                       key={`openapi-${index}`}
@@ -897,6 +920,51 @@ const ToolConfig = ({
                           </p>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div
+                          className="inline-flex items-center rounded-md border text-xs"
+                          role="group"
+                          aria-label="Load mode"
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenapiLoadModeChange(
+                                item.openapi_connection_id,
+                                "explicit"
+                              )
+                            }
+                            className={
+                              "px-2 py-0.5 rounded-l-md " +
+                              (currentLoadMode === "explicit"
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:text-foreground")
+                            }
+                            aria-pressed={currentLoadMode === "explicit"}
+                            title="Send every operation schema in every LLM call (legacy behavior, larger context)."
+                          >
+                            Explicit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenapiLoadModeChange(
+                                item.openapi_connection_id,
+                                "searchable"
+                              )
+                            }
+                            className={
+                              "px-2 py-0.5 rounded-r-md border-l " +
+                              (currentLoadMode === "searchable"
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:text-foreground")
+                            }
+                            aria-pressed={currentLoadMode === "searchable"}
+                            title="Defer schemas behind a load_tools meta-tool; only a name+description catalog goes into the system prompt."
+                          >
+                            Searchable
+                          </button>
+                        </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -920,6 +988,7 @@ const ToolConfig = ({
                           <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
                         </svg>
                       </Button>
+                      </div>
                     </div>
                   );
                 })}

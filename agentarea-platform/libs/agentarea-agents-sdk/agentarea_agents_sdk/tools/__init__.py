@@ -19,7 +19,7 @@ from .tool_definition import (
     toolset,
 )
 from .tool_executor import ToolExecutor
-from .tool_manager import ToolManager
+from .tool_manager import DiscoveryResult, ToolManager
 from .tool_provider import (
     AgentToolProvider,
     BuiltinToolProvider,
@@ -48,6 +48,7 @@ __all__ = [
     "ToolExecutionError",
     "ToolExecutor",
     "ToolManager",
+    "DiscoveryResult",
     "ToolRegistry",
     "Toolset",
     "ToolsetAdapter",

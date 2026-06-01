@@ -374,3 +374,35 @@ class OpenAPIToolFactory:
             allowed_tools,
         )
         return tools
+
+    @staticmethod
+    def get_tool_definition_by_name(connection: Any, tool_name: str) -> dict[str, Any] | None:
+        """Build an OpenAI function definition for one operation by name.
+
+        Used by the disclosure layer to lazily reveal a single tool's full
+        schema without instantiating an `OpenAPITool` object. Looks up
+        `connection.available_tools` (the pre-parsed `{name, description,
+        inputSchema}` JSON column) and matches against either the raw
+        operation name or its slugified form (the latter is what the LLM
+        sees, since OpenAPITool.name slugifies on construction).
+
+        Returns None if the connection has no available_tools or no match.
+        """
+        available = getattr(connection, "available_tools", None) or []
+        target_slug = _slugify_name(tool_name)
+        for op in available:
+            op_name = op.get("name") or ""
+            if not op_name:
+                continue
+            if op_name == tool_name or _slugify_name(op_name) == target_slug:
+                return {
+                    "type": "function",
+                    "function": {
+                        "name": _slugify_name(op_name),
+                        "description": op.get("description")
+                        or f"OpenAPI operation {op_name}",
+                        "parameters": op.get("inputSchema")
+                        or {"type": "object", "properties": {}},
+                    },
+                }
+        return None

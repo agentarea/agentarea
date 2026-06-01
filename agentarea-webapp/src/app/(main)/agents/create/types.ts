@@ -33,6 +33,10 @@ export type OpenAPIConfig = {
   openapi_connection_id: string;
   openapi_connection_name?: string;  // resolved name for backend; filled by picker
   allowed_tools?: string[];  // operation names; empty/missing = all
+  // Disclosure mode (issue #115). "searchable" defers operation schemas
+  // behind a `load_tools` meta-tool; "explicit" sends every schema every call.
+  // Absent = legacy explicit behavior preserved.
+  load_mode?: "explicit" | "searchable";
 };
 
 /**
