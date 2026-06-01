@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 from .app import AppSettings
 from .aws import AWSSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
+from .channels import ChannelDeliverySettings
 from .database import DatabaseSettings
 from .mcp import MCPManagerSettings, MCPSettings
 from .secrets import SecretManagerSettings
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     workflow: WorkflowSettings = Field(default_factory=WorkflowSettings)
     task_execution: TaskExecutionSettings = Field(default_factory=TaskExecutionSettings)
     triggers: TriggerSettings = Field(default_factory=TriggerSettings)
+    channel_delivery: ChannelDeliverySettings = Field(default_factory=ChannelDeliverySettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -49,4 +51,5 @@ def get_settings() -> Settings:
         workflow=WorkflowSettings(),
         task_execution=TaskExecutionSettings(),
         triggers=TriggerSettings(),
+        channel_delivery=ChannelDeliverySettings(),
     )

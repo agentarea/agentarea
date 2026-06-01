@@ -284,6 +284,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.gateway.name | string | `"envoy-gateway"` |  |
 | mcpManager.gateway.namespace | string | `"envoy-gateway-system"` |  |
 | mcpManager.runtimeClass | string | `""` |  |
+| mcpManager.runtime.serviceAccount.create | bool | `true` |  |
+| mcpManager.runtime.serviceAccount.name | string | `""` |  |
+| mcpManager.runtime.imagePullSecrets | list | `[]` |  |
 | mcpManager.securityContext | object | `{}` |  |
 | mcpManager.features.enabled[0] | string | `"gateway_api"` |  |
 | mcpManager.features.enabled[1] | string | `"state_reconciler"` |  |
@@ -292,6 +295,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.warmPool.image.repository | string | `"agentarea/mcp-runner"` |  |
 | mcpManager.warmPool.image.tag | string | `"latest"` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.maxExecutionTimeoutSeconds | int | `1800` |  |
 | mcpManager.warmPool.size | int | `10` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |
 | mcpManager.warmPool.resources.limits.cpu | string | `"500m"` |  |
@@ -300,6 +304,17 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.warmPool.resources.requests.memory | string | `"256Mi"` |  |
 | mcpManager.resources | object | `{}` |  |
 | mcpManager.extraEnv | list | `[]` |  |
+| mcpSandboxRunner.enabled | bool | `true` |  |
+| mcpSandboxRunner.replicaCount | int | `1` |  |
+| mcpSandboxRunner.image.repository | string | `""` |  |
+| mcpSandboxRunner.image.tag | string | `""` |  |
+| mcpSandboxRunner.consumerGroup | string | `"agentarea-sandbox-runners"` |  |
+| mcpSandboxRunner.batchSize | int | `1` |  |
+| mcpSandboxRunner.resources.requests.cpu | string | `"50m"` |  |
+| mcpSandboxRunner.resources.requests.memory | string | `"96Mi"` |  |
+| mcpSandboxRunner.resources.limits.cpu | string | `"500m"` |  |
+| mcpSandboxRunner.resources.limits.memory | string | `"512Mi"` |  |
+| mcpSandboxRunner.extraEnv | list | `[]` |  |
 | temporal.enabled | bool | `true` |  |
 | temporal.replicaCount | int | `1` |  |
 | temporal.image.repository | string | `"temporalio/auto-setup"` |  |

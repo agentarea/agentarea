@@ -5,25 +5,17 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { findTriggerCatalogEntry, renderTriggerIcon } from "./triggerDisplay";
 
 interface TriggersTableProps {
   triggers: any[];
   catalog: any[];
 }
 
-function findCatalogEntry(trigger: any, catalog: any[]) {
-  if (trigger.data_extractor) {
-    const match = catalog.find((e: any) => e.data_extractor === trigger.data_extractor);
-    if (match) return match;
-  }
-  if (trigger.trigger_type === "cron") {
-    return catalog.find((e: any) => e.id === "cron");
-  }
-  const wt = trigger.webhook_type || trigger.config?.webhook_type;
-  return catalog.find((e: any) => e.webhook_type === wt) || catalog.find((e: any) => e.id === "webhook");
-}
-
-export default function TriggersTable({ triggers, catalog }: TriggersTableProps) {
+export default function TriggersTable({
+  triggers,
+  catalog,
+}: TriggersTableProps) {
   const router = useRouter();
   const t = useTranslations("TriggersPage.table");
   const tStatus = useTranslations("TriggersPage.status");
@@ -42,9 +34,10 @@ export default function TriggersTable({ triggers, catalog }: TriggersTableProps)
       accessor: "trigger_type",
       header: t("type"),
       render: (_value: string, trigger: any) => {
-        const entry = findCatalogEntry(trigger, catalog);
+        const entry = findTriggerCatalogEntry(trigger, catalog);
         return (
           <Badge variant="outline" className="gap-1">
+            {renderTriggerIcon(entry, trigger, "h-3 w-3")}
             {entry?.name ?? _value}
           </Badge>
         );

@@ -14,6 +14,9 @@ type KubernetesConfig struct {
 	// Runtime configuration
 	RuntimeClass string `json:"runtime_class"`
 
+	// Service account to use for MCP server pods created by the Kubernetes backend.
+	PodServiceAccountName string `json:"pod_service_account_name"`
+
 	// Image pull policy (IfNotPresent, Always, Never). Defaults to IfNotPresent
 	// which is safe for k3d/local dev; production clusters should set Always.
 	ImagePullPolicy string `json:"image_pull_policy"`
@@ -130,12 +133,13 @@ type CertManagerConfig struct {
 // DefaultKubernetesConfig returns default Kubernetes configuration
 func DefaultKubernetesConfig() KubernetesConfig {
 	return KubernetesConfig{
-		Enabled:         false,
-		Namespace:       "agentarea",
-		Domain:          "mcp.local",
-		IngressClass:    "nginx",
-		StorageClass:    "standard",
-		ImagePullPolicy: "IfNotPresent",
+		Enabled:               false,
+		Namespace:             "agentarea",
+		Domain:                "mcp.local",
+		IngressClass:          "nginx",
+		StorageClass:          "standard",
+		ImagePullPolicy:       "IfNotPresent",
+		PodServiceAccountName: "",
 
 		DefaultRequests: ResourceRequirements{
 			CPU:    "100m",

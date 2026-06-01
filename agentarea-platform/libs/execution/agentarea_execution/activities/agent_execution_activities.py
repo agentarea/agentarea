@@ -44,6 +44,7 @@ from agentarea_agents_sdk import (
     ToolExecutor,
     ToolManager,
 )
+from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 
 # Local imports
 from agentarea_common.auth.context import UserContext
@@ -111,6 +112,116 @@ _mcp_dispatch_failed_total = _make_counter(
     "Number of MCP dispatch failures",
     ["reason"],
 )
+
+
+def _activity_output_id(prefix: str) -> str:
+    """Return a stable-ish output id for the current activity attempt."""
+    try:
+        raw = activity.info().activity_id
+    except Exception:
+        raw = prefix
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in raw)
+    return f"{prefix}_{safe}"
+
+
+async def _offload_large_activity_output(
+    *,
+    workspace_id: str | None,
+    task_id: str | None,
+    output_id: str,
+    content: str,
+) -> str:
+    """Offload large activity payloads before they become Temporal history."""
+    from agentarea_execution.workflows.constants import TOOL_OUTPUT_OFFLOAD_CHARS
+    from agentarea_execution.workflows.context_store import ContextStore
+    from agentarea_execution.workflows.helpers import build_output_summary
+
+    if not content or len(content) <= TOOL_OUTPUT_OFFLOAD_CHARS or not workspace_id or not task_id:
+        return content
+
+    try:
+        store = ContextStore(str(workspace_id), str(task_id))
+        await store.store_output(output_id, content)
+        return build_output_summary(content, output_id)
+    except Exception as exc:
+        logger.warning("Activity output offload failed for %s: %s", output_id, exc)
+        head = content[:TOOL_OUTPUT_OFFLOAD_CHARS]
+        return (
+            f"{head}\n... [activity output truncated at {TOOL_OUTPUT_OFFLOAD_CHARS} chars; "
+            f"offload failed: {exc}]"
+        )
+
+
+async def _store_sandbox_artifacts(
+    *,
+    workspace_id: str | None,
+    task_id: str | None,
+    artifacts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Persist sandbox-returned artifacts into task artifact storage."""
+    import base64
+    from pathlib import PurePosixPath
+
+    if not artifacts:
+        return []
+
+    stored_refs: list[dict[str, Any]] = []
+    if not workspace_id:
+        return [
+            {
+                "requested_path": item.get("path") if isinstance(item, dict) else "",
+                "error": "workspace_id is required to store sandbox artifacts",
+            }
+            for item in artifacts
+        ]
+
+    from agentarea_common.artifacts import ArtifactService
+
+    storage = ArtifactService()
+    base_prefix = f"tasks/{task_id}" if task_id else "shared"
+    for item in artifacts:
+        if not isinstance(item, dict):
+            continue
+        requested_path = str(item.get("path") or "")
+        entry: dict[str, Any] = {
+            "requested_path": requested_path,
+            "size": item.get("size") or 0,
+            "content_type": item.get("content_type"),
+        }
+        if item.get("error"):
+            entry["error"] = item.get("error")
+            stored_refs.append(entry)
+            continue
+
+        content_b64 = item.get("content_base64") or ""
+        if not content_b64:
+            entry["error"] = "sandbox returned an empty artifact payload"
+            stored_refs.append(entry)
+            continue
+
+        try:
+            clean_name = PurePosixPath(requested_path.replace("\\", "/")).name or "artifact.bin"
+            artifact_path = f"{base_prefix}/sandbox/{clean_name}"
+            data = base64.b64decode(content_b64)
+            stored = await storage.put(
+                str(workspace_id),
+                artifact_path,
+                data,
+                item.get("content_type"),
+            )
+            entry.update(
+                {
+                    "artifact_path": stored.path,
+                    "size": stored.size,
+                    "content_type": stored.content_type,
+                }
+            )
+        except Exception as exc:
+            entry["error"] = f"failed to store artifact: {exc}"
+        stored_refs.append(entry)
+
+    return stored_refs
+
 
 # Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
 _last_dispatch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
@@ -229,6 +340,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 name=agent.name,
                 description=agent.description,
                 instruction=agent.instruction,
+                agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str,
                 context_window=context_window,
                 default_context_strategy=default_context_strategy,
@@ -615,7 +727,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     # under ``workspaces/{workspace_id}/tasks/{task_id}/`` so
                     # artifacts are grouped by workspace and scoped per task.
                     extra_kwargs: dict = {}
-                    if tool_name in ("agentarea/files", "agentarea/web"):
+                    if tool_name in (
+                        "agentarea/files",
+                        "agentarea/web",
+                        "agentarea/workspace_files",
+                    ):
                         from agentarea_common.artifacts import ArtifactService
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
@@ -632,6 +748,39 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             "default_workspace_id": str(request.workspace_id),
                             "default_user_id": str(user_context.user_id),
                             "event_broker": dependencies.event_broker,
+                        }
+                    elif tool_name == "agentarea/shell":
+                        # The shell tool routes bash commands to the sandbox
+                        # and needs to know which task it's running for.
+                        # The activity is the only seam that has access to
+                        # the Temporal context, so we build a typed
+                        # ToolInvocationContext here and inject it; the
+                        # toolset reads ctx.workflow_id without needing to
+                        # know anything about Temporal.
+                        try:
+                            wf_id = activity.info().workflow_id
+                        except Exception:
+                            wf_id = ""
+                        from agentarea_common.artifacts import ArtifactService
+
+                        base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
+                        extra_kwargs = {
+                            "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "ctx": ToolInvocationContext(
+                                workflow_id=wf_id,
+                                task_id=str(request.task_id) if request.task_id else "",
+                                workspace_id=str(request.workspace_id),
+                                user_id=str(user_context.user_id),
+                                agent_id=str(request.agent_id),
+                                metadata={
+                                    str(k): str(v)
+                                    for k, v in (request.metadata or {}).items()
+                                    if v is not None
+                                },
+                            ),
+                            "storage": ArtifactService(),
+                            "workspace_id": str(request.workspace_id),
+                            "base_prefix": base_prefix,
                         }
 
                     # Create and register the code tool instance
@@ -775,9 +924,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             error=str(e),
                         )
 
+                    result_text = await _offload_large_activity_output(
+                        workspace_id=request.workspace_id,
+                        task_id=request.task_id,
+                        output_id=_activity_output_id("mcp_tool"),
+                        content=str(mcp_result.get("result") or ""),
+                    )
                     return MCPToolResult(
                         success=bool(mcp_result.get("success", False)),
-                        result=str(mcp_result.get("result") or ""),
+                        result=result_text,
                         execution_time="",
                         error=mcp_result.get("error"),
                     )
@@ -790,9 +945,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     mcp_server_instance_service=mcp_server_instance_service,
                 )
 
+                result_text = await _offload_large_activity_output(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    output_id=_activity_output_id("tool"),
+                    content=str(result.get("result") or ""),
+                )
                 return MCPToolResult(
                     success=result.get("success", False),
-                    result=str(result.get("result") or ""),
+                    result=result_text,
                     execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
                 )
@@ -899,6 +1060,38 @@ def make_agent_activities(dependencies: ActivityDependencies):
             events_published = 0
             errors = []
 
+            # Per-invocation cache of task_parameters → channel_origin, used
+            # to avoid N+1 lookups when a single batch carries multiple
+            # events for the same task.
+            channel_origin_cache: dict[str, dict | None] = {}
+
+            async def _resolve_channel_origin(task_id_str: str) -> dict | None:
+                if task_id_str in channel_origin_cache:
+                    return channel_origin_cache[task_id_str]
+                origin: dict | None = None
+                try:
+                    from uuid import UUID as _UUID
+
+                    from agentarea_tasks.infrastructure.repository import (
+                        TaskRepository as _TaskRepository,
+                    )
+
+                    user_context_inner = UserContext(
+                        user_id=request.user_id,
+                        workspace_id=request.workspace_id,
+                    )
+                    async with ActivityContext(container, user_context_inner) as ctx_inner:
+                        session_inner = container._database.async_session_factory()
+                        ctx_inner._sessions.append(session_inner)
+                        task_repo = _TaskRepository(session_inner, user_context_inner)
+                        task = await task_repo.get_task(_UUID(task_id_str))
+                        if task and task.parameters:
+                            origin = task.parameters.get("channel_origin")
+                except Exception:
+                    logger.exception("channel_origin lookup failed for task=%s", task_id_str)
+                channel_origin_cache[task_id_str] = origin
+                return origin
+
             for event_json in request.events_json:
                 try:
                     event = json.loads(event_json)
@@ -966,6 +1159,40 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         except Exception as handler_error:
                             logger.error(f"Failed to handle LLM error event: {handler_error}")
                             errors.append(f"Error handler failed: {handler_error!s}")
+
+                    # 4. Durable outbound channel delivery: enqueue directly
+                    # to the broker stream. Bypasses the lossy pub/sub bridge
+                    # between workflow events and the delivery consumer.
+                    # Temporal activity-level retry covers the previously
+                    # silent failure window (worker crash between event
+                    # receipt and stream submit).
+                    if dependencies.broker_client and dependencies.channel_delivery_settings:
+                        from agentarea_triggers.channels.activity_emit import (
+                            emit_channel_delivery,
+                        )
+
+                        # channel_origin source priority:
+                        #   1. embedded in event.data (workflow has it inline)
+                        #   2. task.parameters via DB lookup (cached per batch)
+                        event_data = (
+                            event.get("data") if isinstance(event.get("data"), dict) else {}
+                        )
+                        channel_origin = event_data.get("channel_origin") if event_data else None
+                        if not channel_origin and task_id and task_id != "unknown":
+                            channel_origin = await _resolve_channel_origin(str(task_id))
+
+                        event_with_id = {
+                            "event_type": event["event_type"],
+                            "event_id": event.get("event_id"),
+                            "task_id": task_id,
+                            "data": event["data"],
+                        }
+                        await emit_channel_delivery(
+                            event=event_with_id,
+                            channel_origin=channel_origin,
+                            broker=dependencies.broker_client,
+                            stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                        )
 
                     events_published += 1
 
@@ -1378,31 +1605,54 @@ def make_agent_activities(dependencies: ActivityDependencies):
     async def execute_skill_script_activity(
         request: ExecuteSkillScriptRequest,
     ) -> ExecuteSkillScriptResult:
-        """Execute a skill script in a sandbox via MCP Manager's warm pool.
+        """Execute a skill script through the sandbox control/data plane.
 
-        Calls POST /sandbox/execute on the MCP Manager, which routes the
-        request to an available warm pool pod for isolated execution.
+        The activity schedules a sandbox execution, then polls the durable
+        execution record while the data-plane runner owns actual process
+        execution.
         """
-        import httpx
-        from agentarea_common.config.mcp import MCPManagerSettings
+        import asyncio
+        import time
 
-        mcp_settings = MCPManagerSettings()
-        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/execute"
+        import httpx
+        from agentarea_common.config.mcp import MCPSettings
+
+        mcp_settings = MCPSettings()
+        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions"
+
+        command_payload: dict[str, Any] = {
+            "script_content": request.script_content,
+            "script_name": request.script_name,
+            "args": request.args,
+            "env": request.env,
+            "artifact_paths": request.artifact_paths,
+            "timeout_seconds": request.timeout_seconds,
+        }
+        # Resolve task scope from Temporal context — the workflow stays
+        # oblivious to sandbox internals. Activity context is unavailable
+        # only in unit-test paths that call the activity directly; the
+        # sandbox tolerates a missing workflow_id (legacy stateless mode).
+        workflow_id: str | None = None
+        try:
+            workflow_id = activity.info().workflow_id
+            command_payload["workflow_id"] = workflow_id
+        except Exception as exc:
+            logger.debug("activity.info() unavailable, running without workflow_id: %s", exc)
+
+        payload: dict[str, Any] = {
+            "workflow_id": workflow_id,
+            "workspace_id": request.workspace_id,
+            "task_id": request.task_id,
+            "runtime": {"provider": "agentarea-k8s"},
+            "command": command_payload,
+        }
+        payload = {key: value for key, value in payload.items() if value}
 
         try:
-            async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
-                resp = await client.post(
-                    url,
-                    json={
-                        "script_content": request.script_content,
-                        "script_name": request.script_name,
-                        "args": request.args,
-                        "env": request.env,
-                        "timeout_seconds": request.timeout_seconds,
-                    },
-                )
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(url, json=payload)
 
-                if resp.status_code != 200:
+                if resp.status_code >= 400:
                     logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")
                     return ExecuteSkillScriptResult(
                         stderr=f"MCP Manager returned {resp.status_code}: {resp.text[:300]}",
@@ -1410,11 +1660,64 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
 
                 data = resp.json()
+                if isinstance(data, dict) and data.get("id"):
+                    deadline = time.monotonic() + request.timeout_seconds + 60
+                    while data.get("status") not in {"completed", "failed", "cancelled"}:
+                        if time.monotonic() >= deadline:
+                            return ExecuteSkillScriptResult(
+                                stderr=(
+                                    "Timed out waiting for sandbox execution "
+                                    f"{data.get('id')} to complete"
+                                ),
+                                exit_code=1,
+                            )
+                        await asyncio.sleep(2)
+                        status_resp = await client.get(
+                            f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions/{data['id']}"
+                        )
+                        if status_resp.status_code >= 400:
+                            return ExecuteSkillScriptResult(
+                                stderr=(
+                                    f"MCP Manager status returned {status_resp.status_code}: "
+                                    f"{status_resp.text[:300]}"
+                                ),
+                                exit_code=1,
+                            )
+                        data = status_resp.json()
+
+                    if data.get("status") != "completed":
+                        return ExecuteSkillScriptResult(
+                            stderr=(
+                                f"Sandbox execution {data.get('status')}: "
+                                f"{data.get('error') or 'no error detail'}"
+                            ),
+                            exit_code=1,
+                        )
+                    data = data.get("result") or {}
+
+                stdout = await _offload_large_activity_output(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    output_id=_activity_output_id("skill_stdout"),
+                    content=data.get("stdout", "") or "",
+                )
+                stderr = await _offload_large_activity_output(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    output_id=_activity_output_id("skill_stderr"),
+                    content=data.get("stderr", "") or "",
+                )
+                artifacts = await _store_sandbox_artifacts(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    artifacts=data.get("artifacts") or [],
+                )
                 return ExecuteSkillScriptResult(
-                    stdout=data.get("stdout", ""),
-                    stderr=data.get("stderr", ""),
+                    stdout=stdout,
+                    stderr=stderr,
                     exit_code=data.get("exit_code", 0),
                     execution_time_ms=data.get("execution_time_ms", 0),
+                    artifacts=artifacts,
                 )
 
         except Exception as e:
@@ -1423,6 +1726,29 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 stderr=f"Failed to execute script: {e}",
                 exit_code=1,
             )
+
+    @activity.defn(name="cleanup_sandbox_workflow_activity")
+    async def cleanup_sandbox_workflow_activity(workflow_id: str) -> None:
+        """Delete the warm-pool sandbox pod assigned to a completed workflow."""
+        import httpx
+        from agentarea_common.config.mcp import MCPSettings
+
+        if not workflow_id:
+            return
+
+        mcp_settings = MCPSettings()
+        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/workflow/{workflow_id}"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.delete(url)
+                if resp.status_code >= 400:
+                    logger.warning(
+                        "Sandbox workflow cleanup returned %s: %s",
+                        resp.status_code,
+                        resp.text[:300],
+                    )
+        except Exception as e:
+            logger.warning("Sandbox workflow cleanup failed for %s: %s", workflow_id, e)
 
     # --- Dynamic Context Discovery Activities ---
 
@@ -1506,15 +1832,20 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     task_manager=None,
                 )
 
-                task = await task_service.create_task_from_params(
-                    title="Delegation from agent",
-                    description=f"Delegated task to {request.target_agent_name}",
-                    query=request.message,
-                    user_id=request.user_id,
+                task = await task_service.create_task_with_policy(
                     agent_id=UUID(request.target_agent_id),
+                    description=f"Delegated task to {request.target_agent_name}",
                     workspace_id=request.workspace_id,
-                    task_parameters={
+                    user_id=request.user_id,
+                    title="Delegation from agent",
+                    query=request.message,
+                    parameters={
                         "source": "agent_delegation",
+                        "parent_agent_id": request.parent_agent_id,
+                        "parent_task_id": request.parent_task_id,
+                    },
+                    metadata_overrides={
+                        "created_via": "agent_delegation",
                         "parent_agent_id": request.parent_agent_id,
                         "parent_task_id": request.parent_task_id,
                     },
@@ -1550,6 +1881,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         recall_history_activity,
         update_task_status_activity,
         execute_skill_script_activity,
+        cleanup_sandbox_workflow_activity,
         store_context_output_activity,
         read_context_output_activity,
         store_history_chunk_activity,

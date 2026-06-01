@@ -12,6 +12,15 @@ except ImportError:
     # Triggers library not yet installed - skip for now
     pass
 
+try:
+    from agentarea_governance.infrastructure.orm import (  # noqa: F401
+        GovernancePolicyORM,
+        TaskPolicySnapshotORM,
+    )
+except ImportError:
+    # Governance library not yet installed - skip for now
+    pass
+
 config = context.config
 
 if config.config_file_name is not None:

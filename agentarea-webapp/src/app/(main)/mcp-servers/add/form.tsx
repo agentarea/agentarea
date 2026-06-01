@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Code, Globe, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -20,7 +19,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { addMCPServer, MCPServerFormState } from "./actions";
-import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig, listMCPServerInstancesAction } from "@/lib/server-actions";
+import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
 
 // Define the header schema for external servers
 const HeaderSchema = z.object({
@@ -31,7 +30,7 @@ const HeaderSchema = z.object({
 // Define the unified schema for client-side validation
 // Create base schema without refine for shape access
 const BaseMCPServerSchema = z.object({
-  type: z.enum(["docker", "command", "external", "bundle"], {
+  type: z.enum(["docker", "command", "external"], {
     required_error: "Server type is required",
   }),
   name: z.string().min(1, "Server name is required"),
@@ -44,7 +43,6 @@ const BaseMCPServerSchema = z.object({
   headers: z.array(HeaderSchema),
   tags: z.string().optional(),
   isPublic: z.boolean(),
-  members: z.string().optional(), // JSON-stringified array of instance IDs
 });
 
 const MCPServerSchema = BaseMCPServerSchema.refine(
@@ -55,13 +53,6 @@ const MCPServerSchema = BaseMCPServerSchema.refine(
       return data.command && data.command.trim() !== "";
     } else if (data.type === "external") {
       return data.endpointUrl && data.endpointUrl.trim() !== "";
-    } else if (data.type === "bundle") {
-      try {
-        const ids = JSON.parse(data.members || "[]");
-        return Array.isArray(ids) && ids.length > 0;
-      } catch {
-        return false;
-      }
     }
     return false;
   },
@@ -101,8 +92,6 @@ type AuthType = "api_key" | "bearer" | "oauth2";
 
 export function AddMCPServerForm() {
   const [state, setState] = useState<MCPServerFormState>(initialState);
-  const [bundleInstances, setBundleInstances] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [authConfigs, setAuthConfigs] = useState<AuthConfig[]>([]);
   const [selectedAuthConfigId, setSelectedAuthConfigId] = useState<string>("");
   const [showNewAuthForm, setShowNewAuthForm] = useState(false);
@@ -207,22 +196,6 @@ export function AddMCPServerForm() {
     }
   }, [watchedType, fetchAuthConfigs]);
 
-  // Fetch bundle instances when type is bundle
-  useEffect(() => {
-    if (watchedType === "bundle") {
-      listMCPServerInstancesAction().then(({ data }) => {
-        if (data) {
-          setBundleInstances((data as Array<{ id: string; name: string }>).map((i) => ({ id: i.id, name: i.name })));
-        }
-      }).catch(() => {});
-    }
-  }, [watchedType]);
-
-  // Keep members value in sync
-  useEffect(() => {
-    setValue("members", JSON.stringify(selectedMemberIds));
-  }, [selectedMemberIds, setValue]);
-
   // Dispatch submitting state for header controls
   const dispatchSubmitting = (submitting: boolean) => {
     const form = document.getElementById("add-mcp-server-form");
@@ -249,8 +222,6 @@ export function AddMCPServerForm() {
       fd.set("endpointUrl", data.endpointUrl || "");
       fd.set("tags", data.tags || "");
       fd.set("isPublic", String(data.isPublic));
-      fd.set("members", data.members || JSON.stringify(selectedMemberIds));
-
       // Serialize headers array in the format actions.ts expects
       if (data.headers) {
         data.headers.forEach((header, index) => {
@@ -436,7 +407,6 @@ export function AddMCPServerForm() {
                     <SelectItem value="docker">Docker Image</SelectItem>
                     <SelectItem value="command">Command (npx / uvx)</SelectItem>
                     <SelectItem value="external">External URL</SelectItem>
-                    <SelectItem value="bundle">Bundle (combine servers)</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -591,38 +561,6 @@ export function AddMCPServerForm() {
               </p>
             </div>
           </>
-        )}
-
-        {/* Bundle-specific Fields */}
-        {watchedType === "bundle" && (
-          <div className="space-y-2">
-            <Label>Sources</Label>
-            <p className="text-sm text-muted-foreground">
-              Select the MCP servers to combine into this server.
-            </p>
-            {bundleInstances.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Loading servers...</p>
-            ) : (
-              <div className="space-y-2 rounded-md border p-3">
-                {bundleInstances.map((inst) => (
-                  <div key={inst.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`member-${inst.id}`}
-                      checked={selectedMemberIds.includes(inst.id)}
-                      onCheckedChange={(checked) => {
-                        setSelectedMemberIds((prev) =>
-                          checked ? [...prev, inst.id] : prev.filter((id) => id !== inst.id)
-                        );
-                      }}
-                    />
-                    <label htmlFor={`member-${inst.id}`} className="text-sm cursor-pointer">
-                      {inst.name}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         )}
 
         {/* External-specific Fields */}

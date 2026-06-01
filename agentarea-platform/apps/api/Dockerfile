@@ -45,7 +45,8 @@ COPY --chown=appuser:appuser apps/api/docker-entrypoint.sh ./docker-entrypoint.s
 COPY --chown=appuser:appuser pyproject.toml ./
 
 # Make entrypoint executable and ensure /tmp is writable for tiktoken cache
-RUN chmod +x /app/docker-entrypoint.sh && \
+RUN chmod 755 /app/docker-entrypoint.sh && \
+    chmod -R a+rX /app/apps /app/libs && \
     mkdir -p /tmp && chmod 1777 /tmp
 
 # Set environment variables

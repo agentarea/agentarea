@@ -1,8 +1,8 @@
-import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getProject } from "@/lib/api";
-import ProjectHeaderTabs from "./components/ProjectHeaderTabs";
+import { requireApiData } from "@/lib/server-resource";
 import ProjectHeaderControls from "./components/ProjectHeaderControls";
+import ProjectHeaderTabs from "./components/ProjectHeaderTabs";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -13,11 +13,7 @@ export default async function ProjectLayout({ params, children }: Props) {
   const { id } = await params;
   const projectResponse = await getProject(id);
 
-  if (!projectResponse.data) {
-    notFound();
-  }
-
-  const project = projectResponse.data;
+  const project = requireApiData(projectResponse, "project");
 
   return (
     <ContentBlock

@@ -55,9 +55,6 @@ class WorkflowSettings(BaseSettings):
 class TaskExecutionSettings(BaseSettings):
     """Task execution configuration."""
 
-    # New execution mode (legacy mode removed)
-    USE_LEGACY_TASK_EXECUTION: bool = False
-
     # Default task parameters
     DEFAULT_TASK_RETRY_ATTEMPTS: int = 3
     DEFAULT_TASK_TIMEOUT_HOURS: int = 24

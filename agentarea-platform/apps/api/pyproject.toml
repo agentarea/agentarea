@@ -12,6 +12,7 @@ dependencies = [
     "agentarea-common",
     "agentarea-agents",
     "agentarea-execution",
+    "agentarea-governance",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-registry",
@@ -20,20 +21,23 @@ dependencies = [
     "agentarea-triggers",
     "agentarea-openapi",
     "agentarea-projects",
+    "agentarea-wallet",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
     "fastapi>=0.104.0",
     "mcp[cli]>=1.9.2",
-    "python-multipart>=0.0.26",
+    "python-multipart>=0.0.27",
     "click>=8.1.8",
     "pyjwt[crypto]>=2.12.0",
     "fastmcp>=3.2.0",
+    "croniter>=6.2.2",
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
 agentarea-execution = { workspace = true }
+agentarea-governance = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-registry = { workspace = true }
@@ -42,6 +46,7 @@ agentarea-secrets = { workspace = true }
 agentarea-triggers = { workspace = true }
 agentarea-openapi = { workspace = true }
 agentarea-projects = { workspace = true }
+agentarea-wallet = { workspace = true }
 
 [project.scripts]
 agentarea-api = "agentarea_api.cli:cli"

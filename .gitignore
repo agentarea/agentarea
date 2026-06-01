@@ -58,6 +58,11 @@ htmlcov/
 .env.test.local
 .env.production.local
 
+# Telegram smoke-test credentials + scratch scripts (hold raw API
+# keys / session files — must never be committed).
+.env.tg.local
+.env.tg.local.d/
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 
@@ -109,6 +114,8 @@ output/
 skills-lock.json
 
 # AI editor / agent tool config dirs (per-user noise)
+.codex/
+.impeccable/
 .codebuddy/
 .commandcode/
 .continue/
@@ -126,3 +133,11 @@ skills-lock.json
 .roo/
 .windsurf/
 .zencoder/
+
+# Local dev scratch / research dumps (not source)
+company/
+research/
+tmp/
+
+# MCP OAuth catalog dump (generated; lives in S3, not git)
+mcp-oauth-catalog.yaml

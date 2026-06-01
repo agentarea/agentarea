@@ -1,6 +1,8 @@
 import asyncio
 import inspect
 import logging
+import os
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -47,6 +49,26 @@ logger = logging.getLogger(__name__)
 
 # Sentinel value for masked secrets — must match across backend and frontend
 SECRET_MASKED_VALUE = "*" * 6
+INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
+SECRET_HEADER_NAMES = {
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "x-api-key",
+}
+
+
+def _lazy_mcp_provisioning_enabled() -> bool:
+    return os.getenv("MCP_LAZY_PROVISIONING_ENABLED", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _is_lazy_instance(instance: MCPServerInstance) -> bool:
+    return bool((instance.json_spec or {}).get("lazy_provisioning"))
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -67,6 +89,28 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
             spec.pop(legacy, None)
             break
     return spec
+
+
+def _server_transport_spec(server_spec: MCPServer) -> dict[str, Any]:
+    spec = dict(server_spec.json_spec or {})
+    if server_spec.remote_url:
+        spec.setdefault("type", "url")
+        spec.setdefault("endpoint_url", server_spec.remote_url)
+    elif server_spec.cmd:
+        spec.setdefault("type", "command")
+        spec.setdefault("command", server_spec.cmd[0] if server_spec.cmd else "")
+        if len(server_spec.cmd or []) > 1:
+            spec.setdefault("args", list(server_spec.cmd[1:]))
+    elif server_spec.docker_image_url:
+        spec.setdefault("type", "docker")
+        spec.setdefault("image", server_spec.docker_image_url)
+    else:
+        spec.setdefault("type", "docker")
+    return _normalize_url_keys(spec)
+
+
+def _instance_owned_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in spec.items() if key not in INSTANCE_TRANSPORT_FIELDS}
 
 
 def derive_bundle_verification(bundle: MCPServerInstance, members: list[MCPServerInstance]) -> dict:
@@ -292,15 +336,101 @@ class MCPServerInstanceService:
     def _get_secret_env_names(self, env_schema: list[dict[str, Any]]) -> set[str]:
         return {e["name"] for e in env_schema if isinstance(e, dict) and e.get("isSecret")}
 
+    def _is_secret_header_name(self, name: str) -> bool:
+        lower = name.lower()
+        return (
+            lower in SECRET_HEADER_NAMES
+            or lower.startswith("x-auth-")
+            or lower.endswith("-token")
+            or lower.endswith("-secret")
+            or lower.endswith("-key")
+        )
+
+    def _is_secret_env_name(self, name: str) -> bool:
+        upper = name.upper()
+        return bool(re.search(r"(_TOKEN|_SECRET|_KEY|_PASSWORD|_API_KEY|_DSN)$", upper))
+
+    def _derive_env_schema_from_instance_spec(self, spec: dict[str, Any]) -> list[dict[str, Any]]:
+        env_schema: list[dict[str, Any]] = []
+        headers = spec.get("headers")
+        if isinstance(headers, dict):
+            for name in headers:
+                env_schema.append(
+                    {
+                        "name": str(name),
+                        "description": f"HTTP header {name}",
+                        "isSecret": self._is_secret_header_name(str(name)),
+                    }
+                )
+        environment = spec.get("environment")
+        if isinstance(environment, dict):
+            for name in environment:
+                env_schema.append(
+                    {
+                        "name": str(name),
+                        "description": f"Environment variable {name}",
+                        "isSecret": self._is_secret_env_name(str(name)),
+                    }
+                )
+        return env_schema
+
+    async def _auto_create_spec_for_instance(
+        self,
+        payload: MCPServerInstanceCreate,
+    ) -> MCPServer:
+        spec = _normalize_url_keys(payload.json_spec or {})
+        spec_type = spec.get("type", "docker")
+        transport_spec = {
+            key: value for key, value in spec.items() if key in INSTANCE_TRANSPORT_FIELDS
+        }
+        env_schema = self._derive_env_schema_from_instance_spec(spec)
+
+        server = MCPServer(
+            name=payload.name,
+            description=payload.description or payload.name,
+            docker_image_url=transport_spec.get("image") if spec_type == "docker" else None,
+            remote_url=transport_spec.get("endpoint_url") if spec_type == "url" else None,
+            version="1.0.0",
+            tags=[],
+            is_public=False,
+            env_schema=env_schema,
+            cmd=(
+                [transport_spec["command"], *transport_spec.get("args", [])]
+                if spec_type == "command" and transport_spec.get("command")
+                else None
+            ),
+            json_spec=transport_spec,
+        )
+        server.created_by = self.repository.user_context.user_id
+        server.workspace_id = self.repository.user_context.workspace_id
+        self.repository.session.add(server)
+        await self.repository.session.flush()
+        return server
+
+    async def _get_transport_spec_for_instance(self, instance: MCPServerInstance) -> dict[str, Any]:
+        server_spec = await self.mcp_server_repository.get_by_id(instance.server_spec_id)
+        if not server_spec:
+            raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
+        return {**_server_transport_spec(server_spec), **(instance.json_spec or {})}
+
+    def _endpoint_url_from_spec(self, instance: MCPServerInstance, spec: dict[str, Any]) -> str:
+        instance_type = spec.get("type", "docker")
+        if instance_type == "url":
+            return spec.get("endpoint_url", "")
+        if instance_type in ("docker", "command"):
+            resolved = spec.get("internal_url")
+            if isinstance(resolved, str) and "://" in resolved:
+                return resolved
+            port = 8080 if instance_type == "command" else spec.get("port") or 8000
+            return f"http://mcp-{instance.id}:{port}"
+        raise ValueError("bundle has no endpoint_url")
+
     async def _extract_secrets_from_spec(
         self,
         spec: dict[str, Any],
-        server_spec_id: str | None,
+        server_spec_id: str,
     ) -> tuple[dict[str, Any], dict[str, str]]:
         secret_env_vars: dict[str, str] = {}
-
-        if not server_spec_id:
-            return spec, secret_env_vars
 
         server_spec = await self.mcp_server_repository.get_by_id(server_spec_id)
         if not server_spec:
@@ -347,30 +477,54 @@ class MCPServerInstanceService:
         server_spec_id = payload.server_spec_id
         auth_config_id = payload.auth_config_id
 
-        spec = _normalize_url_keys(payload.json_spec or {})
+        submitted_spec = _normalize_url_keys(payload.json_spec or {})
 
-        if not server_spec_id:
-            validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
+        try:
+            if server_spec_id:
+                server_spec = await self.mcp_server_repository.get_by_id(server_spec_id)
+                if not server_spec:
+                    raise MCPValidationError([f"server_spec_id '{server_spec_id}' was not found"])
+            else:
+                server_spec = await self._auto_create_spec_for_instance(payload)
+                server_spec_id = str(server_spec.id)
+
+            transport_spec = _server_transport_spec(server_spec)
+            validation_errors = MCPConfigurationValidator.validate_json_spec(transport_spec)
             if validation_errors:
                 raise MCPValidationError(validation_errors)
 
-        spec, secret_env_vars = await self._extract_secrets_from_spec(spec, server_spec_id)
+            instance_type = transport_spec.get("type", "docker")
+            if instance_type == "bundle":
+                raise MCPValidationError(["bundle is not a valid MCP server instance type"])
 
-        instance_type = spec.get("type", "docker")
+            instance_spec = _instance_owned_spec(submitted_spec)
+            spec, secret_env_vars = await self._extract_secrets_from_spec(
+                instance_spec, server_spec_id
+            )
+
+            create_kwargs: dict[str, Any] = {
+                "name": name,
+                "description": description,
+                "server_spec_id": server_spec_id,
+                "json_spec": spec,
+                "verification": dict(DEFAULT_VERIFICATION),
+            }
+            if auth_config_id:
+                create_kwargs["auth_config_id"] = auth_config_id
+
+            instance = MCPServerInstance(
+                **create_kwargs,
+                created_by=self.repository.user_context.user_id,
+                workspace_id=self.repository.user_context.workspace_id,
+            )
+            self.repository.session.add(instance)
+            await self.repository.session.commit()
+            await self.repository.session.refresh(instance)
+        except Exception:
+            await self.repository.session.rollback()
+            raise
+
         is_url_type = instance_type == "url"
-        is_bundle_type = instance_type == "bundle"
-
-        create_kwargs: dict[str, Any] = {
-            "name": name,
-            "description": description,
-            "server_spec_id": server_spec_id,
-            "json_spec": spec,
-            "verification": dict(DEFAULT_VERIFICATION),
-        }
-        if auth_config_id:
-            create_kwargs["auth_config_id"] = auth_config_id
-
-        instance = await self.repository.create(**create_kwargs)
 
         if secret_env_vars:
             try:
@@ -396,47 +550,11 @@ class MCPServerInstanceService:
             if inspect.isawaitable(refresh_result):
                 await refresh_result
 
-        elif is_bundle_type:
-            # Validate all members are succeeded before persisting the bundle
-            member_ids: list[str] = spec.get("members", [])
-            if not member_ids:
-                try:
-                    await self.repository.delete(instance.id)
-                except Exception:
-                    logger.error(
-                        "Failed to clean up bundle instance %s after empty members",
-                        instance.id,
-                        exc_info=True,
-                    )
-                raise ValueError("Cannot create bundle: no members specified.")
-
-            not_ready = []
-            for mid in member_ids:
-                try:
-                    member = await self.repository.get_by_id(UUID(mid))
-                except Exception:
-                    member = None
-                if not member:
-                    not_ready.append(f"id={mid} (not found)")
-                    continue
-                v = member.verification or {}
-                if v.get("status") != "succeeded":
-                    not_ready.append(f"name={member.name}, status={v.get('status', 'unknown')}")
-
-            if not_ready:
-                try:
-                    await self.repository.delete(instance.id)
-                except Exception:
-                    logger.error(
-                        "Failed to clean up bundle instance %s after validation failure",
-                        instance.id,
-                        exc_info=True,
-                    )
-                names = "; ".join(not_ready)
-                raise ValueError(
-                    f"Cannot create bundle: members are not ready: [{names}]. "
-                    "Fix or recreate the failed members first."
-                )
+        elif _lazy_mcp_provisioning_enabled() and (spec or {}).get("lazy_provisioning"):
+            logger.info(
+                "Skipping background MCP verification for lazy instance %s",
+                instance.id,
+            )
 
         else:
             # docker/command — fire background verify; monitor will also sweep.
@@ -459,6 +577,38 @@ class MCPServerInstanceService:
         )
 
         return instance
+
+    async def create_instance_with_spec(
+        self,
+        server_payload: MCPServerCreate,
+        instance_payload: MCPServerInstanceCreate,
+    ) -> MCPServerInstance | None:
+        server = MCPServer(
+            name=server_payload.name,
+            description=server_payload.description,
+            docker_image_url=server_payload.docker_image_url,
+            version=server_payload.version,
+            tags=server_payload.tags or [],
+            is_public=server_payload.is_public,
+            env_schema=server_payload.env_schema or [],
+            cmd=server_payload.cmd,
+            remote_url=server_payload.remote_url,
+            json_spec=server_payload.json_spec,
+            registry_url=server_payload.registry_url,
+            created_by=self.repository.user_context.user_id,
+            workspace_id=self.repository.user_context.workspace_id,
+        )
+        self.repository.session.add(server)
+        await self.repository.session.flush()
+
+        payload = MCPServerInstanceCreate(
+            name=instance_payload.name,
+            description=instance_payload.description,
+            server_spec_id=str(server.id),
+            json_spec=instance_payload.json_spec,
+            auth_config_id=instance_payload.auth_config_id,
+        )
+        return await self.create_instance(payload)
 
     @audited("mcp_instance.update", resource_type="mcp_instance", resource_id_param="id")
     async def update_instance(
@@ -515,7 +665,8 @@ class MCPServerInstanceService:
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
 
-        instance_type = (instance.json_spec or {}).get("type", "docker")
+        transport_spec = await self._get_transport_spec_for_instance(instance)
+        instance_type = transport_spec.get("type", "docker")
         if instance_type == "bundle":
             member_ids: list[str] = (instance.json_spec or {}).get("members", [])
             members = []
@@ -528,8 +679,52 @@ class MCPServerInstanceService:
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
-        payload = await verify(instance)
+        extra_headers = await self._resolve_auth_headers(instance)
+        payload = await verify(instance, extra_headers=extra_headers or None)
         return dict(payload)
+
+    async def discover_and_store_tools(self, instance_id: UUID) -> dict:
+        """Re-run verification (which lists tools and persists them) and return tools.
+
+        Used by the post-OAuth tool discovery hook and the user-initiated
+        "Refresh Tools" / "Discover Tools" action on the instance detail page.
+        """
+        verification_payload = await self.verify_instance(instance_id)
+        instance = await self.repository.get_by_id(instance_id)
+        tools = (instance.tools if instance else None) or []
+        return {"tools": tools, "verification": verification_payload}
+
+    async def _resolve_auth_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """Resolve auth headers (Bearer / API key) from instance.auth_config_id.
+
+        Returns an empty dict if no auth config is attached or resolution fails.
+        Logged on failure but never raises — callers may still proceed and
+        receive a 401 from the upstream MCP server, which is the more
+        actionable error to surface to the user.
+        """
+        if not instance.auth_config_id:
+            return {}
+        try:
+            from agentarea_mcp.application.auth_service import MCPAuthService
+            from agentarea_mcp.infrastructure.auth_repository import (
+                MCPAuthConfigRepository,
+            )
+
+            auth_repo = MCPAuthConfigRepository(
+                self.repository.session, self.repository.user_context
+            )
+            auth_service = MCPAuthService(auth_repo, self.secret_manager)
+            auth_config = await auth_service.get(instance.auth_config_id)
+            if not auth_config:
+                return {}
+            return await auth_service.get_auth_headers(auth_config)
+        except Exception:
+            logger.warning(
+                "Failed to resolve auth headers for instance %s",
+                instance.id,
+                exc_info=True,
+            )
+            return {}
 
     async def get_instance_environment(self, instance_id: UUID) -> dict[str, str]:
         instance = await self.repository.get_by_id(instance_id)
@@ -571,7 +766,8 @@ class MCPServerInstanceService:
         if server_spec_id:
             filters["server_spec_id"] = server_spec_id
 
-        return await self.repository.list_all(creator_scoped=creator_scoped, **filters)
+        instances = await self.repository.list_all(creator_scoped=creator_scoped, **filters)
+        return [instance for instance in instances if instance.server_spec_id]
 
     async def execute_tool(
         self,
@@ -616,11 +812,12 @@ class MCPServerInstanceService:
                 f"MCP server instance {server_instance_id} not found",
             )
 
-        instance_type = (instance.json_spec or {}).get("type", "docker")
+        transport_spec = await self._get_transport_spec_for_instance(instance)
+        instance_type = transport_spec.get("type", "docker")
 
         # Bundle: resolve member and check before dispatching
         if instance_type == "bundle":
-            tools = instance.tools or (instance.json_spec or {}).get("available_tools") or []
+            tools = instance.tools or transport_spec.get("available_tools") or []
             matched = next((t for t in tools if t.get("name") == tool_name), None)
             if not matched:
                 return _fail(
@@ -663,6 +860,33 @@ class MCPServerInstanceService:
 
         # Non-bundle: check verification status
         verification = instance.verification or {}
+        if verification.get("status") != "succeeded":
+            if _lazy_mcp_provisioning_enabled() and _is_lazy_instance(instance):
+                logger.info(
+                    "Lazy MCP provisioning on first tool call: instance=%s tool=%s",
+                    server_instance_id,
+                    tool_name,
+                )
+                verification = await self.verify_instance(server_instance_id)
+                instance = await self.repository.get_by_id(server_instance_id)
+                if not instance:
+                    return _fail(
+                        f"MCP server instance {server_instance_id} disappeared during provisioning.",
+                        f"MCP server instance {server_instance_id} disappeared during provisioning",
+                    )
+                refresh_result = self.repository.session.refresh(instance)
+                if inspect.isawaitable(refresh_result):
+                    await refresh_result
+            else:
+                reason = verification.get("status", "unknown")
+                v_err = (verification.get("error") or {}).get("message", "")
+                detail = f" ({v_err})" if v_err else ""
+                return _fail(
+                    f"MCP '{instance.name}' is not available (status: {reason}{detail}). "
+                    "Re-verify the instance.",
+                    f"Instance {server_instance_id} verification status: {reason}",
+                )
+
         if verification.get("status") != "succeeded":
             reason = verification.get("status", "unknown")
             v_err = (verification.get("error") or {}).get("message", "")
@@ -747,14 +971,15 @@ class MCPServerInstanceService:
     async def _resolve_mcp_url_and_headers(
         self, instance: MCPServerInstance
     ) -> tuple[str, dict[str, str]]:
-        mcp_url = instance.endpoint_url
+        transport_spec = await self._get_transport_spec_for_instance(instance)
+        mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:
             raise RuntimeError(
                 f"Instance {instance.id} has no endpoint URL (missing url/external_url in json_spec)"
             )
 
         headers: dict[str, str] = {}
-        custom_headers = (instance.json_spec or {}).get("headers")
+        custom_headers = transport_spec.get("headers")
         if isinstance(custom_headers, dict):
             headers.update(custom_headers)
 
@@ -784,25 +1009,26 @@ class MCPServerInstanceService:
     ):
         from mcp import ClientSession
 
+        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+
         try:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=30), headers=headers or None
+                streamable_url, timeout=timedelta(seconds=30), headers=headers or None
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
                     return await session.call_tool(tool_name, tool_args)
         except Exception as e:
-            logger.info("Streamable HTTP call failed for %s (%s), trying SSE fallback", mcp_url, e)
+            logger.info(
+                "Streamable HTTP call failed for %s (%s), trying SSE at %s",
+                streamable_url,
+                e,
+                sse_url,
+            )
 
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(sse_url, timeout=30, headers=headers or None) as (
             read_stream,
@@ -815,25 +1041,26 @@ class MCPServerInstanceService:
     async def _list_tools_via_mcp(self, mcp_url: str, headers: dict[str, str]):
         from mcp import ClientSession
 
+        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+
         try:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10), headers=headers or None
+                streamable_url, timeout=timedelta(seconds=10), headers=headers or None
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
                     return await session.list_tools()
         except Exception as e:
-            logger.info("Streamable HTTP failed for %s (%s), trying SSE fallback", mcp_url, e)
+            logger.info(
+                "Streamable HTTP failed for %s (%s), trying SSE at %s",
+                streamable_url,
+                e,
+                sse_url,
+            )
 
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(sse_url, timeout=10, headers=headers or None) as (
             read_stream,
@@ -842,6 +1069,15 @@ class MCPServerInstanceService:
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 return await session.list_tools()
+
+    @staticmethod
+    def _mcp_transport_urls(mcp_url: str) -> tuple[str, str]:
+        base = mcp_url.rstrip("/")
+        if base.endswith("/sse"):
+            return base[:-4] + "/mcp", base
+        if base.endswith("/mcp"):
+            return base, base[:-4] + "/sse"
+        return base + "/mcp", base + "/sse"
 
     async def validate_connection(
         self, url: str, headers: dict[str, str] | None = None
@@ -889,11 +1125,12 @@ class MCPServerInstanceService:
         if not instance:
             return {"status": "error", "message": "Instance not found"}
 
-        instance_type = (instance.json_spec or {}).get("type", "docker")
+        transport_spec = await self._get_transport_spec_for_instance(instance)
+        instance_type = transport_spec.get("type", "docker")
         if instance_type != "url":
             return {"status": "error", "message": "Probe is only supported for URL-type instances"}
 
-        mcp_url = instance.endpoint_url
+        mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:
             return {"status": "error", "message": "No endpoint URL configured"}
 

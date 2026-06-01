@@ -8,7 +8,16 @@ export const metadata: Metadata = {
   title: "Inbox",
 };
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter } = await searchParams;
+  const activeFilter = (["all", "pending", "completed", "failed"].includes(filter ?? "")
+    ? filter
+    : "pending") as "all" | "pending" | "completed" | "failed";
+
   return (
     <ContentBlock
       header={{
@@ -22,7 +31,7 @@ export default async function InboxPage() {
           </div>
         }
       >
-        <InboxData />
+        <InboxData filter={activeFilter} />
       </Suspense>
     </ContentBlock>
   );

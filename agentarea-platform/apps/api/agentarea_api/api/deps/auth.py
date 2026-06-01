@@ -8,44 +8,11 @@ import logging
 from typing import Annotated
 
 from agentarea_common.auth import UserContext, UserContextDep
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
 
-async def get_workspace_id(
-    x_workspace_id: str | None = Header(
-        None,
-        description="Workspace ID for data isolation. Required for most endpoints.",
-        alias="X-Workspace-ID",
-    ),
-    user_context: UserContextDep | None = None,
-) -> str:
-    """Get the workspace ID from the request header or user context.
-
-    Args:
-        x_workspace_id: Workspace ID provided in X-Workspace-ID header
-        user_context: User context from authentication
-
-    Returns:
-        str: The workspace ID from header, or user's workspace_id from context
-
-    Note: This function is deprecated. Use UserContextDep.workspace_id instead.
-    """
-    if x_workspace_id:
-        return x_workspace_id
-    if user_context:
-        return user_context.workspace_id
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST, detail="Workspace ID is required but not provided"
-    )
-
-
-# Type alias for workspace dependency
-WorkspaceDep = Annotated[str, Depends(get_workspace_id)]
-
-
-# New context-based dependencies
 async def get_admin_user_context(
     user_context: UserContextDep,
 ) -> UserContext:

@@ -11,8 +11,8 @@ BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
 
 # Timeout configurations
 ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
-LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=2)
-TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=3)
+LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
+TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 
 # Heartbeat configuration
@@ -24,6 +24,7 @@ DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for chi
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
+LLM_RETRY_ATTEMPTS: Final[int] = 1
 
 
 # Context window management
@@ -109,6 +110,7 @@ class Activities:
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
     RESOLVE_SKILL_FILE: Final[str] = "resolve_skill_file_activity"
     EXECUTE_SKILL_SCRIPT: Final[str] = "execute_skill_script_activity"
+    CLEANUP_SANDBOX_WORKFLOW: Final[str] = "cleanup_sandbox_workflow_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
     STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"

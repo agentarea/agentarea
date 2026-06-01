@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -14,7 +15,7 @@ type AgentCardProps = {
 
 export default function AgentCard({ agent }: AgentCardProps) {
   return (
-    <Link href={`/agents/${agent.id}/new-task`}>
+    <Link href={`/agents/${agent.id}`}>
       <div className="block h-full">
         <Card
           className={cn(
@@ -46,6 +47,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 pt-0.5">
                   <div className="flex items-center gap-2">
+                    <AgentAvatar agent={agent as any} size="sm" />
                     <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 transition-colors duration-300 group-hover:text-primary dark:text-zinc-100 dark:group-hover:text-zinc-50">
                       {agent.name}
                     </h3>

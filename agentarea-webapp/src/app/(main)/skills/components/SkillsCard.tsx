@@ -1,8 +1,8 @@
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { FileCode, Github, Sparkles, Upload } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
@@ -15,7 +15,7 @@ function SourceIcon({ sourceType }: { sourceType: string }) {
   switch (sourceType) {
     case "github":
       return <Github className="h-3 w-3" />;
-    case "upload":
+    case "zip":
       return <Upload className="h-3 w-3" />;
     default:
       return <FileCode className="h-3 w-3" />;
@@ -29,8 +29,10 @@ export default function SkillsCard({ skill }: SkillsCardProps) {
     switch (sourceType) {
       case "github":
         return t("github");
-      case "upload":
-        return t("uploaded");
+      case "zip":
+        return t("zip");
+      case "path":
+        return t("path");
       default:
         return t("content");
     }

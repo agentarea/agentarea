@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -55,4 +56,8 @@ class RunCreate(BaseModel):
     project_id: str | None = Field(
         default=None,
         description="Optional project scope for billing / organization.",
+    )
+    task_policy: PolicyDocument | None = Field(
+        default=None,
+        description="Optional task-scoped governance policy that may only tighten higher scopes.",
     )

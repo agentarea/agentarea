@@ -1,0 +1,4094 @@
+{
+  "metadata": {
+    "source": "research/mcp-remote-oauth-catalog.csv",
+    "generated_by": "agentarea local MCP OAuth catalog ingestion",
+    "total_count": 95
+  },
+  "servers": [
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/github",
+        "title": "GitHub",
+        "description": "Remote MCP server for GitHub. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.githubcopilot.com/mcp/"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Requires GitHub Copilot. Good candidate for URL plus OAuth onboarding.",
+          "agentarea:logo_domain": "github.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=github.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/github.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/atlassian",
+        "title": "Atlassian",
+        "description": "Remote MCP server for Atlassian. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.atlassian.com/v1/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Use v1/mcp. Legacy v1/sse endpoint is deprecated after 2026-06-30.",
+          "agentarea:logo_domain": "atlassian.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=atlassian.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/atlassian.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/notion",
+        "title": "Notion",
+        "description": "Remote MCP server for Notion. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developers.notion.com/docs/get-started-with-mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.notion.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developers.notion.com/docs/get-started-with-mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote MCP with OAuth flow.",
+          "agentarea:logo_domain": "notion.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=notion.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/notion.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/slack",
+        "title": "Slack",
+        "description": "Remote MCP server for Slack. OAuth status: oauth_limited.",
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.slack.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "oauth_limited",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://docs.slack.dev/ai/slack-mcp-server/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth supported, but client/app registration and Slack-side allowlisting can apply.",
+          "agentarea:logo_domain": "slack.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=slack.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/slack.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/linear",
+        "title": "Linear",
+        "description": "Remote MCP server for Linear. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://linear.app/docs/mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.linear.app/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://linear.app/docs/mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth 2.1 with dynamic client registration.",
+          "agentarea:logo_domain": "linear.app",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=linear.app&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/linear.jpg",
+            "mimeType": "image/jpeg",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/stripe",
+        "title": "Stripe",
+        "description": "Remote MCP server for Stripe. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.stripe.com/mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.stripe.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://docs.stripe.com/mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth supported. API key can be used as fallback in some clients.",
+          "agentarea:logo_domain": "stripe.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=stripe.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/stripe.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/sentry",
+        "title": "Sentry",
+        "description": "Remote MCP server for Sentry. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.sentry.io/product/sentry-mcp/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.sentry.dev/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://docs.sentry.io/product/sentry-mcp/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth 2.1 remote MCP.",
+          "agentarea:logo_domain": "sentry.dev",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=sentry.dev&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/sentry.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/cloudflare",
+        "title": "Cloudflare",
+        "description": "Remote MCP server for Cloudflare. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.cloudflare.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Cloudflare has multiple official MCP servers; this is the top-level remote endpoint.",
+          "agentarea:logo_domain": "cloudflare.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=cloudflare.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/cloudflare.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/supabase",
+        "title": "Supabase",
+        "description": "Remote MCP server for Supabase. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://supabase.com/docs/guides/getting-started/mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.supabase.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://supabase.com/docs/guides/getting-started/mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote hosted MCP server with OAuth.",
+          "agentarea:logo_domain": "supabase.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=supabase.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/supabase.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/vercel",
+        "title": "Vercel",
+        "description": "Remote MCP server for Vercel. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://vercel.com/docs/mcp/vercel-mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.vercel.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://vercel.com/docs/mcp/vercel-mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote hosted MCP with OAuth.",
+          "agentarea:logo_domain": "vercel.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=vercel.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/vercel.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/figma",
+        "title": "Figma",
+        "description": "Remote MCP server for Figma. OAuth status: oauth_limited.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.figma.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "oauth_limited",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote OAuth server. Some clients may require allowlist or manual client registration.",
+          "agentarea:logo_domain": "figma.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=figma.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/figma.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/canva",
+        "title": "Canva",
+        "description": "Remote MCP server for Canva. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://www.canva.dev/docs/mcp/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.canva.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://www.canva.dev/docs/mcp/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote MCP with OAuth/DCR style setup.",
+          "agentarea:logo_domain": "canva.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=canva.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/canva.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/airtable",
+        "title": "Airtable",
+        "description": "Remote MCP server for Airtable. OAuth status: oauth_limited.",
+        "version": "1.0.0",
+        "websiteUrl": "https://support.airtable.com/docs/using-the-airtable-mcp-server",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.airtable.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "oauth_limited",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://support.airtable.com/docs/using-the-airtable-mcp-server",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote OAuth server. Some clients may require manual registration.",
+          "agentarea:logo_domain": "airtable.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=airtable.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/airtable.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/asana",
+        "title": "Asana",
+        "description": "Remote MCP server for Asana. OAuth status: oauth_limited.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developers.asana.com/docs/using-asanas-mcp-server",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.asana.com/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "oauth_limited",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developers.asana.com/docs/using-asanas-mcp-server",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth supported; redirect URI/client allowlist restrictions can apply.",
+          "agentarea:logo_domain": "asana.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=asana.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/asana.ico",
+            "mimeType": "image/x-icon",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/box",
+        "title": "Box",
+        "description": "Remote MCP server for Box. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developer.box.com/guides/box-mcp/remote/",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.box.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developer.box.com/guides/box-mcp/remote/",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote Box MCP server with OAuth.",
+          "agentarea:logo_domain": "box.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=box.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/box.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/square",
+        "title": "Square",
+        "description": "Remote MCP server for Square. OAuth status: oauth_limited.",
+        "version": "1.0.0",
+        "websiteUrl": "https://developer.squareup.com/docs/mcp",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.squareup.com/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "oauth_limited",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://developer.squareup.com/docs/mcp",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "OAuth supported; Square may restrict MCP clients through allowlisting.",
+          "agentarea:logo_domain": "squareup.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=squareup.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/square.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/paypal",
+        "title": "PayPal",
+        "description": "Remote MCP server for PayPal. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.paypal.ai/developer/tools/ai/mcp-quickstart",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.paypal.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://docs.paypal.ai/developer/tools/ai/mcp-quickstart",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote MCP with PayPal auth flow.",
+          "agentarea:logo_domain": "paypal.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=paypal.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/paypal.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/zapier",
+        "title": "Zapier",
+        "description": "Remote MCP server for Zapier. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://help.zapier.com/hc/en-us/articles/36265392843917-Use-Zapier-MCP-with-your-client",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.zapier.com/"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://help.zapier.com/hc/en-us/articles/36265392843917-Use-Zapier-MCP-with-your-client",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Usually creates a private Zapier MCP URL after OAuth/login setup.",
+          "agentarea:logo_domain": "zapier.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=zapier.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/zapier.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/egnyte",
+        "title": "Egnyte",
+        "description": "Remote MCP server for Egnyte. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/egnyte",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp-server.egnyte.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/egnyte",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote hosted MCP. Confirm exact auth requirements before publishing as one-click OAuth.",
+          "agentarea:logo_domain": "egnyte.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=egnyte.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/egnyte.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/heroku",
+        "title": "Heroku",
+        "description": "Remote MCP server for Heroku. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://devcenter.heroku.com/articles/heroku-mcp-server",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.heroku.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "official_docs",
+          "agentarea:source_url": "https://devcenter.heroku.com/articles/heroku-mcp-server",
+          "agentarea:confidence": "high",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote Heroku MCP server with OAuth.",
+          "agentarea:logo_domain": "heroku.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=heroku.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/heroku.jpg",
+            "mimeType": "image/jpeg",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/activecampaign",
+        "title": "ActiveCampaign",
+        "description": "Remote MCP server for ActiveCampaign. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/activecampaign",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.activecampaign.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/activecampaign",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check official docs and OAuth behavior before enabling in product.",
+          "agentarea:logo_domain": "activecampaign.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=activecampaign.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/activecampaign.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/ahrefs",
+        "title": "Ahrefs",
+        "description": "Remote MCP server for Ahrefs. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/ahrefs",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.ahrefs.com/mcp/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/ahrefs",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth mode before publishing as OAuth-connectable.",
+          "agentarea:logo_domain": "ahrefs.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=ahrefs.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/ahrefs.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/apollo",
+        "title": "Apollo",
+        "description": "Remote MCP server for Apollo. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/apollo",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.apollo.io/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/apollo",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior before enabling.",
+          "agentarea:logo_domain": "apollo.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=apollo.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/apollo.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/attio",
+        "title": "Attio",
+        "description": "Remote MCP server for Attio. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/attio",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.attio.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/attio",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth behavior.",
+          "agentarea:logo_domain": "attio.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=attio.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/attio.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/base44",
+        "title": "Base44",
+        "description": "Remote MCP server for Base44. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/base44",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://app.base44.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/base44",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "base44.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=base44.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/base44.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/benevity",
+        "title": "Benevity",
+        "description": "Remote MCP server for Benevity. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/benevity",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.benevity.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/benevity",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth behavior.",
+          "agentarea:logo_domain": "benevity.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=benevity.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/benevity.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/bitly",
+        "title": "Bitly",
+        "description": "Remote MCP server for Bitly. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/bitly",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api-ssl.bitly.com/v4/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/bitly",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "bitly.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=bitly.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/bitly.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/braintrust",
+        "title": "Braintrust",
+        "description": "Remote MCP server for Braintrust. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/braintrust",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.braintrust.dev/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/braintrust",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth behavior.",
+          "agentarea:logo_domain": "braintrust.dev",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=braintrust.dev&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/braintrust.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/buildkite",
+        "title": "Buildkite",
+        "description": "Remote MCP server for Buildkite. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.buildkite.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "local_catalog",
+          "agentarea:source_url": "mcp-oauth-catalog.yaml",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote URL exists in local catalog. Needs fresh official source check before public listing.",
+          "agentarea:logo_domain": "buildkite.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=buildkite.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/buildkite.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/clerk",
+        "title": "Clerk",
+        "description": "Remote MCP server for Clerk. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/clerk",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.clerk.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/clerk",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "clerk.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=clerk.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/clerk.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/clickup",
+        "title": "ClickUp",
+        "description": "Remote MCP server for ClickUp. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/clickup",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.clickup.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/clickup",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "clickup.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=clickup.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/clickup.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/close",
+        "title": "Close",
+        "description": "Remote MCP server for Close. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/close",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.close.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/close",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "close.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=close.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/close.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/cloudinary",
+        "title": "Cloudinary",
+        "description": "Remote MCP server for Cloudinary. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/cloudinary",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://asset-management.mcp.cloudinary.com/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/cloudinary",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth behavior.",
+          "agentarea:logo_domain": "cloudinary.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=cloudinary.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/cloudinary.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/common-room",
+        "title": "Common Room",
+        "description": "Remote MCP server for Common Room. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/common-room",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.commonroom.io/mcp/"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/common-room",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "commonroom.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=commonroom.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/common-room.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/consensus",
+        "title": "Consensus",
+        "description": "Remote MCP server for Consensus. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/consensus",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.consensus.app/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/consensus",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "consensus.app",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=consensus.app&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/consensus.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/context7",
+        "title": "Context7",
+        "description": "Remote MCP server for Context7. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/context7",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.context7.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/context7",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote URL found. This may be public/no-auth docs access rather than account OAuth.",
+          "agentarea:logo_domain": "context7.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=context7.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/context7.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/customgpt-ai",
+        "title": "CustomGPT.ai",
+        "description": "Remote MCP server for CustomGPT.ai. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/customgpt-ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.customgpt.ai"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/customgpt-ai",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "customgpt.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=customgpt.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/customgpt-ai.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/databricks",
+        "title": "Databricks",
+        "description": "Remote MCP server for Databricks. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/databricks",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://<workspace-hostname>/api/2.0/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/databricks",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Tenant/workspace-specific URL. Requires workspace host substitution.",
+          "agentarea:logo_domain": "databricks.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=databricks.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/databricks.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/dremio-cloud",
+        "title": "Dremio Cloud",
+        "description": "Remote MCP server for Dremio Cloud. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/dremio-cloud",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.dremio.cloud/mcp/<project_id>"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/dremio-cloud",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Project-specific URL. Requires project ID.",
+          "agentarea:logo_domain": "dremio.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=dremio.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/dremio-cloud.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/elastic",
+        "title": "Elastic",
+        "description": "Remote MCP server for Elastic. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/elasticsearch",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{KIBANA_URL}/api/agent_builder/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/elasticsearch",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Kibana tenant URL, not a single global endpoint.",
+          "agentarea:logo_domain": "elastic.co",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=elastic.co&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/elastic.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/factset",
+        "title": "FactSet",
+        "description": "Remote MCP server for FactSet. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/factset-ai-ready-data",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.factset.com/content/v1"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/factset-ai-ready-data",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check entitlement and OAuth behavior.",
+          "agentarea:logo_domain": "factset.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=factset.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/factset.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/glean",
+        "title": "Glean",
+        "description": "Remote MCP server for Glean. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/glean",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.glean.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/glean",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Enterprise tenant restrictions may apply.",
+          "agentarea:logo_domain": "glean.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=glean.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/glean.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/godaddy",
+        "title": "GoDaddy",
+        "description": "Remote MCP server for GoDaddy. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/godaddy",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.godaddy.com/v1/domains/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/godaddy",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check auth behavior.",
+          "agentarea:logo_domain": "godaddy.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=godaddy.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/godaddy.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/google-kubernetes-engine",
+        "title": "Google Kubernetes Engine",
+        "description": "Remote MCP server for Google Kubernetes Engine. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/google-kubernetes-engine",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://container.googleapis.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/google-kubernetes-engine",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Likely Google auth/Cloud entitlement flow; verify before publishing.",
+          "agentarea:logo_domain": "cloud.google.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=cloud.google.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/google-kubernetes-engine.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/granola",
+        "title": "Granola",
+        "description": "Remote MCP server for Granola. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/granola",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.granola.ai/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/granola",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "granola.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=granola.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/granola.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/guru",
+        "title": "Guru",
+        "description": "Remote MCP server for Guru. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/guru",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.api.getguru.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/guru",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "getguru.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=getguru.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/guru.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/harvey",
+        "title": "Harvey",
+        "description": "Remote MCP server for Harvey. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/harvey",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.harvey.ai/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/harvey",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Enterprise access likely required.",
+          "agentarea:logo_domain": "harvey.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=harvey.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/harvey.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/hex",
+        "title": "Hex",
+        "description": "Remote MCP server for Hex. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/hex",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://app.hex.tech/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/hex",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "hex.tech",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=hex.tech&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/hex.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/hubspot",
+        "title": "HubSpot",
+        "description": "Remote MCP server for HubSpot. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/hubspot",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.hubspot.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/hubspot",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check exact endpoint and OAuth behavior.",
+          "agentarea:logo_domain": "hubspot.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=hubspot.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/hubspot.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/intercom",
+        "title": "Intercom",
+        "description": "Remote MCP server for Intercom. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/intercom",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.intercom.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/intercom",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "intercom.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=intercom.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/intercom.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/jam",
+        "title": "Jam",
+        "description": "Remote MCP server for Jam. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/jam",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.jam.dev/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/jam",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "jam.dev",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=jam.dev&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/jam.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/jfrog",
+        "title": "JFrog",
+        "description": "Remote MCP server for JFrog. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/jfrog",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{JFROG_PLATFORM_URL}/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/jfrog",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Tenant-specific JFrog platform URL.",
+          "agentarea:logo_domain": "jfrog.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=jfrog.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/jfrog.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/jotform",
+        "title": "Jotform",
+        "description": "Remote MCP server for Jotform. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/jotform",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.jotform.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/jotform",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "jotform.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=jotform.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/jotform.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/klaviyo",
+        "title": "Klaviyo",
+        "description": "Remote MCP server for Klaviyo. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/klaviyo",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.klaviyo.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/klaviyo",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "klaviyo.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=klaviyo.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/klaviyo.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/lemlist",
+        "title": "Lemlist",
+        "description": "Remote MCP server for Lemlist. OAuth status: confirmed_oauth.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/lemlist",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://app.lemlist.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "confirmed_oauth",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/lemlist",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Docs mention OAuth or API key setup. Verify client compatibility before one-click launch.",
+          "agentarea:logo_domain": "lemlist.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=lemlist.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/lemlist.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/mercury",
+        "title": "Mercury",
+        "description": "Remote MCP server for Mercury. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/mercury",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.mercury.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/mercury",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "mercury.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=mercury.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/mercury.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/mermaid-chart",
+        "title": "Mermaid Chart",
+        "description": "Remote MCP server for Mermaid Chart. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/mermaid-chart",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.mermaidchart.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/mermaid-chart",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "mermaidchart.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=mermaidchart.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/mermaid-chart.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/miro",
+        "title": "Miro",
+        "description": "Remote MCP server for Miro. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/miro",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.miro.com/"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/miro",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "miro.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=miro.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/miro.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/mixpanel",
+        "title": "Mixpanel",
+        "description": "Remote MCP server for Mixpanel. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/mixpanel",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.mixpanel.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/mixpanel",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "mixpanel.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=mixpanel.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/mixpanel.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/monday-com",
+        "title": "monday.com",
+        "description": "Remote MCP server for monday.com. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/monday-com",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.monday.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/monday-com",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "monday.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=monday.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/monday-com.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/motherduck",
+        "title": "MotherDuck",
+        "description": "Remote MCP server for MotherDuck. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/motherduck",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.motherduck.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/motherduck",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "motherduck.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=motherduck.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/motherduck.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/neon",
+        "title": "Neon",
+        "description": "Remote MCP server for Neon. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/neon",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.neon.tech/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/neon",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "neon.tech",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=neon.tech&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/neon.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/new-relic",
+        "title": "New Relic",
+        "description": "Remote MCP server for New Relic. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/new-relic",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.newrelic.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/new-relic",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "newrelic.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=newrelic.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/new-relic.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/outreach",
+        "title": "Outreach",
+        "description": "Remote MCP server for Outreach. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/outreach",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.outreach.io/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/outreach",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "outreach.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=outreach.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/outreach.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/pagerduty",
+        "title": "PagerDuty",
+        "description": "Remote MCP server for PagerDuty. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/pagerduty",
+        "remotes": [
+          {
+            "type": "unknown",
+            "url": "https://github.com/PagerDuty/pagerduty-mcp-server"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/pagerduty",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Official listing points to repo. Confirm whether hosted remote URL exists before adding to URL catalog.",
+          "agentarea:logo_domain": "pagerduty.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=pagerduty.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/pagerduty.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/pendo",
+        "title": "Pendo",
+        "description": "Remote MCP server for Pendo. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/pendo",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://app.pendo.io/mcp/v0/shttp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/pendo",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "pendo.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=pendo.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/pendo.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/perplexity",
+        "title": "Perplexity",
+        "description": "Remote MCP server for Perplexity. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/perplexity",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.perplexity.ai/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/perplexity",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "perplexity.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=perplexity.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/perplexity.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/plaid",
+        "title": "Plaid",
+        "description": "Remote MCP server for Plaid. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/plaid",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://api.dashboard.plaid.com/mcp/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/plaid",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check dashboard auth and OAuth behavior.",
+          "agentarea:logo_domain": "plaid.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=plaid.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/plaid.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/planetscale",
+        "title": "PlanetScale",
+        "description": "Remote MCP server for PlanetScale. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/planetscale",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.pscale.dev/mcp/planetscale"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/planetscale",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "planetscale.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=planetscale.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/planetscale.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/posthog",
+        "title": "PostHog",
+        "description": "Remote MCP server for PostHog. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/posthog",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.posthog.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/posthog",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "posthog.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=posthog.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/posthog.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/prisma",
+        "title": "Prisma",
+        "description": "Remote MCP server for Prisma. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/prisma",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.prisma.io/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/prisma",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "prisma.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=prisma.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/prisma.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/ramp",
+        "title": "Ramp",
+        "description": "Remote MCP server for Ramp. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://ramp-mcp-remote.ramp.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "local_catalog",
+          "agentarea:source_url": "mcp-oauth-catalog.yaml",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote URL exists in local catalog. Needs fresh official source check before public listing.",
+          "agentarea:logo_domain": "ramp.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=ramp.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/ramp.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/razorpay",
+        "title": "Razorpay",
+        "description": "Remote MCP server for Razorpay. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/razorpay",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.razorpay.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/razorpay",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "razorpay.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=razorpay.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/razorpay.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/semgrep",
+        "title": "Semgrep",
+        "description": "Remote MCP server for Semgrep. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/semgrep",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.semgrep.ai/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/semgrep",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "semgrep.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=semgrep.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/semgrep.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/semrush",
+        "title": "Semrush",
+        "description": "Remote MCP server for Semrush. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/semrush",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.semrush.com/v1/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/semrush",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "semrush.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=semrush.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/semrush.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/shopify-storefront",
+        "title": "Shopify Storefront",
+        "description": "Remote MCP server for Shopify Storefront. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/shopify-storefront",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{shop}.myshopify.com/api/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/shopify-storefront",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Shop-specific URL. Not a single global OAuth endpoint.",
+          "agentarea:logo_domain": "shopify.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=shopify.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/shopify-storefront.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/similarweb",
+        "title": "Similarweb",
+        "description": "Remote MCP server for Similarweb. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/similarweb",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.similarweb.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/similarweb",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "similarweb.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=similarweb.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/similarweb.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/snowflake",
+        "title": "Snowflake",
+        "description": "Remote MCP server for Snowflake. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/snowflake",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://<account_url>/api/v2/databases/{db}/schemas/{schema}/mcp-servers/{name}"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/snowflake",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Account/database/schema-specific URL.",
+          "agentarea:logo_domain": "snowflake.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=snowflake.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/snowflake.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/stack-overflow",
+        "title": "Stack Overflow",
+        "description": "Remote MCP server for Stack Overflow. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/stack-overflow",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.stackoverflow.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/stack-overflow",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "stackoverflow.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=stackoverflow.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/stack-overflow.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/starburst",
+        "title": "Starburst",
+        "description": "Remote MCP server for Starburst. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/starburst",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.starburst.io/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/starburst",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "starburst.io",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=starburst.io&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/starburst.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/statsig",
+        "title": "Statsig",
+        "description": "Remote MCP server for Statsig. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/statsig",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.statsig.com/v1/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/statsig",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "statsig.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=statsig.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/statsig.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/supermetrics",
+        "title": "Supermetrics",
+        "description": "Remote MCP server for Supermetrics. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/supermetrics",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.supermetrics.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/supermetrics",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "supermetrics.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=supermetrics.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/supermetrics.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/tavily",
+        "title": "Tavily",
+        "description": "Remote MCP server for Tavily. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/tavily",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.tavily.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/tavily",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "tavily.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=tavily.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/tavily.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/telnyx",
+        "title": "Telnyx",
+        "description": "Remote MCP server for Telnyx. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/telnyx",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.telnyx.com/v2/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/telnyx",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "telnyx.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=telnyx.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/telnyx.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/thoughtspot",
+        "title": "ThoughtSpot",
+        "description": "Remote MCP server for ThoughtSpot. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/thoughtspot",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://agent.thoughtspot.app/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/thoughtspot",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "thoughtspot.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=thoughtspot.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/thoughtspot.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/tigerdata-timescale",
+        "title": "TigerData Timescale",
+        "description": "Remote MCP server for TigerData Timescale. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/timescale",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.tigerdata.com"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/timescale",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "tigerdata.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=tigerdata.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/tigerdata-timescale.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/twilio",
+        "title": "Twilio",
+        "description": "Remote MCP server for Twilio. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/twilio",
+        "remotes": [
+          {
+            "type": "unknown",
+            "url": "https://github.com/twilio-labs/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/twilio",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Official listing/blog found, but hosted URL needs confirmation.",
+          "agentarea:logo_domain": "twilio.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=twilio.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/twilio.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/v0-dev",
+        "title": "v0.dev",
+        "description": "Remote MCP server for v0.dev. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/v0-dev",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.v0.dev"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/v0-dev",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "v0.dev",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=v0.dev&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/v0-dev.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/visier",
+        "title": "Visier",
+        "description": "Remote MCP server for Visier. OAuth status: tenant_url.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/visier",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{vanity_name}.app.visier.com/visier-query-mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "tenant_url",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/visier",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Tenant-specific URL.",
+          "agentarea:logo_domain": "visier.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=visier.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/visier.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/weights-and-biases",
+        "title": "Weights & Biases",
+        "description": "Remote MCP server for Weights & Biases. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/weights-biases",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.withwandb.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/weights-biases",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "wandb.ai",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=wandb.ai&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/weights-and-biases.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/webflow",
+        "title": "Webflow",
+        "description": "Remote MCP server for Webflow. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.webflow.com/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "local_catalog",
+          "agentarea:source_url": "mcp-oauth-catalog.yaml",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote URL exists in local catalog. Needs fresh official source check before public listing.",
+          "agentarea:logo_domain": "webflow.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=webflow.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/webflow.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/wix",
+        "title": "Wix",
+        "description": "Remote MCP server for Wix. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.wix.com/sse"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "local_catalog",
+          "agentarea:source_url": "mcp-oauth-catalog.yaml",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Remote URL exists in local catalog. Needs fresh official source check before public listing.",
+          "agentarea:logo_domain": "wix.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=wix.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/wix.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/wordpress-com",
+        "title": "WordPress.com",
+        "description": "Remote MCP server for WordPress.com. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/wordpress-com",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://public-api.wordpress.com/wpcom/v2/mcp/v1"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/wordpress-com",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "wordpress.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=wordpress.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/wordpress-com.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/xero",
+        "title": "Xero",
+        "description": "Remote MCP server for Xero. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/xero",
+        "remotes": [
+          {
+            "type": "unknown",
+            "url": "https://github.com/XeroAPI/xero-mcp-server"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/xero",
+          "agentarea:confidence": "low",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Official listing points to repo. Confirm whether hosted remote URL exists before URL listing.",
+          "agentarea:logo_domain": "xero.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=xero.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/xero.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/you-com",
+        "title": "You.com",
+        "description": "Remote MCP server for You.com. OAuth status: needs_verification.",
+        "version": "1.0.0",
+        "websiteUrl": "https://apigene.ai/mcp/official/you-com",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.you.com/mcp"
+          }
+        ],
+        "metadata": {
+          "agentarea:oauth_status": "needs_verification",
+          "agentarea:source_type": "vendor_verified_directory",
+          "agentarea:source_url": "https://apigene.ai/mcp/official/you-com",
+          "agentarea:confidence": "medium",
+          "agentarea:last_checked": "2026-05-18",
+          "agentarea:notes": "Vendor-verified remote URL found. Re-check OAuth behavior.",
+          "agentarea:logo_domain": "you.com",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=you.com&sz=128"
+        },
+        "icons": [
+          {
+            "src": "/api/static/icons/mcp/you-com.jpg",
+            "mimeType": "image/jpeg",
+            "sizes": [
+              "128x128"
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-05-18T00:00:00Z",
+          "updatedAt": "2026-05-18T00:00:00Z"
+        }
+      }
+    }
+  ]
+}

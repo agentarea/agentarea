@@ -6,12 +6,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+)
+
+const (
+	labelComponent  = "app.kubernetes.io/component"
+	labelManagedBy  = "app.kubernetes.io/managed-by"
+	labelStatus     = "mcp.agentarea.io/status"
+	labelWorkflowID = "mcp.agentarea.io/workflow-id"
+
+	statusWaiting  = "waiting"
+	statusAssigned = "assigned"
+	statusIdle     = "idle"
+
+	annotationWorkflowAssignedAt = "mcp.agentarea.io/workflow-assigned-at"
+	annotationWorkflowLastUsedAt = "mcp.agentarea.io/workflow-last-used-at"
+	annotationWorkflowLeaseUntil = "mcp.agentarea.io/workflow-lease-until"
+	annotationWorkflowIdleSince  = "mcp.agentarea.io/workflow-idle-since"
+	annotationWorkflowCleanupAt  = "mcp.agentarea.io/workflow-cleanup-at"
 )
 
 // Client manages warm pool operations
@@ -46,14 +65,14 @@ func NewClient(client kubernetes.Interface, namespace string) *Client {
 	return &Client{
 		client:    client,
 		namespace: namespace,
-		timeout:   30 * time.Second,
+		timeout:   120 * time.Second,
 	}
 }
 
 // FindAvailablePod finds a warm pod in "waiting" state
 func (c *Client) FindAvailablePod(ctx context.Context) (*corev1.Pod, error) {
 	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=warm-pool,mcp.agentarea.io/status=waiting",
+		LabelSelector: fmt.Sprintf("%s=warm-pool,%s=%s", labelComponent, labelStatus, statusWaiting),
 		Limit:         1,
 	})
 	if err != nil {
@@ -75,6 +94,7 @@ func (c *Client) AssignPod(ctx context.Context, pod *corev1.Pod, instance *model
 
 	pod.Labels["mcp.agentarea.io/status"] = "activating"
 	pod.Labels["mcp.agentarea.io/instance-id"] = instance.InstanceID
+	pod.Labels["mcp.agentarea.io/instance-name"] = instance.Name
 
 	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {
@@ -151,21 +171,48 @@ func (c *Client) ActivatePod(ctx context.Context, pod *corev1.Pod, req Activatio
 	return nil
 }
 
-// ExecuteRequest holds script execution parameters
+// ExecuteRequest holds script execution parameters.
+//
+// WorkflowID, when set, opts the call into per-workflow workspace
+// persistence: the activation service routes the script to
+// /workspace/wf-<id>/ and keeps it across calls. Cleanup is the caller's
+// responsibility — invoke DELETE /sandbox/workflow/:id when the workflow
+// completes.
 type ExecuteRequest struct {
-	ScriptContent  string            `json:"script_content"`
-	ScriptName     string            `json:"script_name"`
-	Args           []string          `json:"args,omitempty"`
-	Env            map[string]string `json:"env,omitempty"`
-	TimeoutSeconds int              `json:"timeout_seconds,omitempty"`
+	ScriptContent  string             `json:"script_content"`
+	ScriptName     string             `json:"script_name"`
+	Args           []string           `json:"args,omitempty"`
+	Env            map[string]string  `json:"env,omitempty"`
+	InputFiles     []SandboxInputFile `json:"input_files,omitempty"`
+	ArtifactPaths  []string           `json:"artifact_paths,omitempty"`
+	TimeoutSeconds int                `json:"timeout_seconds,omitempty"`
+	WorkflowID     string             `json:"workflow_id,omitempty"`
+}
+
+// SandboxInputFile is a caller-provided file to materialize inside the sandbox workspace.
+type SandboxInputFile struct {
+	Path          string `json:"path"`
+	ContentBase64 string `json:"content_base64"`
+	ContentType   string `json:"content_type,omitempty"`
+}
+
+// SandboxArtifact is a file produced by a sandbox command and requested by the caller.
+type SandboxArtifact struct {
+	Path          string `json:"path"`
+	Name          string `json:"name,omitempty"`
+	ContentType   string `json:"content_type,omitempty"`
+	Size          int64  `json:"size,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 // ExecuteResponse holds script execution result
 type ExecuteResponse struct {
-	Stdout          string `json:"stdout"`
-	Stderr          string `json:"stderr"`
-	ExitCode        int    `json:"exit_code"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
+	Stdout          string            `json:"stdout"`
+	Stderr          string            `json:"stderr"`
+	ExitCode        int               `json:"exit_code"`
+	ExecutionTimeMs int64             `json:"execution_time_ms"`
+	Artifacts       []SandboxArtifact `json:"artifacts,omitempty"`
 }
 
 // ExecuteInPod sends a script execution request to a warm pod.
@@ -244,6 +291,215 @@ func (c *Client) ReturnToPool(ctx context.Context, pod *corev1.Pod) error {
 	return err
 }
 
+// FindOrAssignPodForWorkflow returns the pod assigned to a given workflow id,
+// allocating one if needed. Pod stickiness is what gives the per-workflow
+// sandbox its state — every call routed through the same pod hits the same
+// /workspace/wf-<id>/ directory. If the regular warm pool is exhausted, a
+// workflow-scoped pod is cloned from a warm-pool template instead of falling
+// back to a stateless executor.
+func (c *Client) FindOrAssignPodForWorkflow(ctx context.Context, workflowID string) (*corev1.Pod, error) {
+	now := time.Now().UTC()
+	selector := fmt.Sprintf("%s=%s", labelWorkflowID, workflowID)
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for workflow %s: %w", workflowID, err)
+	}
+	if len(pods.Items) > 0 {
+		pod := &pods.Items[0]
+		if pod.Labels[labelStatus] == statusIdle {
+			return c.markWorkflowAssigned(ctx, pod, workflowID, now, defaultWorkflowLeaseTTL())
+		}
+		return pod, nil
+	}
+
+	pod, err := c.FindAvailablePod(ctx)
+	if err != nil {
+		return c.createWorkflowPodFromTemplate(ctx, workflowID, now, defaultWorkflowLeaseTTL())
+	}
+	return c.markWorkflowAssigned(ctx, pod, workflowID, now, defaultWorkflowLeaseTTL())
+}
+
+func (c *Client) markWorkflowAssigned(ctx context.Context, pod *corev1.Pod, workflowID string, now time.Time, leaseTTL time.Duration) (*corev1.Pod, error) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+	if _, ok := pod.Annotations[annotationWorkflowAssignedAt]; !ok {
+		pod.Annotations[annotationWorkflowAssignedAt] = now.Format(time.RFC3339)
+	}
+	pod.Labels[labelWorkflowID] = workflowID
+	pod.Labels[labelStatus] = statusAssigned
+	pod.Annotations[annotationWorkflowLastUsedAt] = now.Format(time.RFC3339)
+	pod.Annotations[annotationWorkflowLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+	delete(pod.Annotations, annotationWorkflowIdleSince)
+	delete(pod.Annotations, annotationWorkflowCleanupAt)
+
+	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign pod to workflow %s: %w", workflowID, err)
+	}
+	return updated, nil
+}
+
+func (c *Client) createWorkflowPodFromTemplate(ctx context.Context, workflowID string, now time.Time, leaseTTL time.Duration) (*corev1.Pod, error) {
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=warm-pool", labelComponent),
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list warm pool pod templates: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no warm pool pod template available for workflow %s", workflowID)
+	}
+
+	template := pods.Items[0]
+	namePart := workflowPodNamePart(workflowID)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: fmt.Sprintf("workflow-%s-", namePart),
+			Namespace:    c.namespace,
+			Labels: map[string]string{
+				labelComponent:  "workflow-sandbox",
+				labelManagedBy:  "mcp-manager",
+				labelWorkflowID: workflowID,
+				labelStatus:     statusAssigned,
+			},
+			Annotations: map[string]string{
+				annotationWorkflowAssignedAt: now.Format(time.RFC3339),
+				annotationWorkflowLastUsedAt: now.Format(time.RFC3339),
+				annotationWorkflowLeaseUntil: now.Add(leaseTTL).Format(time.RFC3339),
+			},
+		},
+		Spec: template.Spec,
+	}
+	pod.Spec.NodeName = ""
+
+	created, err := c.client.CoreV1().Pods(c.namespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create workflow sandbox pod for %s: %w", workflowID, err)
+	}
+	return c.waitForPodRunning(ctx, created.Name, 120*time.Second)
+}
+
+// DeletePodForWorkflow deletes any pod labeled with the given workflow id.
+// The DaemonSet/Deployment that manages the warm pool replenishes the
+// deleted pod automatically; emptyDir state goes with the pod.
+func (c *Client) DeletePodForWorkflow(ctx context.Context, workflowID string) error {
+	selector := fmt.Sprintf("mcp.agentarea.io/workflow-id=%s", workflowID)
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list pods for workflow %s: %w", workflowID, err)
+	}
+	for _, pod := range pods.Items {
+		if err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+			return fmt.Errorf("failed to delete pod %s for workflow %s: %w", pod.Name, workflowID, err)
+		}
+	}
+	return nil
+}
+
+// RetirePodForWorkflow moves workflow pods to an idle state and schedules
+// garbage collection. A zero or negative TTL keeps the previous immediate
+// deletion behavior.
+func (c *Client) RetirePodForWorkflow(ctx context.Context, workflowID string, idleTTL time.Duration) error {
+	if idleTTL <= 0 {
+		return c.DeletePodForWorkflow(ctx, workflowID)
+	}
+	now := time.Now().UTC()
+	selector := fmt.Sprintf("%s=%s", labelWorkflowID, workflowID)
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list pods for workflow %s: %w", workflowID, err)
+	}
+	for _, pod := range pods.Items {
+		if pod.Labels == nil {
+			pod.Labels = make(map[string]string)
+		}
+		if pod.Annotations == nil {
+			pod.Annotations = make(map[string]string)
+		}
+		pod.Labels[labelStatus] = statusIdle
+		pod.Annotations[annotationWorkflowIdleSince] = now.Format(time.RFC3339)
+		pod.Annotations[annotationWorkflowCleanupAt] = now.Add(idleTTL).Format(time.RFC3339)
+		delete(pod.Annotations, annotationWorkflowLeaseUntil)
+		if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, &pod, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to mark pod %s idle for workflow %s: %w", pod.Name, workflowID, err)
+		}
+	}
+	return nil
+}
+
+// TouchWorkflowPod extends the active lease for a workflow pod. The GC loop
+// only deletes assigned pods after this lease expires, which prevents orphaned
+// pods from living forever while leaving long-running tasks alone.
+func (c *Client) TouchWorkflowPod(ctx context.Context, pod *corev1.Pod, leaseTTL time.Duration) error {
+	if pod == nil || pod.Labels[labelWorkflowID] == "" || leaseTTL <= 0 {
+		return nil
+	}
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+	now := time.Now().UTC()
+	pod.Annotations[annotationWorkflowLastUsedAt] = now.Format(time.RFC3339)
+	pod.Annotations[annotationWorkflowLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+	if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to extend workflow lease for pod %s: %w", pod.Name, err)
+	}
+	return nil
+}
+
+// DeleteExpiredWorkflowPods removes idle workflow sandboxes after their
+// cleanup deadline and assigned sandboxes after their orphan lease expires.
+func (c *Client) DeleteExpiredWorkflowPods(ctx context.Context, now time.Time) (int, error) {
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelWorkflowID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to list workflow sandbox pods: %w", err)
+	}
+
+	deleted := 0
+	for _, pod := range pods.Items {
+		status := pod.Labels[labelStatus]
+		annotations := pod.Annotations
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+
+		var deadlineRaw string
+		switch status {
+		case statusIdle:
+			deadlineRaw = annotations[annotationWorkflowCleanupAt]
+		case statusAssigned:
+			deadlineRaw = annotations[annotationWorkflowLeaseUntil]
+		default:
+			continue
+		}
+		if deadlineRaw == "" {
+			continue
+		}
+		deadline, err := time.Parse(time.RFC3339, deadlineRaw)
+		if err != nil || now.Before(deadline) {
+			continue
+		}
+		if err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+			return deleted, fmt.Errorf("failed to delete expired workflow sandbox pod %s: %w", pod.Name, err)
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
 // LabelStatefulPod labels an existing pod as stateful for a specific agent.
 func (c *Client) LabelStatefulPod(ctx context.Context, pod *corev1.Pod, agentID string) (*corev1.Pod, error) {
 	if pod.Labels == nil {
@@ -283,7 +539,7 @@ func (c *Client) FindOrCreateStatefulPod(ctx context.Context, agentID string) (*
 
 	// No pod found — clone a warm pool pod spec and create a stateful pod.
 	warmPods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=warm-pool,mcp.agentarea.io/status=waiting",
+		LabelSelector: fmt.Sprintf("%s=warm-pool,%s=%s", labelComponent, labelStatus, statusWaiting),
 		Limit:         1,
 	})
 	if err != nil {
@@ -343,14 +599,14 @@ func (c *Client) waitForPodRunning(ctx context.Context, podName string, timeout 
 // GetPoolStatus returns current warm pool status
 func (c *Client) GetPoolStatus(ctx context.Context) (*PoolStatus, error) {
 	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=warm-pool",
+		LabelSelector: fmt.Sprintf("%s=warm-pool", labelComponent),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list warm pods: %w", err)
 	}
 
 	status := &PoolStatus{
-		Total: len(pods.Items),
+		Total:   len(pods.Items),
 		ByPhase: make(map[string]int),
 	}
 
@@ -367,6 +623,8 @@ func (c *Client) GetPoolStatus(ctx context.Context) (*PoolStatus, error) {
 				status.Ready++
 			case "assigned":
 				status.Assigned++
+			case "idle":
+				status.Idle++
 			}
 		}
 	}
@@ -381,5 +639,34 @@ type PoolStatus struct {
 	Activating int
 	Ready      int
 	Assigned   int
+	Idle       int
 	ByPhase    map[string]int
+}
+
+func defaultWorkflowLeaseTTL() time.Duration {
+	if value := os.Getenv("SANDBOX_WORKFLOW_LEASE_TTL"); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil && duration > 0 {
+			return duration
+		}
+	}
+	return 2 * time.Hour
+}
+
+func workflowPodNamePart(workflowID string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(workflowID) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteRune('-')
+	}
+	value := strings.Trim(b.String(), "-")
+	if value == "" {
+		return "sandbox"
+	}
+	if len(value) > 32 {
+		return value[:32]
+	}
+	return value
 }

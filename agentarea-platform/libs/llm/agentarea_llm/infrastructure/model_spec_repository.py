@@ -75,53 +75,6 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
 
         return specs
 
-    async def create_spec(self, entity: ModelSpec) -> ModelSpec:
-        """Create a new model spec from domain entity.
-
-        Note: This method is deprecated. Use create() with field parameters instead.
-        """
-        # Extract fields from the spec entity
-        spec_data = {
-            "id": entity.id,
-            "provider_spec_id": entity.provider_spec_id,
-            "model_name": entity.model_name,
-            "display_name": entity.display_name,
-            "description": entity.description,
-            "context_window": entity.context_window,
-            "is_active": entity.is_active,
-            "created_at": entity.created_at,
-            "updated_at": entity.updated_at,
-        }
-
-        # Remove None values and system fields that will be auto-populated
-        spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        spec_data.pop("created_at", None)
-        spec_data.pop("updated_at", None)
-
-        created_spec = await self.create(**spec_data)
-        return await self.get_with_relations(created_spec.id) or created_spec
-
-    async def update_spec(self, entity: ModelSpec) -> ModelSpec:
-        """Update an existing model spec from domain entity.
-
-        Note: This method is deprecated. Use update() with field parameters instead.
-        """
-        # Extract fields from the spec entity
-        spec_data = {
-            "provider_spec_id": entity.provider_spec_id,
-            "model_name": entity.model_name,
-            "display_name": entity.display_name,
-            "description": entity.description,
-            "context_window": entity.context_window,
-            "is_active": entity.is_active,
-        }
-
-        # Remove None values
-        spec_data = {k: v for k, v in spec_data.items() if v is not None}
-
-        updated_spec = await self.update(entity.id, **spec_data)
-        return updated_spec or entity
-
     async def upsert_by_provider_and_model_kwargs(self, **kwargs) -> ModelSpec:
         """Upsert model spec by provider and model name using kwargs (avoids entity construction)."""
         provider_spec_id = kwargs.get("provider_spec_id")
@@ -151,6 +104,15 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 is_active=entity.is_active,
             )
             return updated or existing
-        else:
-            # Create new
-            return await self.create_spec(entity)
+        spec_data = {
+            "id": entity.id,
+            "provider_spec_id": entity.provider_spec_id,
+            "model_name": entity.model_name,
+            "display_name": entity.display_name,
+            "description": entity.description,
+            "context_window": entity.context_window,
+            "is_active": entity.is_active,
+        }
+        spec_data = {k: v for k, v in spec_data.items() if v is not None}
+        created_spec = await self.create(**spec_data)
+        return await self.get_with_relations(created_spec.id) or created_spec

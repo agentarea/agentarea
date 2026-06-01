@@ -21,7 +21,7 @@ class MCPServerResponse(BaseModel):
     slug: str
     name: str
     description: str
-    docker_image_url: str
+    docker_image_url: str | None = None
     version: str
     tags: list[str]
     is_public: bool

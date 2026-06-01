@@ -225,6 +225,23 @@ func IsValidURL(urlStr string) bool {
 	return true
 }
 
+// ValidateWorkflowID validates a workflow id used as a directory segment.
+// Allows hex/uuid-style ids and Temporal "task-<uuid>" ids; rejects anything
+// that would let a caller write outside /workspace/.
+func ValidateWorkflowID(id string) error {
+	if id == "" {
+		return fmt.Errorf("workflow_id is empty")
+	}
+	if len(id) > 128 {
+		return fmt.Errorf("workflow_id too long (max 128)")
+	}
+	workflowIDPattern := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	if !workflowIDPattern.MatchString(id) {
+		return fmt.Errorf("workflow_id contains invalid characters (allowed: a-z A-Z 0-9 _ -)")
+	}
+	return nil
+}
+
 // ValidateHealthCheckPath validates a health check path is safe
 // This prevents SSRF attacks via malicious health check paths
 func ValidateHealthCheckPath(path string) error {

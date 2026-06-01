@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: mcp-manager
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: mcp-manager
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.image.tag }}"

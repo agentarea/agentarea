@@ -249,6 +249,24 @@ def create_app() -> FastAPI:
     # Register workspace error handlers
     register_workspace_error_handlers(app)
 
+    # Map BudgetCapExceededError to HTTP 402 Payment Required so the UI can
+    # surface a clear "raise the cap or wait" message with the actual numbers.
+    from agentarea_tasks.domain.exceptions import BudgetCapExceededError
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(BudgetCapExceededError)
+    async def _budget_cap_exceeded_handler(_request: Request, exc: BudgetCapExceededError):
+        return JSONResponse(
+            status_code=402,
+            content={
+                "detail": str(exc),
+                "current_mtd_usd": exc.current_mtd_usd,
+                "cap_usd": exc.cap_usd,
+                "workspace_id": exc.workspace_id,
+            },
+        )
+
     # Health check endpoint
     @app.get("/health")
     async def health():

@@ -19,6 +19,8 @@ interface SearchInputProps {
   urlParamName?: string;
   /** Путь для обновления URL (используется только с urlParamName) */
   urlPath?: string;
+  /** URL параметры, которые нужно сбросить при изменении поиска */
+  resetParamNames?: string[];
 }
 
 export default function SearchInput({
@@ -28,6 +30,7 @@ export default function SearchInput({
   placeholder,
   urlParamName,
   urlPath,
+  resetParamNames,
 }: SearchInputProps) {
   const commonT = useTranslations("Common");
   const router = useRouter();
@@ -55,6 +58,7 @@ export default function SearchInput({
       } else {
         params.delete(urlParamName);
       }
+      resetParamNames?.forEach((paramName) => params.delete(paramName));
 
       const currentString = searchParams.toString();
       const newString = params.toString();
@@ -65,7 +69,14 @@ export default function SearchInput({
         router.replace(newUrl, { scroll: false });
       }
     }
-  }, [debouncedQuery, urlParamName, urlPath, router, searchParams]);
+  }, [
+    debouncedQuery,
+    urlParamName,
+    urlPath,
+    resetParamNames,
+    router,
+    searchParams,
+  ]);
 
   // Вызываем callback если он указан
   useEffect(() => {

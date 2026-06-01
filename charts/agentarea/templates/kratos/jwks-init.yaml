@@ -67,6 +67,7 @@ spec:
     spec:
       serviceAccountName: {{ include "agentarea.fullname" . }}-jwks-sa
       restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: jwks-generator
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"

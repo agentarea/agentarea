@@ -13,6 +13,16 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ModelInstance, user_context)
 
+    async def create_instance(self, instance: ModelInstance) -> ModelInstance:
+        """Create a model instance from a domain object."""
+        instance.workspace_id = self.user_context.workspace_id
+        if not instance.created_by:
+            instance.created_by = self.user_context.user_id
+
+        self.session.add(instance)
+        await self.session.commit()
+        return await self.get_with_relations(instance.id) or instance
+
     async def get_with_relations(self, id: UUID) -> ModelInstance | None:
         """Get model instance by ID with relationships loaded."""
         instance = await self.get_by_id(id)
@@ -72,64 +82,3 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             return list(instances_with_relations)
 
         return instances
-
-    async def get_by_workspace_id(
-        self, workspace_id: str, limit: int = 100, offset: int = 0
-    ) -> list[ModelInstance]:
-        """Get model instances by workspace ID with pagination.
-
-        Note: This method is deprecated. Use list_instances() instead which automatically
-        filters by the current workspace from user context.
-        """
-        # For backward compatibility, but this should be replaced with list_instances()
-        if workspace_id != self.user_context.workspace_id:
-            return []  # Don't allow cross-workspace access
-
-        return await self.list_instances(limit=limit, offset=offset)
-
-    async def create_instance(self, entity: ModelInstance) -> ModelInstance:
-        """Create a new model instance from domain entity.
-
-        Note: This method is deprecated. Use create() with field parameters instead.
-        """
-        # Extract fields from the instance entity
-        instance_data = {
-            "id": entity.id,
-            "provider_config_id": entity.provider_config_id,
-            "model_spec_id": entity.model_spec_id,
-            "name": entity.name,
-            "description": entity.description,
-            "is_active": entity.is_active,
-            "is_public": entity.is_public,
-            "created_at": entity.created_at,
-            "updated_at": entity.updated_at,
-        }
-
-        # Remove None values and system fields that will be auto-populated
-        instance_data = {k: v for k, v in instance_data.items() if v is not None}
-        instance_data.pop("created_at", None)
-        instance_data.pop("updated_at", None)
-
-        created_instance = await self.create(**instance_data)
-        return await self.get_with_relations(created_instance.id) or created_instance
-
-    async def update_instance(self, entity: ModelInstance) -> ModelInstance:
-        """Update an existing model instance from domain entity.
-
-        Note: This method is deprecated. Use update() with field parameters instead.
-        """
-        # Extract fields from the instance entity
-        instance_data = {
-            "provider_config_id": entity.provider_config_id,
-            "model_spec_id": entity.model_spec_id,
-            "name": entity.name,
-            "description": entity.description,
-            "is_active": entity.is_active,
-            "is_public": entity.is_public,
-        }
-
-        # Remove None values
-        instance_data = {k: v for k, v in instance_data.items() if v is not None}
-
-        updated_instance = await self.update(entity.id, **instance_data)
-        return updated_instance or entity

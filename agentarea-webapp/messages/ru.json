@@ -93,6 +93,7 @@
     }
   },
   "Sidebar": {
+    "dashboard": "Дашборд",
     "home": "Главная",
     "inbox": "Входящие",
     "admin": "Админ",
@@ -107,7 +108,10 @@
     "mcpServers": "Серверы",
     "projects": "Проекты",
     "context": "Контекст",
-    "platform": "Платформа",
+    "work": "Работа",
+    "knowledge": "Знания",
+    "build": "Сборка",
+    "govern": "Управление",
     "connections": "Соединения",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
@@ -117,6 +121,9 @@
     "modelSpecs": "Спецификации моделей",
     "automation": "Автоматизация",
     "network": "Сеть",
+    "budgets": "Бюджеты",
+    "secrets": "Секреты",
+    "policies": "Политики",
     "settings": "Настройки",
     "logout": "Выйти"
   },
@@ -298,6 +305,7 @@
     "description": "Описание",
     "tools": "Инструменты",
     "noTools": "Нет инструментов",
+    "overview": "Обзор",
     "createTask": "Создать задачу",
     "activeTasks": "Активные задачи",
     "currentTasks": "Текущие задачи",
@@ -847,7 +855,25 @@
     "source": {
       "github": "GitHub",
       "uploaded": "Загружено",
+      "zip": "Загружено",
+      "path": "Путь",
       "content": "Контент"
+    },
+    "filters": {
+      "source": "Источник",
+      "allSources": "Все источники",
+      "files": "Файлы",
+      "allFiles": "Все файлы",
+      "withFiles": "С файлами",
+      "withoutFiles": "Только контент",
+      "scope": "Область",
+      "allScopes": "Все области",
+      "clear": "Сбросить",
+      "scopeValues": {
+        "private": "Приватная",
+        "ingress": "Входящая",
+        "egress": "Исходящая"
+      }
     },
     "create": {
       "title": "Добавить навык",
@@ -906,6 +932,13 @@
     "executionTimeDesc": "Измерено от начала до завершения",
     "started": "Начало",
     "ended": "Конец",
+    "activitySummary": "Сводка активности",
+    "toolsCalled": "Инструменты",
+    "toolFailures": "Ошибки",
+    "modelCalls": "Модель",
+    "events": "События",
+    "calledTools": "Вызванные инструменты",
+    "learnedSkills": "Изученные навыки",
     "quickActions": "Быстрые действия",
     "viewTaskEvents": "Смотреть события задачи",
     "openAgentDetails": "Открыть детали агента",
@@ -1255,11 +1288,38 @@
     "errorWhileCancelling": "Произошла ошибка при отмене задачи",
     "unexpectedError": "Произошла непредвиденная ошибка"
   },
+  "QuickTask": {
+    "title": "Новая задача",
+    "loading": "Загружаем агентов…",
+    "selectAgent": "Выберите агента",
+    "noAgentsShort": "Нет агентов",
+    "placeholder": "Опишите задачу для {agentName}…",
+    "placeholderGeneric": "Что вы хотите сделать?",
+    "attach": "Прикрепить файлы",
+    "send": "Отправить",
+    "toSend": "чтобы отправить",
+    "toCreate": "чтобы создать",
+    "errorCreate": "Не удалось создать задачу. Попробуйте снова.",
+    "noAgents": {
+      "title": "Пока нет агентов",
+      "subtitle": "Создайте первого агента, чтобы запускать задачи.",
+      "openWorkplace": "Открыть Workplace",
+      "createAgent": "Создать агента"
+    }
+  },
   "WorkplacePage": {
     "workplace": "Рабочее место",
     "failedToLoadAgents": "Не удалось загрузить агентов",
     "noAgentsAvailable": "Агенты недоступны.",
-    "createFirstAgent": "Создайте своего первого агента, чтобы начать работу."
+    "createFirstAgent": "Создайте своего первого агента, чтобы начать работу.",
+    "onboarding": {
+      "noAgentTitle": "Нет агента",
+      "noAgentSubtitle": "Создайте агента, чтобы начать общение в этом воркспейсе.",
+      "noProviderSubtitle": "Сначала подключите языковую модель, потом создайте агента.",
+      "createAgentAction": "Создать агента",
+      "connectLLMAction": "Подключить LLM",
+      "disabledPlaceholder": "Создайте агента, чтобы начать общение…"
+    }
   },
   "BuiltinToolIconGrid": {
     "title": "Встроенные инструменты",

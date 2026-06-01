@@ -656,7 +656,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
           }
           submitLabel={isCreating ? t("actions.creating") : t("actions.createInstance")}
           showContainerSummary
-          containerImage={server.docker_image_url}
+          containerImage={server.docker_image_url ?? undefined}
           containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
         />
       </div>

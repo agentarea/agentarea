@@ -41,8 +41,8 @@ type Config struct {
 
 // FeaturesConfig holds feature flag configuration
 type FeaturesConfig struct {
-	Enabled  []string                       `json:"enabled"`
-	Variants map[string]map[string]string   `json:"variants"`
+	Enabled  []string                     `json:"enabled"`
+	Variants map[string]map[string]string `json:"variants"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -91,7 +91,7 @@ func Load() *Config {
 			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
 			Port:         getEnvInt("SERVER_PORT", 8000),
 			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
-			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 35*time.Minute),
 			// CORS disabled by default for security
 			CORSEnabled:        getEnvBool("CORS_ENABLED", false),
 			CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{}),
@@ -177,6 +177,7 @@ func loadKubernetesConfig() KubernetesConfig {
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
 	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
+	config.PodServiceAccountName = getEnv("KUBERNETES_POD_SERVICE_ACCOUNT_NAME", config.PodServiceAccountName)
 	config.ImagePullPolicy = getEnv("K8S_IMAGE_PULL_POLICY", config.ImagePullPolicy)
 	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)
 	config.GatewayNamespace = getEnv("KUBERNETES_GATEWAY_NAMESPACE", config.GatewayNamespace)

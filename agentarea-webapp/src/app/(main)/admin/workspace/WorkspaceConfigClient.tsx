@@ -1,19 +1,22 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Download, FileUp, Upload } from "lucide-react";
+import { DollarSign, Download, FileUp, Upload } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   exportWorkspaceAction as exportWorkspace,
   importWorkspaceAction as importWorkspace,
+  getWorkspaceSettingsAction,
+  updateWorkspaceSettingsAction,
 } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +36,38 @@ export default function WorkspaceConfigClient() {
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentCap, setCurrentCap] = useState<number | null | undefined>(undefined);
+  const [capInput, setCapInput] = useState("");
+  const [isLoadingCap, setIsLoadingCap] = useState(false);
+  const [isSavingCap, setIsSavingCap] = useState(false);
+  const [capStatus, setCapStatus] = useState<"idle" | "success" | "error">("idle");
+
+  useEffect(() => {
+    if (activeTab !== "budget") return;
+    if (currentCap !== undefined) return;
+    setIsLoadingCap(true);
+    getWorkspaceSettingsAction().then(({ data }) => {
+      if (data) {
+        setCurrentCap(data.monthly_cap_usd);
+        setCapInput(data.monthly_cap_usd != null ? String(data.monthly_cap_usd) : "");
+      }
+    }).finally(() => setIsLoadingCap(false));
+  }, [activeTab, currentCap]);
+
+  const handleSaveCap = async () => {
+    setIsSavingCap(true);
+    setCapStatus("idle");
+    const value = capInput.trim() === "" ? null : parseFloat(capInput);
+    const { data, error } = await updateWorkspaceSettingsAction(value);
+    if (error || !data) {
+      setCapStatus("error");
+    } else {
+      setCurrentCap(data.monthly_cap_usd);
+      setCapStatus("success");
+    }
+    setIsSavingCap(false);
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -163,6 +198,11 @@ export default function WorkspaceConfigClient() {
                 value: "import",
                 label: t("import.tabLabel"),
                 icon: <Upload className="h-4 w-4" />,
+              },
+              {
+                value: "budget",
+                label: t("budget.tabLabel"),
+                icon: <DollarSign className="h-4 w-4" />,
               },
             ]}
           />
@@ -315,6 +355,58 @@ export default function WorkspaceConfigClient() {
               <Upload className="h-4 w-4" />
               {isImporting ? t("import.importing") : t("import.button")}
             </Button>
+          </div>
+        </TabsContent>
+        <TabsContent value="budget" className="space-y-4">
+          <div className="grid gap-4">
+            <div>
+              <h3 className="text-sm font-semibold">{t("budget.title")}</h3>
+              <p className="note mt-1">{t("budget.description")}</p>
+            </div>
+
+            <div className="grid gap-2">
+              <FormLabel htmlFor="monthly-cap" icon={DollarSign}>
+                {t("budget.label")}
+              </FormLabel>
+              <Input
+                id="monthly-cap"
+                type="number"
+                step="0.01"
+                min="0"
+                value={capInput}
+                onChange={(e) => {
+                  setCapInput(e.target.value);
+                  setCapStatus("idle");
+                }}
+                placeholder={t("budget.placeholder")}
+                disabled={isLoadingCap || isSavingCap}
+                className="max-w-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                {isLoadingCap
+                  ? "..."
+                  : currentCap != null
+                  ? `${t("budget.current")}: $${currentCap.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : t("budget.noCap")}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Button
+                onClick={handleSaveCap}
+                disabled={isSavingCap || isLoadingCap}
+                size="sm"
+                className="w-fit"
+              >
+                {isSavingCap ? t("budget.saving") : t("budget.save")}
+              </Button>
+              {capStatus === "success" && (
+                <p className="text-xs text-green-600 dark:text-green-400">{t("budget.success")}</p>
+              )}
+              {capStatus === "error" && (
+                <p className="text-xs text-destructive">{t("budget.error")}</p>
+              )}
+            </div>
           </div>
         </TabsContent>
       </Tabs>

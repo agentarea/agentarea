@@ -9,17 +9,20 @@ from fastapi import APIRouter, Depends
 
 # Import core API modules
 from . import (
+    agent_overview,
     agents,
     agents_a2a,
     agents_tasks,
     agents_well_known,
     api_keys,
     audit,
+    dashboard,
     files,
     inbox,
     mcp_auth_configs,
     mcp_oauth_connect,
     mcp_oauth_links,
+    mcp_proxy,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances,
@@ -107,6 +110,9 @@ protected_v1_router.include_router(mcp_oauth_connect.router)
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)
 
+# MCP per-instance reverse proxy (Streamable HTTP) - PROTECTED
+protected_v1_router.include_router(mcp_proxy.router)
+
 # Registries (MCP catalog) - PROTECTED
 protected_v1_router.include_router(registries.router)
 
@@ -123,6 +129,10 @@ protected_v1_router.include_router(projects.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
+
+# Dashboard + workspace settings - PROTECTED
+protected_v1_router.include_router(dashboard.router)
+protected_v1_router.include_router(agent_overview.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)

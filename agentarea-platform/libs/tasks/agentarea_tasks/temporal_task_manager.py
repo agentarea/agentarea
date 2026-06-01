@@ -138,6 +138,7 @@ class TemporalTaskManager(BaseTaskManager):
                     (task.metadata or {}).get("requires_human_approval", False)
                 ),
                 workflow_metadata=task.metadata or {},
+                effective_policy=task.effective_policy,
             )
 
             # Start the workflow using the correct workflow name and arguments
@@ -153,6 +154,7 @@ class TemporalTaskManager(BaseTaskManager):
                 "max_reasoning_iterations": execution_request.max_reasoning_iterations,
                 "requires_human_approval": execution_request.requires_human_approval,
                 "workflow_metadata": execution_request.workflow_metadata,
+                "effective_policy": execution_request.effective_policy,
             }
 
             # Create workflow config with task queue

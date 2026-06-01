@@ -17,6 +17,7 @@ import httpx
 from agentarea_common.config import get_database, get_settings
 from sqlalchemy import select
 
+from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import (
     VERIFICATION_SCHEMA_VERSION,
@@ -29,6 +30,51 @@ logger = logging.getLogger(__name__)
 _LIST_TOOLS_ATTEMPT_TIMEOUT = 5  # seconds per attempt
 _LIST_TOOLS_BACKOFF_DELAYS = [2, 4, 8, 16, 30, 30]  # seconds between retries
 _TOTAL_DEADLINE = 120  # seconds total budget (cold image pulls can take 60-90s)
+
+
+def _transport_spec_from_server(server: MCPServer) -> dict:
+    spec = dict(server.json_spec or {})
+    if server.remote_url:
+        spec.setdefault("type", "url")
+        spec.setdefault("endpoint_url", server.remote_url)
+    elif server.cmd:
+        spec.setdefault("type", "command")
+        spec.setdefault("command", server.cmd[0] if server.cmd else "")
+        if len(server.cmd or []) > 1:
+            spec.setdefault("args", list(server.cmd[1:]))
+    elif server.docker_image_url:
+        spec.setdefault("type", "docker")
+        spec.setdefault("image", server.docker_image_url)
+    else:
+        spec.setdefault("type", "docker")
+    return spec
+
+
+class _RuntimeInstance:
+    def __init__(self, instance: MCPServerInstance, transport_spec: dict):
+        self.id = instance.id
+        self.name = instance.name
+        self.workspace_id = instance.workspace_id
+        self.created_by = instance.created_by
+        self.verification = instance.verification
+        self.last_dispatch = instance.last_dispatch
+        self.tools = instance.tools
+        self.server_spec_id = instance.server_spec_id
+        self.json_spec = {**transport_spec, **(instance.json_spec or {})}
+
+    @property
+    def endpoint_url(self) -> str:
+        instance_type = self.json_spec.get("type", "docker")
+        if instance_type == "url":
+            return self.json_spec.get("endpoint_url", "")
+        if instance_type in ("docker", "command"):
+            resolved = self.json_spec.get("internal_url")
+            if isinstance(resolved, str) and "://" in resolved:
+                return resolved
+            port = 8080 if instance_type == "command" else self.json_spec.get("port") or 8000
+            return f"http://mcp-{self.id}:{port}"
+        raise ValueError("bundle has no endpoint_url")
+
 
 _TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (
     ConnectionRefusedError,
@@ -87,40 +133,53 @@ def _make_payload(
 async def _list_tools(endpoint_url: str, headers: dict | None = None) -> list[dict]:
     """Connect to running MCP server and list tools.
 
-    Tries streamable-HTTP first, falls back to SSE transport.
+    URL transport selection:
+    - URL ends with /sse  → SSE transport only (preserves explicit intent)
+    - URL ends with /mcp  → streamable-HTTP, fall back to sibling /sse
+    - URL has no suffix   → try <url>/mcp, fall back to <url>/sse
+
     Raises on any connection or protocol error — caller handles retries.
     """
     from mcp import ClientSession
 
     url = endpoint_url.rstrip("/")
-    if not url.endswith("/mcp"):
-        mcp_url = f"{url}/mcp"
-    else:
-        mcp_url = url
-
     custom_headers = dict(headers) if headers else None
     timeout_seconds = float(_LIST_TOOLS_ATTEMPT_TIMEOUT)
 
-    try:
-        from mcp.client.streamable_http import streamablehttp_client
+    # Decide transport(s) based on URL suffix.
+    if url.endswith("/sse"):
+        streamable_url: str | None = None
+        sse_url: str = url
+    elif url.endswith("/mcp"):
+        streamable_url = url
+        sse_url = url[:-4] + "/sse"
+    else:
+        streamable_url = f"{url}/mcp"
+        sse_url = f"{url}/sse"
 
-        async with streamablehttp_client(
-            mcp_url,
-            timeout=timeout_seconds,
-            headers=custom_headers,
-        ) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as sess:
-                await sess.initialize()
-                result = await sess.list_tools()
-    except Exception as transport_err:
-        logger.debug("Streamable HTTP failed for %s (%s), trying SSE", mcp_url, transport_err)
+    result = None
+    if streamable_url is not None:
+        try:
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async with streamablehttp_client(
+                streamable_url,
+                timeout=timeout_seconds,
+                headers=custom_headers,
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as sess:
+                    await sess.initialize()
+                    result = await sess.list_tools()
+        except Exception as transport_err:
+            logger.debug(
+                "Streamable HTTP failed for %s (%s), trying SSE at %s",
+                streamable_url,
+                transport_err,
+                sse_url,
+            )
+
+    if result is None:
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(
             sse_url,
@@ -176,6 +235,7 @@ async def verify(
     instance: MCPServerInstance,
     session=None,
     *,
+    extra_headers: dict[str, str] | None = None,
     _list_tools_fn=None,  # test seam
     _go_create_fn=None,  # test seam
     _go_health_fn=None,  # test seam
@@ -190,13 +250,15 @@ async def verify(
     Args:
         instance: The MCPServerInstance ORM object.
         session: An open AsyncSession.  If None, a new session is created.
+        extra_headers: Optional headers merged into the verification HTTP probe
+            (e.g. caller-supplied Authorization for ad-hoc URL checks).
         _list_tools_fn / _go_create_fn / _go_health_fn: Test seams.
 
     Returns:
         VerificationPayload with the final status written to the DB.
     """
-    if instance.json_spec.get("type") == "bundle":
-        raise NotImplementedError("Bundle verification is derived at read time (Step 3)")
+    if (instance.json_spec or {}).get("type") == "bundle":
+        raise NotImplementedError("Bundle verification is derived at read time")
 
     list_tools_fn = _list_tools_fn or _list_tools
     go_create_fn = _go_create_fn or _go_create_instance
@@ -206,7 +268,6 @@ async def verify(
     mcp_manager_url = settings.mcp.MCP_MANAGER_URL
 
     instance_id = str(instance.id)
-    instance_type = instance.json_spec.get("type", "docker")
 
     db = get_database()
 
@@ -233,6 +294,27 @@ async def verify(
                         detail=None,
                     ),
                 )
+
+            server_spec = (
+                await sess.execute(select(MCPServer).where(MCPServer.id == locked.server_spec_id))
+            ).scalar_one_or_none()
+            if server_spec is None:
+                payload = _make_payload(
+                    "failed",
+                    VerificationError(
+                        code="server_spec_not_found",
+                        message="Referenced MCP server spec was not found.",
+                        detail=str(locked.server_spec_id),
+                    ),
+                )
+                locked.verification = dict(payload)
+                await sess.flush()
+                return payload
+
+            runtime_instance = _RuntimeInstance(locked, _transport_spec_from_server(server_spec))
+            instance_type = runtime_instance.json_spec.get("type", "docker")
+            if instance_type == "bundle":
+                raise NotImplementedError("Bundle verification is derived at read time")
 
             # If another concurrent verify() is already in progress on this row,
             # return its current state — the in-flight caller will write the final
@@ -261,7 +343,7 @@ async def verify(
         resolved_url: str | None = None
         if instance_type in ("docker", "command"):
             try:
-                ack = await go_create_fn(locked, mcp_manager_url)
+                ack = await go_create_fn(runtime_instance, mcp_manager_url)
                 sc = ack["status_code"]
                 resolved_url = ack.get("internal_url")
                 if sc not in (200, 201, 409):
@@ -316,8 +398,10 @@ async def verify(
             endpoint_url = resolved_url
             await _persist_internal_url(locked.id, resolved_url, db)
         else:
-            endpoint_url = locked.endpoint_url
-        headers = dict(locked.json_spec.get("headers", {}))
+            endpoint_url = runtime_instance.endpoint_url
+        headers = dict(runtime_instance.json_spec.get("headers", {}))
+        if extra_headers:
+            headers.update(extra_headers)
         deadline = asyncio.get_event_loop().time() + _TOTAL_DEADLINE
         last_error: BaseException | None = None
 

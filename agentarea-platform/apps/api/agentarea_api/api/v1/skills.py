@@ -18,7 +18,8 @@ from agentarea_agents.schemas.skills_dto import (
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.base import RepositoryFactoryDep
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -83,6 +84,7 @@ class SkillResponse(BaseModel):
     source_type: str
     source_url: str | None
     has_files: bool
+    network_scope: str
     workspace_id: str
     created_at: str
     updated_at: str
@@ -90,6 +92,10 @@ class SkillResponse(BaseModel):
     @classmethod
     def from_skill(cls, skill: Skill) -> "SkillResponse":
         """Create response from Skill entity."""
+        network_scope = getattr(skill, "network_scope", "private")
+        if not isinstance(network_scope, str):
+            network_scope = "private"
+
         return cls(
             id=str(skill.id),
             name=skill.name,
@@ -98,6 +104,7 @@ class SkillResponse(BaseModel):
             source_type=skill.source_type,
             source_url=skill.source_url,
             has_files=skill.s3_path is not None,
+            network_scope=network_scope,
             workspace_id=skill.workspace_id,
             created_at=skill.created_at.isoformat() if skill.created_at else "",
             updated_at=skill.updated_at.isoformat() if skill.updated_at else "",
@@ -214,13 +221,32 @@ async def upload_skill(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("", response_model=list[SkillResponse])
+@router.get("", response_model=PaginatedResponse[SkillResponse])
 async def list_skills(
     skill_service: SkillServiceDep,
+    pagination: PaginationParams = Depends(),
+    source_type: str | None = Query(None, description="Filter by source type"),
+    has_files: bool | None = Query(None, description="Filter by package-backed skills"),
+    network_scope: str | None = Query(None, description="Filter by network scope"),
+    from_registry: bool | None = Query(None, description="Filter registry-created skills"),
 ):
-    """List all skills in the workspace."""
-    skills = await skill_service.list()
-    return [SkillResponse.from_skill(skill) for skill in skills]
+    """List skills in the workspace."""
+    skills, total = await skill_service.list_paginated(
+        limit=pagination.limit,
+        offset=pagination.offset,
+        search=pagination.search,
+        source_type=source_type,
+        has_files=has_files,
+        network_scope=network_scope,
+        from_registry=from_registry,
+    )
+    return PaginatedResponse(
+        items=[SkillResponse.from_skill(skill) for skill in skills],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+        has_next=(pagination.offset + pagination.page_size) < total,
+    )
 
 
 @router.get("/{skill_id}", response_model=SkillResponse)

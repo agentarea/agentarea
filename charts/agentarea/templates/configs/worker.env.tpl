@@ -11,6 +11,7 @@ WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS: "5"
 TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: "true"
 DEBUG: "false"
 ENVIRONMENT: "production"
+MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 {{- end }}
 
 {{- define "agentarea.worker.envs" }}
@@ -49,4 +50,9 @@ ENVIRONMENT: "production"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: ENVIRONMENT
+- name: MCP_MANAGER_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: MCP_MANAGER_URL
 {{- end }}

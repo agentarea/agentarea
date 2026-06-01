@@ -43,7 +43,7 @@ global:
     postgresql: "agentarea-postgresql-secret"
     # Redis credentials
     redis: "agentarea-redis-secret"
-    # MinIO/S3 credentials
+    # RustFS/S3 credentials
     rustfs: "agentarea-rustfs-secret"
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
@@ -520,6 +520,15 @@ mcpManager:
   # Set to "kata-qemu" for Kata Containers (requires Kata runtime)
   # Leave empty "" for standard container runtime
   runtimeClass: ""
+
+  # Runtime MCP server pods use a separate ServiceAccount so their registry
+  # access can point at the managed MCP runtime registry, not platform images.
+  runtime:
+    serviceAccount:
+      create: true
+      name: ""
+    imagePullSecrets: []
+    # - name: agentarea-mcp-runtime-regcred
   
   # Security context - only used when backend is "docker"
   # For "kubernetes" backend, leave empty: {}
@@ -551,6 +560,10 @@ mcpManager:
       repository: agentarea/mcp-runner
       tag: "latest"
       pullPolicy: IfNotPresent
+
+    # Maximum duration of a single sandbox command. Workflow pod lifetime is
+    # controlled separately by MCP Manager workflow lease/idle TTL settings.
+    maxExecutionTimeoutSeconds: 1800
     
     # Number of warm pods per node
     size: 10
@@ -568,6 +581,25 @@ mcpManager:
         memory: 256Mi
   
   resources: {}
+  extraEnv: []
+
+# Sandbox runner data plane. This process consumes sandbox execution requests
+# from Redis Streams and executes them in the selected sandbox backend.
+mcpSandboxRunner:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: "" # Defaults to mcpManager.image.repository
+    tag: ""        # Defaults to mcpManager.image.tag
+  consumerGroup: agentarea-sandbox-runners
+  batchSize: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   extraEnv: []
 
 # Temporal Workflow Engine
@@ -666,8 +698,8 @@ rustfs:
   persistence:
     enabled: true
     size: 10Gi
-  # Probes are overridable. The rustfs image doesn't implement MinIO's
-  # /minio/health/live path (returns 403), so defaults use TCP probes.
+  # Probes are overridable. The rustfs image doesn't expose an HTTP health path
+  # by default (returns 403), so defaults use TCP probes.
   # Override to httpGet if your image version exposes a working health path.
   readinessProbe:
     tcpSocket:

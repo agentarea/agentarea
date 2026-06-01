@@ -2,6 +2,14 @@
 
 import { getBezierPath, type EdgeProps } from "@xyflow/react";
 
+const RELATION_COLORS: Record<string, string> = {
+  has_trigger: "#60a5fa",
+  uses_mcp: "#fb7185",
+  uses_openapi: "#fb7185",
+  has_skill: "#fb7185",
+  delegates_to: "#a78bfa",
+};
+
 export default function DataFlowEdge({
   id,
   sourceX,
@@ -19,20 +27,23 @@ export default function DataFlowEdge({
     targetX,
     targetY,
     targetPosition,
-    curvature: 0.35,
+    curvature: 0.45,
   });
 
   const isInactive = data?.isInactive as boolean | undefined;
   const dimmed = data?.dimmed as boolean | undefined;
   const highlighted = data?.highlighted as boolean | undefined;
+  const relation = (data?.relation as string | undefined) ?? "";
 
-  let stroke = "#a1a1aa";
-  let strokeWidth = 1.25;
-  let opacity = 0.55;
+  const baseColor = RELATION_COLORS[relation] ?? "#94a3b8";
+
+  let stroke = baseColor;
+  let strokeWidth = 1.75;
+  let opacity = 0.75;
 
   if (highlighted) {
     stroke = "#2563eb";
-    strokeWidth = 2;
+    strokeWidth = 2.25;
     opacity = 1;
   } else if (dimmed) {
     stroke = "#d4d4d8";

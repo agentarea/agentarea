@@ -3,8 +3,16 @@
 import json
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from agentarea_triggers.channels import get_adapter, list_adapters, register_adapter
+from agentarea_triggers.channels.adapters import (
+    TELEGRAM_MD,
+    TELEGRAM_SENDER,
+    _strip_markdown,
+    make_formatter,
+    make_http_sender,
+)
 from agentarea_triggers.channels.email import (
     EmailAdapter,
     _escape_html,
@@ -26,7 +34,7 @@ class TestTelegramAdapter:
     def secret_manager(self):
         sm = AsyncMock()
         sm.get_secret = AsyncMock(
-            return_value=json.dumps({"bot_token": "test-token"})  # noqa: S106
+            return_value=json.dumps({"bot_token": "test-token"})
         )
         return sm
 
@@ -99,6 +107,64 @@ class TestTelegramAdapter:
         assert _escape_md("normal") == "normal"
 
 
+class TestComposedTelegramAdapter:
+    """Test the composed Telegram adapter used by the worker."""
+
+    @pytest.fixture
+    def secret_manager(self):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(
+            return_value=json.dumps({"bot_token": "test-token"})
+        )
+        return sm
+
+    def test_formatter_escapes_status_punctuation_for_markdown_v2(self):
+        formatter = make_formatter(TELEGRAM_MD)
+
+        msg = formatter({"event_type": "WorkflowStarted", "data": {}}, "concise")
+
+        assert "Working on it\\.\\.\\." in msg
+
+    def test_strip_markdown_for_plain_text_fallback(self):
+        assert _strip_markdown(r"\*Done\* with value\_1") == "Done with value1"
+
+    @pytest.mark.asyncio
+    async def test_sender_retries_without_markdown_on_telegram_parse_error(self, secret_manager):
+        sender = make_http_sender(TELEGRAM_SENDER, secret_manager)
+        channel_config = {
+            "type": "telegram",
+            "trigger_id": "test-trigger",
+            "chat_id": "12345",
+            "message_id": 99,
+        }
+        bad_resp = httpx.Response(
+            400,
+            text="Bad Request: can't parse entities",
+            request=httpx.Request("POST", "https://telegram.test/sendMessage"),
+        )
+        ok_resp = httpx.Response(
+            200,
+            json={"ok": True},
+            request=httpx.Request("POST", "https://telegram.test/sendMessage"),
+        )
+
+        with patch("agentarea_triggers.channels.adapters.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post.side_effect = [bad_resp, ok_resp]
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await sender(channel_config, r"⏳ Working on it\.\.\.")
+
+            assert mock_client.post.call_count == 2
+            first_payload = mock_client.post.call_args_list[0].kwargs["json"]
+            retry_payload = mock_client.post.call_args_list[1].kwargs["json"]
+            assert first_payload["parse_mode"] == "MarkdownV2"
+            assert "parse_mode" not in retry_payload
+            assert retry_payload["text"] == "⏳ Working on it..."
+            assert retry_payload["reply_to_message_id"] == 99
+
+
 class TestEmailAdapter:
     """Test Email outbound adapter."""
 
@@ -136,32 +202,44 @@ class TestChannelRouter:
     """Test channel router dispatch."""
 
     @pytest.fixture
-    def router(self):
-        return ChannelRouter()
+    def emitter(self):
+        # Router now submits to a stream emitter instead of calling adapter.send
+        # directly — the consumer drives delivery in a separate loop.
+        e = AsyncMock()
+        e.submit = AsyncMock(return_value="msg-id-1")
+        return e
+
+    @pytest.fixture
+    def router(self, emitter):
+        return ChannelRouter(emitter=emitter)
 
     @pytest.mark.asyncio
-    async def test_no_channel_origin_skips(self, router):
+    async def test_no_channel_origin_skips(self, router, emitter):
         """Events without channel_origin are ignored (webUI handles them)."""
         event = {"event_type": "WorkflowCompleted", "data": {}}
-        # Should not raise
         await router.on_task_event(event)
+        emitter.submit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_invisible_event_skipped(self, router):
+    async def test_invisible_event_skipped(self, router, emitter):
         """Events not visible in the presentation mode are skipped."""
         event = {
             "event_type": "LLMCallChunk",  # Internal — not visible in concise
             "data": {},
             "channel_origin": {"type": "telegram", "chat_id": "123", "presentation": "concise"},
         }
-        # Should not raise or attempt to send
         await router.on_task_event(event)
+        emitter.submit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_dispatches_to_registered_adapter(self, router):
-        """Events are dispatched to the correct adapter."""
-        mock_adapter = AsyncMock()
-        mock_adapter.format.return_value = "formatted message"
+    async def test_dispatches_to_registered_adapter(self, router, emitter):
+        """Events are formatted by the adapter and submitted to the emitter."""
+        from unittest.mock import MagicMock
+        mock_adapter = MagicMock()
+        # format is sync, returns the message string
+        mock_adapter.format = MagicMock(return_value="formatted message")
+        # send is async — would be called by the consumer, not by the router
+        mock_adapter.send = AsyncMock()
         register_adapter("test_channel", mock_adapter)
 
         event = {
@@ -173,17 +251,23 @@ class TestChannelRouter:
         await router.on_task_event(event)
 
         mock_adapter.format.assert_called_once()
-        mock_adapter.send.assert_called_once()
+        # send is NOT called by the router anymore — the consumer does that.
+        mock_adapter.send.assert_not_called()
+        emitter.submit.assert_called_once()
+        kwargs = emitter.submit.await_args.kwargs
+        assert kwargs["channel_type"] == "test_channel"
+        assert kwargs["message"] == "formatted message"
 
     @pytest.mark.asyncio
-    async def test_missing_adapter_logs_warning(self, router):
-        """Missing adapter logs a warning but doesn't raise."""
+    async def test_missing_adapter_logs_warning(self, router, emitter):
+        """Missing adapter logs a warning but doesn't raise or submit."""
         event = {
             "event_type": "WorkflowCompleted",
             "data": {},
             "channel_origin": {"type": "nonexistent_channel", "chat_id": "123"},
         }
         await router.on_task_event(event)
+        emitter.submit.assert_not_called()
 
 
 class TestAdapterRegistry:

@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: rustfs
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: rustfs
           image: "{{ default "rustfs/rustfs" .Values.rustfs.image.repository }}:{{ default "latest" .Values.rustfs.image.tag }}"
@@ -134,25 +135,28 @@ spec:
         app.kubernetes.io/component: rustfs-bucket-init
     spec:
       restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
-        - name: mc
-          image: "minio/mc:latest"
+        - name: s3-client
+          image: "amazon/aws-cli:2.17.51"
           command:
             - sh
             - -c
             - |
-              mc alias set local http://{{ .Release.Name }}-rustfs:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY"
-              mc mb -p local/{{ .Values.rustfs.defaultBuckets }} || true
+              aws configure set default.s3.addressing_style path
+              aws s3 mb s3://{{ .Values.rustfs.defaultBuckets }} --endpoint-url http://{{ .Release.Name }}-rustfs:9000 || true
           env:
-            - name: RUSTFS_ACCESS_KEY
+            - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.rustfs }}
                   key: root-user
-            - name: RUSTFS_SECRET_KEY
+            - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.rustfs }}
                   key: root-password
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
 {{- end }}
 {{- end }}

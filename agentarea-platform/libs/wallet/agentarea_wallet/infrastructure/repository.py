@@ -1,7 +1,7 @@
 """Repositories for the wallet domain."""
 
 import logging
-from datetime import date, datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -36,6 +36,49 @@ class WalletRepository(WorkspaceScopedRepository[AgentWallet]):
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def list_budget_exhausted(self) -> list[AgentWallet]:
+        """List wallets in the current workspace whose period spend has hit the cap.
+
+        Live computation, no events. Mirrors the live-query pattern used by
+        the existing service-budget guard. Wallets with budget_period
+        ``execution`` are skipped — those caps are per-execution and don't
+        map to a workspace-level "exhausted" notion.
+        """
+        query = (
+            select(AgentWallet)
+            .where(self._get_workspace_filter())
+            .where(AgentWallet.status == "active")
+            .where(AgentWallet.service_budget_usd > 0)
+            .where(AgentWallet.service_budget_period.in_(["daily", "monthly"]))
+        )
+        result = await self.session.execute(query)
+        wallets = list(result.scalars().all())
+
+        if not wallets:
+            return []
+
+        # Compute spent per period via a small per-wallet query — keeps logic
+        # simple and avoids JSON gymnastics. Workspaces with thousands of
+        # active wallets should revisit with a window query.
+        today = datetime.now(UTC).date()
+        daily_start = datetime(today.year, today.month, today.day)
+        monthly_start = datetime(today.year, today.month, 1)
+
+        exhausted: list[AgentWallet] = []
+        for wallet in wallets:
+            period_start = daily_start if wallet.service_budget_period == "daily" else monthly_start
+            spent_q = (
+                select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
+                .where(PaymentRecord.agent_id == str(wallet.agent_id))
+                .where(PaymentRecord.status == "completed")
+                .where(PaymentRecord.created_at >= period_start)
+                .where(PaymentRecord.workspace_id == wallet.workspace_id)
+            )
+            spent = float((await self.session.execute(spent_q)).scalar() or 0.0)
+            if spent >= float(wallet.service_budget_usd):
+                exhausted.append(wallet)
+        return exhausted
 
 
 class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
@@ -125,7 +168,7 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             .where(self._get_workspace_filter())
         )
 
-        today = date.today()
+        today = datetime.now(UTC).date()
         if budget_period == "daily":
             period_start = datetime(today.year, today.month, today.day)
             query = query.where(PaymentRecord.created_at >= period_start)

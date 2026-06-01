@@ -23,6 +23,7 @@ spec:
       runtimeClassName: kata-qemu
       {{- end }}
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: warm-pod
           image: "{{ .Values.mcpManager.warmPool.image.repository }}:{{ .Values.mcpManager.warmPool.image.tag }}"
@@ -41,6 +42,8 @@ spec:
               value: "3000"
             - name: LOG_LEVEL
               value: "{{ .Values.mcpManager.warmPool.logLevel }}"
+            - name: MAX_EXECUTION_TIMEOUT_SECONDS
+              value: "{{ .Values.mcpManager.warmPool.maxExecutionTimeoutSeconds | default 1800 }}"
           resources:
             {{- toYaml .Values.mcpManager.warmPool.resources | nindent 12 }}
           securityContext:

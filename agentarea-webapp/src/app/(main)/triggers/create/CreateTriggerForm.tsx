@@ -3,7 +3,27 @@
 import { useState, useEffect, useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Search, Tag, Bot, Clock, Globe, List, Key, Code2, AlertTriangle } from "lucide-react";
+import {
+  Search,
+  Tag,
+  Bot,
+  Clock,
+  Globe,
+  List,
+  Key,
+  Code2,
+  AlertTriangle,
+  MessageSquare,
+  Zap,
+  Send,
+  Hash,
+  Mail,
+  Webhook,
+  Circle,
+  Info,
+  type LucideIcon,
+} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -91,6 +111,7 @@ export function CreateTriggerForm({
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
     initialData?.config?.allowed_methods || ["POST"]
   );
@@ -106,6 +127,9 @@ export function CreateTriggerForm({
         setCatalog(data);
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
+        } else {
+          const firstKind = kindOrder.find((k) => data.some((e) => e.kind === k));
+          if (firstKind) setActiveTab(firstKind);
         }
       })
       .catch(() => {});
@@ -168,31 +192,64 @@ export function CreateTriggerForm({
 
   // Group by kind for default view
   const kindLabels: Record<string, string> = {
-    messaging: "Messaging",
     schedule: "Scheduling",
+    messaging: "Messaging",
     event: "Events",
   };
-  const kinds = [...new Set(catalog.map((e) => e.kind))];
+  const kindIcons: Record<string, LucideIcon> = {
+    schedule: Clock,
+    messaging: MessageSquare,
+    event: Zap,
+  };
+  const triggerIcons: Record<string, LucideIcon> = {
+    cron: Clock,
+    telegram: Send,
+    slack: Hash,
+    discord: MessageSquare,
+    email: Mail,
+    webhook: Webhook,
+  };
+  const kindOrder: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
+  const kinds = new Set(catalog.map((e) => e.kind));
+  const orderedKinds = kindOrder.filter((k) => kinds.has(k));
 
-  const renderCard = (entry: CatalogEntry) => (
-    <button
-      key={entry.id}
-      type="button"
-      onClick={() => setSelectedId(entry.id)}
-      className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm transition-colors text-left w-full",
-        selectedId === entry.id
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border hover:border-primary/50 hover:bg-muted/50 text-foreground"
-      )}
-    >
-      <span className="font-medium truncate">{entry.name}</span>
-    </button>
-  );
+  useEffect(() => {
+    if (!activeTab || isEditing) return;
+    const entries = catalog.filter((e) => e.kind === activeTab);
+    if (entries.length === 1) {
+      setSelectedId(entries[0].id);
+    }
+  }, [activeTab, catalog, isEditing]);
+
+  const renderCard = (entry: CatalogEntry) => {
+    const Icon = triggerIcons[entry.icon] ?? triggerIcons[entry.id] ?? Circle;
+    const isSelected = selectedId === entry.id;
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        onClick={() => setSelectedId(entry.id)}
+        className={cn(
+          "group flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-[13px] transition-colors w-full",
+          isSelected
+            ? "bg-foreground/[0.04] text-foreground ring-1 ring-foreground/15 dark:bg-foreground/[0.06] dark:ring-foreground/20"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        )}
+      >
+        <Icon
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-colors",
+            isSelected ? "text-foreground" : "text-muted-foreground/70"
+          )}
+        />
+        <span className="truncate font-medium">{entry.name}</span>
+      </button>
+    );
+  };
 
   return (
     <form id="create-trigger-form" action={formAction} className="overflow-auto h-full">
-      <div className="form-content lg:max-w-xl lg:mx-auto space-y-6 py-5">
+      <div className="form-content lg:max-w-xl lg:mx-auto space-y-5 py-5">
         {isEditing && (
           <input type="hidden" name="id" value={initialData.id} />
         )}
@@ -228,21 +285,34 @@ export function CreateTriggerForm({
                   )}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {kinds.map((kind) => {
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList
+                    className="w-full grid"
+                    style={{
+                      gridTemplateColumns: `repeat(${orderedKinds.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {orderedKinds.map((kind) => {
+                      const KindIcon = kindIcons[kind] ?? Circle;
+                      return (
+                        <TabsTrigger key={kind} value={kind}>
+                          <KindIcon className="h-4 w-4 mr-1.5" />
+                          {kindLabels[kind] ?? kind}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                  {orderedKinds.map((kind) => {
                     const entries = catalog.filter((e) => e.kind === kind);
                     return (
-                      <div key={kind}>
-                        <p className="text-xs text-muted-foreground mb-1.5 mt-3">
-                          {kindLabels[kind] ?? kind}
-                        </p>
+                      <TabsContent key={kind} value={kind}>
                         <div className="grid grid-cols-2 gap-1.5">
                           {entries.map(renderCard)}
                         </div>
-                      </div>
+                      </TabsContent>
                     );
                   })}
-                </div>
+                </Tabs>
               )}
             </div>
           </div>
@@ -256,6 +326,30 @@ export function CreateTriggerForm({
                 {selected?.description}
               </p>
             </div>
+          </div>
+        )}
+
+        {selected && triggerType === "webhook" && (
+          <div className="border-l border-border/60 pl-3 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Info className="h-3 w-3 text-muted-foreground shrink-0" />
+              <p className="text-[12px] font-medium">Webhook endpoint</p>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              A unique URL is generated after you create this trigger. Copy it
+              from the trigger detail page and paste it into your {selected.name}{" "}
+              settings.
+              {selected.webhook_type === "telegram" &&
+                " Use /setwebhook with @BotFather or the Telegram Bot API."}
+              {selected.webhook_type === "slack" &&
+                " In Slack → Event Subscriptions, paste under Request URL."}
+              {selected.webhook_type === "discord" &&
+                " In Discord → General Information, paste under Interactions Endpoint URL."}
+              {selected.webhook_type === "gmail" &&
+                " Set up a Google Cloud Pub/Sub push subscription pointing to this URL."}
+              {selected.webhook_type === "generic" &&
+                " Send HTTP requests to this URL from any service or script."}
+            </p>
           </div>
         )}
 
@@ -376,22 +470,25 @@ export function CreateTriggerForm({
                   name="event_types"
                   value={JSON.stringify(selectedEvents)}
                 />
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {availableEvents.map((event) => (
-                    <button
-                      key={event}
-                      type="button"
-                      onClick={() => toggleEvent(event)}
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer",
-                        selectedEvents.includes(event)
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      )}
-                    >
-                      {event}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                  {availableEvents.map((event) => {
+                    const isSel = selectedEvents.includes(event);
+                    return (
+                      <button
+                        key={event}
+                        type="button"
+                        onClick={() => toggleEvent(event)}
+                        className={cn(
+                          "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                          isSel
+                            ? "bg-foreground text-background"
+                            : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        {event}
+                      </button>
+                    );
+                  })}
                 </div>
                 {selectedEvents.length > 0 && (
                   <p className="text-xs text-muted-foreground">
@@ -472,9 +569,31 @@ export function CreateTriggerForm({
           />
         </div>
 
+        {state.errors?._form && (
+          <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+            {state.errors._form.map((err, i) => (
+              <p key={i}>{err}</p>
+            ))}
+          </div>
+        )}
+
         {/* Submit */}
-        <div className="flex justify-end pt-2">
-          <Button type="submit" disabled={isPending || !selected}>
+        <div className="flex items-center justify-end gap-2 border-t border-border/50 pt-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/triggers")}
+            className="h-8 text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isPending || !selected}
+            className="h-8 text-[13px]"
+          >
             {isPending
               ? "..."
               : isEditing
@@ -482,14 +601,6 @@ export function CreateTriggerForm({
                 : t("createButton")}
           </Button>
         </div>
-
-        {state.errors?._form && (
-          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            {state.errors._form.map((err, i) => (
-              <p key={i}>{err}</p>
-            ))}
-          </div>
-        )}
       </div>
     </form>
   );

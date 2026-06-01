@@ -2,6 +2,7 @@ package backends
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 
@@ -11,6 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
+
+const warmPoolMCPPort = 3000
 
 // GetWarmPoolClient returns a warm pool client for the current namespace.
 func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
@@ -25,6 +28,16 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 		slog.String("name", spec.Name),
 		slog.String("instance_name", instanceName))
 
+	// Try warm pool activation before creating per-instance resources. If the
+	// pool is empty, standard deployment can create those resources cleanly.
+	warmPoolClient := warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
+	pod, err := warmPoolClient.FindAvailablePod(ctx)
+	if err != nil {
+		k.logger.Warn("No warm pods available, falling back to standard deployment",
+			slog.String("error", err.Error()))
+		return k.CreateInstance(ctx, spec)
+	}
+
 	// Create ConfigMap and Secret first
 	if err := k.createConfigMap(ctx, instanceName, spec); err != nil {
 		return nil, fmt.Errorf("failed to create configmap: %w", err)
@@ -35,27 +48,17 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 		return nil, fmt.Errorf("failed to create secret: %w", err)
 	}
 
-	// Try warm pool activation
-	warmPoolClient := warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
-
-	pod, err := warmPoolClient.FindAvailablePod(ctx)
-	if err != nil {
-		k.logger.Warn("No warm pods available, falling back to standard deployment",
-			slog.String("error", err.Error()))
-		return k.CreateInstance(ctx, spec)
-	}
-
 	k.logger.Info("Found warm pod",
 		slog.String("pod", pod.Name),
 		slog.String("node", pod.Spec.NodeName))
 
 	// Create MCP instance model for activation
 	instance := &models.MCPServerInstance{
-		InstanceID: string(pod.UID),
+		InstanceID: spec.InstanceID,
 		Name:       spec.Name,
 		JSONSpec: map[string]interface{}{
 			"image": spec.Image,
-			"port":  spec.Port,
+			"port":  warmPoolMCPPort,
 		},
 	}
 
@@ -69,19 +72,20 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 	activationReq := warmpool.ActivationRequest{
 		MCPImage:     spec.Image,
 		MCPImageHash: hashImage(spec.Image),
-		Port:         spec.Port,
+		Port:         warmPoolMCPPort,
 		Entrypoint:   spec.Entrypoint,
 		Command:      spec.Command,
 		Env:          spec.Environment,
 	}
 
 	k.logger.Info("Sending activation request",
-		slog.Int("port", spec.Port),
+		slog.Int("port", warmPoolMCPPort),
 		slog.String("image", spec.Image))
 
 	if err := warmPoolClient.ActivatePod(ctx, pod, activationReq); err != nil {
 		// Return pod to pool and fallback
 		warmPoolClient.ReturnToPool(ctx, pod)
+		k.cleanupResources(ctx, instanceName)
 		k.logger.Error("Warm pool activation failed, falling back",
 			slog.String("error", err.Error()))
 		return k.CreateInstance(ctx, spec)
@@ -108,7 +112,7 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 	}
 
 	result := &InstanceResult{
-		ID:          string(pod.UID),
+		ID:          spec.InstanceID,
 		Name:        spec.Name,
 		URL:         k.k8sConfig.GetInstanceURL(instanceName),
 		InternalURL: k.k8sConfig.GetInternalServiceURL(instanceName, spec.Port),
@@ -145,8 +149,8 @@ func (k *KubernetesBackend) createServiceForPod(ctx context.Context, instanceNam
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "mcp",
-					Port:       int32(spec.Port),
-					TargetPort: intstr.FromInt(spec.Port),
+					Port:       80,
+					TargetPort: intstr.FromInt(warmPoolMCPPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
@@ -162,6 +166,6 @@ func (k *KubernetesBackend) createServiceForPod(ctx context.Context, instanceNam
 
 // hashImage generates a hash for image caching
 func hashImage(image string) string {
-	// Simple hash - in production use SHA256
-	return fmt.Sprintf("%x", image)[:16]
+	sum := sha256.Sum256([]byte(image))
+	return fmt.Sprintf("%x", sum[:])
 }

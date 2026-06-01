@@ -19,6 +19,7 @@ class _FakeInstance:
         self.json_spec = {"type": instance_type}
         self.workspace_id = uuid.uuid4()
         self.created_by = str(uuid.uuid4())
+        self.server_spec_id = "test-spec-id"
         self.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
         self.last_dispatch = None
         self.tools = None
@@ -65,7 +66,23 @@ def _make_db_mock(instance):
 
         async def execute(self, stmt):
             result = MagicMock()
-            result.scalar_one_or_none.return_value = instance
+            self._exec_call += 1
+            if self._exec_call == 2:
+                server = MagicMock()
+                server.id = "test-spec-id"
+                server.remote_url = (
+                    instance.json_spec.get("endpoint_url")
+                    if instance.json_spec.get("type") == "url"
+                    else None
+                )
+                server.cmd = None
+                server.docker_image_url = "test-image:latest"
+                server.json_spec = dict(instance.json_spec or {})
+                server.json_spec.setdefault("image", "test-image:latest")
+                server.env_schema = []
+                result.scalar_one_or_none.return_value = server
+            else:
+                result.scalar_one_or_none.return_value = instance
             result.scalar_one.return_value = instance
             result.fetchall.return_value = []
             return result
@@ -419,6 +436,263 @@ async def test_verify_bundle_raises():
     from agentarea_mcp.verification import verify
     with pytest.raises(NotImplementedError):
         await verify(inst)
+
+
+# ---------------------------------------------------------------------------
+# verify() merges extra_headers into list_tools call
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_verify_passes_extra_headers_to_list_tools():
+    """When verify() is called with extra_headers (e.g. OAuth Bearer), they
+    must be merged with json_spec headers and passed to list_tools."""
+    inst = _make_instance("url")
+    inst.json_spec = {
+        "type": "url",
+        "endpoint_url": "https://mcp.notion.com/sse",
+        "headers": {"X-Custom": "value"},
+    }
+    db_mock = _make_db_mock(inst)
+
+    captured_headers: list[dict] = []
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        captured_headers.append(headers or {})
+        return [{"name": "search", "description": "", "inputSchema": {}}]
+
+    async def fake_go_create(instance, mcp_manager_url):
+        return {"status_code": 201, "body": {}}
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings:
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+
+        from agentarea_mcp.verification import verify
+        result = await verify(
+            inst,
+            extra_headers={"Authorization": "Bearer abc123"},
+            _list_tools_fn=fake_list_tools,
+            _go_create_fn=fake_go_create,
+        )
+
+    assert result["status"] == "succeeded"
+    assert captured_headers, "list_tools must be called"
+    headers = captured_headers[0]
+    assert headers.get("Authorization") == "Bearer abc123"
+    assert headers.get("X-Custom") == "value"
+
+
+# ---------------------------------------------------------------------------
+# _list_tools URL transport selection — preserves explicit /sse and /mcp
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_list_tools_with_explicit_sse_url_does_not_double_sse():
+    """For URLs ending in /sse, _list_tools must use SSE transport directly,
+    NOT munge to /mcp first and then strip-and-append /sse (which produced /sse/sse)."""
+    from agentarea_mcp import verification as ver
+
+    sse_targets: list[str] = []
+    streamable_called = False
+
+    class _FakeStream:
+        async def __aenter__(self):
+            return (object(), object(), object())
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSSEStream:
+        def __init__(self, url):
+            sse_targets.append(url)
+
+        async def __aenter__(self):
+            return (object(), object())
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSession:
+        def __init__(self, *_args, **_kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            r = MagicMock()
+            r.tools = []
+            return r
+
+    def fake_streamable(url, **kw):
+        nonlocal streamable_called
+        streamable_called = True
+        return _FakeStream()
+
+    def fake_sse(url, **kw):
+        return _FakeSSEStream(url)
+
+    import sys
+
+    fake_streamable_mod = MagicMock()
+    fake_streamable_mod.streamablehttp_client = fake_streamable
+    fake_sse_mod = MagicMock()
+    fake_sse_mod.sse_client = fake_sse
+    fake_mcp_mod = MagicMock()
+    fake_mcp_mod.ClientSession = _FakeSession
+
+    with patch.dict(sys.modules, {
+        "mcp": fake_mcp_mod,
+        "mcp.client.streamable_http": fake_streamable_mod,
+        "mcp.client.sse": fake_sse_mod,
+    }):
+        await ver._list_tools("https://mcp.notion.com/sse")
+
+    assert sse_targets == ["https://mcp.notion.com/sse"], (
+        f"Explicit /sse URL must be passed unchanged to sse_client; got {sse_targets!r}"
+    )
+    assert not streamable_called, (
+        "Streamable HTTP must NOT be tried first when URL is explicitly /sse "
+        "(prevents transforming to /sse/mcp -> /sse/sse)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_tools_with_explicit_mcp_url_uses_streamable_directly():
+    """URLs ending in /mcp must go straight to streamable-http, not be re-suffixed."""
+    from agentarea_mcp import verification as ver
+
+    streamable_targets: list[str] = []
+
+    class _FakeStream:
+        def __init__(self, url):
+            streamable_targets.append(url)
+
+        async def __aenter__(self):
+            return (object(), object(), object())
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSession:
+        def __init__(self, *_a, **_k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            r = MagicMock()
+            r.tools = []
+            return r
+
+    def fake_streamable(url, **kw):
+        return _FakeStream(url)
+
+    def fake_sse(url, **kw):
+        raise AssertionError("SSE should not be reached when streamable succeeds")
+
+    import sys
+
+    fake_streamable_mod = MagicMock()
+    fake_streamable_mod.streamablehttp_client = fake_streamable
+    fake_sse_mod = MagicMock()
+    fake_sse_mod.sse_client = fake_sse
+    fake_mcp_mod = MagicMock()
+    fake_mcp_mod.ClientSession = _FakeSession
+
+    with patch.dict(sys.modules, {
+        "mcp": fake_mcp_mod,
+        "mcp.client.streamable_http": fake_streamable_mod,
+        "mcp.client.sse": fake_sse_mod,
+    }):
+        await ver._list_tools("https://example.com/mcp")
+
+    assert streamable_targets == ["https://example.com/mcp"]
+
+
+@pytest.mark.asyncio
+async def test_list_tools_with_unsuffixed_url_tries_mcp_then_sse():
+    """For bare URLs (no /sse or /mcp suffix), try /mcp first; on failure fall back to /sse."""
+    from agentarea_mcp import verification as ver
+
+    streamable_targets: list[str] = []
+    sse_targets: list[str] = []
+
+    class _FailStream:
+        def __init__(self, url):
+            streamable_targets.append(url)
+
+        async def __aenter__(self):
+            raise ConnectionError("streamable not supported")
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSSEStream:
+        def __init__(self, url):
+            sse_targets.append(url)
+
+        async def __aenter__(self):
+            return (object(), object())
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSession:
+        def __init__(self, *_a, **_k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            r = MagicMock()
+            r.tools = []
+            return r
+
+    def fake_streamable(url, **kw):
+        return _FailStream(url)
+
+    def fake_sse(url, **kw):
+        return _FakeSSEStream(url)
+
+    import sys
+
+    fake_streamable_mod = MagicMock()
+    fake_streamable_mod.streamablehttp_client = fake_streamable
+    fake_sse_mod = MagicMock()
+    fake_sse_mod.sse_client = fake_sse
+    fake_mcp_mod = MagicMock()
+    fake_mcp_mod.ClientSession = _FakeSession
+
+    with patch.dict(sys.modules, {
+        "mcp": fake_mcp_mod,
+        "mcp.client.streamable_http": fake_streamable_mod,
+        "mcp.client.sse": fake_sse_mod,
+    }):
+        await ver._list_tools("https://example.com")
+
+    assert streamable_targets == ["https://example.com/mcp"]
+    assert sse_targets == ["https://example.com/sse"]
 
 
 # ---------------------------------------------------------------------------

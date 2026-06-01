@@ -1,11 +1,11 @@
 """Task repository implementation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import func, select, update
+from sqlalchemy import Numeric, cast, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
@@ -240,6 +240,36 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def sum_spend_since(self, since: datetime) -> float:
+        """Sum task.result.total_cost for the current workspace since a given UTC time.
+
+        Uses started_at (falling back to created_at when started_at is null)
+        as the activity timestamp. Tasks with no total_cost contribute 0.
+        ``TaskORM.result`` is a plain JSON column, so we extract via the
+        ``->>`` operator (returns text) and cast to numeric.
+        """
+        cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+        activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
+        stmt = (
+            select(func.coalesce(func.sum(cost_expr), 0))
+            .where(self._get_workspace_filter())
+            .where(activity_at >= since)
+        )
+        result = await self.session.execute(stmt)
+        return float(result.scalar() or 0.0)
+
+    async def sum_spend_mtd(self) -> float:
+        """Sum total_cost for the current workspace from the first of this UTC month."""
+        now = datetime.now(UTC)
+        first_of_month = datetime(now.year, now.month, 1, tzinfo=UTC).replace(tzinfo=None)
+        return await self.sum_spend_since(first_of_month)
+
+    async def sum_spend_today(self) -> float:
+        """Sum total_cost for the current workspace from the start of today UTC."""
+        now = datetime.now(UTC)
+        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC).replace(tzinfo=None)
+        return await self.sum_spend_since(today_start)
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
         """Update task status atomically with optional additional fields."""

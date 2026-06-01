@@ -92,6 +92,7 @@ from .constants import (
     EVENT_PUBLISH_TIMEOUT,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
+    LLM_RETRY_ATTEMPTS,
     MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
     TOOL_OUTPUT_OFFLOAD_CHARS,
@@ -332,6 +333,7 @@ class AgentExecutionWorkflow:
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
+        self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
 
         # Initialize helpers
@@ -647,6 +649,13 @@ class AgentExecutionWorkflow:
                                     "type": "string",
                                     "description": "Arguments to pass to the script",
                                 },
+                                "artifact_paths": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": (
+                                        "Relative output files to upload as task artifacts after the script runs"
+                                    ),
+                                },
                             },
                             "required": ["skill_name", "script_name"],
                         },
@@ -740,6 +749,7 @@ class AgentExecutionWorkflow:
         self.state.service_cost_used = state.service_cost_used
         self.state.wallet_id = state.wallet_id
         self.state.resolved_model = state.resolved_model
+        self.state.effective_policy = state.effective_policy
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -834,6 +844,7 @@ class AgentExecutionWorkflow:
             service_cost_used=self.state.service_cost_used,
             wallet_id=self.state.wallet_id,
             resolved_model=self.state.resolved_model,
+            effective_policy=self.state.effective_policy,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -860,6 +871,7 @@ class AgentExecutionWorkflow:
             if self.state.goal
             else MAX_ITERATIONS,
             budget_usd=self.state.budget_usd,
+            effective_policy=self.state.effective_policy,
             continued_state=continued_state.model_dump(),
         )
 
@@ -1007,7 +1019,7 @@ class AgentExecutionWorkflow:
 
         # Check maximum iterations
         max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
-        if self.state.current_iteration >= max_iterations:
+        if self.state.current_iteration > max_iterations:
             workflow.logger.info(
                 f"Max iterations reached ({max_iterations}) - terminating workflow"
             )
@@ -1051,8 +1063,8 @@ class AgentExecutionWorkflow:
                 {"iteration": iteration, "total_cost": serialize_money(self.budget_tracker.cost)},
             )
 
-            # Emit WorkflowCompleted after IterationCompleted to maintain correct event ordering.
-            # _handle_task_completion sets _awaiting_input=True but defers event emission here.
+            # Emit WorkflowCompleted after IterationCompleted for conversational agents.
+            # Stateless runs publish the completion event from _finalize_execution.
             if self._awaiting_input:
                 self.event_manager.add_event(
                     EventTypes.WORKFLOW_COMPLETED,
@@ -1102,6 +1114,17 @@ class AgentExecutionWorkflow:
                 tool_catalog_text = self._tool_catalog.build_prompt_text()
                 if tool_catalog_text:
                     agent_instruction = agent_instruction + tool_catalog_text
+
+            project_id = (self._workflow_metadata or {}).get("project_id")
+            if project_id:
+                agent_instruction += (
+                    "\n\nProject input files are available to shell commands in the "
+                    "`inputs/` directory of the sandbox. Use ordinary file operations "
+                    "such as `find inputs -maxdepth 2 -type f` to inspect them. "
+                    "When a shell command creates a file that should be returned to "
+                    "the user, pass that relative file path in the shell tool's "
+                    "`artifact_paths` argument so it is stored as a task artifact."
+                )
 
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
@@ -1219,6 +1242,7 @@ class AgentExecutionWorkflow:
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
                 resolved_model=self.state.resolved_model,
+                effective_policy=self.state.effective_policy,
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -1226,7 +1250,7 @@ class AgentExecutionWorkflow:
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=RetryPolicy(maximum_attempts=LLM_RETRY_ATTEMPTS),
             )
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -1501,20 +1525,21 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Handle task completion — enter awaiting_input state for follow-ups."""
+        """Handle task completion and optionally wait for follow-ups."""
         try:
             tool_args = json.loads(completion_call.function["arguments"])
             result_text = tool_args.get("result", "Task completed")
         except (json.JSONDecodeError, KeyError):
             result_text = "Task completed"
 
-        # Enter awaiting state — workflow stays alive for follow-up messages
         self.state.success = True
         self.state.final_response = result_text
-        self._awaiting_input = True
+        agent_type = str(self.state.agent_config.get("agent_type") or "stateless").lower()
+        self._awaiting_input = agent_type == "stateful"
 
         workflow.logger.info(f"Task completed: {result_text}")
-        workflow.logger.info("Entering awaiting_input state for follow-up messages")
+        if self._awaiting_input:
+            workflow.logger.info("Entering awaiting_input state for follow-up messages")
 
         # Update task status to completed immediately so UI reflects it
         await workflow.execute_activity(
@@ -1701,6 +1726,8 @@ class AgentExecutionWorkflow:
                 task_id=str(self.state.task_id),
                 agent_id=UUID(self.state.agent_id) if self.state.agent_id else None,
                 tools=self.state.agent_config.get("tools"),
+                metadata=self._workflow_metadata or {},
+                effective_policy=self.state.effective_policy,
             )
 
             result_obj = await workflow.execute_activity(
@@ -2113,6 +2140,9 @@ class AgentExecutionWorkflow:
         skill_name = args.get("skill_name", "")
         script_name = args.get("script_name", "")
         script_args = args.get("args", "")
+        artifact_paths = args.get("artifact_paths") or []
+        if not isinstance(artifact_paths, list):
+            artifact_paths = []
 
         # Validate skill is activated
         if skill_name not in self.state.activated_skills:
@@ -2161,8 +2191,10 @@ class AgentExecutionWorkflow:
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=2),
                 )
-                if file_result.success and file_result.content_text:
+                if file_result.success:
                     script_content = file_result.content_text
+                    if not script_content and file_result.content:
+                        script_content = file_result.content.decode("utf-8")
             except Exception as e:
                 workflow.logger.warning(f"Could not fetch script from S3: {e}")
 
@@ -2177,7 +2209,9 @@ class AgentExecutionWorkflow:
             )
             return
 
-        # Execute via MCP Manager sandbox
+        # Execute via MCP Manager sandbox. The activity layer owns scoping
+        # to the current task — workflow code stays oblivious to sandbox
+        # internals.
         script_args_list = [script_args] if script_args else []
         result = await workflow.execute_activity(
             Activities.EXECUTE_SKILL_SCRIPT,
@@ -2186,7 +2220,10 @@ class AgentExecutionWorkflow:
                     script_content=script_content,
                     script_name=script_name,
                     args=script_args_list,
-                    timeout_seconds=30,
+                    artifact_paths=[str(path) for path in artifact_paths],
+                    timeout_seconds=1800,
+                    workspace_id=str(self.state.workspace_id) if self.state.workspace_id else None,
+                    task_id=str(self.state.task_id) if self.state.task_id else None,
                 )
             ],
             result_type=ExecuteSkillScriptResult,
@@ -2202,6 +2239,8 @@ class AgentExecutionWorkflow:
             output_parts.append(f"STDERR: {result.stderr}")
         if result.exit_code != 0:
             output_parts.append(f"Exit code: {result.exit_code}")
+        if result.artifacts:
+            output_parts.append(f"Artifacts: {json.dumps(result.artifacts, ensure_ascii=False)}")
         content = "\n".join(output_parts) or "(no output)"
 
         # Offload large script outputs to MinIO (hybrid/dynamic strategy)
@@ -2302,6 +2341,7 @@ class AgentExecutionWorkflow:
                     "parent_agent_id": self.state.agent_id,
                     "parent_task_id": self.state.task_id,
                 },
+                effective_policy=self.state.effective_policy,
             )
 
             # Start child workflow and await result
@@ -2712,6 +2752,16 @@ class AgentExecutionWorkflow:
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
 
+        try:
+            await workflow.execute_activity(
+                Activities.CLEANUP_SANDBOX_WORKFLOW,
+                args=[workflow.info().workflow_id],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=1),
+            )
+        except Exception as e:
+            workflow.logger.warning(f"Sandbox workflow cleanup failed: {e}")
+
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []
         for msg in self.state.messages:
@@ -2875,7 +2925,9 @@ class AgentExecutionWorkflow:
             success_criteria=request.task_parameters.get(
                 "success_criteria", ["Task completed successfully"]
             ),
-            max_iterations=request.task_parameters.get("max_iterations", MAX_ITERATIONS),
+            max_iterations=request.task_parameters.get(
+                "max_iterations", request.max_reasoning_iterations
+            ),
             requires_human_approval=request.requires_human_approval,
             context=request.task_parameters,
         )

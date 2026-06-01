@@ -405,6 +405,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Overview
+         * @description Aggregate stats + upcoming work for one agent.
+         */
+        get: operations["get_agent_overview_v1_agents__agent_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/": {
         parameters: {
             query?: never;
@@ -509,10 +529,31 @@ export interface paths {
          * @description List artifacts the agent produced under ``tasks/{task_id}/``.
          *
          *     Workspace-scoped: the task must belong to the caller's workspace, or we
-         *     return 404. Each item carries a presigned download URL valid for
-         *     ``expires_in`` seconds (default 1 hour, capped at 24h).
+         *     return 404. Each item carries an AgentArea API download URL, so access
+         *     stays behind our auth, audit, and workspace checks instead of exposing
+         *     object-storage URLs directly.
          */
         get: operations["list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Task Artifact
+         * @description Stream a task artifact through the AgentArea API.
+         */
+        get: operations["download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -862,6 +903,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/files/download/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Workspace File
+         * @description Stream a workspace file through the AgentArea API.
+         */
+        get: operations["stream_workspace_file_v1_files_download__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/files/{file_path}": {
         parameters: {
             query?: never;
@@ -1095,7 +1156,7 @@ export interface paths {
          * Create Mcp Server Instance
          * @description Create a new MCP server instance.
          *
-         *     Returns 201 for url/bundle (synchronous verification completed).
+         *     Returns 201 for url (synchronous verification completed).
          *     Returns 202 for docker/command (background verification in progress).
          */
         post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
@@ -1185,6 +1246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-server-instances/with-spec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Mcp Server Connection
+         * @description Create an MCP server spec and instance in one transaction.
+         */
+        post: operations["create_mcp_server_connection_v1_mcp_server_instances_with_spec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/{instance_id}": {
         parameters: {
             query?: never;
@@ -1202,6 +1283,30 @@ export interface paths {
         head?: never;
         /** Update Mcp Server Instance */
         patch: operations["update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch"];
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Mcp Server Instance Tools
+         * @description Re-discover the tools exposed by an MCP server instance.
+         *
+         *     Re-runs verification (which calls list_tools on the server using any
+         *     OAuth/API-key credentials linked via auth_config_id) and persists the
+         *     refreshed tool list. Returns {tools, verification}.
+         */
+        post: operations["discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/mcp-server-instances/{instance_id}/environment": {
@@ -1367,6 +1472,34 @@ export interface paths {
         /** Deploy Mcp Server */
         post: operations["deploy_mcp_server_v1_mcp_servers__server_id__deploy_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/{instance_id}/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        get: operations["proxy_instance_v1_mcp__instance_id__mcp_get"];
+        put?: never;
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        post: operations["proxy_instance_v1_mcp__instance_id__mcp_post"];
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        delete: operations["proxy_instance_v1_mcp__instance_id__mcp_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1798,6 +1931,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/files/download/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Project File
+         * @description Stream a project file through the AgentArea API.
+         */
+        get: operations["stream_project_file_v1_projects__project_id__files_download__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/files/{file_path}": {
         parameters: {
             query?: never;
@@ -1807,7 +1960,7 @@ export interface paths {
         };
         /**
          * Download Project File
-         * @description Generate a presigned URL for a project file.
+         * @description Return an AgentArea API URL for a project file.
          */
         get: operations["download_project_file_v1_projects__project_id__files__file_path__get"];
         put?: never;
@@ -2278,7 +2431,7 @@ export interface paths {
         };
         /**
          * List Skills
-         * @description List all skills in the workspace.
+         * @description List skills in the workspace.
          */
         get: operations["list_skills_v1_skills_get"];
         put?: never;
@@ -2993,6 +3146,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard
+         * @description Aggregate workspace state for the operator dashboard.
+         */
+        get: operations["get_dashboard_v1_workspace_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/export": {
         parameters: {
             query?: never;
@@ -3100,6 +3273,30 @@ export interface paths {
          *     Same as /import but accepts a file upload instead of raw YAML content.
          */
         post: operations["import_workspace_config_file_v1_workspace_import_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace Settings
+         * @description Read the current workspace's settings (cap, etc).
+         */
+        get: operations["get_workspace_settings_v1_workspace_settings_get"];
+        /**
+         * Update Workspace Settings
+         * @description Upsert the current workspace's settings.
+         */
+        put: operations["update_workspace_settings_v1_workspace_settings_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3512,6 +3709,25 @@ export interface components {
              */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
+        /** AgentOverviewResponse */
+        AgentOverviewResponse: {
+            /** Cost Mtd Usd */
+            cost_mtd_usd: number;
+            /** Cost Today Usd */
+            cost_today_usd: number;
+            /** Daily Spend */
+            daily_spend: components["schemas"]["DailySpendPoint"][];
+            /** Daily Tasks */
+            daily_tasks: components["schemas"]["DailyTaskCounts"][];
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Tasks Done Today */
+            tasks_done_today: number;
+            /** Tasks Failed Today */
+            tasks_failed_today: number;
+            /** Upcoming */
+            upcoming: components["schemas"]["UpcomingItem"][];
+        };
         /** AgentProvider */
         AgentProvider: {
             /** Organization */
@@ -3556,6 +3772,28 @@ export interface components {
             /** Tools */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
+        /** AgentRow */
+        AgentRow: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Cost Mtd Usd */
+            cost_mtd_usd: number;
+            /** Cost Today Usd */
+            cost_today_usd: number;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Name */
+            name: string;
+            /** Recent Task Names */
+            recent_task_names: string[];
+            /** Tasks Done Today */
+            tasks_done_today: number;
+            /** Tasks Failed Today */
+            tasks_failed_today: number;
+        };
         /** AgentSkill */
         AgentSkill: {
             /** Description */
@@ -3599,6 +3837,16 @@ export interface components {
             skill_ids?: string[] | null;
             /** Tools */
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
+        };
+        /**
+         * ApprovalPolicy
+         * @description Human approval and escalation requirements.
+         */
+        ApprovalPolicy: {
+            /** Escalation Rules */
+            escalation_rules?: string[];
+            /** Requires Human Approval */
+            requires_human_approval?: boolean | null;
         };
         /** AssociationBody */
         AssociationBody: {
@@ -3657,6 +3905,15 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** Blockers */
+        Blockers: {
+            /** Failed 24H */
+            failed_24h: components["schemas"]["FailedTaskBlocker"][];
+            /** Hitl */
+            hitl: components["schemas"]["HitlBlocker"][];
+            /** Wallet Exhausted */
+            wallet_exhausted: components["schemas"]["WalletExhaustedBlocker"][];
+        };
         /** Body_import_workspace_config_file_v1_workspace_import_file_post */
         Body_import_workspace_config_file_v1_workspace_import_file_post: {
             /**
@@ -3677,6 +3934,30 @@ export interface components {
              * @description ZIP file containing the skill package
              */
             file: string;
+        };
+        /**
+         * BudgetPolicy
+         * @description Budget-related ceilings.
+         */
+        BudgetPolicy: {
+            /** Monthly Spend Cap Usd */
+            monthly_spend_cap_usd?: number | string | null;
+            /** Run Budget Usd */
+            run_budget_usd?: number | string | null;
+            /** Service Budget Usd */
+            service_budget_usd?: number | string | null;
+        };
+        /**
+         * ContentSafetyPolicy
+         * @description Content-safety governance controls.
+         */
+        ContentSafetyPolicy: {
+            /** Output Sanitizer Enabled */
+            output_sanitizer_enabled?: boolean | null;
+            /** Prompt Injection Detection Enabled */
+            prompt_injection_detection_enabled?: boolean | null;
+            /** Semantic Guard Threshold */
+            semantic_guard_threshold?: number | null;
         };
         /** CreateInvitationBody */
         CreateInvitationBody: {
@@ -3702,6 +3983,35 @@ export interface components {
             /** Wallet Type */
             wallet_type: string;
             x402_config?: components["schemas"]["X402ConfigSchema"] | null;
+        };
+        /** DailySpendPoint */
+        DailySpendPoint: {
+            /** Date */
+            date: string;
+            /** Usd */
+            usd: number;
+        };
+        /** DailyTaskCounts */
+        DailyTaskCounts: {
+            /** Completed */
+            completed: number;
+            /** Date */
+            date: string;
+            /** Failed */
+            failed: number;
+            /** Input Required */
+            input_required: number;
+        };
+        /** DashboardResponse */
+        DashboardResponse: {
+            /** Agents */
+            agents: components["schemas"]["AgentRow"][];
+            blockers: components["schemas"]["Blockers"];
+            /** Daily Spend */
+            daily_spend: components["schemas"]["DailySpendPoint"][];
+            /** Daily Tasks */
+            daily_tasks: components["schemas"]["DailyTaskCounts"][];
+            spend: components["schemas"]["SpendCard"];
         };
         /** DiscoverPreviewModelResponse */
         DiscoverPreviewModelResponse: {
@@ -3950,6 +4260,28 @@ export interface components {
              */
             trigger_id: string;
         };
+        /** FailedTaskBlocker */
+        FailedTaskBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+        };
         /** FundWalletRequest */
         FundWalletRequest: {
             /** Service Budget Usd */
@@ -4000,6 +4332,28 @@ export interface components {
             secret: boolean;
             /** Value */
             value?: string | null;
+        };
+        /** HitlBlocker */
+        HitlBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
         };
         /**
          * ImportRequest
@@ -4227,6 +4581,11 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** MCPServerConnectionCreateRequest */
+        MCPServerConnectionCreateRequest: {
+            instance: components["schemas"]["MCPServerInstanceCreateWithoutSpec"];
+            server: components["schemas"]["MCPServerCreate"];
+        };
         /**
          * MCPServerCreate
          * @description Payload for creating an MCP server spec (catalog template).
@@ -4309,8 +4668,6 @@ export interface components {
          *     - ``{"type": "url", "endpoint_url": "https://..."}``
          *     - ``{"type": "docker", "environment": {...}, "env_vars": [...]}``
          *     - ``{"type": "command", "command": [...], "environment": {...}}``
-         *     - ``{"type": "bundle", "members": ["<instance-id>", ...]}``
-         *
          *     For URL-type instances the service synchronously verifies the endpoint;
          *     docker/command kick off background verification.
          */
@@ -4327,7 +4684,7 @@ export interface components {
             description?: string | null;
             /**
              * Json Spec
-             * @description Connection configuration. Must include 'type' ('url' | 'docker' | 'command' | 'bundle'); other keys depend on type.
+             * @description Connection configuration. Must include 'type' ('url' | 'docker' | 'command'); other keys depend on type.
              */
             json_spec: {
                 [key: string]: unknown;
@@ -4339,9 +4696,22 @@ export interface components {
             name: string;
             /**
              * Server Spec Id
-             * @description ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.). Optional for ad-hoc URL instances.
+             * @description ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).
              */
-            server_spec_id?: string | null;
+            server_spec_id: string;
+        };
+        /** MCPServerInstanceCreateWithoutSpec */
+        MCPServerInstanceCreateWithoutSpec: {
+            /** Auth Config Id */
+            auth_config_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Json Spec */
+            json_spec?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
         };
         /** MCPServerInstanceResponse */
         MCPServerInstanceResponse: {
@@ -4370,7 +4740,7 @@ export interface components {
             /** Name */
             name: string;
             /** Server Spec Id */
-            server_spec_id: string | null;
+            server_spec_id: string;
             /** Tools */
             tools?: {
                 [key: string]: unknown;
@@ -4411,7 +4781,7 @@ export interface components {
             /** Description */
             description: string;
             /** Docker Image Url */
-            docker_image_url: string;
+            docker_image_url?: string | null;
             /** Env Schema */
             env_schema: {
                 [key: string]: unknown;
@@ -4904,6 +5274,19 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedResponse[SkillResponse] */
+        PaginatedResponse_SkillResponse_: {
+            /** Has Next */
+            has_next: boolean;
+            /** Items */
+            items: components["schemas"]["SkillResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
         /** PaymentRecordResponse */
         PaymentRecordResponse: {
             /** Agent Id */
@@ -4934,6 +5317,17 @@ export interface components {
             tool_name: string;
             /** Tx Hash */
             tx_hash?: string | null;
+        };
+        /**
+         * PolicyDocument
+         * @description Source policy document stored per scope.
+         */
+        PolicyDocument: {
+            approval?: components["schemas"]["ApprovalPolicy"] | null;
+            budget?: components["schemas"]["BudgetPolicy"] | null;
+            content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
+            tokens?: components["schemas"]["TokenPolicy"] | null;
+            tools?: components["schemas"]["ToolsPolicy"] | null;
         };
         /** ProjectAgentRef */
         ProjectAgentRef: {
@@ -5494,6 +5888,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Network Scope */
+            network_scope: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
@@ -5550,6 +5946,24 @@ export interface components {
             }[];
             /** Version */
             version?: string | null;
+        };
+        /** SpendCard */
+        SpendCard: {
+            /** Cap Usd */
+            cap_usd: number | null;
+            /** Mtd Usd */
+            mtd_usd: number;
+            /** Pct Of Cap */
+            pct_of_cap: number | null;
+            /** Projected Eom Usd */
+            projected_eom_usd: number | null;
+            /**
+             * Projection Method
+             * @default linear-mtd
+             */
+            projection_method: string;
+            /** Today Usd */
+            today_usd: number;
         };
         /** SyncResponse */
         SyncResponse: {
@@ -5609,6 +6023,7 @@ export interface components {
              * @default false
              */
             requires_human_approval: boolean | null;
+            task_policy?: components["schemas"]["PolicyDocument"] | null;
         };
         /**
          * TaskEvent
@@ -5811,6 +6226,16 @@ export interface components {
             total_cost?: number | null;
         };
         /**
+         * TokenPolicy
+         * @description Token-related ceilings.
+         */
+        TokenPolicy: {
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Max Tokens Per Call */
+            max_tokens_per_call?: number | null;
+        };
+        /**
          * ToolConfigYAML
          * @description Tool configuration in YAML format.
          */
@@ -5864,6 +6289,16 @@ export interface components {
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */
             requires_user_confirmation?: boolean | null;
+        };
+        /**
+         * ToolsPolicy
+         * @description MCP tool capability restrictions.
+         */
+        ToolsPolicy: {
+            /** Allowed */
+            allowed?: string[] | null;
+            /** Denied */
+            denied?: string[];
         };
         /**
          * TriggerCreate
@@ -6191,6 +6626,24 @@ export interface components {
             /** Webhook Type */
             webhook_type?: string | null;
         };
+        /** UpcomingItem */
+        UpcomingItem: {
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /**
+             * Fires At
+             * Format: date-time
+             */
+            fires_at: string;
+            /** Kind */
+            kind: string;
+            /** Task Id */
+            task_id?: string | null;
+            /** Title */
+            title: string;
+            /** Trigger Id */
+            trigger_id?: string | null;
+        };
         /** UpdateAllResponse */
         UpdateAllResponse: {
             /** Errors */
@@ -6227,7 +6680,7 @@ export interface components {
             name?: string | null;
             /**
              * Type
-             * @description Instance type: url, docker, command, bundle
+             * @description Instance type: url, docker, command
              */
             type: string;
         };
@@ -6261,6 +6714,20 @@ export interface components {
             mpp_tempo_key?: string | null;
             /** X402 Private Key */
             x402_private_key?: string | null;
+        };
+        /** WalletExhaustedBlocker */
+        WalletExhaustedBlocker: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /** Budget Usd */
+            budget_usd: number;
+            /** Period */
+            period: string;
         };
         /** WalletResponse */
         WalletResponse: {
@@ -6321,6 +6788,16 @@ export interface components {
             directories: string[];
             /** Files */
             files: components["schemas"]["WorkspaceFileInfo"][];
+        };
+        /** WorkspaceSettingsResponse */
+        WorkspaceSettingsResponse: {
+            /** Monthly Cap Usd */
+            monthly_cap_usd: number | null;
+        };
+        /** WorkspaceSettingsUpdate */
+        WorkspaceSettingsUpdate: {
+            /** Monthly Cap Usd */
+            monthly_cap_usd: number | null;
         };
         /** X402ConfigSchema */
         X402ConfigSchema: {
@@ -7112,6 +7589,37 @@ export interface operations {
             };
         };
     };
+    get_agent_overview_v1_agents__agent_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOverviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_agent_tasks_v1_agents__agent_id__tasks__get: {
         parameters: {
             query?: {
@@ -7341,6 +7849,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskArtifactItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+                artifact_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -8042,6 +8583,37 @@ export interface operations {
             };
         };
     };
+    stream_workspace_file_v1_files_download__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_workspace_file_v1_files__file_path__get: {
         parameters: {
             query?: never;
@@ -8658,6 +9230,39 @@ export interface operations {
             };
         };
     };
+    create_mcp_server_connection_v1_mcp_server_instances_with_spec_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MCPServerConnectionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_mcp_server_instance_v1_mcp_server_instances__instance_id__get: {
         parameters: {
             query?: never;
@@ -8742,6 +9347,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_mcp_server_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -9119,6 +9755,99 @@ export interface operations {
             header?: never;
             path: {
                 server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
             };
             cookie?: never;
         };
@@ -10131,6 +10860,38 @@ export interface operations {
             };
         };
     };
+    stream_project_file_v1_projects__project_id__files_download__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_project_file_v1_projects__project_id__files__file_path__get: {
         parameters: {
             query?: never;
@@ -11125,7 +11886,19 @@ export interface operations {
     };
     list_skills_v1_skills_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by source type */
+                source_type?: string | null;
+                /** @description Filter by package-backed skills */
+                has_files?: boolean | null;
+                /** @description Filter by network scope */
+                network_scope?: string | null;
+                /** @description Filter registry-created skills */
+                from_registry?: boolean | null;
+                page?: number;
+                page_size?: number;
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11138,7 +11911,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SkillResponse"][];
+                    "application/json": components["schemas"]["PaginatedResponse_SkillResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12117,6 +12899,26 @@ export interface operations {
             };
         };
     };
+    get_dashboard_v1_workspace_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+        };
+    };
     export_workspace_config_v1_workspace_export_get: {
         parameters: {
             query?: never;
@@ -12195,6 +12997,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_settings_v1_workspace_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_workspace_settings_v1_workspace_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSettingsResponse"];
                 };
             };
             /** @description Validation Error */

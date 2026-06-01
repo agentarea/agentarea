@@ -218,20 +218,6 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
 
-    async def get_by_workspace_id(
-        self, workspace_id: str, limit: int = 100, offset: int = 0
-    ) -> list[Trigger]:
-        """Get triggers by workspace ID with pagination.
-
-        Note: This method is deprecated. Use list_triggers() instead which automatically
-        filters by the current workspace from user context.
-        """
-        # For backward compatibility, but this should be replaced with list_triggers()
-        if workspace_id != self.user_context.workspace_id:
-            return []  # Don't allow cross-workspace access
-
-        return await self.list_triggers(limit=limit, offset=offset)
-
     async def list_by_type(self, trigger_type: TriggerType, limit: int = 100) -> list[Trigger]:
         """List triggers by type."""
         stmt = (

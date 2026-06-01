@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import { getMCPServerInstance, getMCPServer } from "@/lib/api";
-import MCPInstanceDetail from "./MCPInstanceDetail";
+import { getMCPServer, getMCPServerInstance } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import MCPInstanceHeaderControls from "./HeaderControls";
+import MCPInstanceDetail from "./MCPInstanceDetail";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -12,7 +12,10 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { data: instance } = await getMCPServerInstance(id);
+  const instance = requireApiData(
+    await getMCPServerInstance(id),
+    "MCP instance"
+  );
   return { title: instance?.name ?? "MCP Instance" };
 }
 
@@ -20,13 +23,14 @@ export default async function MCPInstancePage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("MCPServersPage");
 
-  const { data: instance } = await getMCPServerInstance(id);
-  if (!instance) notFound();
+  const instance = requireApiData(
+    await getMCPServerInstance(id),
+    "MCP instance"
+  );
 
-  const serverSpec =
-    instance.server_spec_id
-      ? (await getMCPServer(instance.server_spec_id)).data ?? null
-      : null;
+  const serverSpec = instance.server_spec_id
+    ? requireApiData(await getMCPServer(instance.server_spec_id), "MCP server")
+    : null;
 
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
@@ -37,7 +41,10 @@ export default async function MCPInstancePage({ params }: Props) {
     );
     for (let i = 0; i < jsonSpec.members.length; i++) {
       const memberId = jsonSpec.members[i];
-      const memberData = results[i]?.data;
+      const memberData = requireApiData<any>(
+        results[i],
+        `MCP bundle member ${memberId}`
+      );
       memberNames[memberId] = memberData?.name ?? memberId;
     }
   }

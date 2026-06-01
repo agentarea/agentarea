@@ -7,6 +7,7 @@ import { RefreshCw } from "lucide-react";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import NetworkLegend from "./components/NetworkLegend";
+import NetworkMetricsPanel from "./components/NetworkMetricsPanel";
 import NodeDetailDrawer from "./components/NodeDetailDrawer";
 import { useNetwork } from "./NetworkProvider";
 import DataFlowView from "./views/DataFlowView";
@@ -110,6 +111,7 @@ export default function NetworkClient() {
       )}
 
       <NetworkLegend />
+      <NetworkMetricsPanel topology={topology} />
 
       {selectedNode && topology && (
         <NodeDetailDrawer

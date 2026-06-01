@@ -1,8 +1,13 @@
-"""Lazy secret manager that opens a fresh DB session per get_secret call.
+"""Background-side `SecretReader` implementation.
 
-Used by background subscribers (ChannelEventSubscriber) that don't have a
-request-scoped DB session or user context. Resolves workspace context from
-the trigger_id embedded in the secret name pattern: channel_cred:<type>:<trigger_id>.
+Adapters running in the worker's delivery consumer have no request-scoped
+DB session or `UserContext`. `LazySecretReader.get_secret` opens a fresh
+session per call and resolves the workspace from the trigger_id embedded
+in the secret name (`channel_cred:<channel_type>:<trigger_id>`), then
+delegates to the configured `SecretManagerFactory`.
+
+Implements `SecretReader` (read-only). Set/rotate goes through the
+authenticated API path with a real `UserContext`, never through this.
 """
 
 from __future__ import annotations
@@ -16,9 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class LazySecretManager:
-    """BaseSecretManager adapter that resolves workspace from the secret name."""
-
+class LazySecretReader:
     def __init__(self, factory: SecretManagerFactory) -> None:
         self._factory = factory
 
@@ -58,8 +61,6 @@ class LazySecretManager:
             )
             return await secret_manager.get_secret(name)
 
-    async def set_secret(self, name: str, value: str) -> None:
-        raise NotImplementedError("LazySecretManager is read-only")
 
-    async def delete_secret(self, name: str) -> None:
-        raise NotImplementedError("LazySecretManager is read-only")
+# Backwards-compat alias for any caller still importing the old name.
+LazySecretManager = LazySecretReader
