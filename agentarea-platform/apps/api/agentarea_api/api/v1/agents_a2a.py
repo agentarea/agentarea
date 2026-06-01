@@ -1482,7 +1482,7 @@ async def _dispatch_rpc_method(
     return create_error_response(request_id, -32601, f"Method not found: {method}")
 
 
-@router.post("/rpc")
+@router.post("/rpc", response_model=None)
 async def handle_agent_jsonrpc(
     agent_id: UUID,
     request: Request,

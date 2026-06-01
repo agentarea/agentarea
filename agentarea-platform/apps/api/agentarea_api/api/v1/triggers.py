@@ -317,10 +317,10 @@ async def get_channel_events(
 
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
+    secret_manager: BaseSecretManagerDep,
     payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    secret_manager: BaseSecretManagerDep | None = None,
 ) -> TriggerResponse:
     """Create a new trigger.
 
@@ -541,10 +541,10 @@ async def get_trigger(
 @router.put("/{trigger_id}", response_model=TriggerResponse)
 async def update_trigger(
     trigger_id: UUID,
+    secret_manager: BaseSecretManagerDep,
     payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    secret_manager: BaseSecretManagerDep | None = None,
 ) -> TriggerResponse:
     """Update an existing trigger.
 
