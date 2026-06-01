@@ -98,5 +98,6 @@ def get_jwt_handler() -> JWTTokenHandler:
     """
     settings = get_settings()
     return JWTTokenHandler(
-        secret_key=settings.app.JWT_SECRET_KEY, algorithm=settings.app.JWT_ALGORITHM
+        secret_key=getattr(settings.app, "JWT_SECRET_KEY", ""),
+        algorithm=getattr(settings.app, "JWT_ALGORITHM", "HS256"),
     )

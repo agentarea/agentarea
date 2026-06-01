@@ -4,11 +4,17 @@ These activities handle the actual execution of triggers, condition evaluation,
 and task creation when triggers fire.
 """
 
-import logging
 from datetime import datetime
 from uuid import UUID
 
 from agentarea_common.config import get_database
+from agentarea_triggers.logging_utils import (
+    DependencyUnavailableError,
+    TriggerExecutionError,
+    TriggerLogger,
+    generate_correlation_id,
+    set_correlation_id,
+)
 from temporalio import activity
 
 from ..interfaces import ActivityDependencies
@@ -23,20 +29,7 @@ from ..models import (
     RecordTriggerExecutionResult,
 )
 
-# Import trigger logging utilities
-try:
-    from agentarea_triggers.logging_utils import (
-        DependencyUnavailableError,
-        TriggerExecutionError,
-        TriggerLogger,
-        generate_correlation_id,
-        set_correlation_id,
-    )
-
-    logger = TriggerLogger(__name__)
-except ImportError:
-    # Fallback to standard logging if trigger logging not available
-    logger = logging.getLogger(__name__)
+logger = TriggerLogger(__name__)
 
 
 async def _resolve_trigger_context(session, trigger_id: UUID):
@@ -198,23 +191,24 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     )
 
                 # Run data extractor if configured (poll-based channels like email)
-                if hasattr(trigger, "data_extractor") and trigger.data_extractor:
+                data_extractor = getattr(trigger, "data_extractor", None)
+                if data_extractor:
                     try:
                         from agentarea_triggers.extractors import get_extractor
 
-                        extractor_cls = get_extractor(trigger.data_extractor)
+                        extractor_cls = get_extractor(data_extractor)
                         if extractor_cls:
                             extractor = extractor_cls()
                             extraction_result = await extractor.extract(
-                                trigger.data_extractor_config or {},
-                                trigger.data_extractor_state,
+                                getattr(trigger, "data_extractor_config", None) or {},
+                                getattr(trigger, "data_extractor_state", None),
                             )
 
                             if not extraction_result.has_new_data:
                                 logger.info(
                                     "Data extractor found no new data, skipping",
                                     trigger_id=trigger_id,
-                                    extractor=trigger.data_extractor,
+                                    extractor=data_extractor,
                                 )
                                 return ExecuteTriggerResult(
                                     trigger_id=trigger_id,
@@ -240,11 +234,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                             logger.info(
                                 f"Data extractor found {len(extraction_result.events)} new events",
                                 trigger_id=trigger_id,
-                                extractor=trigger.data_extractor,
+                                extractor=data_extractor,
                             )
                         else:
                             logger.warning(
-                                f"Unknown extractor type: {trigger.data_extractor}",
+                                f"Unknown extractor type: {data_extractor}",
                                 trigger_id=trigger_id,
                             )
                     except Exception as extractor_error:
@@ -510,7 +504,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         execution_data = request.execution_data
         try:
+            from agentarea_tasks.domain.models import SimpleTask
+            from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
+            from agentarea_tasks.temporal_task_manager import TemporalTaskManager
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
@@ -538,12 +535,19 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         error=f"Trigger {trigger_id} not found",
                     )
 
-                # Create task service with minimal dependencies for task creation
+                task_repository = repository_factory.create_repository(TaskRepository)
+                if dependencies.workflow_executor is not None:
+                    task_manager = TemporalTaskManager.__new__(TemporalTaskManager)
+                    task_manager.task_repository = task_repository
+                    task_manager.temporal_executor = dependencies.workflow_executor
+                else:
+                    task_manager = TemporalTaskManager(task_repository=task_repository)
+
+                # Create task service and submit through the normal routing path.
                 task_service = TaskService(
                     repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    task_manager=None,  # Not needed for task creation
-                    agent_repository=None,
+                    task_manager=task_manager,
                     workflow_service=None,
                 )
 
@@ -563,15 +567,17 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     else (trigger.description or f"Execute trigger {trigger.name}")
                 )
 
-                # Create task
-                task = await task_service.create_task_from_params(
+                task = SimpleTask(
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,
-                    user_id=trigger.created_by,
+                    user_id=str(trigger.created_by),
+                    workspace_id=str(user_context.workspace_id),
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
+                    status="submitted",
                 )
+                task = await task_service.route_or_submit_task(task)
 
                 logger.info(f"Created task {task.id} from trigger {trigger_id}")
 

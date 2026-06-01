@@ -139,8 +139,10 @@ class DiscordSignatureVerifier(SignatureVerifier):
 
     def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
         try:
-            from nacl.exceptions import BadSignatureError
-            from nacl.signing import VerifyKey
+            from importlib import import_module
+
+            bad_signature_error_cls = import_module("nacl.exceptions").BadSignatureError
+            verify_key_cls = import_module("nacl.signing").VerifyKey
         except ImportError:
             logger.error(
                 "PyNaCl not installed, Discord signature verification will reject all requests. Install with: pip install PyNaCl"
@@ -158,10 +160,10 @@ class DiscordSignatureVerifier(SignatureVerifier):
             body_str = body if isinstance(body, str) else body.decode("utf-8")
             message = f"{timestamp}{body_str}".encode()
 
-            verify_key = VerifyKey(bytes.fromhex(secret))
+            verify_key = verify_key_cls(bytes.fromhex(secret))
             verify_key.verify(message, bytes.fromhex(signature))
             return True
-        except BadSignatureError:
+        except bad_signature_error_cls:
             logger.warning("Discord signature verification failed")
             return False
         except Exception as e:

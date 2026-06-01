@@ -7,6 +7,7 @@ lives in the future Keto-integration PR.
 """
 
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with get_database().async_session_factory() as session:
         yield session
 

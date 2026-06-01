@@ -49,6 +49,7 @@ from .tools.tool_manager import ToolManager
 __all__ = [
     # High-level Agent (recommended)
     "Agent",
+    "run_agent",
     # LLM Components
     "LLMModel",
     "LLMRequest",

@@ -181,7 +181,7 @@ class JSONRPCResponse(JSONRPCMessage):
 
 class SendTaskRequest(JSONRPCRequest):
     method: Literal["tasks/send"] = "tasks/send"
-    params: TaskSendParams
+    params: TaskSendParams | None = None
 
 
 class SendTaskResponse(JSONRPCResponse):
@@ -190,7 +190,7 @@ class SendTaskResponse(JSONRPCResponse):
 
 class SendTaskStreamingRequest(JSONRPCRequest):
     method: Literal["tasks/sendSubscribe"] = "tasks/sendSubscribe"
-    params: TaskSendParams
+    params: TaskSendParams | None = None
 
 
 class SendTaskStreamingResponse(JSONRPCResponse):
@@ -199,7 +199,7 @@ class SendTaskStreamingResponse(JSONRPCResponse):
 
 class GetTaskRequest(JSONRPCRequest):
     method: Literal["tasks/get"] = "tasks/get"
-    params: TaskQueryParams
+    params: TaskQueryParams | None = None
 
 
 class GetTaskResponse(JSONRPCResponse):
@@ -208,7 +208,7 @@ class GetTaskResponse(JSONRPCResponse):
 
 class CancelTaskRequest(JSONRPCRequest):
     method: Literal["tasks/cancel",] = "tasks/cancel"
-    params: TaskIdParams
+    params: TaskIdParams | None = None
 
 
 class CancelTaskResponse(JSONRPCResponse):
@@ -217,7 +217,7 @@ class CancelTaskResponse(JSONRPCResponse):
 
 class SetTaskPushNotificationRequest(JSONRPCRequest):
     method: Literal["tasks/pushNotification/set",] = "tasks/pushNotification/set"
-    params: TaskPushNotificationConfig
+    params: TaskPushNotificationConfig | None = None
 
 
 class SetTaskPushNotificationResponse(JSONRPCResponse):
@@ -226,7 +226,7 @@ class SetTaskPushNotificationResponse(JSONRPCResponse):
 
 class GetTaskPushNotificationRequest(JSONRPCRequest):
     method: Literal["tasks/pushNotification/get",] = "tasks/pushNotification/get"
-    params: TaskIdParams
+    params: TaskIdParams | None = None
 
 
 class GetTaskPushNotificationResponse(JSONRPCResponse):
@@ -235,7 +235,7 @@ class GetTaskPushNotificationResponse(JSONRPCResponse):
 
 class TaskResubscriptionRequest(JSONRPCRequest):
     method: Literal["tasks/resubscribe",] = "tasks/resubscribe"
-    params: TaskIdParams
+    params: TaskIdParams | None = None
 
 
 # A2A Message endpoints
@@ -248,7 +248,7 @@ class MessageSendParams(BaseModel):
 
 class MessageSendRequest(JSONRPCRequest):
     method: Literal["message/send"] = "message/send"
-    params: MessageSendParams
+    params: MessageSendParams | None = None
 
 
 class MessageSendResponse(JSONRPCResponse):
@@ -257,7 +257,7 @@ class MessageSendResponse(JSONRPCResponse):
 
 class MessageStreamRequest(JSONRPCRequest):
     method: Literal["message/stream"] = "message/stream"
-    params: MessageSendParams
+    params: MessageSendParams | None = None
 
 
 class MessageStreamResponse(JSONRPCResponse):
@@ -326,7 +326,7 @@ class AuthenticatedExtendedCardParams(BaseModel):
 
 class AuthenticatedExtendedCardRequest(JSONRPCRequest):
     method: Literal["agent/authenticatedExtendedCard"] = "agent/authenticatedExtendedCard"
-    params: AuthenticatedExtendedCardParams
+    params: AuthenticatedExtendedCardParams | None = None
 
 
 class AuthenticatedExtendedCardResponse(JSONRPCResponse):

@@ -3,7 +3,7 @@
 import json
 import logging
 import logging.config
-from typing import Any
+from typing import Any, cast
 
 from ..auth.context import UserContext
 from .filters import WorkspaceContextFilter
@@ -24,13 +24,13 @@ class WorkspaceContextFormatter(logging.Formatter):
 
         # Add workspace context if available
         if hasattr(record, "user_id"):
-            log_entry["user_id"] = record.user_id
+            log_entry["user_id"] = cast(Any, record).user_id
         if hasattr(record, "workspace_id"):
-            log_entry["workspace_id"] = record.workspace_id
+            log_entry["workspace_id"] = cast(Any, record).workspace_id
 
         # Add audit event data if present
         if hasattr(record, "audit_event"):
-            log_entry["audit_event"] = record.audit_event
+            log_entry["audit_event"] = cast(Any, record).audit_event
 
         # Add any extra fields
         for key, value in record.__dict__.items():

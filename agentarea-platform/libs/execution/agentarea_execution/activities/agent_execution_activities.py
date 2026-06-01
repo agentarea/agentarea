@@ -18,25 +18,6 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-try:
-    from prometheus_client import Counter as _Counter
-
-    def _make_counter(name: str, doc: str, labels: list[str] | None = None):
-        return _Counter(name, doc, labels or [])
-
-except ImportError:
-
-    class _NoopCounter:
-        def inc(self, amount=1):
-            pass
-
-        def labels(self, **_kw):
-            return self
-
-    def _make_counter(name: str, doc: str, labels: list[str] | None = None):  # type: ignore[misc]
-        return _NoopCounter()
-
-
 from agentarea_agents_sdk import (
     GoalProgressEvaluator,
     LLMModel,
@@ -48,6 +29,8 @@ from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 
 # Local imports
 from agentarea_common.auth.context import UserContext
+from agentarea_common.money import to_money
+from prometheus_client import Counter
 
 # Third-party imports
 from temporalio import activity
@@ -104,6 +87,17 @@ from .event_publisher import create_event_publisher, publish_enriched_llm_error_
 from .heartbeat import auto_heartbeater
 
 logger = logging.getLogger(__name__)
+
+
+def _make_counter(name: str, doc: str, labels: list[str] | None = None):
+    return Counter(name, doc, labels or [])
+
+
+def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
 
 # Prometheus counters for MCP dispatch telemetry
 _mcp_last_dispatch_dropped_total = _make_counter(
@@ -341,13 +335,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return AgentConfigResult(
                 id=str(agent.id),
                 name=agent.name,
-                description=agent.description,
-                instruction=agent.instruction,
+                description=agent.description or "",
+                instruction=agent.instruction or "",
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
-                model_id=model_id_str,
+                model_id=model_id_str or "",
                 context_window=context_window,
                 default_context_strategy=default_context_strategy,
-                tools=agent.tools or [],
+                tools=_as_tool_config_list(agent.tools),
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
                 a2ui_enabled=agent.a2ui_enabled if agent.a2ui_enabled is not None else False,
@@ -383,7 +377,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
-                tools_config=agent.tools,
+                tools_config=_as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -424,7 +418,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
-                tools_config=agent.tools,
+                tools_config=_as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -588,8 +582,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
 
             llm_model = LLMModel(
-                provider_type=provider_type,
-                model_name=model_name,
+                provider_type=str(provider_type),
+                model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
             )
@@ -668,7 +662,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 content=complete_content,
                 thinking=complete_thinking,
                 tool_calls=complete_tool_calls,
-                cost=final_cost,
+                cost=to_money(final_cost),
                 usage=usage_model,
             )
 
@@ -786,7 +780,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         extra_kwargs = {
                             "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
                             "ctx": ToolInvocationContext(
-                                workflow_id=wf_id,
+                                workflow_id=wf_id or "",
                                 task_id=str(request.task_id) if request.task_id else "",
                                 workspace_id=str(request.workspace_id),
                                 user_id=str(user_context.user_id),
@@ -829,7 +823,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     from agentarea_agents_sdk.tools.agent_delegation_tool import (
                         create_task_service_for_delegation,
                     )
-                    from agentarea_common.database import get_database
+                    from agentarea_common.config import get_database
 
                     delegation_session = get_database().async_session_factory()
                     ctx._sessions.append(delegation_session)
@@ -931,7 +925,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     try:
                         mcp_result = await mcp_server_instance_service.execute_tool(
-                            instance.id, request.tool_name, request.tool_args
+                            UUID(str(instance.id)), request.tool_name, request.tool_args
                         )
                     except Exception as e:
                         logger.error("MCP tool execution failed: %s", e, exc_info=True)
@@ -1072,7 +1066,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     "does not have 'broker' attribute"
                 )
                 return WorkflowEventsResult(
-                    success=False, errors=["Event broker configuration error"]
+                    success=False,
+                    events_published=0,
+                    errors=["Event broker configuration error"],
                 )
 
             redis_event_broker = create_event_broker_from_router(dependencies.event_broker)  # type: ignore
@@ -1454,7 +1450,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             llm_model = LLMModel(
                 provider_type=provider_type,
-                model_name=model_name,
+                model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
             )
@@ -1595,7 +1591,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     event_dict = {
                         "event_type": event.event_type,
                         "data": event.data if hasattr(event, "data") else {},
-                        "created_at": str(event.created_at) if hasattr(event, "created_at") else "",
+                        "created_at": str(event.timestamp) if hasattr(event, "timestamp") else "",
                     }
                     events_data.append(event_dict)
 
@@ -1835,7 +1831,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
         try:
             from agentarea_common.base.repository_factory import RepositoryFactory
             from agentarea_common.config import get_database
+            from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
+            from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
             database = get_database()
             async with database.async_session_factory() as session:
@@ -1844,11 +1842,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     workspace_id=request.workspace_id,
                 )
                 repository_factory = RepositoryFactory(session, user_context)
+                task_repository = repository_factory.create_repository(TaskRepository)
+                if dependencies.workflow_executor is not None:
+                    task_manager = TemporalTaskManager.__new__(TemporalTaskManager)
+                    task_manager.task_repository = task_repository
+                    task_manager.temporal_executor = dependencies.workflow_executor
+                else:
+                    task_manager = TemporalTaskManager(task_repository=task_repository)
 
                 task_service = TaskService(
                     repository_factory=repository_factory,
                     event_broker=dependencies.event_broker,
-                    task_manager=None,
+                    task_manager=task_manager,
                 )
 
                 task = await task_service.create_task_with_policy(

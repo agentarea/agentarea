@@ -45,9 +45,7 @@ def _make_connection(num_ops: int = 3, name: str = "stripe-api"):
             "get": {
                 "operationId": f"op_{i:02d}",
                 "summary": f"Operation {i}",
-                "parameters": [
-                    {"name": "x", "in": "query", "schema": {"type": "string"}}
-                ],
+                "parameters": [{"name": "x", "in": "query", "schema": {"type": "string"}}],
                 "responses": {"200": {"description": "ok"}},
             }
         }
@@ -178,9 +176,7 @@ async def test_legacy_discover_available_tools_ignores_load_mode():
         mcp_server_instance_service=None,
     )
     assert isinstance(flat, list)
-    op_names = {
-        t["function"]["name"] for t in flat if t["function"]["name"].startswith("op_")
-    }
+    op_names = {t["function"]["name"] for t in flat if t["function"]["name"].startswith("op_")}
     assert op_names == {"op_00", "op_01"}
 
 

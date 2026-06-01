@@ -1150,7 +1150,7 @@ async def get_task_events(
                 WHERE task_id = :task_id
             """
 
-            params = {"task_id": str(task_id)}
+            params: dict[str, Any] = {"task_id": str(task_id)}
 
             if event_type:
                 base_query += " AND event_type = :event_type"

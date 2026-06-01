@@ -4486,29 +4486,6 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
-        /** JSONRPCError */
-        JSONRPCError: {
-            /** Code */
-            code: number;
-            /** Data */
-            data?: unknown | null;
-            /** Message */
-            message: string;
-        };
-        /** JSONRPCResponse */
-        JSONRPCResponse: {
-            error?: components["schemas"]["JSONRPCError"] | null;
-            /** Id */
-            id?: number | string | null;
-            /**
-             * Jsonrpc
-             * @default 2.0
-             * @constant
-             */
-            jsonrpc: "2.0";
-            /** Result */
-            result?: unknown | null;
-        };
         /** MCPAuthConfigCreateRequest */
         MCPAuthConfigCreateRequest: {
             /**
@@ -6285,6 +6262,8 @@ export interface components {
             description_override?: string | null;
             /** Disabled Methods */
             disabled_methods?: string[] | null;
+            /** Load Mode */
+            load_mode?: ("explicit" | "searchable") | null;
             /** Openapi Connection Id */
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */
@@ -7544,7 +7523,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONRPCResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

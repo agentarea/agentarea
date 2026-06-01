@@ -25,6 +25,7 @@ from typing import Any
 from ..models.llm_model import LLMModel, LLMRequest
 from ..prompts import PromptBuilder, ToolInfo
 from ..tools.completion_tool import CompletionTool
+from ..tools.decorator_tool import ToolsetAdapter
 from ..tools.tool_executor import ToolExecutor
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ class EventAgent:
 
         # Register built-in/default tools
         if include_default_tools:
-            self.tool_executor.registry.register(CompletionTool())
+            self.tool_executor.registry.register(ToolsetAdapter(CompletionTool()))
 
         # Register custom tools
         if tools:

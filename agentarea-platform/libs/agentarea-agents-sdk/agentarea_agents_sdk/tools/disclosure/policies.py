@@ -23,19 +23,13 @@ LOAD_TOOLS_NAME = "load_tools"
 class ExplicitPolicy:
     """All schemas in context every call. Identity policy — no behavior change."""
 
-    def partition(
-        self, candidates: list[ToolCandidate], ctx: DisclosureContext
-    ) -> Partition:
+    def partition(self, candidates: list[ToolCandidate], ctx: DisclosureContext) -> Partition:
         return Partition(explicit=[c.schema for c in candidates], deferred=[])
 
-    def render_catalog(
-        self, deferred: list[ToolCandidate], ctx: DisclosureContext
-    ) -> str:
+    def render_catalog(self, deferred: list[ToolCandidate], ctx: DisclosureContext) -> str:
         return ""
 
-    def get_meta_tool_definitions(
-        self, ctx: DisclosureContext
-    ) -> list[dict[str, Any]]:
+    def get_meta_tool_definitions(self, ctx: DisclosureContext) -> list[dict[str, Any]]:
         return []
 
     def reveal(
@@ -54,14 +48,10 @@ class NamedLookupPolicy:
     `available_tools` until the LLM explicitly asks for them via `load_tools`.
     """
 
-    def partition(
-        self, candidates: list[ToolCandidate], ctx: DisclosureContext
-    ) -> Partition:
+    def partition(self, candidates: list[ToolCandidate], ctx: DisclosureContext) -> Partition:
         return Partition(explicit=[], deferred=list(candidates))
 
-    def render_catalog(
-        self, deferred: list[ToolCandidate], ctx: DisclosureContext
-    ) -> str:
+    def render_catalog(self, deferred: list[ToolCandidate], ctx: DisclosureContext) -> str:
         if not deferred:
             return ""
 
@@ -83,14 +73,10 @@ class NamedLookupPolicy:
             for cand in sorted(groups[connection_id], key=lambda c: c.name):
                 stripped = (cand.description or "").strip()
                 first_line = stripped.splitlines()[0] if stripped else ""
-                lines.append(
-                    f"- {cand.name}: {first_line}" if first_line else f"- {cand.name}"
-                )
+                lines.append(f"- {cand.name}: {first_line}" if first_line else f"- {cand.name}")
         return "\n".join(lines)
 
-    def get_meta_tool_definitions(
-        self, ctx: DisclosureContext
-    ) -> list[dict[str, Any]]:
+    def get_meta_tool_definitions(self, ctx: DisclosureContext) -> list[dict[str, Any]]:
         return [
             {
                 "type": "function",

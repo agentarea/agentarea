@@ -94,9 +94,11 @@ async def _start_temporal_workflow_for_task(
         from agentarea_agents.application.temporal_workflow_service import (
             TemporalWorkflowService,
         )
+        from agentarea_common.infrastructure.connection_manager import get_connection_manager
 
-        # Create workflow service
-        workflow_service = TemporalWorkflowService()
+        connection_manager = get_connection_manager()
+        execution_service = await connection_manager.get_execution_service()
+        workflow_service = TemporalWorkflowService(execution_service)
 
         # Get user_id from metadata - require it, don't default
         user_id = metadata.get("user_id")
@@ -104,13 +106,13 @@ async def _start_temporal_workflow_for_task(
             logger.error(f"TaskCreated event missing user_id in metadata for task {task_id}")
             # Try to extract from task if available, otherwise fail
             # For now, log error but continue - workflow should handle missing user_id
-            user_id = None
+            user_id = "anonymous"
 
         # Start the Temporal workflow - this returns immediately
         result = await workflow_service.execute_agent_task_async(
             agent_id=agent_id,
             task_query=description,
-            user_id=user_id,
+            user_id=str(user_id),
             task_parameters=parameters,
             workspace_id=workspace_id,
         )

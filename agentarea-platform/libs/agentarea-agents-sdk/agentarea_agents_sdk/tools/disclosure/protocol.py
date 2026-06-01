@@ -74,21 +74,15 @@ class DisclosureContext:
 class ToolDisclosurePolicy(Protocol):
     """Strategy: decides what enters context now, what's deferred, and how to reveal."""
 
-    def partition(
-        self, candidates: list[ToolCandidate], ctx: DisclosureContext
-    ) -> Partition:
+    def partition(self, candidates: list[ToolCandidate], ctx: DisclosureContext) -> Partition:
         """Split candidates into explicit (full schemas) and deferred (catalog only)."""
         ...
 
-    def render_catalog(
-        self, deferred: list[ToolCandidate], ctx: DisclosureContext
-    ) -> str:
+    def render_catalog(self, deferred: list[ToolCandidate], ctx: DisclosureContext) -> str:
         """System-prompt block describing deferred tools. Empty string = no block."""
         ...
 
-    def get_meta_tool_definitions(
-        self, ctx: DisclosureContext
-    ) -> list[dict[str, Any]]:
+    def get_meta_tool_definitions(self, ctx: DisclosureContext) -> list[dict[str, Any]]:
         """Function-call meta-tools the LLM uses to interact with this policy."""
         ...
 

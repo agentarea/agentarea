@@ -5,7 +5,6 @@ from collections.abc import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from ..auth.context import UserContext
 from .config import update_logging_context
 from .context_logger import get_context_logger
 
@@ -24,7 +23,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
             The response from the handler
         """
         # Try to get user context from request state
-        user_context: UserContext = getattr(request.state, "user_context", None)
+        user_context = getattr(request.state, "user_context", None)
 
         if user_context:
             # Update logging context for this request

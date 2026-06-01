@@ -34,7 +34,7 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
         is_public: bool | None = None,
     ) -> list[ModelInstance]:
         """List ModelInstances with filtering options."""
-        return await self.repository.list(
+        return await self.repository.list_instances(
             provider_config_id=provider_config_id,
             model_spec_id=model_spec_id,
             is_active=is_active,
