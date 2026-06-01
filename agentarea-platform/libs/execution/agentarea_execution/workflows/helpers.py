@@ -13,6 +13,29 @@ with workflow.unsafe.imports_passed_through():
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
 
+def resolve_effective_budget(
+    request_budget: float | str | None,
+    effective_policy: dict[str, Any] | None,
+    key: str = "run_budget_usd",
+) -> Money | None:
+    """Single source of truth for the run budget.
+
+    The legacy ``request.budget_usd`` and the governance policy ceiling
+    (``effective_policy.budget.run_budget_usd``) are reconciled so the
+    loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)
+    enforce the same number. The tightest of the two wins — a lower ceiling
+    can never be loosened by the other source.
+    """
+    policy_budget = None
+    if effective_policy:
+        policy_budget = (effective_policy.get("budget") or {}).get(key)
+
+    candidates = [to_money(b) for b in (request_budget, policy_budget) if b is not None]
+    if not candidates:
+        return None
+    return min(candidates)
+
+
 class EventManager:
     """Manages workflow events with consistent formatting."""
 

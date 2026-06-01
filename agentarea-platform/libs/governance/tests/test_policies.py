@@ -11,6 +11,7 @@ from agentarea_governance.domain.policies import (
     PolicyValidator,
     TokenPolicy,
     ToolsPolicy,
+    effective_policy_from_json,
 )
 
 
@@ -209,7 +210,6 @@ def test_to_execution_state_emits_content_safety_flags():
                 content_safety=ContentSafetyPolicy(
                     prompt_injection_detection_enabled=False,
                     output_sanitizer_enabled=True,
-                    semantic_guard_threshold=70,
                 )
             )
         ]
@@ -220,11 +220,35 @@ def test_to_execution_state_emits_content_safety_flags():
     content_safety = state["content_safety"]
     assert content_safety["prompt_injection_enabled"] is False
     assert content_safety["output_sanitizer_enabled"] is True
-    assert content_safety["semantic_guard_threshold"] == 70
 
 
 def test_to_execution_state_empty_policy_is_empty_state():
     assert PolicyResolver().resolve([]).to_execution_state() == {}
+
+
+def test_snapshot_roundtrips_losslessly_for_immutability():
+    """The snapshot frozen at task creation must reach the runtime unchanged.
+
+    Guards against a future change re-resolving policy at runtime: whatever was
+    stored at creation must produce an identical execution_state when reloaded,
+    so a policy edit after the task starts cannot alter the running task.
+    """
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                budget=BudgetPolicy(run_budget_usd="10.00"),
+                tools=ToolsPolicy(allowed=["web_*"], denied=["payment_*"]),
+                approval=ApprovalPolicy(escalation_rules=["delete_*"]),
+            )
+        ],
+        source_policy_ids=["workspace-policy", "agent-policy"],
+    )
+
+    snapshot = effective.to_json_dict()
+    restored = effective_policy_from_json(snapshot)
+
+    assert restored.to_json_dict() == snapshot
+    assert restored.to_execution_state() == effective.to_execution_state()
 
 
 def test_policy_validator_exposes_chain_validation_contract():

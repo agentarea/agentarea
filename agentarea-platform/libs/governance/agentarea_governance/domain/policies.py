@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any
 
 from agentarea_common.money import Money, to_money
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 RESOLVER_VERSION = "policy-resolver-v1"
 
@@ -81,14 +81,6 @@ class ContentSafetyPolicy(BaseModel):
 
     prompt_injection_detection_enabled: bool | None = None
     output_sanitizer_enabled: bool | None = None
-    semantic_guard_threshold: int | None = None
-
-    @field_validator("semantic_guard_threshold")
-    @classmethod
-    def _validate_threshold(cls, value: int | None) -> int | None:
-        if value is not None and not 0 <= value <= 100:
-            raise ValueError("semantic_guard_threshold must be between 0 and 100")
-        return value
 
 
 class PolicyDocument(BaseModel):
@@ -149,7 +141,6 @@ class EffectivePolicy(PolicyDocument):
             state["content_safety"] = {
                 "prompt_injection_enabled": self.content_safety.prompt_injection_detection_enabled,
                 "output_sanitizer_enabled": self.content_safety.output_sanitizer_enabled,
-                "semantic_guard_threshold": self.content_safety.semantic_guard_threshold,
             }
 
         for key in ("cost_used", "service_cost_used"):
@@ -253,12 +244,6 @@ class PolicyResolver:
         for field in ("prompt_injection_detection_enabled", "output_sanitizer_enabled"):
             if getattr(higher, field) is True and getattr(lower, field) is False:
                 raise PolicyValidationError(f"{field} cannot be disabled")
-        if (
-            higher.semantic_guard_threshold is not None
-            and lower.semantic_guard_threshold is not None
-            and lower.semantic_guard_threshold < higher.semantic_guard_threshold
-        ):
-            raise PolicyValidationError("semantic_guard_threshold cannot be lowered")
 
     def _merge_budget(
         self, higher: BudgetPolicy | None, lower: BudgetPolicy | None
@@ -323,9 +308,6 @@ class PolicyResolver:
             or bool(lower.prompt_injection_detection_enabled),
             output_sanitizer_enabled=bool(higher.output_sanitizer_enabled)
             or bool(lower.output_sanitizer_enabled),
-            semantic_guard_threshold=_max_int(
-                higher.semantic_guard_threshold, lower.semantic_guard_threshold
-            ),
         )
 
 
@@ -343,14 +325,6 @@ def _min_int(left: int | None, right: int | None) -> int | None:
     if right is None:
         return left
     return min(left, right)
-
-
-def _max_int(left: int | None, right: int | None) -> int | None:
-    if left is None:
-        return right
-    if right is None:
-        return left
-    return max(left, right)
 
 
 def _dedupe(values: list[str]) -> list[str]:

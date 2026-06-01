@@ -38,6 +38,7 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolCallExtractor,
         build_output_summary,
+        resolve_effective_budget,
     )
     from .models import (
         AgentExecutionState,
@@ -332,7 +333,11 @@ class AgentExecutionWorkflow:
         self.state.workspace_id = request.workspace_id  # Add workspace_id from request
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
-        self.state.budget_usd = request.budget_usd
+        # Single source of truth: the loop-level PEP (BudgetTracker) enforces the
+        # same ceiling as the call-level PEP (CostBudgetGuard) — tightest wins.
+        self.state.budget_usd = resolve_effective_budget(
+            request.budget_usd, request.effective_policy
+        )
         self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
 
