@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.audit import audited
+from agentarea_common.events.base_events import EventEnvelope
 from agentarea_common.events.broker import EventBroker
 
 from .domain.enums import ExecutionStatus, TriggerType
@@ -560,13 +561,15 @@ class TriggerService:
         """
         try:
             await self.event_broker.publish(
-                event_type="trigger.auto_disabled",
-                data={
+                EventEnvelope(
+                    event_type="trigger.auto_disabled",
+                    data={
                     "trigger_id": str(trigger_id),
                     "consecutive_failures": consecutive_failures,
                     "disabled_at": datetime.utcnow().isoformat(),
                     "reason": "consecutive_failures_threshold_exceeded",
-                },
+                    },
+                )
             )
             logger.info(f"Published auto-disabled event for trigger {trigger_id}")
         except Exception as e:
@@ -1003,7 +1006,7 @@ class TriggerService:
 
     async def execute_trigger(
         self, trigger_id: UUID, trigger_data: dict[str, Any]
-    ) -> TriggerExecution:
+    ) -> TriggerExecution | None:
         """Execute a trigger.
 
         Args:
@@ -1283,8 +1286,6 @@ class TriggerService:
         # Build channel_origin from webhook trigger data
         if isinstance(trigger, WebhookTrigger):
             webhook_type = trigger.webhook_type
-            if hasattr(webhook_type, "value"):
-                webhook_type = webhook_type.value
 
             if webhook_type == "telegram":
                 chat_id = trigger_data.get("chat_id")
@@ -1443,7 +1444,7 @@ class TriggerService:
             return {}
 
         try:
-            return await self.llm_condition_evaluator.extract_parameters(
+            return await self.llm_condition_evaluator.extract_task_parameters(
                 instruction=instruction, event_data=event_data, trigger_context=trigger_context
             )
         except Exception as e:

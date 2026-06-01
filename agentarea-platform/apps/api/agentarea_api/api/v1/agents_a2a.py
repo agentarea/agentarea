@@ -62,7 +62,7 @@ from agentarea_common.utils.types import (
 from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -412,7 +412,7 @@ def convert_simple_task_to_a2a_task(task: SimpleTask):
 
     return Task(
         id=str(task.id),
-        context_id=None,
+        contextId=None,
         status=task_status,
         artifacts=None,
         history=None,
@@ -473,7 +473,7 @@ async def handle_task_send(request_id, params, task_service, agent_id, auth_cont
 
         a2a_task = Task(
             id=str(created_task.id),
-            context_id=None,
+            contextId=None,
             status=task_status,
             artifacts=None,
             history=None,
@@ -565,7 +565,9 @@ async def handle_message_send(
         # Create validated message
         message = Message(role="user", parts=[TextPart(text=text_content)])
         # Include optional metadata from params (e.g., requires_human_approval)
-        message_params = MessageSendParams(message=message, metadata=params.get("metadata"))
+        message_params = MessageSendParams(
+            message=message, contextId=None, metadata=params.get("metadata")
+        )
 
         # Convert to task with proper metadata
         task = convert_a2a_message_to_task(
@@ -604,7 +606,7 @@ async def handle_message_send(
 
         a2a_task = Task(
             id=str(created_task.id),
-            context_id=None,
+            contextId=None,
             status=task_status,
             artifacts=None,
             history=None,
@@ -672,7 +674,7 @@ async def handle_message_stream_sse(
     auth_context,
     agent_service,
     event_stream_service,
-):
+) -> JSONRPCResponse | Response:
     """Handle A2A message/stream method with proper TaskService integration.
 
     Includes validation and real event streaming.
@@ -706,7 +708,9 @@ async def handle_message_stream_sse(
         # Create validated message
         message = Message(role="user", parts=[TextPart(text=text_content)])
         # Include optional metadata from params (e.g., requires_human_approval)
-        message_params = MessageSendParams(message=message, metadata=params.get("metadata"))
+        message_params = MessageSendParams(
+            message=message, contextId=None, metadata=params.get("metadata")
+        )
 
         # Create task with proper A2A metadata
         task = convert_a2a_message_to_task(
@@ -757,6 +761,7 @@ async def handle_message_stream_sse(
                     id=request_id,
                     result=StreamResponseTask(
                         id=str(created_task.id),
+                        contextId=None,
                         status=TaskStatus(state=TaskState.SUBMITTED),
                     ).model_dump(by_alias=True),
                 )
@@ -788,7 +793,8 @@ async def handle_message_stream_sse(
                         update = JSONRPCResponse(
                             id=request_id,
                             result=StreamResponseStatusUpdate(
-                                task_id=str(created_task.id),
+                                taskId=str(created_task.id),
+                                contextId=None,
                                 status=TaskStatus(state=state),
                                 final=True,
                             ).model_dump(by_alias=True),
@@ -804,13 +810,15 @@ async def handle_message_stream_sse(
                             artifact_evt = JSONRPCResponse(
                                 id=request_id,
                                 result=StreamResponseArtifactUpdate(
-                                    task_id=str(created_task.id),
+                                    taskId=str(created_task.id),
+                                    contextId=None,
                                     artifact=Artifact(
-                                        artifact_id=str(_uuid4()),
+                                        artifactId=str(_uuid4()),
                                         parts=[TextPart(text=content)],
+                                        lastChunk=None,
                                     ),
                                     append=True,
-                                    last_chunk=False,
+                                    lastChunk=False,
                                 ).model_dump(by_alias=True),
                             )
                             yield f"data: {artifact_evt.model_dump_json(by_alias=True)}\n\n"
@@ -819,7 +827,8 @@ async def handle_message_stream_sse(
                         update = JSONRPCResponse(
                             id=request_id,
                             result=StreamResponseStatusUpdate(
-                                task_id=str(created_task.id),
+                                taskId=str(created_task.id),
+                                contextId=None,
                                 status=TaskStatus(state=TaskState.WORKING),
                                 final=False,
                             ).model_dump(by_alias=True),
@@ -1166,7 +1175,8 @@ async def handle_task_resubscribe(
                 final = JSONRPCResponse(
                     id=request_id,
                     result=StreamResponseStatusUpdate(
-                        task_id=str(task_id),
+                        taskId=str(task_id),
+                        contextId=None,
                         status=a2a_task.status,
                         final=True,
                     ).model_dump(by_alias=True),
@@ -1201,7 +1211,8 @@ async def handle_task_resubscribe(
                     update = JSONRPCResponse(
                         id=request_id,
                         result=StreamResponseStatusUpdate(
-                            task_id=str(task_id),
+                            taskId=str(task_id),
+                            contextId=None,
                             status=TaskStatus(state=state),
                             final=True,
                         ).model_dump(by_alias=True),
@@ -1214,13 +1225,15 @@ async def handle_task_resubscribe(
                         artifact_evt = JSONRPCResponse(
                             id=request_id,
                             result=StreamResponseArtifactUpdate(
-                                task_id=str(task_id),
+                                taskId=str(task_id),
+                                contextId=None,
                                 artifact=Artifact(
-                                    artifact_id=str(uuid4()),
+                                    artifactId=str(uuid4()),
                                     parts=[TextPart(text=content)],
+                                    lastChunk=None,
                                 ),
                                 append=True,
-                                last_chunk=False,
+                                lastChunk=False,
                             ).model_dump(by_alias=True),
                         )
                         yield f"data: {artifact_evt.model_dump_json(by_alias=True)}\n\n"
@@ -1228,7 +1241,8 @@ async def handle_task_resubscribe(
                     update = JSONRPCResponse(
                         id=request_id,
                         result=StreamResponseStatusUpdate(
-                            task_id=str(task_id),
+                            taskId=str(task_id),
+                            contextId=None,
                             status=TaskStatus(state=TaskState.WORKING),
                             final=False,
                         ).model_dump(by_alias=True),
@@ -1282,8 +1296,8 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         # Build current capabilities based on agent configuration
         capabilities = AgentCapabilities(
             streaming=True,  # All agents support streaming through A2A
-            push_notifications=False,  # Not currently supported
-            state_transition_history=True,  # Supported through Temporal workflows
+            pushNotifications=False,  # Not currently supported
+            stateTransitionHistory=True,  # Supported through Temporal workflows
         )
 
         # Build skills based on agent configuration and tools
@@ -1295,8 +1309,8 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
                 id="text-processing",
                 name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
-                input_modes=["text"],
-                output_modes=["text"],
+                inputModes=["text"],
+                outputModes=["text"],
             )
         )
 
@@ -1307,8 +1321,8 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
                     id="tool-execution",
                     name="Tool Execution",
                     description=f"Execute tools and integrations using {agent.name}",
-                    input_modes=["text"],
-                    output_modes=["text", "data"],
+                    inputModes=["text"],
+                    outputModes=["text", "data"],
                 )
             )
 
@@ -1319,8 +1333,8 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
                     id="task-planning",
                     name="Task Planning",
                     description=f"Break down complex tasks into steps using {agent.name}",
-                    input_modes=["text"],
-                    output_modes=["text"],
+                    inputModes=["text"],
+                    outputModes=["text"],
                 )
             )
 
@@ -1364,11 +1378,17 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
             description=enhanced_description,
             url=f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
             version="1.0.0",
+            protocolVersion="0.3.0",
             provider=AgentProvider(
                 organization="AgentArea", url=f"{base_url}/api/v1/agents/{agent_id}"
             ),
+            documentationUrl=None,
             capabilities=capabilities,
+            defaultInputModes=["text/plain", "application/json"],
+            defaultOutputModes=["text/plain", "application/json"],
             skills=skills,
+            supportsAuthenticatedExtendedCard=True,
+            securitySchemes=None,
         )
         return AgentAuthenticatedExtendedCardResponse(
             jsonrpc="2.0", id=request_id, result=agent_card
@@ -1470,7 +1490,7 @@ async def handle_agent_jsonrpc(
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
     event_stream_service: EventStreamService = Depends(get_event_stream_service),
-) -> JSONRPCResponse:
+) -> JSONRPCResponse | Response:
     """Handle A2A JSON-RPC requests with comprehensive error handling and validation."""
     request_start_time = time.time()
     request_id = None
@@ -1584,7 +1604,7 @@ async def handle_agent_jsonrpc(
             extra_metadata={
                 "method": method,
                 "result_type": type(result).__name__,
-                "is_streaming_response": hasattr(result, "media_type")
+                "is_streaming_response": isinstance(result, Response)
                 and result.media_type == "text/event-stream",
             },
         )
@@ -1667,8 +1687,8 @@ async def get_agent_well_known(
         # Build current capabilities based on agent configuration
         capabilities = AgentCapabilities(
             streaming=True,  # All agents support streaming through A2A
-            push_notifications=False,  # Not currently supported
-            state_transition_history=True,  # Supported through Temporal workflows
+            pushNotifications=False,  # Not currently supported
+            stateTransitionHistory=True,  # Supported through Temporal workflows
         )
 
         # Build skills based on current agent configuration and tools
@@ -1680,8 +1700,8 @@ async def get_agent_well_known(
                 id="text-processing",
                 name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
-                input_modes=["text"],
-                output_modes=["text"],
+                inputModes=["text"],
+                outputModes=["text"],
             )
         )
 
@@ -1692,8 +1712,8 @@ async def get_agent_well_known(
                     id="tool-execution",
                     name="Tool Execution",
                     description=f"Execute tools and integrations using {agent.name}",
-                    input_modes=["text"],
-                    output_modes=["text", "data"],
+                    inputModes=["text"],
+                    outputModes=["text", "data"],
                 )
             )
 
@@ -1704,8 +1724,8 @@ async def get_agent_well_known(
                     id="task-planning",
                     name="Task Planning",
                     description=f"Break down complex tasks into steps using {agent.name}",
-                    input_modes=["text"],
-                    output_modes=["text"],
+                    inputModes=["text"],
+                    outputModes=["text"],
                 )
             )
 
@@ -1747,9 +1767,15 @@ async def get_agent_well_known(
             description=enhanced_description,
             url=f"/api/v1/agents/{agent_id}/a2a/rpc",
             version="1.0.0",
+            protocolVersion="0.3.0",
             provider=AgentProvider(organization="AgentArea", url=f"/api/v1/agents/{agent_id}"),
+            documentationUrl=None,
             capabilities=capabilities,
+            defaultInputModes=["text/plain", "application/json"],
+            defaultOutputModes=["text/plain", "application/json"],
             skills=skills,
+            supportsAuthenticatedExtendedCard=True,
+            securitySchemes=None,
         )
         return agent_card
     except A2AValidationError as e:

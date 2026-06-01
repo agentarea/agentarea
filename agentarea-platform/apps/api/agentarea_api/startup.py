@@ -5,6 +5,7 @@ and other startup tasks required by the AgentArea platform.
 """
 
 import logging
+from typing import Any, cast
 
 from fastapi import FastAPI
 
@@ -48,5 +49,6 @@ def setup_app(app: FastAPI):
     Args:
         app: The FastAPI application instance to configure
     """
-    app.add_event_handler("startup", lambda: startup_event(app))
-    app.add_event_handler("shutdown", lambda: shutdown_event(app))
+    app_any = cast(Any, app)
+    app_any.add_event_handler("startup", lambda: startup_event(app))
+    app_any.add_event_handler("shutdown", lambda: shutdown_event(app))

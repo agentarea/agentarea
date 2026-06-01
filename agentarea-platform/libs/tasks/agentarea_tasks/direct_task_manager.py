@@ -9,7 +9,7 @@ Swap via WORKFLOW__EXECUTION_ENGINE=direct. No other config needed.
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from .domain.interfaces import BaseTaskManager
@@ -205,7 +205,7 @@ class DirectTaskManager(BaseTaskManager):
         )
 
         # Resolve agent
-        agent_service, session = await container.get_agent_service(user_context)
+        agent_service, session = await cast(Any, container).get_agent_service(user_context)
         agent = await agent_service.get_with_skills(task.agent_id)
         if not agent:
             raise ValueError(f"Agent {task.agent_id} not found")
@@ -226,7 +226,9 @@ class DirectTaskManager(BaseTaskManager):
                 )
 
         # Resolve model instance → provider config → API key
-        model_instance_service, _ = await container.get_model_instance_service(user_context)
+        model_instance_service, _ = await cast(Any, container).get_model_instance_service(
+            user_context
+        )
         model_instance = await model_instance_service.get(UUID(agent.model_id))
         if not model_instance:
             raise ValueError(f"Model instance {agent.model_id} not found")
@@ -235,7 +237,7 @@ class DirectTaskManager(BaseTaskManager):
         model_name = model_instance.model_spec.model_name
 
         # Get API key from secret manager
-        secret_manager = await container.get_secret_manager(task.workspace_id)
+        secret_manager = await cast(Any, container).get_secret_manager(task.workspace_id)
         api_key_secret = model_instance.provider_config.api_key_secret_name
         api_key = await secret_manager.get_secret(api_key_secret) if api_key_secret else ""
 
@@ -299,7 +301,7 @@ class DirectTaskManager(BaseTaskManager):
             query=getattr(task, "query", task.description),
             user_id=str(getattr(task, "created_by", "")),
             workspace_id=str(task.workspace_id),
-            agent_id=getattr(task, "agent_id", None),
+            agent_id=UUID(str(task.agent_id)) if getattr(task, "agent_id", None) else uuid4(),
             status=task.status,
             result=task.result,
             execution_id=f"task-{task.id}",

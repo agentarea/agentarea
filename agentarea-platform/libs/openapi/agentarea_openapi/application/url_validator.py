@@ -52,7 +52,7 @@ def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
 
     resolved_ips: list[str] = []
     for result in results:
-        addr_str = result[4][0]
+        addr_str = str(result[4][0])
         try:
             addr = ipaddress.ip_address(addr_str)
         except ValueError:
@@ -118,7 +118,7 @@ def build_pinned_target(url: str, resolved_ip: str | None = None) -> PinnedTarge
     if resolved_ip is None:
         try:
             results = socket.getaddrinfo(original_host, None)
-            resolved_ip = results[0][4][0] if results else original_host
+            resolved_ip = str(results[0][4][0]) if results else original_host
         except socket.gaierror:
             resolved_ip = original_host
 

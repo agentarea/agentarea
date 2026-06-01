@@ -9,6 +9,7 @@ from .a2a_tool_factory import A2AAgentToolFactory
 from .base_tool import ToolRegistry
 from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
+from .decorator_tool import ToolsetAdapter
 from .mcp_tool import MCPToolFactory
 from .openapi_tool import OpenAPIToolFactory, _slugify_name
 from .tool_provider import (
@@ -52,7 +53,7 @@ class ToolManager:
         self._openapi_connection_service = openapi_connection_service
 
         # Register built-in tools
-        self.registry.register(CompletionTool())
+        self.registry.register(ToolsetAdapter(CompletionTool()))
 
     async def discover_available_tools(
         self,
@@ -141,7 +142,12 @@ class ToolManager:
         for tool in tools_config:
             tool_type = tool.get("type")
             tool_name = tool.get("name")
+            if not isinstance(tool_name, str) or not tool_name:
+                logger.warning("Skipping tool with missing name", extra={"tool_config": tool})
+                continue
             settings = tool.get("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
 
             if tool_type == "code":
                 disabled_methods = settings.get("disabled_methods", [])
@@ -164,7 +170,7 @@ class ToolManager:
             elif tool_type == "mcp":
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
                     tool_name, allowed_names, mcp_server_instance_service
@@ -201,7 +207,7 @@ class ToolManager:
                 connection_ref = settings.get("openapi_connection_id") or tool_name
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 load_mode = settings.get("load_mode")
                 if load_mode == "searchable" and not force_explicit:
@@ -468,7 +474,12 @@ class ToolManager:
         for tool in tools_config:
             tool_type = tool.get("type")
             tool_name = tool.get("name")
+            if not isinstance(tool_name, str) or not tool_name:
+                logger.warning("Skipping tool provider with missing name", extra={"tool_config": tool})
+                continue
             settings = tool.get("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
 
             if tool_type == "code":
                 disabled_methods = settings.get("disabled_methods", [])
@@ -490,8 +501,12 @@ class ToolManager:
                     )
 
             elif tool_type == "mcp":
+                raw_allowed = settings.get("allowed_tools") or []
+                allowed_names = [
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
-                    tool_name, settings.get("allowed_tools", []), mcp_server_instance_service
+                    tool_name, allowed_names, mcp_server_instance_service
                 )
                 if mcp_tools:
                     tool_defs = [t.get_openai_function_definition() for t in mcp_tools]
@@ -532,7 +547,7 @@ class ToolManager:
                 connection_ref = settings.get("openapi_connection_id") or tool_name
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 openapi_tools = await self._discover_openapi_tools_by_name(
                     connection_ref, allowed_names, self._openapi_connection_service

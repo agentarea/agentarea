@@ -79,7 +79,7 @@ class GovernancePolicyService:
             parent_agent_id=parent_agent_id,
             document=document,
         )
-        PolicyValidator(PolicyResolver()).validate_chain(policies, source_policy_ids=source_ids)
+        PolicyValidator(PolicyResolver()).validate_chain(list(policies), source_policy_ids=source_ids)
 
         policy_id, saved_document = await self._policy_repository.upsert_scope_policy(
             scope_type=scope_type,

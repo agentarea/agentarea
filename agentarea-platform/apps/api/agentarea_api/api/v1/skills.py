@@ -175,6 +175,8 @@ async def create_skill(
                 ),
             )
         else:
+            if request.github_url is None:
+                raise HTTPException(status_code=400, detail="github_url is required")
             skill = await skill_service.create_from_github(
                 SkillImportFromGithub(
                     github_url=request.github_url,

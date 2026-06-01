@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
 
 import redis.asyncio as redis
@@ -59,7 +59,7 @@ class RedisEventBroker(EventBroker):
                 if hasattr(self.redis_broker, "_connection"):
                     conn = self.redis_broker._connection
                     if hasattr(conn, "redis"):
-                        self._raw_redis = conn.redis
+                        self._raw_redis = cast(redis.Redis, cast(Any, conn).redis)
                     else:
                         # Fallback: create new Redis client from connection params
                         self._raw_redis = await self._create_raw_redis()
@@ -99,11 +99,13 @@ class RedisEventBroker(EventBroker):
         await self._ensure_connected()
 
         # Normalize input to EventEnvelope for type safety
-        if hasattr(event, "to_envelope") and callable(event.to_envelope):
+        event_any = cast(Any, event)
+        to_envelope = getattr(event_any, "to_envelope", None)
+        if callable(to_envelope):
             # Supports typed Pydantic BaseEvent models without importing them here
-            envelope = event.to_envelope()  # type: ignore[attr-defined]
+            envelope = cast(EventEnvelope, to_envelope())
         else:
-            envelope = EventEnvelope.from_any(event)
+            envelope = EventEnvelope.from_any(cast(EventEnvelope | DomainEvent, event))
 
         # Convert to shared event format (CloudEvents compatible)
         # This ensures cross-language compatibility with Go services

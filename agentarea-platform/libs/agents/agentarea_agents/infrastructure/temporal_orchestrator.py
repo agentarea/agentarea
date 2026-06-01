@@ -1,6 +1,7 @@
 """Temporal workflow orchestrator implementation."""
 
 import logging
+from inspect import isawaitable
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +9,14 @@ from ..application.execution_service import WorkflowOrchestratorInterface
 from ..domain.interfaces import ExecutionRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _duration_seconds(value: Any) -> float | None:
+    total_seconds = getattr(value, "total_seconds", None)
+    if callable(total_seconds):
+        result = total_seconds()
+        return float(result) if isinstance(result, int | float) else None
+    return None
 
 
 class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
@@ -58,7 +67,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Close Temporal client connection."""
         if self._client:
             try:
-                await self._client.close()
+                close = getattr(self._client, "close", None)
+                if callable(close):
+                    close_result = close()
+                    if isawaitable(close_result):
+                        await close_result
                 logger.info("Closed Temporal client connection")
             except Exception as e:
                 logger.warning(f"Error closing Temporal client: {e}")
@@ -177,12 +190,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 if description.start_time
                 else None,
                 "end_time": description.close_time.isoformat() if description.close_time else None,
-                "execution_time": (
-                    description.execution_time.total_seconds()
-                    if getattr(description, "execution_time", None)
-                    and hasattr(description.execution_time, "total_seconds")
-                    else None
-                ),
+                "execution_time": _duration_seconds(getattr(description, "execution_time", None)),
             }
 
             if mapped_status == "completed":

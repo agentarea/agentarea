@@ -1,7 +1,7 @@
 """Helper classes and utilities for agent execution workflows."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from temporalio import workflow
 
@@ -77,7 +77,11 @@ class BudgetTracker:
     Use serialize_money() when putting values into dicts/events.
     """
 
-    def __init__(self, budget_usd: float | None = None, service_budget_usd: float | None = None):
+    def __init__(
+        self,
+        budget_usd: Money | float | None = None,
+        service_budget_usd: Money | float | None = None,
+    ):
         from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
 
         self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
@@ -89,7 +93,7 @@ class BudgetTracker:
         self._service_cost: Money = ZERO
         self._service_warning_sent = False
 
-    def add_cost(self, amount: float) -> None:
+    def add_cost(self, amount: Money | float) -> None:
         """Add cost to the current total."""
         added = to_money(amount)
         self.cost += added
@@ -211,7 +215,7 @@ class MessageBuilder:
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools,
+            available_tools=cast(Any, available_tools),
             a2ui_enabled=a2ui_enabled,
         )
 
@@ -314,7 +318,7 @@ class ToolCallExtractor:
         elif isinstance(message, dict) and "tool_calls" in message:
             tool_calls = message["tool_calls"]
 
-        if hasattr(message, "content"):
+        if not isinstance(message, dict) and hasattr(message, "content"):
             content = message.content
         elif isinstance(message, dict) and "content" in message:
             content = message["content"]

@@ -202,7 +202,7 @@ class Toolset(ABC):
 
     def _get_parameter_schema(self, param: inspect.Parameter, type_hint: Any) -> dict[str, Any]:
         """Generate schema for a single parameter."""
-        schema = {"description": f"Parameter: {param.name}"}
+        schema: dict[str, Any] = {"description": f"Parameter: {param.name}"}
         origin = get_origin(type_hint)
         args = get_args(type_hint)
         union_args = args if origin in (types.UnionType, Union) else ()

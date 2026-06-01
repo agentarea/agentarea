@@ -8,12 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class BaseRepository[T]:
     """Base repository providing basic CRUD operations."""
 
-    def __init__(self, session: AsyncSession):
+    model_class: type[T]
+
+    def __init__(self, session: AsyncSession, model_class: type[T] | None = None):
         self.session = session
+        if model_class is not None:
+            self.model_class = model_class
 
     async def get(self, id: UUID | str) -> T | None:
         """Get a record by ID."""
         return await self.session.get(self.model_class, id)
+
+    async def get_by_id(self, id: UUID | str) -> T | None:
+        """Compatibility alias for workspace-scoped repositories."""
+        return await self.get(id)
 
     async def list(self) -> list[T]:
         """List all records."""

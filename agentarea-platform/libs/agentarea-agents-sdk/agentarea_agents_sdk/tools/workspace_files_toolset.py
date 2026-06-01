@@ -58,8 +58,8 @@ class WorkspaceFilesToolset(Toolset):
             objects = await self.storage.list(self.workspace_id, prefix=resolved_prefix)
             rows = []
             for obj in objects[: max(0, max_items)]:
-                path = getattr(obj, "path", None) or (
-                    obj.get("path") if isinstance(obj, dict) else ""
+                path = str(
+                    getattr(obj, "path", None) or (obj.get("path") if isinstance(obj, dict) else "")
                 )
                 rows.append(
                     {

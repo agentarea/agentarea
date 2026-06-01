@@ -195,7 +195,7 @@ class BaseTaskService(ABC):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
-            workspace_id=task.workspace_id,
+            workspace_id=task.workspace_id or "",
             metadata=task.metadata,
         )
 
@@ -240,7 +240,7 @@ class BaseTaskService(ABC):
                         task_id=str(updated_task.id),
                         old_status=old_status,
                         new_status=new_status,
-                        status_timestamp=updated_task.updated_at,
+                        status_timestamp=updated_task.updated_at or datetime.now(),
                     )
                 )
         except Exception as e:
@@ -341,7 +341,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            workspace_id=task.workspace_id,
+            workspace_id=task.workspace_id or "",
             metadata=task.metadata,
         )
 

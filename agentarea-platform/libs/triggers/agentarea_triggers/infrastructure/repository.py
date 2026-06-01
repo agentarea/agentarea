@@ -1,12 +1,14 @@
 """Trigger repository implementation."""
 
 from datetime import datetime
-from typing import Any
+from enum import Enum
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, desc, select, update
+from sqlalchemy import and_, desc, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import ExecutionStatus, TriggerType
@@ -19,6 +21,10 @@ from ..domain.models import (
     WebhookTrigger,
 )
 from .orm import TriggerExecutionORM, TriggerORM
+
+
+def _value(value: Any) -> Any:
+    return value.value if isinstance(value, Enum) else value
 
 
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
@@ -51,7 +57,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": entity.name,
             "description": entity.description,
             "agent_id": entity.agent_id,
-            "trigger_type": entity.trigger_type.value,
+            "trigger_type": _value(entity.trigger_type),
             "is_active": entity.is_active,
             "task_parameters": entity.task_parameters,
             "conditions": entity.conditions,
@@ -76,9 +82,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": entity.webhook_id,
                     "allowed_methods": entity.allowed_methods,
-                    "webhook_type": entity.webhook_type.value
-                    if hasattr(entity.webhook_type, "value")
-                    else entity.webhook_type,
+                    "webhook_type": _value(entity.webhook_type),
                     "validation_rules": entity.validation_rules,
                     "webhook_config": entity.webhook_config,
                 }
@@ -99,7 +103,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": entity.name,
             "description": entity.description,
             "agent_id": entity.agent_id,
-            "trigger_type": entity.trigger_type.value,
+            "trigger_type": _value(entity.trigger_type),
             "is_active": entity.is_active,
             "task_parameters": entity.task_parameters,
             "conditions": entity.conditions,
@@ -124,9 +128,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": entity.webhook_id,
                     "allowed_methods": entity.allowed_methods,
-                    "webhook_type": entity.webhook_type.value
-                    if hasattr(entity.webhook_type, "value")
-                    else entity.webhook_type,
+                    "webhook_type": _value(entity.webhook_type),
                     "validation_rules": entity.validation_rules,
                     "webhook_config": entity.webhook_config,
                 }
@@ -152,7 +154,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             name=trigger_data.name,
             description=trigger_data.description,
             agent_id=trigger_data.agent_id,
-            trigger_type=trigger_data.trigger_type.value,
+            trigger_type=_value(trigger_data.trigger_type),
             task_parameters=trigger_data.task_parameters,
             conditions=trigger_data.conditions,
             created_by=trigger_data.created_by,
@@ -167,9 +169,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             webhook_id=trigger_data.webhook_id,
             allowed_methods=trigger_data.allowed_methods,
             webhook_type=(
-                trigger_data.webhook_type.value
-                if hasattr(trigger_data.webhook_type, "value")
-                else trigger_data.webhook_type
+                _value(trigger_data.webhook_type)
             )
             if trigger_data.webhook_type
             else None,
@@ -235,7 +235,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         """List active triggers."""
         stmt = (
             select(TriggerORM)
-            .where(TriggerORM.is_active is True)
+            .where(TriggerORM.is_active.is_(True))
             .order_by(TriggerORM.created_at.desc())
             .limit(limit)
         )
@@ -243,6 +243,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         trigger_orms = result.scalars().all()
 
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
+
+    async def count_all(self) -> int:
+        """Count all triggers visible in the current workspace."""
+        return await self.count()
 
     async def get_by_webhook_id(self, webhook_id: str) -> Trigger | None:
         """Get trigger by webhook ID."""
@@ -292,7 +296,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        return result.rowcount > 0
+        return cast(CursorResult[Any], result).rowcount > 0
 
     async def update_execution_tracking(
         self, trigger_id: UUID, last_execution_at: datetime, consecutive_failures: int = 0
@@ -310,7 +314,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         result = await self.session.execute(stmt)
         await self.session.flush()
 
-        return result.rowcount > 0
+        return cast(CursorResult[Any], result).rowcount > 0
 
     async def disable_trigger(self, trigger_id: UUID) -> bool:
         """Disable a trigger."""
@@ -322,7 +326,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         result = await self.session.execute(stmt)
         await self.session.flush()
 
-        return result.rowcount > 0
+        return cast(CursorResult[Any], result).rowcount > 0
 
     async def enable_trigger(self, trigger_id: UUID) -> bool:
         """Enable a trigger."""
@@ -334,7 +338,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         result = await self.session.execute(stmt)
         await self.session.flush()
 
-        return result.rowcount > 0
+        return cast(CursorResult[Any], result).rowcount > 0
 
     def _orm_to_domain(self, trigger_orm: TriggerORM) -> Trigger:
         """Convert ORM model to domain model."""
@@ -359,7 +363,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         if trigger_orm.trigger_type == TriggerType.CRON.value:
             return CronTrigger(
                 **base_data,
-                cron_expression=trigger_orm.cron_expression,
+                cron_expression=trigger_orm.cron_expression or "",
                 timezone=trigger_orm.timezone or "UTC",
                 data_extractor=trigger_orm.data_extractor,
                 data_extractor_config=trigger_orm.data_extractor_config,
@@ -370,7 +374,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
             return WebhookTrigger(
                 **base_data,
-                webhook_id=trigger_orm.webhook_id,
+                webhook_id=trigger_orm.webhook_id or "",
                 allowed_methods=trigger_orm.allowed_methods or ["POST"],
                 webhook_type=WebhookType(trigger_orm.webhook_type)
                 if trigger_orm.webhook_type
@@ -389,7 +393,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": trigger.name,
             "description": trigger.description,
             "agent_id": trigger.agent_id,
-            "trigger_type": trigger.trigger_type.value,
+            "trigger_type": _value(trigger.trigger_type),
             "is_active": trigger.is_active,
             "task_parameters": trigger.task_parameters,
             "conditions": trigger.conditions,
@@ -417,9 +421,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": trigger.webhook_id,
                     "allowed_methods": trigger.allowed_methods,
-                    "webhook_type": trigger.webhook_type.value
-                    if hasattr(trigger.webhook_type, "value")
-                    else trigger.webhook_type,
+                    "webhook_type": _value(trigger.webhook_type),
                     "validation_rules": trigger.validation_rules,
                     "webhook_config": trigger.webhook_config,
                 }
@@ -560,8 +562,6 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         self, trigger_id: UUID, start_time: datetime, end_time: datetime
     ) -> int:
         """Count executions for a trigger in a specific time period."""
-        from sqlalchemy import func
-
         stmt = select(func.count(TriggerExecutionORM.id)).where(
             and_(
                 TriggerExecutionORM.trigger_id == trigger_id,
@@ -615,8 +615,6 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         end_time: datetime | None = None,
     ) -> int:
         """Count executions with filtering."""
-        from sqlalchemy import func
-
         stmt = select(func.count(TriggerExecutionORM.id))
 
         # Apply filters
@@ -635,6 +633,20 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
 
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def count_since(self, since: datetime) -> int:
+        """Count executions since the given timestamp."""
+        return await self.count_executions_filtered(start_time=since)
+
+    async def count_failures_since(self, since: datetime) -> int:
+        """Count failed or timed-out executions since the given timestamp."""
+        failed = await self.count_executions_filtered(
+            status=ExecutionStatus.FAILED, start_time=since
+        )
+        timed_out = await self.count_executions_filtered(
+            status=ExecutionStatus.TIMEOUT, start_time=since
+        )
+        return failed + timed_out
 
     async def get_execution_metrics(self, trigger_id: UUID, hours: int = 24) -> dict[str, Any]:
         """Get execution metrics for a trigger within specified hours."""
@@ -788,7 +800,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
     def _orm_to_domain(self, execution_orm: TriggerExecutionORM) -> TriggerExecution:
         """Convert ORM model to domain model."""
         return TriggerExecution(
-            id=execution_orm.id,
+            id=cast(UUID, execution_orm.id),
             trigger_id=execution_orm.trigger_id,
             executed_at=execution_orm.executed_at,
             status=ExecutionStatus(execution_orm.status),

@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (  # type: ignore
@@ -139,12 +140,15 @@ class ProviderConfigWithInstancesResponse(BaseModel):
 
     @classmethod
     def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigWithInstancesResponse":
+        provider_config_any = cast(Any, provider_config)
         return cls(
             id=str(provider_config.id),
             provider_spec_id=str(provider_config.provider_spec_id),
             name=provider_config.name,
             endpoint_url=provider_config.endpoint_url,
-            user_id=str(provider_config.user_id) if provider_config.user_id else None,
+            user_id=str(provider_config_any.user_id)
+            if getattr(provider_config_any, "user_id", None)
+            else None,
             is_active=provider_config.is_active,
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,
@@ -271,7 +275,7 @@ async def discover_models_preview(
     new_count = 0
     for model in discovered:
         existing = await model_spec_repo.get_by_provider_and_model(
-            provider_spec_id, model.model_name
+            UUID(str(provider_spec_id)), model.model_name
         )
         is_new = existing is None
 
@@ -445,7 +449,7 @@ async def discover_models(
     for model in discovered:
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
-            provider_spec_id, model.model_name
+            UUID(str(provider_spec_id)), model.model_name
         )
         is_new = existing is None
 

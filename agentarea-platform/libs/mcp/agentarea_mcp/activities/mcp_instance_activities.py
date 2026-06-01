@@ -107,7 +107,7 @@ async def discover_mcp_tools(
 
         async with sse_client(
             sse_url,
-            timeout=timedelta(seconds=timeout),
+            timeout=timeout,
             headers=custom_headers or None,
         ) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as sess:
@@ -151,10 +151,9 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
         from agentarea_common.auth.context import UserContext
         from agentarea_common.config import get_database
 
-        from agentarea_mcp.domain.auth_models import (
-            MCPAuthConfig,  # noqa: F401 - register FK target
-        )
+        from agentarea_mcp.domain import auth_models
         from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+        _ = auth_models.MCPAuthConfig
 
         try:
             db = get_database()
@@ -209,10 +208,9 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> PublishMCPEventResult:
         """Publish an MCP lifecycle event via the event broker."""
         from agentarea_common.events.base_events import DomainEvent
-        from agentarea_common.events.router import create_event_broker_from_router
 
         try:
-            redis_event_broker = create_event_broker_from_router(dependencies.event_broker)
+            redis_event_broker = dependencies.event_broker
 
             event_data = dict(request.event_data)
             event_data["instance_id"] = str(request.instance_id)

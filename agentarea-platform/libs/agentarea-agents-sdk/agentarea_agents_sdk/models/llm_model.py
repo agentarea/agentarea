@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import litellm
@@ -437,8 +437,8 @@ class LLMModel:
         cost = 0.0
         usage = LLMUsage()
 
-        if hasattr(response, "usage") and response.usage:
-            response_usage = response.usage
+        response_usage = getattr(response, "usage", None)
+        if response_usage:
 
             # Update usage statistics
             usage = LLMUsage(
@@ -480,7 +480,7 @@ class LLMModel:
             logger.info(f"Calling LLM with model {params['model']}")
 
             # Make the LLM call
-            typed_response: ModelResponse = await acompletion(**params)
+            typed_response = cast(ModelResponse, await acompletion(**params))
 
             # Parse and return response
             result = self._parse_response(typed_response)
@@ -694,7 +694,7 @@ class LLMModel:
                     if prompt_tokens == 0:
                         prompt_tokens = litellm.token_counter(
                             model=model_str,
-                            messages=[m.model_dump(mode="json") for m in request.messages],
+                            messages=request.messages,
                         )
                     if completion_tokens == 0 and complete_content:
                         completion_tokens = litellm.token_counter(
@@ -704,7 +704,7 @@ class LLMModel:
                     if prompt_tokens > 0 or completion_tokens > 0:
                         prompt_str = " ".join(
                             m.get("content", "") if isinstance(m, dict) else str(m)
-                            for m in [msg.model_dump(mode="json") for msg in request.messages]
+                            for m in request.messages
                         )
                         cost = litellm.completion_cost(
                             model=model_str,

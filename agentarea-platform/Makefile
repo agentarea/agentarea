@@ -28,8 +28,8 @@ test:
 	uv run python -m pytest tests/unit tests/functional apps/api/tests libs/common/tests libs/tasks/tests -m "not integration"
 
 lint:
-	uv run ruff check
-	uv run pyright
+	uv run --group lint ruff check
+	uv run --group lint pyright
 
 format:
 	uv run ruff format

@@ -1,7 +1,7 @@
 """Audit log API endpoints."""
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from agentarea_common.audit.models import AuditEventORM
@@ -46,7 +46,7 @@ class AuditEventResponse(BaseModel):
             action=event.action,
             resource_type=event.resource_type,
             resource_id=event.resource_id,
-            changes=event.changes,
+            changes=cast(list[dict] | None, event.changes if isinstance(event.changes, list) else None),
             event_metadata=event.event_metadata,
         )
 

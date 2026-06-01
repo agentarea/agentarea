@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import yaml
@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
+from agentarea_agents.schemas.dto import AgentTypeLiteral
 from agentarea_agents.schemas.import_export import (
     AgentYAML,
     ImportOptions,
@@ -26,6 +27,10 @@ if TYPE_CHECKING:
     from agentarea_agents.domain.skill_models import Skill
 
 logger = logging.getLogger(__name__)
+
+
+def _agent_type(value: str) -> AgentTypeLiteral:
+    return cast(AgentTypeLiteral, value if value in {"stateless", "stateful"} else "stateless")
 
 
 class WorkspaceImportExportService:
@@ -570,7 +575,7 @@ class WorkspaceImportExportService:
                     description=agent_yaml.description,
                     tools=agent_yaml.tools,
                     skill_ids=skill_ids,
-                    agent_type=agent_yaml.agent_type,
+                    agent_type=_agent_type(agent_yaml.agent_type),
                 ),
             )
             if updated_agent is None:
@@ -589,7 +594,7 @@ class WorkspaceImportExportService:
                     planning=agent_yaml.planning,
                     a2ui_enabled=agent_yaml.a2ui_enabled,
                     skill_ids=skill_ids,
-                    agent_type=agent_yaml.agent_type,
+                    agent_type=_agent_type(agent_yaml.agent_type),
                 )
             )
             return new_agent

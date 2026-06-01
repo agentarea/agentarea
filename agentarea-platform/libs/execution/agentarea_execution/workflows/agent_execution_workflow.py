@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, cast
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -24,7 +24,7 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
-    from agentarea_common.money import serialize_money
+    from agentarea_common.money import ZERO, serialize_money
 
     from .context_manager import (
         ContextWindowManager,
@@ -498,7 +498,7 @@ class AgentExecutionWorkflow:
 
             for tool in tools_list or []:
                 try:
-                    available_tools.append(tool.model_dump())  # Pydantic ToolDefinition
+                        available_tools.append(cast(Any, tool).model_dump())  # Pydantic ToolDefinition
                 except AttributeError:
                     if isinstance(tool, dict):
                         available_tools.append(tool)
@@ -720,7 +720,7 @@ class AgentExecutionWorkflow:
         """
         tools_config = self.state.agent_config.get("tools", [])
         agent_names = [
-            tc.get("name")
+            str(tc.get("name"))
             for tc in tools_config
             if isinstance(tc, dict) and tc.get("type") == "agent" and tc.get("name")
         ]
@@ -898,12 +898,20 @@ class AgentExecutionWorkflow:
             task_id=self.state.task_id,
             user_id=self.state.user_id,
             workspace_id=self.state.workspace_id,
-            goal=self.state.goal,
+            goal=self.state.goal
+            or AgentGoal(
+                id="continued",
+                description="",
+                success_criteria=[],
+                max_iterations=0,
+                requires_human_approval=False,
+                context={},
+            ),
             messages=messages_dict,
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
-            total_cost=serialize_money(self.budget_tracker.cost),
+            total_cost=self.budget_tracker.cost,
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
@@ -1321,7 +1329,7 @@ class AgentExecutionWorkflow:
             # Create Pydantic request model
             llm_request = LLMCallRequest(
                 messages=messages_dict,
-                model_id=self.state.agent_config.get("model_id"),
+                model_id=str(self.state.agent_config.get("model_id") or ""),
                 tools=self.state.available_tools,
                 workspace_id=self.state.user_context_data["workspace_id"],
                 user_context_data=self.state.user_context_data,
@@ -1646,9 +1654,7 @@ class AgentExecutionWorkflow:
                     status="completed",
                     result=json.dumps({"response": result_text}),
                     workspace_id=self.state.workspace_id,
-                    total_cost=serialize_money(self.budget_tracker.cost)
-                    if self.budget_tracker
-                    else "0",
+                    total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -2702,7 +2708,7 @@ class AgentExecutionWorkflow:
         try:
             compact_request = CompactMessagesRequest(
                 messages_to_compact=messages_to_compact,
-                model_id=self.state.agent_config.get("model_id"),
+                model_id=str(self.state.agent_config.get("model_id") or ""),
                 workspace_id=self.state.workspace_id,
                 user_context_data=self.state.user_context_data,
                 resolved_model=self.state.resolved_model,
@@ -2919,9 +2925,7 @@ class AgentExecutionWorkflow:
                     else None,
                     error_message=self.state.blocked_reason if final_status == "blocked" else None,
                     workspace_id=self.state.workspace_id,
-                    total_cost=serialize_money(self.budget_tracker.cost)
-                    if self.budget_tracker
-                    else "0",
+                    total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -2955,7 +2959,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             success=self.state.success,
             final_response=self.state.final_response,
-            total_cost=serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
+            total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
             reasoning_iterations_used=self.state.current_iteration,
             conversation_history=conversation_history,
         )

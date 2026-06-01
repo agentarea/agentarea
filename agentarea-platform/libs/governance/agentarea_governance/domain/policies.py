@@ -354,7 +354,7 @@ def _pattern_is_within(child: str, parent: str) -> bool:
         return fnmatch.fnmatch(child, parent)
     if parent.endswith("*") and not any(char in parent[:-1] for char in "*?"):
         return child.startswith(parent[:-1])
-        return False
+    return False
 
 
 class PolicyValidator:

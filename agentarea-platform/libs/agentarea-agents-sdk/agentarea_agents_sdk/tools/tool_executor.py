@@ -1,6 +1,7 @@
 """Service for executing tools using unified tool interface."""
 
 import logging
+from inspect import isawaitable
 from typing import Any
 from uuid import UUID
 
@@ -97,7 +98,8 @@ class ToolExecutor:
                 fn = getattr(mcp_server_instance_service, method, None)
                 if callable(fn):
                     try:
-                        tools_payload = await fn(server_instance_id)
+                        call_result = fn(server_instance_id)
+                        tools_payload = await call_result if isawaitable(call_result) else call_result
                         if tools_payload is not None:
                             break
                     except Exception as e:

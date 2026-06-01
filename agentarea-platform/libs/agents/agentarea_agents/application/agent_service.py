@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.audit import audited
@@ -68,8 +69,8 @@ class AgentService(BaseCrudService[Agent]):
             AgentCreated(
                 agent_id=agent.id,
                 name=agent.name,
-                description=agent.description,
-                model_id=agent.model_id,
+                description=agent.description or "",
+                model_id=agent.model_id or "",
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
@@ -92,7 +93,7 @@ class AgentService(BaseCrudService[Agent]):
         if "name" in patch:
             agent.name = patch["name"]
         if "capabilities" in patch:
-            agent.capabilities = patch["capabilities"]
+            cast(Any, agent).capabilities = patch["capabilities"]
         if "description" in patch:
             agent.description = patch["description"]
         if "instruction" in patch:

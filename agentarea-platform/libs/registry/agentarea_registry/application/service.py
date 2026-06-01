@@ -327,6 +327,9 @@ class RegistryService:
         if spec.get("transport"):
             tags.append(spec["transport"])
 
+        if item.installed_entity_id is None:
+            raise ValueError(f"Registry item {item.id} is not installed")
+
         return await self.server_repo.update(
             item.installed_entity_id,
             description=item.description or "",
