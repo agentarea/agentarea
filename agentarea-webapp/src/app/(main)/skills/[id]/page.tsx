@@ -3,47 +3,59 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Save, Eye, Pencil, FileText, FileX } from "lucide-react";
-import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import YAML from "js-yaml";
+import {
+  Eye,
+  FileText,
+  FileX,
+  List,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { Streamdown } from "streamdown";
+import ContentBlock from "@/components/ContentBlock";
 import DeleteButton from "@/components/DeleteButton";
-import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SkillPanel from "@/components/SkillPanel/SkillPanel";
 import Section from "@/components/TaskInfoPanel/components/Section";
-import {
-  getSkillAction as getSkill,
-  getSkillContentAction as getSkillContent,
-  getSkillFilesAction as getSkillFiles,
-  getSkillFileAction as getSkillFile,
-  updateSkillAction as updateSkill,
-  deleteSkillAction as deleteSkill,
-} from "@/lib/server-actions";
-import type { Skill, SkillContent, SkillFile } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
+import { AnimatedTabs } from "@/components/ui/animated-tabs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/hooks/use-toast";
+import type { Skill, SkillContent, SkillFile } from "@/lib/api";
+import { formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
-  listSkillMembersAction as listSkillMembers,
   addSkillMemberAction as addSkillMember,
-  removeSkillMemberAction as removeSkillMember,
+  deleteSkillAction as deleteSkill,
   flattenSkillAction as flattenSkill,
+  getSkillAction as getSkill,
+  getSkillContentAction as getSkillContent,
+  getSkillFileAction as getSkillFile,
+  getSkillFilesAction as getSkillFiles,
+  listSkillMembersAction as listSkillMembers,
   listSkillsAction as listSkills,
+  removeSkillMemberAction as removeSkillMember,
+  updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
-import { Plus, Trash2, List } from "lucide-react";
-import YAML from "js-yaml";
-import { AnimatedTabs } from "@/components/ui/animated-tabs";
 
 // Parse YAML frontmatter from markdown
-function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string; rawFrontmatter: string } {
+function parseFrontmatter(content: string): {
+  frontmatter: Record<string, unknown>;
+  body: string;
+  rawFrontmatter: string;
+} {
   let body = content;
   let rawFrontmatter = "";
   let frontmatter: Record<string, unknown> = {};
@@ -53,7 +65,8 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
     rawFrontmatter = match[1];
     body = match[2];
     try {
-      frontmatter = YAML.load(rawFrontmatter) as Record<string, unknown> || {};
+      frontmatter =
+        (YAML.load(rawFrontmatter) as Record<string, unknown>) || {};
     } catch {
       frontmatter = {};
     }
@@ -74,6 +87,7 @@ export default function SkillDetailPage() {
   const [content, setContent] = useState<SkillContent | null>(null);
   const [files, setFiles] = useState<SkillFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [editName, setEditName] = useState("");
@@ -95,23 +109,31 @@ export default function SkillDetailPage() {
   const [removingChildId, setRemovingChildId] = useState<string | null>(null);
 
   // Execution order state
-  const [showExecutionOrderDialog, setShowExecutionOrderDialog] = useState(false);
+  const [showExecutionOrderDialog, setShowExecutionOrderDialog] =
+    useState(false);
   const [executionOrder, setExecutionOrder] = useState<any[]>([]);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
-        const [skillRes, contentRes, filesRes, membersRes, allSkillsRes] = await Promise.all([
-          getSkill(skillId),
-          getSkillContent(skillId),
-          getSkillFiles(skillId),
-          listSkillMembers(skillId),
-          listSkills(),
-        ]);
+        const [skillRes, contentRes, filesRes, membersRes, allSkillsRes] =
+          await Promise.all([
+            getSkill(skillId),
+            getSkillContent(skillId),
+            getSkillFiles(skillId),
+            listSkillMembers(skillId),
+            listSkills(),
+          ]);
 
         if (skillRes.error || !skillRes.data) {
+          if (!isApiNotFound(skillRes)) {
+            setLoadError(formatApiError(skillRes));
+            return;
+          }
+
           toast({
             title: t("error.loadSkills"),
             description: t("error.skillNotFound"),
@@ -123,7 +145,8 @@ export default function SkillDetailPage() {
 
         const skillData = skillRes.data as Skill;
         const contentData = contentRes.data as SkillContent;
-        const filesData = (filesRes.data as { files: SkillFile[] })?.files || [];
+        const filesData =
+          (filesRes.data as { files: SkillFile[] })?.files || [];
 
         setSkill(skillData);
         setContent(contentData);
@@ -153,7 +176,8 @@ export default function SkillDetailPage() {
     const nameChanged = editName !== skill.name;
     const descChanged = editDescription !== (skill.description || "");
     const contentChanged =
-      skill.source_type === "content" && editContent !== (content?.content || "");
+      skill.source_type === "content" &&
+      editContent !== (content?.content || "");
 
     setHasChanges(nameChanged || descChanged || contentChanged);
   }, [editName, editDescription, editContent, skill, content]);
@@ -228,7 +252,10 @@ export default function SkillDetailPage() {
         setContent(contentRes.data as SkillContent);
       }
 
-      toast({ title: t("success.skillUpdated"), description: t("success.skillUpdated") });
+      toast({
+        title: t("success.skillUpdated"),
+        description: t("success.skillUpdated"),
+      });
       setHasChanges(false);
       setIsEditing(false);
     } finally {
@@ -242,7 +269,11 @@ export default function SkillDetailPage() {
     try {
       const { error } = await addSkillMember(skillId, addingChildId);
       if (error) {
-        toast({ title: "Error", description: "Failed to add child skill", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: "Failed to add child skill",
+          variant: "destructive",
+        });
         return;
       }
       const { data } = await listSkillMembers(skillId);
@@ -260,10 +291,16 @@ export default function SkillDetailPage() {
     try {
       const { error } = await removeSkillMember(skillId, childId);
       if (error) {
-        toast({ title: "Error", description: "Failed to remove child skill", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: "Failed to remove child skill",
+          variant: "destructive",
+        });
         return;
       }
-      setChildSkills((prev: any[]) => prev.filter((s: any) => s.id !== childId));
+      setChildSkills((prev: any[]) =>
+        prev.filter((s: any) => s.id !== childId)
+      );
       toast({ title: "Child skill removed" });
     } finally {
       setRemovingChildId(null);
@@ -276,7 +313,11 @@ export default function SkillDetailPage() {
     try {
       const { data, error } = await flattenSkill(skillId);
       if (error) {
-        toast({ title: "Error", description: "Failed to fetch execution order", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: "Failed to fetch execution order",
+          variant: "destructive",
+        });
         return;
       }
       setExecutionOrder((data as any) || []);
@@ -302,8 +343,29 @@ export default function SkillDetailPage() {
     );
   }
 
-  if (!skill) {
-    return null;
+  if (loadError || !skill) {
+    return (
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: t("title"), href: "/skills" },
+            { label: skillId },
+          ],
+        }}
+      >
+        <div className="flex h-64 items-center justify-center">
+          <EmptyState
+            title={t("error.loadSkills")}
+            description={loadError || t("error.skillNotFound")}
+            icons={[FileX]}
+            action={{
+              label: t("title"),
+              onClick: () => router.push("/skills"),
+            }}
+          />
+        </div>
+      </ContentBlock>
+    );
   }
 
   const isContentEditable = skill.source_type === "content";
@@ -369,49 +431,49 @@ export default function SkillDetailPage() {
                 <CardTitle className="text-xs font-mono">
                   {selectedFile || tDetail("selectFile")}
                 </CardTitle>
-              <div className="flex items-center gap-2">
-                {hasChanges && (
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="border-border/70 bg-background/60 shadow-none hover:bg-muted/70"
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    {tDetail("save")}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {hasChanges && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="border-border/70 bg-background/60 shadow-none hover:bg-muted/70"
+                      onClick={handleSave}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      {tDetail("save")}
+                    </Button>
+                  )}
 
-                {canEditFile && (
-                  <AnimatedTabs
-                    layoutId="skill-edit-toggle"
-                    tabs={[
-                      {
-                        value: "view",
-                        label: tDetail("view"),
-                        icon: <Eye className="h-3.5 w-3.5" />,
-                      },
-                      {
-                        value: "edit",
-                        label: tDetail("edit"),
-                        icon: <Pencil className="h-3.5 w-3.5" />,
-                      },
-                    ]}
-                    activeTab={editModeTab}
-                    onChange={(val) => setIsEditing(val === "edit")}
-                    className="w-auto rounded-md border border-border/70 bg-background/60 p-0.5 text-xs font-normal"
-                    tabClassName="flex-none px-2 py-1 gap-1"
-                    labelClassName="sr-only"
-                    activeIndicatorClassName="bg-background shadow-none ring-1 ring-border/70"
-                    hoverIndicatorClassName="bg-muted/60"
-                  />
-                )}
-              </div>
+                  {canEditFile && (
+                    <AnimatedTabs
+                      layoutId="skill-edit-toggle"
+                      tabs={[
+                        {
+                          value: "view",
+                          label: tDetail("view"),
+                          icon: <Eye className="h-3.5 w-3.5" />,
+                        },
+                        {
+                          value: "edit",
+                          label: tDetail("edit"),
+                          icon: <Pencil className="h-3.5 w-3.5" />,
+                        },
+                      ]}
+                      activeTab={editModeTab}
+                      onChange={(val) => setIsEditing(val === "edit")}
+                      className="w-auto rounded-md border border-border/70 bg-background/60 p-0.5 text-xs font-normal"
+                      tabClassName="flex-none px-2 py-1 gap-1"
+                      labelClassName="sr-only"
+                      activeIndicatorClassName="bg-background shadow-none ring-1 ring-border/70"
+                      hoverIndicatorClassName="bg-muted/60"
+                    />
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0 flex-1 overflow-auto relative">
                 {loadingFile ? (
@@ -484,8 +546,14 @@ export default function SkillDetailPage() {
       {/* Child Skills Section */}
       <div className="border-t px-6 py-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Child Skills ({childSkills.length})</h3>
-          <Button size="xs" variant="outline" onClick={() => setShowAddChildDialog(true)}>
+          <h3 className="text-sm font-medium">
+            Child Skills ({childSkills.length})
+          </h3>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => setShowAddChildDialog(true)}
+          >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Add Child Skill
           </Button>
@@ -495,7 +563,10 @@ export default function SkillDetailPage() {
         ) : (
           <ul className="space-y-1">
             {childSkills.map((child: any) => (
-              <li key={child.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+              <li
+                key={child.id}
+                className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+              >
                 <span>{child.name}</span>
                 <Button
                   size="xs"
@@ -529,16 +600,32 @@ export default function SkillDetailPage() {
             >
               <option value="">Select a skill...</option>
               {allSkills
-                .filter((s: any) => s.id !== skillId && !childSkills.some((c: any) => c.id === s.id))
+                .filter(
+                  (s: any) =>
+                    s.id !== skillId &&
+                    !childSkills.some((c: any) => c.id === s.id)
+                )
                 .map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
             </select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddChildDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddChildSkill} disabled={!addingChildId || isAddingChild}>
-              {isAddingChild ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button
+              variant="outline"
+              onClick={() => setShowAddChildDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddChildSkill}
+              disabled={!addingChildId || isAddingChild}
+            >
+              {isAddingChild ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Add
             </Button>
           </DialogFooter>
@@ -546,16 +633,23 @@ export default function SkillDetailPage() {
       </Dialog>
 
       {/* Execution Order Dialog */}
-      <Dialog open={showExecutionOrderDialog} onOpenChange={setShowExecutionOrderDialog}>
+      <Dialog
+        open={showExecutionOrderDialog}
+        onOpenChange={setShowExecutionOrderDialog}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Execution Order</DialogTitle>
           </DialogHeader>
           <div className="py-2">
             {isLoadingOrder ? (
-              <div className="flex justify-center py-6"><LoadingSpinner /></div>
+              <div className="flex justify-center py-6">
+                <LoadingSpinner />
+              </div>
             ) : executionOrder.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No execution order available.</p>
+              <p className="text-sm text-muted-foreground">
+                No execution order available.
+              </p>
             ) : (
               <ol className="space-y-1 list-decimal list-inside">
                 {executionOrder.map((item: any, idx: number) => (
@@ -567,7 +661,12 @@ export default function SkillDetailPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExecutionOrderDialog(false)}>Close</Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowExecutionOrderDialog(false)}
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

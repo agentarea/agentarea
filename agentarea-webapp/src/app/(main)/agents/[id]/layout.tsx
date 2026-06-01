@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getAgent } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import { ChatProvider } from "../shared/ChatContext";
 import AgentHeaderControls from "./components/AgentHeaderControls";
 import AgentHeaderTabs from "./components/AgentHeaderTabs";
@@ -15,11 +15,7 @@ export default async function AgentLayout({ params, children }: Props) {
   const { id } = await params;
   const agentResponse = await getAgent(id);
   const t = await getTranslations("AgentsPage");
-  if (!agentResponse.data) {
-    notFound();
-  }
-
-  const agent = agentResponse.data;
+  const agent = requireApiData(agentResponse, "agent");
 
   return (
     <ChatProvider>

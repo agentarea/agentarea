@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   getAgent,
@@ -9,6 +8,7 @@ import {
   listModelInstances,
   listSkills,
 } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import EditAgentClient from "./EditAgentClient";
 
 export const metadata: Metadata = {
@@ -21,64 +21,56 @@ interface Props {
 
 export default async function EditAgentPage({ params }: Props) {
   const { id } = await params;
-  try {
-    const [
-      agentResponse,
-      mcpResponse,
-      llmResponse,
-      mcpInstancesResponse,
-      codeToolsResponse,
-      skillsResponse,
-    ] = await Promise.all([
-      getAgent(id),
-      listMCPServers(),
-      listModelInstances(),
-      listMCPServerInstances(),
-      listAllTools({ include: "code" }),
-      listSkills(),
-    ]);
+  const [
+    agentResponse,
+    mcpResponse,
+    llmResponse,
+    mcpInstancesResponse,
+    codeToolsResponse,
+    skillsResponse,
+  ] = await Promise.all([
+    getAgent(id),
+    listMCPServers(),
+    listModelInstances(),
+    listMCPServerInstances(),
+    listAllTools({ include: "code" }),
+    listSkills(),
+  ]);
 
-    if (!agentResponse.data) {
-      notFound();
-    }
+  const agent = requireApiData(agentResponse, "agent");
+  const rawMcpServers =
+    (mcpResponse.data as any)?.items || mcpResponse.data || [];
+  const mcpServers = rawMcpServers.map((server: any) => ({
+    ...server,
+    status: ["published", "draft", "pending", "rejected"].includes(
+      server.status
+    )
+      ? server.status
+      : "draft",
+  }));
+  const llmModelInstances = llmResponse.data || [];
+  const mcpInstanceList = mcpInstancesResponse.data || [];
+  const builtinTools = codeToolsResponse.data || [];
+  const availableSkills = skillsResponse.data || [];
 
-    const agent = agentResponse.data;
-    const rawMcpServers = (mcpResponse.data as any)?.items || mcpResponse.data || [];
-    const mcpServers = rawMcpServers.map((server: any) => ({
-      ...server,
-      status: ["published", "draft", "pending", "rejected"].includes(
-        server.status
-      )
-        ? server.status
-        : "draft",
-    }));
-    const llmModelInstances = llmResponse.data || [];
-    const mcpInstanceList = mcpInstancesResponse.data || [];
-    const builtinTools = codeToolsResponse.data || [];
-    const availableSkills = skillsResponse.data || [];
-
-    return (
-      <ContentBlock
-        header={{
-          title: "Edit Agent",
-          backLink: {
-            label: "Back to Browse Agents",
-            href: "/agents",
-          },
-        }}
-      >
-        <EditAgentClient
-          agent={agent}
-          mcpServers={mcpServers}
-          llmModelInstances={llmModelInstances}
-          mcpInstanceList={mcpInstanceList}
-          builtinTools={builtinTools}
-          availableSkills={availableSkills}
-        />
-      </ContentBlock>
-    );
-  } catch (error) {
-    console.error("Error loading agent:", error);
-    notFound();
-  }
+  return (
+    <ContentBlock
+      header={{
+        title: "Edit Agent",
+        backLink: {
+          label: "Back to Browse Agents",
+          href: "/agents",
+        },
+      }}
+    >
+      <EditAgentClient
+        agent={agent}
+        mcpServers={mcpServers}
+        llmModelInstances={llmModelInstances}
+        mcpInstanceList={mcpInstanceList}
+        builtinTools={builtinTools}
+        availableSkills={availableSkills}
+      />
+    </ContentBlock>
+  );
 }
