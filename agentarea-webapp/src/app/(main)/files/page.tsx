@@ -6,6 +6,7 @@ import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
 import {
   listWorkspaceFilesAction,
   downloadWorkspaceFileAction,
+  workspaceFileHistoryAction,
 } from "@/lib/server-actions";
 
 export default function WorkspaceFilesPage() {
@@ -32,6 +33,11 @@ export default function WorkspaceFilesPage() {
     return (data as any)?.url ?? null;
   }, []);
 
+  const fetchHistory = useCallback(async (path: string) => {
+    const { data } = await workspaceFileHistoryAction(path);
+    return (data as any)?.events ?? [];
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -52,6 +58,7 @@ export default function WorkspaceFilesPage() {
         files={files}
         directories={directories}
         fetchUrl={fetchUrl}
+        fetchHistory={fetchHistory}
         emptyMessage="No files in this workspace yet."
         className="flex-1"
       />

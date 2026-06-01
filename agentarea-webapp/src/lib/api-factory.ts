@@ -1118,6 +1118,64 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    // Workspace Members & Invitations API
+    listWorkspaceMembers: async (workspaceId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/workspaces/{workspace_id}/members",
+        { params: { path: { workspace_id: workspaceId } } }
+      );
+      return { data, error };
+    },
+
+    removeWorkspaceMember: async (workspaceId: string, userId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/workspaces/{workspace_id}/members/{user_id}",
+        { params: { path: { workspace_id: workspaceId, user_id: userId } } }
+      );
+      return { data, error };
+    },
+
+    listWorkspaceInvitations: async (workspaceId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/workspaces/{workspace_id}/invitations",
+        { params: { path: { workspace_id: workspaceId } } }
+      );
+      return { data, error };
+    },
+
+    createWorkspaceInvitation: async (
+      workspaceId: string,
+      body: components["schemas"]["CreateInvitationBody"]
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/workspaces/{workspace_id}/invitations",
+        { params: { path: { workspace_id: workspaceId } }, body }
+      );
+      return { data, error };
+    },
+
+    revokeWorkspaceInvitation: async (
+      workspaceId: string,
+      invitationId: string
+    ) => {
+      const { data, error } = await client.DELETE(
+        "/v1/workspaces/{workspace_id}/invitations/{invitation_id}",
+        {
+          params: {
+            path: { workspace_id: workspaceId, invitation_id: invitationId },
+          },
+        }
+      );
+      return { data, error };
+    },
+
+    acceptWorkspaceInvitation: async (token: string) => {
+      const { data, error } = await client.POST("/v1/invitations/accept", {
+        body: { token },
+      });
+      return { data, error };
+    },
+
     // MCP Instance Tools Discovery
     discoverMCPInstanceTools: async (instanceId: string) => {
       const { data, error } = await client.POST(
@@ -1479,6 +1537,13 @@ export function createApiClient(client: Client) {
           params: { path: { file_path: filePath } },
         }
       );
+      return { data, error };
+    },
+
+    workspaceFileHistory: async (filePath: string) => {
+      const { data, error } = await client.GET("/v1/files/history" as any, {
+        params: { query: { path: filePath } },
+      } as any);
       return { data, error };
     },
 

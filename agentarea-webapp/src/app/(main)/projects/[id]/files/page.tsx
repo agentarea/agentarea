@@ -11,6 +11,7 @@ import {
   listProjectFilesAction,
   uploadProjectFileAction,
   downloadProjectFileAction,
+  workspaceFileHistoryAction,
 } from "@/lib/server-actions";
 
 export default function ProjectFilesPage() {
@@ -71,6 +72,16 @@ export default function ProjectFilesPage() {
     [projectId]
   );
 
+  const fetchHistory = useCallback(
+    async (path: string) => {
+      const { data } = await workspaceFileHistoryAction(
+        `projects/${projectId}/${path}`
+      );
+      return (data as any)?.events ?? [];
+    },
+    [projectId]
+  );
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -107,6 +118,7 @@ export default function ProjectFilesPage() {
       <FileBrowser
         files={files}
         fetchUrl={fetchUrl}
+        fetchHistory={fetchHistory}
         emptyMessage="No files uploaded yet."
         className="flex-1"
       />

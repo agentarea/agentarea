@@ -81,6 +81,7 @@ from ..models import (
     ResolveAgentToolsResult,
     ResolvedModelInfo,
     ResolveModelRequest,
+    SearchableToolEntry,
     SearchHistoryRequest,
     SearchHistoryResult,
     SkillFileRequest,
@@ -90,7 +91,9 @@ from ..models import (
     StoreHistoryResult,
     StoreOutputRequest,
     StoreOutputResult,
+    ToolDefinition,
     ToolDiscoveryRequest,
+    ToolDiscoveryResult,
     ToolProviderData,
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
@@ -152,13 +155,30 @@ async def _offload_large_activity_output(
         )
 
 
+def _agent_artifact_actor(request, user_context) -> "ArtifactActor":
+    """Build the provenance actor for files an agent writes during a task."""
+    from agentarea_common.artifacts import ACTOR_AGENT, ArtifactActor
+
+    return ArtifactActor(
+        user_id=str(user_context.user_id),
+        actor_type=ACTOR_AGENT,
+        agent_id=str(request.agent_id) if request.agent_id else None,
+        task_id=str(request.task_id) if request.task_id else None,
+    )
+
+
 async def _store_sandbox_artifacts(
     *,
     workspace_id: str | None,
     task_id: str | None,
     artifacts: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Persist sandbox-returned artifacts into task artifact storage."""
+    """Persist sandbox-returned artifacts into task artifact storage.
+
+    Provenance is not recorded here: the skill-script request carries neither
+    the acting agent nor the user, so these objects show no history. Agent file
+    writes that go through the file/web/shell toolsets are attributed normally.
+    """
     import base64
     from pathlib import PurePosixPath
 
@@ -356,8 +376,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
     @activity.defn
     async def discover_available_tools_activity(
         request: ToolDiscoveryRequest,
-    ) -> list[dict[str, Any]]:  # Keep backward compatible
-        """Discover available tools for an agent."""
+    ) -> ToolDiscoveryResult:
+        """Discover available tools for an agent.
+
+        Honors `settings.load_mode` per OpenAPI tool — operations marked
+        `searchable` go into `searchable_entries` (deferred pool) instead of
+        `tools` (the per-call LLM context).
+        """
         user_context = create_user_context(request.user_context_data)
 
         async with ActivityContext(container, user_context) as ctx:
@@ -370,10 +395,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise ValueError(f"Agent {request.agent_id} not found")
 
-            # Use tool manager to discover available tools
+            # Use tool manager to discover available tools (split path).
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
-            all_tools = await tool_manager.discover_available_tools(
+            split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
                 mcp_server_instance_service=mcp_server_instance_service,
@@ -381,7 +406,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 base_url=base_url,
             )
 
-            return all_tools
+            tool_defs = [ToolDefinition(**t) for t in split.explicit_tools]
+            searchable = [
+                SearchableToolEntry(
+                    name=e.get("name", ""),
+                    description=e.get("description", ""),
+                    connection_id=e.get("connection_id", ""),
+                    schema=e.get("schema") or {},
+                    source_type=e.get("source_type", "openapi"),
+                )
+                for e in split.searchable_entries
+            ]
+            return ToolDiscoveryResult(tools=tool_defs, searchable_entries=searchable)
 
     @activity.defn
     async def discover_tool_providers_activity(
@@ -732,11 +768,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         "agentarea/web",
                         "agentarea/workspace_files",
                     ):
-                        from agentarea_common.artifacts import ArtifactService
+                        from agentarea_common.artifacts import (
+                            ArtifactActor,
+                            ArtifactService,
+                            DbArtifactEventRecorder,
+                        )
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
-                            "storage": ArtifactService(),
+                            "storage": ArtifactService(
+                                recorder=DbArtifactEventRecorder(),
+                                actor=_agent_artifact_actor(request, user_context),
+                            ),
                             "workspace_id": str(request.workspace_id),
                             "base_prefix": base_prefix,
                         }
@@ -761,7 +804,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             wf_id = activity.info().workflow_id
                         except Exception:
                             wf_id = ""
-                        from agentarea_common.artifacts import ArtifactService
+                        from agentarea_common.artifacts import (
+                            ArtifactActor,
+                            ArtifactService,
+                            DbArtifactEventRecorder,
+                        )
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
@@ -778,7 +825,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                     if v is not None
                                 },
                             ),
-                            "storage": ArtifactService(),
+                            "storage": ArtifactService(
+                                recorder=DbArtifactEventRecorder(),
+                                actor=_agent_artifact_actor(request, user_context),
+                            ),
                             "workspace_id": str(request.workspace_id),
                             "base_prefix": base_prefix,
                         }

@@ -9,6 +9,7 @@ import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSide
 import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
+import { PROTECTED_ROUTE_PREFIXES as PROTECTED_ROUTES } from "@/lib/auth-session";
 import { navData } from "@/lib/nav-data";
 
 interface ConditionalLayoutProps {
@@ -17,19 +18,6 @@ interface ConditionalLayoutProps {
 }
 
 const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
-const PROTECTED_ROUTES = [
-  "/workplace",
-  "/agents",
-  "/tasks",
-  "/mcp-servers",
-  "/settings",
-  "/admin",
-  "/skills",
-  "/triggers",
-  "/inbox",
-  "/projects",
-  "/network",
-];
 
 const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
 
