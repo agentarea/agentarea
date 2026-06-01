@@ -6,6 +6,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 # Suppress noisy third-party loggers before any imports trigger them
 for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
@@ -164,11 +165,13 @@ def create_app() -> FastAPI:
     # via session_manager.run() in the lifespan.
     from agentarea_agents_sdk.mcp_server import create_mcp_server
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
+    from agentarea_agents_sdk.tools.base_tool import BaseTool
+    from agentarea_agents_sdk.tools.decorator_tool import Toolset
 
     from agentarea_api.tools import get_platform_tools
 
     _mcp_server = create_mcp_server(
-        toolsets=get_platform_tools(),
+        toolsets=cast(list[Toolset | BaseTool], get_platform_tools()),
         name="AgentArea",
         description="AgentArea platform — agents, runs, MCP servers, providers, models, secrets",
     )

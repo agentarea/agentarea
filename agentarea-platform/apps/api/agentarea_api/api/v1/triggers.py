@@ -19,16 +19,13 @@ Key endpoints:
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     get_trigger_health_check,
     get_trigger_service,
-)
-from agentarea_api.api.v1.a2a_auth import (
-    require_a2a_execute_auth,  # noqa: F401  # re-exported for tests
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
@@ -320,10 +317,10 @@ async def get_channel_events(
 
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
+    secret_manager: BaseSecretManagerDep,
     payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
     """Create a new trigger.
 
@@ -544,10 +541,10 @@ async def get_trigger(
 @router.put("/{trigger_id}", response_model=TriggerResponse)
 async def update_trigger(
     trigger_id: UUID,
+    secret_manager: BaseSecretManagerDep,
     payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
     """Update an existing trigger.
 
@@ -581,11 +578,15 @@ async def update_trigger(
         if payload.channel_credentials and secret_manager:
             # Determine channel type from the updated trigger
             channel_type = "generic"
-            if hasattr(updated_trigger, "webhook_type"):
-                wt = updated_trigger.webhook_type
+            updated_trigger_any = cast(Any, updated_trigger)
+            if hasattr(updated_trigger_any, "webhook_type"):
+                wt = updated_trigger_any.webhook_type
                 channel_type = wt.value if hasattr(wt, "value") else str(wt)
-            elif hasattr(updated_trigger, "data_extractor") and updated_trigger.data_extractor:
-                channel_type = updated_trigger.data_extractor.removesuffix("_polling")
+            elif (
+                hasattr(updated_trigger_any, "data_extractor")
+                and updated_trigger_any.data_extractor
+            ):
+                channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
             await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
             has_creds = True

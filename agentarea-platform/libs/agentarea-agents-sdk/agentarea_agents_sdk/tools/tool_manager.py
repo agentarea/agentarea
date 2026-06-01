@@ -1,6 +1,7 @@
 """Service for managing and discovering available tools."""
 
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -8,8 +9,9 @@ from .a2a_tool_factory import A2AAgentToolFactory
 from .base_tool import ToolRegistry
 from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
+from .decorator_tool import ToolsetAdapter
 from .mcp_tool import MCPToolFactory
-from .openapi_tool import OpenAPIToolFactory
+from .openapi_tool import OpenAPIToolFactory, _slugify_name
 from .tool_provider import (
     AgentToolProvider,
     BuiltinToolProvider,
@@ -20,6 +22,21 @@ from .tool_provider import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DiscoveryResult:
+    """Output of `discover_available_tools_split`.
+
+    `explicit_tools` ships full OpenAI function definitions into the LLM
+    context every call. `searchable_entries` are deferred — they live in
+    workflow state for the `load_tools` meta-tool to reveal on demand. Each
+    entry is a dict matching the ToolCandidate shape: name, description,
+    connection_id, schema, source_type.
+    """
+
+    explicit_tools: list[dict[str, Any]] = field(default_factory=list)
+    searchable_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
 class ToolManager:
@@ -36,7 +53,7 @@ class ToolManager:
         self._openapi_connection_service = openapi_connection_service
 
         # Register built-in tools
-        self.registry.register(CompletionTool())
+        self.registry.register(ToolsetAdapter(CompletionTool()))
 
     async def discover_available_tools(
         self,
@@ -50,33 +67,89 @@ class ToolManager:
         workspace_id: str | None = None,
         user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Discover available tools for an agent.
+        """Discover available tools for an agent (legacy flat-list API).
 
-        Args:
-            agent_id: The agent ID
-            tools_config: Agent's tools configuration (list of tool definitions)
-            mcp_server_instance_service: Service for MCP server instances
-            agent_service: Optional agent service for resolving agent-type tools
-            base_url: Base URL for constructing A2A endpoints
-            auth_token: Optional auth token for A2A calls
-
-        Returns:
-            List of available tool definitions (OpenAI format)
+        Ignores `load_mode` and always returns full schemas for every tool —
+        existing callers keep their current behavior. New code should use
+        `discover_available_tools_split` to honor `load_mode`.
         """
-        # Start with built-in tools
-        all_tools = self.registry.get_openai_functions()
+        result = await self._discover(
+            agent_id=agent_id,
+            tools_config=tools_config,
+            mcp_server_instance_service=mcp_server_instance_service,
+            agent_service=agent_service,
+            base_url=base_url,
+            auth_token=auth_token,
+            task_service=task_service,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            force_explicit=True,
+        )
+        return result.explicit_tools
+
+    async def discover_available_tools_split(
+        self,
+        agent_id: UUID,
+        tools_config: list[dict[str, Any]] | None,
+        mcp_server_instance_service,
+        agent_service=None,
+        base_url: str = "",
+        auth_token: str | None = None,
+        task_service=None,
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+    ) -> DiscoveryResult:
+        """Discover tools, honoring `settings.load_mode` per tool.
+
+        For OpenAPI tools with `load_mode == "searchable"`, schemas go into
+        `searchable_entries` (deferred pool) instead of `explicit_tools`.
+        Other tool types and `load_mode == "explicit"` (or absent) preserve
+        legacy behavior — full schemas in `explicit_tools`.
+        """
+        return await self._discover(
+            agent_id=agent_id,
+            tools_config=tools_config,
+            mcp_server_instance_service=mcp_server_instance_service,
+            agent_service=agent_service,
+            base_url=base_url,
+            auth_token=auth_token,
+            task_service=task_service,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            force_explicit=False,
+        )
+
+    async def _discover(
+        self,
+        agent_id: UUID,
+        tools_config: list[dict[str, Any]] | None,
+        mcp_server_instance_service,
+        agent_service,
+        base_url: str,
+        auth_token: str | None,
+        task_service,
+        workspace_id: str | None,
+        user_id: str | None,
+        force_explicit: bool,
+    ) -> DiscoveryResult:
+        """Shared discovery worker. Public methods select force_explicit."""
+        result = DiscoveryResult(explicit_tools=list(self.registry.get_openai_functions()))
 
         if not tools_config:
             logger.info(f"No tools configured for agent {agent_id}")
-            return all_tools
+            return result
 
         for tool in tools_config:
             tool_type = tool.get("type")
             tool_name = tool.get("name")
+            if not isinstance(tool_name, str) or not tool_name:
+                logger.warning("Skipping tool with missing name", extra={"tool_config": tool})
+                continue
             settings = tool.get("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
 
             if tool_type == "code":
-                # Code-based tool
                 disabled_methods = settings.get("disabled_methods", [])
                 toolset_methods = (
                     {method: False for method in disabled_methods} if disabled_methods else {}
@@ -89,26 +162,23 @@ class ToolManager:
                     if isinstance(tool_instance, Toolset):
                         tool_instance = ToolsetAdapter(tool_instance)
 
-                    all_tools.append(tool_instance.get_openai_function_definition())
+                    result.explicit_tools.append(tool_instance.get_openai_function_definition())
                     logger.info(f"Added code tool: {tool_name}")
                 else:
                     logger.warning(f"Unknown code tool requested: {tool_name}")
 
             elif tool_type == "mcp":
-                # MCP tool - find instance by ID or name
-                # Normalize allowed_tools: can be str[] or {tool_name, ...}[]
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
                     tool_name, allowed_names, mcp_server_instance_service
                 )
                 for mcp_tool in mcp_tools:
-                    all_tools.append(mcp_tool.get_openai_function_definition())
+                    result.explicit_tools.append(mcp_tool.get_openai_function_definition())
 
             elif tool_type == "agent":
-                # Agent-to-agent tool via A2A protocol
                 if not agent_service or not base_url:
                     logger.warning(
                         f"Skipping agent tool '{tool_name}': agent_service or base_url not provided"
@@ -127,7 +197,7 @@ class ToolManager:
                     user_id=user_id,
                 )
                 if a2a_tool:
-                    all_tools.append(a2a_tool.get_openai_function_definition())
+                    result.explicit_tools.append(a2a_tool.get_openai_function_definition())
                     logger.info(f"Added agent tool: {tool_name}")
 
             elif tool_type == "openapi":
@@ -137,13 +207,20 @@ class ToolManager:
                 connection_ref = settings.get("openapi_connection_id") or tool_name
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
-                openapi_tools = await self._discover_openapi_tools_by_name(
-                    connection_ref, allowed_names, self._openapi_connection_service
-                )
-                for openapi_tool in openapi_tools:
-                    all_tools.append(openapi_tool.get_openai_function_definition())
+                load_mode = settings.get("load_mode")
+                if load_mode == "searchable" and not force_explicit:
+                    entries = await self._build_openapi_searchable_entries(
+                        connection_ref, allowed_names, self._openapi_connection_service
+                    )
+                    result.searchable_entries.extend(entries)
+                else:
+                    openapi_tools = await self._discover_openapi_tools_by_name(
+                        connection_ref, allowed_names, self._openapi_connection_service
+                    )
+                    for openapi_tool in openapi_tools:
+                        result.explicit_tools.append(openapi_tool.get_openai_function_definition())
 
             else:
                 logger.warning(
@@ -151,8 +228,104 @@ class ToolManager:
                     extra={"tool_config": tool},
                 )
 
-        logger.info(f"Discovered {len(all_tools)} tools for agent {agent_id}")
-        return all_tools
+        logger.info(
+            "Discovered %d explicit tools and %d searchable entries for agent %s",
+            len(result.explicit_tools),
+            len(result.searchable_entries),
+            agent_id,
+        )
+        return result
+
+    async def _build_openapi_searchable_entries(
+        self,
+        connection_name_or_id: str,
+        allowed_tools: list[str],
+        openapi_connection_service,
+    ) -> list[dict[str, Any]]:
+        """Cheap path: read pre-parsed `available_tools` from the DB, no spec re-parse.
+
+        Returns ToolCandidate-shaped dicts ready for the workflow's
+        searchable pool: {name, description, connection_id, schema, source_type}.
+        Schemas are pre-built so `load_tools` reveal becomes a dict lookup at
+        runtime — no per-call connection refetch.
+        """
+        if not openapi_connection_service:
+            logger.warning(
+                "Skipping openapi tool %r: no openapi_connection_service provided",
+                connection_name_or_id,
+            )
+            return []
+
+        connection = await self._resolve_openapi_connection(
+            connection_name_or_id, openapi_connection_service
+        )
+        if not connection:
+            return []
+
+        available = getattr(connection, "available_tools", None) or []
+        allowed_set = set(allowed_tools) if allowed_tools else None
+
+        entries: list[dict[str, Any]] = []
+        for op in available:
+            raw_name = op.get("name") or ""
+            if not raw_name:
+                continue
+            if allowed_set is not None and raw_name not in allowed_set:
+                continue
+            slugified = _slugify_name(raw_name)
+            description = op.get("description") or f"OpenAPI operation {raw_name}"
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": slugified,
+                    "description": description,
+                    "parameters": op.get("inputSchema") or {"type": "object", "properties": {}},
+                },
+            }
+            entries.append(
+                {
+                    "name": slugified,
+                    "description": description,
+                    "connection_id": str(getattr(connection, "id", "") or connection_name_or_id),
+                    "schema": schema,
+                    "source_type": "openapi",
+                }
+            )
+        return entries
+
+    async def _resolve_openapi_connection(
+        self,
+        connection_name_or_id: str,
+        openapi_connection_service,
+    ):
+        """Resolve a UUID-or-name reference to an OpenAPIConnection record.
+
+        Mirrors the resolution path used by `OpenAPIToolFactory.create_tools_from_connection`
+        so legacy and searchable paths agree on which connection they pick.
+        """
+        try:
+            try:
+                uuid_val = UUID(str(connection_name_or_id))
+                conn = await openapi_connection_service.get_connection(uuid_val)
+                if conn:
+                    return conn
+            except (ValueError, AttributeError):
+                pass
+            connections, _ = await openapi_connection_service.list_connections(
+                search=str(connection_name_or_id)
+            )
+            for conn in connections:
+                if conn.name == str(connection_name_or_id):
+                    return conn
+        except Exception as e:
+            logger.error(
+                "Failed to resolve OpenAPI connection %r: %s",
+                connection_name_or_id,
+                e,
+                exc_info=True,
+            )
+        logger.warning("OpenAPI connection not found: %r", connection_name_or_id)
+        return None
 
     async def _discover_mcp_tools(
         self,
@@ -298,7 +471,14 @@ class ToolManager:
         for tool in tools_config:
             tool_type = tool.get("type")
             tool_name = tool.get("name")
+            if not isinstance(tool_name, str) or not tool_name:
+                logger.warning(
+                    "Skipping tool provider with missing name", extra={"tool_config": tool}
+                )
+                continue
             settings = tool.get("settings", {})
+            if not isinstance(settings, dict):
+                settings = {}
 
             if tool_type == "code":
                 disabled_methods = settings.get("disabled_methods", [])
@@ -320,8 +500,12 @@ class ToolManager:
                     )
 
             elif tool_type == "mcp":
+                raw_allowed = settings.get("allowed_tools") or []
+                allowed_names = [
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                ]
                 mcp_tools = await self._discover_mcp_tools_by_name(
-                    tool_name, settings.get("allowed_tools", []), mcp_server_instance_service
+                    tool_name, allowed_names, mcp_server_instance_service
                 )
                 if mcp_tools:
                     tool_defs = [t.get_openai_function_definition() for t in mcp_tools]
@@ -362,7 +546,7 @@ class ToolManager:
                 connection_ref = settings.get("openapi_connection_id") or tool_name
                 raw_allowed = settings.get("allowed_tools") or []
                 allowed_names = [
-                    (t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
+                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
                 ]
                 openapi_tools = await self._discover_openapi_tools_by_name(
                     connection_ref, allowed_names, self._openapi_connection_service

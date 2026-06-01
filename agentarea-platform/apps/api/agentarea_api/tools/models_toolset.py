@@ -50,7 +50,7 @@ class ModelsToolset(Toolset):
                 [
                     {
                         "id": str(s.id),
-                        "name": s.name,
+                        "name": s.display_name or s.model_name,
                         "provider_spec_id": str(s.provider_spec_id),
                     }
                     for s in specs

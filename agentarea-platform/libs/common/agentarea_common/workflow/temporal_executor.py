@@ -5,9 +5,10 @@ while maintaining the clean abstraction layer.
 """
 
 import asyncio
+import importlib
 import logging
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from temporalio.client import Client
@@ -25,6 +26,14 @@ from agentarea_common.workflow.executor import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _duration_seconds(value: Any) -> float | None:
+    total_seconds = getattr(value, "total_seconds", None)
+    if callable(total_seconds):
+        result = total_seconds()
+        return float(result) if isinstance(result, int | float) else None
+    return None
 
 
 def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -74,9 +83,11 @@ def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[st
 
     # Create A2A-compatible artifact
     a2a_artifact = Artifact(
+        artifactId="agent_response",
         name="agent_response",
         description="Agent response to user query",
         parts=[TextPart(text=agent_response_text)],
+        lastChunk=True,
         metadata={
             "session_id": session_id,
             "usage_metadata": usage_metadata,
@@ -173,9 +184,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
         # Import workflow class dynamically based on name
         if workflow_name == "AgentTaskWorkflow":
-            from agentarea_tasks.workflows.agent_task_workflow import AgentTaskWorkflow
-
-            workflow_class = AgentTaskWorkflow.run
+            agent_task_workflow = cast(
+                Any, importlib.import_module("agentarea_tasks.workflows.agent_task_workflow")
+            ).AgentTaskWorkflow
+            workflow_class = agent_task_workflow.run
         elif workflow_name == "AgentExecutionWorkflow":
             from agentarea_execution.workflows.agent_execution_workflow import (
                 AgentExecutionWorkflow,
@@ -255,17 +267,11 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             handle = self.client.get_workflow_handle(workflow_id)
             description = await handle.describe()
 
-            # Handle execution_time safely - it might be timedelta or datetime
-            execution_time_seconds = None
-            if description.execution_time:
-                if hasattr(description.execution_time, "total_seconds"):
-                    execution_time_seconds = description.execution_time.total_seconds()
-                else:
-                    # If it's not a timedelta, try to convert or log warning
-                    logger.warning(
-                        f"Unexpected execution_time type: {type(description.execution_time)}"
-                    )
-                    execution_time_seconds = None
+            execution_time_seconds = _duration_seconds(getattr(description, "execution_time", None))
+            if getattr(description, "execution_time", None) and execution_time_seconds is None:
+                logger.warning(
+                    f"Unexpected execution_time type: {type(description.execution_time)}"
+                )
 
             # Get result if workflow is completed
             result = None
@@ -340,16 +346,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             # Get final status
             description = await handle.describe()
 
-            # Handle execution_time safely - it might be timedelta or datetime
-            execution_time_seconds = None
-            if description.execution_time:
-                if hasattr(description.execution_time, "total_seconds"):
-                    execution_time_seconds = description.execution_time.total_seconds()
-                else:
-                    logger.warning(
-                        f"Unexpected execution_time type in wait_for_result: "
-                        f"{type(description.execution_time)}"
-                    )
+            execution_time_seconds = _duration_seconds(getattr(description, "execution_time", None))
+            if getattr(description, "execution_time", None) and execution_time_seconds is None:
+                logger.warning(
+                    f"Unexpected execution_time type in wait_for_result: "
+                    f"{type(description.execution_time)}"
+                )
 
             return WorkflowResult(
                 workflow_id=workflow_id,

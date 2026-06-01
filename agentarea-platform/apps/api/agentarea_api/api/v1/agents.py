@@ -1,7 +1,7 @@
 """Agents API endpoints for managing AI agents."""
 
 import re
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from contextlib import suppress
@@ -23,7 +23,6 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.config import get_database
-from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -47,18 +46,12 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
     # Create database session
     database = get_database()
     async with database.async_session_factory() as session:
-        # Create model instance service
         model_instance_repository = ModelInstanceRepository(session, user_context)
-        model_instance_service = ModelInstanceService(
-            repository=model_instance_repository,
-            event_broker=None,  # Not needed for validation
-            secret_manager=None,  # Not needed for validation
-        )
 
         # First, try to treat model_id as a UUID (model instance ID)
         try:
             model_uuid = UUID(model_id)
-            model_instance = await model_instance_service.get(model_uuid)
+            model_instance = await model_instance_repository.get_with_relations(model_uuid)
             if model_instance:
                 # Valid model instance ID
                 return
@@ -118,9 +111,10 @@ class AgentResponse(BaseModel):
     def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
         tools = None
         if agent.tools:
-            if isinstance(agent.tools, list):
-                tools = [ToolConfigYAML(**tool) for tool in agent.tools]
-            elif isinstance(agent.tools, dict):
+            agent_tools = cast(Any, agent.tools)
+            if isinstance(agent_tools, list):
+                tools = [ToolConfigYAML(**tool) for tool in agent_tools if isinstance(tool, dict)]
+            elif isinstance(agent_tools, dict):
                 tools = []
 
         skills = None
@@ -131,18 +125,18 @@ class AgentResponse(BaseModel):
             ]
 
         return cls(
-            id=agent.id,
-            slug=agent.slug,
-            name=agent.name,
-            status=agent.status,
-            description=agent.description,
-            instruction=agent.instruction,
-            model_id=agent.model_id,
+            id=cast(UUID, agent.id),
+            slug=str(agent.slug),
+            name=str(agent.name),
+            status=str(agent.status),
+            description=cast(str | None, agent.description),
+            instruction=cast(str | None, agent.instruction),
+            model_id=cast(str | None, agent.model_id),
             tools=tools,
-            events_config=agent.events_config,
-            planning=agent.planning,
-            a2ui_enabled=agent.a2ui_enabled,
-            agent_type=agent.agent_type,
+            events_config=cast(dict | None, agent.events_config),
+            planning=cast(bool | None, agent.planning),
+            a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
+            agent_type=str(agent.agent_type),
             skills=skills,
         )
 
@@ -202,7 +196,8 @@ class ToolResponse(BaseModel):
 
 def _mcp_tool_response(tool: dict[str, Any], instance) -> ToolResponse | None:
     """Normalize persisted MCP tool metadata to the public tool response."""
-    function = tool.get("function") if isinstance(tool.get("function"), dict) else tool
+    raw_function = tool.get("function")
+    function = raw_function if isinstance(raw_function, dict) else tool
     name = function.get("name")
     if not name:
         return None
@@ -333,6 +328,8 @@ async def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = await agent_service.get_with_skills(resolved_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)
 
 

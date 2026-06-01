@@ -242,4 +242,4 @@ class FileToolset(Toolset):
         path = getattr(obj, "path", None) or (obj.get("path") if isinstance(obj, dict) else "")
         if self.base_prefix and path.startswith(self.base_prefix + "/"):
             return path[len(self.base_prefix) + 1 :]
-        return path
+        return str(path or "")

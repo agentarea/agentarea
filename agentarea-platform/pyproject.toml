@@ -329,7 +329,6 @@ reportTypeCommentUsage = "warning"
 reportIncompatibleMethodOverride = "warning"
 reportIncompatibleVariableOverride = "warning"
 reportInconsistentConstructor = "warning"
-reportOverlappingOverloads = "warning"
 reportPossiblyUnboundVariable = "warning"
 reportMissingSuperCall = false
 reportUninitializedInstanceVariable = "warning"

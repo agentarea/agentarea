@@ -190,6 +190,8 @@ class SkillService:
             str(skill.id),
             s3_path=s3_path,
         )
+        if skill is None:
+            raise RuntimeError("Failed to update skill package path")
 
         logger.info(f"Created skill '{skill_name}' from ZIP (id={skill.id})")
         return skill
@@ -250,6 +252,8 @@ class SkillService:
             str(skill.id),
             s3_path=s3_path,
         )
+        if skill is None:
+            raise RuntimeError("Failed to update skill package path")
 
         logger.info(
             f"Created skill '{skill_name}' from GitHub: {payload.github_url} (id={skill.id})"
@@ -336,6 +340,8 @@ class SkillService:
                 str(skill.id),
                 s3_path=s3_path,
             )
+            if skill is None:
+                raise RuntimeError("Failed to update skill package path")
 
             logger.info(f"Created skill '{skill_name}' from path: {full_path} (id={skill.id})")
             return skill
@@ -523,6 +529,8 @@ class SkillService:
             )
 
         skill = await repo.update(str(skill.id), content=new_skill_md_text)
+        if skill is None:
+            raise RuntimeError("Failed to update skill content")
         logger.info(
             f"Replaced package for skill {skill_id}: {len(files)} files written, "
             f"{len(orphans)} orphans removed"

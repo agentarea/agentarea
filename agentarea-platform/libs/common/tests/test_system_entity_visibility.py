@@ -62,12 +62,15 @@ async def test_provider_config_repo_create_scopes_to_current_workspace(monkeypat
     repo = ProviderConfigRepository(session, user_context)
     monkeypatch.setattr(repo, "get_with_relations", AsyncMock(return_value=None))
 
+    # Pre-populate workspace_id AND created_by with attacker-controlled values
+    # to prove the repo unconditionally overwrites both from UserContext (no
+    # silent fallback — see project rule "never fall back to system user_id").
     config = ProviderConfig(
         provider_spec_id=uuid4(),
         name="Test provider",
         api_key="secret-ref",
         workspace_id="wrong-workspace",
-        created_by="",
+        created_by="attacker-user",
     )
 
     created = await repo.create_config(config)
@@ -80,6 +83,37 @@ async def test_provider_config_repo_create_scopes_to_current_workspace(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_provider_config_repo_has_update_config(monkeypatch):
+    """Regression: ProviderService.update_provider_config calls
+    repo.update_config(config). Missing method raised AttributeError on every
+    PUT/PATCH /provider-configs/{id} and the providers_toolset update path.
+    The method must delegate to the base update_from_entity contract
+    (mutated domain object → persisted + refreshed record).
+    """
+    session = MagicMock()
+    user_context = _user_context_with_system()
+    repo = ProviderConfigRepository(session, user_context)
+
+    config = ProviderConfig(
+        id=uuid4(),
+        provider_spec_id=uuid4(),
+        name="Renamed provider",
+        api_key="secret-ref",
+        workspace_id="ws-1",
+        created_by="user-1",
+    )
+
+    update_from_entity_mock = AsyncMock(return_value=config)
+    monkeypatch.setattr(repo, "update_from_entity", update_from_entity_mock)
+    monkeypatch.setattr(repo, "get_with_relations", AsyncMock(return_value=config))
+
+    result = await repo.update_config(config)
+
+    update_from_entity_mock.assert_awaited_once_with(config)
+    assert result is config
+
+
+@pytest.mark.asyncio
 async def test_model_instance_repo_create_scopes_to_current_workspace(monkeypatch):
     session = MagicMock()
     session.commit = AsyncMock()
@@ -87,12 +121,14 @@ async def test_model_instance_repo_create_scopes_to_current_workspace(monkeypatc
     repo = ModelInstanceRepository(session, user_context)
     monkeypatch.setattr(repo, "get_with_relations", AsyncMock(return_value=None))
 
+    # Same overwrite contract as ProviderConfig — supplied created_by must be
+    # ignored and replaced with the calling UserContext.user_id.
     instance = ModelInstance(
         provider_config_id=uuid4(),
         model_spec_id=uuid4(),
         name="Test model",
         workspace_id="wrong-workspace",
-        created_by="",
+        created_by="attacker-user",
     )
 
     created = await repo.create_instance(instance)

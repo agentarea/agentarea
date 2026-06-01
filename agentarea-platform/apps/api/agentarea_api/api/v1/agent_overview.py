@@ -9,6 +9,7 @@ Returns time-series and upcoming-work data for the agent landing page:
 
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep
@@ -179,8 +180,11 @@ async def get_agent_overview(
     )
     trigger_rows = (await db_session.execute(triggers_q)).scalars().all()
     for trig in trigger_rows:
+        cron_expression = trig.cron_expression
+        if not cron_expression:
+            continue
         try:
-            itr = croniter(trig.cron_expression, now)
+            itr = croniter(cron_expression, now)
             for _ in range(10):
                 fires_at = itr.get_next(datetime)
                 if fires_at > horizon:
@@ -190,8 +194,8 @@ async def get_agent_overview(
                         fires_at=fires_at,
                         kind="trigger",
                         title=trig.name,
-                        trigger_id=trig.id,
-                        cron_expression=trig.cron_expression,
+                        trigger_id=type_cast(UUID, trig.id),
+                        cron_expression=cron_expression,
                     )
                 )
         except Exception:
@@ -201,8 +205,8 @@ async def get_agent_overview(
                     fires_at=now,
                     kind="trigger",
                     title=f"{trig.name} (invalid cron)",
-                    trigger_id=trig.id,
-                    cron_expression=trig.cron_expression,
+                    trigger_id=type_cast(UUID, trig.id),
+                    cron_expression=cron_expression,
                 )
             )
 
@@ -221,7 +225,7 @@ async def get_agent_overview(
                 fires_at=t.started_at or t.created_at,
                 kind="running_task" if t.status == "running" else "pending_task",
                 title=t.description[:120] if t.description else "(unnamed task)",
-                task_id=t.id,
+                task_id=type_cast(UUID, t.id),
             )
         )
 

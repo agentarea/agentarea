@@ -6,12 +6,13 @@ authenticated requests.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import jwt
 from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPBearer
+from jwt.algorithms import RSAAlgorithm
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -131,14 +132,19 @@ class JWTMiddleware(BaseHTTPMiddleware):
             key = None
             for jwk in self.jwks_cache.get("keys", []):
                 if jwk.get("kid") == key_id:
-                    key = jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
+                    key = RSAAlgorithm.from_jwk(jwk)
                     break
 
             if not key:
                 raise jwt.InvalidTokenError("Key not found in JWKS")
 
             # Verify the token
-            return jwt.decode(token, key, algorithms=self.algorithms, options={"verify_aud": False})
+            return jwt.decode(
+                token,
+                cast(Any, key),
+                algorithms=self.algorithms,
+                options={"verify_aud": False},
+            )
         else:
             # If no JWKS URI, raise an error as we need it for OIDC
             raise jwt.InvalidTokenError("JWKS URI not configured for OIDC token verification")

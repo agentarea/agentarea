@@ -49,15 +49,19 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
         description=agent.description,
         url=f"{base_url}/v1/agents/{agent_id}/a2a/rpc",
         version="1.0.0",
-        documentation_url=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
+        protocolVersion="0.3.0",
+        documentationUrl=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
         capabilities=AgentCapabilities(
             streaming=True,
-            push_notifications=False,
-            state_transition_history=True,
+            pushNotifications=False,
+            stateTransitionHistory=True,
             extensions=extensions,
         ),
         provider=AgentProvider(organization="AgentArea"),
-        security_schemes={
+        defaultInputModes=["text/plain", "application/json"],
+        defaultOutputModes=["text/plain", "application/json"],
+        supportsAuthenticatedExtendedCard=True,
+        securitySchemes={
             "bearer": {
                 "type": "http",
                 "scheme": "bearer",
@@ -69,8 +73,8 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
                 id="text-processing",
                 name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
-                input_modes=["text/plain"],
-                output_modes=["text/plain"],
+                inputModes=["text/plain"],
+                outputModes=["text/plain"],
             )
         ],
     )

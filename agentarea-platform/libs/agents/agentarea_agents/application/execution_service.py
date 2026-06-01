@@ -19,6 +19,10 @@ class ExecutionService(ExecutionServiceInterface):
     def __init__(self, workflow_orchestrator: "WorkflowOrchestratorInterface"):
         self._workflow_orchestrator = workflow_orchestrator
 
+    @property
+    def orchestrator(self) -> "WorkflowOrchestratorInterface":
+        return self._workflow_orchestrator
+
     async def execute_async(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute agent task via workflow orchestrator."""
         try:
@@ -151,6 +155,11 @@ class WorkflowOrchestratorInterface(ABC):
     @abstractmethod
     async def resume_workflow(self, execution_id: str) -> bool:
         """Resume paused workflow execution."""
+        pass
+
+    @abstractmethod
+    async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
+        """Send A2UI action to a running workflow."""
         pass
 
     @abstractmethod

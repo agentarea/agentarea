@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import get_event_router
@@ -30,21 +31,24 @@ async def start_events_router():
 async def stop_events_router():
     """Stop the FastStream router's broker with thorough cleanup."""
     try:
+        broker = cast(Any, router.broker)
         # Close the broker
-        await router.broker.close()
+        await broker.close()
 
         # Additional cleanup for any remaining connections
-        if hasattr(router.broker, "_connection") and router.broker._connection:
+        connection = getattr(broker, "_connection", None)
+        if connection:
             try:
-                await router.broker._connection.close()
+                await connection.close()
             except Exception as conn_e:
                 logger.debug(f"Error closing router broker connection: {conn_e}")
 
         # Force cleanup of any connection pools
-        if hasattr(router.broker, "_pool") and router.broker._pool:
+        pool = getattr(broker, "_pool", None)
+        if pool:
             try:
-                router.broker._pool.close()
-                await router.broker._pool.wait_closed()
+                pool.close()
+                await pool.wait_closed()
             except Exception as pool_e:
                 logger.debug(f"Error closing connection pool: {pool_e}")
         logger.info("FastStream Redis broker closed")

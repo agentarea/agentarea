@@ -7,7 +7,7 @@ for cron triggers, handling schedule creation, updates, and deletion.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from temporalio.client import (
@@ -73,6 +73,32 @@ class TemporalScheduleManager:
             data_converter=pydantic_data_converter,
         )
         self._connected = True
+
+    async def is_healthy(self) -> bool:
+        """Return whether Temporal schedule operations can reach a client."""
+        try:
+            await self._ensure_client()
+            return self.client is not None
+        except Exception as e:
+            logger.warning(f"Temporal schedule manager health check failed: {e}")
+            return False
+
+    async def get_active_schedule_count(self) -> int:
+        """Count active trigger schedules when the Temporal client supports listing."""
+        await self._ensure_client()
+        if not self.client:
+            return 0
+
+        list_schedules = getattr(cast(Any, self.client), "list_schedules", None)
+        if not list_schedules:
+            return 0
+
+        count = 0
+        async for description in list_schedules():
+            schedule_id = getattr(description, "id", "")
+            if str(schedule_id).startswith("cron-trigger-"):
+                count += 1
+        return count
 
     async def create_cron_schedule(
         self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"
@@ -338,12 +364,14 @@ class TemporalScheduleManager:
                 ],
                 "recent_actions": [
                     {
-                        "scheduled_time": action.scheduled_time.isoformat(),
-                        "actual_time": action.actual_time.isoformat()
-                        if action.actual_time
+                        "scheduled_time": getattr(action, "scheduled_time", None).isoformat()
+                        if getattr(action, "scheduled_time", None)
                         else None,
-                        "start_workflow_result": str(action.start_workflow_result)
-                        if action.start_workflow_result
+                        "actual_time": getattr(action, "actual_time", None).isoformat()
+                        if getattr(action, "actual_time", None)
+                        else None,
+                        "start_workflow_result": str(getattr(action, "start_workflow_result", ""))
+                        if getattr(action, "start_workflow_result", None)
                         else None,
                     }
                     for action in (description.info.recent_actions or [])

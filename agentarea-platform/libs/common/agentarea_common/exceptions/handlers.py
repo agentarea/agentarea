@@ -1,7 +1,7 @@
 """Error handlers for workspace-related exceptions."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
@@ -62,13 +62,13 @@ def _log_workspace_error(exc: WorkspaceError, request: Request) -> None:
 
     # Add exception-specific context
     if hasattr(exc, "resource_type"):
-        log_context["resource_type"] = exc.resource_type
+        log_context["resource_type"] = cast(Any, exc).resource_type
     if hasattr(exc, "resource_id"):
-        log_context["resource_id"] = exc.resource_id
+        log_context["resource_id"] = cast(Any, exc).resource_id
     if hasattr(exc, "missing_field"):
-        log_context["missing_field"] = exc.missing_field
+        log_context["missing_field"] = cast(Any, exc).missing_field
     if hasattr(exc, "reason"):
-        log_context["jwt_error_reason"] = exc.reason
+        log_context["jwt_error_reason"] = cast(Any, exc).reason
 
     # Log at appropriate level based on exception type
     if isinstance(exc, WorkspaceAccessDenied | WorkspaceResourceNotFound):

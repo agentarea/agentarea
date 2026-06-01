@@ -7,7 +7,7 @@ in natural language that are evaluated against event data.
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import litellm
@@ -609,7 +609,7 @@ class LLMConditionEvaluator:
             logger.debug(f"Calling LLM for condition evaluation with model {litellm_model}")
 
             # Make the LLM call
-            response = await litellm.acompletion(**litellm_params)
+            response = cast(Any, await litellm.acompletion(**litellm_params))
             content = response.choices[0].message.content or ""
 
             logger.debug(f"LLM condition evaluation response: {content[:100]}...")

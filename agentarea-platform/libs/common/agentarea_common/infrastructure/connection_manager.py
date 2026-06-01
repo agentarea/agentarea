@@ -6,8 +6,9 @@ while still providing connection reuse and proper cleanup.
 
 import asyncio
 import logging
+from inspect import isawaitable
 from threading import Lock
-from typing import Optional
+from typing import Any, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -147,18 +148,20 @@ class ConnectionManager:
         if self._execution_service_singleton:
             try:
                 # Close Temporal client if available
-                if hasattr(self._execution_service_singleton, "orchestrator") and hasattr(
-                    self._execution_service_singleton.orchestrator, "_client"
-                ):
-                    client = self._execution_service_singleton.orchestrator._client
+                orchestrator = getattr(self._execution_service_singleton, "orchestrator", None)
+                if orchestrator is not None and hasattr(orchestrator, "_client"):
+                    client = cast(Any, orchestrator)._client
                     if client and hasattr(client, "close"):
-                        await client.close()
+                        close_result: Any = client.close()
+                        if isawaitable(close_result):
+                            await close_result
 
                 # Also try to close the orchestrator itself
-                if hasattr(self._execution_service_singleton, "orchestrator") and hasattr(
-                    self._execution_service_singleton.orchestrator, "close"
-                ):
-                    await self._execution_service_singleton.orchestrator.close()
+                close_orchestrator = getattr(orchestrator, "close", None)
+                if callable(close_orchestrator):
+                    close_result = close_orchestrator()
+                    if isawaitable(close_result):
+                        await close_result
 
                 logger.info("Cleaned up execution service singleton")
             except Exception as e:

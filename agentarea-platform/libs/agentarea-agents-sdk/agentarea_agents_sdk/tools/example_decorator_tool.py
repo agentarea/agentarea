@@ -86,9 +86,10 @@ class DataToolset(Toolset):
             Search results as a formatted string
         """
         # Simulate search results
+        max_results = limit if limit is not None else 10
         results = [
             f"Result {i + 1}: Data matching '{query}'"
-            for i in range(min(limit, 5))  # Simulate up to 5 results
+            for i in range(min(max_results, 5))  # Simulate up to 5 results
         ]
         return f"Found {len(results)} results for '{query}':\n" + "\n".join(results)
 
@@ -127,7 +128,8 @@ class SimpleToolset(Toolset):
         Returns:
             The echoed message
         """
-        return (message + " ") * repeat
+        repeat_count = repeat if repeat is not None else 1
+        return (message + " ") * repeat_count
 
 
 async def main():

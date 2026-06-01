@@ -121,7 +121,9 @@ class EmailAdapter:
         msg.attach(MIMEText(message, "html"))
 
         try:
-            import aiosmtplib
+            from importlib import import_module
+
+            aiosmtplib = import_module("aiosmtplib")
 
             smtp_kwargs: dict[str, Any] = {
                 "hostname": smtp_creds.get("smtp_host", "localhost"),
