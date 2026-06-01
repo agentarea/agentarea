@@ -68,13 +68,17 @@ def _dedupe_within_workspace(
 
 
 def _backfill_slugs(connection: sa.engine.Connection, table_name: str) -> None:
-    """Compute and assign slugs for every existing row of ``table_name``."""
+    """Compute and assign slugs for every existing row of ``table_name``.
+
+    ``table_name`` is a hardcoded literal at the only two call sites
+    (``"agents"`` and ``"mcp_servers"``), so the interpolation is safe.
+    """
     rows = connection.execute(
-        sa.text(f"SELECT id, workspace_id, name FROM {table_name}")
+        sa.text(f"SELECT id, workspace_id, name FROM {table_name}")  # noqa: S608
     ).fetchall()
 
     taken_per_workspace: dict[str, set[str]] = {}
-    update_stmt = sa.text(f"UPDATE {table_name} SET slug = :slug WHERE id = :id")
+    update_stmt = sa.text(f"UPDATE {table_name} SET slug = :slug WHERE id = :id")  # noqa: S608
 
     for row in rows:
         row_id = row[0]

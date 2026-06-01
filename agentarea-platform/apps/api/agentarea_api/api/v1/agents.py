@@ -1,10 +1,9 @@
 """Agents API endpoints for managing AI agents."""
 
 import re
+from contextlib import suppress
 from typing import Any, Literal, cast
 from uuid import UUID
-
-from contextlib import suppress
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
