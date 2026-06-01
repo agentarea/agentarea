@@ -38,6 +38,7 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolCallExtractor,
         build_output_summary,
+        policy_requires_approval,
         resolve_effective_budget,
     )
     from .models import (
@@ -1586,15 +1587,11 @@ class AgentExecutionWorkflow:
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
 
-        # Approval gating before starting the tool activity
-        requires_approval = self._tool_requires_approval(tool_name)
+        # Approval gating before starting the tool activity — driven solely by the
+        # governance ApprovalPolicy on the task's effective_policy snapshot.
+        approval_required = self._tool_requires_approval(tool_name)
         workflow.logger.info(
-            f"Tool '{tool_name}' approval check: requires_approval={requires_approval}, "
-            f"agent_config tools={len((self.state.agent_config or {}).get('tools', []))}"
-        )
-        approval_required = (
-            bool(self.state.goal and getattr(self.state.goal, "requires_human_approval", False))
-            or requires_approval
+            f"Tool '{tool_name}' policy approval check: requires_approval={approval_required}"
         )
 
         if approval_required:
@@ -2987,46 +2984,10 @@ class AgentExecutionWorkflow:
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:
-        """Check agent tools for per-tool user confirmation requirement.
+        """Whether this tool call needs human approval.
 
-        Checks both:
-        - Top-level requires_user_confirmation on the tool config (code/agent tools)
-        - Per-tool requires_user_confirmation in allowed_tools (MCP tools)
+        Single source of truth is the governance ApprovalPolicy on the task's
+        effective_policy snapshot — not per-tool agent config. When this returns
+        True the loop pauses on the existing human-in-the-loop path.
         """
-        try:
-            tools = (self.state.agent_config or {}).get("tools") or []
-        except Exception:
-            tools = []
-
-        for tool_config in tools:
-            if not isinstance(tool_config, dict):
-                continue
-
-            settings = tool_config.get("settings", {}) or {}
-
-            # Direct match by name (code tools, agent tools)
-            if tool_config.get("name") == tool_name:
-                if isinstance(settings, dict) and bool(
-                    settings.get("requires_user_confirmation", False)
-                ):
-                    return True
-
-            # MCP tools: check per-tool approval in allowed_tools
-            if tool_config.get("type") == "mcp":
-                allowed_tools = (
-                    settings.get("allowed_tools") if isinstance(settings, dict) else None
-                )
-                if isinstance(allowed_tools, list):
-                    for at in allowed_tools:
-                        if isinstance(at, dict) and at.get("tool_name") == tool_name:
-                            if bool(at.get("requires_user_confirmation", False)):
-                                return True
-                elif isinstance(allowed_tools, dict):
-                    # Dict format: {tool_name: {requires_user_confirmation: bool}}
-                    tool_settings = allowed_tools.get(tool_name)
-                    if isinstance(tool_settings, dict) and bool(
-                        tool_settings.get("requires_user_confirmation", False)
-                    ):
-                        return True
-
-        return False
+        return policy_requires_approval(self.state.effective_policy, tool_name)

@@ -36,6 +36,20 @@ def resolve_effective_budget(
     return min(candidates)
 
 
+def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name: str) -> bool:
+    """Whether a tool call needs human approval — driven solely by ApprovalPolicy.
+
+    The policy engine is the single source of truth: either approval is required
+    globally (``requires_human_approval``) or the tool is explicitly listed in
+    ``escalation_rules``. When approval is required the workflow pauses on the
+    existing human-in-the-loop path (HUMAN_APPROVAL_REQUESTED -> resolve_escalation).
+    """
+    approval = (effective_policy or {}).get("approval") or {}
+    if approval.get("requires_human_approval") is True:
+        return True
+    return tool_name in (approval.get("escalation_rules") or [])
+
+
 class EventManager:
     """Manages workflow events with consistent formatting."""
 
