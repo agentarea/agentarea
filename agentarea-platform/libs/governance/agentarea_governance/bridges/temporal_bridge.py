@@ -20,6 +20,7 @@ from temporalio.worker import (
 from ..domain.enums import InterceptorAction, Phase
 from ..domain.exceptions import EscalationRequired, GovernanceDenied
 from ..domain.models import InterceptorContext
+from ..domain.policies import effective_policy_from_json
 from ..pipeline import InterceptorPipeline
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,32 @@ def _extract_context_from_input(
         action_type=action_type,
         action_name=action_name,
         action_params=_extract_params(request),
+        execution_state=_extract_execution_state(request),
     )
+
+
+def _extract_execution_state(request: Any) -> dict[str, Any]:
+    """Translate the request's effective policy + runtime counters into guard state.
+
+    This is the link that makes the resolved governance policy actually reach
+    the gates. Without it the gates see an empty execution_state and allow
+    everything. Runtime counters (cost/tokens consumed so far) ride alongside
+    the policy so budget gates compare against the running total, not just the
+    hard ceiling.
+    """
+    raw_policy = getattr(request, "effective_policy", None)
+    if not raw_policy:
+        return {}
+
+    policy = effective_policy_from_json(raw_policy)
+
+    runtime_state: dict[str, Any] = {}
+    for field in ("cost_used", "service_cost_used", "tokens_used"):
+        value = getattr(request, field, None)
+        if value is not None:
+            runtime_state[field] = value
+
+    return policy.to_execution_state(runtime_state)
 
 
 def _extract_uuid(obj: Any, field: str) -> UUID | None:

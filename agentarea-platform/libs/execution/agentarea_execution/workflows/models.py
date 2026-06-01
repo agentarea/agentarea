@@ -98,6 +98,7 @@ class ContinueAsNewState(BaseModel):
     available_tools: list[dict[str, Any]]
     current_iteration: int
     total_cost: Money = ZERO
+    tokens_used: int = 0
     budget_usd: Money | None = None
     context_window: int = 128000
     user_context_data: dict[str, Any] = Field(default_factory=dict)
@@ -135,6 +136,7 @@ class AgentExecutionState(BaseModel):
     success: bool = False
     blocked_reason: str | None = None
     budget_usd: Money | None = None
+    tokens_used: int = 0  # Cumulative tokens consumed across the run (governance)
     context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)

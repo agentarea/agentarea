@@ -258,6 +258,10 @@ class LLMCallRequest(BaseModel):
     execution_id: str | None = None
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
     effective_policy: dict[str, Any] | None = None
+    # Runtime governance counters — let budget gates compare against the running total
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
 
 class LLMUsage(BaseModel):
@@ -291,6 +295,10 @@ class MCPToolRequest(BaseModel):
     tools: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     effective_policy: dict[str, Any] | None = None
+    # Runtime governance counters — let budget gates compare against the running total
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
 
 class MCPToolResult(BaseModel):

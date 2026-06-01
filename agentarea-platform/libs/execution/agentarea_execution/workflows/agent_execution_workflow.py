@@ -739,6 +739,7 @@ class AgentExecutionWorkflow:
         self.state.available_tools = state.available_tools
         self.state.current_iteration = state.current_iteration
         self.state.budget_usd = state.budget_usd
+        self.state.tokens_used = state.tokens_used
         self.state.context_window = state.context_window
         self.state.user_context_data = state.user_context_data
         self.state.activated_skills = state.activated_skills
@@ -831,6 +832,7 @@ class AgentExecutionWorkflow:
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
             total_cost=serialize_money(self.budget_tracker.cost),
+            tokens_used=self.state.tokens_used,
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
@@ -1243,6 +1245,9 @@ class AgentExecutionWorkflow:
                 execution_id=self.state.execution_id,
                 resolved_model=self.state.resolved_model,
                 effective_policy=self.state.effective_policy,
+                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                tokens_used=self.state.tokens_used,
+                service_cost_used=float(self.state.service_cost_used),
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -1290,6 +1295,11 @@ class AgentExecutionWorkflow:
                 "usage": usage_payload,
             }
             self.budget_tracker.add_cost(usage_info["cost"])
+
+            # Accumulate cumulative token usage for governance token-budget gating
+            total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
+            if total_tokens:
+                self.state.tokens_used += total_tokens
 
             # Update context window manager with actual token usage
             if self.context_manager and usage_payload:
@@ -1728,6 +1738,9 @@ class AgentExecutionWorkflow:
                 tools=self.state.agent_config.get("tools"),
                 metadata=self._workflow_metadata or {},
                 effective_policy=self.state.effective_policy,
+                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                tokens_used=self.state.tokens_used,
+                service_cost_used=float(self.state.service_cost_used),
             )
 
             result_obj = await workflow.execute_activity(
