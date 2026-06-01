@@ -477,10 +477,14 @@ class AgentExecutionWorkflow:
             available_tools.append(self._tool_catalog.get_activate_tool_source_definition())
 
         else:
-            # STATIC/HYBRID mode: load all tools upfront (current behavior)
+            # STATIC/HYBRID mode: load all tools upfront (current behavior).
+            # `result_type` is required for Temporal to deserialize the
+            # activity result into the Pydantic model — otherwise the workflow
+            # receives a plain dict and `searchable_entries` is silently dropped.
             tools_result: ToolDiscoveryResult = await workflow.execute_activity(
                 Activities.DISCOVER_AVAILABLE_TOOLS,
                 args=[tools_request],
+                result_type=ToolDiscoveryResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
