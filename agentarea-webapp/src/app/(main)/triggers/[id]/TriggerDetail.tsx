@@ -3,27 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
+import { Bot, Check, Clock, Copy, Hash, Link as LinkIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
-  Bot,
-  Check,
-  Clock,
-  Copy,
-  Hash,
-  Link as LinkIcon,
-} from "lucide-react";
+  InfoPanelBody,
+  InfoPanelField,
+  InfoPanelHeader,
+  InfoPanelSection,
+  InfoPanelShell,
+  InfoPanelValueBox,
+} from "@/components/InfoPanel";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import {
-  InfoPanelShell,
-  InfoPanelBody,
-  InfoPanelHeader,
-  InfoPanelField,
-  InfoPanelValueBox,
-  InfoPanelSection,
-} from "@/components/InfoPanel";
-import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
+import { renderTriggerIcon } from "../components/triggerDisplay";
 
 interface TriggerDetailProps {
   trigger: any;
@@ -69,7 +63,9 @@ function TriggerInfoPanel({
   const statusVariant = isActive ? "success" : "secondary";
   const statusLabel = isActive ? "Active" : "Inactive";
 
-  const displayName = catalogEntry?.name ?? (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
+  const displayName =
+    catalogEntry?.name ??
+    (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
 
   return (
     <InfoPanelShell>
@@ -89,7 +85,10 @@ function TriggerInfoPanel({
               Type
             </div>
             <div className="text-sm font-semibold text-foreground">
-              {displayName}
+              <span className="inline-flex items-center gap-1.5">
+                {renderTriggerIcon(catalogEntry, trigger, "h-3.5 w-3.5")}
+                {displayName}
+              </span>
             </div>
           </div>
 
@@ -133,7 +132,9 @@ function TriggerInfoPanel({
 
         {catalogEntry?.description && (
           <InfoPanelSection title="About" contentClassName="text-xs">
-            <p className="text-sm text-muted-foreground">{catalogEntry.description}</p>
+            <p className="text-sm text-muted-foreground">
+              {catalogEntry.description}
+            </p>
           </InfoPanelSection>
         )}
       </InfoPanelBody>
@@ -157,14 +158,21 @@ export default function TriggerDetail({
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
-
             {/* Catalog info card — similar to MCP spec info */}
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
               <div className="flex items-center gap-3">
+                {renderTriggerIcon(
+                  catalogEntry,
+                  trigger,
+                  "h-8 w-8 text-primary"
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="font-medium text-sm">{displayName}</div>
-                    <Badge variant={trigger.is_active ? "success" : "secondary"} size="sm">
+                    <Badge
+                      variant={trigger.is_active ? "success" : "secondary"}
+                      size="sm"
+                    >
                       {trigger.is_active ? "Active" : "Inactive"}
                     </Badge>
                     {catalogEntry?.kind && (
@@ -218,16 +226,24 @@ export default function TriggerDetail({
                 </div>
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <div className="text-xs text-muted-foreground">Cron expression</div>
+                    <div className="text-xs text-muted-foreground">
+                      Cron expression
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 rounded-md border border-border/60 bg-background px-3 py-2 font-mono text-sm">
                         {trigger.config.cron_expression}
                       </div>
-                      <CopyButton text={trigger.config.cron_expression} label="Cron expression" />
+                      <CopyButton
+                        text={trigger.config.cron_expression}
+                        label="Cron expression"
+                      />
                     </div>
                     {trigger.config.timezone && (
                       <div className="text-xs text-muted-foreground">
-                        Timezone: <span className="font-mono">{trigger.config.timezone}</span>
+                        Timezone:{" "}
+                        <span className="font-mono">
+                          {trigger.config.timezone}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -237,9 +253,13 @@ export default function TriggerDetail({
                         Last run
                       </div>
                       <div className="text-sm">
-                        {trigger.last_run_at
-                          ? formatDistanceToNow(new Date(trigger.last_run_at), { addSuffix: true })
-                          : <span className="text-muted-foreground">Never</span>}
+                        {trigger.last_run_at ? (
+                          formatDistanceToNow(new Date(trigger.last_run_at), {
+                            addSuffix: true,
+                          })
+                        ) : (
+                          <span className="text-muted-foreground">Never</span>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -247,9 +267,13 @@ export default function TriggerDetail({
                         Next run
                       </div>
                       <div className="text-sm">
-                        {trigger.next_run_at
-                          ? formatDistanceToNow(new Date(trigger.next_run_at), { addSuffix: true })
-                          : <span className="text-muted-foreground">—</span>}
+                        {trigger.next_run_at ? (
+                          formatDistanceToNow(new Date(trigger.next_run_at), {
+                            addSuffix: true,
+                          })
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -278,13 +302,23 @@ export default function TriggerDetail({
                   </div>
                   <div className="space-y-2 text-sm">
                     <div>
-                      <span className="text-muted-foreground">Webhook type: </span>
-                      <span className="capitalize font-mono">{trigger.webhook_type}</span>
+                      <span className="text-muted-foreground">
+                        Webhook type:{" "}
+                      </span>
+                      <span className="capitalize font-mono">
+                        {trigger.webhook_type}
+                      </span>
                     </div>
                     {trigger.last_run_at && (
                       <div>
-                        <span className="text-muted-foreground">Last triggered: </span>
-                        <span>{formatDistanceToNow(new Date(trigger.last_run_at), { addSuffix: true })}</span>
+                        <span className="text-muted-foreground">
+                          Last triggered:{" "}
+                        </span>
+                        <span>
+                          {formatDistanceToNow(new Date(trigger.last_run_at), {
+                            addSuffix: true,
+                          })}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -300,7 +334,11 @@ export default function TriggerDetail({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {trigger.event_types.map((event: string) => (
-                    <Badge key={event} variant="outline" className="text-xs font-mono">
+                    <Badge
+                      key={event}
+                      variant="outline"
+                      className="text-xs font-mono"
+                    >
                       {event}
                     </Badge>
                   ))}
@@ -309,16 +347,17 @@ export default function TriggerDetail({
             )}
 
             {/* Task parameters */}
-            {trigger.task_parameters && Object.keys(trigger.task_parameters).length > 0 && (
-              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Task Parameters
+            {trigger.task_parameters &&
+              Object.keys(trigger.task_parameters).length > 0 && (
+                <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Task Parameters
+                  </div>
+                  <pre className="overflow-auto rounded-md bg-muted/40 p-3 text-xs font-mono">
+                    {JSON.stringify(trigger.task_parameters, null, 2)}
+                  </pre>
                 </div>
-                <pre className="overflow-auto rounded-md bg-muted/40 p-3 text-xs font-mono">
-                  {JSON.stringify(trigger.task_parameters, null, 2)}
-                </pre>
-              </div>
-            )}
+              )}
           </div>
         </div>
       </div>

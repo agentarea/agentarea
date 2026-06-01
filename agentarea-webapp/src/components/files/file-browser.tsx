@@ -54,6 +54,7 @@ export function FileBrowser({
   return (
     <ResizablePanelGroup direction="horizontal" className={className}>
       <ResizablePanel defaultSize={28} minSize={18} maxSize={50}>
+
         <div className="h-full overflow-auto p-2">
           <FileTree
             files={files}
@@ -62,6 +63,7 @@ export function FileBrowser({
             selectedPath={activePath}
           />
         </div>
+
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={72}>

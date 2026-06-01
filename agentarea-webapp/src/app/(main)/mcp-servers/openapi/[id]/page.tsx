@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileJson2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, RefreshCw, Trash2 } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/server-actions";
 import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
+import { OpenAPIConnectionMark } from "../../components/MCPCard";
 import { ToolsTable } from "../../components/ToolsTable";
 import { OpenAPIConnection } from "../../types";
 
@@ -207,10 +208,13 @@ export default function OpenAPIConnectionDetailPage() {
           <div>
             <p className="text-xs text-muted-foreground">Type</p>
             <div className="mt-1 flex items-center gap-1.5">
-              <FileJson2 className="h-4 w-4 text-orange-500" />
+              <OpenAPIConnectionMark
+                connection={connection}
+                className="h-4 w-4 rounded-sm text-[6px]"
+              />
               <Badge
                 variant="outline"
-                className="text-orange-600 border-orange-300"
+                className="border-orange-300 text-orange-600"
               >
                 OpenAPI
               </Badge>

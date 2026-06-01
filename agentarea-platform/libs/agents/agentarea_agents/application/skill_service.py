@@ -354,6 +354,28 @@ class SkillService:
         repo = self._get_repository()
         return await repo.list_all()
 
+    async def list_paginated(
+        self,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        source_type: str | None = None,
+        has_files: bool | None = None,
+        network_scope: str | None = None,
+        from_registry: bool | None = None,
+    ) -> tuple[list[Skill], int]:
+        """List skills with pagination metadata."""
+        repo = self._get_repository()
+        return await repo.list_paginated(
+            limit=limit,
+            offset=offset,
+            search=search,
+            source_type=source_type,
+            has_files=has_files,
+            network_scope=network_scope,
+            from_registry=from_registry,
+        )
+
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def update(
         self,

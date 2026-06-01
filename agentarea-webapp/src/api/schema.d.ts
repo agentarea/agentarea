@@ -1477,6 +1477,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp/{instance_id}/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        get: operations["proxy_instance_v1_mcp__instance_id__mcp_get"];
+        put?: never;
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        post: operations["proxy_instance_v1_mcp__instance_id__mcp_post"];
+        /**
+         * Proxy Instance
+         * @description Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+         */
+        delete: operations["proxy_instance_v1_mcp__instance_id__mcp_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/model-instances/": {
         parameters: {
             query?: never;
@@ -2403,7 +2431,7 @@ export interface paths {
         };
         /**
          * List Skills
-         * @description List all skills in the workspace.
+         * @description List skills in the workspace.
          */
         get: operations["list_skills_v1_skills_get"];
         put?: never;
@@ -4753,7 +4781,7 @@ export interface components {
             /** Description */
             description: string;
             /** Docker Image Url */
-            docker_image_url: string;
+            docker_image_url?: string | null;
             /** Env Schema */
             env_schema: {
                 [key: string]: unknown;
@@ -5239,6 +5267,19 @@ export interface components {
             has_next: boolean;
             /** Items */
             items: components["schemas"]["MCPServerResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedResponse[SkillResponse] */
+        PaginatedResponse_SkillResponse_: {
+            /** Has Next */
+            has_next: boolean;
+            /** Items */
+            items: components["schemas"]["SkillResponse"][];
             /** Page */
             page: number;
             /** Page Size */
@@ -5847,6 +5888,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Network Scope */
+            network_scope: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
@@ -9737,6 +9780,99 @@ export interface operations {
             };
         };
     };
+    proxy_instance_v1_mcp__instance_id__mcp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proxy_instance_v1_mcp__instance_id__mcp_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_model_instances_v1_model_instances__get: {
         parameters: {
             query?: {
@@ -11750,7 +11886,19 @@ export interface operations {
     };
     list_skills_v1_skills_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by source type */
+                source_type?: string | null;
+                /** @description Filter by package-backed skills */
+                has_files?: boolean | null;
+                /** @description Filter by network scope */
+                network_scope?: string | null;
+                /** @description Filter registry-created skills */
+                from_registry?: boolean | null;
+                page?: number;
+                page_size?: number;
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11763,7 +11911,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SkillResponse"][];
+                    "application/json": components["schemas"]["PaginatedResponse_SkillResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

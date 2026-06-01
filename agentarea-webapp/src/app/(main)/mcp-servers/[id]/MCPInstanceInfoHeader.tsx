@@ -1,9 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Badge } from "@/components/ui/badge";
 import { InfoPanelHeader } from "@/components/InfoPanel";
+import { Badge } from "@/components/ui/badge";
 import type { MCPInstance } from "../types";
+import { getEffectiveMCPVerificationStatus } from "../utils";
 
 export default function MCPInstanceInfoHeader({
   instance,
@@ -12,11 +13,7 @@ export default function MCPInstanceInfoHeader({
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail");
 
-  const verification = (instance as any).verification as {
-    status: string;
-  } | null | undefined;
-
-  const vStatus = verification?.status ?? "never_attempted";
+  const vStatus = getEffectiveMCPVerificationStatus(instance);
 
   const statusVariant =
     vStatus === "succeeded"

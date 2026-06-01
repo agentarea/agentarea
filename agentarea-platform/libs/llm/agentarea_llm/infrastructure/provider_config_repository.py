@@ -13,6 +13,16 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ProviderConfig, user_context)
 
+    async def create_config(self, config: ProviderConfig) -> ProviderConfig:
+        """Create a provider config from a domain object."""
+        config.workspace_id = self.user_context.workspace_id
+        if not config.created_by:
+            config.created_by = self.user_context.user_id
+
+        self.session.add(config)
+        await self.session.commit()
+        return await self.get_with_relations(config.id) or config
+
     async def get_with_relations(self, id: UUID) -> ProviderConfig | None:
         """Get provider config by ID with relationships loaded."""
         config = await self.get_by_id(id)
