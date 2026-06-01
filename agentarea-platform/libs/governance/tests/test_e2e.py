@@ -1,8 +1,8 @@
 """End-to-end test — full pipeline with multiple interceptors."""
 
-import pytest
 from uuid import uuid4
 
+import pytest
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.factory import create_governance_pipeline
