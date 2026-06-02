@@ -1,11 +1,14 @@
 """Task repository implementation."""
 
 from datetime import UTC, datetime
+from typing import Any
+from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import Numeric, cast, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
@@ -289,7 +292,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
         result = await self.session.execute(stmt)
 
-        if result.rowcount == 0:
+        if type_cast(CursorResult[Any], result).rowcount == 0:
             return None
 
         await self.session.flush()

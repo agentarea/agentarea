@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.events.base_events import DomainEvent
-from agentarea_common.utils.types import Artifact, TaskState, TaskStatus
+from agentarea_common.utils.types import Artifact
 
 
 @dataclass
@@ -24,7 +24,7 @@ class TaskUpdated(DomainEvent):
     """Event emitted when a task is updated."""
 
     task_id: str
-    status: TaskStatus
+    status: str
     artifacts: list[Artifact] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -34,8 +34,8 @@ class TaskStatusChanged(DomainEvent):
     """Event emitted when a task status changes."""
 
     task_id: str
-    old_status: TaskState
-    new_status: TaskState
+    old_status: str
+    new_status: str
     message: str | None = None
     status_timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 

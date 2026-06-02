@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import UUID
 
 from agentarea_agents_sdk.runners import (
     AgentGoal,
@@ -29,6 +30,8 @@ class TemporalExecutionState:
     # Additional Temporal-specific fields
     agent_config: dict[str, Any] = field(default_factory=dict)
     available_tools: list[dict[str, Any]] = field(default_factory=list)
+    task_id: str | None = None
+    agent_id: str | None = None
 
 
 class TemporalAgentRunner(BaseAgentRunner):
@@ -247,7 +250,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     server_instance_id=None,
                     workspace_id=workspace_id,
                     task_id=str(state.task_id) if state.task_id else None,
-                    agent_id=state.agent_id if state.agent_id else None,
+                    agent_id=UUID(state.agent_id) if state.agent_id else None,
                     tools=state.agent_config.get("tools"),
                 )
 

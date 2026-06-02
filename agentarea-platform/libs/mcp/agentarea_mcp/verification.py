@@ -12,6 +12,7 @@ path.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import httpx
 from agentarea_common.config import get_database, get_settings
@@ -343,7 +344,7 @@ async def verify(
         resolved_url: str | None = None
         if instance_type in ("docker", "command"):
             try:
-                ack = await go_create_fn(runtime_instance, mcp_manager_url)
+                ack = await go_create_fn(cast(Any, runtime_instance), mcp_manager_url)
                 sc = ack["status_code"]
                 resolved_url = ack.get("internal_url")
                 if sc not in (200, 201, 409):

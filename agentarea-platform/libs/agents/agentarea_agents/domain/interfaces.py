@@ -78,6 +78,11 @@ class ExecutionServiceInterface(ABC):
         pass
 
     @abstractmethod
+    async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
+        """Send an A2UI user action to a running execution."""
+        pass
+
+    @abstractmethod
     async def resolve_escalation(
         self,
         execution_id: str,

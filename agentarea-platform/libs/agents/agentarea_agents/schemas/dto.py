@@ -123,5 +123,6 @@ class AgentSummary(BaseModel):
     """Lightweight agent reference returned by list/create-style tools."""
 
     id: UUID
+    slug: str
     name: str
     description: str | None = None

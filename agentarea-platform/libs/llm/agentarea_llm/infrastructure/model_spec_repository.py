@@ -93,7 +93,9 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
 
     async def upsert_by_provider_and_model(self, entity: ModelSpec) -> ModelSpec:
         """Upsert model spec by provider and model name - used in bootstrap"""
-        existing = await self.get_by_provider_and_model(entity.provider_spec_id, entity.model_name)
+        existing = await self.get_by_provider_and_model(
+            UUID(str(entity.provider_spec_id)), entity.model_name
+        )
         if existing:
             # Update existing using kwargs-based update
             updated = await self.update(

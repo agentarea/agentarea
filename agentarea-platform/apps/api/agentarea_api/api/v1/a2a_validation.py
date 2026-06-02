@@ -10,13 +10,7 @@ from typing import Any, ClassVar
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
-from pydantic import BaseModel, Field, ValidationError
-
-try:
-    # Pydantic v2
-    from pydantic import ConfigDict
-except ImportError:  # pragma: no cover
-    ConfigDict = dict  # type: ignore[misc]
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +215,8 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         try:
             body = await request.json()
             request_id = body.get("id")
-        except Exception as e:
-            logger.debug(f"Could not extract request ID from request body: {e}")
+        except Exception as id_error:
+            logger.debug(f"Could not extract request ID from request body: {id_error}")
 
         # Return error response
         error_response = create_a2a_error_response(request_id, e)

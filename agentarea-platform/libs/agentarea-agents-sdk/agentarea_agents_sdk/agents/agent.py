@@ -8,6 +8,7 @@ from typing import Any
 from ..models.llm_model import LLMModel, LLMRequest
 from ..prompts import PromptBuilder, ToolInfo
 from ..tools.completion_tool import CompletionTool
+from ..tools.decorator_tool import ToolsetAdapter
 from ..tools.tool_executor import ToolExecutor
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class Agent:
 
         # Register default tools if requested
         if include_default_tools:
-            self.tool_executor.registry.register(CompletionTool())
+            self.tool_executor.registry.register(ToolsetAdapter(CompletionTool()))
 
         # Register custom tools if provided
         if tools:
@@ -143,7 +144,7 @@ class Agent:
                     final_tool_calls = chunk.tool_calls
 
             # Add assistant message to conversation
-            assistant_message = {"role": "assistant", "content": full_content}
+            assistant_message: dict[str, Any] = {"role": "assistant", "content": full_content}
             if final_tool_calls:
                 assistant_message["tool_calls"] = final_tool_calls
             messages.append(assistant_message)

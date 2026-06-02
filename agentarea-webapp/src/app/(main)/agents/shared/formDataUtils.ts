@@ -82,6 +82,12 @@ export function createAgentFormData(data: AgentFormValues): FormData {
             );
           });
         }
+        if (config.load_mode === "explicit" || config.load_mode === "searchable") {
+          formData.append(
+            `tools_config.openapi_configs[${index}].load_mode`,
+            config.load_mode
+          );
+        }
       }
     );
   }

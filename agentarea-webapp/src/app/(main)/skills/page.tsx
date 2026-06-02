@@ -1,12 +1,11 @@
-import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
-import SkillsContent from "./components/SkillsContent";
-import SkillsHeaderTabs from "./components/SkillsHeaderTabs";
 import CreateSkillButton from "./components/CreateSkillButton";
+import SkillsFilters from "./components/SkillsFilters";
+import SkillsHeaderTabs from "./components/SkillsHeaderTabs";
+import SkillsList from "./components/SkillsList";
 
 export const metadata = {
   title: "Skills",
@@ -27,10 +26,28 @@ export default async function SkillsPage({
     typeof resolvedSearchParams.tab === "string"
       ? (resolvedSearchParams.tab as "grid" | "table")
       : (cookieTab as "grid" | "table") || "grid";
-  
+
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
+      : "";
+  const sourceType =
+    typeof resolvedSearchParams.source_type === "string"
+      ? resolvedSearchParams.source_type
+      : "";
+  const filesFilter =
+    typeof resolvedSearchParams.files === "string"
+      ? resolvedSearchParams.files
+      : "all";
+  const hasFiles =
+    filesFilter === "with_files"
+      ? true
+      : filesFilter === "without_files"
+        ? false
+        : undefined;
+  const networkScope =
+    typeof resolvedSearchParams.network_scope === "string"
+      ? resolvedSearchParams.network_scope
       : "";
 
   return (
@@ -43,20 +60,24 @@ export default async function SkillsPage({
       subheader={
         <>
           <SearchInput urlParamName="search" urlPath="/skills" />
-          <SkillsHeaderTabs currentTab={viewMode} />
+          <div className="flex shrink-0 items-center gap-3">
+            <SkillsFilters
+              sourceType={sourceType}
+              filesFilter={filesFilter}
+              networkScope={networkScope}
+            />
+            <SkillsHeaderTabs currentTab={viewMode} />
+          </div>
         </>
       }
     >
-      <Suspense key={`${viewMode}-${searchQuery}`} fallback={
-        <div className="flex h-64 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }>
-        <SkillsContent
-          viewMode={viewMode}
-          searchQuery={searchQuery}
-        />
-      </Suspense>
+      <SkillsList
+        viewMode={viewMode}
+        searchQuery={searchQuery}
+        sourceType={sourceType}
+        hasFiles={hasFiles}
+        networkScope={networkScope}
+      />
     </ContentBlock>
   );
 }

@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.audit import audited
@@ -6,6 +7,7 @@ from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.utils.slug import generate_slug
 
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
 from agentarea_agents.domain.models import Agent
@@ -42,13 +44,34 @@ class AgentService(BaseCrudService[Agent]):
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
 
+    async def _resolve_unique_slug(self, name: str) -> str:
+        """Generate a workspace-unique slug from ``name``.
+
+        Tries ``base``, then ``base-2``, ``base-3``, ... up to ``base-999``.
+        """
+        repo = self._get_agent_repository()
+        base = generate_slug(name)
+
+        if await repo.get_by_slug(base) is None:
+            return base
+
+        for suffix in range(2, 1000):
+            candidate = f"{base}-{suffix}"
+            if await repo.get_by_slug(candidate) is None:
+                return candidate
+
+        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools] if payload.tools else None
         events_config = payload.events_config.model_dump() if payload.events_config else None
 
+        slug = await self._resolve_unique_slug(payload.name)
+
         agent = Agent(
             name=payload.name,
+            slug=slug,
             description=payload.description,
             instruction=payload.instruction,
             model_id=payload.model_id,
@@ -68,8 +91,8 @@ class AgentService(BaseCrudService[Agent]):
             AgentCreated(
                 agent_id=agent.id,
                 name=agent.name,
-                description=agent.description,
-                model_id=agent.model_id,
+                description=agent.description or "",
+                model_id=agent.model_id or "",
                 tools=agent.tools,
                 events_config=agent.events_config,
                 planning=agent.planning,
@@ -92,7 +115,7 @@ class AgentService(BaseCrudService[Agent]):
         if "name" in patch:
             agent.name = patch["name"]
         if "capabilities" in patch:
-            agent.capabilities = patch["capabilities"]
+            cast(Any, agent).capabilities = patch["capabilities"]
         if "description" in patch:
             agent.description = patch["description"]
         if "instruction" in patch:
@@ -135,6 +158,11 @@ class AgentService(BaseCrudService[Agent]):
         """Get an agent by name."""
         repo = self._get_agent_repository()
         return await repo.get_agent_by_name(name)
+
+    async def get_by_slug(self, slug: str) -> Agent | None:
+        """Get an agent by workspace-scoped slug."""
+        repo = self._get_agent_repository()
+        return await repo.get_by_slug(slug)
 
     async def get_with_skills(self, id: UUID) -> Agent | None:
         """Get an agent with its skills loaded."""

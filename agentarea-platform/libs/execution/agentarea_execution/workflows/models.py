@@ -112,6 +112,12 @@ class ContinueAsNewState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # Searchable OpenAPI pool: ToolCandidate-shaped dicts (name, description,
+    # connection_id, schema, source_type) deferred behind `load_tools`.
+    searchable_tool_pool: list[dict[str, Any]] = Field(default_factory=list)
+    # Names from the pool already revealed into available_tools — re-applied on replay
+    # so prior tool_calls keep resolving after continue-as-new.
+    revealed_openapi_tools: list[str] = Field(default_factory=list)
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO
@@ -147,6 +153,13 @@ class AgentExecutionState(BaseModel):
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
     activated_tool_sources: list[str] = Field(default_factory=list)
+    # Searchable OpenAPI pool: ToolCandidate-shaped dicts kept in workflow state
+    # only — never sent to the LLM directly. Catalog text + `load_tools` meta-tool
+    # mediate access (issue #115).
+    searchable_tool_pool: list[dict[str, Any]] = Field(default_factory=list)
+    # Names from the pool whose full schemas have been appended to
+    # `available_tools`; tracked so continue-as-new can re-reveal on replay.
+    revealed_openapi_tools: list[str] = Field(default_factory=list)
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO

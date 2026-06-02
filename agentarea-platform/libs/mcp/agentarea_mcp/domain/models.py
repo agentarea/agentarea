@@ -1,7 +1,7 @@
 from typing import Any
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Boolean, String
+from sqlalchemy import JSON, Boolean, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
@@ -12,8 +12,12 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     """MCP Server model with workspace awareness and audit trail."""
 
     __tablename__ = "mcp_servers"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "slug", name="uq_mcp_servers_workspace_slug"),
+    )
 
     name: Mapped[str] = mapped_column(String, nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     description: Mapped[str] = mapped_column(String, nullable=False)
     docker_image_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     version: Mapped[str] = mapped_column(String, nullable=False)
@@ -39,6 +43,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self,
         name: str,
         description: str,
+        slug: str | None = None,
         version: str = "1.0.0",
         docker_image_url: str | None = None,
         tags: list[str] | None = None,
@@ -55,6 +60,8 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     ):
         super().__init__(**kwargs)  # Let BaseModel handle id, timestamps, user_id, workspace_id
         self.name = name
+        if slug is not None:
+            self.slug = slug
         self.description = description
         self.docker_image_url = docker_image_url
         self.version = version

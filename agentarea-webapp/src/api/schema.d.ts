@@ -277,21 +277,21 @@ export interface paths {
         };
         /**
          * Get Agent
-         * @description Get an agent by ID.
+         * @description Get an agent by UUID or workspace-scoped slug.
          */
         get: operations["get_agent_v1_agents__agent_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Agent
-         * @description Delete an agent.
+         * @description Delete an agent (by UUID or workspace-scoped slug).
          */
         delete: operations["delete_agent_v1_agents__agent_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Agent
-         * @description Update an agent.
+         * @description Update an agent (by UUID or workspace-scoped slug).
          */
         patch: operations["update_agent_v1_agents__agent_id__patch"];
         trace?: never;
@@ -2431,7 +2431,7 @@ export interface paths {
         };
         /**
          * List Skills
-         * @description List all skills in the workspace.
+         * @description List skills in the workspace.
          */
         get: operations["list_skills_v1_skills_get"];
         put?: never;
@@ -3767,6 +3767,8 @@ export interface components {
             skills?: {
                 [key: string]: unknown;
             }[] | null;
+            /** Slug */
+            slug: string;
             /** Status */
             status: string;
             /** Tools */
@@ -4486,29 +4488,6 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
-        /** JSONRPCError */
-        JSONRPCError: {
-            /** Code */
-            code: number;
-            /** Data */
-            data?: unknown | null;
-            /** Message */
-            message: string;
-        };
-        /** JSONRPCResponse */
-        JSONRPCResponse: {
-            error?: components["schemas"]["JSONRPCError"] | null;
-            /** Id */
-            id?: number | string | null;
-            /**
-             * Jsonrpc
-             * @default 2.0
-             * @constant
-             */
-            jsonrpc: "2.0";
-            /** Result */
-            result?: unknown | null;
-        };
         /** MCPAuthConfigCreateRequest */
         MCPAuthConfigCreateRequest: {
             /**
@@ -4803,6 +4782,8 @@ export interface components {
             registry_url?: string | null;
             /** Remote Url */
             remote_url?: string | null;
+            /** Slug */
+            slug: string;
             /** Status */
             status: string;
             /** Tags */
@@ -5267,6 +5248,19 @@ export interface components {
             has_next: boolean;
             /** Items */
             items: components["schemas"]["MCPServerResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** PaginatedResponse[SkillResponse] */
+        PaginatedResponse_SkillResponse_: {
+            /** Has Next */
+            has_next: boolean;
+            /** Items */
+            items: components["schemas"]["SkillResponse"][];
             /** Page */
             page: number;
             /** Page Size */
@@ -5875,6 +5869,10 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Network Scope */
+            network_scope: string;
+            /** Slug */
+            slug: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
@@ -6270,6 +6268,8 @@ export interface components {
             description_override?: string | null;
             /** Disabled Methods */
             disabled_methods?: string[] | null;
+            /** Load Mode */
+            load_mode?: ("explicit" | "searchable") | null;
             /** Openapi Connection Id */
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */
@@ -7529,7 +7529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONRPCResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -11871,7 +11871,19 @@ export interface operations {
     };
     list_skills_v1_skills_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by source type */
+                source_type?: string | null;
+                /** @description Filter by package-backed skills */
+                has_files?: boolean | null;
+                /** @description Filter by network scope */
+                network_scope?: string | null;
+                /** @description Filter registry-created skills */
+                from_registry?: boolean | null;
+                page?: number;
+                page_size?: number;
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11884,7 +11896,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SkillResponse"][];
+                    "application/json": components["schemas"]["PaginatedResponse_SkillResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

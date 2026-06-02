@@ -7,9 +7,10 @@ using JWT tokens signed with ES256.
 import base64
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 import jwt
+from jwt.algorithms import ECAlgorithm
 
 from ..interfaces import AuthResult, AuthToken
 from .base import BaseAuthProvider
@@ -68,11 +69,15 @@ class KratosAuthProvider(BaseAuthProvider):
                 return AuthResult(is_authenticated=False, error="Key not found in JWKS")
 
             # Convert JWK to EC key (Kratos uses ES256)
-            ec_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(key))
+            ec_key = ECAlgorithm.from_jwk(json.dumps(key))
 
             # Verify and decode the token
             payload = jwt.decode(
-                token, ec_key, algorithms=["ES256"], audience=self.audience, issuer=self.issuer
+                token,
+                cast(Any, ec_key),
+                algorithms=["ES256"],
+                audience=self.audience,
+                issuer=self.issuer,
             )
 
             # Validate claims

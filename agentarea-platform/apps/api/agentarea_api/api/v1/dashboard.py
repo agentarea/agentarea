@@ -16,6 +16,7 @@ from agentarea_agents.domain.models import Agent
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.money import to_money
 from agentarea_governance.domain.policies import PolicyDocument, PolicyScopeType, monthly_cap_policy
 from agentarea_governance.infrastructure.repository import GovernancePolicyRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
@@ -404,7 +405,7 @@ async def update_workspace_settings(
     """Upsert the current workspace's settings."""
     factory = RepositoryFactory(db_session, user_context)
     document = (
-        monthly_cap_policy(payload.monthly_cap_usd)
+        monthly_cap_policy(to_money(payload.monthly_cap_usd))
         if payload.monthly_cap_usd is not None
         else PolicyDocument()
     )

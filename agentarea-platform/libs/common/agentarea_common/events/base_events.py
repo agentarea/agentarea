@@ -1,10 +1,8 @@
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 
-@dataclass
 class DomainEvent:
     event_id: UUID
     timestamp: datetime

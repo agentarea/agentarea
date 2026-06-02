@@ -1,6 +1,8 @@
 """Workspace-scoped repository base class."""
 
-from typing import Any
+from __future__ import annotations
+
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -8,10 +10,9 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
-from .models import WorkspaceScopedMixin
 
 
-class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
+class WorkspaceScopedRepository[T]:
     """Base repository class that provides workspace-scoped CRUD operations.
 
     This repository focuses on workspace-level data isolation rather than user-level.
@@ -39,15 +40,20 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
         AuthorizationService during request authentication.
         """
         workspaces = self.user_context.accessible_workspaces
+        model = cast(Any, self.model_class)
+        workspace_col = model.workspace_id
         if workspaces and len(workspaces) > 1:
-            return self.model_class.workspace_id.in_(workspaces)
-        return self.model_class.workspace_id == self.user_context.workspace_id
+            return workspace_col.in_(workspaces)
+        return workspace_col == self.user_context.workspace_id
 
     def _get_creator_workspace_filter(self):
         """Get the creator and workspace filter for queries."""
+        model = cast(Any, self.model_class)
+        created_by_col = model.created_by
+        workspace_col = model.workspace_id
         return and_(
-            self.model_class.created_by == self.user_context.user_id,
-            self.model_class.workspace_id == self.user_context.workspace_id,
+            created_by_col == self.user_context.user_id,
+            workspace_col == self.user_context.workspace_id,
         )
 
     async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> T | None:
@@ -61,7 +67,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             The record if found, None otherwise
         """
         try:
-            query = select(self.model_class).where(self.model_class.id == id)
+            query = select(self.model_class).where(cast(Any, self.model_class).id == id)
 
             if creator_scoped:
                 query = query.where(self._get_creator_workspace_filter())
@@ -74,6 +80,14 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             return record
         except Exception:
             raise
+
+    async def get(self, id: UUID | str) -> T | None:
+        """BaseRepository-compatible getter."""
+        return await self.get_by_id(id)
+
+    async def list(self) -> list[T]:
+        """BaseRepository-compatible list operation."""
+        return await self.list_all()
 
     async def get_by_id_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> T:
         """Get a record by ID or raise NoResultFound.
@@ -125,7 +139,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
 
             # Order by newest first
             if hasattr(self.model_class, "created_at"):
-                query = query.order_by(self.model_class.created_at.desc())
+                query = query.order_by(cast(Any, self.model_class).created_at.desc())
 
             # Apply pagination
             if offset is not None:
@@ -150,7 +164,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
         Returns:
             Number of records
         """
-        query = select(func.count(self.model_class.id))
+        query = select(func.count(cast(Any, self.model_class).id))
 
         # Apply workspace/creator filtering
         if creator_scoped:
@@ -205,7 +219,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             The updated record if found, None otherwise
         """
         try:
-            query = select(self.model_class).where(self.model_class.id == id)
+            query = select(self.model_class).where(cast(Any, self.model_class).id == id)
 
             if creator_scoped:
                 query = query.where(self._get_creator_workspace_filter())
@@ -255,7 +269,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             NoResultFound: If record not found in workspace
         """
         # Extract entity data using to_dict()
-        entity_dict = entity.to_dict()
+        entity_dict = cast(Any, entity).to_dict()
 
         # Extract ID and remove it from update data
         entity_id = entity_dict.pop("id")
@@ -308,7 +322,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
             True if record was deleted, False if not found
         """
         try:
-            query = select(self.model_class).where(self.model_class.id == id)
+            query = select(self.model_class).where(cast(Any, self.model_class).id == id)
 
             if creator_scoped:
                 query = query.where(self._get_creator_workspace_filter())

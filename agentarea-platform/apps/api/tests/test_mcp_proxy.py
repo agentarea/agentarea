@@ -3,13 +3,11 @@
 from types import SimpleNamespace
 
 import pytest
-
 from agentarea_api.api.v1.mcp_proxy import (
     _filter_inbound_headers,
     _filter_outbound_headers,
     _resolve_upstream_url,
 )
-
 
 # ----- _resolve_upstream_url -----
 
