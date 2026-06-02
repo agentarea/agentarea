@@ -153,8 +153,6 @@ async def get_all_tasks(
         All users in the same workspace can see all workspace tasks.
     """
     try:
-        import asyncio
-
         # Sequential awaits: agent_service and task_service share one AsyncSession
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
