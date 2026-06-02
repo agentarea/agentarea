@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, MoreHorizontal, Star } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ export default function SkillsCard({
   onToggleFavorite,
 }: SkillsCardProps) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
   const source = sourceMeta(skill.source_type);
   const scope = scopeMeta(skill.network_scope);
   const SourceIcon = source.icon;
@@ -83,8 +85,18 @@ export default function SkillsCard({
         </span>
       </div>
 
-      {/* hover quick actions — top-right */}
-      <span className="absolute right-2.5 top-2.5 hidden items-center gap-0.5 group-hover:flex">
+      {/* hover quick actions — top-right. Hidden via opacity (not display) so
+          the trigger keeps a valid layout box; otherwise Radix loses its
+          anchor on mouse-leave and the menu jumps/flashes at 0,0 — including
+          during the close animation. */}
+      <span
+        className={cn(
+          "absolute right-2.5 top-2.5 flex items-center gap-0.5 transition-opacity",
+          menuOpen
+            ? "opacity-100"
+            : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+        )}
+      >
         <button
           type="button"
           title="Favorite"
@@ -111,7 +123,7 @@ export default function SkillsCard({
         >
           <Copy className="h-[15px] w-[15px]" />
         </button>
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild onClick={stop}>
             <button
               type="button"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, MoreHorizontal, Star } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ export default function SkillRow({
   onToggleFavorite,
 }: SkillRowProps) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
   const source = sourceMeta(skill.source_type);
   const scope = scopeMeta(skill.network_scope);
   const SourceIcon = source.icon;
@@ -68,8 +70,14 @@ export default function SkillRow({
         {skill.description || ""}
       </span>
 
-      {/* meta cluster — hidden while hovering to make room for quick actions */}
-      <span className="flex shrink-0 items-center gap-2 group-hover:invisible">
+      {/* meta cluster — hidden while hovering (or while the menu is open) to
+          make room for quick actions */}
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-2 group-hover:invisible",
+          menuOpen && "invisible"
+        )}
+      >
         <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
           <span
             className="h-[7px] w-[7px] rounded-full"
@@ -86,8 +94,18 @@ export default function SkillRow({
         </span>
       </span>
 
-      {/* hover quick actions */}
-      <span className="absolute right-3 hidden h-full items-center gap-0.5 pl-8 group-hover:flex bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50">
+      {/* hover quick actions — hidden via opacity (not display) so the trigger
+          keeps a valid layout box; otherwise Radix loses its anchor on
+          mouse-leave and the menu jumps/flashes at the corner — including
+          during the close animation. */}
+      <span
+        className={cn(
+          "absolute right-3 flex h-full items-center gap-0.5 pl-8 bg-gradient-to-l from-muted/60 via-muted/60 to-transparent transition-opacity dark:from-zinc-800/50 dark:via-zinc-800/50",
+          menuOpen
+            ? "opacity-100"
+            : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+        )}
+      >
         <button
           type="button"
           title="Favorite"
@@ -114,7 +132,7 @@ export default function SkillRow({
         >
           <Copy className="h-[15px] w-[15px]" />
         </button>
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild onClick={stop}>
             <button
               type="button"
