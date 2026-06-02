@@ -1,114 +1,136 @@
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { FileCode, Github, Sparkles, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { HoverLink } from "@/components/ui/hover-link";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { Copy, MoreHorizontal, Star } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
+import { scopeMeta, sourceMeta } from "./skillsMeta";
 
 interface SkillsCardProps {
   skill: Skill;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
 }
 
-function SourceIcon({ sourceType }: { sourceType: string }) {
-  switch (sourceType) {
-    case "github":
-      return <Github className="h-3 w-3" />;
-    case "zip":
-      return <Upload className="h-3 w-3" />;
-    default:
-      return <FileCode className="h-3 w-3" />;
-  }
-}
+export default function SkillsCard({
+  skill,
+  isFavorite,
+  onToggleFavorite,
+}: SkillsCardProps) {
+  const router = useRouter();
+  const source = sourceMeta(skill.source_type);
+  const scope = scopeMeta(skill.network_scope);
+  const SourceIcon = source.icon;
+  const ScopeIcon = scope.icon;
 
-export default function SkillsCard({ skill }: SkillsCardProps) {
-  const t = useTranslations("SkillsPage.source");
-
-  function getSourceLabel(sourceType: string) {
-    switch (sourceType) {
-      case "github":
-        return t("github");
-      case "zip":
-        return t("zip");
-      case "path":
-        return t("path");
-      default:
-        return t("content");
-    }
-  }
+  const open = () => router.push(`/skills/${skill.id}`);
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <Link href={`/skills/${skill.id}`}>
-      <div className="block h-full">
-        <Card
-          className={cn(
-            "group relative flex h-full cursor-pointer flex-col justify-between overflow-hidden p-0 transition-all duration-300",
-            "border border-zinc-200 dark:border-zinc-800",
-            "bg-white dark:bg-zinc-900",
-            "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-950/50",
-            "hover:border-primary/20 dark:hover:border-primary/40",
-            "hover:bg-white dark:hover:bg-zinc-800",
-            "hover:-translate-y-0.5",
-            "active:scale-[0.99]"
-          )}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className={cn(
+        "group relative cursor-pointer rounded-[10px] border border-zinc-200 bg-background p-3.5",
+        "transition-[border-color,box-shadow] duration-150",
+        "hover:border-zinc-300 hover:shadow-[0_2px_10px_rgba(0,0,0,0.04)]",
+        "dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
+      )}
+    >
+      {/* top: icon + name */}
+      <div className="mb-[9px] flex items-center gap-[9px]">
+        <span
+          className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] text-white"
+          style={{ backgroundColor: source.color }}
         >
-          <div
-            className="pointer-events-none absolute inset-0 opacity-[0.015] dark:opacity-[0.03]"
-            style={{
-              backgroundImage: `repeating-linear-gradient(
-                -45deg,
-                currentColor,
-                currentColor 1px,
-                transparent 1px,
-                transparent 10px
-              )`,
-            }}
-          />
-
-          <div className="relative z-10 flex h-full flex-col justify-between">
-            <div className="flex flex-col gap-2 px-4 py-4 md:px-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-zinc-800 dark:text-zinc-200 group-hover:bg-primary/10 dark:group-hover:bg-zinc-700/80 transition-colors duration-300 border border-transparent dark:border-zinc-700/50">
-                  <Sparkles className="h-4 w-4 transition-colors duration-300" />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight text-zinc-900 transition-colors duration-300 group-hover:text-primary dark:text-zinc-100 dark:group-hover:text-zinc-50">
-                    {skill.name}
-                  </h3>
-                  {skill.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {skill.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={cn(
-                "relative overflow-hidden border-t",
-                "border-zinc-200/60 dark:border-zinc-700/60",
-                "pl-4 pr-2 py-2.5 md:pl-5 md:pr-3",
-                "transition-colors duration-500"
-              )}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:bg-zinc-800" />
-              <div className="relative z-10 flex items-center justify-between">
-                <Badge
-                  size="sm"
-                  variant="outline"
-                  className="gap-1 font-normal text-muted-foreground border-transparent bg-secondary/50 px-1.5 h-5"
-                >
-                  <SourceIcon sourceType={skill.source_type} />
-                  {getSourceLabel(skill.source_type)}
-                </Badge>
-                <HoverLink text="View skill" />
-              </div>
-            </div>
-          </div>
-        </Card>
+          <SourceIcon className="h-[15px] w-[15px]" strokeWidth={2} />
+        </span>
+        <span className="truncate text-[13.5px] font-semibold text-foreground">
+          {skill.name}
+        </span>
       </div>
-    </Link>
+
+      {/* description — fixed two-line clamp */}
+      <p className="mb-3 line-clamp-2 h-[38px] text-[12.5px] leading-[1.5] text-muted-foreground">
+        {skill.description || ""}
+      </p>
+
+      {/* footer: source label pill + network scope */}
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
+          <span
+            className="h-[7px] w-[7px] rounded-full"
+            style={{ backgroundColor: source.color }}
+          />
+          {source.label}
+        </span>
+        <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
+          <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
+          {scope.label}
+        </span>
+      </div>
+
+      {/* hover quick actions — top-right */}
+      <span className="absolute right-2.5 top-2.5 hidden items-center gap-0.5 group-hover:flex">
+        <button
+          type="button"
+          title="Favorite"
+          onClick={(e) => {
+            stop(e);
+            onToggleFavorite(skill.id);
+          }}
+          className="grid h-[26px] w-[26px] place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+        >
+          <Star
+            className="h-[15px] w-[15px]"
+            fill={isFavorite ? "currentColor" : "none"}
+            style={isFavorite ? { color: "#d99a00" } : undefined}
+          />
+        </button>
+        <button
+          type="button"
+          title="Duplicate"
+          onClick={(e) => {
+            stop(e);
+            router.push(`/skills/create?from=${skill.id}`);
+          }}
+          className="grid h-[26px] w-[26px] place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+        >
+          <Copy className="h-[15px] w-[15px]" />
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={stop}>
+            <button
+              type="button"
+              title="More"
+              className="grid h-[26px] w-[26px] place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+            >
+              <MoreHorizontal className="h-[15px] w-[15px]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={stop}>
+            <DropdownMenuItem onSelect={() => router.push(`/skills/${skill.id}`)}>
+              Open skill
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onToggleFavorite(skill.id)}>
+              {isFavorite ? "Remove favorite" : "Add to favorites"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+    </div>
   );
 }

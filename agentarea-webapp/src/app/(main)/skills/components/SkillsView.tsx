@@ -475,9 +475,19 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <p className="text-xs">{t("emptyHereDescription")}</p>
           </div>
         ) : view === "grid" ? (
-          <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div
+            className="grid gap-3 p-4"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(264px, 1fr))",
+            }}
+          >
             {sortItems(visible).map((skill) => (
-              <SkillsCard key={skill.id} skill={skill} />
+              <SkillsCard
+                key={skill.id}
+                skill={skill}
+                isFavorite={favorites.has(skill.id)}
+                onToggleFavorite={toggleFavorite}
+              />
             ))}
           </div>
         ) : (
