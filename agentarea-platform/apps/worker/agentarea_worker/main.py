@@ -17,6 +17,7 @@ import dotenv
 from agentarea_agents.infrastructure.di_container import initialize_di_container
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
+from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
@@ -100,10 +101,12 @@ class AgentAreaWorker:
     async def connect(self) -> None:
         """Connect to Temporal server."""
         settings = get_settings()
+        setup_otel("agentarea-worker", settings.observability)
         self.client = await Client.connect(
             settings.workflow.TEMPORAL_SERVER_URL,
             namespace=settings.workflow.TEMPORAL_NAMESPACE,
             data_converter=pydantic_data_converter,
+            plugins=get_temporal_plugins(settings.observability),
         )
         logger.info("Connected to Temporal server")
 

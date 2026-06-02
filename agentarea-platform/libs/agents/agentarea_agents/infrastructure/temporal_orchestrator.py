@@ -45,12 +45,17 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Get Temporal client, create if needed."""
         if self._client is None:
             try:
+                from agentarea_common.config import ObservabilitySettings
+                from agentarea_common.observability import get_temporal_plugins, setup_otel
                 from temporalio.client import Client
                 from temporalio.contrib.pydantic import pydantic_data_converter
 
+                observability_settings = ObservabilitySettings()
+                setup_otel("agentarea-agents", observability_settings)
                 self._client = await Client.connect(
                     self.temporal_address,
                     data_converter=pydantic_data_converter,
+                    plugins=get_temporal_plugins(observability_settings),
                 )
                 logger.info(f"Connected to Temporal at {self.temporal_address}")
             except ImportError as e:

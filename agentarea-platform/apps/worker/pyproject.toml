@@ -15,7 +15,7 @@ dependencies = [
     "agentarea-execution",
     "agentarea-governance",
     "agentarea-triggers",
-    "temporalio>=1.0.0",
+    "temporalio[opentelemetry]>=1.0.0",
     "python-dotenv>=1.0.0",
     "watchfiles>=0.21.0",
     "click>=8.0.0",
@@ -33,4 +33,4 @@ agentarea-triggers = { workspace = true }
 agentarea-worker = "agentarea_worker.cli:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agentarea_worker"] 
+packages = ["agentarea_worker"]
