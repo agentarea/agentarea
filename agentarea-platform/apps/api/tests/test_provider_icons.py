@@ -39,10 +39,23 @@ def test_trailing_slash_on_base_is_normalized(monkeypatch):
     [
         "https://cdn.example.com/icons/foo.svg",
         "http://cdn.example.com/icons/foo.png",
-        "/static/icons/providers/custom.svg",
     ],
 )
-def test_full_url_or_absolute_path_passes_through(full):
-    # Remote registry entries supply their own icon URL; never rewrite them,
-    # and never depend on request host or API_BASE_URL for these.
+def test_full_url_passes_through(full):
+    # Remote registry entries supply their own absolute icon URL; never rewrite
+    # them, and never depend on request host or API_BASE_URL for these.
     assert build_provider_icon_url(full) == full
+
+
+def test_root_relative_path_is_not_passed_through(monkeypatch):
+    # A root-relative path would resolve against the *frontend* origin in the
+    # browser (the host that 404/500s), so it must NOT pass through. It is
+    # treated as an id and pinned to the API base instead.
+    monkeypatch.setenv("API_BASE_URL", "https://api.agentarea.ai")
+    from agentarea_common.config.app import get_app_settings
+
+    get_app_settings.cache_clear()
+
+    result = build_provider_icon_url("/static/icons/providers/custom.svg")
+    assert result.startswith("https://api.agentarea.ai/static/icons/providers/")
+    assert not result.startswith("/")

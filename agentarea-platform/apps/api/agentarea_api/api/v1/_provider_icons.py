@@ -15,13 +15,17 @@ from agentarea_common.config.app import get_app_settings
 def build_provider_icon_url(icon: str | None) -> str | None:
     """Map a stored provider ``icon`` to a public URL, or ``None`` if unset.
 
-    - Full URLs (``http(s)://``) and absolute paths (``/...``) pass through
-      unchanged — this is how remote registry entries supply their own icons.
-    - A bare id resolves against ``API_BASE_URL`` to the built-in static asset.
+    - A full URL (``http(s)://``) passes through unchanged — this is how a
+      remote registry entry supplies its own icon.
+    - Anything else is treated as a built-in id and resolved against
+      ``API_BASE_URL``. Note we deliberately do NOT pass through root-relative
+      paths (``/...``): the icon renders in the browser on the *frontend*
+      origin, so ``/static/...`` would resolve against a host that cannot serve
+      it — the exact 404/500 this function exists to avoid.
     """
     if not icon:
         return None
-    if icon.startswith(("http://", "https://", "/")):
+    if icon.startswith(("http://", "https://")):
         return icon
     base = get_app_settings().API_BASE_URL.rstrip("/")
     return f"{base}/static/icons/providers/{icon}.svg"
