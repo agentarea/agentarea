@@ -142,9 +142,7 @@ class ArtifactService:
             )
 
         await asyncio.to_thread(_call)
-        await self._record(
-            workspace_id, path, ACTION_MODIFIED if existed else ACTION_CREATED
-        )
+        await self._record(workspace_id, path, ACTION_MODIFIED if existed else ACTION_CREATED)
         return ArtifactObject(path=path.lstrip("/"), size=len(data), content_type=ct)
 
     async def get(self, workspace_id: str, path: str) -> tuple[bytes, str | None]:

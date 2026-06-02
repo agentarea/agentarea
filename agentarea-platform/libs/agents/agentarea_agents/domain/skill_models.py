@@ -38,9 +38,7 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "skills"
-    __table_args__ = (
-        UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),
-    )
+    __table_args__ = (UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Immutable, workspace-scoped human-readable identifier (derived from name at creation).

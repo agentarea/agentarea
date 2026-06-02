@@ -104,9 +104,7 @@ def upgrade() -> None:
 
     # 4. Slug lookup index + workspace-scoped uniqueness (identity contract).
     op.create_index("ix_skills_slug", "skills", ["slug"])
-    op.create_unique_constraint(
-        "uq_skills_workspace_slug", "skills", ["workspace_id", "slug"]
-    )
+    op.create_unique_constraint("uq_skills_workspace_slug", "skills", ["workspace_id", "slug"])
 
     # 5. Provenance uniqueness for catalog skills only (operator dedup target).
     op.create_index(

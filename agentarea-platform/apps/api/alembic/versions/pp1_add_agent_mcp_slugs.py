@@ -108,9 +108,7 @@ def upgrade() -> None:
     op.create_index("ix_mcp_servers_slug", "mcp_servers", ["slug"])
 
     # 5. Workspace-scoped uniqueness — the actual contract.
-    op.create_unique_constraint(
-        "uq_agents_workspace_slug", "agents", ["workspace_id", "slug"]
-    )
+    op.create_unique_constraint("uq_agents_workspace_slug", "agents", ["workspace_id", "slug"])
     op.create_unique_constraint(
         "uq_mcp_servers_workspace_slug", "mcp_servers", ["workspace_id", "slug"]
     )

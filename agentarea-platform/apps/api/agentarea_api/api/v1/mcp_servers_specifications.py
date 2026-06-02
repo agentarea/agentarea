@@ -56,9 +56,7 @@ class MCPServerResponse(BaseModel):
         )
 
 
-async def _resolve_server_id(
-    mcp_server_service: MCPServerService, identifier: str
-) -> UUID | None:
+async def _resolve_server_id(mcp_server_service: MCPServerService, identifier: str) -> UUID | None:
     """Resolve a UUID for an MCP server referenced by UUID *or* slug."""
     with suppress(ValueError):
         return UUID(identifier)
