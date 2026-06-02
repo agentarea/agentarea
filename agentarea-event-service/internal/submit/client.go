@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/agentarea/event-service/internal/broker"
 )
 
 // Event is the normalized event payload to submit. It mirrors channels/telegram.Event
@@ -20,28 +21,31 @@ type Event struct {
 	Raw       map[string]any `json:"raw"`
 }
 
-// InboundMessage is the payload published to Redis for the Python worker to consume.
+// InboundMessage is the normalized payload written to the inbound stream.
 type InboundMessage struct {
 	TriggerID     string         `json:"trigger_id"`
 	Event         Event          `json:"event"`
 	ChannelOrigin map[string]any `json:"channel_origin"`
 }
 
-// InboundChannel is the Redis pub/sub channel the Python worker subscribes to.
-const InboundChannel = "agentarea.channel.message.received"
+const DefaultInboundStream = "agentarea.channel.inbound"
 
-// RedisSubmitter publishes inbound channel messages to Redis for the Python worker.
-type RedisSubmitter struct {
-	client *redis.Client
+// StreamSubmitter appends inbound channel events to a durable broker stream.
+type StreamSubmitter struct {
+	broker broker.Client
+	stream string
 }
 
-// NewRedisSubmitter creates a new Redis-based submitter.
-func NewRedisSubmitter(client *redis.Client) *RedisSubmitter {
-	return &RedisSubmitter{client: client}
+// NewStreamSubmitter creates a stream-backed submitter.
+func NewStreamSubmitter(broker broker.Client, stream string) *StreamSubmitter {
+	if stream == "" {
+		stream = DefaultInboundStream
+	}
+	return &StreamSubmitter{broker: broker, stream: stream}
 }
 
-// SubmitEvent publishes a trigger event to Redis.
-func (s *RedisSubmitter) SubmitEvent(ctx context.Context, triggerID string, event Event, channelOrigin map[string]any) error {
+// SubmitEvent appends a trigger event to the inbound stream.
+func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, event Event, channelOrigin map[string]any) error {
 	msg := InboundMessage{
 		TriggerID:     triggerID,
 		Event:         event,
@@ -53,8 +57,31 @@ func (s *RedisSubmitter) SubmitEvent(ctx context.Context, triggerID string, even
 		return fmt.Errorf("marshal inbound message: %w", err)
 	}
 
-	if err := s.client.Publish(ctx, InboundChannel, data).Err(); err != nil {
-		return fmt.Errorf("redis publish: %w", err)
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+	originJSON, err := json.Marshal(channelOrigin)
+	if err != nil {
+		return fmt.Errorf("marshal channel origin: %w", err)
+	}
+
+	dedupKey := fmt.Sprintf("%s:%s:%d", triggerID, event.Type, event.MessageID)
+	if event.MessageID == 0 {
+		dedupKey = fmt.Sprintf("%s:%s:%x", triggerID, event.Type, data)
+	}
+
+	_, err = s.broker.Submit(ctx, s.stream, map[string]string{
+		"trigger_id":      triggerID,
+		"event":           string(eventJSON),
+		"channel_origin":  string(originJSON),
+		"dedup_key":       dedupKey,
+		"received_at":     time.Now().UTC().Format(time.RFC3339Nano),
+		"schema_version":  "1",
+		"inbound_message": string(data),
+	})
+	if err != nil {
+		return fmt.Errorf("submit inbound stream: %w", err)
 	}
 
 	return nil

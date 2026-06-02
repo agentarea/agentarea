@@ -1,4 +1,4 @@
-{{- if and .Values.kratos.enabled .Values.postgresql.enabled }}
+{{- if and .Values.kratos.enabled .Values.postgresql.enabled .Values.kratos.database.createJob.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:

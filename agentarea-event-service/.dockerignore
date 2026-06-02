@@ -1,0 +1,5 @@
+.git
+bin
+tmp
+vendor
+.DS_Store

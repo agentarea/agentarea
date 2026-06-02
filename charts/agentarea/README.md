@@ -256,6 +256,8 @@ The following table lists configurable parameters of the chart and their default
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
+| eventService.inboundStream | string | `"agentarea.channel.inbound"` |  |
+| eventService.telegramPolling.enabled | bool | `false` |  |
 | eventService.resources | object | `{}` |  |
 | eventService.podAnnotations | object | `{}` |  |
 | eventService.podLabels | object | `{}` |  |
@@ -320,6 +322,7 @@ The following table lists configurable parameters of the chart and their default
 | temporal.image.repository | string | `"temporalio/auto-setup"` |  |
 | temporal.image.tag | string | `"1.29.1"` |  |
 | temporal.database.name | string | `"temporal"` |  |
+| temporal.database.createJob.enabled | bool | `true` |  |
 | temporal.service.type | string | `"ClusterIP"` |  |
 | temporal.service.port | int | `7233` |  |
 | temporal.resources | object | `{}` |  |
@@ -384,6 +387,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.urls.publicBrowser | string | `""` |  |
 | kratos.urls.admin | string | `""` |  |
 | kratos.database.name | string | `"kratos"` |  |
+| kratos.database.createJob.enabled | bool | `true` |  |
 | kratos.configMapOverrideName | string | `""` |  |
 | kratos.files | object | `{}` |  |
 | kratos.secretName | string | `""` |  |
