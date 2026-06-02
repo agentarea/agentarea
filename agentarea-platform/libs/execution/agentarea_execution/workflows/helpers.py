@@ -14,7 +14,7 @@ from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
 
 def resolve_effective_budget(
-    request_budget: Money | float | str | None,
+    request_budget: Money | None,
     effective_policy: dict[str, Any] | None,
     key: str = "run_budget_usd",
 ) -> Money | None:
