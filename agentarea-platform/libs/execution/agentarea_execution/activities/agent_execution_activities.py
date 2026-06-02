@@ -1081,26 +1081,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
             from uuid import uuid4
 
             from agentarea_common.events.base_events import DomainEvent
-            from agentarea_common.events.router import create_event_broker_from_router
 
             from ..handlers import handle_llm_error_event
+            from .event_publisher import resolve_event_broker
 
             logger.info(f"Publishing {len(request.events_json)} workflow events via EventBroker")
 
-            # Convert RedisRouter to RedisEventBroker for publishing
-            # dependencies.event_broker is a RedisRouter, we need RedisEventBroker to publish
-            if not hasattr(dependencies.event_broker, "broker"):
-                logger.error(
-                    f"Event broker {type(dependencies.event_broker)} "
-                    "does not have 'broker' attribute"
-                )
-                return WorkflowEventsResult(
-                    success=False,
-                    events_published=0,
-                    errors=["Event broker configuration error"],
-                )
-
-            redis_event_broker = create_event_broker_from_router(dependencies.event_broker)  # type: ignore
+            event_publisher = resolve_event_broker(dependencies.event_broker)
             events_published = 0
             errors = []
 
@@ -1158,7 +1145,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     # 1. Publish via RedisEventBroker (uses FastStream
                     # infrastructure) for real-time SSE
-                    await redis_event_broker.publish(domain_event)
+                    await event_publisher.publish(domain_event)
                     logger.debug(
                         f"Published workflow event: {event['event_type']} for task {task_id}"
                     )
