@@ -8,18 +8,20 @@ import {
 } from "@/components/ui/resizable";
 import { FileTree, type BrowsedFile } from "./file-tree";
 import { FileTabs } from "./file-tabs";
-import type { FetchUrlFn } from "./file-viewer";
+import type { FetchUrlFn, FetchHistoryFn } from "./file-viewer";
 
 export function FileBrowser({
   files,
   directories = [],
   fetchUrl,
+  fetchHistory,
   emptyMessage = "No files yet.",
   className = "h-[calc(100vh-12rem)]",
 }: {
   files: BrowsedFile[];
   directories?: string[];
   fetchUrl: FetchUrlFn;
+  fetchHistory?: FetchHistoryFn;
   emptyMessage?: string;
   className?: string;
 }) {
@@ -73,10 +75,11 @@ export function FileBrowser({
           onActivate={setActivePath}
           onClose={handleClose}
           fetchUrl={fetchUrl}
+          fetchHistory={fetchHistory}
         />
       </ResizablePanel>
     </ResizablePanelGroup>
   );
 }
 
-export type { BrowsedFile, FetchUrlFn };
+export type { BrowsedFile, FetchUrlFn, FetchHistoryFn };

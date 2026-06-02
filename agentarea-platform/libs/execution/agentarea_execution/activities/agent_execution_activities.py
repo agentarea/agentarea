@@ -149,13 +149,30 @@ async def _offload_large_activity_output(
         )
 
 
+def _agent_artifact_actor(request, user_context):
+    """Build the provenance actor for files an agent writes during a task."""
+    from agentarea_common.artifacts import ACTOR_AGENT, ArtifactActor
+
+    return ArtifactActor(
+        user_id=str(user_context.user_id),
+        actor_type=ACTOR_AGENT,
+        agent_id=str(request.agent_id) if request.agent_id else None,
+        task_id=str(request.task_id) if request.task_id else None,
+    )
+
+
 async def _store_sandbox_artifacts(
     *,
     workspace_id: str | None,
     task_id: str | None,
     artifacts: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Persist sandbox-returned artifacts into task artifact storage."""
+    """Persist sandbox-returned artifacts into task artifact storage.
+
+    Provenance is not recorded here: the skill-script request carries neither
+    the acting agent nor the user, so these objects show no history. Agent file
+    writes that go through the file/web/shell toolsets are attributed normally.
+    """
     import base64
     from pathlib import PurePosixPath
 
@@ -745,11 +762,17 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         "agentarea/web",
                         "agentarea/workspace_files",
                     ):
-                        from agentarea_common.artifacts import ArtifactService
+                        from agentarea_common.artifacts import (
+                            ArtifactService,
+                            DbArtifactEventRecorder,
+                        )
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
-                            "storage": ArtifactService(),
+                            "storage": ArtifactService(
+                                recorder=DbArtifactEventRecorder(),
+                                actor=_agent_artifact_actor(request, user_context),
+                            ),
                             "workspace_id": str(request.workspace_id),
                             "base_prefix": base_prefix,
                         }
@@ -774,7 +797,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             wf_id = activity.info().workflow_id
                         except Exception:
                             wf_id = ""
-                        from agentarea_common.artifacts import ArtifactService
+                        from agentarea_common.artifacts import (
+                            ArtifactService,
+                            DbArtifactEventRecorder,
+                        )
 
                         base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
@@ -791,7 +817,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                     if v is not None
                                 },
                             ),
-                            "storage": ArtifactService(),
+                            "storage": ArtifactService(
+                                recorder=DbArtifactEventRecorder(),
+                                actor=_agent_artifact_actor(request, user_context),
+                            ),
                             "workspace_id": str(request.workspace_id),
                             "base_prefix": base_prefix,
                         }

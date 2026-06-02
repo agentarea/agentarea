@@ -153,13 +153,11 @@ async def get_all_tasks(
         All users in the same workspace can see all workspace tasks.
     """
     try:
-        import asyncio
-
-        # Fetch agents and all workspace tasks in parallel (2 DB queries total)
-        agents_result, task_orms = await asyncio.gather(
-            agent_service.list(),
-            task_service.task_repository.list_all(limit=limit),
-        )
+        # Sequential awaits: agent_service and task_service share one AsyncSession
+        # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
+        # single connection ("another operation is in progress").
+        agents_result = await agent_service.list()
+        task_orms = await task_service.task_repository.list_all(limit=limit)
 
         # Build agent lookup map
         agent_map = {str(agent.id): agent.name for agent in agents_result}

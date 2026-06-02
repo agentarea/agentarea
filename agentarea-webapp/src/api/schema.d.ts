@@ -923,6 +923,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/files/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace File History
+         * @description Return the provenance trail for a workspace file, newest event first.
+         */
+        get: operations["workspace_file_history_v1_files_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/files/{file_path}": {
         parameters: {
             query?: never;
@@ -932,6 +952,93 @@ export interface paths {
         };
         /** Download Workspace File */
         get: operations["download_workspace_file_v1_files__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/governance/effective-policy/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Effective Policy
+         * @description Compute effective policy without persisting a snapshot.
+         *
+         *     Useful for UIs that need to show the merged workspace/agent/task ceiling
+         *     before the user commits a task creation.
+         */
+        post: operations["preview_effective_policy_v1_governance_effective_policy_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/governance/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Policies
+         * @description List source policies in the current workspace.
+         */
+        get: operations["list_policies_v1_governance_policies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/governance/policies/{scope_type}/{scope_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy
+         * @description Read one source policy in the current workspace.
+         */
+        get: operations["get_policy_v1_governance_policies__scope_type___scope_id__get"];
+        /**
+         * Upsert Policy
+         * @description Create or update a source policy, rejecting obvious lower-scope loosening.
+         */
+        put: operations["upsert_policy_v1_governance_policies__scope_type___scope_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/governance/task-policy-snapshots/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Policy Snapshot
+         * @description Read an immutable effective policy snapshot for a task.
+         */
+        get: operations["get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3845,10 +3952,34 @@ export interface components {
          * @description Human approval and escalation requirements.
          */
         ApprovalPolicy: {
+            /** Approvers */
+            approvers?: string[];
             /** Escalation Rules */
             escalation_rules?: string[];
             /** Requires Human Approval */
             requires_human_approval?: boolean | null;
+        };
+        /** ArtifactEventResponse */
+        ArtifactEventResponse: {
+            /** Action */
+            action: string;
+            /** Actor Type */
+            actor_type: string;
+            /** Agent Id */
+            agent_id?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Task Id */
+            task_id?: string | null;
+        };
+        /** ArtifactHistoryResponse */
+        ArtifactHistoryResponse: {
+            /** Events */
+            events: components["schemas"]["ArtifactEventResponse"][];
+            /** Path */
+            path: string;
         };
         /** AssociationBody */
         AssociationBody: {
@@ -3941,13 +4072,25 @@ export interface components {
          * BudgetPolicy
          * @description Budget-related ceilings.
          */
-        BudgetPolicy: {
+        "BudgetPolicy-Input": {
             /** Monthly Spend Cap Usd */
             monthly_spend_cap_usd?: number | string | null;
             /** Run Budget Usd */
             run_budget_usd?: number | string | null;
             /** Service Budget Usd */
             service_budget_usd?: number | string | null;
+        };
+        /**
+         * BudgetPolicy
+         * @description Budget-related ceilings.
+         */
+        "BudgetPolicy-Output": {
+            /** Monthly Spend Cap Usd */
+            monthly_spend_cap_usd?: string | null;
+            /** Run Budget Usd */
+            run_budget_usd?: string | null;
+            /** Service Budget Usd */
+            service_budget_usd?: string | null;
         };
         /**
          * ContentSafetyPolicy
@@ -3958,8 +4101,6 @@ export interface components {
             output_sanitizer_enabled?: boolean | null;
             /** Prompt Injection Detection Enabled */
             prompt_injection_detection_enabled?: boolean | null;
-            /** Semantic Guard Threshold */
-            semantic_guard_threshold?: number | null;
         };
         /** CreateInvitationBody */
         CreateInvitationBody: {
@@ -4135,6 +4276,37 @@ export interface components {
             models: components["schemas"]["DiscoveredModelResponse"][];
             /** New Models */
             new_models: number;
+        };
+        /**
+         * EffectivePolicy
+         * @description Resolved immutable policy snapshot.
+         */
+        EffectivePolicy: {
+            approval?: components["schemas"]["ApprovalPolicy"] | null;
+            budget?: components["schemas"]["BudgetPolicy-Output"] | null;
+            content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
+            /**
+             * Resolver Version
+             * @default policy-resolver-v1
+             */
+            resolver_version: string;
+            /** Source Policy Ids */
+            source_policy_ids?: string[];
+            tokens?: components["schemas"]["TokenPolicy"] | null;
+            tools?: components["schemas"]["ToolsPolicy"] | null;
+        };
+        /**
+         * EffectivePolicyPreviewRequest
+         * @description Body for dry-run effective-policy resolution.
+         */
+        EffectivePolicyPreviewRequest: {
+            /** Agent Id */
+            agent_id?: string | null;
+            task_policy?: components["schemas"]["PolicyDocument-Input"] | null;
+        };
+        /** EffectivePolicyResponse */
+        EffectivePolicyResponse: {
+            effective_policy: components["schemas"]["EffectivePolicy"];
         };
         /** EscalationResolution */
         EscalationResolution: {
@@ -5303,12 +5475,57 @@ export interface components {
          * PolicyDocument
          * @description Source policy document stored per scope.
          */
-        PolicyDocument: {
+        "PolicyDocument-Input": {
             approval?: components["schemas"]["ApprovalPolicy"] | null;
-            budget?: components["schemas"]["BudgetPolicy"] | null;
+            budget?: components["schemas"]["BudgetPolicy-Input"] | null;
             content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
             tokens?: components["schemas"]["TokenPolicy"] | null;
             tools?: components["schemas"]["ToolsPolicy"] | null;
+        };
+        /**
+         * PolicyDocument
+         * @description Source policy document stored per scope.
+         */
+        "PolicyDocument-Output": {
+            approval?: components["schemas"]["ApprovalPolicy"] | null;
+            budget?: components["schemas"]["BudgetPolicy-Output"] | null;
+            content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
+            tokens?: components["schemas"]["TokenPolicy"] | null;
+            tools?: components["schemas"]["ToolsPolicy"] | null;
+        };
+        /** PolicyResponse */
+        PolicyResponse: {
+            document: components["schemas"]["PolicyDocument-Output"];
+            /** Enabled */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Scope Id */
+            scope_id: string;
+            scope_type: components["schemas"]["PolicyScopeType"];
+        };
+        /**
+         * PolicyScopeType
+         * @description Supported policy scope types.
+         * @enum {string}
+         */
+        PolicyScopeType: "workspace" | "agent" | "task";
+        /**
+         * PolicyUpsertRequest
+         * @description Request body for creating or updating a source policy.
+         */
+        PolicyUpsertRequest: {
+            document: components["schemas"]["PolicyDocument-Input"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Parent Agent Id
+             * @description Required when validating a task-scoped persisted policy against its agent.
+             */
+            parent_agent_id?: string | null;
         };
         /** ProjectAgentRef */
         ProjectAgentRef: {
@@ -6006,7 +6223,7 @@ export interface components {
              * @default false
              */
             requires_human_approval: boolean | null;
-            task_policy?: components["schemas"]["PolicyDocument"] | null;
+            task_policy?: components["schemas"]["PolicyDocument-Input"] | null;
         };
         /**
          * TaskEvent
@@ -8599,6 +8816,37 @@ export interface operations {
             };
         };
     };
+    workspace_file_history_v1_files_history_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_workspace_file_v1_files__file_path__get: {
         parameters: {
             query?: never;
@@ -8617,6 +8865,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceFileDownloadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_effective_policy_v1_governance_effective_policy_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EffectivePolicyPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_policies_v1_governance_policies_get: {
+        parameters: {
+            query?: {
+                scope_type?: string | null;
+                scope_id?: string | null;
+                enabled?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_v1_governance_policies__scope_type___scope_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_type: string;
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_policy_v1_governance_policies__scope_type___scope_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_type: string;
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePolicyResponse"];
                 };
             };
             /** @description Validation Error */

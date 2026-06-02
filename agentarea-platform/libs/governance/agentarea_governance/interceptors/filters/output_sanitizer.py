@@ -42,9 +42,10 @@ class OutputSanitizer:
         return InterceptorCategory.FILTER
 
     async def execute(self, context: InterceptorContext) -> InterceptorResult:
-        if context.execution_state.get("content_safety", {}).get(
-            "output_sanitizer_enabled"
-        ) is False:
+        if (
+            context.execution_state.get("content_safety", {}).get("output_sanitizer_enabled")
+            is False
+        ):
             return InterceptorResult(
                 action=InterceptorAction.ALLOW,
                 interceptor_name=self.name,

@@ -6,7 +6,11 @@ from typing import Annotated, Any
 from urllib.parse import quote
 from uuid import UUID
 
-from agentarea_common.artifacts import ArtifactService
+from agentarea_common.artifacts import (
+    ArtifactActor,
+    ArtifactService,
+    DbArtifactEventRecorder,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
@@ -270,7 +274,10 @@ async def upload_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    svc = ArtifactService()
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
     content = await file.read()
     await svc.put(
         user_context.workspace_id,
@@ -361,5 +368,8 @@ async def delete_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    svc = ArtifactService()
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
     await svc.delete(user_context.workspace_id, _project_path(project_id, file_path))

@@ -43,6 +43,8 @@ export function getServerClient() {
         return request;
       },
       async onResponse({ response }) {
+        // Auth is gated by the middleware (src/proxy.ts); this handler does not
+        // perform 401-driven redirects.
         const url = response.url;
         const status = response.status;
 

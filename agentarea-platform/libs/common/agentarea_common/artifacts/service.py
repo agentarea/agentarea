@@ -16,6 +16,13 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
+from agentarea_common.artifacts.audit import (
+    ACTION_CREATED,
+    ACTION_DELETED,
+    ACTION_MODIFIED,
+    ArtifactActor,
+    ArtifactEventRecorder,
+)
 from agentarea_common.config.aws import (
     get_aws_settings,
     get_s3_client,
@@ -48,6 +55,8 @@ class ArtifactService:
         client: Any | None = None,
         public_client: Any | None = None,
         bucket: str | None = None,
+        recorder: ArtifactEventRecorder | None = None,
+        actor: ArtifactActor | None = None,
     ) -> None:
         self._client = client or get_s3_client()
         # Presigned URLs must be signed against a host the external caller
@@ -56,6 +65,31 @@ class ArtifactService:
         # PUBLIC_S3_ENDPOINT is unset (single-host setups).
         self._public_client = public_client or get_s3_public_client()
         self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET_NAME
+        # Provenance is only recorded when both a recorder and an actor are
+        # supplied; read-only callers construct the service without either.
+        self._recorder = recorder
+        self._actor = actor
+
+    async def _record(self, workspace_id: str, path: str, action: str) -> None:
+        if self._recorder is None or self._actor is None:
+            return
+        try:
+            await self._recorder.record(
+                workspace_id=workspace_id,
+                path=path.lstrip("/"),
+                action=action,
+                actor=self._actor,
+            )
+        except Exception:
+            # Provenance is best-effort: never fail the file operation because
+            # the audit row could not be written.
+            logger.error(
+                "Failed to record artifact event action=%s path=%s workspace=%s",
+                action,
+                path,
+                workspace_id,
+                exc_info=True,
+            )
 
     @property
     def bucket(self) -> str:
@@ -91,6 +125,14 @@ class ArtifactService:
         key = self._key(workspace_id, path)
         ct = content_type or self._guess_content_type(path)
 
+        # Distinguish a first write (created) from an overwrite (modified) for
+        # provenance; only pay the extra head_object when we'll record it.
+        existed = (
+            await self.exists(workspace_id, path)
+            if self._recorder is not None and self._actor is not None
+            else False
+        )
+
         def _call() -> None:
             self._client.put_object(
                 Bucket=self._bucket,
@@ -100,6 +142,7 @@ class ArtifactService:
             )
 
         await asyncio.to_thread(_call)
+        await self._record(workspace_id, path, ACTION_MODIFIED if existed else ACTION_CREATED)
         return ArtifactObject(path=path.lstrip("/"), size=len(data), content_type=ct)
 
     async def get(self, workspace_id: str, path: str) -> tuple[bytes, str | None]:
@@ -139,6 +182,7 @@ class ArtifactService:
             self._client.delete_object(Bucket=self._bucket, Key=key)
 
         await asyncio.to_thread(_call)
+        await self._record(workspace_id, path, ACTION_DELETED)
 
     async def list(
         self,

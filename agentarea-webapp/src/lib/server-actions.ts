@@ -83,6 +83,7 @@ import {
   deleteProjectFile,
   listWorkspaceFiles,
   downloadWorkspaceFile,
+  workspaceFileHistory,
   getAgentWallet,
   createAgentWallet,
   updateAgentWallet,
@@ -613,6 +614,10 @@ export async function listWorkspaceFilesAction() {
 
 export async function downloadWorkspaceFileAction(filePath: string) {
   return await downloadWorkspaceFile(filePath);
+}
+
+export async function workspaceFileHistoryAction(filePath: string) {
+  return await workspaceFileHistory(filePath);
 }
 
 export async function previewOpenAPISpecAction(body: {
