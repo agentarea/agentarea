@@ -60,6 +60,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <ModelBadge
                       providerName={agent.model_info?.provider_name}
+                      iconUrl={agent.model_info?.provider_icon_url}
                       modelDisplayName={agent.model_info?.model_display_name}
                       configName={agent.model_info?.config_name}
                     />

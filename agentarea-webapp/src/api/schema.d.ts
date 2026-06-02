@@ -5110,6 +5110,8 @@ export interface components {
             name: string;
             /** Provider Config Id */
             provider_config_id: string;
+            /** Provider Icon Url */
+            provider_icon_url?: string | null;
             /** Provider Key */
             provider_key?: string | null;
             /** Provider Name */

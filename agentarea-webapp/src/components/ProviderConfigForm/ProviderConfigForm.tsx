@@ -13,7 +13,6 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { getProviderIconUrl } from "@/lib/provider-icons";
 import {
   bulkCreateModelInstancesAction as bulkCreateModelInstances,
   createProviderConfigAction as createProviderConfig,
@@ -511,7 +510,7 @@ export default function ProviderConfigForm({
                   options={providerSpecs.map((spec) => ({
                     id: spec.id,
                     label: spec.name,
-                    icon: spec.icon_url || getProviderIconUrl(spec.name),
+                    icon: spec.icon_url ?? undefined,
                   }))}
                   value={field.value}
                   onValueChange={handleProviderChange}

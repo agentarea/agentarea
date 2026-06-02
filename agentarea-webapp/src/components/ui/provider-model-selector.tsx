@@ -18,7 +18,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -56,7 +55,7 @@ const groupModelsByConfig = (instances: LLMModelInstance[]) => {
       configName,
       instances,
       providerName,
-      icon: getProviderIconUrl(providerName),
+      icon: instances[0]?.provider_icon_url ?? null,
     };
   });
 };
@@ -194,9 +193,11 @@ export function ProviderModelSelector({
     return <Bot className="h-4 w-4 text-muted-foreground" />;
   };
 
-  const renderModelIcon = (providerName: string) => {
-    const iconUrl = getProviderIconUrl(providerName);
-    return renderProviderIcon(providerName, iconUrl);
+  const renderModelIcon = (instance: LLMModelInstance) => {
+    return renderProviderIcon(
+      instance.provider_name || "",
+      instance.provider_icon_url
+    );
   };
 
   const renderDefaultTrigger = () => {
@@ -204,7 +205,7 @@ export function ProviderModelSelector({
       return (
         <div className="flex items-center gap-2">
           <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
-            {renderModelIcon(selectedModel.provider_name || "")}
+            {renderModelIcon(selectedModel)}
           </div>
           <div className="flex flex-col items-start">
             <span className="text-xs">{selectedModel.name}</span>

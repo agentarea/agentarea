@@ -33,6 +33,7 @@ export default async function AgentsContent({
     const model_info = model
       ? {
           provider_name: model.provider_name || undefined,
+          provider_icon_url: model.provider_icon_url || undefined,
           model_display_name: model.model_display_name || undefined,
           config_name: model.config_name || undefined,
         }
