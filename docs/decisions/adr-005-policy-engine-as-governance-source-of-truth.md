@@ -112,6 +112,16 @@ remain by design (graceful loop stop + hard call block) but read one number.
   with the ceiling: `granted ∩ within-ceiling \ denied`.
 - **ReBAC graph + tuples (Ory Keto).** Only needed for cross-workspace resource
   sharing, not for capability bounding. SpiceDB is not part of this stack.
+- **Content-safety / PII as configurable policy.** A baseline regex
+  `OutputSanitizer` (FILTER) + swappable `DetectionEngine` (Strategy) ships in
+  OSS today; advanced detection (Presidio/LLM) is an enterprise `DetectionEngine`
+  swap via `ExtensionRegistry` (same pattern as the entitlement guard). Making the
+  action configurable (`pii_rules`: categories, redact/deny/warn, confidence) is a
+  future extension — deferred until needed. **Design principle (locked):** the
+  "where a rule applies" dimension is an OPEN, deployment-defined **boundary
+  label** (arbitrary network/trust zones), NOT a fixed ingress/internal/egress
+  enum. Framework interception seams (phases) are fixed; boundary labels are open
+  and owned by the deployment topology; rules select by label (empty = all).
 
 ## Status of the gates
 
