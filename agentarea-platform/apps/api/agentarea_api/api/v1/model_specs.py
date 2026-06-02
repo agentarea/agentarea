@@ -191,6 +191,8 @@ async def update_model_spec(
     updates = data.model_dump(exclude_none=True)
     updated_spec = await model_spec_repo.update(model_spec_id, **updates)
     updated_spec = await model_spec_repo.get_with_relations(model_spec_id) or updated_spec
+    if updated_spec is None:
+        raise HTTPException(status_code=404, detail="Model specification not found")
     return ModelSpecResponse.from_domain(updated_spec)
 
 

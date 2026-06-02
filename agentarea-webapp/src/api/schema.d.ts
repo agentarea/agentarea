@@ -277,21 +277,21 @@ export interface paths {
         };
         /**
          * Get Agent
-         * @description Get an agent by ID.
+         * @description Get an agent by UUID or workspace-scoped slug.
          */
         get: operations["get_agent_v1_agents__agent_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Agent
-         * @description Delete an agent.
+         * @description Delete an agent (by UUID or workspace-scoped slug).
          */
         delete: operations["delete_agent_v1_agents__agent_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Agent
-         * @description Update an agent.
+         * @description Update an agent (by UUID or workspace-scoped slug).
          */
         patch: operations["update_agent_v1_agents__agent_id__patch"];
         trace?: never;
@@ -3767,6 +3767,8 @@ export interface components {
             skills?: {
                 [key: string]: unknown;
             }[] | null;
+            /** Slug */
+            slug: string;
             /** Status */
             status: string;
             /** Tools */
@@ -4486,29 +4488,6 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
-        /** JSONRPCError */
-        JSONRPCError: {
-            /** Code */
-            code: number;
-            /** Data */
-            data?: unknown | null;
-            /** Message */
-            message: string;
-        };
-        /** JSONRPCResponse */
-        JSONRPCResponse: {
-            error?: components["schemas"]["JSONRPCError"] | null;
-            /** Id */
-            id?: number | string | null;
-            /**
-             * Jsonrpc
-             * @default 2.0
-             * @constant
-             */
-            jsonrpc: "2.0";
-            /** Result */
-            result?: unknown | null;
-        };
         /** MCPAuthConfigCreateRequest */
         MCPAuthConfigCreateRequest: {
             /**
@@ -4803,6 +4782,8 @@ export interface components {
             registry_url?: string | null;
             /** Remote Url */
             remote_url?: string | null;
+            /** Slug */
+            slug: string;
             /** Status */
             status: string;
             /** Tags */
@@ -5890,6 +5871,8 @@ export interface components {
             name: string;
             /** Network Scope */
             network_scope: string;
+            /** Slug */
+            slug: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
@@ -6285,6 +6268,8 @@ export interface components {
             description_override?: string | null;
             /** Disabled Methods */
             disabled_methods?: string[] | null;
+            /** Load Mode */
+            load_mode?: ("explicit" | "searchable") | null;
             /** Openapi Connection Id */
             openapi_connection_id?: string | null;
             /** Requires User Confirmation */
@@ -7544,7 +7529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONRPCResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

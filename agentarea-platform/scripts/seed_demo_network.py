@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
 from agentarea_common.infrastructure.database import db
+from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_openapi.domain.models import OpenAPIConnection
@@ -155,6 +156,7 @@ async def main(workspace_id: str, created_by: str) -> None:
 
             agent = Agent(
                 name=full_name,
+                slug=generate_slug(full_name),
                 description=f"Demo agent: {base_name}",
                 instruction=f"You are the {base_name} demo agent.",
                 model_id="gpt-4o-mini",

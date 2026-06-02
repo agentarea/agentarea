@@ -32,6 +32,7 @@ const OpenAPIConfigSchema = z.object({
   openapi_connection_id: z.string().uuid("Invalid OpenAPI connection ID"),
   openapi_connection_name: z.string().optional(),
   allowed_tools: z.array(z.string()).optional().nullable(),
+  load_mode: z.enum(["explicit", "searchable"]).optional(),
 });
 
 // Define Zod schema for Builtin Tool Config
@@ -76,6 +77,7 @@ export interface AddAgentFormState {
         openapi_connection_id: string;
         openapi_connection_name?: string;
         allowed_tools?: string[] | null;
+        load_mode?: "explicit" | "searchable";
       }> | null;
     } | null;
     events_config?: {
@@ -148,6 +150,7 @@ export async function addAgent(
     openapi_connection_id?: string;
     openapi_connection_name?: string;
     allowed_tools?: string[];
+    load_mode?: "explicit" | "searchable";
   };
   const openapiConfigs: Record<number, OpenAPIConfigMutable> = {};
 
@@ -268,6 +271,20 @@ export async function addAgent(
       }
       openapiConfigs[index].allowed_tools!.push(value as string);
     }
+
+    const openapiLoadModeMatch = key.match(
+      /tools_config\.openapi_configs\[(\d+)\]\.load_mode/
+    );
+    if (openapiLoadModeMatch) {
+      const index = parseInt(openapiLoadModeMatch[1], 10);
+      if (!openapiConfigs[index]) {
+        openapiConfigs[index] = {};
+      }
+      const v = value as string;
+      if (v === "explicit" || v === "searchable") {
+        openapiConfigs[index].load_mode = v;
+      }
+    }
   });
 
   // Combine MCP configs with their allowed tools
@@ -297,6 +314,7 @@ export async function addAgent(
     openapi_connection_id: config.openapi_connection_id as string,
     openapi_connection_name: config.openapi_connection_name,
     allowed_tools: config.allowed_tools,
+    load_mode: config.load_mode,
   }));
 
   // Reconstruct events array using new format

@@ -20,6 +20,7 @@ from typing import Any
 from uuid import UUID
 
 import yaml
+from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
 from agentarea_registry.domain.models import Registry, RegistryItem
@@ -291,6 +292,17 @@ class RegistryService:
 
     # ── MCP Server handlers ──
 
+    async def _resolve_unique_slug(self, repo: Any, name: str) -> str:
+        """Workspace-scoped unique slug, using ``repo.get_by_slug`` for collision checks."""
+        base = generate_slug(name)
+        if await repo.get_by_slug(base) is None:
+            return base
+        for suffix in range(2, 1000):
+            candidate = f"{base}-{suffix}"
+            if await repo.get_by_slug(candidate) is None:
+                return candidate
+        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
     async def _create_mcp_server(self, item: RegistryItem, registry_url: str | None = None) -> str:
         spec = item.spec or {}
         conn_type = spec.get("connection_type", "url")
@@ -301,8 +313,11 @@ class RegistryService:
         if spec.get("transport"):
             tags.append(spec["transport"])
 
+        slug = await self._resolve_unique_slug(self.server_repo, item.name)
+
         server = await self.server_repo.create(
             name=item.name,
+            slug=slug,
             description=item.description or "",
             docker_image_url=docker_image_url,
             version=item.version or "latest",
@@ -326,6 +341,9 @@ class RegistryService:
         tags = ["registry", conn_type]
         if spec.get("transport"):
             tags.append(spec["transport"])
+
+        if item.installed_entity_id is None:
+            raise ValueError(f"Registry item {item.id} is not installed")
 
         return await self.server_repo.update(
             item.installed_entity_id,
@@ -382,8 +400,10 @@ class RegistryService:
         if not self.skill_repo:
             raise ValueError("Skill repository not available")
         spec = item.spec or {}
+        slug = await self._resolve_unique_slug(self.skill_repo, item.name)
         skill = await self.skill_repo.create(
             name=item.name,
+            slug=slug,
             description=item.description,
             source_type=spec.get("source_type", "content"),
             content=spec.get("content"),
@@ -481,9 +501,12 @@ class RegistryService:
         else:
             agent_uuid = uuid.uuid4()
 
+        slug = await self._resolve_unique_slug(self.agent_repo, item.name)
+
         created = await self.agent_repo.create(
             id=agent_uuid,
             name=item.name,
+            slug=slug,
             description=item.description or "",
             instruction=spec.get("instruction", ""),
             tools=spec.get("tools", []),

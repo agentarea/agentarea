@@ -1,7 +1,5 @@
-import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
-import ContentBlock from "@/components/ContentBlock";
 import { getTrigger, listAgents } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import { CreateTriggerForm } from "../../create/CreateTriggerForm";
 
 interface Props {
@@ -10,15 +8,13 @@ interface Props {
 
 export default async function EditTriggerPage({ params }: Props) {
   const { id } = await params;
-  const t = await getTranslations("TriggersPage");
 
   const [triggerResponse, agentsResponse] = await Promise.all([
     getTrigger(id),
     listAgents(),
   ]);
 
-  const trigger = triggerResponse.data;
-  if (!trigger) notFound();
+  const trigger = requireApiData(triggerResponse, "trigger");
 
   return (
     <div className="p-6">

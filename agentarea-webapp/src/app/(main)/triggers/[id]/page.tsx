@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getTrigger, listAgents, listTriggerCatalog } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import TriggerDetail from "./TriggerDetail";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { data: trigger } = await getTrigger(id);
+  const trigger = requireApiData(await getTrigger(id), "trigger");
   return { title: (trigger as any)?.name ?? "Trigger" };
 }
 
@@ -22,8 +22,7 @@ export default async function TriggerPage({ params }: Props) {
     listTriggerCatalog(),
   ]);
 
-  const trigger = triggerResponse.data;
-  if (!trigger) notFound();
+  const trigger = requireApiData(triggerResponse, "trigger");
 
   const agents = (agentsResponse.data as any[]) || [];
   const agentName =
@@ -36,11 +35,12 @@ export default async function TriggerPage({ params }: Props) {
   const triggerType = (trigger as any).trigger_type;
   const webhookType = (trigger as any).webhook_type;
   const dataExtractor = (trigger as any).data_extractor;
-  const catalogEntry = catalog.find((c: any) => {
-    if (dataExtractor) return c.data_extractor === dataExtractor;
-    if (triggerType === "cron") return c.id === "cron";
-    return c.webhook_type === webhookType;
-  }) ?? null;
+  const catalogEntry =
+    catalog.find((c: any) => {
+      if (dataExtractor) return c.data_extractor === dataExtractor;
+      if (triggerType === "cron") return c.id === "cron";
+      return c.webhook_type === webhookType;
+    }) ?? null;
 
   return (
     <TriggerDetail

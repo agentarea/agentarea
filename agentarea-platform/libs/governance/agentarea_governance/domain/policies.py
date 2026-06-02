@@ -20,6 +20,46 @@ class PolicyValidationError(ValueError):
     """Raised when a lower-scope policy attempts to weaken a higher scope."""
 
 
+def parse_subject(ref: str) -> tuple[str, str, str | None]:
+    """Parse a Keto-style subject ref into (type, id, relation|None).
+
+    Accepts ``type:id`` (SubjectID, e.g. ``user:alice``) or
+    ``type:id#relation`` (SubjectSet/userset, e.g. ``group:eng#member``).
+    Raises ValueError for anything else (notably a bare id with no type) so the
+    data stays ReBAC/Keto-native and raw ids cannot leak in.
+    """
+    if not isinstance(ref, str) or ":" not in ref:
+        raise ValueError(f"invalid subject ref {ref!r}: expected 'type:id' or 'type:id#relation'")
+    type_, rest = ref.split(":", 1)
+    relation: str | None = None
+    if "#" in rest:
+        id_, relation = rest.split("#", 1)
+    else:
+        id_ = rest
+    if not type_ or not id_ or (relation is not None and not relation):
+        raise ValueError(f"invalid subject ref {ref!r}: empty component")
+    return type_, id_, relation
+
+
+def is_approver(caller_user_id: str, approvers: list[str]) -> bool:
+    """Whether the caller may approve, resolving only direct user subjects.
+
+    Group/role/userset subjects (``group:x``, ``...#relation``) are accepted and
+    stored but not resolved until a membership/roles model exists (issue #198).
+    Empty ``approvers`` is handled by the caller (soft default = any member).
+    """
+    if not caller_user_id:
+        return False
+    for ref in approvers:
+        try:
+            type_, id_, relation = parse_subject(ref)
+        except ValueError:
+            continue
+        if type_ == "user" and relation is None and id_ == caller_user_id:
+            return True
+    return False
+
+
 class PolicyScopeType(StrEnum):
     """Supported policy scope types."""
 
@@ -72,6 +112,17 @@ class ApprovalPolicy(BaseModel):
 
     requires_human_approval: bool | None = None
     escalation_rules: list[str] = Field(default_factory=list)
+    # Who may approve, as Keto-style subject refs: "user:<id>", "group:<id>",
+    # or a userset "<type>:<id>#<relation>". Empty = any workspace member (soft
+    # default — see issue #198 / ADR-005 for the zero-trust posture decision).
+    approvers: list[str] = Field(default_factory=list)
+
+    @field_validator("approvers")
+    @classmethod
+    def _validate_approvers(cls, value: list[str]) -> list[str]:
+        for ref in value:
+            parse_subject(ref)  # raises ValueError on a non subject-ref (e.g. raw id)
+        return value
 
 
 class ContentSafetyPolicy(BaseModel):
@@ -81,14 +132,6 @@ class ContentSafetyPolicy(BaseModel):
 
     prompt_injection_detection_enabled: bool | None = None
     output_sanitizer_enabled: bool | None = None
-    semantic_guard_threshold: int | None = None
-
-    @field_validator("semantic_guard_threshold")
-    @classmethod
-    def _validate_threshold(cls, value: int | None) -> int | None:
-        if value is not None and not 0 <= value <= 100:
-            raise ValueError("semantic_guard_threshold must be between 0 and 100")
-        return value
 
 
 class PolicyDocument(BaseModel):
@@ -114,15 +157,23 @@ class EffectivePolicy(PolicyDocument):
     resolver_version: str = RESOLVER_VERSION
 
     def to_execution_state(self, runtime_state: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Translate the typed policy snapshot to existing guard keys."""
+        """Translate the typed policy snapshot into the guard execution_state.
+
+        This is the anti-corruption layer between the typed governance policy
+        domain and the generic interceptor framework. Monetary values are
+        emitted as plain floats because the budget gates perform threshold
+        arithmetic (ratio comparisons) against runtime counters — authoritative
+        money accounting stays upstream in BudgetTracker. Mixing Decimal with
+        float here would raise at the gate and be silently swallowed.
+        """
         runtime_state = runtime_state or {}
         state: dict[str, Any] = {}
 
         if self.budget:
             if self.budget.run_budget_usd is not None:
-                state["budget_usd"] = to_money(self.budget.run_budget_usd)
+                state["budget_usd"] = float(to_money(self.budget.run_budget_usd))
             if self.budget.service_budget_usd is not None:
-                state["service_budget_usd"] = to_money(self.budget.service_budget_usd)
+                state["service_budget_usd"] = float(to_money(self.budget.service_budget_usd))
 
         if self.tokens:
             if self.tokens.max_tokens is not None:
@@ -137,12 +188,17 @@ class EffectivePolicy(PolicyDocument):
         if self.approval:
             state["escalation_rules"] = self.approval.escalation_rules
 
+        if self.content_safety:
+            state["content_safety"] = {
+                "prompt_injection_enabled": self.content_safety.prompt_injection_detection_enabled,
+                "output_sanitizer_enabled": self.content_safety.output_sanitizer_enabled,
+            }
+
         for key in ("cost_used", "service_cost_used"):
             if key in runtime_state:
-                state[key] = to_money(runtime_state[key])
-        for key in ("tokens_used",):
-            if key in runtime_state:
-                state[key] = runtime_state[key]
+                state[key] = float(to_money(runtime_state[key]))
+        if "tokens_used" in runtime_state:
+            state["tokens_used"] = runtime_state["tokens_used"]
 
         return state
 
@@ -239,12 +295,6 @@ class PolicyResolver:
         for field in ("prompt_injection_detection_enabled", "output_sanitizer_enabled"):
             if getattr(higher, field) is True and getattr(lower, field) is False:
                 raise PolicyValidationError(f"{field} cannot be disabled")
-        if (
-            higher.semantic_guard_threshold is not None
-            and lower.semantic_guard_threshold is not None
-            and lower.semantic_guard_threshold < higher.semantic_guard_threshold
-        ):
-            raise PolicyValidationError("semantic_guard_threshold cannot be lowered")
 
     def _merge_budget(
         self, higher: BudgetPolicy | None, lower: BudgetPolicy | None
@@ -295,6 +345,7 @@ class PolicyResolver:
             requires_human_approval=bool(higher.requires_human_approval)
             or bool(lower.requires_human_approval),
             escalation_rules=_dedupe([*higher.escalation_rules, *lower.escalation_rules]),
+            approvers=_dedupe([*higher.approvers, *lower.approvers]),
         )
 
     def _merge_content_safety(
@@ -309,9 +360,6 @@ class PolicyResolver:
             or bool(lower.prompt_injection_detection_enabled),
             output_sanitizer_enabled=bool(higher.output_sanitizer_enabled)
             or bool(lower.output_sanitizer_enabled),
-            semantic_guard_threshold=_max_int(
-                higher.semantic_guard_threshold, lower.semantic_guard_threshold
-            ),
         )
 
 
@@ -331,14 +379,6 @@ def _min_int(left: int | None, right: int | None) -> int | None:
     return min(left, right)
 
 
-def _max_int(left: int | None, right: int | None) -> int | None:
-    if left is None:
-        return right
-    if right is None:
-        return left
-    return max(left, right)
-
-
 def _dedupe(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
@@ -354,7 +394,7 @@ def _pattern_is_within(child: str, parent: str) -> bool:
         return fnmatch.fnmatch(child, parent)
     if parent.endswith("*") and not any(char in parent[:-1] for char in "*?"):
         return child.startswith(parent[:-1])
-        return False
+    return False
 
 
 class PolicyValidator:

@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any
 import redis.asyncio as redis
 
 if TYPE_CHECKING:
-    from agentarea_common.events.base import EventBroker
-    from agentarea_common.workflow.base import WorkflowExecutor
+    from agentarea_common.events.broker import EventBroker
+
+    WorkflowExecutor = Any
 
 logger = logging.getLogger(__name__)
 

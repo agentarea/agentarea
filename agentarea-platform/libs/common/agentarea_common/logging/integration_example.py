@@ -4,11 +4,32 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from ..auth.context import UserContext, get_user_context
-from .audit_logger import get_audit_logger
+from ..auth.context import UserContext
+from ..auth.dependencies import get_user_context
 from .config import setup_logging
 from .context_logger import get_context_logger
 from .middleware import LoggingContextMiddleware
+
+
+class _AuditLogger:
+    def log_create(self, **kwargs) -> None:
+        return None
+
+    def log_read(self, **kwargs) -> None:
+        return None
+
+    def log_update(self, **kwargs) -> None:
+        return None
+
+    def log_delete(self, **kwargs) -> None:
+        return None
+
+    def log_error(self, **kwargs) -> None:
+        return None
+
+
+def get_audit_logger() -> _AuditLogger:
+    return _AuditLogger()
 
 
 @asynccontextmanager
@@ -220,12 +241,18 @@ def example_repository_with_audit_logging():
         async def get_example(self, example_id: str) -> ExampleModel:
             """Get example with automatic audit logging."""
             # The base repository will automatically log this read
-            return await self.get_by_id(example_id)
+            result = await self.get_by_id(example_id)
+            if result is None:
+                raise ValueError(f"Example not found: {example_id}")
+            return result
 
         async def update_example(self, example_id: str, name: str) -> ExampleModel:
             """Update example with automatic audit logging."""
             # The base repository will automatically log this update
-            return await self.update(example_id, name=name)
+            result = await self.update(example_id, name=name)
+            if result is None:
+                raise ValueError(f"Example not found: {example_id}")
+            return result
 
         async def delete_example(self, example_id: str) -> bool:
             """Delete example with automatic audit logging."""

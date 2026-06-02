@@ -14,10 +14,14 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         super().__init__(session, ModelInstance, user_context)
 
     async def create_instance(self, instance: ModelInstance) -> ModelInstance:
-        """Create a model instance from a domain object."""
+        """Create a model instance from a domain object.
+
+        Always overwrites ``workspace_id`` and ``created_by`` from the caller's
+        ``UserContext`` so an attacker-controlled or stale domain object cannot
+        smuggle a write into another workspace or impersonate another user.
+        """
         instance.workspace_id = self.user_context.workspace_id
-        if not instance.created_by:
-            instance.created_by = self.user_context.user_id
+        instance.created_by = self.user_context.user_id
 
         self.session.add(instance)
         await self.session.commit()

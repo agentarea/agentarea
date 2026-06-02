@@ -188,6 +188,8 @@ class MCPAuthService:
         if credentials:
             key = await self._store_credentials(created.id, credentials)
             created = await self._repo.update(created.id, secret_key=key)
+            if created is None:
+                raise ValueError(f"MCPAuthConfig {auth_config.id} disappeared during update")
 
         logger.info("Created MCPAuthConfig %s (type=%s)", created.id, auth_type)
         return created

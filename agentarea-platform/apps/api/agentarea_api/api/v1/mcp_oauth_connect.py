@@ -17,6 +17,7 @@ Implements the client-side of:
 import json
 import logging
 import urllib.parse
+from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
@@ -24,6 +25,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
+from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.application.oauth_client_service import (
@@ -38,6 +40,12 @@ from fastapi.responses import RedirectResponse
 
 logger = logging.getLogger(__name__)
 _background_tasks: set = set()
+
+
+class _NoopEventBroker(EventBroker):
+    async def publish(self, event: Any) -> None:
+        return None
+
 
 # Protected router (requires auth) — /authorize needs user context
 router = APIRouter(prefix="/mcp-oauth", tags=["mcp-oauth-connect"])
@@ -390,7 +398,7 @@ async def oauth_callback(
         # Event broker is optional for tool discovery
         service = MCPServerInstanceService(
             repository_factory=factory,
-            event_broker=None,
+            event_broker=_NoopEventBroker(),
             secret_manager=secret_manager,
         )
         # Fire and forget — don't block the user redirect

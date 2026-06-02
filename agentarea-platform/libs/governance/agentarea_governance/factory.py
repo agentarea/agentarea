@@ -13,7 +13,6 @@ from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
 from .interceptors.gates.capability_guard import CapabilityGuard
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
-from .interceptors.gates.escalation_guard import EscalationGuard
 from .interceptors.gates.semantic_guard import SemanticGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
 from .interceptors.gates.token_budget_guard import TokenBudgetGuard
@@ -66,7 +65,11 @@ def create_governance_pipeline() -> InterceptorPipeline:
 
     # Advanced gates
     registry.register(SemanticGuard(), Phase.PRE_TOOL_CALL, priority=400)
-    registry.register(EscalationGuard(), Phase.PRE_TOOL_CALL, priority=410)
+    # NOTE: human-approval escalation is NOT enforced here. The activity-boundary
+    # interceptor cannot pause/resume a workflow, so an ESCALATE here would only
+    # fail the activity. ApprovalPolicy is enforced inside the workflow loop
+    # (policy_requires_approval -> HUMAN_APPROVAL_REQUESTED -> resolve_escalation),
+    # which is the only place that can pause and wait for a human.
 
     # Observers (always last)
     metrics = MetricsObserver()

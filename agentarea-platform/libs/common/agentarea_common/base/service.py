@@ -1,10 +1,9 @@
+from typing import Any, cast
 from uuid import UUID
-
-from ..base.repository import BaseRepository
 
 
 class BaseCrudService[T]:
-    def __init__(self, repository: BaseRepository[T]):
+    def __init__(self, repository: Any):
         self.repository = repository
 
     async def get(self, id: UUID) -> T | None:
@@ -29,7 +28,7 @@ class BaseCrudService[T]:
         # Check if repository is workspace-scoped (expects kwargs)
         if hasattr(self.repository, "create") and hasattr(self.repository.create, "__code__"):
             # Extract entity attributes as kwargs for the repository
-            entity_dict = entity.to_dict()
+            entity_dict = cast(Any, entity).to_dict()
             return await self.repository.create(**entity_dict)
         else:
             # Fallback for repositories that expect entity objects

@@ -5,7 +5,18 @@ from enum import StrEnum
 from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,8 +38,13 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "skills"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Immutable, workspace-scoped human-readable identifier (derived from name at creation).
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default=SkillSourceType.CONTENT.value

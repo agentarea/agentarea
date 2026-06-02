@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getTrigger, listAgents } from "@/lib/api";
+import { getTrigger } from "@/lib/api";
+import { requireApiData } from "@/lib/server-resource";
 import TriggerDetailTabs from "./TriggerDetailTabs";
 import TriggerHeaderControls from "./TriggerHeaderControls";
 
@@ -14,10 +14,7 @@ export default async function TriggerLayout({ params, children }: Props) {
   const { id } = await params;
   const t = await getTranslations("TriggersPage");
 
-  const { data: trigger } = await getTrigger(id);
-  if (!trigger) {
-    notFound();
-  }
+  const trigger = requireApiData(await getTrigger(id), "trigger");
 
   return (
     <ContentBlock
@@ -35,9 +32,7 @@ export default async function TriggerLayout({ params, children }: Props) {
         ),
       }}
       className="p-0"
-      subheader={
-        <TriggerDetailTabs triggerId={id} />
-      }
+      subheader={<TriggerDetailTabs triggerId={id} />}
     >
       {children}
     </ContentBlock>

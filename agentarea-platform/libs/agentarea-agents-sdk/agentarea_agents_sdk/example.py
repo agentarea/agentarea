@@ -8,7 +8,7 @@ import sys
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import create_agent
+from .agents.agent import create_agent
 
 
 async def streaming_math_example():
@@ -89,7 +89,7 @@ async def custom_agent_example():
     print("\nCustom Agent Configuration Example")
     print("=" * 50)
 
-    from agent import Agent
+    from .agents.agent import Agent
 
     # Create agent with custom parameters
     agent = Agent(

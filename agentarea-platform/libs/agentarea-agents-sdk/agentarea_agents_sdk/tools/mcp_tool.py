@@ -2,6 +2,7 @@
 
 import logging
 import os
+from inspect import isawaitable
 from typing import Any
 from uuid import UUID
 
@@ -81,11 +82,12 @@ class MCPTool(BaseTool):
                 self.server_instance_id,
                 self.name,
             )
-            result = await service_execute(
+            execute_result = service_execute(
                 self.server_instance_id,
                 self.name,
                 kwargs,
             )
+            result = await execute_result if isawaitable(execute_result) else execute_result
             if not isinstance(result, dict):
                 result = {"success": True, "result": result}
             result.setdefault("tool_name", self.name)
@@ -151,7 +153,10 @@ class MCPToolFactory:
                     fn = getattr(mcp_server_instance_service, method_name, None)
                     if callable(fn):
                         try:
-                            maybe_tools = await fn(server_instance_id)
+                            call_result = fn(server_instance_id)
+                            maybe_tools = (
+                                await call_result if isawaitable(call_result) else call_result
+                            )
                             if maybe_tools:
                                 tools_data = maybe_tools
                                 break

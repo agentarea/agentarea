@@ -9,7 +9,10 @@ from agentarea_governance.domain.policies import (
     PolicyResolver,
     PolicyValidationError,
     PolicyValidator,
+    TokenPolicy,
     ToolsPolicy,
+    effective_policy_from_json,
+    is_approver,
 )
 
 
@@ -148,6 +151,137 @@ def test_effective_policy_serializes_money_as_json_string():
     )
 
     assert effective.to_json_dict()["budget"]["run_budget_usd"] == "1.25"
+
+
+def test_to_execution_state_emits_floats_for_money():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                budget=BudgetPolicy(run_budget_usd="10.00", service_budget_usd="5.00")
+            )
+        ]
+    )
+
+    state = effective.to_execution_state()
+
+    assert state["budget_usd"] == 10.0
+    assert isinstance(state["budget_usd"], float)
+    assert state["service_budget_usd"] == 5.0
+    assert isinstance(state["service_budget_usd"], float)
+
+
+def test_to_execution_state_merges_runtime_counters_as_floats():
+    effective = PolicyResolver().resolve(
+        [PolicyDocument(budget=BudgetPolicy(run_budget_usd="10.00"))]
+    )
+
+    state = effective.to_execution_state(
+        {"cost_used": "3.50", "service_cost_used": "1.00", "tokens_used": 1200}
+    )
+
+    assert state["cost_used"] == 3.5
+    assert isinstance(state["cost_used"], float)
+    assert state["service_cost_used"] == 1.0
+    assert isinstance(state["service_cost_used"], float)
+    assert state["tokens_used"] == 1200
+
+
+def test_to_execution_state_maps_tools_tokens_and_escalation():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                tokens=TokenPolicy(max_tokens=50000),
+                tools=ToolsPolicy(allowed=["web_*"], denied=["payment_*"]),
+                approval=ApprovalPolicy(escalation_rules=["delete_*"]),
+            )
+        ]
+    )
+
+    state = effective.to_execution_state()
+
+    assert state["max_tokens"] == 50000
+    assert state["tools_config"] == {"allowed": ["web_*"], "denied": ["payment_*"]}
+    assert state["escalation_rules"] == ["delete_*"]
+
+
+def test_to_execution_state_emits_content_safety_flags():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                content_safety=ContentSafetyPolicy(
+                    prompt_injection_detection_enabled=False,
+                    output_sanitizer_enabled=True,
+                )
+            )
+        ]
+    )
+
+    state = effective.to_execution_state()
+
+    content_safety = state["content_safety"]
+    assert content_safety["prompt_injection_enabled"] is False
+    assert content_safety["output_sanitizer_enabled"] is True
+
+
+def test_to_execution_state_empty_policy_is_empty_state():
+    assert PolicyResolver().resolve([]).to_execution_state() == {}
+
+
+def test_approvers_merge_union_across_scopes():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(approval=ApprovalPolicy(approvers=["user:alice"])),
+            PolicyDocument(approval=ApprovalPolicy(approvers=["user:bob", "user:alice"])),
+        ]
+    )
+    assert effective.approval.approvers == ["user:alice", "user:bob"]
+
+
+def test_approvers_must_be_typed_subject_refs_not_raw_ids():
+    with pytest.raises(ValueError, match="subject ref"):
+        ApprovalPolicy(approvers=["alice"])  # raw id without type is rejected
+
+
+def test_approvers_accept_usersets_and_groups():
+    policy = ApprovalPolicy(approvers=["user:alice", "group:security#member", "role:admin"])
+    assert policy.approvers == ["user:alice", "group:security#member", "role:admin"]
+
+
+def test_is_approver_matches_direct_user_only():
+    assert is_approver("alice", ["user:alice", "user:bob"]) is True
+    assert is_approver("carol", ["user:alice", "user:bob"]) is False
+
+
+def test_is_approver_does_not_resolve_usersets_yet():
+    # group/userset subjects are stored but unresolved until a membership model (#198)
+    assert is_approver("alice", ["group:security#member"]) is False
+    # a direct user ref still matches even alongside an unresolved userset
+    assert is_approver("alice", ["group:security#member", "user:alice"]) is True
+
+
+def test_snapshot_roundtrips_losslessly_for_immutability():
+    """The snapshot frozen at task creation must reach the runtime unchanged.
+
+    Guards against a future change re-resolving policy at runtime: whatever was
+    stored at creation must produce an identical execution_state when reloaded,
+    so a policy edit after the task starts cannot alter the running task.
+    """
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                budget=BudgetPolicy(run_budget_usd="10.00"),
+                tools=ToolsPolicy(allowed=["web_*"], denied=["payment_*"]),
+                approval=ApprovalPolicy(escalation_rules=["delete_*"]),
+            )
+        ],
+        source_policy_ids=["workspace-policy", "agent-policy"],
+    )
+
+    snapshot = effective.to_json_dict()
+    restored = effective_policy_from_json(snapshot)
+
+    assert restored.to_json_dict() == snapshot
+    assert restored.to_execution_state() == effective.to_execution_state()
 
 
 def test_policy_validator_exposes_chain_validation_contract():

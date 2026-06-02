@@ -93,7 +93,7 @@ def migrate():
                     click.echo(
                         "No Alembic revision found but tables exist. Stamping head without applying migrations."
                     )
-                    command.stamp(alembic_cfg, head_rev)
+                    command.stamp(alembic_cfg, head_rev or "head")
                     click.echo("Stamped database to head revision")
                 else:
                     click.echo("Empty or dirty database detected. Applying migrations to head...")

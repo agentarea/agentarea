@@ -34,6 +34,9 @@ services:
       - WORKFLOW__TEMPORAL_NAMESPACE=default
       - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
+      - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
+      - KRATOS_ISSUER=${KRATOS_ISSUER:-http://localhost:4433}
+      - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
     depends_on:
       db:
         condition: service_healthy
@@ -86,7 +89,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -114,6 +117,8 @@ services:
       - ORY_ADMIN_URL=${ORY_ADMIN_URL:-http://kratos:4434}
       # ORY_SDK_URL: internal Docker URL for server-side API calls to Kratos
       - ORY_SDK_URL=${ORY_SDK_URL:-http://kratos:4433}
+      - ORY_BROWSER_URL=${ORY_BROWSER_URL:-http://localhost:4433}
+      - API_BROWSER_URL=${API_BROWSER_URL:-http://localhost:8000}
       - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
     networks:
       - default
@@ -121,15 +126,12 @@ services:
 
   rustfs:
     image: rustfs/rustfs:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - rustfs_data:/data
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
-    command: /data --console-enable
+    command: /data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 5s
@@ -143,8 +145,6 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=postgres  # Maintenance DB; postgres_init creates the main app DB plus aux DBs
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -222,8 +222,6 @@ services:
     networks:
       - temporal-network
       - default
-    ports:
-      - 7233:7233
     labels:
       kompose.volume.type: configMap
     volumes:
@@ -240,6 +238,8 @@ services:
     pull_policy: always
     image: agentarea/agentarea-worker:${VERSION:-latest}
     container_name: agentarea-worker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -256,6 +256,12 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - LLM_DOCKER_HOST=host.docker.internal
+      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
+      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
+      - AWS_ENDPOINT_URL=http://rustfs:9000
+      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
 
       # Redis
       - REDIS_URL=redis://valkey:6379
@@ -270,6 +276,7 @@ services:
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
+      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
 
       # Development
       # - DEBUG=true
@@ -336,9 +343,10 @@ services:
   # Ory Kratos Identity Server
   kratos:
     image: oryd/kratos:v1.3.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4433:4433" # public API
-      - "4434:4434" # admin API
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
@@ -346,6 +354,10 @@ services:
       COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
       COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_EMAIL}
       COURIER_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${OIDC_GOOGLE_CLIENT_ID:-}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_SECRET: ${OIDC_GOOGLE_CLIENT_SECRET:-}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_ID: ${OIDC_GITHUB_CLIENT_ID:-}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_SECRET: ${OIDC_GITHUB_CLIENT_SECRET:-}
     command: ["serve", "-c", "/etc/config/kratos/kratos.yml"]
     volumes:
       - ./config/auth/kratos:/etc/config/kratos
@@ -357,73 +369,6 @@ services:
       kratos-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
-
-  # # Ory Hydra OAuth2/OIDC Server
-  # hydra:
-  #   image: oryd/hydra:v2.2.0
-  #   ports:
-  #     - "4444:4444" # public API
-  #     - "4445:4445" # admin API
-  #   environment:
-  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-  #     URLS_SELF_ISSUER: http://localhost:4444
-  #     URLS_CONSENT: http://localhost:3000/auth/consent
-  #     URLS_LOGIN: http://localhost:3000/auth/login
-  #     URLS_LOGOUT: http://localhost:3000/auth/logout
-  #     URLS_ERROR: http://localhost:3000/auth/error
-  #     SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
-  #     OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
-  #     OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
-  #     LOG_LEVEL: debug
-  #     LOG_LEAK_SENSITIVE_VALUES: true
-  #   command: serve all --dev
-  #   volumes:
-  #     - ./config/auth/hydra:/etc/config/hydra
-  #   networks:
-  #     - auth-network
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-
-  # # Hydra OAuth2 Client Setup
-  # hydra-migrate:
-  #   image: oryd/hydra:v2.2.0
-  #   environment:
-  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-  #   command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
-  #   volumes:
-  #     - ./config/auth/hydra:/etc/config/hydra
-  #   networks:
-  #     - auth-network
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-
-  # # Register OAuth2 client for frontend
-  # hydra-client-setup:
-  #   image: oryd/hydra:v2.2.0
-  #   environment:
-  #     ORY_SDK_URL: http://hydra:4445
-  #   entrypoint: ["sh", "-c"]
-  #   command: >
-  #     "
-  #       sleep 15 &&
-  #       hydra create oauth2-client \
-  #         --name 'AgentArea Frontend' \
-  #         --secret agentarea-secret \
-  #         --grant-type authorization_code,refresh_token \
-  #         --response-type code \
-  #         --scope openid,profile,email \
-  #         --redirect-uri http://localhost:3000/auth/callback \
-  #         --redirect-uri http://localhost:3000/workplace \
-  #         --skip-consent || echo 'Client may already exist'
-  #     "
-  #   networks:
-  #     - auth-network
-  #   depends_on:
-  #     hydra:
-  #       condition: service_started
 
 volumes:
   postgres_data:

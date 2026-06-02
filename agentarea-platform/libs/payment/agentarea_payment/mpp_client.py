@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from typing import Any
 
 from .models import PaymentResult
@@ -36,11 +37,16 @@ class MPPPaymentClient:
             return self._client
 
         try:
-            from mpp.client import Client
-            from mpp.methods.tempo import ChargeIntent, TempoAccount, tempo
+            client_cls = import_module("mpp.client").Client
+            tempo_module = import_module("mpp.methods.tempo")
+            charge_intent_cls = tempo_module.ChargeIntent
+            tempo_account_cls = tempo_module.TempoAccount
+            tempo = tempo_module.tempo
 
-            account = TempoAccount.from_key(self._tempo_key)
-            client = Client(methods=[tempo(account=account, intents={"charge": ChargeIntent()})])
+            account = tempo_account_cls.from_key(self._tempo_key)
+            client = client_cls(
+                methods=[tempo(account=account, intents={"charge": charge_intent_cls()})]
+            )
             self._client = client
             return client
         except ImportError:

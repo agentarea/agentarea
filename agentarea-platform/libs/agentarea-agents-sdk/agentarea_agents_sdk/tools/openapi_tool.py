@@ -399,10 +399,8 @@ class OpenAPIToolFactory:
                     "type": "function",
                     "function": {
                         "name": _slugify_name(op_name),
-                        "description": op.get("description")
-                        or f"OpenAPI operation {op_name}",
-                        "parameters": op.get("inputSchema")
-                        or {"type": "object", "properties": {}},
+                        "description": op.get("description") or f"OpenAPI operation {op_name}",
+                        "parameters": op.get("inputSchema") or {"type": "object", "properties": {}},
                     },
                 }
         return None

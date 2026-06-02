@@ -6,7 +6,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from agentarea_agents.domain.skill_models import (
     Skill,
@@ -33,6 +33,22 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         """
         query = select(self.model_class).where(
             self.model_class.name == name,
+            self._get_workspace_filter(),
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_by_slug(self, slug: str) -> Skill | None:
+        """Get a skill by workspace-scoped slug.
+
+        Args:
+            slug: The slug to search for.
+
+        Returns:
+            The skill if found, None otherwise.
+        """
+        query = select(self.model_class).where(
+            self.model_class.slug == slug,
             self._get_workspace_filter(),
         )
         result = await self.session.execute(query)
@@ -108,6 +124,9 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
 
         query = (
             select(self.model_class)
+            # Listing returns metadata only (SkillResponse excludes content); defer the
+            # heavy `content` Text column so large catalogs don't blow up API memory.
+            .options(defer(self.model_class.content))
             .where(*filters)
             .order_by(self.model_class.created_at.desc())
             .offset(offset)

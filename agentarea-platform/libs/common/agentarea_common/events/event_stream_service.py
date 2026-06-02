@@ -290,7 +290,8 @@ class EventStreamService:
                 # Some FastStream Redis messages wrap the actual JSON as a string under 'data'
                 if "data" in message and isinstance(message["data"], str):
                     try:
-                        event_data = json.loads(message["data"])
+                        parsed = json.loads(message["data"])
+                        event_data = parsed if isinstance(parsed, dict) else {"data": parsed}
                     except json.JSONDecodeError:
                         event_data = message
                 else:
@@ -303,10 +304,10 @@ class EventStreamService:
             # {'data': {'event_type': ..., 'data': {...}}}
             if (
                 isinstance(event_data, dict)
-                and isinstance(event_data.get("data"), dict)
-                and isinstance(event_data["data"].get("data"), dict)
+                and isinstance(data_value := event_data.get("data"), dict)
+                and isinstance(data_value.get("data"), dict)
             ):
-                event_data["data"] = event_data["data"]["data"]
+                event_data["data"] = data_value["data"]
 
             # Filter by task_id if provided
             # aggregate_id can be at different levels in the message structure:

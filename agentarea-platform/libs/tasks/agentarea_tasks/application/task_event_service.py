@@ -18,7 +18,7 @@ class TaskEventService:
     def __init__(
         self,
         repository_factory: RepositoryFactory,
-        event_broker: EventBroker,
+        event_broker: EventBroker | None,
     ):
         self.repository_factory = repository_factory
         self.event_broker = event_broker

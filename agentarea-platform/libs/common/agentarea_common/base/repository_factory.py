@@ -1,13 +1,12 @@
 """Repository factory for dependency injection with user context."""
 
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
-from .workspace_scoped_repository import WorkspaceScopedRepository
 
-T = TypeVar("T", bound=WorkspaceScopedRepository)
+T = TypeVar("T")
 
 
 class RepositoryFactory:
@@ -36,4 +35,6 @@ class RepositoryFactory:
         Returns:
             Repository instance with user context injected
         """
-        return repository_class(session=self.session, user_context=self.user_context)
+        return cast(
+            T, cast(Any, repository_class)(session=self.session, user_context=self.user_context)
+        )

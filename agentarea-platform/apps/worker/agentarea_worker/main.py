@@ -16,7 +16,7 @@ import dotenv
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container
 from agentarea_common.config import get_settings
-from agentarea_common.events.router import get_event_router
+from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
@@ -49,7 +49,8 @@ def create_activity_dependencies() -> ActivityDependencies:
     settings = get_settings()
 
     # Get event broker
-    event_broker = get_event_router(settings.broker)
+    event_router = get_event_router(settings.broker)
+    event_broker = create_event_broker_from_router(event_router)
 
     # Create secret manager factory with settings
     from agentarea_secrets import SecretManagerFactory

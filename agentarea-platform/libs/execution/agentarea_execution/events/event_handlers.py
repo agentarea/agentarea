@@ -30,7 +30,9 @@ class WorkflowEventHandler:
             from agentarea_tasks.application.task_event_service import TaskEventService
 
             # Extract task information from event
-            task_id = UUID(event.aggregate_id)
+            event_data = event.data or {}
+            original_data = event_data.get("original_data") or {}
+            task_id = UUID(str(event_data.get("aggregate_id")))
             workspace_id = self._extract_workspace_id(event)
             user_id = self._extract_user_id(event)
 
@@ -47,8 +49,8 @@ class WorkflowEventHandler:
                 # Create event using service
                 await task_event_service.create_workflow_event(
                     task_id=task_id,
-                    event_type=event.original_event_type or event.event_type,
-                    data=event.original_data or {},
+                    event_type=event_data.get("original_event_type") or event.event_type,
+                    data=original_data,
                     workspace_id=workspace_id,
                     created_by=user_id,
                 )
@@ -64,14 +66,16 @@ class WorkflowEventHandler:
 
     def _extract_workspace_id(self, event: DomainEvent) -> str:
         """Extract workspace ID from event data."""
-        if event.original_data and isinstance(event.original_data, dict):
-            return event.original_data.get("workspace_id", "default")
+        original_data = (event.data or {}).get("original_data")
+        if isinstance(original_data, dict):
+            return str(original_data.get("workspace_id", "default"))
         return "default"
 
     def _extract_user_id(self, event: DomainEvent) -> str:
         """Extract user ID from event data."""
-        if event.original_data and isinstance(event.original_data, dict):
-            return event.original_data.get("user_id", "event_handler")
+        original_data = (event.data or {}).get("original_data")
+        if isinstance(original_data, dict):
+            return str(original_data.get("user_id", "event_handler"))
         return "event_handler"
 
 
@@ -88,7 +92,7 @@ class LLMErrorEventHandler:
         - Retry logic coordination
         """
         try:
-            error_data = event.original_data or {}
+            error_data = (event.data or {}).get("original_data") or {}
             task_id = error_data.get("task_id", "unknown")
             error_type = error_data.get("error_type", "unknown")
 

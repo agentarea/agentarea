@@ -29,7 +29,13 @@ class SecretsToolset(Toolset):
         ):
             secrets = await secret_mgr.list_secrets()
             return json.dumps(
-                [{"name": s.name, "id": str(s.id)} for s in secrets],
+                [
+                    {
+                        "name": getattr(secret, "name", str(secret)),
+                        "id": str(getattr(secret, "id", secret)),
+                    }
+                    for secret in secrets
+                ],
                 default=str,
             )
 
