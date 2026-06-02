@@ -5,7 +5,7 @@ Pure-function tests — no DB, no K8s, no network.
 
 import pytest
 
-from registry_sync import parse_source, VALID_TYPES
+from registry_sync import _upsert_mcp_server, parse_source, VALID_TYPES
 
 
 class TestValidTypes:
@@ -106,6 +106,99 @@ class TestMCPServerParser:
             },
         )
         assert items[0]["external_id"] == "io.example/echo"
+
+    def test_standard_format_preserves_raw_spec_icons(self):
+        items = parse_source(
+            "mcp_servers",
+            {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "io.example/echo",
+                            "title": "Echo",
+                            "description": "Echo server",
+                            "version": "1.2.3",
+                            "icons": [{"src": "/api/static/icons/mcp/echo.svg"}],
+                            "remotes": [{"url": "https://example.com/mcp"}],
+                            "packages": [
+                                {
+                                    "registryType": "npm",
+                                    "name": "@example/echo",
+                                    "version": "1.2.3",
+                                }
+                            ],
+                        }
+                    }
+                ]
+            },
+        )
+
+        assert [item["external_id"] for item in items] == [
+            "io.example/echo",
+            "io.example/echo/command",
+        ]
+        assert items[0]["spec"]["raw_spec"]["icons"][0]["src"] == (
+            "/api/static/icons/mcp/echo.svg"
+        )
+        assert items[1]["spec"]["raw_spec"]["icons"][0]["src"] == (
+            "/api/static/icons/mcp/echo.svg"
+        )
+
+    def test_upsert_writes_raw_spec_to_mcp_server_json_spec(self):
+        class Result:
+            def __init__(self, row=None):
+                self.row = row
+
+            def fetchone(self):
+                return self.row
+
+        class FakeConn:
+            def __init__(self):
+                self.calls = []
+
+            def execute(self, statement, params=None):
+                sql = str(statement)
+                self.calls.append((sql, params or {}))
+                if sql.startswith("SELECT id FROM mcp_servers"):
+                    return Result(None)
+                if sql.startswith("SELECT 1 FROM mcp_servers"):
+                    return Result(None)
+                return Result(None)
+
+        raw_spec = {
+            "name": "io.example/echo",
+            "icons": [{"src": "https://cdn.example.com/echo.svg"}],
+        }
+        conn = FakeConn()
+        _upsert_mcp_server(
+            conn,
+            {
+                "name": "Echo",
+                "description": "Echo server",
+                "version": "1.2.3",
+                "registry_url": "https://registry.example.com",
+                "spec": {
+                    "connection_type": "url",
+                    "url": "https://example.com/mcp",
+                    "transport": "streamable-http",
+                    "raw_spec": raw_spec,
+                },
+                "tags": ["streamable-http"],
+            },
+            "workspace-1",
+            "registry-item-1",
+        )
+
+        insert_params = next(
+            params for sql, params in conn.calls if sql.startswith("INSERT INTO mcp_servers")
+        )
+        assert insert_params["json_spec"] == (
+            '{"name": "io.example/echo", "icons": [{"src": "https://cdn.example.com/echo.svg"}]}'
+        )
+        assert insert_params["registry_url"] == "https://registry.example.com"
+        assert insert_params["rid"] == "registry-item-1"
+        assert insert_params["rurl"] == "https://example.com/mcp"
+        assert insert_params["slug"] == "echo"
 
 
 class TestSkillsParser:
