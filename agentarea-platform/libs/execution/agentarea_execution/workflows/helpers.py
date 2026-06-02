@@ -13,6 +13,61 @@ with workflow.unsafe.imports_passed_through():
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
 
+def resolve_effective_budget(
+    request_budget: float | str | None,
+    effective_policy: dict[str, Any] | None,
+    key: str = "run_budget_usd",
+) -> Money | None:
+    """Single source of truth for the run budget.
+
+    The legacy ``request.budget_usd`` and the governance policy ceiling
+    (``effective_policy.budget.run_budget_usd``) are reconciled so the
+    loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)
+    enforce the same number. The tightest of the two wins — a lower ceiling
+    can never be loosened by the other source.
+    """
+    policy_budget = None
+    if effective_policy:
+        policy_budget = (effective_policy.get("budget") or {}).get(key)
+
+    candidates = [to_money(b) for b in (request_budget, policy_budget) if b is not None]
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name: str) -> bool:
+    """Whether a tool call needs human approval — driven solely by ApprovalPolicy.
+
+    The policy engine is the single source of truth: either approval is required
+    globally (``requires_human_approval``) or the tool is explicitly listed in
+    ``escalation_rules``. When approval is required the workflow pauses on the
+    existing human-in-the-loop path (HUMAN_APPROVAL_REQUESTED -> resolve_escalation).
+    """
+    approval = (effective_policy or {}).get("approval") or {}
+    if approval.get("requires_human_approval") is True:
+        return True
+    return tool_name in (approval.get("escalation_rules") or [])
+
+
+def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
+    """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
+    return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
+    """Whether the caller may resolve an escalation.
+
+    Empty ``approvers`` is the soft default — any workspace member may approve
+    (see issue #198 for the zero-trust posture). Otherwise the caller must be a
+    direct user subject ``user:<id>``. Group/userset subjects are stored but not
+    resolved until a membership/roles model exists, so they do not grant approval.
+    """
+    if not approvers:
+        return True
+    return bool(caller_user_id) and f"user:{caller_user_id}" in approvers
+
+
 class EventManager:
     """Manages workflow events with consistent formatting."""
 

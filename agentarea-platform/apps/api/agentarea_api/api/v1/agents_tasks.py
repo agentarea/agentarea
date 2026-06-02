@@ -1101,7 +1101,11 @@ async def resolve_task_escalation(
     try:
         execution_id = f"task-{task_id}"
         success = await workflow_task_service.resolve_escalation(
-            execution_id, data.escalation_id, data.approved, data.comment
+            execution_id,
+            data.escalation_id,
+            data.approved,
+            data.comment,
+            resolved_by=str(user_context.user_id),
         )
 
         if success:

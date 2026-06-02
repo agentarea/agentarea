@@ -45,6 +45,10 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolCallExtractor,
         build_output_summary,
+        caller_can_approve,
+        policy_approvers,
+        policy_requires_approval,
+        resolve_effective_budget,
     )
     from .models import (
         AgentExecutionState,
@@ -198,13 +202,27 @@ class AgentExecutionWorkflow:
 
     @workflow.signal
     async def resolve_escalation(
-        self, escalation_id: str, approved: bool, comment: str = ""
+        self, escalation_id: str, approved: bool, comment: str = "", resolved_by: str = ""
     ) -> None:
-        """Signal to approve or deny a specific tool escalation."""
+        """Signal to approve or deny a specific tool escalation.
+
+        Authoritative authorization point: only a designated approver (per the
+        task's ApprovalPolicy) may resolve. Unauthorized signals are ignored so
+        the API/activity boundary cannot bypass policy.
+        """
         if escalation_id in self._pending_escalations:
             esc = self._pending_escalations[escalation_id]
+
+            if not caller_can_approve(esc.approvers, resolved_by):
+                workflow.logger.warning(
+                    f"Unauthorized escalation resolution for {escalation_id} by "
+                    f"'{resolved_by or 'unknown'}'; approvers={esc.approvers}. Ignored."
+                )
+                return
+
             esc.resolved = True
             esc.approved = approved
+            esc.approved_by = resolved_by or None
             esc.deny_comment = comment if not approved else None
 
             # Emit resolved event so history load knows the outcome
@@ -219,12 +237,13 @@ class AgentExecutionWorkflow:
                     "tool_call_id": esc.tool_call_id,
                     "approved": approved,
                     "comment": comment,
+                    "approved_by": resolved_by or None,
                     "iteration": self.state.current_iteration,
                 },
             )
             workflow.logger.info(
-                f"Escalation {escalation_id} resolved: approved={approved}"
-                + (f" comment='{comment}'" if comment else "")
+                f"Escalation {escalation_id} resolved by '{resolved_by or 'unknown'}': "
+                f"approved={approved}" + (f" comment='{comment}'" if comment else "")
             )
 
     @workflow.signal
@@ -342,7 +361,11 @@ class AgentExecutionWorkflow:
         self.state.workspace_id = request.workspace_id  # Add workspace_id from request
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
-        self.state.budget_usd = request.budget_usd
+        # Single source of truth: the loop-level PEP (BudgetTracker) enforces the
+        # same ceiling as the call-level PEP (CostBudgetGuard) — tightest wins.
+        self.state.budget_usd = resolve_effective_budget(
+            request.budget_usd, request.effective_policy
+        )
         self.state.effective_policy = request.effective_policy
         self._workflow_metadata = dict(request.workflow_metadata or {})
 
@@ -779,6 +802,7 @@ class AgentExecutionWorkflow:
         self.state.available_tools = state.available_tools
         self.state.current_iteration = state.current_iteration
         self.state.budget_usd = state.budget_usd
+        self.state.tokens_used = state.tokens_used
         self.state.context_window = state.context_window
         self.state.user_context_data = state.user_context_data
         self.state.activated_skills = state.activated_skills
@@ -908,6 +932,7 @@ class AgentExecutionWorkflow:
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
             total_cost=self.budget_tracker.cost,
+            tokens_used=self.state.tokens_used,
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
@@ -1336,6 +1361,9 @@ class AgentExecutionWorkflow:
                 execution_id=self.state.execution_id,
                 resolved_model=self.state.resolved_model,
                 effective_policy=self.state.effective_policy,
+                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                tokens_used=self.state.tokens_used,
+                service_cost_used=float(self.state.service_cost_used),
             )
 
             response: LLMCallResult = await workflow.execute_activity(
@@ -1383,6 +1411,11 @@ class AgentExecutionWorkflow:
                 "usage": usage_payload,
             }
             self.budget_tracker.add_cost(usage_info["cost"])
+
+            # Accumulate cumulative token usage for governance token-budget gating
+            total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
+            if total_tokens:
+                self.state.tokens_used += total_tokens
 
             # Update context window manager with actual token usage
             if self.context_manager and usage_payload:
@@ -1669,15 +1702,11 @@ class AgentExecutionWorkflow:
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
 
-        # Approval gating before starting the tool activity
-        requires_approval = self._tool_requires_approval(tool_name)
+        # Approval gating before starting the tool activity — driven solely by the
+        # governance ApprovalPolicy on the task's effective_policy snapshot.
+        approval_required = self._tool_requires_approval(tool_name)
         workflow.logger.info(
-            f"Tool '{tool_name}' approval check: requires_approval={requires_approval}, "
-            f"agent_config tools={len((self.state.agent_config or {}).get('tools', []))}"
-        )
-        approval_required = (
-            bool(self.state.goal and getattr(self.state.goal, "requires_human_approval", False))
-            or requires_approval
+            f"Tool '{tool_name}' policy approval check: requires_approval={approval_required}"
         )
 
         if approval_required:
@@ -1687,6 +1716,7 @@ class AgentExecutionWorkflow:
                 tool_call_id=tool_call.id,
                 tool_name=tool_name,
                 tool_args=tool_args,
+                approvers=policy_approvers(self.state.effective_policy),
             )
             self._pending_escalations[escalation_id] = escalation
 
@@ -1715,6 +1745,7 @@ class AgentExecutionWorkflow:
                     "tool_call_id": tool_call.id,
                     "iteration": self.state.current_iteration,
                     "arguments": tool_args,
+                    "approvers": escalation.approvers,
                     "message": f"Tool '{tool_name}' requires human approval",
                 },
             )
@@ -1826,6 +1857,9 @@ class AgentExecutionWorkflow:
                 tools=self.state.agent_config.get("tools"),
                 metadata=self._workflow_metadata or {},
                 effective_policy=self.state.effective_policy,
+                cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
+                tokens_used=self.state.tokens_used,
+                service_cost_used=float(self.state.service_cost_used),
             )
 
             result_obj = await workflow.execute_activity(
@@ -3142,46 +3176,10 @@ class AgentExecutionWorkflow:
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:
-        """Check agent tools for per-tool user confirmation requirement.
+        """Whether this tool call needs human approval.
 
-        Checks both:
-        - Top-level requires_user_confirmation on the tool config (code/agent tools)
-        - Per-tool requires_user_confirmation in allowed_tools (MCP tools)
+        Single source of truth is the governance ApprovalPolicy on the task's
+        effective_policy snapshot — not per-tool agent config. When this returns
+        True the loop pauses on the existing human-in-the-loop path.
         """
-        try:
-            tools = (self.state.agent_config or {}).get("tools") or []
-        except Exception:
-            tools = []
-
-        for tool_config in tools:
-            if not isinstance(tool_config, dict):
-                continue
-
-            settings = tool_config.get("settings", {}) or {}
-
-            # Direct match by name (code tools, agent tools)
-            if tool_config.get("name") == tool_name:
-                if isinstance(settings, dict) and bool(
-                    settings.get("requires_user_confirmation", False)
-                ):
-                    return True
-
-            # MCP tools: check per-tool approval in allowed_tools
-            if tool_config.get("type") == "mcp":
-                allowed_tools = (
-                    settings.get("allowed_tools") if isinstance(settings, dict) else None
-                )
-                if isinstance(allowed_tools, list):
-                    for at in allowed_tools:
-                        if isinstance(at, dict) and at.get("tool_name") == tool_name:
-                            if bool(at.get("requires_user_confirmation", False)):
-                                return True
-                elif isinstance(allowed_tools, dict):
-                    # Dict format: {tool_name: {requires_user_confirmation: bool}}
-                    tool_settings = allowed_tools.get(tool_name)
-                    if isinstance(tool_settings, dict) and bool(
-                        tool_settings.get("requires_user_confirmation", False)
-                    ):
-                        return True
-
-        return False
+        return policy_requires_approval(self.state.effective_policy, tool_name)
