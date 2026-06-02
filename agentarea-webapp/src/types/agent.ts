@@ -1,5 +1,6 @@
 export interface ModelInfo {
   provider_name?: string;
+  provider_icon_url?: string;
   model_display_name?: string;
   config_name?: string;
 }

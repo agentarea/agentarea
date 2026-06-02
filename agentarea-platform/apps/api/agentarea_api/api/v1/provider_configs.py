@@ -8,6 +8,7 @@ from agentarea_api.api.deps.services import (  # type: ignore
     get_model_spec_repository,
     get_provider_service,
 )
+from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
@@ -90,12 +91,16 @@ class ModelInstanceResponse(BaseModel):
     # Related data
     provider_name: str | None = None
     provider_key: str | None = None
+    provider_icon_url: str | None = None
     model_name: str | None = None
     model_display_name: str | None = None
     config_name: str | None = None
 
     @classmethod
     def from_domain(cls, model_instance) -> "ModelInstanceResponse":
+        provider_spec = (
+            model_instance.provider_config.provider_spec if model_instance.provider_config else None
+        )
         return cls(
             id=str(model_instance.id),
             provider_config_id=str(model_instance.provider_config_id),
@@ -106,11 +111,10 @@ class ModelInstanceResponse(BaseModel):
             is_public=model_instance.is_public,
             created_at=model_instance.created_at,
             updated_at=model_instance.updated_at,
-            provider_name=model_instance.provider_config.provider_spec.name
-            if model_instance.provider_config and model_instance.provider_config.provider_spec
-            else None,
-            provider_key=model_instance.provider_config.provider_spec.provider_key
-            if model_instance.provider_config and model_instance.provider_config.provider_spec
+            provider_name=provider_spec.name if provider_spec else None,
+            provider_key=provider_spec.provider_key if provider_spec else None,
+            provider_icon_url=build_provider_icon_url(provider_spec.icon)
+            if provider_spec
             else None,
             model_name=model_instance.model_spec.model_name if model_instance.model_spec else None,
             model_display_name=model_instance.model_spec.display_name

@@ -50,6 +50,7 @@ export default function AgentsList({
       render: (value: any) => (
         <ModelBadge
           providerName={value?.provider_name}
+          iconUrl={value?.provider_icon_url}
           modelDisplayName={value?.model_display_name}
           configName={value?.config_name}
         />

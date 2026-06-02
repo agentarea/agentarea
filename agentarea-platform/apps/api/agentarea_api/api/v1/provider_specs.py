@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_provider_service
+from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
@@ -28,10 +29,9 @@ class ProviderSpecResponse(BaseModel):
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
     ) -> "ProviderSpecResponse":
-        icon_url = None
-        if provider_spec.icon and request:
-            base_url = str(request.base_url).rstrip("/")
-            icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
+        # request kept for signature compatibility; the icon URL is resolved
+        # from the configured public base, never the incoming request host.
+        icon_url = build_provider_icon_url(provider_spec.icon)
 
         return cls(
             id=str(provider_spec.id),
@@ -102,10 +102,9 @@ class ProviderSpecWithModelsResponse(BaseModel):
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
     ) -> "ProviderSpecWithModelsResponse":
-        icon_url = None
-        if provider_spec.icon and request:
-            base_url = str(request.base_url).rstrip("/")
-            icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
+        # request kept for signature compatibility; the icon URL is resolved
+        # from the configured public base, never the incoming request host.
+        icon_url = build_provider_icon_url(provider_spec.icon)
 
         return cls(
             id=str(provider_spec.id),

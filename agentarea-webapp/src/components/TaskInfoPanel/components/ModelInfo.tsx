@@ -61,6 +61,7 @@ export default function ModelInfo({
               if (model) {
                 agentData.model_info = {
                   provider_name: model.provider_name || undefined,
+                  provider_icon_url: model.provider_icon_url || undefined,
                   model_display_name: model.model_display_name || undefined,
                   config_name: model.config_name || undefined,
                 };
@@ -128,6 +129,7 @@ export default function ModelInfo({
         <div>
           <ModelBadge
             providerName={agent.model_info?.provider_name}
+            iconUrl={agent.model_info?.provider_icon_url}
             modelDisplayName={agent.model_info?.model_display_name}
             configName={agent.model_info?.config_name}
           />
