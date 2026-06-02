@@ -19,6 +19,10 @@ class ExecutionService(ExecutionServiceInterface):
     def __init__(self, workflow_orchestrator: "WorkflowOrchestratorInterface"):
         self._workflow_orchestrator = workflow_orchestrator
 
+    @property
+    def orchestrator(self) -> "WorkflowOrchestratorInterface":
+        return self._workflow_orchestrator
+
     async def execute_async(self, request: ExecutionRequest) -> ExecutionResult:
         """Execute agent task via workflow orchestrator."""
         try:
@@ -97,12 +101,17 @@ class ExecutionService(ExecutionServiceInterface):
             return False
 
     async def resolve_escalation(
-        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+        self,
+        execution_id: str,
+        escalation_id: str,
+        approved: bool,
+        comment: str = "",
+        resolved_by: str = "",
     ) -> bool:
         """Resolve a tool escalation via workflow orchestrator."""
         try:
             return await self._workflow_orchestrator.resolve_escalation_workflow(
-                execution_id, escalation_id, approved, comment
+                execution_id, escalation_id, approved, comment, resolved_by
             )
         except Exception as e:
             logger.error(f"Failed to resolve escalation: {e}")
@@ -154,8 +163,18 @@ class WorkflowOrchestratorInterface(ABC):
         pass
 
     @abstractmethod
+    async def send_a2ui_action(self, execution_id: str, action_data: dict) -> bool:
+        """Send A2UI action to a running workflow."""
+        pass
+
+    @abstractmethod
     async def resolve_escalation_workflow(
-        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+        self,
+        execution_id: str,
+        escalation_id: str,
+        approved: bool,
+        comment: str = "",
+        resolved_by: str = "",
     ) -> bool:
         """Resolve a tool escalation in the workflow."""
         pass

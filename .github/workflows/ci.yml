@@ -114,6 +114,10 @@ jobs:
         working-directory: agentarea-platform
         run: uv run ruff format --check .
 
+      - name: Run pyright
+        working-directory: agentarea-platform
+        run: uv run pyright
+
   platform-test:
     runs-on: ubuntu-latest
     needs: [changes, platform-lint]

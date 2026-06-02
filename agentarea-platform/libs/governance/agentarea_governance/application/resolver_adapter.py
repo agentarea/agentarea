@@ -49,7 +49,7 @@ class GovernancePolicyResolver:
         if task_policy is not None:
             policies.append(task_policy)
 
-        return PolicyResolver().resolve(policies, source_policy_ids=source_ids)
+        return PolicyResolver().resolve(list(policies), source_policy_ids=source_ids)
 
     async def snapshot(
         self,

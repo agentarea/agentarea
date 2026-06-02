@@ -18,6 +18,7 @@ from . import (
     audit,
     dashboard,
     files,
+    governance,
     inbox,
     mcp_auth_configs,
     mcp_oauth_connect,
@@ -133,6 +134,9 @@ protected_v1_router.include_router(audit.router)
 # Dashboard + workspace settings - PROTECTED
 protected_v1_router.include_router(dashboard.router)
 protected_v1_router.include_router(agent_overview.router)
+
+# Governance policies (CRUD + effective-policy preview + task snapshots) - PROTECTED
+protected_v1_router.include_router(governance.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)

@@ -13,6 +13,7 @@ import {
   Plug,
   ShieldCheck,
   Sparkles,
+  Users,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -135,6 +136,12 @@ export const navData = {
           titleKey: "network",
           url: "/network",
           icon: Network,
+        },
+        {
+          title: "Members",
+          titleKey: "members",
+          url: "/members",
+          icon: Users,
         },
         {
           title: "Budgets",

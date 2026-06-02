@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as redis
 from redis.exceptions import ResponseError
@@ -41,7 +41,7 @@ class RedisStreamsBroker:
 
     async def submit(self, stream: str, fields: dict[str, str]) -> str:
         client = await self._get_client()
-        msg_id: str = await client.xadd(stream, fields)
+        msg_id: str = await client.xadd(stream, fields=cast(Any, dict(fields)))
         return msg_id
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:

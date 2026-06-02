@@ -13,6 +13,32 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ProviderConfig, user_context)
 
+    async def create_config(self, config: ProviderConfig) -> ProviderConfig:
+        """Create a provider config from a domain object.
+
+        Always overwrites ``workspace_id`` and ``created_by`` from the caller's
+        ``UserContext`` so an attacker-controlled or stale domain object cannot
+        smuggle a write into another workspace or impersonate another user.
+        """
+        config.workspace_id = self.user_context.workspace_id
+        config.created_by = self.user_context.user_id
+
+        self.session.add(config)
+        await self.session.commit()
+        return await self.get_with_relations(config.id) or config
+
+    async def update_config(self, config: ProviderConfig) -> ProviderConfig:
+        """Persist mutations on ``config`` and return the refreshed record.
+
+        Delegates to ``WorkspaceScopedRepository.update_from_entity`` which
+        scrubs immutable audit columns and applies the patch within workspace
+        scope, then reloads the row with relationships eagerly loaded so the
+        caller can serialize ``provider_spec`` / ``model_instances`` without
+        triggering async lazy-load.
+        """
+        updated = await self.update_from_entity(config)
+        return await self.get_with_relations(updated.id) or updated
+
     async def get_with_relations(self, id: UUID) -> ProviderConfig | None:
         """Get provider config by ID with relationships loaded."""
         config = await self.get_by_id(id)

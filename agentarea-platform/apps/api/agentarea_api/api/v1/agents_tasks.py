@@ -153,13 +153,11 @@ async def get_all_tasks(
         All users in the same workspace can see all workspace tasks.
     """
     try:
-        import asyncio
-
-        # Fetch agents and all workspace tasks in parallel (2 DB queries total)
-        agents_result, task_orms = await asyncio.gather(
-            agent_service.list(),
-            task_service.task_repository.list_all(limit=limit),
-        )
+        # Sequential awaits: agent_service and task_service share one AsyncSession
+        # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
+        # single connection ("another operation is in progress").
+        agents_result = await agent_service.list()
+        task_orms = await task_service.task_repository.list_all(limit=limit)
 
         # Build agent lookup map
         agent_map = {str(agent.id): agent.name for agent in agents_result}
@@ -1101,7 +1099,11 @@ async def resolve_task_escalation(
     try:
         execution_id = f"task-{task_id}"
         success = await workflow_task_service.resolve_escalation(
-            execution_id, data.escalation_id, data.approved, data.comment
+            execution_id,
+            data.escalation_id,
+            data.approved,
+            data.comment,
+            resolved_by=str(user_context.user_id),
         )
 
         if success:
@@ -1150,7 +1152,7 @@ async def get_task_events(
                 WHERE task_id = :task_id
             """
 
-            params = {"task_id": str(task_id)}
+            params: dict[str, Any] = {"task_id": str(task_id)}
 
             if event_type:
                 base_query += " AND event_type = :event_type"

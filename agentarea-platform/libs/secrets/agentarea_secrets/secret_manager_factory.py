@@ -9,6 +9,7 @@ Supported secret managers:
 """
 
 import logging
+from typing import Any, cast
 
 from agentarea_common.auth import UserContext
 from agentarea_common.config.secrets import SecretManagerSettings
@@ -102,7 +103,7 @@ class SecretManagerFactory:
                         "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
                     )
 
-                client = InfisicalSDKClient(
+                client = cast(Any, InfisicalSDKClient)(
                     host=self.settings.SECRET_MANAGER_ENDPOINT or "https://app.infisical.com",
                     client_id=self.settings.SECRET_MANAGER_ACCESS_KEY,
                     client_secret=self.settings.SECRET_MANAGER_SECRET_KEY,

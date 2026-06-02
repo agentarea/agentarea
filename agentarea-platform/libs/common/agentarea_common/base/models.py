@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -10,9 +10,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 class BaseModel(DeclarativeBase):
     """Base model for all database models."""
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.now)
-    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
 
     def __repr__(self) -> str:
         """Return a string representation of the model."""

@@ -12,6 +12,7 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.slug import generate_slug
 
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
@@ -183,10 +184,34 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.repository_factory = repository_factory
         self.event_broker = event_broker
 
+    async def _resolve_unique_slug(self, name: str) -> str:
+        """Generate a workspace-unique slug from ``name``.
+
+        Tries ``base``, then ``base-2``, ``base-3``, ... up to ``base-999``.
+        """
+        base = generate_slug(name)
+
+        if await self.repository.get_by_slug(base) is None:
+            return base
+
+        for suffix in range(2, 1000):
+            candidate = f"{base}-{suffix}"
+            if await self.repository.get_by_slug(candidate) is None:
+                return candidate
+
+        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
+    async def get_by_slug(self, slug: str) -> MCPServer | None:
+        """Get an MCP server spec by workspace-scoped slug."""
+        return await self.repository.get_by_slug(slug)
+
     @audited("mcp_server.create", resource_type="mcp_server")
     async def create_mcp_server(self, payload: MCPServerCreate) -> MCPServer:
+        slug = await self._resolve_unique_slug(payload.name)
+
         server = MCPServer(
             name=payload.name,
+            slug=slug,
             description=payload.description,
             docker_image_url=payload.docker_image_url,
             version=payload.version,
@@ -628,7 +653,7 @@ class MCPServerInstanceService:
                 instance_id=instance.id,
                 server_spec_id=instance.server_spec_id,
                 name=instance.name,
-                status=None,
+                status=instance.status,
             )
         )
 

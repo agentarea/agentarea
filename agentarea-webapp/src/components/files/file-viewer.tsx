@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Bot, Download, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BrowsedFile } from "./file-tree";
 
@@ -48,12 +48,113 @@ function classify(file: BrowsedFile): ViewerKind {
 
 export type FetchUrlFn = (path: string) => Promise<string | null>;
 
+export type ArtifactEvent = {
+  action: string;
+  actor_type: string;
+  created_by: string;
+  agent_id?: string | null;
+  task_id?: string | null;
+  created_at: string;
+};
+
+export type FetchHistoryFn = (path: string) => Promise<ArtifactEvent[]>;
+
+const ACTION_LABELS: Record<string, string> = {
+  created: "added",
+  modified: "modified",
+  deleted: "deleted",
+};
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+function ProvenanceRow({ event }: { event: ArtifactEvent }) {
+  const isAgent = event.actor_type === "agent";
+  const Icon = isAgent ? Bot : User;
+  const actorLabel = isAgent
+    ? `Agent ${event.agent_id ?? "?"}`
+    : event.created_by || "Unknown user";
+  return (
+    <li className="flex items-start gap-2 py-1">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <div className="flex flex-col leading-tight">
+        <span className="text-foreground">
+          {actorLabel} {ACTION_LABELS[event.action] ?? event.action} this file
+        </span>
+        <span className="text-[11px] text-muted-foreground">
+          {formatTimestamp(event.created_at)}
+          {isAgent && event.task_id ? ` · task ${event.task_id}` : ""}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function ProvenancePanel({
+  file,
+  fetchHistory,
+}: {
+  file: BrowsedFile;
+  fetchHistory: FetchHistoryFn;
+}) {
+  const [events, setEvents] = useState<ArtifactEvent[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEvents(null);
+    setLoading(true);
+    (async () => {
+      const result = await fetchHistory(file.path).catch(() => []);
+      if (!cancelled) {
+        setEvents(result);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [file, fetchHistory]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading history…
+      </div>
+    );
+  }
+
+  if (!events || events.length === 0) {
+    return (
+      <div className="border-b px-3 py-2 text-xs text-muted-foreground">
+        No history recorded for this file yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b px-3 py-2">
+      <ul className="text-xs">
+        {events.map((ev, i) => (
+          <ProvenanceRow key={`${ev.created_at}-${i}`} event={ev} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function FileViewerContent({
   file,
   fetchUrl,
+  fetchHistory,
 }: {
   file: BrowsedFile;
   fetchUrl: FetchUrlFn;
+  fetchHistory?: FetchHistoryFn;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
@@ -114,6 +215,8 @@ export function FileViewerContent({
           {file.path}
         </span>
       </div>
+
+      {fetchHistory && <ProvenancePanel file={file} fetchHistory={fetchHistory} />}
 
       <div className="flex-1 overflow-auto bg-muted/20">
         {loading && (

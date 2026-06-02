@@ -311,9 +311,7 @@ class DefaultWebhookManager(WebhookManager):
                     "Successfully parsed webhook data",
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value
-                    if hasattr(trigger.webhook_type, "value")
-                    else trigger.webhook_type,
+                    webhook_type=trigger.webhook_type,
                 )
             except Exception as parse_error:
                 error_msg = f"Failed to parse webhook data: {parse_error}"
@@ -321,9 +319,7 @@ class DefaultWebhookManager(WebhookManager):
                     error_msg,
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value
-                    if hasattr(trigger.webhook_type, "value")
-                    else trigger.webhook_type,
+                    webhook_type=trigger.webhook_type,
                 )
                 return await self.get_webhook_response(False, "Failed to parse request data")
 
@@ -527,8 +523,6 @@ class DefaultWebhookManager(WebhookManager):
     ) -> str | None:
         """Extract the event type from parsed webhook data based on channel."""
         webhook_type = trigger.webhook_type
-        if hasattr(webhook_type, "value"):
-            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
 
         if webhook_type == "slack":
             # Slack Events API: event.type field
@@ -596,9 +590,6 @@ class DefaultWebhookManager(WebhookManager):
         }
 
         webhook_type = trigger.webhook_type
-        # Handle enum value if needed (though model is str now)
-        if hasattr(webhook_type, "value"):
-            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
 
         # Check provider config first
         provider = self.providers.get(webhook_type)

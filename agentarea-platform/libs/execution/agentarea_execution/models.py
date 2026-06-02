@@ -237,10 +237,39 @@ class ToolDefinition(BaseModel):
     function: dict[str, Any]
 
 
+class SearchableToolEntry(BaseModel):
+    """Deferred tool entry — used by the disclosure layer for `load_tools`.
+
+    Carries enough metadata for the catalog block (name + description) and
+    for on-demand reveal (full schema + connection_id). Lives in workflow
+    state until revealed; never sent to the LLM directly.
+
+    Note: `schema_` is aliased to JSON key `"schema"` because Pydantic's
+    BaseModel reserves `schema` on the class. Callers MUST use
+    `model_dump(by_alias=True)` to round-trip through the workflow's
+    `searchable_tool_pool` (plain dicts) — otherwise the dict key becomes
+    `schema_` and `ToolCandidate(**c)` reconstruction will silently miss it.
+    """
+
+    name: str
+    description: str = ""
+    connection_id: str = ""
+    schema_: dict[str, Any] = Field(default_factory=dict, alias="schema")
+    source_type: str = "openapi"
+
+    model_config = {"populate_by_name": True}
+
+
 class ToolDiscoveryResult(BaseModel):
-    """Tools discovery result."""
+    """Tools discovery result.
+
+    `tools` ships in the LLM's available_tools every call (current behavior).
+    `searchable_entries` is the deferred pool for the `load_tools` meta-tool;
+    schemas land in available_tools only when the LLM explicitly reveals them.
+    """
 
     tools: list[ToolDefinition]
+    searchable_entries: list[SearchableToolEntry] = Field(default_factory=list)
 
 
 class LLMCallRequest(BaseModel):
@@ -258,6 +287,10 @@ class LLMCallRequest(BaseModel):
     execution_id: str | None = None
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
     effective_policy: dict[str, Any] | None = None
+    # Runtime governance counters — let budget gates compare against the running total
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
 
 class LLMUsage(BaseModel):
@@ -291,6 +324,10 @@ class MCPToolRequest(BaseModel):
     tools: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     effective_policy: dict[str, Any] | None = None
+    # Runtime governance counters — let budget gates compare against the running total
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
 
 class MCPToolResult(BaseModel):

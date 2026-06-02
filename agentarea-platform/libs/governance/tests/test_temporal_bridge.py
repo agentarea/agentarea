@@ -20,6 +20,8 @@ from agentarea_governance.domain.enums import (
 )
 from agentarea_governance.domain.exceptions import EscalationRequired, GovernanceDenied
 from agentarea_governance.domain.models import InterceptorContext, InterceptorResult
+from agentarea_governance.interceptors.gates.capability_guard import CapabilityGuard
+from agentarea_governance.interceptors.gates.cost_budget_guard import CostBudgetGuard
 from agentarea_governance.pipeline import InterceptorPipeline
 from agentarea_governance.registry import InterceptorRegistry
 
@@ -84,6 +86,10 @@ class _FakeLLMCallRequest:
     workspace_id: str = "ws-1"
     agent_id: str = ""
     user_context_data: dict[str, Any] | None = None
+    effective_policy: dict[str, Any] | None = None
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
     def model_dump(self) -> dict[str, Any]:
         return {"messages": self.messages, "model_id": self.model_id}
@@ -95,6 +101,10 @@ class _FakeMCPToolRequest:
     tool_args: dict[str, Any]
     workspace_id: str = "ws-1"
     user_context_data: dict[str, Any] | None = None
+    effective_policy: dict[str, Any] | None = None
+    cost_used: float | None = None
+    tokens_used: int | None = None
+    service_cost_used: float | None = None
 
     def model_dump(self) -> dict[str, Any]:
         return {"tool_name": self.tool_name, "tool_args": self.tool_args}
@@ -183,6 +193,71 @@ class TestContextExtraction:
         input = _FakeActivityInput(fn=fn, args=[])
         context = _extract_context_from_input(input, Phase.PRE_LLM_CALL)
         assert context is None
+
+
+class TestExecutionStateFromPolicy:
+    def test_policy_populates_execution_state(self):
+        request = _FakeLLMCallRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            model_id="gpt-4",
+            effective_policy={
+                "budget": {"run_budget_usd": "10.00"},
+                "tools": {"allowed": ["web_*"], "denied": []},
+            },
+            cost_used=4.0,
+            tokens_used=1200,
+        )
+        fn = _make_fn("call_llm_activity")
+        input = _FakeActivityInput(fn=fn, args=[request])
+        context = _extract_context_from_input(input, Phase.PRE_LLM_CALL)
+        assert context is not None
+        assert context.execution_state["budget_usd"] == 10.0
+        assert context.execution_state["cost_used"] == 4.0
+        assert context.execution_state["tokens_used"] == 1200
+        assert context.execution_state["tools_config"]["allowed"] == ["web_*"]
+
+    def test_no_policy_leaves_state_empty(self):
+        request = _FakeLLMCallRequest(messages=[], model_id="gpt-4")
+        fn = _make_fn("call_llm_activity")
+        input = _FakeActivityInput(fn=fn, args=[request])
+        context = _extract_context_from_input(input, Phase.PRE_LLM_CALL)
+        assert context is not None
+        assert context.execution_state == {}
+
+    @pytest.mark.asyncio
+    async def test_budget_policy_denies_when_exhausted(self):
+        registry = InterceptorRegistry()
+        registry.register(CostBudgetGuard(), Phase.PRE_LLM_CALL, priority=100)
+        pipeline = InterceptorPipeline(registry)
+        next_interceptor = _FakeNextInterceptor()
+        bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
+        request = _FakeLLMCallRequest(
+            messages=[],
+            model_id="gpt-4",
+            effective_policy={"budget": {"run_budget_usd": "10.00"}},
+            cost_used=10.0,
+        )
+        input = _FakeActivityInput(fn=_make_fn("call_llm_activity"), args=[request])
+        with pytest.raises(GovernanceDenied):
+            await bridge.execute_activity(input)
+        assert not next_interceptor.called
+
+    @pytest.mark.asyncio
+    async def test_capability_policy_denies_disallowed_tool(self):
+        registry = InterceptorRegistry()
+        registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
+        pipeline = InterceptorPipeline(registry)
+        next_interceptor = _FakeNextInterceptor()
+        bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
+        request = _FakeMCPToolRequest(
+            tool_name="shell_exec",
+            tool_args={},
+            effective_policy={"tools": {"allowed": ["web_*"], "denied": []}},
+        )
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        with pytest.raises(GovernanceDenied):
+            await bridge.execute_activity(input)
+        assert not next_interceptor.called
 
 
 class TestGovernanceActivityInterceptor:

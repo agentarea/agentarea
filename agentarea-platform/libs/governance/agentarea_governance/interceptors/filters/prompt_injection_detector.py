@@ -38,6 +38,16 @@ class PromptInjectionDetector:
         return InterceptorCategory.FILTER
 
     async def execute(self, context: InterceptorContext) -> InterceptorResult:
+        if (
+            context.execution_state.get("content_safety", {}).get("prompt_injection_enabled")
+            is False
+        ):
+            return InterceptorResult(
+                action=InterceptorAction.ALLOW,
+                interceptor_name=self.name,
+                reason="prompt injection detection disabled by policy",
+            )
+
         content = context.content
         if not content:
             return InterceptorResult(

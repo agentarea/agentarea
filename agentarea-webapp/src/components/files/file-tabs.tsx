@@ -4,7 +4,11 @@ import { X } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
-import { FileViewerContent, type FetchUrlFn } from "./file-viewer";
+import {
+  FileViewerContent,
+  type FetchUrlFn,
+  type FetchHistoryFn,
+} from "./file-viewer";
 import type { BrowsedFile } from "./file-tree";
 
 export function FileTabs({
@@ -13,12 +17,14 @@ export function FileTabs({
   onActivate,
   onClose,
   fetchUrl,
+  fetchHistory,
 }: {
   openFiles: BrowsedFile[];
   activePath: string | null;
   onActivate: (path: string) => void;
   onClose: (path: string) => void;
   fetchUrl: FetchUrlFn;
+  fetchHistory?: FetchHistoryFn;
 }) {
   if (openFiles.length === 0) {
     return (
@@ -81,7 +87,11 @@ export function FileTabs({
           value={file.path}
           className="mt-0 flex-1 overflow-hidden focus-visible:ring-0"
         >
-          <FileViewerContent file={file} fetchUrl={fetchUrl} />
+          <FileViewerContent
+            file={file}
+            fetchUrl={fetchUrl}
+            fetchHistory={fetchHistory}
+          />
         </TabsContent>
       ))}
     </Tabs>

@@ -7,6 +7,7 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatApiError } from "@/lib/api-errors";
 import {
   deleteOpenAPIConnectionAction as deleteOpenAPIConnection,
   discoverOpenAPIToolsAction as discoverOpenAPITools,
@@ -35,12 +36,15 @@ export default function OpenAPIConnectionDetailPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data, error: loadError } =
-          await getOpenAPIConnection(connectionId);
-        if (loadError) {
-          setError((loadError as any)?.detail || "Failed to load connection");
+        const result = await getOpenAPIConnection(connectionId);
+        if (result.error || !result.data) {
+          setError(
+            result.status === 404
+              ? "Connection not found"
+              : `Failed to load connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+          );
         } else {
-          setConnection(data as any);
+          setConnection(result.data as any);
         }
       } catch (err) {
         console.error("Failed to load OpenAPI connection", err);
@@ -63,12 +67,15 @@ export default function OpenAPIConnectionDetailPage() {
         setError((discoverError as any)?.detail || "Failed to discover tools");
         return;
       }
-      const { data, error: loadError } =
-        await getOpenAPIConnection(connectionId);
-      if (loadError) {
-        setError((loadError as any)?.detail || "Failed to reload connection");
+      const result = await getOpenAPIConnection(connectionId);
+      if (result.error || !result.data) {
+        setError(
+          result.status === 404
+            ? "Connection not found"
+            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+        );
       } else {
-        setConnection(data as any);
+        setConnection(result.data as any);
       }
     } catch (err) {
       console.error("Failed to discover tools", err);
@@ -89,12 +96,15 @@ export default function OpenAPIConnectionDetailPage() {
         setError((saveError as any)?.detail || "Failed to save headers");
         return;
       }
-      const { data, error: loadError } =
-        await getOpenAPIConnection(connectionId);
-      if (loadError) {
-        setError((loadError as any)?.detail || "Failed to reload connection");
+      const result = await getOpenAPIConnection(connectionId);
+      if (result.error || !result.data) {
+        setError(
+          result.status === 404
+            ? "Connection not found"
+            : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
+        );
       } else {
-        setConnection(data as any);
+        setConnection(result.data as any);
         setEditingHeaders(false);
       }
     } catch (err) {

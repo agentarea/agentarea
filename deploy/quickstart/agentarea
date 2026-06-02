@@ -1,0 +1,177 @@
+#!/bin/sh
+set -eu
+
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+COMPOSE_FILE="$ROOT_DIR/docker-compose.yaml"
+ENV_FILE="$ROOT_DIR/.env"
+
+compose() {
+  COMPOSE_PROJECT_NAME=agentarea docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || {
+    echo "Docker is required. Install Docker, then rerun this command." >&2
+    exit 1
+  }
+  docker compose version >/dev/null 2>&1 || {
+    echo "Docker Compose v2 is required. Install/upgrade Docker, then rerun this command." >&2
+    exit 1
+  }
+}
+
+usage() {
+  cat <<EOF
+Usage: agentarea <command>
+
+Commands:
+  doctor      Check local prerequisites and bundle files
+  pull        Pull AgentArea images
+  migrate     Run database migrations
+  config      Print or edit the .env config file
+  up          Start AgentArea in the background
+  down        Stop AgentArea
+  restart     Restart AgentArea
+  logs        Follow service logs
+  status      Show compose service status
+  open        Print local service URLs
+  upgrade     Pull images and restart services
+  reset       Stop services and remove local Docker volumes
+EOF
+}
+
+doctor() {
+  require_docker
+  [ -f "$COMPOSE_FILE" ] || {
+    echo "Missing $COMPOSE_FILE" >&2
+    exit 1
+  }
+  [ -f "$ENV_FILE" ] || {
+    echo "Missing $ENV_FILE" >&2
+    exit 1
+  }
+  [ -f "$ROOT_DIR/config/auth/kratos/kratos.yml" ] || {
+    echo "Missing Kratos config" >&2
+    exit 1
+  }
+  [ -f "$ROOT_DIR/agentarea-platform/temporal-config/development-sql.yaml" ] || {
+    echo "Missing Temporal config" >&2
+    exit 1
+  }
+  compose config >/dev/null
+  echo "AgentArea quickstart bundle looks ready."
+}
+
+open_urls() {
+  cat <<EOF
+AgentArea URLs:
+  Web app:       http://localhost:3000
+  API:           http://localhost:8000
+  API docs:      http://localhost:8000/docs
+  MCP manager:   http://localhost:7999
+  Kratos public: http://localhost:4433
+EOF
+}
+
+config() {
+  if [ "${1:-}" = "--edit" ]; then
+    "${EDITOR:-vi}" "$ENV_FILE"
+    return
+  fi
+  cat <<EOF
+AgentArea config:
+  $ENV_FILE
+
+Edit it with:
+  $ROOT_DIR/agentarea config --edit
+
+After editing, restart services:
+  $ROOT_DIR/agentarea restart
+EOF
+}
+
+reset() {
+  answer=$(ask "Remove AgentArea containers and Docker volumes? [y/N]" "N")
+  case "$answer" in
+    y|Y|yes|YES) compose down -v ;;
+    *) echo "Reset cancelled." ;;
+  esac
+}
+
+ask() {
+  prompt="$1"
+  default="$2"
+  if [ -r /dev/tty ] && { : < /dev/tty; } 2>/dev/null; then
+    printf '%s ' "$prompt" > /dev/tty
+    IFS= read -r answer < /dev/tty || answer=""
+  else
+    answer=""
+  fi
+  if [ -z "$answer" ]; then
+    answer="$default"
+  fi
+  printf '%s' "$answer"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  doctor)
+    doctor
+    ;;
+  pull)
+    require_docker
+    compose pull
+    ;;
+  migrate)
+    require_docker
+    compose up app_migrations
+    ;;
+  config)
+    config "${2:-}"
+    ;;
+  up)
+    require_docker
+    compose up -d
+    open_urls
+    ;;
+  down)
+    require_docker
+    compose down
+    ;;
+  restart)
+    require_docker
+    compose restart
+    ;;
+  logs)
+    require_docker
+    if [ $# -gt 1 ]; then
+      compose logs -f "$2"
+    else
+      compose logs -f
+    fi
+    ;;
+  status)
+    require_docker
+    compose ps
+    ;;
+  open)
+    open_urls
+    ;;
+  upgrade)
+    require_docker
+    compose pull
+    compose up -d
+    ;;
+  reset)
+    require_docker
+    reset
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

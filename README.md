@@ -88,15 +88,38 @@ Relationship-based access control (ReBAC) via Ory Keto. Model who can see and ac
 
 - Docker & Docker Compose
 
-### 1. Start the platform
+### 1. Start the platform without cloning
 
 ```bash
-git clone https://github.com/agentarea/agentarea.git
-cd agentarea
-make up
+curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/install.sh | sh
 ```
 
-This starts every service via Docker Compose. Once it's up, open the web UI at **http://localhost:3000**.
+The bootstrap downloads only the runtime bundle into `./agentarea`: Docker Compose, auth/Temporal config, and a small local launcher. It does not clone the repository and does not install Docker, Node, Python, or Go.
+
+Then run:
+
+```bash
+./agentarea/agentarea doctor
+./agentarea/agentarea pull
+./agentarea/agentarea up
+```
+
+Open the web UI at **http://localhost:3000**.
+
+Edit configuration anytime in `./agentarea/.env` or run:
+
+```bash
+./agentarea/agentarea config --edit
+```
+
+To inspect the installer before running:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/install.sh -o agentarea-install.sh
+sh agentarea-install.sh
+```
+
+For local development from source, clone the repository and use `make up`.
 
 ### 2. Create your first agent
 

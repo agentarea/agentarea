@@ -80,7 +80,8 @@ class SkillParser:
             post = frontmatter.loads(content)
 
             # Extract metadata
-            name = post.get("name", "")
+            name_value = post.get("name", "")
+            name = name_value if isinstance(name_value, str) else ""
             if not name:
                 # Try to extract name from first heading
                 lines = post.content.strip().split("\n")
@@ -92,10 +93,18 @@ class SkillParser:
             if not name:
                 name = "Unnamed Skill"
 
+            description_value = post.get("description")
+            allowed_tools_value = post.get("allowed-tools", [])
+            allowed_tools = (
+                [str(tool) for tool in allowed_tools_value]
+                if isinstance(allowed_tools_value, list)
+                else []
+            )
+
             metadata = SkillMetadata(
                 name=name,
-                description=post.get("description"),
-                allowed_tools=post.get("allowed-tools", []) or [],
+                description=description_value if isinstance(description_value, str) else None,
+                allowed_tools=allowed_tools,
                 raw_frontmatter=dict(post.metadata),
             )
 

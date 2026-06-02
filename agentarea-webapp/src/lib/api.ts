@@ -154,6 +154,14 @@ export const {
   exportWorkspace,
   importWorkspace,
 
+  // Workspace Members & Invitations API
+  listWorkspaceMembers,
+  removeWorkspaceMember,
+  listWorkspaceInvitations,
+  createWorkspaceInvitation,
+  revokeWorkspaceInvitation,
+  acceptWorkspaceInvitation,
+
   // MCP Instance Tools Discovery
   discoverMCPInstanceTools,
   testMCPInstanceAuth,
@@ -207,6 +215,7 @@ export const {
   // Workspace Files API (read-only)
   listWorkspaceFiles,
   downloadWorkspaceFile,
+  workspaceFileHistory,
 
   // Wallet API
   getAgentWallet,
@@ -319,3 +328,8 @@ export type TaskWithAgent = TaskResponse & {
 export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
+
+export type WorkspaceMember = components["schemas"]["MemberResponse"];
+export type WorkspaceInvitation = components["schemas"]["InvitationResponse"];
+export type WorkspaceInvitationCreated =
+  components["schemas"]["InvitationCreatedResponse"];

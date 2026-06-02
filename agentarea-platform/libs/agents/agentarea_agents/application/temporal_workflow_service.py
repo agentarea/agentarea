@@ -92,11 +92,16 @@ class TemporalWorkflowService:
             return False
 
     async def resolve_escalation(
-        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+        self,
+        execution_id: str,
+        escalation_id: str,
+        approved: bool,
+        comment: str = "",
+        resolved_by: str = "",
     ) -> bool:
         try:
             return await self._execution_service.resolve_escalation(
-                execution_id, escalation_id, approved, comment
+                execution_id, escalation_id, approved, comment, resolved_by
             )
         except Exception as e:
             logger.error(f"Failed to resolve escalation: {e}")

@@ -90,14 +90,16 @@ class RegistryItemResponse(BaseModel):
     def from_domain(cls, item: RegistryItem) -> "RegistryItemResponse":
         return cls(
             id=item.id,
-            registry_id=item.registry_id,
+            registry_id=UUID(str(item.registry_id)),
             external_id=item.external_id,
             name=item.name,
             description=item.description,
             version=item.version,
             spec=item.spec or {},
             tags=item.tags or [],
-            installed_entity_id=item.installed_entity_id,
+            installed_entity_id=UUID(str(item.installed_entity_id))
+            if item.installed_entity_id
+            else None,
             update_available=item.update_available,
             installed_version=item.installed_version,
             created_at=item.created_at,

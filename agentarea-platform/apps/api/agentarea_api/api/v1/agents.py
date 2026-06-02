@@ -1,7 +1,8 @@
 """Agents API endpoints for managing AI agents."""
 
 import re
-from typing import Any, Literal
+from contextlib import suppress
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -21,7 +22,6 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.config import get_database
-from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -45,18 +45,12 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
     # Create database session
     database = get_database()
     async with database.async_session_factory() as session:
-        # Create model instance service
         model_instance_repository = ModelInstanceRepository(session, user_context)
-        model_instance_service = ModelInstanceService(
-            repository=model_instance_repository,
-            event_broker=None,  # Not needed for validation
-            secret_manager=None,  # Not needed for validation
-        )
 
         # First, try to treat model_id as a UUID (model instance ID)
         try:
             model_uuid = UUID(model_id)
-            model_instance = await model_instance_service.get(model_uuid)
+            model_instance = await model_instance_repository.get_with_relations(model_uuid)
             if model_instance:
                 # Valid model instance ID
                 return
@@ -99,6 +93,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
 
 class AgentResponse(BaseModel):
     id: UUID
+    slug: str
     name: str
     status: str
     description: str | None = None
@@ -115,9 +110,10 @@ class AgentResponse(BaseModel):
     def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
         tools = None
         if agent.tools:
-            if isinstance(agent.tools, list):
-                tools = [ToolConfigYAML(**tool) for tool in agent.tools]
-            elif isinstance(agent.tools, dict):
+            agent_tools = cast(Any, agent.tools)
+            if isinstance(agent_tools, list):
+                tools = [ToolConfigYAML(**tool) for tool in agent_tools if isinstance(tool, dict)]
+            elif isinstance(agent_tools, dict):
                 tools = []
 
         skills = None
@@ -128,19 +124,31 @@ class AgentResponse(BaseModel):
             ]
 
         return cls(
-            id=agent.id,
-            name=agent.name,
-            status=agent.status,
-            description=agent.description,
-            instruction=agent.instruction,
-            model_id=agent.model_id,
+            id=cast(UUID, agent.id),
+            slug=str(agent.slug),
+            name=str(agent.name),
+            status=str(agent.status),
+            description=cast(str | None, agent.description),
+            instruction=cast(str | None, agent.instruction),
+            model_id=cast(str | None, agent.model_id),
             tools=tools,
-            events_config=agent.events_config,
-            planning=agent.planning,
-            a2ui_enabled=agent.a2ui_enabled,
-            agent_type=agent.agent_type,
+            events_config=cast(dict | None, agent.events_config),
+            planning=cast(bool | None, agent.planning),
+            a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
+            agent_type=str(agent.agent_type),
             skills=skills,
         )
+
+
+async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUID | None:
+    """Resolve a UUID for an agent referenced by UUID *or* slug.
+
+    Returns the agent's UUID if found in the caller's workspace, else None.
+    """
+    with suppress(ValueError):
+        return UUID(identifier)
+    agent = await agent_service.get_by_slug(identifier)
+    return agent.id if agent else None
 
 
 @router.post("/", response_model=AgentResponse)
@@ -187,7 +195,8 @@ class ToolResponse(BaseModel):
 
 def _mcp_tool_response(tool: dict[str, Any], instance) -> ToolResponse | None:
     """Normalize persisted MCP tool metadata to the public tool response."""
-    function = tool.get("function") if isinstance(tool.get("function"), dict) else tool
+    raw_function = tool.get("function")
+    function = raw_function if isinstance(raw_function, dict) else tool
     name = function.get("name")
     if not name:
         return None
@@ -265,12 +274,15 @@ async def get_all_tools(
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
-    agent_id: UUID,
+    agent_id: str,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
-    """Get an agent by ID."""
-    agent = await agent_service.get_with_skills(agent_id)
+    """Get an agent by UUID or workspace-scoped slug."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.get_with_skills(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)
@@ -297,33 +309,41 @@ async def list_agents(
 
 @router.patch("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
-    agent_id: UUID,
+    agent_id: str,
     data: AgentUpdate,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Update an agent."""
-    await require_permission("edit", "agent", str(agent_id), user_context.user_id)
+    """Update an agent (by UUID or workspace-scoped slug)."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await require_permission("edit", "agent", str(resolved_id), user_context.user_id)
     # Validate model_id if it's being updated
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
 
-    agent = await agent_service.update_agent(id=agent_id, payload=data)
+    agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    agent = await agent_service.get_with_skills(agent_id)
+    agent = await agent_service.get_with_skills(resolved_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)
 
 
 @router.delete("/{agent_id}")
 async def delete_agent(
-    agent_id: UUID,
+    agent_id: str,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Delete an agent."""
-    await require_permission("delete", "agent", str(agent_id), user_context.user_id)
-    success = await agent_service.delete_agent(agent_id)
+    """Delete an agent (by UUID or workspace-scoped slug)."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await require_permission("delete", "agent", str(resolved_id), user_context.user_id)
+    success = await agent_service.delete_agent(resolved_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}

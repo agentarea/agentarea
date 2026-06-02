@@ -21,7 +21,7 @@ from contextvars import ContextVar
 from typing import Any
 
 from starlette.requests import Request
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ def _make_replay_receive(body: bytes) -> Receive:
     """Return an ASGI ``receive`` callable that replays *body* exactly once."""
     _sent = False
 
-    async def replay():
+    async def replay() -> Message:
         nonlocal _sent
         if not _sent:
             _sent = True
@@ -225,6 +225,7 @@ def _make_replay_receive(body: bytes) -> Receive:
         import asyncio
 
         await asyncio.Event().wait()
+        return {"type": "http.disconnect"}
 
     return replay
 

@@ -6,7 +6,7 @@ used across the AgentArea API endpoints.
 
 import logging
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.import_export_service import WorkspaceImportExportService
@@ -38,50 +38,23 @@ from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
+from agentarea_triggers.infrastructure.repository import (
+    TriggerExecutionRepository,
+    TriggerRepository,
+)
+from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
+from agentarea_triggers.trigger_service import TriggerService
+from agentarea_triggers.webhook_manager import (
+    DefaultWebhookManager,
+    WebhookExecutionCallback,
+)
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Initialize module logger early to avoid NameError in import-time branches
 logger = logging.getLogger(__name__)
 
-# Trigger system imports (conditional to avoid import errors)
-try:
-    from agentarea_triggers.infrastructure.repository import (  # type: ignore[assignment]
-        TriggerExecutionRepository,
-        TriggerRepository,
-    )
-    from agentarea_triggers.temporal_schedule_manager import (
-        TemporalScheduleManager,  # type: ignore[assignment]
-    )
-    from agentarea_triggers.trigger_service import TriggerService  # type: ignore[assignment]
-    from agentarea_triggers.webhook_manager import (  # type: ignore[assignment]
-        DefaultWebhookManager,
-        WebhookExecutionCallback,
-    )
-
-    TRIGGERS_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Triggers module not available: {e}")
-    TRIGGERS_AVAILABLE = False
-
-    # Create dummy classes to prevent import errors
-    class TriggerService:  # type: ignore[no-redef]
-        pass
-
-    class TriggerRepository:  # type: ignore[no-redef]
-        pass
-
-    class TriggerExecutionRepository:  # type: ignore[no-redef]
-        pass
-
-    class DefaultWebhookManager:  # type: ignore[no-redef]
-        pass
-
-    class WebhookExecutionCallback:  # type: ignore[no-redef]
-        pass
-
-    class TemporalScheduleManager:  # type: ignore[no-redef]
-        pass
+TRIGGERS_AVAILABLE: Final = True
 
 
 async def get_event_broker() -> EventBroker:
@@ -508,22 +481,8 @@ async def get_webhook_manager(
     event_broker: EventBrokerDep,
     repository_factory: RepositoryFactoryDep,
     secret_manager: BaseSecretManagerDep,
-):
+) -> DefaultWebhookManager:
     """Get a WebhookManager instance for the current request."""
-    if not TRIGGERS_AVAILABLE:
-        # Return a mock webhook manager
-        class MockWebhookManager:
-            async def handle_webhook_request(self, *args, **kwargs):
-                return {
-                    "status_code": 503,
-                    "body": {"status": "error", "message": "Triggers service not available"},
-                }
-
-            async def is_healthy(self):
-                return False
-
-        return MockWebhookManager()
-
     settings = get_settings()
     trigger_service = await get_trigger_service(repository_factory, event_broker, secret_manager)
     execution_callback = TriggerServiceWebhookCallback(trigger_service)

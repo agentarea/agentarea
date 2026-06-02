@@ -55,7 +55,8 @@
           "temporal-workflows",
           "warm-pool",
           "skill-sandboxing",
-          "feature-flags"
+          "feature-flags",
+          "engineering-principles"
         ]
       },
       {

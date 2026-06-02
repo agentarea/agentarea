@@ -1,8 +1,8 @@
 """End-to-end test — full pipeline with multiple interceptors."""
 
-import pytest
 from uuid import uuid4
 
+import pytest
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.factory import create_governance_pipeline
@@ -96,7 +96,15 @@ class TestE2EFullPipeline:
         assert result.interceptor_name == "semantic_guard"
 
     @pytest.mark.asyncio
-    async def test_escalation_guard_routes_to_human(self):
+    async def test_pipeline_does_not_escalate_for_approval(self):
+        """Human-approval escalation is NOT enforced at the activity pipeline.
+
+        The activity-boundary interceptor cannot pause/resume a workflow, so an
+        ESCALATE here would only fail the activity. ApprovalPolicy is enforced
+        inside the workflow loop (policy_requires_approval -> HUMAN_APPROVAL_REQUESTED
+        -> resolve_escalation), the only place that can pause for a human. The
+        pipeline therefore allows the call through to that workflow-level gate.
+        """
         pipeline = create_governance_pipeline()
         ctx = _ctx(
             action_name="payment_process",
@@ -107,8 +115,7 @@ class TestE2EFullPipeline:
             },
         )
         result = await pipeline.run(Phase.PRE_TOOL_CALL, ctx)
-        assert result.action == InterceptorAction.ESCALATE
-        assert result.interceptor_name == "escalation_guard"
+        assert result.action == InterceptorAction.ALLOW
 
     @pytest.mark.asyncio
     async def test_prompt_injection_blocked_on_llm_input(self):

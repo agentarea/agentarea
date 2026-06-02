@@ -69,6 +69,13 @@ make test           # pytest unit/functional
 uv run pytest tests/integration/ -v  # integration tests
 ```
 
+## ALEMBIC MIGRATIONS
+
+- **Filenames: ISO timestamp** — `YYYYMMDD_HHMM_<slug>.py`, e.g. `20260601_1659_add_agent_mcp_slugs.py`. `alembic revision --autogenerate -m "..."` produces this format automatically via `file_template` in `apps/api/alembic.ini`. Sort chronologically in `ls`; no merge conflicts between parallel PRs.
+- **Legacy names** — anything that predates this convention uses either numeric (`001_`, `011_`) or letter-pair (`aa, bb, ..., rr`) prefixes. **Do not extend the letter-pair scheme.** It was a half-baked attempt at chronological hints that didn't prevent collisions (we hit a `pp1_*` collision in #183). Leave existing files in place; new files go ISO.
+- **`down_revision` is the source of truth** — alembic ignores filenames when ordering migrations. Always set `down_revision` to the current head (`uv run alembic heads` from `apps/api/`). When two parallel branches end up with two heads, add a merge revision: `uv run alembic merge -m "merge X and Y" <head_a> <head_b>`.
+- **Self-contained** — never import helpers from `agentarea_common` or other domain libs into a migration. Inline anything you need so the migration is safe to run against any future revision of the codebase.
+
 ## ADDING NEW DOMAIN LIB
 
 1. Create `libs/{name}/` with pyproject.toml

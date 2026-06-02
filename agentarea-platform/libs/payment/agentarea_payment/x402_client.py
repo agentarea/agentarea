@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from importlib import import_module
 from typing import Any
 
 from .models import PaymentResult
@@ -40,13 +41,13 @@ class X402PaymentClient:
             return self._client
 
         try:
-            from x402 import x402Client
-            from x402.mechanisms.evm.exact import ExactEvmScheme
+            x402_client_cls = import_module("x402").x402Client
+            exact_evm_scheme_cls = import_module("x402.mechanisms.evm.exact").ExactEvmScheme
 
-            client = x402Client()
+            client = x402_client_cls()
             # Create signer from private key
             signer = self._create_signer()
-            client.register("eip155:*", ExactEvmScheme(signer=signer))
+            client.register("eip155:*", exact_evm_scheme_cls(signer=signer))
             self._client = client
             return client
         except ImportError:
@@ -56,9 +57,9 @@ class X402PaymentClient:
     def _create_signer(self):
         """Create a signer from the private key."""
         try:
-            from eth_account import Account
+            account_cls = import_module("eth_account").Account
 
-            return Account.from_key(self._private_key)
+            return account_cls.from_key(self._private_key)
         except ImportError:
             # Fallback: x402 SDK may provide its own signer
             logger.warning("eth_account not available, attempting x402 native signer")

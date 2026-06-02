@@ -1,7 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 try:
@@ -113,7 +113,7 @@ class FAISSContextProvider(ContextProvider):
         index_position = self.index.ntotal
 
         # Store in FAISS index
-        self.index.add(embedding)
+        cast(Any, self.index).add(embedding)
 
         # Store metadata
         context_metadata = {
@@ -158,7 +158,7 @@ class FAISSContextProvider(ContextProvider):
         # Search for similar contexts
         # Get more results than needed for filtering
         search_limit = min(limit * 3, self.index.ntotal)
-        scores, indices = self.index.search(query_embedding, search_limit)
+        scores, indices = cast(Any, self.index).search(query_embedding, search_limit)
 
         contexts = []
         for score, idx in zip(scores[0], indices[0], strict=False):

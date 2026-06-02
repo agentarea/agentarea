@@ -1,7 +1,7 @@
 """Helper classes and utilities for agent execution workflows."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from temporalio import workflow
 
@@ -11,6 +11,61 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO, Money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
+
+
+def resolve_effective_budget(
+    request_budget: Money | None,
+    effective_policy: dict[str, Any] | None,
+    key: str = "run_budget_usd",
+) -> Money | None:
+    """Single source of truth for the run budget.
+
+    The legacy ``request.budget_usd`` and the governance policy ceiling
+    (``effective_policy.budget.run_budget_usd``) are reconciled so the
+    loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)
+    enforce the same number. The tightest of the two wins — a lower ceiling
+    can never be loosened by the other source.
+    """
+    policy_budget = None
+    if effective_policy:
+        policy_budget = (effective_policy.get("budget") or {}).get(key)
+
+    candidates = [to_money(b) for b in (request_budget, policy_budget) if b is not None]
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name: str) -> bool:
+    """Whether a tool call needs human approval — driven solely by ApprovalPolicy.
+
+    The policy engine is the single source of truth: either approval is required
+    globally (``requires_human_approval``) or the tool is explicitly listed in
+    ``escalation_rules``. When approval is required the workflow pauses on the
+    existing human-in-the-loop path (HUMAN_APPROVAL_REQUESTED -> resolve_escalation).
+    """
+    approval = (effective_policy or {}).get("approval") or {}
+    if approval.get("requires_human_approval") is True:
+        return True
+    return tool_name in (approval.get("escalation_rules") or [])
+
+
+def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
+    """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
+    return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
+    """Whether the caller may resolve an escalation.
+
+    Empty ``approvers`` is the soft default — any workspace member may approve
+    (see issue #198 for the zero-trust posture). Otherwise the caller must be a
+    direct user subject ``user:<id>``. Group/userset subjects are stored but not
+    resolved until a membership/roles model exists, so they do not grant approval.
+    """
+    if not approvers:
+        return True
+    return bool(caller_user_id) and f"user:{caller_user_id}" in approvers
 
 
 class EventManager:
@@ -77,7 +132,11 @@ class BudgetTracker:
     Use serialize_money() when putting values into dicts/events.
     """
 
-    def __init__(self, budget_usd: float | None = None, service_budget_usd: float | None = None):
+    def __init__(
+        self,
+        budget_usd: Money | float | None = None,
+        service_budget_usd: Money | float | None = None,
+    ):
         from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
 
         self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
@@ -89,7 +148,7 @@ class BudgetTracker:
         self._service_cost: Money = ZERO
         self._service_warning_sent = False
 
-    def add_cost(self, amount: float) -> None:
+    def add_cost(self, amount: Money | float) -> None:
         """Add cost to the current total."""
         added = to_money(amount)
         self.cost += added
@@ -211,7 +270,7 @@ class MessageBuilder:
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools,
+            available_tools=cast(Any, available_tools),
             a2ui_enabled=a2ui_enabled,
         )
 
@@ -314,7 +373,7 @@ class ToolCallExtractor:
         elif isinstance(message, dict) and "tool_calls" in message:
             tool_calls = message["tool_calls"]
 
-        if hasattr(message, "content"):
+        if not isinstance(message, dict) and hasattr(message, "content"):
             content = message.content
         elif isinstance(message, dict) and "content" in message:
             content = message["content"]

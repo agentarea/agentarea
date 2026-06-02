@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import unicodedata
 import urllib.request
 import uuid
 from datetime import datetime, timezone
@@ -299,12 +301,12 @@ def reconcile(
             entity_id = existing["installed_entity_id"]
             if entity_id:
                 _update_entity(
-                    conn, registry_type, entity_id, item, workspace_id
+                    conn, registry_type, entity_id, item, workspace_id, existing["id"]
                 )
             updated_count += 1
         else:
             item_id = _create_registry_item(conn, registry_id, item, workspace_id)
-            entity_id = _create_entity(conn, registry_type, item, workspace_id)
+            entity_id = _create_entity(conn, registry_type, item, workspace_id, item_id)
             if entity_id:
                 conn.execute(
                     _text(
@@ -450,7 +452,11 @@ def _update_registry_item(conn, item_id: str, item: dict[str, Any]) -> None:
 
 
 def _create_entity(
-    conn, registry_type: str, item: dict[str, Any], workspace_id: str
+    conn,
+    registry_type: str,
+    item: dict[str, Any],
+    workspace_id: str,
+    registry_item_id: str | None = None,
 ) -> str | None:
     if registry_type == "llm_providers":
         return _upsert_provider_spec(conn, item, workspace_id)
@@ -461,7 +467,7 @@ def _create_entity(
     if registry_type == "mcp_servers":
         return _upsert_mcp_server(conn, item, workspace_id)
     if registry_type == "skills":
-        return _upsert_skill(conn, item, workspace_id)
+        return _upsert_skill(conn, item, workspace_id, registry_item_id)
     return None
 
 
@@ -471,9 +477,10 @@ def _update_entity(
     entity_id: str,
     item: dict[str, Any],
     workspace_id: str,
+    registry_item_id: str | None = None,
 ) -> None:
     # Re-upsert handles updates uniformly for our catalog shapes.
-    _create_entity(conn, registry_type, item, workspace_id)
+    _create_entity(conn, registry_type, item, workspace_id, registry_item_id)
 
 
 def _upsert_provider_spec(
@@ -704,14 +711,69 @@ def _upsert_mcp_server(conn, item: dict[str, Any], workspace_id: str) -> str:
     return sid
 
 
-def _upsert_skill(conn, item: dict[str, Any], workspace_id: str) -> str:
+def _generate_slug(name: str) -> str:
+    """ASCII, lowercase, hyphenated slug. Kept in sync with
+    agentarea_common.utils.slug.generate_slug."""
+    if not isinstance(name, str):
+        name = str(name or "")
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    if len(slug) > 100:
+        slug = slug[:100].rstrip("-")
+    return slug or "item"
+
+
+def _unique_skill_slug(conn, workspace_id: str, name: str) -> str:
+    """Workspace-unique slug via SELECT collision checks.
+
+    Safe within the operator's single per-registry transaction (own writes are
+    visible to later reads in the same tx); cross-pass idempotency is guaranteed
+    separately by the registry_item_id conflict target.
+    """
+    base = _generate_slug(name)
+
+    def _taken(candidate: str) -> bool:
+        return (
+            conn.execute(
+                _text("SELECT 1 FROM skills WHERE workspace_id = :ws AND slug = :slug LIMIT 1"),
+                {"ws": workspace_id, "slug": candidate},
+            ).fetchone()
+            is not None
+        )
+
+    if not _taken(base):
+        return base
+    for suffix in range(2, 1000):
+        candidate = f"{base}-{suffix}"
+        if not _taken(candidate):
+            return candidate
+    raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
+
+def _upsert_skill(
+    conn, item: dict[str, Any], workspace_id: str, registry_item_id: str | None = None
+) -> str:
+    """Idempotently upsert a catalog skill keyed on its registry item.
+
+    Dedup is by ``registry_item_id`` (provenance), backed by the partial unique
+    index ``uq_skills_registry_item`` — race-proof under overlapping reconciles,
+    unlike the previous SELECT-then-INSERT by name. The slug is immutable and
+    derived once at creation.
+    """
     spec = item.get("spec") or {}
-    row = conn.execute(
-        _text("SELECT id FROM skills WHERE name = :name AND workspace_id = :ws"),
-        {"name": item["name"], "ws": workspace_id},
-    ).fetchone()
-    if row:
-        sid = str(row[0])
+
+    # Dedup by provenance: one skill per registry item. Re-sync updates in place
+    # and never touches the (immutable) slug.
+    existing = (
+        conn.execute(
+            _text("SELECT id FROM skills WHERE registry_item_id = :rid"),
+            {"rid": registry_item_id},
+        ).fetchone()
+        if registry_item_id
+        else None
+    )
+    if existing:
+        sid = str(existing[0])
         conn.execute(
             _text(
                 "UPDATE skills SET description = :desc, content = :content, "
@@ -725,21 +787,29 @@ def _upsert_skill(conn, item: dict[str, Any], workspace_id: str) -> str:
             },
         )
         return sid
-    sid = str(uuid.uuid4())
-    conn.execute(
+
+    slug = _unique_skill_slug(conn, workspace_id, item["name"])
+    row = conn.execute(
         _text(
-            "INSERT INTO skills (id, name, description, source_type, content, source_url, "
-            "workspace_id, created_by, created_at, updated_at) VALUES (:id, :name, :desc, "
-            ":st, :content, :url, :ws, 'system', now(), now())"
+            "INSERT INTO skills (id, name, slug, description, source_type, content, "
+            "source_url, registry_item_id, workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :name, :slug, :desc, :st, :content, :url, :rid, :ws, 'system', "
+            "now(), now()) "
+            "ON CONFLICT (registry_item_id) WHERE registry_item_id IS NOT NULL "
+            "DO UPDATE SET description = EXCLUDED.description, content = EXCLUDED.content, "
+            "source_url = EXCLUDED.source_url, updated_at = now() "
+            "RETURNING id"
         ),
         {
-            "id": sid,
+            "id": str(uuid.uuid4()),
             "name": item["name"],
+            "slug": slug,
             "desc": item.get("description"),
             "st": spec.get("source_type", "content"),
             "content": spec.get("content"),
             "url": spec.get("source_url"),
+            "rid": registry_item_id,
             "ws": workspace_id,
         },
-    )
-    return sid
+    ).fetchone()
+    return str(row[0])
