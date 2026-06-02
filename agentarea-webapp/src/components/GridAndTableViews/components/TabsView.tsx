@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
-import { TabsList, TabsTrigger } from "@/components/ui/tabs";
+import HeaderTabs from "@/components/HeaderTabs";
 import { TabsWithNavigation } from "./TabsWithNavigation";
 
 export default function TabsView({
@@ -33,22 +32,15 @@ export default function TabsView({
         </div>
 
         <div>
-          <TabsList>
-            <TabsTrigger
-              value="grid"
-              className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"
-            >
-              <LayoutDashboardIcon className="h-5 w-5" />
-              <span className="hidden sm:block">{t("grid")}</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="table"
-              className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"
-            >
-              <TablePropertiesIcon className="h-5 w-5" />
-              <span className="hidden sm:block">{t("table")}</span>
-            </TabsTrigger>
-          </TabsList>
+          <HeaderTabs
+            paramName="tab"
+            defaultTab="grid"
+            currentTab={activeTab}
+            tabs={[
+              { value: "table", label: t("table") },
+              { value: "grid", label: t("grid") },
+            ]}
+          />
         </div>
       </div>
 

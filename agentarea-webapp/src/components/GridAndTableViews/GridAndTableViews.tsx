@@ -1,10 +1,10 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import HeaderTabs from "@/components/HeaderTabs";
 import Table from "@/components/Table/Table";
-import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { TabsWithNavigation } from "./components/TabsWithNavigation";
 
@@ -36,22 +36,15 @@ const TabsView = ({
         </div>
 
         <div>
-          <TabsList>
-            <TabsTrigger
-              value="grid"
-              className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"
-            >
-              <LayoutDashboardIcon className="h-5 w-5" />
-              <span className="hidden sm:block">{t("grid")}</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="table"
-              className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"
-            >
-              <TablePropertiesIcon className="h-5 w-5" />
-              <span className="hidden sm:block">{t("table")}</span>
-            </TabsTrigger>
-          </TabsList>
+          <HeaderTabs
+            paramName="tab"
+            defaultTab="grid"
+            currentTab={activeTab}
+            tabs={[
+              { value: "table", label: t("table") },
+              { value: "grid", label: t("grid") },
+            ]}
+          />
         </div>
       </div>
 

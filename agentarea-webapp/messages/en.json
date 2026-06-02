@@ -142,7 +142,6 @@
     "importExport": "Import / Export",
     "auditLog": "Audit Log"
   },
-
   "LlmBrowsePage": {
     "title": "LLM Models",
     "addNewLlm": "Add New LLM",
@@ -239,7 +238,6 @@
       "description": "Manage your subscription and billing"
     }
   },
-
   "BillingPage": {
     "title": "Billing",
     "description": "Manage your subscription and billing",
@@ -314,7 +312,6 @@
       }
     }
   },
-
   "AgentPaymentsPage": {
     "title": "Payment History",
     "description": "All service payments made by this agent via x402 and MPP protocols.",
@@ -842,7 +839,8 @@
         "private": "Private",
         "ingress": "Ingress",
         "egress": "Egress"
-      }
+      },
+      "filter": "Filter"
     },
     "table": {
       "name": "Name",
@@ -895,11 +893,21 @@
       "nameOverride": "Override imported name",
       "descriptionOptional": "Description (optional)",
       "descriptionOverride": "Override imported description",
+      "githubUrlHint": "Use a public GitHub repository URL that contains the skill files.",
       "createSkill": "Create Skill",
       "importFromGithub": "Import from GitHub",
       "uploadSkill": "Upload Skill",
       "dragDrop": "Drag and drop a ZIP file, or",
       "browse": "browse",
+      "useTemplate": "Use template",
+      "templateOverwriteConfirm": "Replace the current content with the default skill template?",
+      "frontmatterDetected": "Frontmatter detected in the content. Name and description from the file will be used automatically.",
+      "previewEmpty": "Preview will appear here once you add content.",
+      "viewMode": {
+        "edit": "Edit",
+        "split": "Split",
+        "preview": "Preview"
+      },
       "remove": "Remove",
       "validationError": "Validation Error",
       "error": {
@@ -915,8 +923,21 @@
         "skillCreated": "Skill created successfully",
         "skillImported": "Skill imported successfully",
         "skillUploaded": "Skill uploaded successfully"
-      }
-    }
+      },
+      "uploadHint": "Drag and drop or browse to select a ZIP file"
+    },
+    "display": {
+      "display": "Display",
+      "grouping": "Grouping",
+      "source": "Source",
+      "scope": "Scope",
+      "none": "No grouping",
+      "ordering": "Ordering",
+      "name": "Name",
+      "created": "Created"
+    },
+    "emptyHere": "No skills here",
+    "emptyHereDescription": "Nothing matches this view yet."
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",
@@ -1358,7 +1379,6 @@
     "retryable": "Retryable",
     "nonRetryable": "Non-retryable"
   },
-
   "AuditLogPage": {
     "title": "Audit Log",
     "description": "Track who did what, when, and from where across your workspace",
