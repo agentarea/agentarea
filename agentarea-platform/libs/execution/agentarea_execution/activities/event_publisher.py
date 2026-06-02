@@ -2,12 +2,28 @@
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from agentarea_common.events.base_events import DomainEvent
+from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.router import create_event_broker_from_router
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_event_broker(event_broker: Any) -> EventBroker:
+    """Return the publish-capable EventBroker from worker/API event dependencies."""
+    if isinstance(event_broker, EventBroker):
+        return event_broker
+
+    if hasattr(event_broker, "broker"):
+        return create_event_broker_from_router(event_broker)
+
+    raise TypeError(
+        "event_broker must implement EventBroker or expose a RedisRouter-style "
+        f"'broker' attribute, got {type(event_broker).__name__}"
+    )
 
 
 def create_event_publisher(event_broker, task_id: str):
@@ -28,7 +44,7 @@ def create_event_publisher(event_broker, task_id: str):
             chunk_type: "text" for regular content, "thinking" for reasoning blocks.
         """
         try:
-            redis_event_broker = create_event_broker_from_router(event_broker)
+            publisher = resolve_event_broker(event_broker)
 
             chunk_event = {
                 "event_type": "LLMCallChunk",
@@ -56,7 +72,7 @@ def create_event_publisher(event_broker, task_id: str):
             )
 
             # Publish via RedisEventBroker for real-time SSE
-            await redis_event_broker.publish(domain_event)
+            await publisher.publish(domain_event)
             logger.debug(f"Published LLM chunk event {chunk_index} for task {task_id}")
 
         except Exception as e:
@@ -85,7 +101,7 @@ async def publish_a2ui_event(
         event_broker: FastStream event broker/router.
     """
     try:
-        redis_event_broker = create_event_broker_from_router(event_broker)
+        publisher = resolve_event_broker(event_broker)
 
         a2ui_event = {
             "event_type": event_type,
@@ -105,7 +121,7 @@ async def publish_a2ui_event(
             original_data=a2ui_event["data"],
         )
 
-        await redis_event_broker.publish(domain_event)
+        await publisher.publish(domain_event)
         logger.debug(f"Published {event_type} event for task {task_id}")
 
     except Exception as e:
@@ -123,7 +139,7 @@ async def publish_enriched_llm_error_event(
 ):
     """Publish enriched LLM error event with detailed error information."""
     try:
-        redis_event_broker = create_event_broker_from_router(event_broker)
+        publisher = resolve_event_broker(event_broker)
 
         error_type = type(error).__name__
         error_message = str(error)
@@ -175,7 +191,7 @@ async def publish_enriched_llm_error_event(
         )
 
         # Publish via RedisEventBroker for real-time SSE
-        await redis_event_broker.publish(domain_event)
+        await publisher.publish(domain_event)
         logger.info(f"Published enriched LLM error event for task {task_id}: {error_type}")
 
     except Exception as e:
