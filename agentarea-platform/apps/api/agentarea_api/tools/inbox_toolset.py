@@ -8,7 +8,7 @@ from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context
 
-INBOX_STATUSES = ["waiting_for_approval", "completed", "failed"]
+INBOX_STATUSES = ["waiting_for_approval", "waiting_for_input", "completed", "failed"]
 
 
 @toolset(
@@ -18,7 +18,7 @@ INBOX_STATUSES = ["waiting_for_approval", "completed", "failed"]
     category="platform",
 )
 class InboxToolset(Toolset):
-    """List tasks awaiting user action (waiting_for_approval, completed, failed)."""
+    """List tasks awaiting user action (waiting_for_approval, waiting_for_input, completed, failed)."""
 
     @tool_method
     async def list(

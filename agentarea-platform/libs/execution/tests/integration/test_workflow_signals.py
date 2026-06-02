@@ -51,6 +51,8 @@ from temporalio.worker import Worker
 
 _llm_release = threading.Event()
 _published: list[dict[str, Any]] = []
+_status_updates: list[str] = []
+_request_input_llm_calls = 0
 
 
 @activity.defn(name="build_agent_config_activity")
@@ -115,6 +117,76 @@ def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     }
 
 
+@activity.defn(name="call_llm_activity")
+def _mock_call_llm_request_input(request: LLMCallRequest) -> dict[str, Any]:
+    """First ask for user input, then complete after the queued reply."""
+    global _request_input_llm_calls
+    _request_input_llm_calls += 1
+    if _request_input_llm_calls == 1:
+        return {
+            "content": "",
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_input_1",
+                    "type": "function",
+                    "function": {
+                        "name": "request_user_input",
+                        "arguments": json.dumps(
+                            {
+                                "question": "Which environment should I use?",
+                                "questions": [
+                                    {
+                                        "id": "environment",
+                                        "question": "Which environment should I use?",
+                                        "type": "select",
+                                        "options": ["dev", "prod"],
+                                        "required": True,
+                                    },
+                                    {
+                                        "id": "api_token",
+                                        "question": "API token",
+                                        "type": "secret",
+                                        "secret_name": "service/api_token",
+                                        "required": True,
+                                    },
+                                ],
+                            }
+                        ),
+                    },
+                }
+            ],
+            "finish_reason": "tool_calls",
+        "cost": 0.001,
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+    tool_payload = None
+    for message in request.messages:
+        if message.get("name") == "request_user_input":
+            tool_payload = json.loads(message["content"])
+            break
+    assert tool_payload is not None
+    assert tool_payload["answers"] == {"environment": "dev"}
+    assert tool_payload["secret_refs"]["api_token"]["secret_ref"] == "secret:service/api_token"
+    return {
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_done_1",
+                "type": "function",
+                "function": {
+                    "name": "completion",
+                    "arguments": json.dumps({"result": "continued with input"}),
+                },
+            }
+        ],
+        "finish_reason": "tool_calls",
+        "cost": 0.001,
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+
+
 @activity.defn(name="execute_mcp_tool_activity")
 async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
     return {"success": True, "result": "Mock", "tool_name": request.tool_name}
@@ -134,6 +206,7 @@ async def _mock_publish_events(request: WorkflowEventsRequest) -> WorkflowEvents
 
 @activity.defn(name="update_task_status_activity")
 async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
+    _status_updates.append(request.status)
     return True
 
 
@@ -191,10 +264,24 @@ async def _wait_until_initialized(handle, attempts: int = 100) -> None:
     )
 
 
+async def _wait_for_status(handle, status: str, attempts: int = 100) -> None:
+    import asyncio
+
+    for _ in range(attempts):
+        state = await handle.query(AgentExecutionWorkflow.get_current_state)
+        if state.get("status") == status:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"workflow never reached {status!r}; last state={state!r}")
+
+
 @pytest.fixture(autouse=True)
 def _reset_globals():
+    global _request_input_llm_calls
     _llm_release.clear()
     _published.clear()
+    _status_updates.clear()
+    _request_input_llm_calls = 0
     yield
     # Always release on teardown so a failing test doesn't strand a worker.
     _llm_release.set()
@@ -203,6 +290,83 @@ def _reset_globals():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_request_user_input_waits_for_queued_reply_then_continues():
+    """The built-in request_user_input tool pauses until structured input resumes it."""
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        activities = [
+            _mock_build_config,
+            _mock_discover_tools,
+            _mock_resolve_model,
+            _mock_call_llm_request_input,
+            _mock_execute_mcp,
+            _mock_publish_events,
+            _mock_update_status,
+        ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            worker = Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=activities,
+                activity_executor=executor,
+            )
+            async with worker:
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(hours=1),
+                )
+
+                await _wait_for_status(handle, "waiting_for_input")
+                assert "waiting_for_input" in _status_updates
+                state = await handle.query(AgentExecutionWorkflow.get_current_state)
+                pending = state["pending_input_requests"]
+                assert len(pending) == 1
+                input_request_id = next(iter(pending))
+                questions = pending[input_request_id]["questions"]
+                assert questions[0]["id"] == "environment"
+                assert questions[1]["type"] == "secret"
+
+                published_types = {e.get("event_type") for e in _published}
+                assert "HumanInputRequested" in published_types, published_types
+                assert "WorkflowCompleted" not in published_types, published_types
+
+                await handle.signal(
+                    AgentExecutionWorkflow.workflow_command,
+                    args=[
+                        "submit_user_input",
+                        {
+                            "input_request_id": input_request_id,
+                            "answers": {"environment": "dev"},
+                            "secret_refs": {
+                                "api_token": {
+                                    "secret_name": "service/api_token",
+                                    "secret_ref": "secret:service/api_token",
+                                }
+                            },
+                        },
+                    ],
+                )
+
+                result = await handle.result()
+
+                assert result.success is True
+                assert result.final_response == "continued with input"
+                assert _request_input_llm_calls == 2
+                published_types = {e.get("event_type") for e in _published}
+                assert "HumanInputReceived" in published_types, published_types
+                assert "WorkflowCompleted" in published_types, published_types
+                assert "running" in _status_updates
+                assert "completed" in _status_updates
 
 
 @pytest.mark.asyncio

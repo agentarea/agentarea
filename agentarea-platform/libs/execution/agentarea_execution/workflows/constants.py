@@ -83,6 +83,8 @@ class EventTypes:
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
     HUMAN_APPROVAL_DENIED: Final[str] = "HumanApprovalDenied"
+    HUMAN_INPUT_REQUESTED: Final[str] = "HumanInputRequested"
+    HUMAN_INPUT_RECEIVED: Final[str] = "HumanInputReceived"
 
     MODEL_CHANGED: Final[str] = "ModelChanged"
     MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
@@ -131,6 +133,7 @@ class ExecutionStatus:
     PLANNING: Final[str] = "planning"
     EXECUTING: Final[str] = "executing"
     WAITING_FOR_APPROVAL: Final[str] = "waiting_for_approval"
+    WAITING_FOR_INPUT: Final[str] = "waiting_for_input"
     BLOCKED: Final[str] = "blocked"
     TOOL_EXECUTION: Final[str] = "tool_execution"
     EVALUATING: Final[str] = "evaluating"

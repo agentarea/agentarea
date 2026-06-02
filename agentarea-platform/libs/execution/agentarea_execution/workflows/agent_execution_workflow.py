@@ -139,6 +139,7 @@ class AgentExecutionWorkflow:
         # Stateless wrt the policy itself — pool lives in state.searchable_tool_pool.
         self._disclosure_policy: ToolDisclosurePolicy | None = None
         self._pending_escalations: dict[str, PendingEscalation] = {}
+        self._pending_input_requests: dict[str, dict[str, Any]] = {}
         # Generic message queue — queued user messages drained before each LLM call
         self._message_queue: list[dict[str, Any]] = []
         # Track if completion event has been published (to avoid double-publish at termination)
@@ -253,6 +254,7 @@ class AgentExecutionWorkflow:
             "change_model": self._handle_change_model,
             "update_budget": self._handle_update_budget,
             "queue_message": self._handle_queue_message,
+            "submit_user_input": self._handle_submit_user_input,
             "remove_message": self._handle_remove_message,
         }
         handler = handlers.get(command)
@@ -310,10 +312,36 @@ class AgentExecutionWorkflow:
                 "MessageQueued",
                 {
                     "message_id": msg_id,
-                    "content": text,
+                    "content_length": len(text),
                 },
             )
         workflow.logger.info(f"Message queued: {msg_id}")
+
+    def _handle_submit_user_input(self, payload: dict) -> None:
+        """Resolve a pending structured user-input request."""
+        input_request_id = str(payload.get("input_request_id") or "")
+        pending = self._pending_input_requests.get(input_request_id)
+        if not pending:
+            workflow.logger.warning(
+                f"submit_user_input ignored for unknown input_request_id={input_request_id!r}"
+            )
+            return
+
+        pending["resolved"] = True
+        pending["submission"] = {
+            "answers": payload.get("answers") or {},
+            "secret_refs": payload.get("secret_refs") or {},
+        }
+        if self.event_manager:
+            self.event_manager.add_event(
+                "UserInputSubmitted",
+                {
+                    "input_request_id": input_request_id,
+                    "answer_keys": sorted(list((payload.get("answers") or {}).keys())),
+                    "secret_keys": sorted(list((payload.get("secret_refs") or {}).keys())),
+                },
+            )
+        workflow.logger.info(f"User input submitted: {input_request_id}")
 
     def _handle_remove_message(self, payload: dict) -> None:
         """Remove a queued message by ID before the agent sees it."""
@@ -590,6 +618,99 @@ class AgentExecutionWorkflow:
             not in {"completion", "task_complete"}
         ]
         available_tools.insert(0, completion_tool_definition)
+
+        # request_user_input — pause the workflow until the user provides a reply.
+        available_tools.insert(
+            1,
+            {
+                "type": "function",
+                "function": {
+                    "name": "request_user_input",
+                    "description": (
+                        "Ask the user for missing information and pause this task until "
+                        "they reply. Use this instead of completion when the task cannot "
+                        "continue without user input. Optional choices may be supplied for "
+                        "single-select questions; free-text replies are allowed by default."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": (
+                                    "The exact question to show to the user for a simple "
+                                    "single-question prompt. For rich forms, use questions."
+                                ),
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Optional answer choices. Omit for a free-text question."
+                                ),
+                            },
+                            "questions": {
+                                "type": "array",
+                                "description": (
+                                    "Optional structured form fields. Use this when you need "
+                                    "multiple answers, typed inputs, or secret inputs."
+                                ),
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "description": (
+                                                "Stable field identifier returned with the answer."
+                                            ),
+                                        },
+                                        "question": {
+                                            "type": "string",
+                                            "description": "Field label/question shown to the user.",
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "text",
+                                                "textarea",
+                                                "select",
+                                                "multiselect",
+                                                "boolean",
+                                                "number",
+                                                "secret",
+                                            ],
+                                            "description": (
+                                                "Input type. Use secret for API keys, tokens, "
+                                                "passwords, and session strings."
+                                            ),
+                                        },
+                                        "required": {"type": "boolean"},
+                                        "options": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                        },
+                                        "secret_name": {
+                                            "type": "string",
+                                            "description": (
+                                                "Suggested workspace secret name for secret fields."
+                                            ),
+                                        },
+                                    },
+                                    "required": ["id", "question"],
+                                },
+                            },
+                            "allow_custom_response": {
+                                "type": "boolean",
+                                "description": (
+                                    "Whether the user may provide a free-text answer outside "
+                                    "the supplied options. Defaults to true."
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        )
 
         # recall_history — query past execution context
         available_tools.append(
@@ -1593,11 +1714,14 @@ class AgentExecutionWorkflow:
         read_output_calls: list[ToolCall] = []
         activate_source_calls: list[ToolCall] = []
         load_tools_calls: list[ToolCall] = []
+        input_calls: list[ToolCall] = []
 
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
             if tool_name in {"completion", "task_complete"}:
                 completion_call = tool_call
+            elif tool_name == "request_user_input":
+                input_calls.append(tool_call)
             elif tool_name == "recall_history":
                 recall_calls.append(tool_call)
             elif tool_name == "read_tool_output":
@@ -1614,6 +1738,36 @@ class AgentExecutionWorkflow:
                 agent_calls.append(tool_call)
             else:
                 regular_calls.append(tool_call)
+
+        # User-input requests are exclusive: the workflow must pause and get a
+        # reply before any further side effects or final completion happen.
+        if input_calls:
+            await self._execute_request_user_input(input_calls[0])
+            skipped_calls = [
+                *input_calls[1:],
+                *recall_calls,
+                *read_output_calls,
+                *activate_source_calls,
+                *load_tools_calls,
+                *skill_calls,
+                *script_calls,
+                *agent_calls,
+                *regular_calls,
+            ]
+            for skipped in skipped_calls:
+                skipped_name = skipped.function.get("name", "unknown")
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=(
+                            "Skipped because the workflow requested user input. "
+                            "Call this tool again after the user reply if it is still needed."
+                        ),
+                        tool_call_id=skipped.id,
+                        name=skipped_name,
+                    )
+                )
+            return
 
         # Run recall_history and read_tool_output calls (can run in parallel with agent calls)
         for tool_call in recall_calls:
@@ -1689,6 +1843,174 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
+
+    async def _execute_request_user_input(self, tool_call: ToolCall) -> None:
+        """Pause execution until the user replies via the queue_message command."""
+        from datetime import timedelta
+
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        questions = self._normalize_user_input_questions(tool_args)
+        question = str(tool_args.get("question") or "").strip()
+        if not question:
+            question = questions[0]["question"] if questions else "Please provide input."
+        allow_custom_response = bool(tool_args.get("allow_custom_response", True))
+        input_request_id = str(workflow.uuid4())
+        pending_request = {
+            "resolved": False,
+            "submission": None,
+            "questions": questions,
+        }
+        self._pending_input_requests[input_request_id] = pending_request
+
+        self.state.status = ExecutionStatus.WAITING_FOR_INPUT
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="waiting_for_input",
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
+        self.event_manager.add_event(
+            EventTypes.HUMAN_INPUT_REQUESTED,
+            {
+                "input_request_id": input_request_id,
+                "tool_call_id": tool_call.id,
+                "iteration": self.state.current_iteration,
+                "question": question,
+                "questions": questions,
+                "allow_custom_response": allow_custom_response,
+                "input_mode": "form" if len(questions) > 1 else questions[0]["type"],
+            },
+        )
+        await self._publish_events_immediately()
+
+        try:
+            await workflow.wait_condition(
+                lambda: pending_request["resolved"],
+                timeout=timedelta(minutes=30),
+            )
+        except TimeoutError:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content="No user response was received before the input request timed out.",
+                    tool_call_id=tool_call.id,
+                    name="request_user_input",
+                )
+            )
+            self._pending_input_requests.pop(input_request_id, None)
+            return
+
+        submission = pending_request.get("submission") or {}
+
+        self.event_manager.add_event(
+            EventTypes.HUMAN_INPUT_RECEIVED,
+            {
+                "input_request_id": input_request_id,
+                "tool_call_id": tool_call.id,
+                "answer_keys": sorted(list((submission.get("answers") or {}).keys())),
+                "secret_keys": sorted(list((submission.get("secret_refs") or {}).keys())),
+                "iteration": self.state.current_iteration,
+            },
+        )
+        await self._publish_events_immediately()
+
+        self.state.status = ExecutionStatus.EXECUTING
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=json.dumps(
+                    {
+                        "input_request_id": input_request_id,
+                        "answers": submission.get("answers") or {},
+                        "secret_refs": submission.get("secret_refs") or {},
+                    },
+                    ensure_ascii=False,
+                ),
+                tool_call_id=tool_call.id,
+                name="request_user_input",
+            )
+        )
+        self._pending_input_requests.pop(input_request_id, None)
+
+    def _normalize_user_input_questions(self, tool_args: dict[str, Any]) -> list[dict[str, Any]]:
+        """Normalize legacy question/options and rich questions[] into form fields."""
+        raw_questions = tool_args.get("questions")
+        if isinstance(raw_questions, list) and raw_questions:
+            questions = []
+            for idx, raw in enumerate(raw_questions):
+                if not isinstance(raw, dict):
+                    continue
+                field_id = str(raw.get("id") or f"field_{idx + 1}").strip()
+                label = str(raw.get("question") or raw.get("label") or field_id).strip()
+                field_type = str(raw.get("type") or "text").strip().lower()
+                if field_type not in {
+                    "text",
+                    "textarea",
+                    "select",
+                    "multiselect",
+                    "boolean",
+                    "number",
+                    "secret",
+                }:
+                    field_type = "text"
+                options = [
+                    str(option)
+                    for option in (raw.get("options") or [])
+                    if str(option).strip()
+                ]
+                question = {
+                    "id": field_id,
+                    "question": label,
+                    "type": field_type,
+                    "required": bool(raw.get("required", True)),
+                }
+                if options:
+                    question["options"] = options
+                if field_type == "secret" and raw.get("secret_name"):
+                    question["secret_name"] = str(raw["secret_name"])
+                questions.append(question)
+            if questions:
+                return questions
+
+        question = str(tool_args.get("question") or "").strip()
+        if not question:
+            question = "Please provide the missing information so I can continue."
+        raw_options = tool_args.get("options") or []
+        options = [str(option) for option in raw_options if str(option).strip()]
+        field_type = "select" if options else "text"
+        normalized = {
+            "id": "answer",
+            "question": question,
+            "type": field_type,
+            "required": True,
+        }
+        if options:
+            normalized["options"] = options
+        return [normalized]
 
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
         """Execute a single MCP tool call using Pydantic models."""
@@ -3171,6 +3493,13 @@ class AgentExecutionWorkflow:
                     "resolved": e.resolved,
                 }
                 for eid, e in self._pending_escalations.items()
+            },
+            "pending_input_requests": {
+                input_id: {
+                    "resolved": bool(pending.get("resolved")),
+                    "questions": pending.get("questions") or [],
+                }
+                for input_id, pending in self._pending_input_requests.items()
             },
             "context": self.context_manager.get_status() if self.context_manager else None,
         }
