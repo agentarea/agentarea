@@ -1,10 +1,5 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-// Neutral placeholders rendered while loading or when a provider has no icon.
-const LOADING_ICON =
-  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI0YzRjNGMyIvPgo8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMyIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K";
-const FALLBACK_ICON =
-  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI0YzRjNGMyIvPgo8cGF0aCBkPSJNOCA0QzkuMTA0NTcgNCAxMCA0Ljg5NTQzIDEwIDZDMTAgNy4xMDQ1NyA5LjEwNDU3IDggOCA4QzYuODk1NDMgOCA2IDcuMTA0NTcgNiA2QzYgNC44OTU0MyA2Ljg5NTQzIDQgOCA0WiIgZmlsbD0iIzk5OTk5OSIvPgo8cGF0aCBkPSJNOCA5QzkuMTA0NTcgOSAxMCA5Ljg5NTQzIDEwIDExQzEwIDEyLjEwNDYgOS4xMDQ1NyAxMyA4IDEzQzYuODk1NDMgMTMgNiAxMi4xMDQ2IDYgMTFDNiA5Ljg5NTQzIDYuODk1NDMgOSA4IDlaIiBmaWxsPSIjOTk5OTk5Ii8+Cjwvc3ZnPgo=";
 
 interface ModelBadgeProps {
   providerName?: string;
@@ -26,17 +21,39 @@ export default function ModelBadge({
   isLoading = false,
   size = "default",
 }: ModelBadgeProps) {
-  const getProviderIcon = () => {
-    if (isLoading) return LOADING_ICON;
-    return iconUrl || FALLBACK_ICON;
-  };
-
   const getModelName = () => {
     if (isLoading) return "Loading...";
     return modelDisplayName || configName || providerName || "Unknown model";
   };
 
   const isSm = size === "sm";
+  const iconSize = isSm ? 14 : 16;
+
+  // While loading show a neutral skeleton; once loaded render the real icon, or
+  // nothing at all if the provider has none. No default/placeholder icons.
+  const renderIcon = () => {
+    if (isLoading) {
+      return (
+        <Skeleton
+          className="rounded-sm"
+          style={{ width: iconSize, height: iconSize }}
+        />
+      );
+    }
+    if (!iconUrl) return null;
+    return (
+      <img
+        src={iconUrl}
+        alt={providerName || "Model"}
+        width={iconSize}
+        height={iconSize}
+        className="rounded-sm"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    );
+  };
 
   return (
     <div
@@ -47,16 +64,7 @@ export default function ModelBadge({
       )}
       title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ""}`}
     >
-      <img
-        src={getProviderIcon()}
-        alt={providerName || "Model"}
-        width={isSm ? 14 : 16}
-        height={isSm ? 14 : 16}
-        className="rounded-sm"
-        onError={(e) => {
-          e.currentTarget.src = FALLBACK_ICON;
-        }}
-      />
+      {renderIcon()}
       <span
         className={cn(
           "font-medium text-gray-700",
