@@ -1,35 +1,39 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter, useSearchParams } from "next/navigation";
+import YAML from "js-yaml";
 import {
-  FileCode,
-  Github,
-  Upload,
-  Link as LinkIcon,
-  FileText,
-  Sparkles,
-  Eye,
-  Pencil,
   Columns,
+  Eye,
+  FileCode,
   FilePlus,
-  X,
+  FileText,
+  Github,
   Info,
+  Link as LinkIcon,
+  Loader2,
+  Pencil,
+  Sparkles,
+  Upload,
+  X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Streamdown } from "streamdown";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
-import { Streamdown } from "streamdown";
-import YAML from "js-yaml";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import {
   createSkillAction as createSkill,
+  getSkillAction as getSkill,
+  getSkillContentAction as getSkillContent,
   uploadSkillAction as uploadSkill,
 } from "@/lib/server-actions";
-import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import type { Skill, SkillContent } from "@/types/skill";
 
 const SKILL_TEMPLATE = `---
 name: my-skill
@@ -74,7 +78,11 @@ function parseFrontmatter(content: string): {
   };
 }
 
-function injectFrontmatter(body: string, name?: string, description?: string): string {
+function injectFrontmatter(
+  body: string,
+  name?: string,
+  description?: string
+): string {
   const parsed = parseFrontmatter(body);
   if (parsed.hasFrontmatter) return body;
   if (!name && !description) return body;
@@ -90,8 +98,12 @@ type ViewMode = "edit" | "split" | "preview";
 export function CreateSkillForm() {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tCreate = useTranslations("SkillsPage.create");
+  const sourceSkillId = searchParams.get("from");
   const [activeTab, setActiveTab] = useState("content");
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [duplicatedFromId, setDuplicatedFromId] = useState<string | null>(null);
 
   // Content tab state
   const [contentName, setContentName] = useState("");
@@ -314,6 +326,81 @@ export function CreateSkillForm() {
     else if (activeTab === "upload") handleUploadSubmit();
   };
 
+  useEffect(() => {
+    if (!sourceSkillId || duplicatedFromId === sourceSkillId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSkillToDuplicate = async () => {
+      setIsDuplicating(true);
+
+      try {
+        const [skillRes, contentRes] = await Promise.all([
+          getSkill(sourceSkillId),
+          getSkillContent(sourceSkillId),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const sourceSkill = skillRes.data as Skill | undefined;
+        const sourceContent = contentRes.data as SkillContent | undefined;
+
+        if (skillRes.error || !sourceSkill) {
+          toast({
+            title: tCreate("error.duplicateLoadFailed"),
+            description: tCreate("error.duplicateLoadFailedDescription"),
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const name = sourceSkill.name || "";
+        const description = sourceSkill.description || "";
+
+        setContentName(name);
+        setContentDescription(description);
+        setGithubName(name);
+        setGithubDescription(description);
+        setUploadName(name);
+        setUploadDescription(description);
+
+        if (sourceSkill.source_type === "github") {
+          setActiveTab("github");
+          setGithubUrl(sourceSkill.source_url || "");
+        } else {
+          setActiveTab("content");
+          setContentMarkdown(sourceContent?.content || "");
+        }
+
+        setDuplicatedFromId(sourceSkillId);
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        toast({
+          title: tCreate("error.duplicateLoadFailed"),
+          description: tCreate("error.duplicateLoadFailedDescription"),
+          variant: "destructive",
+        });
+      } finally {
+        if (!cancelled) {
+          setIsDuplicating(false);
+        }
+      }
+    };
+
+    loadSkillToDuplicate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [duplicatedFromId, sourceSkillId, tCreate, toast]);
+
   const useTemplate = () => {
     if (
       contentMarkdown.trim() &&
@@ -372,7 +459,11 @@ export function CreateSkillForm() {
             <div className="grid gap-3 md:grid-cols-2">
               {showNameField && (
                 <div className="grid gap-1.5">
-                  <FormLabel htmlFor="content-name" icon={Sparkles} required={false}>
+                  <FormLabel
+                    htmlFor="content-name"
+                    icon={Sparkles}
+                    required={false}
+                  >
                     {tCreate("name")}
                   </FormLabel>
                   <Input
@@ -406,6 +497,13 @@ export function CreateSkillForm() {
               <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{tCreate("frontmatterDetected")}</span>
+              </div>
+            )}
+
+            {isDuplicating && (
+              <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>{tCreate("loadingDuplicate")}</span>
               </div>
             )}
 
@@ -457,7 +555,9 @@ export function CreateSkillForm() {
             <div
               className={cn(
                 "grid min-h-0 flex-1 overflow-hidden rounded-md border border-input bg-background",
-                viewMode === "split" ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
+                viewMode === "split"
+                  ? "grid-cols-1 lg:grid-cols-2"
+                  : "grid-cols-1"
               )}
             >
               {(viewMode === "edit" || viewMode === "split") && (
@@ -516,7 +616,11 @@ export function CreateSkillForm() {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="grid gap-2">
-                <FormLabel htmlFor="github-name" icon={Sparkles} required={false}>
+                <FormLabel
+                  htmlFor="github-name"
+                  icon={Sparkles}
+                  required={false}
+                >
                   {tCreate("nameOptional")}
                 </FormLabel>
                 <Input
@@ -603,7 +707,11 @@ export function CreateSkillForm() {
 
             <div className="grid gap-3 md:grid-cols-2">
               <div className="grid gap-2">
-                <FormLabel htmlFor="upload-name" icon={Sparkles} required={false}>
+                <FormLabel
+                  htmlFor="upload-name"
+                  icon={Sparkles}
+                  required={false}
+                >
                   {tCreate("nameOptional")}
                 </FormLabel>
                 <Input

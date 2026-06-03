@@ -917,14 +917,17 @@
         "uploadFailed": "Failed to upload skill",
         "invalidFile": "Invalid File",
         "zipRequired": "Please upload a ZIP file",
-        "createFailed": "Failed to create skill"
+        "createFailed": "Failed to create skill",
+        "duplicateLoadFailed": "Failed to load skill for duplication",
+        "duplicateLoadFailedDescription": "The original skill could not be loaded, so the form was left unchanged."
       },
       "success": {
         "skillCreated": "Skill created successfully",
         "skillImported": "Skill imported successfully",
         "skillUploaded": "Skill uploaded successfully"
       },
-      "uploadHint": "Drag and drop or browse to select a ZIP file"
+      "uploadHint": "Drag and drop or browse to select a ZIP file",
+      "loadingDuplicate": "Loading the original skill and pre-filling this form..."
     },
     "display": {
       "display": "Display",
