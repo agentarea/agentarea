@@ -766,7 +766,7 @@ export function createApiClient(client: Client) {
     },
 
     getMCPInstanceHealth: async (
-      instanceName: string
+      managerServiceName: string
     ): Promise<{
       health_check: {
         service_name: string;
@@ -795,7 +795,7 @@ export function createApiClient(client: Client) {
         }
         const healthData = data as any;
         const healthCheck = healthData.health_checks?.find(
-          (check: any) => check.service_name === instanceName
+          (check: any) => check.service_name === managerServiceName
         );
         return { health_check: healthCheck || null };
       } catch (error) {
