@@ -41,6 +41,13 @@ interface Props {
   memberNames?: Record<string, string>;
 }
 
+const MCP_TRANSPORT = {
+  url: "url",
+  bundle: "bundle",
+  command: "command",
+  docker: "docker",
+} as const;
+
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const t = useTranslations("MCPServersPage.instanceDetail");
@@ -211,20 +218,25 @@ export default function MCPInstanceDetail({
   const derivedTransportType = ((): string => {
     const fromInstance = instance.json_spec?.type as string | undefined;
     if (fromInstance) return fromInstance;
-    if (serverSpec?.remote_url) return "url";
+    if (serverSpec?.remote_url) return MCP_TRANSPORT.url;
     const specJson = (serverSpec as any)?.json_spec as
       | Record<string, any>
       | undefined;
     if (specJson?.type) return specJson.type as string;
-    if ((serverSpec as any)?.cmd) return "command";
-    return "docker";
+    if ((serverSpec as any)?.cmd) return MCP_TRANSPORT.command;
+    return MCP_TRANSPORT.docker;
   })();
   const jsonSpecType = derivedTransportType;
+  const managerServiceName = instance.id;
   useEffect(() => {
-    if (jsonSpecType === "url" || jsonSpecType === "bundle") return;
-    if (isVerificationSucceeded && instance.name) {
+    if (
+      jsonSpecType === MCP_TRANSPORT.url ||
+      jsonSpecType === MCP_TRANSPORT.bundle
+    )
+      return;
+    if (isVerificationSucceeded && managerServiceName) {
       setIsLoadingUrl(true);
-      getMCPInstanceHealth(instance.name)
+      getMCPInstanceHealth(managerServiceName)
         .then(({ health_check }) => {
           if (health_check?.details?.proxy_url) {
             setConnectionUrl(health_check.details.proxy_url);
@@ -242,7 +254,7 @@ export default function MCPInstanceDetail({
         .catch(console.error)
         .finally(() => setIsLoadingUrl(false));
     }
-  }, [isVerificationSucceeded, instance.name, jsonSpecType]);
+  }, [isVerificationSucceeded, managerServiceName, jsonSpecType]);
 
   const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
     string,
@@ -264,9 +276,9 @@ export default function MCPInstanceDetail({
 
   // Determine MCP type (uses derivedTransportType — see above)
   const specType = derivedTransportType;
-  const isUrlType = specType === "url";
-  const isCommandType = specType === "command";
-  const isBundleType = specType === "bundle";
+  const isUrlType = specType === MCP_TRANSPORT.url;
+  const isCommandType = specType === MCP_TRANSPORT.command;
+  const isBundleType = specType === MCP_TRANSPORT.bundle;
   const bundleMembers = (instance.json_spec?.members ?? []) as string[];
 
   // Command-type fields
