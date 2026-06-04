@@ -5,27 +5,27 @@ import { cookies } from "next/headers";
 import { env } from "@/env";
 
 /**
- * In-memory token cache with TTL
- * Maps cookie hash -> { token, expiresAt }
- */
-const tokenCache = new Map<string, { token: string | null; expiresAt: number }>();
-
-// Cache TTL: 5 minutes (JWT tokens typically last longer but we refresh proactively)
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-/**
- * Get authentication token from current session
- * Returns JWT token or null if no session
+ * Get authentication token from current session.
+ * Returns a freshly tokenized Kratos JWT, or null if there is no live session.
  *
- * Uses two-level caching:
- * 1. React.cache() for request-level deduplication (same render)
- * 2. In-memory cache for cross-request caching (5 min TTL)
+ * Deliberately STATELESS across requests: the JWT is a short-lived token
+ * derived from the long-lived Kratos session cookie, so it is re-resolved per
+ * request rather than cached in process memory. A cross-request in-memory cache
+ * is an anti-pattern here — it does not survive horizontal scaling (each node
+ * keeps its own copy, producing non-deterministic staleness), leaks entries
+ * that are never evicted, and can pin a stale/null token past its real expiry.
+ *
+ * De-duplication WITHIN a single server render is handled by React.cache()
+ * below, so a page issuing many API calls resolves the session via Kratos
+ * `whoami` at most once per request. If `whoami` ever becomes a measured
+ * bottleneck, add a SHARED (e.g. Valkey) cache keyed by session id with a TTL
+ * bounded by the token's own exp — not a per-process Map.
  */
 async function getAuthTokenImpl(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
 
-    // Get all cookies to forward to Kratos
+    // Forward all cookies to Kratos so it can resolve the session
     const allCookies = cookieStore.getAll();
     const cookieHeader = allCookies
       .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -36,20 +36,9 @@ async function getAuthTokenImpl(): Promise<string | null> {
       return null;
     }
 
-    // Create a simple hash of the cookie header for cache key
-    // (session cookies are typically stable within a session)
-    const cacheKey = cookieHeader;
-
-    // Check in-memory cache
-    const cached = tokenCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      console.log("[getAuthToken] Using cached token");
-      return cached.token;
-    }
-
     console.debug("[getAuthToken] Calling Kratos whoami endpoint");
 
-    // Call Kratos directly with fetch to get JWT token
+    // Call Kratos directly to tokenize the session into an agentarea JWT
     const response = await fetch(
       `${env.ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`,
       {
@@ -67,37 +56,27 @@ async function getAuthTokenImpl(): Promise<string | null> {
       const data = await response.json();
       if (data.tokenized) {
         console.log("[getAuthToken] JWT token received successfully");
-        const token = data.tokenized;
-
-        // Store in cache
-        tokenCache.set(cacheKey, {
-          token,
-          expiresAt: Date.now() + CACHE_TTL_MS,
-        });
-
-        return token;
-      } else {
-        console.warn("[getAuthToken] No tokenized field in response");
+        return data.tokenized;
       }
-    } else {
-      console.error(
-        "[getAuthToken] Kratos response not OK:",
-        response.status,
-        response.statusText
-      );
+      console.warn("[getAuthToken] No tokenized field in response");
+      return null;
     }
 
+    console.error(
+      "[getAuthToken] Kratos response not OK:",
+      response.status,
+      response.statusText
+    );
     return null;
   } catch (error: any) {
     console.error("[getAuthToken] Error getting JWT token from Kratos:", error);
-    // Return null if authentication fails
-    // This allows requests to work even if session is invalid
+    // Return null if authentication fails; callers treat null as "no session".
     return null;
   }
 }
 
 /**
- * Exported function with React.cache() for request-level deduplication
- * This ensures multiple calls within the same server render only fetch once
+ * Exported with React.cache() for request-scoped de-duplication: multiple calls
+ * within the same server render resolve the session only once.
  */
 export const getAuthToken = cache(getAuthTokenImpl);

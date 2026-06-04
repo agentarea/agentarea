@@ -315,6 +315,29 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
   }
 
+  /* Brand identity: diagonal hatch. `bg-hatch-on-color` lays light stripes
+     over a filled colour surface (e.g. agent avatars); `bg-hatch-soft`
+     is a faint neutral texture for panels (e.g. the Test surface). */
+  .bg-hatch-on-color {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 9px,
+      rgba(255, 255, 255, 0.2) 9px,
+      rgba(255, 255, 255, 0.2) 10px
+    );
+  }
+
+  .bg-hatch-soft {
+    background-image: repeating-linear-gradient(
+      135deg,
+      hsl(var(--muted) / 0.45),
+      hsl(var(--muted) / 0.45) 9px,
+      hsl(var(--border) / 0.6) 9px,
+      hsl(var(--border) / 0.6) 10px
+    );
+  }
+
   .label {
     @apply flex items-center gap-[5px];
   }

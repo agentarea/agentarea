@@ -1,6 +1,14 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
-import { listAgents, listModelInstances, getAllTasks } from "@/lib/api";
+import {
+  listAgents,
+  listModelInstances,
+  listMCPServerInstances,
+  listMCPServers,
+  getAllTasks,
+} from "@/lib/api";
+import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
 import AgentsList from "./AgentsList";
 
 interface AgentsContentProps {
@@ -14,8 +22,25 @@ export default async function AgentsContent({
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
 
-  const [{ data: agents = [] }, { data: modelInstances = [] }, { data: tasks = [] }] =
-    await Promise.all([listAgents(), listModelInstances(), getAllTasks()]);
+  const [
+    { data: agents = [] },
+    { data: modelInstances = [] },
+    { data: mcpInstances = [] },
+    { data: mcpServersData },
+    { data: tasks = [] },
+  ] = await Promise.all([
+    listAgents(),
+    listModelInstances(),
+    listMCPServerInstances(),
+    listMCPServers({ page_size: 100 }),
+    getAllTasks(),
+  ]);
+
+  const mcpServers: McpServer[] = Array.isArray(mcpServersData)
+    ? (mcpServersData as McpServer[])
+    : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
+      []);
+  const mcpInstanceList = (mcpInstances as McpInstance[]) ?? [];
 
   // Count active (running) tasks per agent
   const activeTaskCountByAgent: Record<string, number> = {};
@@ -39,7 +64,8 @@ export default async function AgentsContent({
         }
       : undefined;
     const active_task_count = activeTaskCountByAgent[String(agent.id)] ?? 0;
-    return { ...agent, model_info, active_task_count };
+    const tool_icons = resolveAgentToolIcons(agent, mcpInstanceList, mcpServers);
+    return { ...agent, model_info, active_task_count, tool_icons };
   });
 
   // Filter agents based on search query

@@ -729,6 +729,121 @@ jobs:
     enabled: true
 
 # Ory Kratos Identity Server
+# Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).
+# Disabled by default; enable to turn on real relationship-based access checks.
+keto:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: oryd/keto
+    tag: "v0.12.0"
+  database:
+    name: "keto"
+    createJob:
+      enabled: true
+  configMapOverrideName: ""
+  # Keto server config (DSN injected from the postgres secret via $DSN).
+  config: |
+    version: v0.12.0
+    dsn: ${DSN}
+    namespaces:
+      location: file:///etc/config/keto/namespaces.keto.ts
+    serve:
+      read:
+        host: 0.0.0.0
+        port: 4466
+      write:
+        host: 0.0.0.0
+        port: 4467
+      metrics:
+        host: 0.0.0.0
+        port: 4468
+    log:
+      level: info
+      format: json
+  # Ory Permission Language model. Keep in sync with
+  # config/auth/keto/namespaces.keto.ts (used by docker-compose dev).
+  namespaces: |
+    import { Namespace, Context, SubjectSet } from "@ory/keto-namespace-types"
+
+    class User implements Namespace {}
+
+    class Workspace implements Namespace {
+      related: {
+        members: (User | Agent)[]
+      }
+    }
+
+    class SkillCollection implements Namespace {
+      related: {
+        parents: Workspace[]
+        viewers: (User | Agent | SubjectSet<Workspace, "members">)[]
+        editors: (User | Agent | SubjectSet<Workspace, "members">)[]
+        owners: (User | Agent)[]
+      }
+      permits = {
+        use: (ctx: Context): boolean =>
+          this.related.viewers.includes(ctx.subject) ||
+          this.related.editors.includes(ctx.subject) ||
+          this.related.owners.includes(ctx.subject),
+        configure: (ctx: Context): boolean =>
+          this.related.editors.includes(ctx.subject) ||
+          this.related.owners.includes(ctx.subject),
+        manage: (ctx: Context): boolean =>
+          this.related.owners.includes(ctx.subject),
+      }
+    }
+
+    class Skill implements Namespace {
+      related: {
+        collections: SkillCollection[]
+        viewers: (User | Agent)[]
+        editors: (User | Agent)[]
+        owners: (User | Agent)[]
+      }
+      permits = {
+        use: (ctx: Context): boolean =>
+          this.related.viewers.includes(ctx.subject) ||
+          this.related.editors.includes(ctx.subject) ||
+          this.related.owners.includes(ctx.subject) ||
+          this.related.collections.traverse((c) => c.permits.use(ctx)),
+        configure: (ctx: Context): boolean =>
+          this.related.editors.includes(ctx.subject) ||
+          this.related.owners.includes(ctx.subject) ||
+          this.related.collections.traverse((c) => c.permits.configure(ctx)),
+        manage: (ctx: Context): boolean =>
+          this.related.owners.includes(ctx.subject) ||
+          this.related.collections.traverse((c) => c.permits.manage(ctx)),
+      }
+    }
+
+    class MCPServer implements Namespace {
+      related: {
+        connectors: (User | Agent | SubjectSet<Workspace, "members">)[]
+        operators: (User | Agent)[]
+      }
+      permits = {
+        connect: (ctx: Context): boolean =>
+          this.related.connectors.includes(ctx.subject) ||
+          this.related.operators.includes(ctx.subject),
+        manage: (ctx: Context): boolean =>
+          this.related.operators.includes(ctx.subject),
+      }
+    }
+
+    class Agent implements Namespace {
+      related: {
+        operators: (User | Agent | SubjectSet<Workspace, "members">)[]
+        owners: User[]
+      }
+      permits = {
+        operate: (ctx: Context): boolean =>
+          this.related.operators.includes(ctx.subject) ||
+          this.related.owners.includes(ctx.subject),
+        own: (ctx: Context): boolean => this.related.owners.includes(ctx.subject),
+      }
+    }
+
 kratos:
   enabled: true
   replicaCount: 1

@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
 import ModelBadge from "@/components/ui/model-badge";
 import { cn } from "@/lib/utils";
-import { Agent } from "@/types";
-import { getToolAvatarUrls } from "@/utils/toolsDisplay";
+import { Agent, agentPath } from "@/types";
+import { AgentToolIcon } from "@/utils/agentToolIcons";
+import { AgentToolIcons } from "./AgentToolIcons";
 
 type AgentCardProps = {
-  agent: Agent & { active_task_count?: number };
+  agent: Agent & { active_task_count?: number; tool_icons?: AgentToolIcon[] };
 };
 
 export default function AgentCard({ agent }: AgentCardProps) {
   return (
-    <Link href={`/agents/${agent.id}`}>
+    <Link href={agentPath(agent)}>
       <div className="block h-full">
         <Card
           className={cn(
@@ -84,14 +84,11 @@ export default function AgentCard({ agent }: AgentCardProps) {
             >
               <div className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:bg-zinc-800" />
               <div className="relative z-10 flex items-center justify-between">
-                {(() => {
-                  const toolAvatars = getToolAvatarUrls(agent);
-                  return toolAvatars.length > 0 ? (
-                    <AvatarCircles maxDisplay={5} avatarUrls={toolAvatars} />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">No tools</span>
-                  );
-                })()}
+                {agent.tool_icons && agent.tool_icons.length > 0 ? (
+                  <AgentToolIcons maxDisplay={5} tools={agent.tool_icons} />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No tools</span>
+                )}
                 <HoverLink text="View agent" />
               </div>
             </div>

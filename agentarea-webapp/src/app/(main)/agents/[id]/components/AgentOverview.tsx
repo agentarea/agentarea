@@ -1,14 +1,25 @@
-import Link from "next/link";
-import { ArrowRight, MessagesSquare } from "lucide-react";
-import { AgentAvatar } from "@/components/AgentAvatar";
+import { createElement } from "react";
 import {
-  computeDelta,
-  DeltaBadge,
-  Sparkline,
-} from "@/components/charts/Sparkline";
-import { Button } from "@/components/ui/button";
+  ArrowUpRight,
+  Boxes,
+  ChevronRight,
+  Clock,
+  ListChecks,
+  Plug,
+  Play,
+  Shield,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
+import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
+import {
+  agentColorVar,
+  getAgentIconComponent,
+  resolveAgentIdentity,
+} from "@/lib/agent-identity";
 import { getAgent, listAgentTasks } from "@/lib/api";
-import { getAgentOverview } from "@/lib/api-dashboard";
+import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
 import { cn } from "@/lib/utils";
 
 const fmtUsd = (v: number) =>
@@ -30,30 +41,75 @@ const relTime = (iso: string | null | undefined) => {
   return `${Math.round(hours / 24)}d`;
 };
 
-const STATUS_DOT: Record<string, string> = {
-  completed: "bg-emerald-500",
-  failed: "bg-red-500",
-  running: "bg-blue-500",
-  input_required: "bg-amber-500",
+const RUNNING_STATUSES = new Set([
+  "running",
+  "working",
+  "submitted",
+  "in_progress",
+]);
+
+type TaskPill = "done" | "run" | "wait" | "fail";
+const taskPill = (status: string): TaskPill => {
+  if (status === "completed") return "done";
+  if (status === "failed") return "fail";
+  if (status === "input_required") return "wait";
+  if (RUNNING_STATUSES.has(status)) return "run";
+  return "done";
 };
+const PILL_CLASS: Record<TaskPill, { dot: string; pill: string; label: string }> =
+  {
+    done: {
+      dot: "bg-emerald-500",
+      pill: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+      label: "Done",
+    },
+    run: {
+      dot: "bg-blue-500",
+      pill: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+      label: "Running",
+    },
+    wait: {
+      dot: "bg-amber-500",
+      pill: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+      label: "Waiting",
+    },
+    fail: {
+      dot: "bg-red-500",
+      pill: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+      label: "Failed",
+    },
+  };
 
 export async function AgentOverview({ agentId }: { agentId: string }) {
-  const [agentRes, overview, tasksRes] = await Promise.all([
+  const [agentRes, overview, tasksRes, settings] = await Promise.all([
     getAgent(agentId).catch(() => ({ data: null, error: "load failed" })),
     getAgentOverview(agentId).catch(() => null),
     listAgentTasks(agentId).catch(() => ({ data: null, error: "load failed" })),
+    getWorkspaceSettings().catch(() => null),
   ]);
 
   const agent = (agentRes?.data as any) || { id: agentId, name: agentId };
+  // Canonical ref for in-page links: keep URLs on the slug when available,
+  // regardless of whether the page was opened by slug or id.
+  const agentRef = agent.slug || agentId;
   const tasks = (tasksRes?.data as any[]) || [];
-  const recentTasks = tasks.slice(0, 5);
 
+  const runningTasks = tasks.filter((t) =>
+    RUNNING_STATUSES.has(String(t.status ?? ""))
+  );
+  const pendingApprovals = tasks.filter(
+    (t) => String(t.status ?? "") === "input_required"
+  );
+  const recentTasks = tasks
+    .filter((t) => !RUNNING_STATUSES.has(String(t.status ?? "")))
+    .slice(0, 5);
+
+  // --- derived metrics (real data) ---
   const spendValues = (overview?.daily_spend ?? []).map((p) => p.usd);
   const completedValues = (overview?.daily_tasks ?? []).map((d) => d.completed);
   const failedValues = (overview?.daily_tasks ?? []).map((d) => d.failed);
 
-  const throughput7d =
-    completedValues.slice(-7).reduce((a, b) => a + b, 0) / 7;
+  const throughput7d = completedValues.slice(-7).reduce((a, b) => a + b, 0) / 7;
   const throughputPrev =
     completedValues.slice(-14, -7).reduce((a, b) => a + b, 0) / 7;
   const throughputDelta = computeDelta(
@@ -63,10 +119,8 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
 
   const sumCompleted = completedValues.slice(-7).reduce((a, b) => a + b, 0);
   const sumFailed = failedValues.slice(-7).reduce((a, b) => a + b, 0);
-  const reliability =
-    sumCompleted + sumFailed > 0
-      ? (sumCompleted / (sumCompleted + sumFailed)) * 100
-      : 100;
+  const totalRuns = sumCompleted + sumFailed;
+  const reliability = totalRuns > 0 ? (sumCompleted / totalRuns) * 100 : 100;
   const sumCompletedPrev = completedValues
     .slice(-14, -7)
     .reduce((a, b) => a + b, 0);
@@ -77,225 +131,566 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       : reliability;
   const reliabilityDelta = computeDelta([reliabilityPrev, reliability], 1);
 
-  const sumSpend = spendValues.slice(-7).reduce((a, b) => a + b, 0);
-  const costPerSuccess = sumCompleted > 0 ? sumSpend / sumCompleted : 0;
-  const sumSpendPrev = spendValues.slice(-14, -7).reduce((a, b) => a + b, 0);
-  const costPerSuccessPrev =
-    sumCompletedPrev > 0 ? sumSpendPrev / sumCompletedPrev : 0;
-  const costDelta = computeDelta(
-    [costPerSuccessPrev || 0, costPerSuccess || 0],
-    1
+  const spend7d = spendValues.slice(-7).reduce((a, b) => a + b, 0);
+  const spend7dPrev = spendValues.slice(-14, -7).reduce((a, b) => a + b, 0);
+  const spendDelta = computeDelta([spend7dPrev, spend7d], 1);
+
+  const costMtd = overview?.cost_mtd_usd ?? 0;
+  const cap = settings?.monthly_cap_usd ?? null;
+  const capPct = cap && cap > 0 ? Math.min(100, (costMtd / cap) * 100) : null;
+  const capTone =
+    capPct == null
+      ? "var(--primary)"
+      : capPct >= 100
+        ? "var(--destructive)"
+        : capPct >= 85
+          ? "38 92% 50%"
+          : "var(--primary)";
+
+  const doneToday = overview?.tasks_done_today ?? 0;
+  const failedToday = overview?.tasks_failed_today ?? 0;
+
+  // --- identity / hero meta ---
+  const { colorToken, iconKey } = resolveAgentIdentity(agent);
+  const HeroIcon = getAgentIconComponent(iconKey);
+  const isActive = String(agent.status ?? "").toLowerCase() === "active";
+
+  const modelLabel =
+    agent.model_info?.config_name ||
+    agent.model_info?.model_display_name ||
+    agent.model_id ||
+    null;
+  const modelSub =
+    agent.model_info?.model_display_name &&
+    agent.model_info?.model_display_name !== modelLabel
+      ? agent.model_info.model_display_name
+      : agent.model_info?.provider_name || null;
+
+  const triggers = (overview?.upcoming ?? []).filter(
+    (u) => u.kind === "trigger"
   );
 
+  const skills = agent.skills ?? [];
+  const mcpConfigs = agent.tools_config?.mcp_server_configs ?? [];
+  const openapiConfigs = agent.tools_config?.openapi_configs ?? [];
+  const connectionsCount = mcpConfigs.length + openapiConfigs.length;
+
   return (
-    <div>
-      <header className="flex items-center gap-3 pb-5">
-        <AgentAvatar agent={agent} size="lg" />
+    <div className="mx-auto w-full max-w-[1180px]">
+      {/* ===== hero ===== */}
+      <header className="flex items-start gap-4 pb-5">
+        <span
+          className="relative flex h-[50px] w-[50px] shrink-0 items-center justify-center overflow-hidden rounded-[13px] text-white [&>svg]:relative [&>svg]:z-10 [&>svg]:h-6 [&>svg]:w-6"
+          style={{ background: agentColorVar(colorToken) }}
+        >
+          {createElement(HeroIcon, { strokeWidth: 1.9 })}
+          <span className="bg-hatch-on-color pointer-events-none absolute inset-0" />
+        </span>
+
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[18px] font-semibold tracking-tight">
-            {agent.name}
-          </h1>
-          <p className="truncate text-[12px] text-muted-foreground">
-            {agent.description || "No description"}
-          </p>
-        </div>
-        <div className="hidden shrink-0 gap-1.5 sm:flex">
-          <Link href={`/agents/${agentId}/new-task`}>
-            <Button size="sm" className="h-7 gap-1.5 px-2.5 text-[12px]">
-              <MessagesSquare className="h-3.5 w-3.5" />
-              New task
-            </Button>
-          </Link>
-          <Link href={`/agents/${agentId}/tasks`}>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 gap-1 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {agent.name}
+            </h1>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
+                isActive
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  : "bg-muted text-muted-foreground"
+              )}
             >
-              All tasks <ArrowRight className="h-3 w-3" />
-            </Button>
-          </Link>
-          <Link href={`/agents/${agentId}/settings`}>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 gap-1 px-2 text-[12px] text-muted-foreground hover:text-foreground"
-            >
-              Settings <ArrowRight className="h-3 w-3" />
-            </Button>
-          </Link>
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  isActive ? "bg-emerald-500" : "bg-muted-foreground"
+                )}
+              />
+              {isActive ? "Active" : agent.status || "Paused"}
+            </span>
+          </div>
+
+          {agent.description && (
+            <p className="mt-1 max-w-[640px] text-[13px] text-muted-foreground">
+              {agent.description}
+            </p>
+          )}
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
+            {modelLabel && (
+              <HeroMeta>
+                <Boxes className="h-3.5 w-3.5" />
+                <span className="font-medium text-foreground/80">
+                  {modelLabel}
+                </span>
+              </HeroMeta>
+            )}
+            {triggers.length > 0 && (
+              <>
+                <HeroDot />
+                <HeroMeta>
+                  <Zap className="h-3.5 w-3.5" />
+                  {triggers.length}{" "}
+                  {triggers.length === 1 ? "trigger" : "triggers"}
+                </HeroMeta>
+              </>
+            )}
+            <HeroDot />
+            <HeroMeta>
+              <Clock className="h-3.5 w-3.5" />
+              Last active{" "}
+              <span className="font-medium text-foreground/80">
+                {relTime(overview?.last_activity_at)}
+              </span>
+            </HeroMeta>
+          </div>
         </div>
       </header>
 
-      <KpiStrip
-        items={[
-          {
-            label: "Throughput",
-            value: throughput7d.toFixed(1),
-            unit: "/ day",
-            sparkline: completedValues,
-            delta: throughputDelta,
+      {/* ===== stat strip ===== */}
+      <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          icon={<Shield />}
+          label="Reliability"
+          value={`${reliability.toFixed(0)}`}
+          unit="% success"
+          delta={{
+            pct: reliabilityDelta.pct,
+            direction: reliabilityDelta.direction,
             goodDirection: "up",
-            stroke: "hsl(var(--chart-2))",
-          },
-          {
-            label: "Reliability",
-            value: `${reliability.toFixed(0)}%`,
-            unit: "success rate",
-            sparkline: completedValues.map((c, i) =>
-              c + failedValues[i] > 0
-                ? (c / (c + failedValues[i])) * 100
-                : 100
-            ),
-            delta: reliabilityDelta,
+          }}
+          sub={
+            totalRuns > 0
+              ? `${sumCompleted} of ${totalRuns} tasks · 7d`
+              : "No runs in the last 7 days"
+          }
+        />
+        <StatCard
+          icon={<ListChecks />}
+          label="Throughput"
+          value={throughput7d.toFixed(1)}
+          unit="/ day"
+          delta={{
+            pct: throughputDelta.pct,
+            direction: throughputDelta.direction,
             goodDirection: "up",
-            stroke: "hsl(var(--chart-3))",
-          },
-          {
-            label: "$ / success",
-            value: costPerSuccess > 0 ? fmtUsd(costPerSuccess) : "—",
-            unit: "7-day avg",
-            sparkline: spendValues,
-            delta: costDelta,
+          }}
+          sub="tasks completed · 7d avg"
+        />
+        <StatCard
+          icon={<Clock />}
+          label="Spend · month"
+          value={fmtUsd(costMtd)}
+          delta={{
+            pct: spendDelta.pct,
+            direction: spendDelta.direction,
             goodDirection: "down",
-            stroke: "hsl(var(--accent))",
-          },
-          {
-            label: "Today",
-            value: `${overview?.tasks_done_today ?? 0}`,
-            unit: `done · ${overview?.tasks_failed_today ?? 0} failed`,
-            sparkline: completedValues.slice(-7),
-            delta: { pct: null, direction: "flat", delta: null } as any,
-            goodDirection: "up",
-            stroke: "hsl(var(--chart-1))",
-            tone:
-              (overview?.tasks_failed_today ?? 0) > 0
-                ? "text-red-600 dark:text-red-400"
-                : undefined,
-          },
-        ]}
-      />
-
-      <div className="my-6 border-t border-border/50" />
-
-      <section>
-        <header className="flex items-baseline justify-between">
-          <h3 className="text-[13px] font-medium text-foreground">
-            Recent tasks
-          </h3>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            Last activity {relTime(overview?.last_activity_at)}
-          </span>
-        </header>
-
-        {recentTasks.length === 0 ? (
-          <div className="py-8 text-center text-[12px] text-muted-foreground">
-            No tasks yet.{" "}
-            <Link
-              href={`/agents/${agentId}/new-task`}
-              className="text-foreground underline-offset-2 hover:underline"
-            >
-              Start one
-            </Link>
-            .
-          </div>
-        ) : (
-          <ul className="mt-2 -mx-2 divide-y divide-border/50">
-            {recentTasks.map((t) => {
-              const cost = Number(t.result?.total_cost ?? 0);
-              const status = String(t.status ?? "unknown");
-              return (
-                <li key={t.id}>
-                  <Link
-                    href={`/tasks/${t.id}`}
-                    className="flex items-center gap-3 rounded px-2 py-2.5 transition-colors hover:bg-muted/50"
-                  >
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 shrink-0 rounded-full",
-                        STATUS_DOT[status] ?? "bg-zinc-400"
-                      )}
-                    />
-                    <span className="w-20 shrink-0 truncate text-[11px] text-muted-foreground">
-                      {status.replace("_", " ")}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[12px]">
-                      {t.description || t.title || t.id}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
-                      {cost > 0 ? fmtUsd(cost) : "—"}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
-                      {relTime(t.created_at ?? t.started_at)}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+          }}
+          sub={cap ? `of ${fmtUsd(cap)} cap` : "no cap set"}
+        />
+        <StatCard
+          icon={<ListChecks />}
+          label="Today"
+          value={`${doneToday}`}
+          unit={`done · ${failedToday} failed`}
+          tone={failedToday > 0 ? "text-red-600 dark:text-red-400" : undefined}
+          sub={
+            runningTasks.length > 0
+              ? `${runningTasks.length} running now`
+              : "nothing running"
+          }
+        />
       </section>
+
+      {/* ===== two-column body ===== */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
+        {/* left */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHead
+              icon={<Play className="h-3.5 w-3.5" />}
+              title="In progress"
+              badge={
+                runningTasks.length > 0
+                  ? `${runningTasks.length} running`
+                  : undefined
+              }
+            />
+            {runningTasks.length === 0 ? (
+              <EmptyRow text="Nothing running right now." />
+            ) : (
+              runningTasks.map((t) => (
+                <TaskRow key={t.id} task={t} running />
+              ))
+            )}
+          </Card>
+
+          <Card>
+            <CardHead
+              icon={<ListChecks className="h-3.5 w-3.5" />}
+              title="Recent tasks"
+              link={{ label: "All tasks", href: `/agents/${agentRef}/tasks` }}
+            />
+            {recentTasks.length === 0 ? (
+              <EmptyRow
+                text="No tasks yet."
+                action={{
+                  label: "Start one",
+                  href: `/agents/${agentRef}/new-task`,
+                }}
+              />
+            ) : (
+              recentTasks.map((t) => <TaskRow key={t.id} task={t} />)
+            )}
+          </Card>
+        </div>
+
+        {/* right rail */}
+        <div className="flex flex-col gap-4">
+          {/* at a glance */}
+          <Card>
+            <CardHead
+              icon={<Boxes className="h-3.5 w-3.5" />}
+              title="At a glance"
+              link={{
+                label: "Configure",
+                href: `/agents/${agentRef}/settings`,
+              }}
+            />
+            <GlanceRow
+              href={`/agents/${agentRef}/settings`}
+              tile={
+                <span
+                  className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-bold text-white"
+                  style={{ background: agentColorVar(colorToken) }}
+                >
+                  {(agent.model_info?.provider_name?.[0] ?? "M").toUpperCase()}
+                </span>
+              }
+              title={modelLabel || "No model set"}
+              sub={modelSub || "Model"}
+            />
+            <GlanceRow
+              href={`/agents/${agentRef}/settings`}
+              tile={<GlanceTile icon={<Sparkles className="h-3.5 w-3.5" />} />}
+              title="Skills"
+              sub={
+                skills.length > 0
+                  ? skills
+                      .slice(0, 3)
+                      .map((s: any) => s.name)
+                      .join(", ") + (skills.length > 3 ? " +" + (skills.length - 3) : "")
+                  : "None granted"
+              }
+              value={skills.length}
+            />
+            <GlanceRow
+              href={`/agents/${agentRef}/settings`}
+              tile={<GlanceTile icon={<Plug className="h-3.5 w-3.5" />} />}
+              title="Connections"
+              sub={
+                connectionsCount > 0
+                  ? `${mcpConfigs.length} MCP · ${openapiConfigs.length} API`
+                  : "None connected"
+              }
+              value={connectionsCount}
+              last
+            />
+          </Card>
+
+          {/* guardrails */}
+          <Card>
+            <CardHead
+              icon={<Shield className="h-3.5 w-3.5" />}
+              title="Guardrails"
+              link={{
+                label: "Payments",
+                href: `/agents/${agentRef}/payments`,
+              }}
+            />
+            <div className="border-b border-border/60 px-[15px] py-3">
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-[12px] font-medium text-foreground/80">
+                  Spend this month
+                </span>
+                <span className="text-[11.5px] text-muted-foreground">
+                  <b className="font-semibold text-foreground tabular-nums">
+                    {fmtUsd(costMtd)}
+                  </b>
+                  {cap ? ` / ${fmtUsd(cap)}` : ""}
+                </span>
+              </div>
+              {capPct != null ? (
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${capPct}%`,
+                      background: `hsl(${capTone})`,
+                    }}
+                  />
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  No workspace spend cap configured.
+                </p>
+              )}
+            </div>
+
+            <Link
+              href={`/agents/${agentRef}/tasks?status=input_required`}
+              className="flex items-center gap-2.5 px-[15px] py-3 transition-colors hover:bg-muted/50"
+            >
+              <span
+                className={cn(
+                  "grid h-7 w-7 shrink-0 place-items-center rounded-lg",
+                  pendingApprovals.length > 0
+                    ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                <Clock className="h-3.5 w-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-medium">
+                  Approvals pending
+                </div>
+                <div className="truncate text-[11px] text-muted-foreground">
+                  {pendingApprovals.length > 0
+                    ? "Tasks waiting on human input"
+                    : "None pending"}
+                </div>
+              </div>
+              {pendingApprovals.length > 0 && (
+                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">
+                  {pendingApprovals.length}
+                </span>
+              )}
+            </Link>
+          </Card>
+
+          <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
+            Skills, connections, budgets and approvals are governed through your
+            workspace — this page links into each.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
-type KpiItem = {
+/* ------------------------- subcomponents ------------------------- */
+
+function HeroMeta({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 [&>svg]:text-muted-foreground/70">
+      {children}
+    </span>
+  );
+}
+function HeroDot() {
+  return <span className="h-[3px] w-[3px] rounded-full bg-muted-foreground/40" />;
+}
+
+type StatDelta = {
+  pct: number | null;
+  direction: "up" | "down" | "flat";
+  goodDirection: "up" | "down";
+};
+type StatCardProps = {
+  icon: React.ReactNode;
   label: string;
   value: string;
-  unit: string;
-  sparkline: number[];
-  delta: ReturnType<typeof computeDelta>;
-  goodDirection: "up" | "down";
-  stroke: string;
+  unit?: string;
+  sub: string;
   tone?: string;
+  delta?: StatDelta;
 };
-
-function KpiStrip({ items }: { items: KpiItem[] }) {
+function StatCard({ icon, label, value, unit, sub, tone, delta }: StatCardProps) {
+  const showDelta = delta && delta.pct != null && delta.direction !== "flat";
   return (
-    <section className="grid grid-cols-2 gap-x-8 gap-y-5 lg:grid-cols-4 lg:divide-x lg:divide-border/50">
-      {items.map((it, idx) => (
-        <div
-          key={it.label}
-          className={cn(
-            "min-w-0",
-            idx > 0 && "lg:pl-8"
-          )}
+    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/60">
+          {icon}
+          {label}
+        </span>
+        {showDelta && (
+          <DeltaBadge
+            pct={delta.pct}
+            direction={delta.direction}
+            goodDirection={delta.goodDirection}
+          />
+        )}
+      </div>
+      <div className={cn("mt-2.5 flex items-baseline gap-1.5", tone)}>
+        <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums">
+          {value}
+        </span>
+        {unit && (
+          <span className="text-[12px] font-medium text-muted-foreground">
+            {unit}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 text-[11.5px] text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {children}
+    </div>
+  );
+}
+
+function CardHead({
+  icon,
+  title,
+  badge,
+  link,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  badge?: string;
+  link?: { label: string; href: string };
+}) {
+  return (
+    <div className="flex items-center gap-2.5 border-b border-border/60 px-[15px] py-2.5">
+      <span className="grid h-[23px] w-[23px] place-items-center rounded-md bg-muted text-foreground/70">
+        {icon}
+      </span>
+      <span className="flex-1 text-[13px] font-semibold">{title}</span>
+      {badge && (
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+          {badge}
+        </span>
+      )}
+      {link && (
+        <Link
+          href={link.href}
+          className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline dark:text-accent-foreground"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">
-              {it.label}
-            </span>
-            <DeltaBadge
-              pct={it.delta.pct}
-              direction={it.delta.direction}
-              goodDirection={it.goodDirection}
-            />
-          </div>
-          <div
-            className={cn(
-              "mt-1 flex items-baseline gap-1.5",
-              it.tone
-            )}
-          >
-            <span className="text-[22px] font-semibold leading-none tabular-nums tracking-tight">
-              {it.value}
-            </span>
-            <span className="text-[11px] font-normal text-muted-foreground">
-              {it.unit}
-            </span>
-          </div>
-          {it.sparkline.length > 1 && (
-            <Sparkline
-              values={it.sparkline}
-              width={180}
-              height={24}
-              stroke={it.stroke}
-              strokeWidth={1.25}
-              className="mt-2 w-full"
-            />
-          )}
+          {link.label}
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function TaskRow({ task, running }: { task: any; running?: boolean }) {
+  const status = String(task.status ?? "unknown");
+  const pill = taskPill(status);
+  const meta = PILL_CLASS[pill];
+  const cost = Number(task.result?.total_cost ?? 0);
+  const when = relTime(task.created_at ?? task.started_at);
+  const title = task.description || task.title || task.id;
+
+  return (
+    <Link
+      href={`/tasks/${task.id}`}
+      className="flex items-center gap-3 border-b border-border/60 px-[15px] py-3 transition-colors last:border-b-0 hover:bg-muted/50"
+    >
+      <span
+        className={cn(
+          "h-2 w-2 shrink-0 rounded-full",
+          meta.dot,
+          running && "ring-[3px] ring-blue-500/20"
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] font-medium">{title}</div>
+        <div className="text-[11px] text-muted-foreground">
+          {running ? "Running" : meta.label} · {when}
         </div>
-      ))}
-    </section>
+      </div>
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+          meta.pill
+        )}
+      >
+        {meta.label}
+      </span>
+      <span className="w-12 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground tabular-nums">
+        {cost > 0 ? fmtUsd(cost) : "—"}
+      </span>
+    </Link>
+  );
+}
+
+function EmptyRow({
+  text,
+  action,
+}: {
+  text: string;
+  action?: { label: string; href: string };
+}) {
+  return (
+    <div className="px-[15px] py-7 text-center text-[12px] text-muted-foreground">
+      {text}
+      {action && (
+        <>
+          {" "}
+          <Link
+            href={action.href}
+            className="text-foreground underline-offset-2 hover:underline"
+          >
+            {action.label}
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+function GlanceTile({ icon }: { icon: React.ReactNode }) {
+  return (
+    <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-foreground/70">
+      {icon}
+    </span>
+  );
+}
+
+function GlanceRow({
+  href,
+  tile,
+  title,
+  sub,
+  value,
+  last,
+}: {
+  href: string;
+  tile: React.ReactNode;
+  title: string;
+  sub: string;
+  value?: number;
+  last?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-2.5 px-[15px] py-3 transition-colors hover:bg-muted/50",
+        !last && "border-b border-border/60"
+      )}
+    >
+      {tile}
+      <div className="min-w-0 flex-1">
+        <div className="text-[12.5px] font-medium">{title}</div>
+        <div className="truncate text-[11px] text-muted-foreground">{sub}</div>
+      </div>
+      <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        {value != null && (
+          <b className="font-mono font-semibold text-foreground/80 tabular-nums">
+            {value}
+          </b>
+        )}
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+      </span>
+    </Link>
   );
 }

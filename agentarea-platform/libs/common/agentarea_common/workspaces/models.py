@@ -12,6 +12,9 @@ INVITATION_STATUS_PENDING = "pending"
 INVITATION_STATUS_ACCEPTED = "accepted"
 INVITATION_STATUS_REVOKED = "revoked"
 
+WORKSPACE_TYPE_PERSONAL = "personal"
+WORKSPACE_TYPE_SHARED = "shared"
+
 
 class WorkspaceInvitation(BaseModel):
     """A pending or resolved invitation to join a workspace.
@@ -54,3 +57,35 @@ class WorkspaceMembership(BaseModel):
     workspace_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     invitation_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+
+
+class Workspace(BaseModel):
+    """A workspace: the tenancy / isolation boundary for scoped resources.
+
+    Reifies what used to be an opaque ``workspace_id`` string into a real
+    row. Two flavours, distinguished by ``type``:
+
+    - ``personal``: auto-provisioned per user; ``id`` equals the user's
+      id so existing data tagged with ``workspace_id == user_id`` keeps
+      working without a backfill.
+    - ``shared``: created explicitly; ``id`` is a generated uuid string.
+
+    ``id`` is a ``String`` (not BaseModel's UUID) precisely so a personal
+    workspace can reuse the user's id. No foreign keys from scoped tables
+    point here yet (additive table), and there is intentionally no
+    ``parent_org_id`` — the organization layer is deferred until billing
+    or SSO concretely require it.
+    """
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=WORKSPACE_TYPE_PERSONAL
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+    @property
+    def is_personal(self) -> bool:
+        return self.type == WORKSPACE_TYPE_PERSONAL

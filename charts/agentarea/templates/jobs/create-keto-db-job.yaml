@@ -1,0 +1,55 @@
+{{- if and .Values.keto.enabled .Values.postgresql.enabled .Values.keto.database.createJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-create-keto-db
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: create-keto-db
+  annotations:
+    # This job is a standard resource that waits for the database to be ready.
+    # We use internal retry logic instead of Helm hooks to avoid dependency deadlocks.
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: create-keto-db
+    spec:
+      restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+        - name: wait-for-db
+          image: "postgres:alpine"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until pg_isready -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER; do echo waiting for database; sleep 2; done;']
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+      containers:
+        - name: create-db
+          image: "postgres:alpine"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Checking/Creating keto database..."
+              export PGPASSWORD=$POSTGRES_PASSWORD
+              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.keto.database.name | default "keto" }}'" | grep -q 1 || \
+              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.keto.database.name | default "keto" }};"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+{{- end }}

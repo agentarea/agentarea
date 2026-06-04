@@ -16,6 +16,9 @@ export default async function AgentLayout({ params, children }: Props) {
   const agentResponse = await getAgent(id);
   const t = await getTranslations("AgentsPage");
   const agent = requireApiData(agentResponse, "agent");
+  // Keep all in-page navigation on the slug when available, so opening by slug
+  // doesn't bounce back to the id once a tab/breadcrumb is clicked.
+  const agentRef = agent.slug || agent.id;
 
   return (
     <ChatProvider>
@@ -23,12 +26,12 @@ export default async function AgentLayout({ params, children }: Props) {
         header={{
           breadcrumb: [
             { label: t("browseAgents"), href: "/agents" },
-            { label: agent.name, href: `/agents/${agent.id}` },
+            { label: agent.name, href: `/agents/${agentRef}` },
           ],
           controls: <AgentHeaderControls />,
         }}
         className="p-0 h-full"
-        subheader={<AgentHeaderTabs agentId={agent.id} />}
+        subheader={<AgentHeaderTabs agentId={agentRef} />}
       >
         {children}
       </ContentBlock>

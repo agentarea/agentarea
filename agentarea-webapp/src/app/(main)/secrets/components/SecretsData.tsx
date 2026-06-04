@@ -1,5 +1,6 @@
 import EmptyState from "@/components/EmptyState";
 import { listMCPServerInstances } from "@/lib/api";
+import { ExternalBackends } from "./ExternalBackends";
 import { SecretsTable } from "./SecretsTable";
 
 type MCPInstance = {
@@ -28,12 +29,7 @@ export async function SecretsData() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="border-l-2 border-border/60 py-2 pl-3 text-sm text-muted-foreground">
-        Secrets are currently managed per MCP connection. Centralized secret
-        inventory and external backend support (Infisical, Vault) coming soon.
-      </div>
-
+    <div className="space-y-6">
       {error ? (
         <EmptyState
           title="Couldn't load connections"
@@ -51,6 +47,8 @@ export async function SecretsData() {
       ) : (
         <SecretsTable instances={instances} />
       )}
+
+      <ExternalBackends />
     </div>
   );
 }

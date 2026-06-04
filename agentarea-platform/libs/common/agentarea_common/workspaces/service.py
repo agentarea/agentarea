@@ -4,16 +4,22 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from .models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
+    WORKSPACE_TYPE_SHARED,
+    Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
 )
-from .repository import WorkspaceInvitationRepository, WorkspaceMembershipRepository
+from .repository import (
+    WorkspaceInvitationRepository,
+    WorkspaceMembershipRepository,
+    WorkspaceRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,3 +155,57 @@ class WorkspaceMembershipService:
 
     async def remove(self, *, workspace_id: str, user_id: str) -> bool:
         return await self.membership_repo.delete(workspace_id, user_id)
+
+
+class WorkspaceService:
+    """Lifecycle of the reified ``Workspace`` entity.
+
+    Owns provisioning of personal workspaces and creation of shared ones.
+    Membership remains the source of truth for *who* can reach a shared
+    workspace; this service just keeps the workspace row and the owner's
+    membership in sync on create.
+    """
+
+    def __init__(
+        self,
+        workspace_repo: WorkspaceRepository,
+        membership_repo: WorkspaceMembershipRepository,
+    ) -> None:
+        self.workspace_repo = workspace_repo
+        self.membership_repo = membership_repo
+
+    async def ensure_personal(self, user_id: str) -> Workspace:
+        """Idempotently provision the user's personal workspace (id == user_id)."""
+        return await self.workspace_repo.get_or_create_personal(user_id)
+
+    async def get(self, workspace_id: str) -> Workspace | None:
+        return await self.workspace_repo.get(workspace_id)
+
+    async def create_shared(self, *, owner_user_id: str, name: str) -> Workspace:
+        """Create a shared workspace and make the creator its first member."""
+        workspace = await self.workspace_repo.add(
+            Workspace(
+                id=str(uuid4()),
+                type=WORKSPACE_TYPE_SHARED,
+                name=name,
+                owner_user_id=owner_user_id,
+            )
+        )
+        if await self.membership_repo.get(workspace.id, owner_user_id) is None:
+            await self.membership_repo.add(
+                WorkspaceMembership(
+                    workspace_id=workspace.id,
+                    user_id=owner_user_id,
+                    invitation_id=None,
+                )
+            )
+        return workspace
+
+    async def list_for_user(self, user_id: str) -> list[Workspace]:
+        """List every workspace the user can reach (personal + memberships).
+
+        Provisions the personal workspace first so a brand-new user always
+        gets at least one entry.
+        """
+        await self.ensure_personal(user_id)
+        return await self.workspace_repo.list_for_user(user_id)

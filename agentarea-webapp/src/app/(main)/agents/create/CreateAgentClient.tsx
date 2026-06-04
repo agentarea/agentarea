@@ -47,9 +47,10 @@ export default function CreateAgentClient({
   };
 
   const handleSuccess = (result: any) => {
-    const createdId = (result.fieldValues as any)?.id;
-    if (createdId && result.fieldValues) {
-      router.push(`/agents/${createdId}`);
+    const created = result.fieldValues as any;
+    const createdRef = created?.slug || created?.id;
+    if (createdRef) {
+      router.push(`/agents/${createdRef}`);
     }
   };
 

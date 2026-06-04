@@ -4,15 +4,17 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Table from "@/components/Table/Table";
-import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
-import { Agent } from "@/types";
-import { getToolAvatars } from "@/utils/toolsDisplay";
+import { Agent, agentPath } from "@/types";
+import { AgentToolIcon } from "@/utils/agentToolIcons";
+import { AgentToolIcons } from "./AgentToolIcons";
 import AgentCard from "./AgentCard";
 
+type AgentWithToolIcons = Agent & { tool_icons?: AgentToolIcon[] };
+
 interface AgentsListProps {
-  initialAgents: Agent[];
+  initialAgents: AgentWithToolIcons[];
   viewMode?: string;
 }
 
@@ -72,21 +74,18 @@ export default function AgentsList({
     {
       accessor: "tools_config",
       header: t("tools") || "Tools",
-      render: (value: any, item: Agent) => {
-        const toolAvatars = getToolAvatars(item);
-        const toolUrls = toolAvatars.map((tool) => ({
-          imageUrl: tool.imageUrl,
-        }));
+      render: (value: any, item: AgentWithToolIcons) => {
+        const toolIcons = item.tool_icons ?? [];
 
-        if (toolUrls.length === 0) {
+        if (toolIcons.length === 0) {
           return <span className="text-xs text-muted-foreground">-</span>;
         }
 
         return (
           <div className="flex items-center gap-2">
-            <AvatarCircles maxDisplay={3} avatarUrls={toolUrls} />
+            <AgentToolIcons maxDisplay={3} tools={toolIcons} />
             <span className="text-xs text-muted-foreground">
-              {toolAvatars.length}
+              {toolIcons.length}
             </span>
           </div>
         );
@@ -101,7 +100,7 @@ export default function AgentsList({
         data={initialAgents}
         columns={agentColumns}
         onRowClick={(agent) => {
-          router.push(`/agents/${agent.id}`);
+          router.push(agentPath(agent));
         }}
       />
     );

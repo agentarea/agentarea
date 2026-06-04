@@ -7,7 +7,9 @@ import ModelBadge from "@/components/ui/model-badge";
 import {
   getAgentAction as getAgent,
   listModelInstancesAction as listModelInstances,
+  listTriggersAction as listTriggers,
 } from "@/lib/server-actions";
+import { cn } from "@/lib/utils";
 import { Agent } from "@/types/agent";
 import { Task } from "../types";
 import ActionLink from "./ActionLink";
@@ -36,6 +38,7 @@ export default function ModelInfo({
 }: ModelInfoProps) {
   const t = useTranslations("TaskInfoPanel");
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [triggers, setTriggers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const targetAgentId = task?.agent_id || agentId;
@@ -79,8 +82,21 @@ export default function ModelInfo({
       }
     };
 
+    const fetchTriggers = async () => {
+      if (!targetAgentId) return;
+      try {
+        const { data } = await listTriggers({ agent_id: targetAgentId });
+        const items = Array.isArray(data) ? data : (data as any)?.items || [];
+        setTriggers(Array.isArray(items) ? items : []);
+      } catch (error) {
+        console.warn("Failed to fetch triggers", error);
+        setTriggers([]);
+      }
+    };
+
     if (targetAgentId) {
       fetchAgent();
+      fetchTriggers();
     }
   }, [targetAgentId]);
 
@@ -104,8 +120,10 @@ export default function ModelInfo({
     );
   }
 
-  const validTriggers =
-    agent.events_config?.events?.filter((e: any) => e.event_type) || [];
+  // Triggers come from the canonical Triggers API (filtered by agent), not the
+  // agent's embedded events_config — the latter does not reflect the real
+  // triggers and showed stale/incorrect entries.
+  const validTriggers = triggers.filter((tr) => tr && (tr.name || tr.id));
 
   return (
     <Section title={t("agentInfo")} contentClassName="space-y-4 text-xs">
@@ -175,13 +193,17 @@ export default function ModelInfo({
             {t("triggers")}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {validTriggers.map((event: any, index: number) => (
+            {validTriggers.map((tr: any, index: number) => (
               <Badge
-                key={index}
+                key={tr.id ?? index}
                 variant="outline"
-                className="text-[10px] font-normal px-2 py-0.5 h-auto"
+                className={cn(
+                  "h-auto px-2 py-0.5 text-[10px] font-normal",
+                  tr.is_active === false && "opacity-50"
+                )}
+                title={tr.description || tr.trigger_type || undefined}
               >
-                {event.event_type}
+                {tr.name || tr.trigger_type || tr.id}
               </Badge>
             ))}
           </div>

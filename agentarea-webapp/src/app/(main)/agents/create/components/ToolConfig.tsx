@@ -21,6 +21,12 @@ import {
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
 import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
+import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import {
+  McpAvailableTool,
+  McpInstance,
+  resolveMcpRef,
+} from "@/lib/mcp/resolveMcpRef";
 import type { OpenAPIConnection } from "@/app/(main)/mcp-servers/types";
 import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
@@ -352,16 +358,70 @@ const ToolConfig = ({
       disabled_methods: field.disabled_methods || {},
     })) || [];
 
+  // Resolve a connection icon the same way the /mcp-servers page does: the icon
+  // usually lives on the server spec, so pair the instance with its spec.
+  const instanceIconSrc = (instance: McpInstance): string | undefined => {
+    const serverSpec = instance.server_spec_id
+      ? mcpServers.find((s) => s.id === instance.server_spec_id)
+      : undefined;
+    return getMCPConnectionIconSrc(instance, serverSpec);
+  };
+  const serverIconSrc = (server: MCPServer): string | undefined =>
+    getMCPConnectionIconSrc(server);
+
+  // Tools discovered for an MCP instance (top-level `tools` from verification,
+  // or json_spec.available_tools for older/bundle specs) — normalized by the
+  // shared resolver.
+  const getInstanceTools = (instance: McpInstance): McpAvailableTool[] => {
+    const res = resolveMcpRef(instance.id, activeInstances, mcpServers);
+    return res.status === "instance" ? res.availableTools : [];
+  };
+
+  // Agents reference an MCP by instance UUID (webapp flow) or instance name
+  // (bundle installs); resolveMcpRef mirrors the runtime's id-then-name lookup.
   const resolveInstanceTrigger = (mcpServerId: string) => {
-    const inst = activeInstances.find((o: any) => o.id === mcpServerId);
-    if (inst) {
+    const res = resolveMcpRef(mcpServerId, activeInstances, mcpServers);
+    if (res.status === "instance") {
       return {
-        ...inst,
-        available_tools: inst.json_spec?.available_tools || inst.available_tools || [],
+        id: res.instance.id,
+        name: res.instance.name,
+        description: res.instance.description ?? undefined,
+        iconSrc: res.iconSrc,
+        available_tools: res.availableTools,
       };
     }
-    return mcpServers.find((o) => o.id === mcpServerId);
+    if (res.status === "server") {
+      return {
+        id: res.server.id,
+        name: res.server.name,
+        description: res.server.description ?? undefined,
+        iconSrc: res.iconSrc,
+        available_tools: [] as McpAvailableTool[],
+      };
+    }
+    // Dangling ref (instance deleted, or never created by an old bundle
+    // install). Render a neutral row instead of an error banner.
+    return {
+      id: mcpServerId,
+      name: mcpServerId,
+      label: mcpServerId,
+      description: "",
+      icon: Wrench,
+      available_tools: [] as McpAvailableTool[],
+    };
   };
+
+  // Small mark used in the picker lists: real connection icon, or a wrench when
+  // the registry has no icon for this server.
+  const McpMark = ({ src }: { src?: string }) => (
+    <span className="relative grid h-4 w-4 shrink-0 place-items-center overflow-hidden">
+      {src ? (
+        <img src={src} alt="" className="h-4 w-4 object-contain" />
+      ) : (
+        <Wrench className="h-4 w-4 text-muted-foreground" />
+      )}
+    </span>
+  );
 
   const handleAddTools = (servers: MCPServer[]) => {
     if (!servers?.length) return;
@@ -656,9 +716,7 @@ const ToolConfig = ({
                   prefix="active-mcp"
                   extractTitle={(instance) => (
                     <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <div className="relative shrink-0">
-                        <img src="/Icon.svg" alt="" className="h-4 w-4" />
-                      </div>
+                      <McpMark src={instanceIconSrc(instance)} />
                       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {instance.name || instance.id}
                       </h3>
@@ -673,13 +731,13 @@ const ToolConfig = ({
                       <p className="text-xs text-muted-foreground">
                         Active MCP Server Instance
                       </p>
-                      {(instance.json_spec?.available_tools ?? instance.available_tools)?.length > 0 && (
+                      {getInstanceTools(instance).length > 0 && (
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-foreground">
                               Available Tools:
                             </p>
                             <div className="space-y-1">
-                              {(instance.json_spec?.available_tools ?? instance.available_tools)?.map((tool: any) => (
+                              {getInstanceTools(instance).map((tool: any) => (
                                 <div
                                   key={tool.name}
                                   className="flex items-center gap-2 rounded bg-muted/30 p-1"
@@ -721,9 +779,7 @@ const ToolConfig = ({
                   prefix="mcp"
                   extractTitle={(server) => (
                     <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <div className="relative shrink-0">
-                        <img src="/Icon.svg" alt="" className="h-4 w-4" />
-                      </div>
+                      <McpMark src={serverIconSrc(server)} />
                       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {server.name}
                       </h3>

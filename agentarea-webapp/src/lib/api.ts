@@ -146,9 +146,22 @@ export const {
 
   // Governance API
   listGovernancePolicies,
+  upsertGovernancePolicy,
+  previewEffectivePolicy,
+
+  // ReBAC Access Explorer API
+  getRebacGraph,
+  listRebacTuples,
+  resolveRebac,
+  createRebacTuple,
+  deleteRebacTuple,
+  listSkillCollections,
 
   // Audit Logs API
   listAuditLogs,
+
+  // Billing API
+  getBillingOverview,
 
   // Workspace Import/Export API
   exportWorkspace,
@@ -322,6 +335,10 @@ export type AgentCard = components["schemas"]["AgentCard"];
 export type TaskWithAgent = TaskResponse & {
   agent_name?: string;
   agent_description?: string | null;
+  // Set by the /v1/inbox endpoint for waiting_for_approval tasks so the inbox can
+  // approve/reject the pending escalation inline.
+  escalation_id?: string | null;
+  escalation_tool_name?: string | null;
 };
 
 // Re-export skill types for convenience

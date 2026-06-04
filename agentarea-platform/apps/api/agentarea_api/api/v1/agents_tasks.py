@@ -119,6 +119,10 @@ class TaskWithAgent(BaseModel):
     created_at: datetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
+    # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
+    # approve/reject the pending escalation inline without re-fetching task events.
+    escalation_id: str | None = None
+    escalation_tool_name: str | None = None
 
     @classmethod
     def from_task_response(cls, task: TaskResponse, agent_name: str) -> "TaskWithAgent":

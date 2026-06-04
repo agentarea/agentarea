@@ -48,9 +48,29 @@ async def initialize_services():
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
+        from agentarea_common.config import get_settings
+
+        settings = get_settings()
+
+        # Shared Keto client (used by the rebac API + KetoPermissionService).
+        keto_client = None
+        if settings.keto.KETO_ENABLED:
+            from agentarea_common.rebac.keto_client import KetoClient
+
+            keto_client = KetoClient(
+                read_url=settings.keto.KETO_READ_URL,
+                write_url=settings.keto.KETO_WRITE_URL,
+                timeout_seconds=settings.keto.KETO_TIMEOUT_SECONDS,
+            )
+            register_singleton(KetoClient, keto_client)
+
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if perm_factory:
             register_factory(PermissionService, perm_factory)
+        elif keto_client is not None:
+            from agentarea_common.auth.keto_permission import KetoPermissionService
+
+            register_singleton(PermissionService, KetoPermissionService(keto_client))
         else:
             register_singleton(PermissionService, SimplePermissionService())
 
@@ -60,10 +80,8 @@ async def initialize_services():
         else:
             register_singleton(AuthorizationService, SimpleAuthorizationService())
 
-        from agentarea_common.config import get_settings
         from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 
-        settings = get_settings()
         event_router = get_event_router(settings.broker)
         event_broker = create_event_broker_from_router(event_router)
         register_singleton(EventBroker, event_broker)

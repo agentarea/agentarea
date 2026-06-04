@@ -84,6 +84,14 @@ spec:
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.backend.envs" . | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
+            {{- if .Values.keto.enabled }}
+            - name: KETO_ENABLED
+              value: "true"
+            - name: KETO_READ_URL
+              value: "http://{{ include "agentarea.fullname" . }}-keto-read:4466"
+            - name: KETO_WRITE_URL
+              value: "http://{{ include "agentarea.fullname" . }}-keto-write:4467"
+            {{- end }}
             {{- if or .Values.backend.envVars .Values.global.envVars }}
             {{- $backendEnv := default dict .Values.backend.envVars -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}

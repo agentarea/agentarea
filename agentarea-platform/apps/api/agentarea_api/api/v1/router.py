@@ -34,7 +34,9 @@ from . import (
     projects,
     provider_configs,
     provider_specs,
+    rebac,
     registries,
+    skill_collections,
     skills,
     triggers,
     wallet,
@@ -102,6 +104,12 @@ protected_v1_router.include_router(skills.router)
 
 # Bundle import (analyze + install) - PROTECTED
 protected_v1_router.include_router(bundles.router)
+
+# Skill collections (grouping for ReBAC fan-out) - PROTECTED
+protected_v1_router.include_router(skill_collections.router)
+
+# ReBAC access explorer (Keto-backed graph, tuples, check, resolve, sync) - PROTECTED
+protected_v1_router.include_router(rebac.router)
 
 # MCP Auth Configs - PROTECTED
 protected_v1_router.include_router(mcp_auth_configs.router)

@@ -1718,6 +1718,103 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    // Create or update a governance policy for a given scope. Returns the saved
+    // GovernancePolicy. The backend rejects (422) attempts by a lower scope to
+    // loosen a higher scope (monotonic validation).
+    upsertGovernancePolicy: async (params: {
+      scope_type: string;
+      scope_id: string;
+      document: Record<string, unknown>;
+      enabled: boolean;
+      parent_agent_id?: string | null;
+    }) => {
+      const { scope_type, scope_id, document, enabled, parent_agent_id } =
+        params;
+      const { data, error } = await client.PUT(
+        "/v1/governance/policies/{scope_type}/{scope_id}" as any,
+        {
+          params: { path: { scope_type, scope_id } },
+          body: { document, enabled, parent_agent_id },
+        } as any
+      );
+      return { data, error };
+    },
+
+    // Resolve the effective (merged) policy for the workspace, or for a given
+    // agent/task. With no agent_id this returns the workspace baseline.
+    previewEffectivePolicy: async (body?: {
+      agent_id?: string;
+      task_policy?: Record<string, unknown>;
+    }) => {
+      const { data, error } = await client.POST(
+        "/v1/governance/effective-policy/preview" as any,
+        { body: (body ?? {}) as any }
+      );
+      return { data, error };
+    },
+
+    // ReBAC Access Explorer API
+    getRebacGraph: async () => {
+      const { data, error } = await client.GET("/v1/rebac/graph" as any, {} as any);
+      return { data, error };
+    },
+
+    listRebacTuples: async (params?: {
+      object?: string;
+      relation?: string;
+      subject?: string;
+    }) => {
+      const { data, error } = await client.GET("/v1/rebac/tuples" as any, {
+        params: { query: params },
+      } as any);
+      return { data, error };
+    },
+
+    resolveRebac: async (body: {
+      subject_id: string;
+      resource_kind: "skill" | "mcp" | "agent";
+      resource_id: string;
+    }) => {
+      const { data, error } = await client.POST("/v1/rebac/resolve" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    createRebacTuple: async (body: {
+      namespace: string;
+      object: string;
+      relation: string;
+      subject_id?: string;
+      subject_set?: string;
+    }) => {
+      const { data, error } = await client.POST("/v1/rebac/tuples" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    deleteRebacTuple: async (body: {
+      namespace: string;
+      object: string;
+      relation: string;
+      subject_id?: string;
+      subject_set?: string;
+    }) => {
+      const { data, error } = await client.DELETE("/v1/rebac/tuples" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    listSkillCollections: async () => {
+      const { data, error } = await client.GET(
+        "/v1/skill-collections" as any,
+        {} as any
+      );
+      return { data, error };
+    },
+
     // Audit Logs API
     listAuditLogs: async (params?: {
       action?: string;
@@ -1736,6 +1833,16 @@ export function createApiClient(client: Client) {
         } as any
       );
       return { data, error };
+    },
+
+    // Billing API (served by the enterprise/billing service; absent in core → 404)
+    getBillingOverview: async () => {
+      const result = await client.GET("/v1/billing/overview" as any, {} as any);
+      return {
+        data: result.data,
+        error: result.error,
+        status: result.response?.status,
+      };
     },
   };
 }

@@ -2,18 +2,36 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import AccessControlData from "./components/access/AccessControlData";
+import AccessControlHeaderControls from "./components/access/AccessControlHeaderControls";
 import { PoliciesData } from "./components/PoliciesData";
+import PoliciesHeaderControls from "./components/PoliciesHeaderControls";
+import { PoliciesViewTabs } from "./components/PoliciesViewTabs";
 
 export const metadata: Metadata = {
   title: "Policies",
 };
 
-export default async function PoliciesPage() {
+export default async function PoliciesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const resolved = await searchParams;
+  const view = resolved.view === "access" ? "access" : "policies";
+
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Policies" }],
+        breadcrumb: [{ label: "Govern", href: "/dashboard" }, { label: "Policies" }],
+        controls:
+          view === "access" ? (
+            <AccessControlHeaderControls />
+          ) : (
+            <PoliciesHeaderControls />
+          ),
       }}
+      subheader={<PoliciesViewTabs current={view} />}
     >
       <div className="main-content">
         <Suspense
@@ -23,7 +41,7 @@ export default async function PoliciesPage() {
             </div>
           }
         >
-          <PoliciesData />
+          {view === "access" ? <AccessControlData /> : <PoliciesData />}
         </Suspense>
       </div>
     </ContentBlock>
