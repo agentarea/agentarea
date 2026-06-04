@@ -16,6 +16,7 @@ from . import (
     agents_well_known,
     api_keys,
     audit,
+    bundles,
     dashboard,
     files,
     governance,
@@ -98,6 +99,9 @@ protected_v1_router.include_router(workspace_invitations.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
+
+# Bundle import (analyze + install) - PROTECTED
+protected_v1_router.include_router(bundles.router)
 
 # MCP Auth Configs - PROTECTED
 protected_v1_router.include_router(mcp_auth_configs.router)

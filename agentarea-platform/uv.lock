@@ -11,6 +11,7 @@ members = [
     "agentarea-agents",
     "agentarea-agents-sdk",
     "agentarea-api",
+    "agentarea-bundles",
     "agentarea-common",
     "agentarea-context",
     "agentarea-execution",
@@ -122,6 +123,7 @@ version = "0.0.10"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "agentarea-agents" },
+    { name = "agentarea-bundles" },
     { name = "agentarea-common" },
     { name = "agentarea-execution" },
     { name = "agentarea-governance" },
@@ -148,6 +150,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
+    { name = "agentarea-bundles", editable = "libs/bundles" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-execution", editable = "libs/execution" },
     { name = "agentarea-governance", editable = "libs/governance" },
@@ -169,6 +172,29 @@ requires-dist = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.12.0" },
     { name = "python-multipart", specifier = ">=0.0.27" },
     { name = "uvicorn", specifier = ">=0.34.0" },
+]
+
+[[package]]
+name = "agentarea-bundles"
+version = "0.0.10"
+source = { editable = "libs/bundles" }
+dependencies = [
+    { name = "agentarea-agents" },
+    { name = "agentarea-common" },
+    { name = "agentarea-mcp" },
+    { name = "agentarea-triggers" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentarea-agents", editable = "libs/agents" },
+    { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-mcp", editable = "libs/mcp" },
+    { name = "agentarea-triggers", editable = "libs/triggers" },
+    { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

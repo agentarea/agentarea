@@ -22,6 +22,12 @@ except ImportError:
     # Governance library not yet installed - skip for now
     pass
 
+try:
+    from agentarea_bundles.domain.models import InstalledBundle  # noqa: F401
+except ImportError:
+    # Bundles library not yet installed - skip for now
+    pass
+
 config = context.config
 
 if config.config_file_name is not None:

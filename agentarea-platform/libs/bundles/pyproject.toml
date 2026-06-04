@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-bundles"
+version = "0.0.10"
+description = "Agent package import (analyze + install) for AgentArea"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "agentarea-agents",
+    "agentarea-mcp",
+    "agentarea-triggers",
+    "pydantic>=2.4.2",
+    "PyYAML>=6.0",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+agentarea-agents = { workspace = true }
+agentarea-mcp = { workspace = true }
+agentarea-triggers = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_bundles"]

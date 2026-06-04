@@ -886,6 +886,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/bundles/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Bundle
+         * @description Parse and analyze a bundle source, returning a non-destructive preview.
+         */
+        post: operations["analyze_bundle_v1_bundles_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bundles/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Bundle
+         * @description Install a canonical bundle: MCP instances, skills, agents and automations.
+         */
+        post: operations["install_bundle_v1_bundles_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/files": {
         parameters: {
             query?: never;
@@ -3948,6 +3988,17 @@ export interface components {
             tools?: components["schemas"]["ToolConfigYAML"][] | null;
         };
         /**
+         * AnalyzeRequest
+         * @description Analyze raw bundle source (YAML or JSON) into an import preview.
+         */
+        AnalyzeRequest: {
+            /**
+             * Source
+             * @description Raw bundle source text (YAML or JSON).
+             */
+            source: string;
+        };
+        /**
          * ApprovalPolicy
          * @description Human approval and escalation requirements.
          */
@@ -4091,6 +4142,198 @@ export interface components {
             run_budget_usd?: string | null;
             /** Service Budget Usd */
             service_budget_usd?: string | null;
+        };
+        /**
+         * Bundle
+         * @description The canonical, fully-inlined package object.
+         */
+        "Bundle-Input": {
+            /** Agents */
+            agents?: components["schemas"]["BundleAgent"][];
+            /** Automations */
+            automations?: components["schemas"]["BundleAutomation"][];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Mcps */
+            mcps?: components["schemas"]["BundleMcp"][];
+            /**
+             * Name
+             * @description Stable package identifier (idempotency key).
+             */
+            name: string;
+            /**
+             * Schema Version
+             * @default 0.1.0
+             */
+            schema_version: string;
+            /** Setup */
+            setup?: components["schemas"]["SetupField"][];
+            /** Skills */
+            skills?: components["schemas"]["BundleSkill"][];
+        };
+        /**
+         * Bundle
+         * @description The canonical, fully-inlined package object.
+         */
+        "Bundle-Output": {
+            /** Agents */
+            agents?: components["schemas"]["BundleAgent"][];
+            /** Automations */
+            automations?: components["schemas"]["BundleAutomation"][];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Mcps */
+            mcps?: components["schemas"]["BundleMcp"][];
+            /**
+             * Name
+             * @description Stable package identifier (idempotency key).
+             */
+            name: string;
+            /**
+             * Schema Version
+             * @default 0.1.0
+             */
+            schema_version: string;
+            /** Setup */
+            setup?: components["schemas"]["SetupField"][];
+            /** Skills */
+            skills?: components["schemas"]["BundleSkill"][];
+        };
+        /**
+         * BundleAgent
+         * @description An agent to create for the package.
+         */
+        BundleAgent: {
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
+            /** Key */
+            key: string;
+            /**
+             * Mcps
+             * @description BundleMcp keys to attach as tools.
+             */
+            mcps?: string[];
+            /** Model */
+            model?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Skills
+             * @description BundleSkill keys to attach.
+             */
+            skills?: string[];
+        };
+        /**
+         * BundleAutomation
+         * @description A scheduled run of one of the package's agents (maps to a CronTrigger).
+         *
+         *     Automations are imported disabled by default; the user enables them after
+         *     verifying connections, mirroring the Zapier/Make "connect then activate"
+         *     flow.
+         */
+        BundleAutomation: {
+            /**
+             * Agent
+             * @description BundleAgent key to invoke.
+             */
+            agent: string;
+            /**
+             * Cron
+             * @description 5- or 6-field cron expression.
+             */
+            cron: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * Prompt
+             * @description Task query passed to the agent on each run.
+             */
+            prompt: string;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /**
+             * Type
+             * @default cron
+             * @constant
+             */
+            type: "cron";
+        };
+        /**
+         * BundleMcp
+         * @description An MCP server to provision for the package.
+         */
+        BundleMcp: {
+            /**
+             * Bindings
+             * @description Maps an env var / header name the server needs to a ${setup.x} reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}.
+             */
+            bindings?: {
+                [key: string]: string;
+            };
+            /**
+             * Json Spec
+             * @description Native MCP runtime spec. Must include 'type' (command|docker|url).
+             */
+            json_spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Key
+             * @description In-package reference key (agents point at this).
+             */
+            key: string;
+            /**
+             * Name
+             * @description Instance display name created in the workspace.
+             */
+            name: string;
+        };
+        /**
+         * BundleSkill
+         * @description A skill to create for the package.
+         */
+        BundleSkill: {
+            /**
+             * Content
+             * @description SKILL.md markdown for source_type=content.
+             */
+            content?: string | null;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Source Type
+             * @default content
+             * @enum {string}
+             */
+            source_type: "content" | "github";
+            /**
+             * Source Url
+             * @description Repo URL for source_type=github.
+             */
+            source_url?: string | null;
         };
         /**
          * ContentSafetyPolicy
@@ -4308,6 +4551,16 @@ export interface components {
         EffectivePolicyResponse: {
             effective_policy: components["schemas"]["EffectivePolicy"];
         };
+        /**
+         * EntityKind
+         * @enum {string}
+         */
+        EntityKind: "mcp" | "skill" | "agent" | "automation";
+        /**
+         * EntityStatus
+         * @enum {string}
+         */
+        EntityStatus: "will_create" | "already_exists" | "unsupported";
         /** EscalationResolution */
         EscalationResolution: {
             /** Approved */
@@ -4530,6 +4783,24 @@ export interface components {
             task_id: string;
         };
         /**
+         * ImportPreview
+         * @description What the wizard renders before the user commits to installing.
+         */
+        ImportPreview: {
+            bundle: components["schemas"]["Bundle-Output"];
+            /** Entities */
+            entities?: components["schemas"]["PreviewEntity"][];
+            /**
+             * Installable
+             * @description True when there are no blocking issues (setup may still be required).
+             */
+            installable: boolean;
+            /** Issues */
+            issues?: components["schemas"]["PreviewIssue"][];
+            /** Setup */
+            setup?: components["schemas"]["SetupField"][];
+        };
+        /**
          * ImportRequest
          * @description Request body for importing workspace configuration.
          */
@@ -4596,6 +4867,50 @@ export interface components {
             total: number;
         };
         /**
+         * InstallAction
+         * @enum {string}
+         */
+        InstallAction: "created" | "reused" | "skipped";
+        /**
+         * InstallRequest
+         * @description Install a (previously analyzed, possibly edited) canonical bundle.
+         */
+        InstallRequest: {
+            bundle: components["schemas"]["Bundle-Input"];
+            /**
+             * Setup Values
+             * @description Values for the bundle's setup fields, keyed by setup field key.
+             */
+            setup_values?: {
+                [key: string]: unknown;
+            };
+        };
+        /** InstallResult */
+        InstallResult: {
+            /** Bundle Name */
+            bundle_name: string;
+            /** Entities */
+            entities?: components["schemas"]["InstalledEntity"][];
+            /** Installed Bundle Id */
+            installed_bundle_id?: string | null;
+        };
+        /** InstalledEntity */
+        InstalledEntity: {
+            action: components["schemas"]["InstallAction"];
+            /** Detail */
+            detail?: string | null;
+            /**
+             * Id
+             * @description Created/reused entity id, when applicable.
+             */
+            id?: string | null;
+            /** Key */
+            key: string;
+            kind: components["schemas"]["EntityKind"];
+            /** Name */
+            name: string;
+        };
+        /**
          * InvitationCreatedResponse
          * @description Same as InvitationResponse plus the plaintext token, returned ONCE.
          */
@@ -4660,6 +4975,11 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
+        /**
+         * IssueSeverity
+         * @enum {string}
+         */
+        IssueSeverity: "block" | "warn";
         /** MCPAuthConfigCreateRequest */
         MCPAuthConfigCreateRequest: {
             /**
@@ -5529,6 +5849,31 @@ export interface components {
              */
             parent_agent_id?: string | null;
         };
+        /**
+         * PreviewEntity
+         * @description One thing the package will (or won't) create.
+         */
+        PreviewEntity: {
+            /** Detail */
+            detail?: string | null;
+            /** Key */
+            key: string;
+            kind: components["schemas"]["EntityKind"];
+            /** Name */
+            name: string;
+            status: components["schemas"]["EntityStatus"];
+        };
+        /**
+         * PreviewIssue
+         * @description A problem found while analyzing the package.
+         */
+        PreviewIssue: {
+            /** Entity Key */
+            entity_key?: string | null;
+            /** Message */
+            message: string;
+            severity: components["schemas"]["IssueSeverity"];
+        };
         /** ProjectAgentRef */
         ProjectAgentRef: {
             /**
@@ -5968,6 +6313,60 @@ export interface components {
             /** Sync Mode */
             sync_mode?: string | null;
         };
+        /**
+         * SetupField
+         * @description A single value the user must provide before the package can run.
+         *
+         *     This is the generalized analogue of a Claude plugin ``userConfig`` entry
+         *     and mirrors the existing MCP ``env_schema`` (KeyValueInput) shape.
+         */
+        SetupField: {
+            /** Default */
+            default?: unknown | null;
+            /**
+             * Help
+             * @description Help text shown beneath the field.
+             */
+            help?: string | null;
+            /**
+             * Key
+             * @description Stable identifier referenced via ${setup.key}.
+             */
+            key: string;
+            /**
+             * Label
+             * @description Human-readable label rendered in the form.
+             */
+            label: string;
+            /**
+             * Max
+             * @description Upper bound for type='number'.
+             */
+            max?: number | null;
+            /**
+             * Min
+             * @description Lower bound for type='number'.
+             */
+            min?: number | null;
+            /**
+             * Options
+             * @description Choices for type='select'.
+             */
+            options?: string[] | null;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /** @default string */
+            type: components["schemas"]["SetupFieldType"];
+        };
+        /**
+         * SetupFieldType
+         * @description Input widget / storage hint for a setup field.
+         * @enum {string}
+         */
+        SetupFieldType: "secret" | "string" | "number" | "boolean" | "select";
         /**
          * SkillContentResponse
          * @description Skill content response model.
@@ -8754,6 +9153,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_bundle_v1_bundles_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_bundle_v1_bundles_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallResult"];
                 };
             };
             /** @description Validation Error */
