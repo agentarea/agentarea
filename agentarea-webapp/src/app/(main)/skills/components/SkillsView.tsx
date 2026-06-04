@@ -287,18 +287,19 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="skills-cq flex h-full w-full flex-col">
       {/* ---------------- toolbar ---------------- */}
       <div className="flex h-[42px] shrink-0 items-center gap-1.5 border-b border-zinc-200 px-4 dark:border-zinc-700">
-        {/* source tabs */}
-        <div className="flex items-center gap-0.5">
+        {/* source tabs — scroll horizontally when the panel is narrow so the
+            right-hand controls always stay visible */}
+        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
           {SOURCE_TABS.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => onTab(tab.value)}
               className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
+                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
                 sourceTab === tab.value
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -312,34 +313,32 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           ))}
         </div>
 
-        <div className="mx-1 h-[18px] w-px bg-zinc-200 dark:bg-zinc-700" />
+        <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
 
         {/* Filter toggle */}
         <button
           type="button"
           onClick={() => setFiltersOpen((v) => !v)}
           className={cn(
-            "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
+            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
             filtersOpen
               ? "bg-muted text-foreground"
               : "text-foreground/80 hover:bg-muted/60"
           )}
         >
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          {t("filters.filter")}
+          <span className="skills-btn-label">{t("filters.filter")}</span>
         </button>
-
-        <div className="flex-1" />
 
         {/* Display menu */}
         <Popover>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
+              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
             >
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              {t("display.display")}
+              <span className="skills-btn-label">{t("display.display")}</span>
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-52 p-1.5">
@@ -385,7 +384,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
 
         {/* list / grid segment */}
         <HeaderTabs
-          className="ml-1"
+          className="ml-1 shrink-0"
           value={view}
           onChange={(v) => onView(v as ViewKey)}
           tabs={[
@@ -498,7 +497,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
                   <button
                     type="button"
                     onClick={() => toggleGroup(g.key)}
-                    className="sticky top-0 z-[2] flex h-9 w-full items-center gap-2 border-b border-zinc-100 bg-zinc-50/95 px-4 backdrop-blur-sm hover:bg-muted dark:border-zinc-800/70 dark:bg-zinc-900/95"
+                    className="skill-hatch sticky top-0 z-[2] flex h-9 w-full items-center gap-2 border-b border-zinc-100 px-4 dark:border-zinc-800/70"
                   >
                     <ChevronDown
                       className={cn(

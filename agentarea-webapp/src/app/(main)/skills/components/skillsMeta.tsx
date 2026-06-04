@@ -60,6 +60,41 @@ export const SCOPE_ORDER: SkillNetworkScope[] = [
   "egress",
 ];
 
+/**
+ * Skill glyph tile — the brand "skill" icon. A softly category-tinted square
+ * (13% colour over the surface) with a matching 26% border and the source
+ * glyph in full colour.
+ */
+export function SkillTile({
+  color,
+  icon: Icon,
+  variant = "row",
+}: {
+  color: string;
+  icon: LucideIcon;
+  variant?: "row" | "card";
+}) {
+  const isCard = variant === "card";
+  const box = isCard ? 30 : 22;
+  const radius = isCard ? 8 : 6;
+  const glyph = isCard ? 17 : 13;
+  return (
+    <span
+      className="relative flex shrink-0 items-center justify-center border"
+      style={{
+        width: box,
+        height: box,
+        borderRadius: radius,
+        color,
+        background: `color-mix(in srgb, ${color} 13%, var(--tile-base))`,
+        borderColor: `color-mix(in srgb, ${color} 26%, var(--tile-base))`,
+      }}
+    >
+      <Icon style={{ width: glyph, height: glyph }} strokeWidth={1.9} />
+    </span>
+  );
+}
+
 /** Compact relative age, e.g. "today", "3d", "2w", "5mo", "1y". */
 export function shortAge(iso: string | null | undefined): string {
   if (!iso) return "—";

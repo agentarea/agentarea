@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, MoreHorizontal, Star } from "lucide-react";
+import { ArrowUpRight, Copy, MoreHorizontal, Star } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
-import { scopeMeta, sourceMeta } from "./skillsMeta";
+import { scopeMeta, SkillTile, sourceMeta } from "./skillsMeta";
 
 interface SkillsCardProps {
   skill: Skill;
@@ -46,32 +46,27 @@ export default function SkillsCard({
         }
       }}
       className={cn(
-        "group relative cursor-pointer rounded-[10px] border border-zinc-200 bg-background p-3.5",
+        "group relative overflow-hidden cursor-pointer rounded-[10px] border border-zinc-200 bg-background p-3.5",
         "transition-[border-color,box-shadow] duration-150",
         "hover:border-zinc-300 hover:shadow-[0_2px_10px_rgba(0,0,0,0.04)]",
         "dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
       )}
     >
       {/* top: icon + name */}
-      <div className="mb-[9px] flex items-center gap-[9px]">
-        <span
-          className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] text-white"
-          style={{ backgroundColor: source.color }}
-        >
-          <SourceIcon className="h-[15px] w-[15px]" strokeWidth={2} />
-        </span>
+      <div className="relative z-[1] mb-[9px] flex items-center gap-[9px]">
+        <SkillTile color={source.color} icon={SourceIcon} variant="card" />
         <span className="truncate text-[13.5px] font-semibold text-foreground">
           {skill.name}
         </span>
       </div>
 
       {/* description — fixed two-line clamp */}
-      <p className="mb-3 line-clamp-2 h-[38px] text-[12.5px] leading-[1.5] text-muted-foreground">
+      <p className="relative z-[1] mb-3 line-clamp-2 h-[38px] text-[12.5px] leading-[1.5] text-muted-foreground">
         {skill.description || ""}
       </p>
 
       {/* footer: source label pill + network scope */}
-      <div className="flex items-center gap-2">
+      <div className="relative z-[1] flex items-center gap-2">
         <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
           <span
             className="h-[7px] w-[7px] rounded-full"
@@ -91,7 +86,7 @@ export default function SkillsCard({
           during the close animation. */}
       <span
         className={cn(
-          "absolute right-2.5 top-2.5 flex items-center gap-0.5 transition-opacity",
+          "absolute right-2.5 top-2.5 z-[2] flex items-center gap-0.5 transition-opacity",
           menuOpen
             ? "opacity-100"
             : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
@@ -142,6 +137,14 @@ export default function SkillsCard({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </span>
+
+      {/* brand: diagonal hatch — soft footer band that grows into a full wash on hover */}
+      <span className="skill-card-hatch" aria-hidden />
+
+      {/* brand: diagonal open-arrow, bottom-right */}
+      <span className="pointer-events-none absolute bottom-[11px] right-[11px] z-[2] grid h-5 w-5 place-items-center text-muted-foreground/70 transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary">
+        <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
       </span>
     </div>
   );

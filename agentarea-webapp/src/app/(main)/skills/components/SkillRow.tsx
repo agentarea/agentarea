@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, MoreHorizontal, Star } from "lucide-react";
+import { ArrowUpRight, Copy, MoreHorizontal, Star } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
-import { scopeMeta, shortAge, sourceMeta } from "./skillsMeta";
+import { scopeMeta, shortAge, SkillTile, sourceMeta } from "./skillsMeta";
 
 interface SkillRowProps {
   skill: Skill;
@@ -47,26 +47,26 @@ export default function SkillRow({
         }
       }}
       className={cn(
-        "group relative flex h-10 cursor-pointer items-center gap-3 px-4",
+        "group relative flex h-10 cursor-pointer items-center gap-3 overflow-hidden px-4",
         "border-b border-zinc-100 dark:border-zinc-800/70",
         "hover:bg-muted/60 dark:hover:bg-zinc-800/50"
       )}
     >
+      {/* brand: accent hatch softly slides in from the right edge on hover */}
+      <span className="skill-row-hatch" aria-hidden />
+
       {/* leading glyph */}
-      <span
-        className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] text-white"
-        style={{ backgroundColor: source.color }}
-      >
-        <SourceIcon className="h-3 w-3" strokeWidth={2.2} />
+      <span className="relative z-[1] flex">
+        <SkillTile color={source.color} icon={SourceIcon} variant="row" />
       </span>
 
       {/* name */}
-      <span className="max-w-[230px] shrink-0 truncate text-[13px] font-medium text-foreground">
+      <span className="relative z-[1] max-w-[230px] shrink-0 truncate text-[13px] font-medium text-foreground">
         {skill.name}
       </span>
 
       {/* description */}
-      <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+      <span className="relative z-[1] min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
         {skill.description || ""}
       </span>
 
@@ -74,22 +74,22 @@ export default function SkillRow({
           make room for quick actions */}
       <span
         className={cn(
-          "flex shrink-0 items-center gap-2 group-hover:invisible",
+          "relative z-[1] flex shrink-0 items-center gap-2 group-hover:invisible",
           menuOpen && "invisible"
         )}
       >
-        <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
+        <span className="skill-col-source inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
           <span
             className="h-[7px] w-[7px] rounded-full"
             style={{ backgroundColor: source.color }}
           />
           {source.label}
         </span>
-        <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
+        <span className="skill-col-scope inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
           <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
           {scope.label}
         </span>
-        <span className="w-12 text-right text-[11.5px] text-muted-foreground/80">
+        <span className="skill-col-date w-12 text-right text-[11.5px] text-muted-foreground/80">
           {shortAge(skill.created_at)}
         </span>
       </span>
@@ -100,7 +100,7 @@ export default function SkillRow({
           during the close animation. */}
       <span
         className={cn(
-          "absolute right-3 flex h-full items-center gap-0.5 pl-8 bg-gradient-to-l from-muted/60 via-muted/60 to-transparent transition-opacity dark:from-zinc-800/50 dark:via-zinc-800/50",
+          "absolute right-10 z-[2] flex h-full items-center gap-0.5 pl-8 bg-gradient-to-l from-muted/60 via-muted/60 to-transparent transition-opacity dark:from-zinc-800/50 dark:via-zinc-800/50",
           menuOpen
             ? "opacity-100"
             : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
@@ -153,6 +153,17 @@ export default function SkillRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </span>
+
+      {/* brand: diagonal open-arrow on row hover */}
+      <span
+        className={cn(
+          "pointer-events-none absolute right-3 z-[2] hidden h-[22px] w-[22px] place-items-center text-primary",
+          menuOpen ? "grid" : "group-hover:grid"
+        )}
+        aria-hidden
+      >
+        <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
       </span>
     </div>
   );
