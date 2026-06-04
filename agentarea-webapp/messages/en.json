@@ -927,7 +927,31 @@
         "skillUploaded": "Skill uploaded successfully"
       },
       "uploadHint": "Drag and drop or browse to select a ZIP file",
-      "loadingDuplicate": "Loading the original skill and pre-filling this form..."
+      "loadingDuplicate": "Loading the original skill and pre-filling this form...",
+      "cancel": "Cancel",
+      "writeContent": "Write content",
+      "uploadFiles": "Upload files",
+      "descriptionLabel": "Description",
+      "sourceHint": {
+        "content": "Author the skill inline in Markdown.",
+        "github": "Sync a SKILL.md straight from a repository.",
+        "upload": "Upload a .zip archive containing a SKILL.md."
+      },
+      "markdownPane": "Markdown",
+      "previewPane": "Preview",
+      "githubRepoPlaceholder": "owner/repo — optionally /tree/main/skills/my-skill",
+      "browseRepo": "Browse",
+      "githubConnectTitle": "Connect a repository",
+      "githubConnectDescription": "Point to a folder containing a <b>SKILL.md</b>. AgentArea keeps it in sync — pushes to the repo update the skill automatically.",
+      "dropTitle": "Drag & drop your skill <zip>.zip</zip>, or",
+      "dropSubtitle": "A .zip archive containing a SKILL.md — plus any reference files, scripts, or assets",
+      "metaScope": "Scope",
+      "metaPrivate": "Private",
+      "metaVisibleTo": "Visible to",
+      "metaWorkspace": "Workspace",
+      "chooseZip": "Choose .zip",
+      "chipZipArchive": ".zip archive",
+      "chipSkillInside": "SKILL.md inside"
     },
     "display": {
       "display": "Display",

@@ -928,7 +928,31 @@
         "skillUploaded": "Навык успешно загружен"
       },
       "uploadHint": "Перетащите ZIP-файл или выберите его для загрузки",
-      "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму..."
+      "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму...",
+      "cancel": "Отмена",
+      "writeContent": "Написать контент",
+      "uploadFiles": "Загрузить файлы",
+      "descriptionLabel": "Описание",
+      "sourceHint": {
+        "content": "Опишите скилл прямо здесь в Markdown.",
+        "github": "Синхронизируйте SKILL.md прямо из репозитория.",
+        "upload": "Загрузите архив .zip с файлом SKILL.md."
+      },
+      "markdownPane": "Markdown",
+      "previewPane": "Превью",
+      "githubRepoPlaceholder": "owner/repo — можно /tree/main/skills/my-skill",
+      "browseRepo": "Обзор",
+      "githubConnectTitle": "Подключите репозиторий",
+      "githubConnectDescription": "Укажите папку с файлом <b>SKILL.md</b>. AgentArea держит его в синхронизации — пуши в репозиторий автоматически обновляют скилл.",
+      "dropTitle": "Перетащите свой скилл <zip>.zip</zip> или",
+      "dropSubtitle": "Архив .zip с файлом SKILL.md — плюс любые справочные файлы, скрипты или ассеты",
+      "metaScope": "Область",
+      "metaPrivate": "Приватный",
+      "metaVisibleTo": "Виден",
+      "metaWorkspace": "Воркспейсу",
+      "chooseZip": "Выбрать .zip",
+      "chipZipArchive": "архив .zip",
+      "chipSkillInside": "SKILL.md внутри"
     },
     "display": {
       "display": "Вид",
