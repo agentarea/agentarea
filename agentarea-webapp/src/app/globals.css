@@ -20,6 +20,100 @@
   .form-error {
     @apply text-xs text-red-500;
   }
+
+  /* ---- Skills brand identity: 135° diagonal hatch ---- */
+  /* group-header band — softer hatch than rows/cards */
+  .skill-hatch {
+    background-image: var(--hatch-soft);
+  }
+  .skill-hatch:hover {
+    background-image: var(--hatch-accent), var(--hatch-soft);
+  }
+
+  /* row: accent hatch that softly slides in from the right edge on hover */
+  .skill-row-hatch {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 230px;
+    z-index: 0;
+    background-image: var(--hatch-accent);
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 82%);
+    mask-image: linear-gradient(90deg, transparent, #000 82%);
+    opacity: 0;
+    transform: translateX(14px);
+    transition:
+      opacity 0.2s,
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .group:hover .skill-row-hatch {
+    opacity: 0.85;
+    transform: none;
+  }
+
+  /* card: soft footer band (idle) that grows upward into a full wash on hover */
+  .skill-card-hatch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 42px;
+    z-index: 0;
+    background-image: var(--hatch);
+    background-position: left bottom;
+    opacity: 0.72;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(0deg, #000, transparent);
+    mask-image: linear-gradient(0deg, #000, transparent);
+    transition:
+      height 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.22s,
+      background-image 0.22s;
+  }
+  .group:hover .skill-card-hatch {
+    height: 100%;
+    opacity: 0.9;
+    background-image: var(--hatch-accent), var(--hatch);
+    background-position: left bottom;
+  }
+
+  /* ---- Skills responsiveness (container-query driven) ---- */
+  /* The page root opts into a size container so rows + toolbar respond to the
+     panel width rather than the viewport (correct with the sidebar open). */
+  .skills-cq {
+    container-type: inline-size;
+    container-name: skills;
+  }
+  /* hide horizontal scrollbar on the toolbar tab strip */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Row meta columns drop off progressively as space tightens. */
+  @container skills (max-width: 620px) {
+    .skill-col-date {
+      display: none;
+    }
+  }
+  @container skills (max-width: 520px) {
+    .skill-col-scope {
+      display: none;
+    }
+  }
+  @container skills (max-width: 430px) {
+    .skill-col-source {
+      display: none;
+    }
+  }
+  /* Toolbar button text collapses to icons when narrow. */
+  @container skills (max-width: 560px) {
+    .skills-btn-label {
+      display: none;
+    }
+  }
 }
 
 @layer base {
@@ -79,6 +173,31 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* skills brand identity — 135° diagonal hatch */
+    --tile-base: #ffffff;
+    --hatch: repeating-linear-gradient(
+      135deg,
+      #f7f7f9,
+      #f7f7f9 9px,
+      #e7e7ec 9px,
+      #e7e7ec 10px
+    );
+    --hatch-accent: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 9px,
+      rgba(34, 82, 179, 0.07) 9px,
+      rgba(34, 82, 179, 0.07) 10px
+    );
+    /* softer hatch for table group headers */
+    --hatch-soft: repeating-linear-gradient(
+      135deg,
+      #fcfcfd,
+      #fcfcfd 9px,
+      #f1f1f4 9px,
+      #f1f1f4 10px
+    );
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -129,6 +248,31 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* skills brand identity — 135° diagonal hatch (dark) */
+    --tile-base: #18181b;
+    --hatch: repeating-linear-gradient(
+      135deg,
+      #1c1c1f,
+      #1c1c1f 9px,
+      #26262b 9px,
+      #26262b 10px
+    );
+    --hatch-accent: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 9px,
+      rgba(120, 150, 235, 0.1) 9px,
+      rgba(120, 150, 235, 0.1) 10px
+    );
+    /* softer hatch for table group headers */
+    --hatch-soft: repeating-linear-gradient(
+      135deg,
+      #1a1a1d,
+      #1a1a1d 9px,
+      #212126 9px,
+      #212126 10px
+    );
   }
 }
 

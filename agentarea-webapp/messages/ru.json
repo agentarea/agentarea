@@ -186,7 +186,6 @@
     "importExport": "Импорт / Экспорт",
     "auditLog": "Журнал аудита"
   },
-
   "LlmBrowsePage": {
     "title": "Модели LLM",
     "addNewLlm": "Создать LLM",
@@ -247,7 +246,6 @@
       "description": "Управление подпиской и счетами"
     }
   },
-
   "BillingPage": {
     "title": "Оплата",
     "description": "Управление подпиской и оплатой",
@@ -322,7 +320,6 @@
       }
     }
   },
-
   "AgentPaymentsPage": {
     "title": "История платежей",
     "description": "Все платежи за сервисы, совершенные этим агентом по протоколам x402 и MPP.",
@@ -916,7 +913,8 @@
         "private": "Приватная",
         "ingress": "Входящая",
         "egress": "Исходящая"
-      }
+      },
+      "filter": "Фильтр"
     },
     "create": {
       "title": "Добавить навык",
@@ -939,11 +937,21 @@
       "nameOverride": "Переопределить импортированное имя",
       "descriptionOptional": "Описание (необязательно)",
       "descriptionOverride": "Переопределить импортированное описание",
+      "githubUrlHint": "Используйте URL публичного GitHub-репозитория, который содержит файлы навыка.",
       "createSkill": "Создать навык",
       "importFromGithub": "Импортировать с GitHub",
       "uploadSkill": "Загрузить навык",
       "dragDrop": "Перетащите ZIP файл или",
       "browse": "выберите",
+      "useTemplate": "Использовать шаблон",
+      "templateOverwriteConfirm": "Заменить текущее содержимое шаблоном навыка по умолчанию?",
+      "frontmatterDetected": "Во входном контенте найден frontmatter. Имя и описание из файла будут использованы автоматически.",
+      "previewEmpty": "Предпросмотр появится здесь, когда вы добавите контент.",
+      "viewMode": {
+        "edit": "Редактор",
+        "split": "Сплит",
+        "preview": "Предпросмотр"
+      },
       "remove": "Удалить",
       "validationError": "Ошибка валидации",
       "error": {
@@ -953,14 +961,54 @@
         "uploadFailed": "Не удалось загрузить навык",
         "invalidFile": "Неверный файл",
         "zipRequired": "Пожалуйста, загрузите ZIP файл",
-        "createFailed": "Не удалось создать навык"
+        "createFailed": "Не удалось создать навык",
+        "duplicateLoadFailed": "Не удалось загрузить навык для копирования",
+        "duplicateLoadFailedDescription": "Исходный навык не удалось загрузить, поэтому форма осталась без изменений."
       },
       "success": {
         "skillCreated": "Навык успешно создан",
         "skillImported": "Навык успешно импортирован",
         "skillUploaded": "Навык успешно загружен"
-      }
-    }
+      },
+      "uploadHint": "Перетащите ZIP-файл или выберите его для загрузки",
+      "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму...",
+      "cancel": "Отмена",
+      "writeContent": "Написать контент",
+      "uploadFiles": "Загрузить файлы",
+      "descriptionLabel": "Описание",
+      "sourceHint": {
+        "content": "Опишите скилл прямо здесь в Markdown.",
+        "github": "Синхронизируйте SKILL.md прямо из репозитория.",
+        "upload": "Загрузите архив .zip с файлом SKILL.md."
+      },
+      "markdownPane": "Markdown",
+      "previewPane": "Превью",
+      "githubRepoPlaceholder": "owner/repo — можно /tree/main/skills/my-skill",
+      "browseRepo": "Обзор",
+      "githubConnectTitle": "Подключите репозиторий",
+      "githubConnectDescription": "Укажите папку с файлом <b>SKILL.md</b>. AgentArea держит его в синхронизации — пуши в репозиторий автоматически обновляют скилл.",
+      "dropTitle": "Перетащите свой скилл <zip>.zip</zip> или",
+      "dropSubtitle": "Архив .zip с файлом SKILL.md — плюс любые справочные файлы, скрипты или ассеты",
+      "metaScope": "Область",
+      "metaPrivate": "Приватный",
+      "metaVisibleTo": "Виден",
+      "metaWorkspace": "Воркспейсу",
+      "chooseZip": "Выбрать .zip",
+      "chipZipArchive": "архив .zip",
+      "chipSkillInside": "SKILL.md внутри"
+    },
+    "display": {
+      "display": "Вид",
+      "grouping": "Группировка",
+      "source": "Источник",
+      "scope": "Область",
+      "none": "Без группировки",
+      "ordering": "Сортировка",
+      "name": "Имя",
+      "created": "Создано"
+    },
+    "emptyHere": "Здесь нет навыков",
+    "emptyHereDescription": "Под этот вид пока ничего не подходит."
   },
   "TaskInfoPanel": {
     "agentTask": "Задача агента",
@@ -1389,7 +1437,6 @@
     "retryable": "Повторяемая",
     "nonRetryable": "Неповторяемая"
   },
-
   "AuditLogPage": {
     "title": "Журнал аудита",
     "description": "Отслеживайте, кто, что и когда делал в вашем рабочем пространстве",

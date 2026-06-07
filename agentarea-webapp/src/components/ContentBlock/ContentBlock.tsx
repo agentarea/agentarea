@@ -117,7 +117,7 @@ export default function ContentBlock({
         </div>
       )}
       {subheader && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10">
+        <div className="flex h-[42px] shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800 md:gap-10">
           {subheader}
         </div>
       )}

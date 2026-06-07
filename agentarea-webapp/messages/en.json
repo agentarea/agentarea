@@ -185,7 +185,6 @@
     "importExport": "Import / Export",
     "auditLog": "Audit Log"
   },
-
   "LlmBrowsePage": {
     "title": "LLM Models",
     "addNewLlm": "Add New LLM",
@@ -282,7 +281,6 @@
       "description": "Manage your subscription and billing"
     }
   },
-
   "BillingPage": {
     "title": "Billing",
     "description": "Manage your subscription and billing",
@@ -357,7 +355,6 @@
       }
     }
   },
-
   "AgentPaymentsPage": {
     "title": "Payment History",
     "description": "All service payments made by this agent via x402 and MPP protocols.",
@@ -885,7 +882,8 @@
         "private": "Private",
         "ingress": "Ingress",
         "egress": "Egress"
-      }
+      },
+      "filter": "Filter"
     },
     "table": {
       "name": "Name",
@@ -938,11 +936,21 @@
       "nameOverride": "Override imported name",
       "descriptionOptional": "Description (optional)",
       "descriptionOverride": "Override imported description",
+      "githubUrlHint": "Use a public GitHub repository URL that contains the skill files.",
       "createSkill": "Create Skill",
       "importFromGithub": "Import from GitHub",
       "uploadSkill": "Upload Skill",
       "dragDrop": "Drag and drop a ZIP file, or",
       "browse": "browse",
+      "useTemplate": "Use template",
+      "templateOverwriteConfirm": "Replace the current content with the default skill template?",
+      "frontmatterDetected": "Frontmatter detected in the content. Name and description from the file will be used automatically.",
+      "previewEmpty": "Preview will appear here once you add content.",
+      "viewMode": {
+        "edit": "Edit",
+        "split": "Split",
+        "preview": "Preview"
+      },
       "remove": "Remove",
       "validationError": "Validation Error",
       "error": {
@@ -952,14 +960,54 @@
         "uploadFailed": "Failed to upload skill",
         "invalidFile": "Invalid File",
         "zipRequired": "Please upload a ZIP file",
-        "createFailed": "Failed to create skill"
+        "createFailed": "Failed to create skill",
+        "duplicateLoadFailed": "Failed to load skill for duplication",
+        "duplicateLoadFailedDescription": "The original skill could not be loaded, so the form was left unchanged."
       },
       "success": {
         "skillCreated": "Skill created successfully",
         "skillImported": "Skill imported successfully",
         "skillUploaded": "Skill uploaded successfully"
-      }
-    }
+      },
+      "uploadHint": "Drag and drop or browse to select a ZIP file",
+      "loadingDuplicate": "Loading the original skill and pre-filling this form...",
+      "cancel": "Cancel",
+      "writeContent": "Write content",
+      "uploadFiles": "Upload files",
+      "descriptionLabel": "Description",
+      "sourceHint": {
+        "content": "Author the skill inline in Markdown.",
+        "github": "Sync a SKILL.md straight from a repository.",
+        "upload": "Upload a .zip archive containing a SKILL.md."
+      },
+      "markdownPane": "Markdown",
+      "previewPane": "Preview",
+      "githubRepoPlaceholder": "owner/repo — optionally /tree/main/skills/my-skill",
+      "browseRepo": "Browse",
+      "githubConnectTitle": "Connect a repository",
+      "githubConnectDescription": "Point to a folder containing a <b>SKILL.md</b>. AgentArea keeps it in sync — pushes to the repo update the skill automatically.",
+      "dropTitle": "Drag & drop your skill <zip>.zip</zip>, or",
+      "dropSubtitle": "A .zip archive containing a SKILL.md — plus any reference files, scripts, or assets",
+      "metaScope": "Scope",
+      "metaPrivate": "Private",
+      "metaVisibleTo": "Visible to",
+      "metaWorkspace": "Workspace",
+      "chooseZip": "Choose .zip",
+      "chipZipArchive": ".zip archive",
+      "chipSkillInside": "SKILL.md inside"
+    },
+    "display": {
+      "display": "Display",
+      "grouping": "Grouping",
+      "source": "Source",
+      "scope": "Scope",
+      "none": "No grouping",
+      "ordering": "Ordering",
+      "name": "Name",
+      "created": "Created"
+    },
+    "emptyHere": "No skills here",
+    "emptyHereDescription": "Nothing matches this view yet."
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",
@@ -1401,7 +1449,6 @@
     "retryable": "Retryable",
     "nonRetryable": "Non-retryable"
   },
-
   "AuditLogPage": {
     "title": "Audit Log",
     "description": "Track who did what, when, and from where across your workspace",
