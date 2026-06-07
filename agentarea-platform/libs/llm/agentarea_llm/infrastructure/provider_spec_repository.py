@@ -2,6 +2,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository import BaseRepository
+from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,7 +14,9 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
     def __init__(self, session: AsyncSession, user_context: UserContext | None = None):
         super().__init__(session)
         self.model_class = ProviderSpec
-        self.user_context = user_context or UserContext(user_id="system", workspace_id="system")
+        self.user_context = user_context or UserContext(
+            user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID
+        )
 
     def _ensure_scope(self, entity: ProviderSpec) -> ProviderSpec:
         """Populate required audit scope for globally-addressed provider specs."""

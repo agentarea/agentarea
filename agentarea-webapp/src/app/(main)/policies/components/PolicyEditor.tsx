@@ -21,13 +21,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { GovernancePolicy, PolicyDocument } from "@/types/policies";
+import type { Policy, PolicyEffect } from "@/types/policies";
 import { EFFECT_STYLES } from "./policy-effects";
 
+// What the editor is operating on. Create modes pre-scope the rule to a
+// subject (workspace, or a picked agent); edit mode locks the subject.
 export type PolicyEditorTarget =
   | { mode: "create-workspace" }
-  | { mode: "create-agent" }
-  | { mode: "edit"; policy: GovernancePolicy };
+  | { mode: "create-agent"; agentId?: string }
+  | { mode: "edit"; policy: Policy };
 
 interface AgentOption {
   id: string;
@@ -43,69 +45,54 @@ interface PolicyEditorProps {
   onSaved: () => void;
 }
 
-// --- form state -----------------------------------------------------------
+// Effects the editor can author. (`allow` exists in the model but tool grants
+// live in the Access view; the editor focuses on restrictions.)
+const EDITABLE_EFFECTS: PolicyEffect[] = [
+  "cap",
+  "deny",
+  "approval",
+  "safety",
+];
+
+// --- cap sub-form ---------------------------------------------------------
+
+type CapKind = "spend" | "service" | "tokens";
 
 interface FormState {
   enabled: boolean;
-  monthlySpendCap: string;
-  runBudget: string;
-  serviceBudget: string;
+  // cap
+  capKind: CapKind;
+  amountUsd: string;
+  period: "month" | "run";
   maxTokens: string;
   maxTokensPerCall: string;
-  requiresApproval: boolean;
+  // deny / approval tools
+  tools: string[];
+  // approval
+  approvalAllActions: boolean;
   approvers: string[];
-  escalationRules: string[];
-  deniedTools: string[];
-  promptInjectionDetection: boolean;
+  // safety
+  promptInjection: boolean;
   outputSanitizer: boolean;
 }
 
 const EMPTY_FORM: FormState = {
   enabled: true,
-  monthlySpendCap: "",
-  runBudget: "",
-  serviceBudget: "",
+  capKind: "spend",
+  amountUsd: "",
+  period: "month",
   maxTokens: "",
   maxTokensPerCall: "",
-  requiresApproval: false,
+  tools: [],
+  approvalAllActions: true,
   approvers: [],
-  escalationRules: [],
-  deniedTools: [],
-  promptInjectionDetection: false,
+  promptInjection: true,
   outputSanitizer: false,
 };
 
-function moneyToInput(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  return String(value);
-}
+// Loosely validate Keto subject refs (user:<id> | group:<id>#member, etc.).
+const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
 
-function numToInput(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "";
-  return String(value);
-}
-
-function documentToForm(policy: GovernancePolicy): FormState {
-  const doc = policy.document ?? {};
-  return {
-    enabled: policy.enabled,
-    monthlySpendCap: moneyToInput(doc.budget?.monthly_spend_cap_usd),
-    runBudget: moneyToInput(doc.budget?.run_budget_usd),
-    serviceBudget: moneyToInput(doc.budget?.service_budget_usd),
-    maxTokens: numToInput(doc.tokens?.max_tokens),
-    maxTokensPerCall: numToInput(doc.tokens?.max_tokens_per_call),
-    requiresApproval: Boolean(doc.approval?.requires_human_approval),
-    approvers: doc.approval?.approvers ?? [],
-    escalationRules: doc.approval?.escalation_rules ?? [],
-    deniedTools: doc.tools?.denied ?? [],
-    promptInjectionDetection: Boolean(
-      doc.content_safety?.prompt_injection_detection_enabled
-    ),
-    outputSanitizer: Boolean(doc.content_safety?.output_sanitizer_enabled),
-  };
-}
-
-// Parse a user-entered money value to a 2-decimal string, or null when blank/invalid.
 function parseMoney(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -122,84 +109,178 @@ function parseInt2(value: string): number | null {
   return n;
 }
 
-// Assemble a clean PolicyDocument, omitting blank fields and empty sections.
-function formToDocument(form: FormState): PolicyDocument {
-  const doc: PolicyDocument = {};
-
-  const monthly = parseMoney(form.monthlySpendCap);
-  const run = parseMoney(form.runBudget);
-  const service = parseMoney(form.serviceBudget);
-  if (monthly !== null || run !== null || service !== null) {
-    doc.budget = {};
-    if (monthly !== null) doc.budget.monthly_spend_cap_usd = monthly;
-    if (run !== null) doc.budget.run_budget_usd = run;
-    if (service !== null) doc.budget.service_budget_usd = service;
-  }
-
-  const maxTokens = parseInt2(form.maxTokens);
-  const maxTokensPerCall = parseInt2(form.maxTokensPerCall);
-  if (maxTokens !== null || maxTokensPerCall !== null) {
-    doc.tokens = {};
-    if (maxTokens !== null) doc.tokens.max_tokens = maxTokens;
-    if (maxTokensPerCall !== null)
-      doc.tokens.max_tokens_per_call = maxTokensPerCall;
-  }
-
-  if (form.deniedTools.length > 0) {
-    doc.tools = { denied: form.deniedTools };
-  }
-
-  if (form.requiresApproval) {
-    doc.approval = { requires_human_approval: true };
-    if (form.approvers.length > 0) doc.approval.approvers = form.approvers;
-    if (form.escalationRules.length > 0)
-      doc.approval.escalation_rules = form.escalationRules;
-  }
-
-  if (form.promptInjectionDetection || form.outputSanitizer) {
-    doc.content_safety = {};
-    if (form.promptInjectionDetection)
-      doc.content_safety.prompt_injection_detection_enabled = true;
-    if (form.outputSanitizer)
-      doc.content_safety.output_sanitizer_enabled = true;
-  }
-
-  return doc;
+function str(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
 }
 
-// Loosely validate Keto subject refs (user:<id> | group:<id>#member, etc.).
-const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
+// Seed the form from an existing rule (edit mode). Unknown shapes degrade
+// gracefully — fields that don't apply stay at their defaults.
+function policyToForm(policy: Policy): { effect: PolicyEffect; form: FormState } {
+  const p =
+    typeof policy.params === "object" && policy.params !== null
+      ? (policy.params as Record<string, unknown>)
+      : {};
+  const form: FormState = { ...EMPTY_FORM, enabled: policy.enabled };
+
+  if (policy.effect === "cap") {
+    if (policy.target === "tokens") {
+      form.capKind = "tokens";
+      form.maxTokens = str(p.max_tokens);
+      form.maxTokensPerCall = str(p.max_tokens_per_call);
+    } else if (policy.target === "service") {
+      form.capKind = "service";
+      form.amountUsd = str(p.amount_usd);
+    } else {
+      form.capKind = "spend";
+      form.amountUsd = str(p.amount_usd);
+      form.period = p.period === "run" ? "run" : "month";
+    }
+  } else if (policy.effect === "deny") {
+    form.tools = policy.target.startsWith("tool:")
+      ? [policy.target.slice("tool:".length)]
+      : [];
+  } else if (policy.effect === "approval") {
+    form.approvalAllActions = policy.target === "*";
+    form.tools =
+      policy.target.startsWith("tool:") && policy.target !== "tool:*"
+        ? [policy.target.slice("tool:".length)]
+        : [];
+    form.approvers = Array.isArray(p.approvers)
+      ? (p.approvers as unknown[]).map(String).filter(Boolean)
+      : [];
+  } else if (policy.effect === "safety") {
+    form.promptInjection = Boolean(p.prompt_injection);
+    form.outputSanitizer = Boolean(p.output_sanitizer);
+  }
+
+  return { effect: policy.effect, form };
+}
+
+// A single rule body for POST /PATCH. Deny/approval over multiple tools fan out
+// into several bodies (one rule per tool).
+interface RuleBody {
+  target: string;
+  effect: PolicyEffect;
+  params: Record<string, unknown>;
+}
+
+// Build the rule bodies the form describes. Returns an error string instead
+// when the form is incomplete.
+function buildRuleBodies(
+  effect: PolicyEffect,
+  form: FormState
+): { bodies: RuleBody[] } | { error: string } {
+  if (effect === "cap") {
+    if (form.capKind === "tokens") {
+      const maxTokens = parseInt2(form.maxTokens);
+      const perCall = parseInt2(form.maxTokensPerCall);
+      if (maxTokens === null && perCall === null)
+        return { error: "Enter a token cap." };
+      const params: Record<string, unknown> = {};
+      if (maxTokens !== null) params.max_tokens = maxTokens;
+      if (perCall !== null) params.max_tokens_per_call = perCall;
+      return { bodies: [{ target: "tokens", effect, params }] };
+    }
+    const amount = parseMoney(form.amountUsd);
+    if (amount === null) return { error: "Enter a valid amount." };
+    if (form.capKind === "service")
+      return {
+        bodies: [{ target: "service", effect, params: { amount_usd: amount } }],
+      };
+    return {
+      bodies: [
+        {
+          target: "spend",
+          effect,
+          params: { amount_usd: amount, period: form.period },
+        },
+      ],
+    };
+  }
+
+  if (effect === "deny") {
+    if (form.tools.length === 0) return { error: "Add at least one tool." };
+    return {
+      bodies: form.tools.map((tool) => ({
+        target: `tool:${tool}`,
+        effect,
+        params: {},
+      })),
+    };
+  }
+
+  if (effect === "approval") {
+    const params: Record<string, unknown> = {};
+    if (form.approvers.length > 0) params.approvers = form.approvers;
+    if (form.approvalAllActions)
+      return { bodies: [{ target: "*", effect, params }] };
+    if (form.tools.length === 0)
+      return { error: "Add a tool or require approval for all actions." };
+    return {
+      bodies: form.tools.map((tool) => ({
+        target: `tool:${tool}`,
+        effect,
+        params,
+      })),
+    };
+  }
+
+  // safety
+  if (!form.promptInjection && !form.outputSanitizer)
+    return { error: "Enable at least one safety check." };
+  return {
+    bodies: [
+      {
+        target: "content",
+        effect,
+        params: {
+          prompt_injection: form.promptInjection,
+          output_sanitizer: form.outputSanitizer,
+        },
+      },
+    ],
+  };
+}
 
 // --- small building blocks ------------------------------------------------
 
-function SectionHeader({
-  effect,
-  title,
-  description,
+function EffectSegmented({
+  value,
+  onChange,
+  disabled,
 }: {
-  effect: keyof typeof EFFECT_STYLES;
-  title: string;
-  description?: string;
+  value: PolicyEffect;
+  onChange: (effect: PolicyEffect) => void;
+  disabled?: boolean;
 }) {
-  const style = EFFECT_STYLES[effect];
   return (
-    <div className="flex items-center gap-2">
-      <span
-        className={cn("h-2 w-2 shrink-0 rounded-full", style.dot)}
-        aria-hidden
-      />
-      <span
-        className={cn(
-          "rounded px-1.5 py-0.5 text-[11px] font-medium",
-          style.chip
-        )}
-      >
-        {style.label}
-      </span>
-      <span className="text-sm font-semibold">{title}</span>
-      {description && (
-        <span className="text-xs text-muted-foreground">{description}</span>
-      )}
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
+      {EDITABLE_EFFECTS.map((effect) => {
+        const style = EFFECT_STYLES[effect];
+        const active = effect === value;
+        return (
+          <button
+            key={effect}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(effect)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              active
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <span
+              className={cn("h-2 w-2 shrink-0 rounded-full", style.dot)}
+              aria-hidden
+            />
+            {style.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -227,9 +308,7 @@ function TagInput({
       setHint(invalidHint ?? "Invalid value");
       return;
     }
-    if (!values.includes(value)) {
-      onChange([...values, value]);
-    }
+    if (!values.includes(value)) onChange([...values, value]);
     setDraft("");
     setHint(null);
   };
@@ -303,7 +382,7 @@ function MoneyField({
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="optional"
+          placeholder="0.00"
           className="pl-6"
         />
       </div>
@@ -346,15 +425,18 @@ export default function PolicyEditor({
   workspaceId,
   onSaved,
 }: PolicyEditorProps) {
+  const [effect, setEffect] = useState<PolicyEffect>("cap");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = target?.mode === "edit";
-  const scopeType = useMemo(() => {
+
+  const subjectType = useMemo<"workspace" | "agent">(() => {
     if (!target) return "workspace";
-    if (target.mode === "edit") return target.policy.scope_type;
+    if (target.mode === "edit")
+      return target.policy.subject_type === "workspace" ? "workspace" : "agent";
     if (target.mode === "create-agent") return "agent";
     return "workspace";
   }, [target]);
@@ -363,13 +445,18 @@ export default function PolicyEditor({
   useEffect(() => {
     if (!open || !target) return;
     if (target.mode === "edit") {
-      setForm(documentToForm(target.policy));
+      const seeded = policyToForm(target.policy);
+      setEffect(seeded.effect);
+      setForm(seeded.form);
       setSelectedAgentId(
-        target.policy.scope_type === "agent" ? target.policy.scope_id : ""
+        target.policy.subject_type === "agent" ? target.policy.subject_id : ""
       );
     } else {
+      setEffect("cap");
       setForm(EMPTY_FORM);
-      setSelectedAgentId("");
+      setSelectedAgentId(
+        target.mode === "create-agent" ? target.agentId ?? "" : ""
+      );
     }
     setError(null);
   }, [open, target]);
@@ -377,48 +464,74 @@ export default function PolicyEditor({
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const resolveScopeId = (): string | null => {
-    if (target?.mode === "edit") return target.policy.scope_id;
-    if (scopeType === "agent") return selectedAgentId || null;
+  const resolveSubjectId = (): string | null => {
+    if (target?.mode === "edit") return target.policy.subject_id;
+    if (subjectType === "agent") return selectedAgentId || null;
     return workspaceId;
   };
 
-  const save = async (enabledOverride?: boolean) => {
-    const scopeId = resolveScopeId();
-    if (!scopeId) {
+  const save = async () => {
+    const subjectId = resolveSubjectId();
+    if (!subjectId) {
       setError(
-        scopeType === "agent"
+        subjectType === "agent"
           ? "Select an agent for this policy."
           : "No workspace context available."
       );
       return;
     }
 
-    const enabled = enabledOverride ?? form.enabled;
-    const document = formToDocument({ ...form, enabled });
+    const built = buildRuleBodies(effect, form);
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/proxy/v1/governance/policies/${scopeType}/${scopeId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ document, enabled }),
+      if (isEdit && target?.mode === "edit") {
+        // PATCH the single rule. Edit only writes the first body (a rule edits
+        // one rule); extra tools added in edit mode are ignored to keep edit
+        // 1:1 with the backing rule.
+        const body = built.bodies[0];
+        const response = await fetch(
+          `/api/proxy/v1/policies/${target.policy.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              target: body.target,
+              effect: body.effect,
+              params: body.params,
+              enabled: form.enabled,
+            }),
+          }
+        );
+        if (!response.ok) {
+          setError(await readDetail(response, "Save failed"));
+          return;
         }
-      );
-
-      if (!response.ok) {
-        let detail = `Save failed (${response.status})`;
-        try {
-          const body = (await response.json()) as { detail?: unknown };
-          if (typeof body.detail === "string") detail = body.detail;
-        } catch {
-          // keep the status-based message
+      } else {
+        // POST one rule per body (deny/approval may fan out over tools).
+        for (const body of built.bodies) {
+          const response = await fetch(`/api/proxy/v1/policies`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject_type: subjectType,
+              subject_id: subjectId,
+              target: body.target,
+              effect: body.effect,
+              params: body.params,
+              enabled: form.enabled,
+            }),
+          });
+          if (!response.ok) {
+            setError(await readDetail(response, "Save failed"));
+            return;
+          }
         }
-        setError(detail);
-        return;
       }
 
       onOpenChange(false);
@@ -430,30 +543,49 @@ export default function PolicyEditor({
     }
   };
 
-  const scopeTitle = isEdit
-    ? scopeType === "workspace"
-      ? "Edit workspace policy"
-      : "Edit agent policy"
-    : scopeType === "agent"
-      ? "New agent policy"
-      : "New workspace policy";
+  const remove = async () => {
+    if (target?.mode !== "edit") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/proxy/v1/policies/${target.policy.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok && response.status !== 204) {
+        setError(await readDetail(response, "Delete failed"));
+        return;
+      }
+      onOpenChange(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete policy");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const title = isEdit
+    ? "Edit policy rule"
+    : subjectType === "agent"
+      ? "New agent rule"
+      : "New workspace rule";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{scopeTitle}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Restrictions defined here apply to{" "}
-            {scopeType === "workspace"
+            A policy is a single rule. It applies to{" "}
+            {subjectType === "workspace"
               ? "every agent in this workspace"
               : "the selected agent"}
             . Tool access grants are managed in the Access view.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-1">
-          {/* Agent picker — only in agent create mode */}
+        <div className="space-y-5 py-1">
+          {/* Agent picker — only in agent create mode without a fixed agent */}
           {target?.mode === "create-agent" && (
             <div className="space-y-1.5">
               <Label htmlFor="policy-agent">Agent</Label>
@@ -475,142 +607,178 @@ export default function PolicyEditor({
             </div>
           )}
 
-          {/* Cap */}
-          <section className="space-y-3 rounded-lg border border-border p-4">
-            <SectionHeader
-              effect="cap"
-              title="Spending & token caps"
-              description="optional"
-            />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <MoneyField
-                id="monthly-cap"
-                label="Monthly spend cap"
-                value={form.monthlySpendCap}
-                onChange={(v) => update("monthlySpendCap", v)}
-              />
-              <MoneyField
-                id="run-budget"
-                label="Per-run budget"
-                value={form.runBudget}
-                onChange={(v) => update("runBudget", v)}
-              />
-              <MoneyField
-                id="service-budget"
-                label="Per-service budget"
-                value={form.serviceBudget}
-                onChange={(v) => update("serviceBudget", v)}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <NumberField
-                id="max-tokens"
-                label="Max tokens"
-                value={form.maxTokens}
-                onChange={(v) => update("maxTokens", v)}
-              />
-              <NumberField
-                id="max-tokens-call"
-                label="Max tokens per call"
-                value={form.maxTokensPerCall}
-                onChange={(v) => update("maxTokensPerCall", v)}
-              />
-            </div>
-          </section>
+          {/* Effect */}
+          <div className="space-y-1.5">
+            <Label>Effect</Label>
+            <EffectSegmented value={effect} onChange={setEffect} disabled={isEdit} />
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                The effect is fixed once a rule is created.
+              </p>
+            )}
+          </div>
 
-          {/* Require approval */}
-          <section className="space-y-3 rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between">
-              <SectionHeader effect="approval" title="Require human approval" />
-              <Switch
-                checked={form.requiresApproval}
-                onCheckedChange={(v) => update("requiresApproval", v)}
-                aria-label="Require human approval"
-              />
-            </div>
-            {form.requiresApproval && (
-              <div className="space-y-3 pt-1">
-                <div className="space-y-1.5">
-                  <Label>Approvers</Label>
-                  <TagInput
-                    values={form.approvers}
-                    onChange={(next) => update("approvers", next)}
-                    placeholder="user:<id> or group:<id>#member"
-                    validate={(v) => SUBJECT_REF_RE.test(v)}
-                    invalidHint="Use a subject ref like user:<id> or group:<id>#member"
+          {/* Effect-specific fields */}
+          {effect === "cap" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="cap-kind">Cap type</Label>
+                <Select
+                  value={form.capKind}
+                  onValueChange={(v) => update("capKind", v as CapKind)}
+                >
+                  <SelectTrigger id="cap-kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spend">Spend budget</SelectItem>
+                    <SelectItem value="service">Per-service budget</SelectItem>
+                    <SelectItem value="tokens">Token cap</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.capKind === "tokens" ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <NumberField
+                    id="max-tokens"
+                    label="Max tokens"
+                    value={form.maxTokens}
+                    onChange={(v) => update("maxTokens", v)}
                   />
+                  <NumberField
+                    id="max-tokens-call"
+                    label="Max tokens per call"
+                    value={form.maxTokensPerCall}
+                    onChange={(v) => update("maxTokensPerCall", v)}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <MoneyField
+                    id="cap-amount"
+                    label="Amount"
+                    value={form.amountUsd}
+                    onChange={(v) => update("amountUsd", v)}
+                  />
+                  {form.capKind === "spend" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cap-period">Period</Label>
+                      <Select
+                        value={form.period}
+                        onValueChange={(v) =>
+                          update("period", v as "month" | "run")
+                        }
+                      >
+                        <SelectTrigger id="cap-period">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="month">Per month</SelectItem>
+                          <SelectItem value="run">Per run</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {effect === "deny" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <Label>Denied tools</Label>
+              <TagInput
+                values={form.tools}
+                onChange={(next) => update("tools", next)}
+                placeholder="Tool name (e.g. send_email or *)"
+              />
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                <LinkIcon className="h-3 w-3" />
+                Granting tool access is managed in the{" "}
+                <a
+                  href="/policies?view=access"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Access view
+                </a>
+                .
+              </p>
+            </section>
+          )}
+
+          {effect === "approval" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="approval-all">Require for all actions</Label>
                   <p className="text-xs text-muted-foreground">
-                    Leave empty to allow any workspace member to approve.
+                    Off to require approval for specific tools only.
                   </p>
                 </div>
+                <Switch
+                  id="approval-all"
+                  checked={form.approvalAllActions}
+                  onCheckedChange={(v) => update("approvalAllActions", v)}
+                />
+              </div>
+              {!form.approvalAllActions && (
                 <div className="space-y-1.5">
-                  <Label>Escalation rules</Label>
+                  <Label>Tools requiring approval</Label>
                   <TagInput
-                    values={form.escalationRules}
-                    onChange={(next) => update("escalationRules", next)}
-                    placeholder="Add an escalation rule"
+                    values={form.tools}
+                    onChange={(next) => update("tools", next)}
+                    placeholder="Tool name (e.g. send_email)"
                   />
                 </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Approvers</Label>
+                <TagInput
+                  values={form.approvers}
+                  onChange={(next) => update("approvers", next)}
+                  placeholder="user:<id> or group:<id>#member"
+                  validate={(v) => SUBJECT_REF_RE.test(v)}
+                  invalidHint="Use a subject ref like user:<id> or group:<id>#member"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to allow any workspace member to approve.
+                </p>
               </div>
-            )}
-          </section>
+            </section>
+          )}
 
-          {/* Deny */}
-          <section className="space-y-3 rounded-lg border border-border p-4">
-            <SectionHeader
-              effect="deny"
-              title="Denied tools"
-              description="optional"
-            />
-            <TagInput
-              values={form.deniedTools}
-              onChange={(next) => update("deniedTools", next)}
-              placeholder="Add a tool name"
-            />
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <LinkIcon className="h-3 w-3" />
-              Granting tool access is managed in the{" "}
-              <a
-                href="/policies?view=access"
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                Access view
-              </a>
-              .
-            </p>
-          </section>
-
-          {/* Safety */}
-          <section className="space-y-3 rounded-lg border border-border p-4">
-            <SectionHeader effect="safety" title="Content safety" />
-            <div className="flex items-center justify-between">
-              <Label htmlFor="prompt-injection" className="font-normal">
-                Prompt-injection detection
-              </Label>
-              <Switch
-                id="prompt-injection"
-                checked={form.promptInjectionDetection}
-                onCheckedChange={(v) => update("promptInjectionDetection", v)}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="output-sanitizer" className="font-normal">
-                Output sanitizer
-              </Label>
-              <Switch
-                id="output-sanitizer"
-                checked={form.outputSanitizer}
-                onCheckedChange={(v) => update("outputSanitizer", v)}
-              />
-            </div>
-          </section>
+          {effect === "safety" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="prompt-injection" className="font-normal">
+                  Prompt-injection detection
+                </Label>
+                <Switch
+                  id="prompt-injection"
+                  checked={form.promptInjection}
+                  onCheckedChange={(v) => update("promptInjection", v)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="output-sanitizer" className="font-normal">
+                  Output sanitizer
+                </Label>
+                <Switch
+                  id="output-sanitizer"
+                  checked={form.outputSanitizer}
+                  onCheckedChange={(v) => update("outputSanitizer", v)}
+                />
+              </div>
+            </section>
+          )}
 
           {/* Enabled */}
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
-              <Label htmlFor="policy-enabled">Policy enabled</Label>
+              <Label htmlFor="policy-enabled">Rule enabled</Label>
               <p className="text-xs text-muted-foreground">
-                Disabled policies are kept but not enforced.
+                Disabled rules are kept but not enforced.
               </p>
             </div>
             <Switch
@@ -628,15 +796,15 @@ export default function PolicyEditor({
         )}
 
         <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
-          {isEdit && form.enabled ? (
+          {isEdit ? (
             <Button
               type="button"
               variant="destructiveOutline"
               size="sm"
               disabled={saving}
-              onClick={() => save(false)}
+              onClick={remove}
             >
-              Disable
+              Delete
             </Button>
           ) : (
             <span />
@@ -656,13 +824,35 @@ export default function PolicyEditor({
               size="sm"
               isLoading={saving}
               disabled={saving}
-              onClick={() => save()}
+              onClick={save}
             >
-              Save policy
+              {isEdit ? "Save rule" : "Create rule"}
             </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+// Read a backend 4xx detail message, falling back to a status-based message.
+async function readDetail(response: Response, fallback: string): Promise<string> {
+  let detail = `${fallback} (${response.status})`;
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") {
+      detail = body.detail;
+    } else if (Array.isArray(body.detail)) {
+      detail = body.detail
+        .map((item) =>
+          item && typeof item === "object" && "msg" in item
+            ? String((item as { msg: unknown }).msg)
+            : String(item)
+        )
+        .join(", ");
+    }
+  } catch {
+    // keep the status-based message
+  }
+  return detail;
 }

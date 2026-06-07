@@ -352,6 +352,7 @@ class TestExportWorkspace:
         """Test that system workspace agents are not exported."""
         user_agent = MagicMock()
         user_agent.workspace_id = "test-workspace"
+        user_agent.source = "workspace_custom"
         user_agent.name = "User Agent"
         user_agent.description = "User agent"
         user_agent.instruction = "You are a user agent"
@@ -360,7 +361,8 @@ class TestExportWorkspace:
         user_agent.a2ui_enabled = None
 
         system_agent = MagicMock()
-        system_agent.workspace_id = "system"
+        system_agent.workspace_id = "platform"
+        system_agent.source = "official"
         system_agent.name = "System Agent"
         system_agent.description = "System agent"
         system_agent.instruction = "You are a system agent"
@@ -376,9 +378,7 @@ class TestExportWorkspace:
         assert exported["agents"][0]["name"] == "User Agent"
 
     @pytest.mark.asyncio
-    async def test_export_mcp_instances(
-        self, import_export_service, mock_mcp_instance_service
-    ):
+    async def test_export_mcp_instances(self, import_export_service, mock_mcp_instance_service):
         """Test exporting MCP instances."""
         mock_instance = MagicMock()
         mock_instance.workspace_id = "test-workspace"
@@ -394,7 +394,9 @@ class TestExportWorkspace:
 
         assert len(exported["mcp_instances"]) == 1
         assert exported["mcp_instances"][0]["name"] == "Test Filesystem"
-        assert exported["mcp_instances"][0]["server_spec_id"] == "a1b2c3d4-e5f6-789a-bcde-123456789abc"
+        assert (
+            exported["mcp_instances"][0]["server_spec_id"] == "a1b2c3d4-e5f6-789a-bcde-123456789abc"
+        )
         assert exported["mcp_instances"][0]["env_vars"]["ROOT"] == "/data"
 
     @pytest.mark.asyncio
@@ -414,7 +416,10 @@ class TestExportWorkspace:
 
         assert len(exported["provider_configs"]) == 1
         assert exported["provider_configs"][0]["name"] == "OpenAI Config"
-        assert exported["provider_configs"][0]["provider_spec_id"] == "932f3839-af2a-455e-80c6-c58fa97e312c"
+        assert (
+            exported["provider_configs"][0]["provider_spec_id"]
+            == "932f3839-af2a-455e-80c6-c58fa97e312c"
+        )
         assert exported["provider_configs"][0]["api_key_placeholder"] == "<REQUIRED>"
         assert exported["provider_configs"][0]["endpoint_url"] == "https://api.openai.com"
 
@@ -425,13 +430,15 @@ class TestExportWorkspace:
         """Test that system workspace provider configs are not exported."""
         user_config = MagicMock()
         user_config.workspace_id = "test-workspace"
+        user_config.source = "workspace_custom"
         user_config.name = "User Config"
         user_config.description = None
         user_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
         user_config.endpoint_url = "https://api.openai.com"
 
         system_config = MagicMock()
-        system_config.workspace_id = "system"
+        system_config.workspace_id = "platform"
+        system_config.source = "official"
         system_config.name = "System Config"
         system_config.description = None
         system_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
@@ -537,9 +544,7 @@ provider_configs: []
         assert "Unknown code tool" in result.errors[0]
 
     @pytest.mark.asyncio
-    async def test_validate_mcp_server_specs(
-        self, import_export_service, mock_repository_factory
-    ):
+    async def test_validate_mcp_server_specs(self, import_export_service, mock_repository_factory):
         """Test validation of MCP server specs."""
         yaml_content = """
 agents: []
@@ -559,9 +564,7 @@ provider_configs: []
         assert "Unknown server spec" in result.errors[0]
 
     @pytest.mark.asyncio
-    async def test_validate_provider_specs(
-        self, import_export_service, mock_provider_service
-    ):
+    async def test_validate_provider_specs(self, import_export_service, mock_provider_service):
         """Test validation of provider specs."""
         yaml_content = """
 agents: []
@@ -584,9 +587,7 @@ class TestOverrideExisting:
     """Test override_existing option."""
 
     @pytest.mark.asyncio
-    async def test_override_existing_agent(
-        self, import_export_service, mock_agent_service
-    ):
+    async def test_override_existing_agent(self, import_export_service, mock_agent_service):
         """Test updating existing agent with override flag."""
         yaml_content = """
 agents:
@@ -609,9 +610,7 @@ provider_configs: []
         mock_agent_service.update_agent.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_no_override_existing_agent(
-        self, import_export_service, mock_agent_service
-    ):
+    async def test_no_override_existing_agent(self, import_export_service, mock_agent_service):
         """Test that existing agent without override flag raises error."""
         yaml_content = """
 agents:
@@ -685,9 +684,7 @@ class TestSkillImportExport:
     """Test skill import/export functionality."""
 
     @pytest.mark.asyncio
-    async def test_import_skill_from_content(
-        self, import_export_service, mock_skill_service
-    ):
+    async def test_import_skill_from_content(self, import_export_service, mock_skill_service):
         """Test importing a skill from inline content."""
         yaml_content = """
 skills:
@@ -720,9 +717,7 @@ provider_configs: []
         assert call_payload.description == "A test skill"
 
     @pytest.mark.asyncio
-    async def test_import_skill_from_github(
-        self, import_export_service, mock_skill_service
-    ):
+    async def test_import_skill_from_github(self, import_export_service, mock_skill_service):
         """Test importing a skill from GitHub."""
         yaml_content = """
 skills:
@@ -748,9 +743,7 @@ provider_configs: []
         assert call_payload.name == "GitHub Skill"
 
     @pytest.mark.asyncio
-    async def test_import_skill_from_path(
-        self, import_export_service, mock_skill_service
-    ):
+    async def test_import_skill_from_path(self, import_export_service, mock_skill_service):
         """Test importing a skill from local path."""
         yaml_content = """
 skills:

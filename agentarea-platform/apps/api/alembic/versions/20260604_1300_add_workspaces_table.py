@@ -8,8 +8,8 @@ Additive only:
 - no ``parent_org_id`` — the organization layer is deferred until
   billing/SSO concretely require it.
 
-Revision ID: 20260604_1300_add_workspaces_table
-Revises: 20260604_1200_add_skill_collections
+Revision ID: 20260604_1300_workspaces_table
+Revises: 20260604_1200_skill_collections
 Create Date: 2026-06-04 13:00:00.000000
 
 """
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "20260604_1300_add_workspaces_table"
-down_revision: str = "20260604_1200_add_skill_collections"
+revision: str = "20260604_1300_workspaces_table"
+down_revision: str = "20260604_1200_skill_collections"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

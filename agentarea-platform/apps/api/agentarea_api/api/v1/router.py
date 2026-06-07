@@ -31,6 +31,7 @@ from . import (
     model_specs,
     network,
     openapi_connections,
+    policies,
     projects,
     provider_configs,
     provider_specs,
@@ -42,6 +43,7 @@ from . import (
     wallet,
     workspace_config,
     workspace_invitations,
+    workspaces,
 )
 
 # ============================================================================
@@ -98,6 +100,7 @@ protected_v1_router.include_router(workspace_config.router)
 
 # Workspace invitations + memberships - PROTECTED
 protected_v1_router.include_router(workspace_invitations.router)
+protected_v1_router.include_router(workspaces.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
@@ -147,8 +150,11 @@ protected_v1_router.include_router(audit.router)
 protected_v1_router.include_router(dashboard.router)
 protected_v1_router.include_router(agent_overview.router)
 
-# Governance policies (CRUD + effective-policy preview + task snapshots) - PROTECTED
+# Governance effective-policy preview + task snapshots - PROTECTED
 protected_v1_router.include_router(governance.router)
+
+# Unified policy rules (source of truth CRUD) - PROTECTED
+protected_v1_router.include_router(policies.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)

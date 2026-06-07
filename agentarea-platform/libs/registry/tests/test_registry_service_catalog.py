@@ -20,8 +20,8 @@ class TestValidTypes:
         assert "llm_providers" in VALID_REGISTRY_TYPES
         assert "llm_models" in VALID_REGISTRY_TYPES
 
-    def test_includes_default_agents(self):
-        assert "default_agents" in VALID_REGISTRY_TYPES
+    def test_includes_agents(self):
+        assert "agents" in VALID_REGISTRY_TYPES
 
 
 class TestParseLLMProviders:
@@ -144,7 +144,7 @@ class TestParseDefaultAgents:
             ]
         }
 
-        items = RegistryService._parse_default_agents(data)
+        items = RegistryService._parse_agents(data)
 
         assert len(items) == 1
         item = items[0]
@@ -155,12 +155,12 @@ class TestParseDefaultAgents:
 
     def test_external_id_falls_back_to_name_when_id_missing(self):
         data = {"agents": [{"name": "Helper", "instruction": "Help."}]}
-        items = RegistryService._parse_default_agents(data)
+        items = RegistryService._parse_agents(data)
         assert items[0]["external_id"] == "Helper"
 
     def test_skips_agents_without_name(self):
         data = {"agents": [{"instruction": "x"}, {"name": "keep"}]}
-        items = RegistryService._parse_default_agents(data)
+        items = RegistryService._parse_agents(data)
         assert len(items) == 1
         assert items[0]["name"] == "keep"
 
@@ -176,7 +176,7 @@ class TestParseDefaultAgents:
                 }
             ]
         }
-        items = RegistryService._parse_default_agents(data)
+        items = RegistryService._parse_agents(data)
         tools = items[0]["spec"]["tools"]
         assert len(tools) == 2
         assert tools[0]["type"] == "mcp"
@@ -195,9 +195,9 @@ class TestParseSourceDispatch:
         )
         assert result[0]["external_id"] == "p/m"
 
-    def test_dispatches_default_agents(self):
+    def test_dispatches_agents(self):
         result = RegistryService._parse_source(
-            "default_agents", {"agents": [{"name": "A"}]}
+            "agents", {"agents": [{"name": "A"}]}
         )
         assert result[0]["name"] == "A"
 

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agentarea_agents.schemas.import_export import ToolConfigYAML
+from agentarea_agents.schemas.import_export import ToolConfig
 
 
 class EventConfig(BaseModel):
@@ -64,7 +64,7 @@ class AgentCreate(BaseModel):
             "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet')."
         ),
     )
-    tools: list[ToolConfigYAML] | None = Field(
+    tools: list[ToolConfig] | None = Field(
         default=None,
         description="Tools attached to the agent (code/mcp/agent/openapi).",
     )
@@ -111,7 +111,7 @@ class AgentUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     instruction: str | None = Field(default=None, max_length=20000)
     model_id: str | None = None
-    tools: list[ToolConfigYAML] | None = None
+    tools: list[ToolConfig] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None

@@ -29,6 +29,8 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     last_dispatch: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     tools: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
+    # Provenance of this resource; see agentarea_common.base.SourceKind.
+    source: Mapped[str] = mapped_column(String, nullable=False, default="workspace_custom")
     auth_config_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),

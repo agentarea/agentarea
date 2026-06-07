@@ -1,6 +1,6 @@
 """Add skill_collections table and collection_skills association table
 
-Revision ID: 20260604_1200_add_skill_collections
+Revision ID: 20260604_1200_skill_collections
 Revises: tt1_merge_heads
 Create Date: 2026-06-04 12:00:00.000000
 
@@ -14,7 +14,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "20260604_1200_add_skill_collections"
+revision: str = "20260604_1200_skill_collections"
 down_revision: str = "tt1_merge_heads"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

@@ -17,12 +17,15 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from agentarea_common.base.source import SourceKind
+from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+
 from .parsers import YAMLValidationError, parse_yaml
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_WORKSPACE_ID = "system"
-SYSTEM_USER_ID = "system"
+SYSTEM_WORKSPACE_ID = PLATFORM_WORKSPACE_ID
+SYSTEM_USER_ID = PLATFORM_PRINCIPAL_ID
 
 
 @dataclass
@@ -114,6 +117,12 @@ class ReconcilerService:
                         session.add(entity)
                         result.created += 1
                         logger.debug("Created %s: %s", entity_type, name)
+
+                    # Platform-seeded entities are built-in (provenance), so
+                    # is_builtin() holds regardless of seeding path. Only the
+                    # source-bearing tables (agents, skills) carry the column.
+                    if hasattr(entity, "source"):
+                        entity.source = SourceKind.OFFICIAL
 
                     await session.commit()
                 except Exception as e:

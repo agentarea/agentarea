@@ -1,8 +1,9 @@
-"""Factory for creating agent delegation tools from configuration.
+"""Factory for agent-to-agent tools (one agent invoking another).
 
-Creates the appropriate tool type:
-- AgentDelegationTool: for same-platform agents (direct task service call, no HTTP)
-- A2AAgentTool: for external agents (HTTP call via A2A protocol)
+Delegation is the concept; A2A is one transport binding of it for remote
+targets — not the umbrella. This factory picks the binding by config:
+- AgentDelegationTool: same-platform agents (direct task service call, no HTTP)
+- A2AAgentTool: external agents (HTTP call via the A2A protocol)
 """
 
 import logging
@@ -15,8 +16,11 @@ from .base_tool import BaseTool
 logger = logging.getLogger(__name__)
 
 
-class A2AAgentToolFactory:
-    """Factory for creating agent delegation tool instances.
+class AgentToolFactory:
+    """Factory for agent-to-agent tool instances (one agent invoking another).
+
+    Delegation is the concept; A2A is one transport binding of it for remote
+    targets — not the umbrella. This factory picks the binding:
 
     For same-platform agents (no explicit a2a_url), creates AgentDelegationTool
     which calls the task service directly — no HTTP, no auth overhead.
@@ -121,7 +125,7 @@ class A2AAgentToolFactory:
                 continue
 
             settings = config.get("settings") or {}
-            tool = await A2AAgentToolFactory.create_tool(
+            tool = await AgentToolFactory.create_tool(
                 agent_name=agent_name,
                 agent_service=agent_service,
                 base_url=base_url,

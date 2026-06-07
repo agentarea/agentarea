@@ -1,12 +1,12 @@
 """Test write protection for system entities via AuthorizationService."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+import pytest
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentUpdate
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def regular_user_context():
     return UserContext(
         user_id="user-1",
         workspace_id="ws-1",
-        accessible_workspaces=["ws-1", "system"],
+        accessible_workspaces=["ws-1", "platform"],
     )
 
 
@@ -28,7 +28,7 @@ def system_agent():
     agent = MagicMock()
     agent.id = UUID("00000000-0000-0000-0000-000000000001")
     agent.name = "System Agent"
-    agent.workspace_id = "system"
+    agent.workspace_id = "platform"
     agent.description = "System agent"
     agent.model_id = "test-model"
     agent.tools = None

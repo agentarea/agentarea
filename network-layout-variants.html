@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Network layout variants</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --border: #e4e4e7;
+    --border2: #d4d4d8;
+    --text: #18181b;
+    --muted: #71717a;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-bd: #bfdbfe;
+    --rose: #e11d48; --rose-bg: #fff1f2; --rose-bd: #fecdd3;
+    --purple: #7c3aed; --purple-bg: #f5f3ff; --purple-bd: #ddd6fe;
+    --neutral-bg: #ffffff; --neutral-bd: #d4d4d8;
+    --edge-trigger: #60a5fa;
+    --edge-ext: #fb7185;
+    --edge-deleg: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  header {
+    padding: 20px 28px 0;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    border: 1px solid var(--border); background: var(--panel);
+    padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 550;
+    cursor: pointer; color: var(--muted); transition: all .15s;
+  }
+  .tab:hover { border-color: var(--border2); }
+  .tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .stage {
+    margin: 16px 28px 28px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .stage-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(to bottom, #fff, #fcfcfd);
+  }
+  .stage-title { font-size: 14px; font-weight: 600; }
+  .stage-desc { font-size: 12px; color: var(--muted); max-width: 60ch; }
+  .canvas-wrap {
+    background-image: radial-gradient(var(--border) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: #fdfdfd;
+  }
+  svg { display: block; width: 100%; height: 640px; }
+  .legend {
+    display: flex; gap: 18px; padding: 10px 18px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); flex-wrap: wrap;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 18px; height: 0; border-top: 2.5px solid; border-radius: 2px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Network — layout variants</h1>
+  <p class="sub">Один и тот же моковый граф (4 агента с делегированием, 3 триггера, MCP / skills / OpenAPI). Сравни расстановку.</p>
+  <div class="tabs">
+    <button class="tab active" data-v="onion">E · Onion layers (core → delegation → world)</button>
+    <button class="tab" data-v="zones">D · Network zones</button>
+    <button class="tab" data-v="layered">A · Layered</button>
+    <button class="tab" data-v="radial">B · Constellation</button>
+    <button class="tab" data-v="grouped">C · Grouped cards</button>
+  </div>
+</header>
+
+<section class="stage" id="stage-onion">
+  <div class="stage-head">
+    <div class="stage-title">E · Onion layers</div>
+    <div class="stage-desc">Концентрические слои: в ядре — оркестратор, кольцами наружу идут уровни делегирования (кто кому подчинён), а на внешнем кольце «мир» — синие точки это входящие события (ingress), розовые это внешние сервисы, куда агент ходит (egress). Чётко читается процесс «изнутри наружу».</div>
+  </div>
+  <div class="canvas-wrap"><svg id="svg-onion" viewBox="0 0 1200 640"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="border-color:var(--edge-trigger)"></span>ingress · событие → агент</span>
+    <span><span class="dot" style="border-color:var(--edge-deleg)"></span>делегирование (слой)</span>
+    <span><span class="dot" style="border-color:var(--edge-ext)"></span>egress · выход во внешний сервис</span>
+  </div>
+</section>
+
+<section class="stage hidden" id="stage-zones">
+  <div class="stage-head">
+    <div class="stage-title">D · Network zones</div>
+    <div class="stage-desc">Сеть как VPC: ingress слева, агенты в governed-зоне, наружу — только через egress-шлюз. Инструменты делятся по scope: внутренние MCP/skills (зелёные) остаются внутри и НЕ пересекают шлюз; внешние (розовые) идут наружу. На рёбрах — permission-чипы (scope доступа + риск), агент egress-capable только если ходит к внешнему ресурсу.</div>
+  </div>
+  <div class="canvas-wrap"><svg id="svg-zones" viewBox="0 0 1200 640"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="border-color:var(--edge-trigger)"></span>ingress · событие</span>
+    <span><span class="dot" style="border-color:var(--edge-deleg)"></span>delegates_to</span>
+    <span><span class="dot" style="border-color:#10b981"></span>internal tool</span>
+    <span><span class="dot" style="border-color:var(--edge-ext)"></span>egress · внешний</span>
+    <span style="color:#16a34a">● internal agent</span>
+    <span style="color:var(--rose)">↗ egress-capable</span>
+    <span style="color:#b91c1c">▰ critical perm</span>
+  </div>
+</section>
+
+<section class="stage hidden" id="stage-layered">
+  <div class="stage-head">
+    <div class="stage-title">A · Layered columns</div>
+    <div class="stage-desc">Строгие колонки Triggers → Agents → Tools, ряды выровнены по связям, без центрирующих пустот. Делегирование — мягкие дуги между агентами. Прокачанная версия текущего вида.</div>
+  </div>
+  <div class="canvas-wrap"><svg id="svg-layered" viewBox="0 0 1200 640"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="border-color:var(--edge-trigger)"></span>trigger → agent</span>
+    <span><span class="dot" style="border-color:var(--edge-deleg)"></span>delegates_to</span>
+    <span><span class="dot" style="border-color:var(--edge-ext)"></span>uses tool / skill</span>
+  </div>
+</section>
+
+<section class="stage hidden" id="stage-radial">
+  <div class="stage-head">
+    <div class="stage-title">B · Constellation</div>
+    <div class="stage-desc">Оркестратор в центре, под-агенты по кольцу, инструменты каждого агента — спутники рядом с ним. Триггеры цепляются снаружи к своему агенту. Хорошо читается «кто чем владеет».</div>
+  </div>
+  <div class="canvas-wrap"><svg id="svg-radial" viewBox="0 0 1200 640"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="border-color:var(--edge-trigger)"></span>trigger → agent</span>
+    <span><span class="dot" style="border-color:var(--edge-deleg)"></span>delegates_to</span>
+    <span><span class="dot" style="border-color:var(--edge-ext)"></span>uses tool / skill</span>
+  </div>
+</section>
+
+<section class="stage hidden" id="stage-grouped">
+  <div class="stage-head">
+    <div class="stage-title">C · Grouped cards</div>
+    <div class="stage-desc">Каждый агент — карточка, его skills / MCP / OpenAPI лежат чипами внутри. Внешняя колонка и сотни рёбер исчезают. Триггеры — пилюли слева, делегирование — стрелки между карточками.</div>
+  </div>
+  <div class="canvas-wrap"><svg id="svg-grouped" viewBox="0 0 1200 640"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="border-color:var(--edge-trigger)"></span>trigger</span>
+    <span><span class="dot" style="border-color:var(--edge-deleg)"></span>delegates_to</span>
+    <span style="color:var(--rose)">■ tool/skill chip</span>
+  </div>
+</section>
+
+<script>
+const SVGNS = "http://www.w3.org/2000/svg";
+
+// ---- mock topology -------------------------------------------------
+const nodes = [
+  { id: "t1", type: "trigger", label: "Webhook" },
+  { id: "t2", type: "trigger", label: "Daily 09:00" },
+  { id: "t3", type: "trigger", label: "Slack event" },
+  { id: "a1", type: "agent", label: "Orchestrator", model: "gpt-4o" },
+  { id: "a2", type: "agent", label: "Research", model: "claude" },
+  { id: "a3", type: "agent", label: "Writer", model: "gpt-4o-mini" },
+  { id: "a4", type: "agent", label: "Support", model: "claude-h" },
+  { id: "a5", type: "agent", label: "Reviewer", model: "gpt-4o" },
+  { id: "m1", type: "mcp", label: "GitHub MCP", scope: "external" },
+  { id: "m2", type: "mcp", label: "Notion MCP", scope: "external" },
+  { id: "m3", type: "mcp", label: "Vector DB", scope: "internal" },
+  { id: "o1", type: "openapi", label: "Stripe API", scope: "external" },
+  { id: "s1", type: "skill", label: "Web search", scope: "external" },
+  { id: "s2", type: "skill", label: "Summarize", scope: "internal" },
+  { id: "s3", type: "skill", label: "Translate", scope: "internal" },
+];
+const edges = [
+  { s: "t1", t: "a1", r: "has_trigger" },
+  { s: "t2", t: "a2", r: "has_trigger" },
+  { s: "t3", t: "a4", r: "has_trigger" },
+  { s: "a1", t: "a2", r: "delegates_to" },
+  { s: "a1", t: "a3", r: "delegates_to" },
+  { s: "a1", t: "a5", r: "delegates_to" },
+  { s: "a5", t: "a4", r: "delegates_to" },
+  { s: "a2", t: "m1", r: "uses_mcp", perm: "repo:read" },
+  { s: "a2", t: "s1", r: "has_skill", perm: "net:read" },
+  { s: "a2", t: "m3", r: "uses_mcp", perm: "vec:read" },
+  { s: "a3", t: "m2", r: "uses_mcp", perm: "pages:write", risk: "warning" },
+  { s: "a3", t: "s2", r: "has_skill", perm: "local" },
+  { s: "a3", t: "s3", r: "has_skill", perm: "local" },
+  { s: "a4", t: "o1", r: "uses_openapi", perm: "charges:write", risk: "critical" },
+  { s: "a4", t: "s1", r: "has_skill", perm: "net:read" },
+  { s: "a5", t: "m3", r: "uses_mcp", perm: "vec:read" },
+];
+const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+const STYLE = {
+  trigger: { bg: "var(--blue-bg)", bd: "var(--blue-bd)", ic: "#3b82f6", glyph: "⚡" },
+  agent:   { bg: "#fff",          bd: "#d4d4d8",        ic: "#52525b", glyph: "🤖" },
+  mcp:     { bg: "var(--rose-bg)", bd: "var(--rose-bd)", ic: "#f43f5e", glyph: "🔌" },
+  openapi: { bg: "var(--rose-bg)", bd: "var(--rose-bd)", ic: "#f43f5e", glyph: "🌐" },
+  skill:   { bg: "var(--rose-bg)", bd: "var(--rose-bd)", ic: "#f43f5e", glyph: "✦" },
+};
+const EDGE_COLOR = {
+  has_trigger: "var(--edge-trigger)",
+  delegates_to: "var(--edge-deleg)",
+  uses_mcp: "var(--edge-ext)", uses_openapi: "var(--edge-ext)", has_skill: "var(--edge-ext)",
+};
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function defsArrow(svg, id, color) {
+  let defs = svg.querySelector("defs");
+  if (!defs) defs = el("defs", {}, svg);
+  const m = el("marker", { id, markerWidth: 7, markerHeight: 7, refX: 6, refY: 3, orient: "auto" }, defs);
+  el("path", { d: "M0,0 L0,6 L6,3 z", fill: color }, m);
+}
+function curve(svg, x1, y1, x2, y2, color, dir = "h", w = 2) {
+  let d;
+  if (dir === "h") {
+    const mx = (x1 + x2) / 2;
+    d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+  } else {
+    const my = (y1 + y2) / 2;
+    d = `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`;
+  }
+  const mid = "arr-" + Math.random().toString(36).slice(2, 8);
+  defsArrow(svg, mid, color);
+  el("path", { d, fill: "none", stroke: color, "stroke-width": w, "stroke-opacity": .8, "marker-end": `url(#${mid})` }, svg);
+}
+
+// node glyph chip (icon circle + label below) — like current NodeCard
+function drawNode(svg, x, y, n, r = 26, ov) {
+  const st = STYLE[n.type];
+  const bg = (ov && ov.bg) || st.bg;
+  const bd = (ov && ov.bd) || st.bd;
+  const g = el("g", {}, svg);
+  el("rect", { x: x - r, y: y - r, width: r * 2, height: r * 2, rx: 13,
+    fill: bg, stroke: bd, "stroke-width": 2,
+    filter: "drop-shadow(0 1px 2px rgba(0,0,0,.06))" }, g);
+  el("text", { x, y: y + 1, "text-anchor": "middle", "dominant-baseline": "central",
+    "font-size": 20 }, g).textContent = st.glyph;
+  const lbl = el("text", { x, y: y + r + 15, "text-anchor": "middle",
+    "font-size": 12, "font-weight": 600, fill: "var(--text)" }, g);
+  lbl.textContent = n.label;
+  if (n.model) {
+    el("text", { x, y: y + r + 29, "text-anchor": "middle", "font-size": 10,
+      fill: "var(--muted)" }, g).textContent = n.model;
+  }
+  return g;
+}
+
+function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+
+// =====================================================================
+// VARIANT A — layered columns (clean Sugiyama-ish)
+// =====================================================================
+function renderLayered() {
+  const svg = document.getElementById("svg-layered");
+  clear(svg);
+  const colX = { trigger: 150, agent: 560, ext: 1010 };
+  const pos = {};
+
+  // agents ordered, evenly distributed
+  const agents = nodes.filter(n => n.type === "agent");
+  const agentGap = 150, agentTop = 110;
+  agents.forEach((a, i) => pos[a.id] = { x: colX.agent, y: agentTop + i * agentGap });
+
+  // triggers placed at their target agent's row (aligned, no centering voids)
+  const triggers = nodes.filter(n => n.type === "trigger");
+  triggers.forEach(tr => {
+    const e = edges.find(e => e.s === tr.id && e.r === "has_trigger");
+    pos[tr.id] = { x: colX.trigger, y: e ? pos[e.t].y : 80 };
+  });
+
+  // external grouped under their owning agent, stacked tightly
+  const exts = nodes.filter(n => ["mcp", "openapi", "skill"].includes(n.type));
+  const extByAgent = {};
+  exts.forEach(x => {
+    const e = edges.find(e => e.t === x.id && ["uses_mcp","uses_openapi","has_skill"].includes(e.r));
+    const owner = e ? e.s : "a1";
+    (extByAgent[owner] ||= []).push(x);
+  });
+  // distribute external column rows, anchored near owner agent
+  let extCursor = 70;
+  agents.forEach(a => {
+    const list = extByAgent[a.id] || [];
+    const blockH = list.length * 96;
+    let y = Math.max(extCursor, pos[a.id].y - blockH / 2 + 48);
+    list.forEach(x => { pos[x.id] = { x: colX.ext, y }; y += 96; });
+    if (list.length) extCursor = y + 10;
+  });
+
+  // edges
+  edges.forEach(e => {
+    const p1 = pos[e.s], p2 = pos[e.t];
+    if (!p1 || !p2) return;
+    const color = EDGE_COLOR[e.r];
+    if (e.r === "delegates_to") {
+      // arc between agents in same column
+      const mx = colX.agent - 90;
+      const d = `M ${p1.x - 26} ${p1.y} C ${mx} ${p1.y}, ${mx} ${p2.y}, ${p2.x - 26} ${p2.y}`;
+      const mid = "arr-d-" + e.t; defsArrow(svg, mid, color);
+      el("path", { d, fill: "none", stroke: color, "stroke-width": 2,
+        "stroke-dasharray": "5 4", "stroke-opacity": .8, "marker-end": `url(#${mid})` }, svg);
+    } else {
+      const fromR = byId[e.s].type === "agent" ? 26 : 26;
+      curve(svg, p1.x + 26, p1.y, p2.x - 26, p2.y, color, "h");
+    }
+  });
+  // nodes
+  nodes.forEach(n => { const p = pos[n.id]; if (p) drawNode(svg, p.x, p.y, n); });
+
+  // column labels
+  [["TRIGGERS", colX.trigger, "var(--edge-trigger)"],
+   ["AGENTS", colX.agent, "#a1a1aa"],
+   ["TOOLS · SKILLS", colX.ext, "var(--edge-ext)"]].forEach(([t,x,c]) => {
+    el("text", { x, y: 34, "text-anchor": "middle", "font-size": 11, "font-weight": 700,
+      "letter-spacing": "1px", fill: c, opacity: .8 }, svg).textContent = t;
+  });
+}
+
+// =====================================================================
+// VARIANT B — constellation (orchestrator hub, agents ring, tool satellites)
+// =====================================================================
+function renderRadial() {
+  const svg = document.getElementById("svg-radial");
+  clear(svg);
+  const cx = 600, cy = 320;
+  const pos = {};
+  pos["a1"] = { x: cx, y: cy };
+
+  const subs = nodes.filter(n => n.type === "agent" && n.id !== "a1").map(n => n.id);
+  const ringR = 200;
+  subs.forEach((id, i) => {
+    const ang = (-90 + i * (360 / subs.length)) * Math.PI / 180;
+    pos[id] = { x: cx + ringR * Math.cos(ang), y: cy + ringR * Math.sin(ang) };
+  });
+
+  // satellites (tools + trigger) around each sub-agent, fanned outward
+  function satellites(agentId) {
+    const items = [];
+    edges.forEach(e => {
+      if (e.s === agentId && ["uses_mcp","uses_openapi","has_skill"].includes(e.r)) items.push(e.t);
+      if (e.t === agentId && e.r === "has_trigger") items.push(e.s);
+    });
+    return items;
+  }
+  subs.concat(["a1"]).forEach(aid => {
+    const ap = pos[aid];
+    const outAng = Math.atan2(ap.y - cy, ap.x - cx) || -Math.PI / 2;
+    const sats = satellites(aid);
+    const spread = 80 * Math.PI / 180;
+    const satR = 130;
+    sats.forEach((sid, i) => {
+      const base = sats.length === 1 ? 0 : (i / (sats.length - 1) - .5);
+      const ang = outAng + base * spread;
+      pos[sid] = { x: ap.x + satR * Math.cos(ang), y: ap.y + satR * Math.sin(ang) };
+    });
+  });
+
+  // edges
+  edges.forEach(e => {
+    const p1 = pos[e.s], p2 = pos[e.t];
+    if (!p1 || !p2) return;
+    const color = EDGE_COLOR[e.r];
+    const mid = "arr-r-" + Math.random().toString(36).slice(2,7);
+    defsArrow(svg, mid, color);
+    // shorten to node edge
+    const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy) || 1;
+    const ux = dx/len, uy = dy/len;
+    const x1 = p1.x + ux*26, y1 = p1.y + uy*26, x2 = p2.x - ux*26, y2 = p2.y - uy*26;
+    el("path", { d: `M ${x1} ${y1} L ${x2} ${y2}`, fill: "none", stroke: color,
+      "stroke-width": e.r === "delegates_to" ? 2.4 : 1.8,
+      "stroke-dasharray": e.r === "delegates_to" ? "none" : "none",
+      "stroke-opacity": .8, "marker-end": `url(#${mid})` }, svg);
+  });
+  // nodes: agents bigger
+  nodes.forEach(n => { const p = pos[n.id]; if (p) drawNode(svg, p.x, p.y, n, n.id === "a1" ? 32 : (n.type === "agent" ? 28 : 22)); });
+}
+
+// =====================================================================
+// VARIANT C — grouped agent cards (tools as inner chips)
+// =====================================================================
+function renderGrouped() {
+  const svg = document.getElementById("svg-grouped");
+  clear(svg);
+  const cardW = 240, padX = 60;
+  const cards = {
+    a1: { x: 40,  y: 250 },
+    a2: { x: 430, y: 50  },
+    a3: { x: 430, y: 250 },
+    a5: { x: 430, y: 450 },
+    a4: { x: 830, y: 450 },
+  };
+  const cardCenter = {};
+
+  // delegation arrows first (under cards)
+  edges.filter(e => e.r === "delegates_to").forEach(e => {
+    const a = cards[e.s], b = cards[e.t];
+    const x1 = a.x + cardW, y1 = a.y + 60;
+    const x2 = b.x, y2 = b.y + 40;
+    const mx = (x1 + x2) / 2;
+    const mid = "arr-g-" + e.t; defsArrow(svg, mid, EDGE_COLOR.delegates_to);
+    el("path", { d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`,
+      fill: "none", stroke: EDGE_COLOR.delegates_to, "stroke-width": 2.4,
+      "stroke-opacity": .85, "marker-end": `url(#${mid})` }, svg);
+  });
+
+  const agents = nodes.filter(n => n.type === "agent");
+  agents.forEach(a => {
+    const c = cards[a.id];
+    const tools = edges.filter(e => e.s === a.id && ["uses_mcp","uses_openapi","has_skill"].includes(e.r)).map(e => byId[e.t]);
+    const trig = edges.filter(e => e.t === a.id && e.r === "has_trigger").map(e => byId[e.s]);
+    const rows = Math.ceil(tools.length / 2);
+    const cardH = 70 + (tools.length ? rows * 30 + 16 : 0);
+    cardCenter[a.id] = { x: c.x + cardW / 2, y: c.y + cardH / 2 };
+
+    const g = el("g", {}, svg);
+    el("rect", { x: c.x, y: c.y, width: cardW, height: cardH, rx: 16,
+      fill: "#fff", stroke: "#d4d4d8", "stroke-width": 1.5,
+      filter: "drop-shadow(0 2px 6px rgba(0,0,0,.07))" }, g);
+    // header
+    el("circle", { cx: c.x + 26, cy: c.y + 28, r: 15, fill: "#f4f4f5", stroke: "#e4e4e7" }, g);
+    el("text", { x: c.x + 26, y: c.y + 29, "text-anchor": "middle", "dominant-baseline": "central", "font-size": 15 }, g).textContent = "🤖";
+    el("text", { x: c.x + 50, y: c.y + 24, "font-size": 14, "font-weight": 650, fill: "var(--text)" }, g).textContent = a.label;
+    el("text", { x: c.x + 50, y: c.y + 40, "font-size": 11, fill: "var(--muted)" }, g).textContent = "Agent · " + a.model;
+    // trigger pills (top-right)
+    trig.forEach((tr, i) => {
+      const px = c.x + cardW - 10 - i * 96, py = c.y - 12;
+      const w = 88;
+      const pg = el("g", {}, svg);
+      el("rect", { x: px - w, y: py, width: w, height: 22, rx: 11, fill: "var(--blue-bg)", stroke: "var(--blue-bd)" }, pg);
+      el("text", { x: px - w/2, y: py + 11, "text-anchor": "middle", "dominant-baseline": "central", "font-size": 10.5, fill: "#1d4ed8", "font-weight": 600 }, pg).textContent = "⚡ " + tr.label;
+      el("line", { x1: px - w/2, y1: py + 22, x2: c.x + 30, y2: c.y, stroke: "var(--edge-trigger)", "stroke-width": 1.5, "stroke-opacity": .7 }, svg);
+    });
+    // tool chips inside
+    el("line", { x1: c.x + 14, y1: c.y + 54, x2: c.x + cardW - 14, y2: c.y + 54, stroke: "#f0f0f1" }, g);
+    tools.forEach((tool, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const cw = (cardW - 14 * 2 - 10) / 2;
+      const tx = c.x + 14 + col * (cw + 10);
+      const ty = c.y + 66 + row * 30;
+      const cg = el("g", {}, svg);
+      el("rect", { x: tx, y: ty, width: cw, height: 24, rx: 8, fill: "var(--rose-bg)", stroke: "var(--rose-bd)" }, cg);
+      el("text", { x: tx + 9, y: ty + 12, "dominant-baseline": "central", "font-size": 11, fill: "#be123c", "font-weight": 550 }, cg).textContent = STYLE[tool.type].glyph + " " + tool.label;
+    });
+  });
+}
+
+// =====================================================================
+// VARIANT D — network zones (ingress → internal/governed → egress)
+// =====================================================================
+function renderZones() {
+  const svg = document.getElementById("svg-zones");
+  clear(svg);
+  const toolRels = ["uses_mcp", "uses_openapi", "has_skill"];
+  const scopeOf = id => byId[id] && byId[id].scope ? byId[id].scope : "external";
+  const RANK = { critical: 3, warning: 2, none: 1 };
+  const riskOfTool = id => {
+    let r = "none";
+    edges.filter(e => e.t === id && toolRels.includes(e.r)).forEach(e => {
+      if (e.risk && RANK[e.risk] > RANK[r]) r = e.risk;
+    });
+    return r;
+  };
+
+  const Z = {
+    ingress:  { x: 24,  w: 206 },          // 24..230
+    internal: { x: 268, w: 600 },          // 268..868
+    gateway:  { x: 868, w: 60  },          // 868..928
+    external: { x: 956, w: 220 },          // 956..1176
+  };
+  const zoneRect = (x, w, fill, stroke, dash) => {
+    const r = el("rect", { x, y: 56, width: w, height: 520, rx: 18,
+      fill, stroke, "stroke-width": 1.5 }, svg);
+    if (dash) r.setAttribute("stroke-dasharray", "6 5");
+  };
+  zoneRect(Z.ingress.x, Z.ingress.w, "rgba(96,165,250,.06)", "rgba(96,165,250,.4)");
+  zoneRect(Z.internal.x, Z.internal.w, "rgba(113,113,122,.045)", "rgba(161,161,170,.45)");
+  zoneRect(Z.gateway.x, Z.gateway.w, "rgba(251,113,133,.11)", "rgba(251,113,133,.55)", true);
+  zoneRect(Z.external.x, Z.external.w, "rgba(251,113,133,.05)", "rgba(251,113,133,.4)");
+
+  const zlabel = (text, cx, color) =>
+    el("text", { x: cx, y: 80, "text-anchor": "middle", "font-size": 11,
+      "font-weight": 700, "letter-spacing": "1px", fill: color, opacity: .9 }, svg)
+      .textContent = text;
+  zlabel("INGRESS · EVENTS", Z.ingress.x + Z.ingress.w / 2, "#2563eb");
+  zlabel("INTERNAL · GOVERNED", Z.internal.x + Z.internal.w / 2, "#52525b");
+  zlabel("EXTERNAL · WORLD", Z.external.x + Z.external.w / 2, "#e11d48");
+
+  // classify: an agent is egress-capable only if it reaches an EXTERNAL-scope tool
+  const isEgress = id => edges.some(e => e.s === id && toolRels.includes(e.r) && scopeOf(e.t) === "external");
+  const agents = nodes.filter(n => n.type === "agent");
+  const egressAgents = agents.filter(a => isEgress(a.id));
+  const coreAgents = agents.filter(a => !isEgress(a.id));
+
+  // gateway with policy summary (critical egress)
+  const gx = Z.gateway.x + Z.gateway.w / 2;
+  const criticalCount = edges.filter(e => toolRels.includes(e.r) && scopeOf(e.t) === "external" && e.risk === "critical").length;
+  el("text", { x: gx, y: 108, "text-anchor": "middle", "font-size": 20 }, svg).textContent = "🛡";
+  el("text", { x: gx, y: 360, "text-anchor": "middle", "font-size": 10, "font-weight": 700,
+    "letter-spacing": "2px", fill: "#e11d48", opacity: .85,
+    transform: `rotate(-90 ${gx} 360)` }, svg).textContent = "EGRESS GATEWAY · POLICY";
+  if (criticalCount) {
+    const pg = el("g", {}, svg);
+    el("rect", { x: gx - 26, y: 122, width: 52, height: 15, rx: 7, fill: "#fee2e2", stroke: "#fca5a5" }, pg);
+    el("text", { x: gx, y: 130, "text-anchor": "middle", "dominant-baseline": "central",
+      "font-size": 8.5, "font-weight": 700, fill: "#b91c1c" }, pg).textContent = criticalCount + " critical";
+  }
+
+  el("text", { x: 30, y: 600, "font-size": 11, fill: "var(--muted)" }, svg).textContent = "traffic in →";
+  el("text", { x: 1170, y: 600, "text-anchor": "end", "font-size": 11, fill: "var(--muted)" }, svg).textContent = "→ data out";
+
+  // delegation depth
+  const depth = {}; agents.forEach(a => depth[a.id] = 0);
+  const deleg = edges.filter(e => e.r === "delegates_to");
+  for (let i = 0; i < agents.length; i++)
+    deleg.forEach(e => { if (depth[e.s] != null && depth[e.t] != null) depth[e.t] = Math.max(depth[e.t], depth[e.s] + 1); });
+
+  const pos = {};
+  // egress agents hug the gateway side of the internal zone
+  egressAgents.forEach((a, i) => pos[a.id] = { x: 600, y: 140 + i * 150 });
+  // core (internal-only) agents deeper inside, columned by delegation depth
+  const targetsY = id => {
+    const ys = deleg.filter(e => e.s === id).map(e => pos[e.t]).filter(Boolean).map(p => p.y);
+    return ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 300;
+  };
+  [...coreAgents].sort((a, b) => depth[b.id] - depth[a.id]).forEach(a => {
+    pos[a.id] = { x: 330 + Math.min(depth[a.id], 1) * 150, y: targetsY(a.id) };
+  });
+
+  // triggers at ingress, aligned to target agent
+  nodes.filter(n => n.type === "trigger").forEach(tr => {
+    const t = edges.find(e => e.s === tr.id && e.r === "has_trigger");
+    pos[tr.id] = { x: 128, y: t && pos[t.t] ? pos[t.t].y : 300 };
+  });
+
+  // tools split by scope: internal stay in internal zone, external go to external zone
+  const tools = nodes.filter(n => ["mcp", "openapi", "skill"].includes(n.type));
+  const ownerY = x => {
+    const e = edges.find(e => e.t === x.id && toolRels.includes(e.r));
+    return e && pos[e.s] ? pos[e.s].y : 300;
+  };
+  const intTools = tools.filter(t => scopeOf(t.id) === "internal").sort((a, b) => ownerY(a) - ownerY(b));
+  const extTools = tools.filter(t => scopeOf(t.id) === "external").sort((a, b) => ownerY(a) - ownerY(b));
+  intTools.forEach((t, i) => pos[t.id] = { x: 770, y: 130 + i * 108 });
+  extTools.forEach((t, i) => pos[t.id] = { x: 1066, y: 110 + i * 104 });
+
+  // edges
+  const arc = (x1, y1, x2, y2, color, w, dash) => {
+    const mx = (x1 + x2) / 2;
+    const mid = "arr-z-" + Math.random().toString(36).slice(2, 8);
+    defsArrow(svg, mid, color);
+    const p = el("path", { d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`,
+      fill: "none", stroke: color, "stroke-width": w, "stroke-opacity": .85,
+      "marker-end": `url(#${mid})` }, svg);
+    if (dash) p.setAttribute("stroke-dasharray", "5 4");
+  };
+  const permChip = (x, y, text, risk, internal) => {
+    const pal = internal ? { bg: "#d1fae5", bd: "#6ee7b7", fg: "#047857" }
+      : risk === "critical" ? { bg: "#fee2e2", bd: "#fca5a5", fg: "#b91c1c" }
+      : risk === "warning" ? { bg: "#fef9c3", bd: "#fde047", fg: "#a16207" }
+      : { bg: "#ffffff", bd: "#e4e4e7", fg: "#52525b" };
+    const w = text.length * 5.4 + 14;
+    const g = el("g", {}, svg);
+    el("rect", { x: x - w / 2, y: y - 8, width: w, height: 16, rx: 8, fill: pal.bg, stroke: pal.bd }, g);
+    el("text", { x, y: y + 0.5, "text-anchor": "middle", "dominant-baseline": "central",
+      "font-size": 9, "font-weight": 600, fill: pal.fg }, g).textContent = text;
+  };
+  edges.forEach(e => {
+    const p1 = pos[e.s], p2 = pos[e.t];
+    if (!p1 || !p2) return;
+    if (e.r === "delegates_to") { arc(p1.x + 26, p1.y, p2.x - 26, p2.y, EDGE_COLOR.delegates_to, 2, true); return; }
+    if (e.r === "has_trigger") { arc(p1.x + 26, p1.y, p2.x - 26, p2.y, EDGE_COLOR.has_trigger, 2, false); return; }
+    // tool edge — color & routing depend on scope
+    const internal = scopeOf(e.t) === "internal";
+    const color = internal ? "#10b981" : EDGE_COLOR.uses_mcp;
+    arc(p1.x + 26, p1.y, p2.x - 26, p2.y, color, internal ? 1.8 : 2.4, false);
+    if (e.perm) permChip((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, e.perm, e.risk, internal);
+  });
+
+  // nodes + badges
+  nodes.forEach(n => {
+    const p = pos[n.id]; if (!p) return;
+    let ov;
+    if (["mcp", "openapi", "skill"].includes(n.type)) {
+      if (scopeOf(n.id) === "internal") ov = { bg: "#ecfdf5", bd: "#6ee7b7" };
+      else {
+        const rk = riskOfTool(n.id);
+        if (rk === "critical") ov = { bd: "#ef4444" };
+        else if (rk === "warning") ov = { bd: "#f59e0b" };
+      }
+    }
+    drawNode(svg, p.x, p.y, n, 26, ov);
+    if (n.type === "agent") {
+      const eg = isEgress(n.id);
+      const txt = eg ? "egress ↗" : "internal";
+      const w = eg ? 56 : 58;
+      const bg = el("g", {}, svg);
+      const by = p.y - 48;
+      el("rect", { x: p.x - w / 2, y: by, width: w, height: 16, rx: 8,
+        fill: eg ? "var(--rose-bg)" : "#dcfce7", stroke: eg ? "var(--rose-bd)" : "#bbf7d0" }, bg);
+      el("text", { x: p.x, y: by + 8.5, "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": 9, "font-weight": 700, fill: eg ? "#be123c" : "#16a34a" }, bg).textContent = txt;
+    }
+    if (["mcp", "openapi", "skill"].includes(n.type)) {
+      const internal = scopeOf(n.id) === "internal";
+      const w = internal ? 46 : 46;
+      const by = p.y - 46;
+      const bg = el("g", {}, svg);
+      el("rect", { x: p.x - w / 2, y: by, width: w, height: 14, rx: 7,
+        fill: internal ? "#ecfdf5" : "var(--rose-bg)", stroke: internal ? "#a7f3d0" : "var(--rose-bd)" }, bg);
+      el("text", { x: p.x, y: by + 7.5, "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": 8, "font-weight": 700, fill: internal ? "#047857" : "#be123c" }, bg)
+        .textContent = internal ? "internal" : "external";
+    }
+  });
+}
+
+// =====================================================================
+// VARIANT E — onion / concentric layers (core → delegation rings → world)
+// =====================================================================
+function renderOnion() {
+  const svg = document.getElementById("svg-onion");
+  clear(svg);
+  const cx = 600, cy = 300, RX = 175, RY = 92;
+
+  // build delegation tree; attach triggers (ingress) & tools (egress) as leaf children
+  const visited = new Set();
+  const childMap = {}, depthMap = {};
+  const toolRels = ["uses_mcp", "uses_openapi", "has_skill"];
+  function build(id, depth) {
+    depthMap[id] = depth;
+    const kids = [];
+    const add = t => { if (!visited.has(t)) { visited.add(t); kids.push(t); } };
+    edges.filter(e => e.r === "delegates_to" && e.s === id).forEach(e => add(e.t));
+    edges.filter(e => e.r === "has_trigger" && e.t === id).forEach(e => add(e.s));
+    edges.filter(e => toolRels.includes(e.r) && e.s === id).forEach(e => add(e.t));
+    childMap[id] = kids;
+    kids.forEach(k => {
+      if (byId[k].type === "agent") build(k, depth + 1);
+      else { childMap[k] = []; depthMap[k] = depth + 1; }
+    });
+  }
+  const root = (nodes.find(n => n.type === "agent" &&
+    !edges.some(e => e.r === "delegates_to" && e.t === n.id)) || { id: "a1" }).id;
+  visited.add(root);
+  build(root, 0);
+
+  const leaves = id => { const k = childMap[id] || []; return k.length === 0 ? 1 : k.reduce((s, c) => s + leaves(c), 0); };
+  const total = leaves(root) || 1;
+  let counter = 0;
+  const angle = {};
+  const assign = id => {
+    const k = childMap[id] || [];
+    if (k.length === 0) { angle[id] = (counter + 0.5) * (360 / total); counter++; return angle[id]; }
+    const a = k.map(assign);
+    angle[id] = a.reduce((x, y) => x + y, 0) / a.length;
+    return angle[id];
+  };
+  assign(root);
+
+  let maxDepth = 0;
+  nodes.filter(n => n.type === "agent").forEach(n => { if (depthMap[n.id] != null) maxDepth = Math.max(maxDepth, depthMap[n.id]); });
+  const worldRing = maxDepth + 1;
+  const ringOf = id => byId[id].type === "agent" ? depthMap[id] : worldRing;
+
+  const pos = {};
+  nodes.forEach(n => {
+    if (angle[n.id] == null) return;
+    const k = ringOf(n.id), a = (angle[n.id] - 90) * Math.PI / 180;
+    pos[n.id] = { x: cx + k * RX * Math.cos(a), y: cy + k * RY * Math.sin(a) };
+  });
+
+  // ring guides + labels (elliptical — uses the wide canvas)
+  for (let d = 1; d <= maxDepth; d++)
+    el("ellipse", { cx, cy, rx: d * RX, ry: d * RY, fill: "none", stroke: "#e4e4e7", "stroke-dasharray": "4 5" }, svg);
+  el("ellipse", { cx, cy, rx: worldRing * RX, ry: worldRing * RY, fill: "none", stroke: "var(--rose-bd)", "stroke-dasharray": "4 5" }, svg);
+  const ringLabel = (k, txt, color) =>
+    el("text", { x: cx, y: cy - k * RY - 8, "text-anchor": "middle", "font-size": 10, "font-weight": 700,
+      "letter-spacing": "1px", fill: color, opacity: .75 }, svg).textContent = txt;
+  ringLabel(worldRing, "WORLD · ingress & egress", "#e11d48");
+  for (let d = 1; d <= maxDepth; d++) ringLabel(d, "L" + d + (d === 1 ? " · DELEGATES" : ""), "#a1a1aa");
+
+  // edges as spokes (via positions, so shared tools keep both links)
+  edges.forEach(e => {
+    const p1 = pos[e.s], p2 = pos[e.t];
+    if (!p1 || !p2) return;
+    const color = EDGE_COLOR[e.r];
+    const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    const mid = "arr-o-" + Math.random().toString(36).slice(2, 7);
+    defsArrow(svg, mid, color);
+    el("path", { d: `M ${p1.x + ux * 26} ${p1.y + uy * 26} L ${p2.x - ux * 26} ${p2.y - uy * 26}`,
+      fill: "none", stroke: color, "stroke-width": e.r === "delegates_to" ? 2.4 : 1.8,
+      "stroke-opacity": .8, "marker-end": `url(#${mid})` }, svg);
+  });
+
+  // nodes (core biggest)
+  nodes.forEach(n => {
+    const p = pos[n.id]; if (!p) return;
+    drawNode(svg, p.x, p.y, n, n.id === root ? 32 : (n.type === "agent" ? 27 : 21));
+  });
+}
+
+// ---- tabs ----------------------------------------------------------
+const renderers = { onion: renderOnion, zones: renderZones, layered: renderLayered, radial: renderRadial, grouped: renderGrouped };
+function show(v) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === v));
+  ["onion","zones","layered","radial","grouped"].forEach(k =>
+    document.getElementById("stage-" + k).classList.toggle("hidden", k !== v));
+  renderers[v]();
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => show(t.dataset.v)));
+// render all once so screenshots work, then show default
+renderOnion(); renderZones(); renderLayered(); renderRadial(); renderGrouped();
+show("zones");
+</script>
+</body>
+</html>

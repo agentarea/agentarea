@@ -48,6 +48,8 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Provenance of this resource; see agentarea_common.base.SourceKind.
+    source: Mapped[str] = mapped_column(String, nullable=False, default="workspace_custom")
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_spec = relationship("ProviderSpec", back_populates="provider_configs", lazy="selectin")

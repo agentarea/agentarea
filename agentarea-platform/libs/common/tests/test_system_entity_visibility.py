@@ -16,11 +16,11 @@ from agentarea_llm.infrastructure.provider_config_repository import ProviderConf
 
 
 def _user_context_with_system(workspace_id: str = "ws-1") -> UserContext:
-    """Create a UserContext with accessible_workspaces including system."""
+    """Create a UserContext with accessible_workspaces including platform (official content)."""
     return UserContext(
         user_id="user-1",
         workspace_id=workspace_id,
-        accessible_workspaces=[workspace_id, "system"],
+        accessible_workspaces=[workspace_id, "platform"],
     )
 
 
@@ -30,7 +30,7 @@ def test_model_instance_repo_includes_system():
     repo = ModelInstanceRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
-    assert "system" in compiled
+    assert "platform" in compiled
     assert "ws-1" in compiled
 
 
@@ -40,7 +40,7 @@ def test_provider_config_repo_includes_system():
     repo = ProviderConfigRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
-    assert "system" in compiled
+    assert "platform" in compiled
     assert "ws-1" in compiled
 
 
@@ -50,7 +50,7 @@ def test_model_spec_repo_includes_system():
     repo = ModelSpecRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
-    assert "system" in compiled
+    assert "platform" in compiled
     assert "ws-1" in compiled
 
 
@@ -148,12 +148,12 @@ def test_default_user_context_only_own_workspace():
 
 @pytest.mark.asyncio
 async def test_simple_authorization_includes_system():
-    """SimpleAuthorizationService grants access to own + system workspace."""
+    """SimpleAuthorizationService grants access to own workspace + platform (official content)."""
     authz = SimpleAuthorizationService()
     user_context = UserContext(user_id="user-1", workspace_id="ws-1")
     workspaces = await authz.get_accessible_workspaces(user_context)
     assert "ws-1" in workspaces
-    assert "system" in workspaces
+    assert "platform" in workspaces
 
 
 @pytest.mark.asyncio

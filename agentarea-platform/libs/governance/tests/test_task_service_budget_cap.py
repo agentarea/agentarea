@@ -9,8 +9,13 @@ from agentarea_governance.domain.policies import (
     PolicyDocument,
     PolicyValidationError,
 )
+from agentarea_governance.domain.rules import (
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
+)
 from agentarea_governance.infrastructure.repository import (
-    GovernancePolicyRepository,
+    PolicyRuleRepository,
     TaskPolicySnapshotRepository,
 )
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError
@@ -37,13 +42,13 @@ def _make_service(
     mock_agent_repo = AsyncMock()
     mock_policy_repo = governance_policy_repository or AsyncMock()
     if governance_policy_repository is None:
-        mock_policy_repo.get_chain.return_value = ([], [])
+        mock_policy_repo.list_rules.return_value = []
     mock_snapshot_repo = task_policy_snapshot_repository or AsyncMock()
 
     def create_repository(repo_cls):
         if repo_cls is TaskRepository:
             return mock_task_repo
-        if repo_cls is GovernancePolicyRepository:
+        if repo_cls is PolicyRuleRepository:
             return mock_policy_repo
         if repo_cls is TaskPolicySnapshotRepository:
             return mock_snapshot_repo
@@ -60,11 +65,23 @@ def _make_service(
 
 
 def _policy_repo_with_cap(cap):
+    """Mock PolicyRuleRepository that returns a workspace monthly-cap rule."""
     policy_repo = AsyncMock()
-    policy_repo.get_chain.return_value = (
-        ["policy-1"],
-        [PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd=cap))],
+    cap_rule = PolicyRule(
+        id="policy-1",
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id="ws-test",
+        target="spend",
+        effect=PolicyEffect.CAP,
+        params={"amount_usd": str(cap), "period": "month"},
     )
+
+    async def list_rules(*, subject_type=None, subject_id=None, **kwargs):
+        if subject_type == PolicySubjectType.WORKSPACE:
+            return [cap_rule]
+        return []
+
+    policy_repo.list_rules.side_effect = list_rules
     return policy_repo
 
 

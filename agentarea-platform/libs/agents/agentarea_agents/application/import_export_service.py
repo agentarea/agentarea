@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import yaml
-from agentarea_common.base import RepositoryFactory
+from agentarea_common.base import RepositoryFactory, is_builtin
 from pydantic import ValidationError
 
 from agentarea_agents.application.agent_service import AgentService
@@ -73,7 +73,7 @@ class WorkspaceImportExportService:
         # MissingGreenlet error when the lazy relationship is accessed outside
         # the original async session scope.
         agents = await self.agent_service.list()
-        workspace_agents_raw = [a for a in agents if a.workspace_id != "system"]
+        workspace_agents_raw = [a for a in agents if not is_builtin(a)]
         workspace_agents: list[Agent] = []
         for a in workspace_agents_raw:
             full = await self.agent_service.get_with_skills(a.id)
@@ -155,8 +155,8 @@ class WorkspaceImportExportService:
             result = []
 
             for instance in instances:
-                # Skip system instances
-                if hasattr(instance, "workspace_id") and instance.workspace_id == "system":
+                # Skip platform-official instances
+                if is_builtin(instance):
                     continue
 
                 instance_dict: dict[str, Any] = {
@@ -195,8 +195,8 @@ class WorkspaceImportExportService:
             result = []
 
             for config in configs:
-                # Skip system configs
-                if hasattr(config, "workspace_id") and config.workspace_id == "system":
+                # Skip platform-official configs
+                if is_builtin(config):
                     continue
 
                 config_dict: dict[str, Any] = {
@@ -234,8 +234,8 @@ class WorkspaceImportExportService:
             result = []
 
             for skill in skills:
-                # Skip system skills
-                if hasattr(skill, "workspace_id") and skill.workspace_id == "system":
+                # Skip platform-official skills
+                if is_builtin(skill):
                     continue
 
                 skill_dict: dict[str, Any] = {

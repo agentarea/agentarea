@@ -17,8 +17,12 @@ from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.money import to_money
-from agentarea_governance.domain.policies import PolicyDocument, PolicyScopeType, monthly_cap_policy
-from agentarea_governance.infrastructure.repository import GovernancePolicyRepository
+from agentarea_governance.domain.rules import (
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
+)
+from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_wallet.infrastructure.repository import WalletRepository
@@ -124,19 +128,31 @@ def _project_eom(mtd_usd: float, now: datetime) -> float | None:
     return round(mtd_usd / days_elapsed * days_in_month, 2)
 
 
+def _is_monthly_spend_cap(rule: PolicyRule) -> bool:
+    return (
+        rule.effect == PolicyEffect.CAP
+        and rule.target == "spend"
+        and (rule.params or {}).get("period", "month") == "month"
+    )
+
+
 async def _get_workspace_policy_cap_usd(
     factory: RepositoryFactory, workspace_id: str
 ) -> float | None:
-    """Read the workspace-scoped monthly cap from governance policies."""
-    policy = await factory.create_repository(GovernancePolicyRepository).get_scope_policy(
-        scope_type=PolicyScopeType.WORKSPACE,
-        scope_id=workspace_id,
+    """Read the workspace-scoped monthly spend cap from policy rules."""
+    rules = await factory.create_repository(PolicyRuleRepository).list_rules(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=workspace_id,
+        effect=PolicyEffect.CAP,
+        target="spend",
+        enabled=True,
     )
-    if not policy:
-        return None
-    _, document = policy
-    cap = document.budget.monthly_spend_cap_usd if document.budget else None
-    return float(cap) if cap is not None else None
+    for rule in rules:
+        if _is_monthly_spend_cap(rule):
+            amount = (rule.params or {}).get("amount_usd")
+            if amount is not None:
+                return float(to_money(amount))
+    return None
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
@@ -402,19 +418,46 @@ async def update_workspace_settings(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> WorkspaceSettingsResponse:
-    """Upsert the current workspace's settings."""
+    """Upsert the current workspace's monthly spend cap as a policy rule."""
     factory = RepositoryFactory(db_session, user_context)
-    document = (
-        monthly_cap_policy(to_money(payload.monthly_cap_usd))
-        if payload.monthly_cap_usd is not None
-        else PolicyDocument()
-    )
-    _, saved = await factory.create_repository(GovernancePolicyRepository).upsert_scope_policy(
-        scope_type=PolicyScopeType.WORKSPACE,
-        scope_id=user_context.workspace_id,
-        document=document,
-    )
-    cap = saved.budget.monthly_spend_cap_usd if saved.budget else None
+    repo = factory.create_repository(PolicyRuleRepository)
+    workspace_id = user_context.workspace_id
+
+    existing = [
+        rule
+        for rule in await repo.list_rules(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id=workspace_id,
+            effect=PolicyEffect.CAP,
+            target="spend",
+        )
+        if _is_monthly_spend_cap(rule)
+    ]
+
+    if payload.monthly_cap_usd is None:
+        for rule in existing:
+            if rule.id is not None:
+                await repo.delete(rule.id)
+        return WorkspaceSettingsResponse(monthly_cap_usd=None)
+
+    params = {"amount_usd": str(to_money(payload.monthly_cap_usd)), "period": "month"}
+    if existing:
+        first, *rest = existing
+        await repo.update(first.id, params=params, enabled=True)
+        for rule in rest:
+            if rule.id is not None:
+                await repo.delete(rule.id)
+    else:
+        await repo.create(
+            PolicyRule(
+                subject_type=PolicySubjectType.WORKSPACE,
+                subject_id=workspace_id,
+                target="spend",
+                effect=PolicyEffect.CAP,
+                params=params,
+            )
+        )
+
     return WorkspaceSettingsResponse(
-        monthly_cap_usd=float(cap) if cap is not None else None,
+        monthly_cap_usd=float(to_money(payload.monthly_cap_usd)),
     )

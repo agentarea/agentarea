@@ -144,9 +144,11 @@ export const {
   getTriggerTimeline,
   getTriggerCorrelations,
 
-  // Governance API
-  listGovernancePolicies,
-  upsertGovernancePolicy,
+  // Policies API (unified rule model)
+  listPolicies,
+  createPolicy,
+  updatePolicy,
+  deletePolicy,
   previewEffectivePolicy,
 
   // ReBAC Access Explorer API

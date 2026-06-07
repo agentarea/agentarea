@@ -67,6 +67,40 @@ async def test_ensure_personal_creates_real_row_with_id_equal_to_user_id(workspa
     assert ws.id == "user-1"
     assert ws.type == WORKSPACE_TYPE_PERSONAL
     assert ws.owner_user_id == "user-1"
+    assert ws.slug == "user"  # no email -> fallback handle
+
+
+@pytest.mark.asyncio
+async def test_personal_slug_is_derived_from_email_handle(workspace_service):
+    ws = await workspace_service.ensure_personal("user-1", email="Jane.Doe@example.com")
+
+    assert ws.slug == "jane-doe"
+
+
+@pytest.mark.asyncio
+async def test_slugs_are_unique_with_numeric_suffix(workspace_service):
+    # Two different users with the same email handle collide on the base slug.
+    a = await workspace_service.ensure_personal("user-1", email="sam@a.com")
+    b = await workspace_service.ensure_personal("user-2", email="sam@b.com")
+
+    assert a.slug == "sam"
+    assert b.slug == "sam-2"
+
+
+@pytest.mark.asyncio
+async def test_create_shared_slug_is_derived_from_name(workspace_service):
+    ws = await workspace_service.create_shared(owner_user_id="user-1", name="Team Rocket!")
+
+    assert ws.slug == "team-rocket"
+
+
+@pytest.mark.asyncio
+async def test_get_by_slug_resolves_to_workspace(workspace_service):
+    created = await workspace_service.create_shared(owner_user_id="user-1", name="Acme")
+
+    found = await workspace_service.get_by_slug("acme")
+    assert found is not None
+    assert found.id == created.id
 
 
 @pytest.mark.asyncio

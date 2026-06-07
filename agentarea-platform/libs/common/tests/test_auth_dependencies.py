@@ -159,7 +159,7 @@ class TestGetUserContext:
         mock_authz = Mock(spec=AuthorizationService)
 
         async def mock_get_accessible_workspaces(user_context):
-            return [user_context.workspace_id, "test-workspace", "system"]
+            return [user_context.workspace_id, "test-workspace", "platform"]
 
         mock_authz.get_accessible_workspaces = mock_get_accessible_workspaces
         register_singleton(AuthorizationService, mock_authz)

@@ -11,6 +11,7 @@ class UserContext:
     workspace_id: str
     roles: list[str] | None = None
     accessible_workspaces: list[str] | None = None
+    email: str | None = None
 
     def __post_init__(self):
         """Initialize default values after dataclass creation."""

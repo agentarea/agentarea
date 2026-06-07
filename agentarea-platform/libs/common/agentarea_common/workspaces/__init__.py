@@ -30,6 +30,7 @@ from .service import (
     WorkspaceMembershipService,
     WorkspaceService,
 )
+from .slug import slugify
 
 __all__ = [
     "INVITATION_STATUS_ACCEPTED",
@@ -50,4 +51,5 @@ __all__ = [
     "WorkspaceMembershipService",
     "WorkspaceRepository",
     "WorkspaceService",
+    "slugify",
 ]

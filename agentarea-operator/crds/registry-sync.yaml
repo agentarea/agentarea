@@ -34,7 +34,7 @@ spec:
                     - skills
                     - llm_providers
                     - llm_models
-                    - default_agents
+                    - agents
                   description: "Registry item type to sync."
                 source:
                   type: object
@@ -65,7 +65,7 @@ spec:
                   description: "Seconds between timer-driven resync. Defaults to 6h."
                 workspaceId:
                   type: string
-                  default: "system"
+                  default: "platform"
                   description: "Target workspace for synced entities."
             status:
               type: object

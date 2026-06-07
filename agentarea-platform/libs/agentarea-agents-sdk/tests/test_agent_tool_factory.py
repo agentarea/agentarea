@@ -1,4 +1,4 @@
-"""Tests for A2AAgentToolFactory."""
+"""Tests for AgentToolFactory."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -6,22 +6,22 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool
-from agentarea_agents_sdk.tools.a2a_tool_factory import A2AAgentToolFactory
+from agentarea_agents_sdk.tools.agent_tool_factory import AgentToolFactory
 
 
 def _make_mock_agent(agent_id="agent-123", name="researcher", description="Researches topics"):
     return SimpleNamespace(id=agent_id, name=name, description=description)
 
 
-class TestA2AAgentToolFactoryCreateTool:
-    """Tests for A2AAgentToolFactory.create_tool()."""
+class TestAgentToolFactoryCreateTool:
+    """Tests for AgentToolFactory.create_tool()."""
 
     @pytest.mark.asyncio
     async def test_create_tool_resolves_agent(self):
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -38,7 +38,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -52,7 +52,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -67,7 +67,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -82,7 +82,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=None)
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="nonexistent",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -95,7 +95,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(side_effect=Exception("DB error"))
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -108,7 +108,7 @@ class TestA2AAgentToolFactoryCreateTool:
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
 
-        tool = await A2AAgentToolFactory.create_tool(
+        tool = await AgentToolFactory.create_tool(
             agent_name="researcher",
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -119,8 +119,8 @@ class TestA2AAgentToolFactoryCreateTool:
         assert tool._auth_token == "secret-token"
 
 
-class TestA2AAgentToolFactoryCreateToolsFromConfig:
-    """Tests for A2AAgentToolFactory.create_tools_from_config()."""
+class TestAgentToolFactoryCreateToolsFromConfig:
+    """Tests for AgentToolFactory.create_tools_from_config()."""
 
     @pytest.mark.asyncio
     async def test_filters_agent_type_only(self):
@@ -133,7 +133,7 @@ class TestA2AAgentToolFactoryCreateToolsFromConfig:
             {"type": "agent", "name": "researcher"},
         ]
 
-        tools = await A2AAgentToolFactory.create_tools_from_config(
+        tools = await AgentToolFactory.create_tools_from_config(
             tools_config=configs,
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -149,7 +149,7 @@ class TestA2AAgentToolFactoryCreateToolsFromConfig:
 
         configs = [{"type": "agent"}]
 
-        tools = await A2AAgentToolFactory.create_tools_from_config(
+        tools = await AgentToolFactory.create_tools_from_config(
             tools_config=configs,
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -174,7 +174,7 @@ class TestA2AAgentToolFactoryCreateToolsFromConfig:
             }
         ]
 
-        tools = await A2AAgentToolFactory.create_tools_from_config(
+        tools = await AgentToolFactory.create_tools_from_config(
             tools_config=configs,
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -191,7 +191,7 @@ class TestA2AAgentToolFactoryCreateToolsFromConfig:
 
         configs = [{"type": "agent", "name": "missing_agent"}]
 
-        tools = await A2AAgentToolFactory.create_tools_from_config(
+        tools = await AgentToolFactory.create_tools_from_config(
             tools_config=configs,
             agent_service=agent_service,
             base_url="http://localhost:8000",
@@ -203,7 +203,7 @@ class TestA2AAgentToolFactoryCreateToolsFromConfig:
     async def test_empty_config_list(self):
         agent_service = AsyncMock()
 
-        tools = await A2AAgentToolFactory.create_tools_from_config(
+        tools = await AgentToolFactory.create_tools_from_config(
             tools_config=[],
             agent_service=agent_service,
             base_url="http://localhost:8000",

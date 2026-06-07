@@ -59,7 +59,7 @@ spec:
                   description: "Make this config available to all workspace users"
                 workspaceId:
                   type: string
-                  default: "system"
+                  default: "platform"
                   description: "Target workspace ID"
                 models:
                   type: array

@@ -15,7 +15,7 @@ except ImportError:
 
 try:
     from agentarea_governance.infrastructure.orm import (  # noqa: F401
-        GovernancePolicyORM,
+        PolicyRuleORM,
         TaskPolicySnapshotORM,
     )
 except ImportError:

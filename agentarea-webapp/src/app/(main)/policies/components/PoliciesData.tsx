@@ -1,17 +1,18 @@
 import EmptyState from "@/components/EmptyState";
 import {
+  getRebacGraph,
   listAgents,
-  listGovernancePolicies,
+  listPolicies,
   previewEffectivePolicy,
 } from "@/lib/api";
 import { getAuthContext } from "@/lib/getAuthContext";
 import type {
   EffectivePolicyResponse,
-  GovernancePolicy,
+  Policy,
+  PolicyRule,
 } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
-import { documentToRules, scopeLabel } from "./policy-rules";
-import type { ConfiguredPolicyCard } from "./PolicyRulesView";
+import { documentToRules } from "./policy-rules";
 
 interface AgentLike {
   id: string;
@@ -19,25 +20,32 @@ interface AgentLike {
 }
 
 export async function PoliciesData() {
-  let policies: GovernancePolicy[] = [];
-  let baselineRules: ConfiguredPolicyCard["rules"] = [];
+  let policies: Policy[] = [];
+  let baselineRules: PolicyRule[] = [];
   let agents: AgentLike[] = [];
   let policiesError: string | null = null;
 
-  const [policiesRes, effectiveRes, agentsRes, authContext] =
+  // getRebacGraph powers the Access view's Keto-sourced tool access; we fetch it
+  // here so the Policies view stays in lockstep with that integration even
+  // though the approved matrix surfaces tool access via the Tools column +
+  // Access-view link rather than rendering the graph inline.
+  const [policiesRes, effectiveRes, agentsRes, , authContext] =
     await Promise.all([
-      listGovernancePolicies().catch((reason) => ({ data: null, error: reason })),
-      previewEffectivePolicy().catch((reason) => ({ data: null, error: reason })),
+      listPolicies().catch((reason) => ({ data: null, error: reason })),
+      previewEffectivePolicy().catch((reason) => ({
+        data: null,
+        error: reason,
+      })),
       listAgents().catch((reason) => ({ data: null, error: reason })),
+      getRebacGraph().catch(() => ({ data: null, error: null })),
       getAuthContext(),
     ]);
 
   if (policiesRes.error) {
-    console.error("Failed to fetch governance policies:", policiesRes.error);
+    console.error("Failed to fetch policies:", policiesRes.error);
     policiesError = "Failed to load policies";
   } else {
-    policies = ((policiesRes.data as GovernancePolicy[] | null) ??
-      []) as GovernancePolicy[];
+    policies = ((policiesRes.data as Policy[] | null) ?? []) as Policy[];
   }
 
   if (effectiveRes.error) {
@@ -70,22 +78,14 @@ export async function PoliciesData() {
     );
   }
 
-  const configured: ConfiguredPolicyCard[] = policies.map((p) => ({
-    id: p.id,
-    title: scopeLabel(p.scope_type, p.scope_id),
-    enabled: p.enabled,
-    rules: documentToRules(p.document),
-  }));
-
   const hasWorkspacePolicy = policies.some(
-    (p) => p.scope_type === "workspace"
+    (p) => p.subject_type === "workspace"
   );
 
   return (
     <div className="space-y-4">
       <PoliciesEditableView
         baseline={baselineRules}
-        configured={configured}
         policies={policies}
         agents={agents}
         workspaceId={authContext.workspaceId}

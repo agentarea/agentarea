@@ -1,7 +1,7 @@
 import type { PolicyEffect } from "@/types/policies";
 
-// Shared effect color tokens used by both the read-only PolicyRulesView and the
-// editable PolicyEditor so the two stay visually consistent.
+// Shared effect color tokens used by both the PoliciesTable and the
+// PolicyEditor so the two stay visually consistent.
 export const EFFECT_STYLES: Record<
   PolicyEffect,
   { label: string; dot: string; chip: string }

@@ -35,8 +35,7 @@ from agentarea_agents.domain.models import Agent
 from agentarea_common.infrastructure.database import db
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
-from agentarea_governance.domain.policies import monthly_cap_policy
-from agentarea_governance.infrastructure.orm import GovernancePolicyORM
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -231,29 +230,25 @@ async def seed_tasks(
 async def upsert_settings(
     session, workspace_id: str, user_id: str, cap: float | None
 ) -> None:
-    """Upsert the workspace cap as a governance policy row."""
+    """Upsert the workspace cap as a unified policy rule row."""
     if cap is None:
         print("workspace cap policy = (none)")
         return
 
-    document = monthly_cap_policy(cap).to_json_dict()
-    stmt = (
-        pg_insert(GovernancePolicyORM)
-        .values(
-            workspace_id=workspace_id,
-            created_by=user_id,
-            scope_type="workspace",
-            scope_id=workspace_id,
-            document=document,
-            enabled=True,
-        )
-        .on_conflict_do_update(
-            constraint="uq_governance_policies_scope",
-            set_={"document": document, "enabled": True},
-        )
+    params = {"amount_usd": str(cap), "period": "month"}
+    stmt = pg_insert(PolicyRuleORM).values(
+        workspace_id=workspace_id,
+        created_by=user_id,
+        subject_type="workspace",
+        subject_id=workspace_id,
+        target="spend",
+        effect="cap",
+        params=params,
+        enabled=True,
+        priority=0,
     )
     await session.execute(stmt)
-    print(f"governance_policies workspace cap = ${cap}")
+    print(f"policies workspace cap = ${cap}")
 
 
 async def exhaust_one_wallet(

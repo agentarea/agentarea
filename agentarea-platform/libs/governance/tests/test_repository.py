@@ -1,4 +1,4 @@
-"""Tests for governance policy repositories."""
+"""Tests for governance policy rule and snapshot repositories."""
 
 from uuid import uuid4
 
@@ -8,15 +8,18 @@ from agentarea_common.base.models import BaseModel
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
-    PolicyDocument,
-    PolicyScopeType,
+)
+from agentarea_governance.domain.rules import (
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
 )
 from agentarea_governance.infrastructure.orm import (
-    GovernancePolicyORM,
+    PolicyRuleORM,
     TaskPolicySnapshotORM,
 )
 from agentarea_governance.infrastructure.repository import (
-    GovernancePolicyRepository,
+    PolicyRuleRepository,
     TaskPolicySnapshotRepository,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -29,7 +32,7 @@ async def session_factory():
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
-                tables=[GovernancePolicyORM.__table__, TaskPolicySnapshotORM.__table__],
+                tables=[PolicyRuleORM.__table__, TaskPolicySnapshotORM.__table__],
             )
         )
     try:
@@ -42,46 +45,74 @@ def _context(workspace_id: str) -> UserContext:
     return UserContext(user_id=f"user-{workspace_id}", workspace_id=workspace_id)
 
 
-async def test_governance_policy_upsert_is_workspace_scoped(session_factory):
+def _rule(subject_id: str, target: str, effect: PolicyEffect, **params) -> PolicyRule:
+    return PolicyRule(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=subject_id,
+        target=target,
+        effect=effect,
+        params=params,
+    )
+
+
+async def test_create_and_list_is_workspace_scoped(session_factory):
     async with session_factory() as session:
-        repo_a = GovernancePolicyRepository(session, _context("workspace-a"))
-        repo_b = GovernancePolicyRepository(session, _context("workspace-b"))
+        repo_a = PolicyRuleRepository(session, _context("workspace-a"))
+        repo_b = PolicyRuleRepository(session, _context("workspace-b"))
 
-        await repo_a.upsert_scope_policy(
-            scope_type=PolicyScopeType.WORKSPACE,
-            scope_id="workspace-a",
-            document=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="10.00")),
+        await repo_a.create(
+            _rule("workspace-a", "spend", PolicyEffect.CAP, amount_usd="10.00", period="month")
         )
 
-        assert await repo_a.get_scope_policy(
-            scope_type=PolicyScopeType.WORKSPACE,
-            scope_id="workspace-a",
-        )
-        assert await repo_b.get_scope_policy(
-            scope_type=PolicyScopeType.WORKSPACE,
-            scope_id="workspace-a",
-        ) is None
+        assert len(await repo_a.list_rules()) == 1
+        assert await repo_b.list_rules() == []
 
 
-async def test_governance_policy_upsert_updates_same_scope_kind(session_factory):
+async def test_list_filters(session_factory):
     async with session_factory() as session:
-        repo = GovernancePolicyRepository(session, _context("workspace-a"))
+        repo = PolicyRuleRepository(session, _context("workspace-a"))
+        await repo.create(_rule("workspace-a", "tool:a", PolicyEffect.DENY))
+        await repo.create(_rule("workspace-a", "tool:b", PolicyEffect.ALLOW))
 
-        first_id, _ = await repo.upsert_scope_policy(
-            scope_type=PolicyScopeType.WORKSPACE,
-            scope_id="workspace-a",
-            document=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="10.00")),
-        )
-        second_id, updated = await repo.upsert_scope_policy(
-            scope_type=PolicyScopeType.WORKSPACE,
-            scope_id="workspace-a",
-            document=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="5.00")),
-        )
+        denied = await repo.list_rules(effect=PolicyEffect.DENY)
+        assert len(denied) == 1
+        assert denied[0].target == "tool:a"
 
-        assert second_id == first_id
-        assert str(updated.budget.monthly_spend_cap_usd) == "5.00"
-        records = await repo.list_policies()
-        assert len(records) == 1
+        by_target = await repo.list_rules(target="tool:b")
+        assert len(by_target) == 1
+        assert by_target[0].effect == PolicyEffect.ALLOW
+
+
+async def test_get_update_set_enabled_delete(session_factory):
+    async with session_factory() as session:
+        repo = PolicyRuleRepository(session, _context("workspace-a"))
+        created = await repo.create(_rule("workspace-a", "tool:x", PolicyEffect.DENY))
+
+        loaded = await repo.get(created.id)
+        assert loaded is not None
+        assert loaded.target == "tool:x"
+
+        updated = await repo.update(created.id, target="tool:y", priority=5)
+        assert updated.target == "tool:y"
+        assert updated.priority == 5
+
+        toggled = await repo.set_enabled(created.id, False)
+        assert toggled.enabled is False
+
+        assert await repo.delete(created.id) is True
+        assert await repo.get(created.id) is None
+        assert await repo.delete(created.id) is False
+
+
+async def test_get_other_workspace_returns_none(session_factory):
+    async with session_factory() as session:
+        repo_a = PolicyRuleRepository(session, _context("workspace-a"))
+        repo_b = PolicyRuleRepository(session, _context("workspace-b"))
+        created = await repo_a.create(_rule("workspace-a", "tool:x", PolicyEffect.DENY))
+
+        assert await repo_b.get(created.id) is None
+        assert await repo_b.update(created.id, priority=9) is None
+        assert await repo_b.delete(created.id) is False
 
 
 async def test_task_policy_snapshot_is_immutable_per_task_kind(session_factory):

@@ -2,17 +2,20 @@
 
 This module defines the abstract AuthorizationService that determines which
 workspaces a user can access. The OSS implementation uses a simple rule
-(user's workspace + system). Enterprise can replace this with ReBAC.
+(user's workspace + platform (official content)). Enterprise can replace
+this with ReBAC.
 """
 
 import logging
 from abc import ABC, abstractmethod
 
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+
 from .context import UserContext
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_WORKSPACE_ID = "system"
+SYSTEM_WORKSPACE_ID = PLATFORM_WORKSPACE_ID
 
 
 class AuthorizationService(ABC):

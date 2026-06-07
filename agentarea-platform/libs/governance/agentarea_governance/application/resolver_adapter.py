@@ -1,4 +1,11 @@
-"""Concrete PolicyResolverPort implementation backed by governance infra."""
+"""Concrete PolicyResolverPort implementation backed by governance rules.
+
+Resolves the workspace and agent rule layers, compiles each into a typed
+:class:`PolicyDocument`, then reuses the unchanged :class:`PolicyResolver`
+(monotonic merge + validator). This keeps the runtime ``EffectivePolicy`` — and
+the derived ``execution_state`` — byte-for-byte equivalent to the previous
+typed-document storage while the source of truth becomes relational rules.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +18,9 @@ from ..domain.policies import (
     PolicyDocument,
     PolicyResolver,
 )
+from ..domain.rules import PolicyRule, PolicySubjectType, rules_to_document
 from ..infrastructure.repository import (
-    GovernancePolicyRepository,
+    PolicyRuleRepository,
     TaskPolicySnapshotRepository,
 )
 
@@ -24,7 +32,7 @@ class GovernancePolicyResolver:
     """
 
     def __init__(self, repository_factory: RepositoryFactory):
-        self._policy_repository = repository_factory.create_repository(GovernancePolicyRepository)
+        self._rule_repository = repository_factory.create_repository(PolicyRuleRepository)
         self._snapshot_repository = repository_factory.create_repository(
             TaskPolicySnapshotRepository
         )
@@ -40,16 +48,32 @@ class GovernancePolicyResolver:
         if not workspace_id:
             return EffectivePolicy()
 
-        source_ids, policies = await self._policy_repository.get_chain(
-            workspace_id=workspace_id,
-            agent_id=agent_id,
-            task_id=task_id,
+        layers: list[PolicyDocument] = []
+        source_ids: list[str] = []
+
+        ws_rules = await self._rule_repository.list_rules(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id=workspace_id,
+            enabled=True,
         )
+        if ws_rules:
+            layers.append(rules_to_document(ws_rules))
+            source_ids.extend(_rule_ids(ws_rules))
+
+        if agent_id is not None:
+            agent_rules = await self._rule_repository.list_rules(
+                subject_type=PolicySubjectType.AGENT,
+                subject_id=str(agent_id),
+                enabled=True,
+            )
+            if agent_rules:
+                layers.append(rules_to_document(agent_rules))
+                source_ids.extend(_rule_ids(agent_rules))
 
         if task_policy is not None:
-            policies.append(task_policy)
+            layers.append(task_policy)
 
-        return PolicyResolver().resolve(list(policies), source_policy_ids=source_ids)
+        return PolicyResolver().resolve(layers, source_policy_ids=source_ids)
 
     async def snapshot(
         self,
@@ -60,3 +84,7 @@ class GovernancePolicyResolver:
         await self._snapshot_repository.create_snapshot(
             task_id=task_id, effective_policy=effective_policy
         )
+
+
+def _rule_ids(rules: list[PolicyRule]) -> list[str]:
+    return [rule.id for rule in rules if rule.id is not None]

@@ -220,7 +220,7 @@ async def get_task_by_id(
             raise HTTPException(status_code=404, detail="Task not found")
 
         task = task_service.task_repository._orm_to_domain(task_orm)
-        agent = await agent_service.get(task.agent_id)
+        agent = await agent_service.get_with_catalog(task.agent_id)
         result_dict = task.result if isinstance(task.result, dict) else None
         total_cost = result_dict.get("total_cost") if result_dict else None
 
@@ -283,8 +283,10 @@ async def create_task_for_agent_with_stream(
     event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Create and execute a task for the specified agent with real-time SSE stream."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
+    # Verify agent exists. Built-in agents live in the registry catalog (ADR-003)
+    # and are run directly from their definition (no fork on run), so accept a
+    # catalog projection here too.
+    agent = await agent_service.get_with_catalog(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 

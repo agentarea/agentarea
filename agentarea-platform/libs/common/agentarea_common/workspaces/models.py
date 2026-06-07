@@ -80,6 +80,7 @@ class Workspace(BaseModel):
     __tablename__ = "workspaces"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
     type: Mapped[str] = mapped_column(
         String(20), nullable=False, default=WORKSPACE_TYPE_PERSONAL
     )

@@ -218,7 +218,9 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
     )
 
     db = Database(get_db_settings())
-    system_context = UserContext(user_id="system", workspace_id="system")
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+
+    system_context = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
 
     # Build registry configs from args
     configs: list[dict] = []
