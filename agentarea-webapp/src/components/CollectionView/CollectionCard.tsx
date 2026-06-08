@@ -50,9 +50,14 @@ export default function CollectionCard({ item }: { item: CollectionItem }) {
         )}
       </div>
 
-      {/* description — fixed two-line clamp (omitted for compact cards) */}
+      {/* description — two-line clamp, or a single truncated line when compact */}
       {!item.hideDescription && (
-        <p className="relative z-[1] mb-3 line-clamp-2 h-[38px] text-[12.5px] leading-[1.5] text-muted-foreground">
+        <p
+          className={cn(
+            "relative z-[1] mb-3 text-[12.5px] leading-[1.5] text-muted-foreground",
+            item.compactDescription ? "truncate" : "line-clamp-2 h-[38px]"
+          )}
+        >
           {item.description || ""}
         </p>
       )}

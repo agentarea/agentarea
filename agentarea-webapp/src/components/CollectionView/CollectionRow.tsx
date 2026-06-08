@@ -54,11 +54,19 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
       <span
         className={cn(
           "relative z-[1] truncate text-[13px] font-medium text-foreground",
-          item.description ? "max-w-[230px] shrink-0" : "min-w-0 flex-1"
+          item.titleClassName ??
+            (item.description ? "max-w-[230px] shrink-0" : "min-w-0 flex-1")
         )}
       >
         {item.title}
       </span>
+
+      {/* inline pills after the title (e.g. Custom / Tools) */}
+      {item.afterTitle != null && (
+        <span className="relative z-[1] flex shrink-0 items-center gap-1.5">
+          {item.afterTitle}
+        </span>
+      )}
 
       {/* description */}
       {item.description != null && (

@@ -4,14 +4,16 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import SearchInput from "@/components/SearchInput";
-import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
 import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 
 export const metadata: Metadata = {
   title: "Connections",
 };
+
+function asString(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value : "";
+}
 
 export default async function MCPServersPage({
   searchParams,
@@ -21,25 +23,32 @@ export default async function MCPServersPage({
   const t = await getTranslations("MCPServersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
+  // View mode: prefer URL, fall back to cookie, default to grid (as before).
   const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_mcp-servers")?.value;
-  const tab =
-    typeof resolvedSearchParams.tab === "string"
-      ? resolvedSearchParams.tab
-      : cookieTab || "grid";
-  const searchQuery =
-    typeof resolvedSearchParams.search === "string"
-      ? resolvedSearchParams.search
-      : "";
-  const typeFilter =
-    typeof resolvedSearchParams.type === "string"
-      ? resolvedSearchParams.type
-      : "";
-  const categoryFilter =
-    typeof resolvedSearchParams.category === "string"
-      ? resolvedSearchParams.category
-      : "";
+  const cookieView = cookieStore.get("view_mcp-servers")?.value;
+  const urlView = asString(resolvedSearchParams.view);
+  const view: "list" | "grid" =
+    urlView === "grid" || urlView === "list"
+      ? urlView
+      : cookieView === "list"
+        ? "list"
+        : "grid";
+
+  const protocolParam = asString(resolvedSearchParams.protocol);
+  const tab: "all" | "mcp" | "openapi" =
+    protocolParam === "mcp" || protocolParam === "openapi"
+      ? protocolParam
+      : "all";
+
+  const groupParam = asString(resolvedSearchParams.group);
+  const group: "none" | "status" | "type" =
+    groupParam === "status" || groupParam === "type" ? groupParam : "none";
+
+  const orderParam = asString(resolvedSearchParams.order);
+  const order: "name" | "status" =
+    orderParam === "status" ? "status" : "name";
+
+  const search = asString(resolvedSearchParams.search);
 
   return (
     <ContentBlock
@@ -48,22 +57,16 @@ export default async function MCPServersPage({
         description: t("description"),
         controls: <AddConnectionDropdown />,
       }}
-      subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/mcp-servers" />
-          <MCPHeaderTabs currentTab={tab} />
-        </>
-      }
+      className="overflow-hidden p-0"
     >
       <Suspense
-        key={`${searchQuery}-${tab}-${typeFilter}-${categoryFilter}`}
         fallback={
           <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />
           </div>
         }
       >
-        <MCPServersContent searchQuery={searchQuery} viewMode={tab} typeFilter={typeFilter} categoryFilter={categoryFilter} />
+        <MCPServersContent initial={{ view, tab, group, order, search }} />
       </Suspense>
     </ContentBlock>
   );

@@ -45,6 +45,15 @@ export interface CollectionItem {
   onOpen?: () => void;
   /** Row: right-hand meta cluster. Card: footer pills. */
   badges?: CollectionBadge[];
+  /** Row only: node rendered immediately after the title, before the
+   *  description (e.g. inline type/Custom pills). Ignored by cards. */
+  afterTitle?: ReactNode;
+  /** Row only: override the title column width classes (e.g. a fixed
+   *  `w-[200px] shrink-0` so following columns line up vertically). */
+  titleClassName?: string;
+  /** Card only: render the description on a single truncated line instead of
+   *  the default two-line clamp (more compact cards). */
+  compactDescription?: boolean;
   /** Row-only trailing node — cost, date, avatars, … Cards ignore it (use
    *  `cardFooter` for card-specific content). */
   meta?: ReactNode;

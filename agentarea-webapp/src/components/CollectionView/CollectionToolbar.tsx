@@ -41,6 +41,10 @@ export interface CollectionToolbarProps {
   filterActive?: boolean;
   onToggleFilter?: () => void;
 
+  /** Optional inline node (e.g. a search box) rendered after the tabs/filter,
+   *  growing to fill the space before the Display + view segment. */
+  searchSlot?: ReactNode;
+
   /** Display popover (grouping + ordering). Rendered on the right when either
    *  option list is provided. */
   displayLabel?: string;
@@ -76,6 +80,7 @@ export default function CollectionToolbar({
   filterLabel = "Filter",
   filterActive,
   onToggleFilter,
+  searchSlot,
   displayLabel = "Display",
   groupingLabel = "Grouping",
   groupOptions,
@@ -148,8 +153,18 @@ export default function CollectionToolbar({
         </>
       )}
 
+      {/* optional inline search (or other) slot */}
+      {searchSlot && (
+        <>
+          {(tabs?.length || onToggleFilter) && (
+            <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+          )}
+          <div className="min-w-0 flex-1">{searchSlot}</div>
+        </>
+      )}
+
       {/* spacer pushes Display + segment to the right edge */}
-      <div className="flex-1" />
+      {!searchSlot && <div className="flex-1" />}
 
       {hasDisplay && (
         <Popover>
