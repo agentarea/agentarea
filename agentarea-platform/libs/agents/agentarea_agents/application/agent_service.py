@@ -221,9 +221,7 @@ class AgentService(BaseCrudService[Agent]):
             planning=spec.get("planning"),
             registry_item_id=item.id,
         )
-        await self._get_catalog_repository().mark_installed(
-            item.id, str(agent.id), item.version
-        )
+        await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
         return agent
 
     @audited("agent.update", resource_type="agent", resource_id_param="id")

@@ -73,9 +73,7 @@ class TestToolConfigDiscrimination:
         assert McpToolConfig(name="github").type == "mcp"
 
     def test_adapter_selects_variant_by_type(self):
-        cfg = TOOL_CONFIG_ADAPTER.validate_python(
-            {"type": "agent", "name": "researcher"}
-        )
+        cfg = TOOL_CONFIG_ADAPTER.validate_python({"type": "agent", "name": "researcher"})
         assert isinstance(cfg, AgentToolConfig)
 
     def test_invalid_type_rejected(self):

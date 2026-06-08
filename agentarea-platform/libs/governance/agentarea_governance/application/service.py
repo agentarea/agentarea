@@ -68,9 +68,7 @@ class GovernancePolicyService:
         resource_type="governance_policy",
         resource_id_param="rule_id",
     )
-    async def set_rule_enabled(
-        self, *, rule_id: UUID | str, enabled: bool
-    ) -> PolicyRule | None:
+    async def set_rule_enabled(self, *, rule_id: UUID | str, enabled: bool) -> PolicyRule | None:
         """Enable or disable a policy rule."""
         return await self._rule_repository.set_enabled(rule_id, enabled)
 

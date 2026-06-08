@@ -89,8 +89,6 @@ class CatalogSkillRepository:
             description=row.description,
             version=row.version,
             spec=spec,
-            installed_entity_id=str(row.installed_entity_id)
-            if row.installed_entity_id
-            else None,
+            installed_entity_id=str(row.installed_entity_id) if row.installed_entity_id else None,
             installed_version=row.installed_version,
         )

@@ -81,9 +81,7 @@ class Workspace(BaseModel):
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
-    type: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=WORKSPACE_TYPE_PERSONAL
-    )
+    type: Mapped[str] = mapped_column(String(20), nullable=False, default=WORKSPACE_TYPE_PERSONAL)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 

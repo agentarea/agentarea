@@ -148,9 +148,7 @@ class _DocumentAccumulator:
                 approvers=_dedupe(self.approvers),
             )
 
-        content_safety = (
-            ContentSafetyPolicy(**self.content_safety) if self.content_safety else None
-        )
+        content_safety = ContentSafetyPolicy(**self.content_safety) if self.content_safety else None
 
         return PolicyDocument(
             budget=budget,
@@ -176,9 +174,7 @@ def rules_to_document(rules: list[PolicyRule]) -> PolicyDocument:
         try:
             kind, value = parse_target(rule.target)
         except ValueError:
-            logger.debug(
-                "skipping rule %s: unparseable target %r", rule.id, rule.target
-            )
+            logger.debug("skipping rule %s: unparseable target %r", rule.id, rule.target)
             continue
         _apply_rule(acc, rule, kind, value)
 
@@ -279,9 +275,7 @@ def _apply_approval(
         # helpers.policy_requires_approval checks escalation_rules membership.
         acc.escalation_rules.append(value)
     else:
-        logger.debug(
-            "skipping approval rule %s: unsupported target %r", rule.id, rule.target
-        )
+        logger.debug("skipping approval rule %s: unsupported target %r", rule.id, rule.target)
 
     approvers = params.get("approvers")
     if approvers:
@@ -290,9 +284,7 @@ def _apply_approval(
 
 def _apply_safety(acc: _DocumentAccumulator, params: dict[str, Any]) -> None:
     if "prompt_injection" in params:
-        acc.content_safety["prompt_injection_detection_enabled"] = bool(
-            params["prompt_injection"]
-        )
+        acc.content_safety["prompt_injection_detection_enabled"] = bool(params["prompt_injection"])
     if "output_sanitizer" in params:
         acc.content_safety["output_sanitizer_enabled"] = bool(params["output_sanitizer"])
 

@@ -151,9 +151,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         """Project un-instantiated catalog model spec items as read-only specs."""
         catalog_items = await self._get_catalog_repository().list_items()
         shadowed = {
-            str(s.registry_item_id)
-            for s in tenant_specs
-            if getattr(s, "registry_item_id", None)
+            str(s.registry_item_id) for s in tenant_specs if getattr(s, "registry_item_id", None)
         }
         projections: list[ModelSpec] = []
         for item in catalog_items:

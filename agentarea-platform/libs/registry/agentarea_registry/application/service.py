@@ -15,7 +15,6 @@ Entity-specific details (connection_type, source_type) live in spec JSONB.
 import json
 import logging
 import urllib.request
-import uuid
 from datetime import datetime
 from typing import Any
 from uuid import UUID

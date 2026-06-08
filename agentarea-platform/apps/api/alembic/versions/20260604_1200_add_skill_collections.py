@@ -43,9 +43,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             onupdate=sa.func.now(),
         ),
-        sa.UniqueConstraint(
-            "workspace_id", "slug", name="uq_skill_collections_workspace_slug"
-        ),
+        sa.UniqueConstraint("workspace_id", "slug", name="uq_skill_collections_workspace_slug"),
     )
 
     op.create_index("ix_skill_collections_workspace_id", "skill_collections", ["workspace_id"])
@@ -72,9 +70,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
 
-    op.create_index(
-        "ix_collection_skills_collection_id", "collection_skills", ["collection_id"]
-    )
+    op.create_index("ix_collection_skills_collection_id", "collection_skills", ["collection_id"])
     op.create_index("ix_collection_skills_skill_id", "collection_skills", ["skill_id"])
 
 

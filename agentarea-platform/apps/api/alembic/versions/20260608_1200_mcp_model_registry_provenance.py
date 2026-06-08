@@ -53,10 +53,7 @@ _SOURCE_TABLES = (
 
 def _ensure_registry(conn, name: str, registry_type: str, source_url: str) -> str:
     registry_id = conn.execute(
-        sa.text(
-            "SELECT id FROM registries "
-            "WHERE registry_type = :rt AND name = :name LIMIT 1"
-        ),
+        sa.text("SELECT id FROM registries WHERE registry_type = :rt AND name = :name LIMIT 1"),
         {"rt": registry_type, "name": name},
     ).scalar()
     if registry_id is None:

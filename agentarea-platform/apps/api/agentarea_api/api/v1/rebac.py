@@ -255,9 +255,7 @@ async def get_graph(
     counts = await collection_repo.skill_counts()
 
     # All skills in the workspace (used for stats + node counts).
-    skill_count_query = select(Skill.id).where(
-        Skill.workspace_id == user_context.workspace_id
-    )
+    skill_count_query = select(Skill.id).where(Skill.workspace_id == user_context.workspace_id)
     governed_skill_count = len((await db_session.execute(skill_count_query)).all())
 
     nodes: list[GraphNode] = []
@@ -347,9 +345,7 @@ async def get_graph(
 
         skill_tuples = await _workspace_tuples(keto, "Skill")
         for t in skill_tuples:
-            if t.relation in _RELATION_LABEL and t.subject_id and t.subject_id.startswith(
-                "Agent:"
-            ):
+            if t.relation in _RELATION_LABEL and t.subject_id and t.subject_id.startswith("Agent:"):
                 direct_exception_count += 1
 
     stats = GraphStats(
@@ -574,8 +570,7 @@ async def resolve_access(
             collection_skills_table.c.skill_id == skill_uuid
         )
         member_collections = {
-            str(row.collection_id)
-            for row in (await db_session.execute(membership_query)).all()
+            str(row.collection_id) for row in (await db_session.execute(membership_query)).all()
         }
         member_collections &= collection_ids
 
@@ -706,9 +701,7 @@ async def sync_grants(
             raise HTTPException(status_code=503, detail="Keto write failed") from exc
 
     # Step 2: mirror collection memberships (scoped to workspace collections).
-    workspace_collection_ids = {
-        str(c.id) for c in await collection_repo.list_all()
-    }
+    workspace_collection_ids = {str(c.id) for c in await collection_repo.list_all()}
     membership_query = select(
         collection_skills_table.c.collection_id,
         collection_skills_table.c.skill_id,

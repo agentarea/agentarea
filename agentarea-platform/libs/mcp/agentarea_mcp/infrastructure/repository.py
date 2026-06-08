@@ -86,9 +86,10 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             return False
         if search is not None:
             term = search.lower()
-            if term not in (server.name or "").lower() and term not in (
-                server.description or ""
-            ).lower():
+            if (
+                term not in (server.name or "").lower()
+                and term not in (server.description or "").lower()
+            ):
                 return False
         return True
 
@@ -197,9 +198,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         """Project un-instantiated catalog MCP items as read-only specs."""
         catalog_items = await self._get_catalog_repository().list_items()
         shadowed = {
-            str(s.registry_item_id)
-            for s in tenant_servers
-            if getattr(s, "registry_item_id", None)
+            str(s.registry_item_id) for s in tenant_servers if getattr(s, "registry_item_id", None)
         }
         projections: list[MCPServer] = []
         for item in catalog_items:

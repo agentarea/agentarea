@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { NavUser } from "@/components/MainLayout/components/NavUser";
 import {
-  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -23,7 +22,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { APP_VERSION } from "@/lib/app-version";
@@ -147,15 +145,6 @@ export function SettingsSidebarContent() {
           </div>
         )}
       </SidebarFooter>
-      <SidebarRail />
     </>
-  );
-}
-
-export default function SettingsSidebar() {
-  return (
-    <Sidebar collapsible="icon">
-      <SettingsSidebarContent />
-    </Sidebar>
   );
 }

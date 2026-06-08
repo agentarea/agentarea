@@ -427,9 +427,7 @@ class SkillService:
         repo = self._get_repository()
         return await repo.get_by_slug(slug)
 
-    async def _catalog_projections(
-        self, tenant_skills: list[Skill]
-    ) -> list[Skill]:
+    async def _catalog_projections(self, tenant_skills: list[Skill]) -> list[Skill]:
         """Project un-forked catalog skill items as read-only ``Skill`` rows.
 
         A catalog item that has already been forked (a tenant ``skills`` row
@@ -586,9 +584,7 @@ class SkillService:
             network_scope=spec.get("network_scope") or "private",
             registry_item_id=item.id,
         )
-        await self._get_catalog_repository().mark_installed(
-            item.id, str(skill.id), item.version
-        )
+        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), item.version)
         logger.info(
             "Forked catalog skill '%s' (item=%s) into tenant skill %s",
             item.name,
@@ -763,9 +759,7 @@ class SkillService:
                 Delete={"Objects": [{"Key": f"{prefix}{p}"} for p in orphans]},
             )
 
-        skill = await repo.update(
-            str(skill.id), content=new_skill_md_text, s3_path=new_s3_path
-        )
+        skill = await repo.update(str(skill.id), content=new_skill_md_text, s3_path=new_s3_path)
         if skill is None:
             raise RuntimeError("Failed to update skill content")
         logger.info(

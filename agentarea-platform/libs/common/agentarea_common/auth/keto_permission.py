@@ -79,9 +79,7 @@ class KetoPermissionService(PermissionService):
             return True
         relation = _RELATION_BY_PERMISSION.get(namespace, {}).get(permission)
         if relation is None:
-            logger.warning(
-                "No Keto relation mapping for %s.%s; denying", resource_type, permission
-            )
+            logger.warning("No Keto relation mapping for %s.%s; denying", resource_type, permission)
             return False
         try:
             result = await self._keto.check(

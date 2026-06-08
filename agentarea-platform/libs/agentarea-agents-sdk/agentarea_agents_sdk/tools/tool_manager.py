@@ -157,7 +157,9 @@ class ToolManager:
                 continue
             builder = self._builders.get(tool.get("type"))
             if builder is None:
-                logger.warning(f"Unknown tool type: {tool.get('type')}", extra={"tool_config": tool})
+                logger.warning(
+                    f"Unknown tool type: {tool.get('type')}", extra={"tool_config": tool}
+                )
                 continue
             await builder.add_explicit(spec, ctx, result)
 

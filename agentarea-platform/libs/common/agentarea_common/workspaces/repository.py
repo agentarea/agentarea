@@ -122,9 +122,7 @@ class WorkspaceRepository:
         return workspace
 
     async def get(self, workspace_id: str) -> Workspace | None:
-        result = await self.session.execute(
-            select(Workspace).where(Workspace.id == workspace_id)
-        )
+        result = await self.session.execute(select(Workspace).where(Workspace.id == workspace_id))
         return result.scalar_one_or_none()
 
     async def get_by_slug(self, slug: str) -> Workspace | None:

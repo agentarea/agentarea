@@ -62,6 +62,4 @@ async def list_workspaces(
     new user always gets at least one entry.
     """
     workspaces = await service.list_for_user(user.user_id, email=user.email)
-    return [
-        WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces
-    ]
+    return [WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces]

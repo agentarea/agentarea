@@ -164,12 +164,16 @@ def upgrade() -> None:
 
     # ---- data migration: decompose governance_policies documents into rules ----
     bind = op.get_bind()
-    rows = bind.execute(
-        sa.text(
-            "SELECT workspace_id, created_by, scope_type, scope_id, document, enabled "
-            "FROM governance_policies"
+    rows = (
+        bind.execute(
+            sa.text(
+                "SELECT workspace_id, created_by, scope_type, scope_id, document, enabled "
+                "FROM governance_policies"
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     insert_stmt = sa.text(
         "INSERT INTO policies "
@@ -229,18 +233,10 @@ def downgrade() -> None:
             "workspace_id", "scope_type", "scope_id", name="uq_governance_policies_scope"
         ),
     )
-    op.create_index(
-        "ix_governance_policies_workspace_id", "governance_policies", ["workspace_id"]
-    )
-    op.create_index(
-        "ix_governance_policies_created_by", "governance_policies", ["created_by"]
-    )
-    op.create_index(
-        "ix_governance_policies_scope_type", "governance_policies", ["scope_type"]
-    )
-    op.create_index(
-        "ix_governance_policies_scope_id", "governance_policies", ["scope_id"]
-    )
+    op.create_index("ix_governance_policies_workspace_id", "governance_policies", ["workspace_id"])
+    op.create_index("ix_governance_policies_created_by", "governance_policies", ["created_by"])
+    op.create_index("ix_governance_policies_scope_type", "governance_policies", ["scope_type"])
+    op.create_index("ix_governance_policies_scope_id", "governance_policies", ["scope_id"])
 
     op.drop_index("ix_policies_workspace_subject", table_name="policies")
     op.drop_index("ix_policies_effect", table_name="policies")

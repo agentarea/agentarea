@@ -282,9 +282,10 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  // Try to get sidebar context, but don't throw if it's not available
-  const context = React.useContext(SidebarContext);
-  const toggleSidebar = context?.toggleSidebar;
+  // Require the sidebar context: rendering a trigger without a SidebarProvider
+  // is a wiring bug, and we want it to surface loudly rather than render a
+  // dead button that silently does nothing.
+  const { toggleSidebar } = useSidebar();
 
   return (
     <Button
@@ -298,10 +299,7 @@ const SidebarTrigger = React.forwardRef<
       )}
       onClick={(event) => {
         onClick?.(event);
-        // Only toggle if sidebar context is available
-        if (toggleSidebar) {
-          toggleSidebar();
-        }
+        toggleSidebar();
       }}
       {...props}
     >
