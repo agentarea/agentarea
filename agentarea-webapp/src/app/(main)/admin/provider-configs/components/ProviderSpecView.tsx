@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useMemo } from "react";
+import { Cpu } from "lucide-react";
+import CollectionView, {
+  type CollectionItem,
+} from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import Table from "@/components/Table/Table";
 import ModelsList from "./ModelsList";
-import { ProviderSpecCard } from "./ProviderItem";
 import { ProviderSpec } from "./types";
 
 interface ProviderSpecViewProps {
@@ -21,44 +22,32 @@ export default function ProviderSpecView({
   viewMode,
   hasNoData,
 }: ProviderSpecViewProps) {
-  const t = useTranslations("Models.table");
-  const router = useRouter();
-
-  // Define table columns for specs
-  const specColumns = [
-    {
-      accessor: "name",
-      header: t("name"),
-      render: (value: string, item: any) => (
-        <div className="flex items-center gap-2">
-          {item.icon_url && (
+  const items = useMemo<CollectionItem[]>(
+    () =>
+      specs.map((spec) => {
+        const iconUrl = (spec as any).icon_url as string | undefined;
+        return {
+          id: spec.id,
+          color: "#5e6ad2",
+          icon: iconUrl ? (
             <img
-              src={item.icon_url}
-              alt={`${value} icon`}
-              className="h-5 w-5 flex-shrink-0 rounded dark:invert"
+              src={iconUrl}
+              alt=""
+              aria-hidden="true"
+              className="h-4 w-4 rounded object-contain dark:invert"
             />
-          )}
-          <span className="truncate">{value}</span>
-        </div>
-      ),
-    },
-    {
-      accessor: "description",
-      header: t("description"),
-      render: (value: string) => (
-        <span className="block max-w-[300px] truncate" title={value}>
-          {value || "-"}
-        </span>
-      ),
-    },
-    {
-      accessor: "models",
-      header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
-    },
-  ];
+          ) : (
+            Cpu
+          ),
+          title: spec.name,
+          description: (spec as any).description,
+          href: `/admin/provider-configs/create/${spec.id}`,
+          meta: <ModelsList models={(spec as any).models || []} />,
+        };
+      }),
+    [specs]
+  );
 
-  // Empty state handling
   if (specs.length === 0) {
     return (
       <div className="py-1">
@@ -75,27 +64,11 @@ export default function ProviderSpecView({
     );
   }
 
-  // Render table view
-  if (viewMode === "table") {
-    return (
-      <Table
-        data={specs}
-        columns={specColumns}
-        onRowClick={(spec) => {
-          router.push(
-            `/admin/provider-configs/create/${spec.id}`
-          );
-        }}
-      />
-    );
-  }
-
-  // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {specs.map((spec) => (
-        <ProviderSpecCard key={spec.id} spec={spec} />
-      ))}
-    </div>
+    <CollectionView
+      view={viewMode === "table" ? "list" : "grid"}
+      items={items}
+      bleed
+    />
   );
 }

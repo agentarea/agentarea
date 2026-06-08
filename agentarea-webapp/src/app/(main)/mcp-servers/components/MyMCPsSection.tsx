@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle, Clock, XCircle } from "lucide-react";
+import CollectionView, {
+  type CollectionItem,
+} from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
@@ -21,11 +22,7 @@ import {
   getMCPInstanceToolCount,
   MCP_CONSTANTS,
 } from "../utils";
-import {
-  MCPInstanceCard,
-  OpenAPIConnectionCard,
-  OpenAPIConnectionMark,
-} from "./MCPCard";
+import { OpenAPIConnectionMark } from "./MCPCard";
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
@@ -36,6 +33,9 @@ interface MyMCPsSectionProps {
   hasNoData?: boolean;
 }
 
+const MCP_COLOR = "#5e6ad2";
+const OPENAPI_COLOR = "#d97706";
+
 export function MyMCPsSection({
   mcpInstances,
   mcpServers,
@@ -45,7 +45,6 @@ export function MyMCPsSection({
   hasNoData = false,
 }: MyMCPsSectionProps) {
   const t = useTranslations("MCPServersPage");
-  const router = useRouter();
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
   const [healthLoading, setHealthLoading] = useState(true);
 
@@ -189,80 +188,6 @@ export function MyMCPsSection({
     }
   };
 
-  // Define table columns for instances
-  const instanceColumns = [
-    {
-      accessor: "name",
-      header: t("table.name"),
-      render: (value: string, item: any) => {
-        const providerIcon =
-          item._type === "mcp" && item._instance
-            ? getMCPConnectionIconSrc(item._instance, item._serverSpec)
-            : undefined;
-        return (
-          <span className="flex min-w-0 items-center gap-2">
-            {item._type === "openapi" && item._connection ? (
-              <OpenAPIConnectionMark
-                connection={item._connection}
-                className="h-5 w-5 shrink-0 rounded text-[7px]"
-              />
-            ) : providerIcon ? (
-              <img
-                src={providerIcon}
-                alt=""
-                aria-hidden="true"
-                className="h-5 w-5 shrink-0 rounded object-contain"
-              />
-            ) : null}
-            <span className="truncate">{value}</span>
-          </span>
-        );
-      },
-    },
-    {
-      accessor: "description",
-      header: t("table.description"),
-      render: (value: string) => (
-        <span className="truncate text-sm text-gray-500">{value || "-"}</span>
-      ),
-    },
-    {
-      accessor: "endpoint_url",
-      header: t("table.endpoint"),
-      render: (value: string) => (
-        <span className="truncate font-mono text-xs text-gray-400">
-          {value || "-"}
-        </span>
-      ),
-    },
-    {
-      accessor: "tools",
-      header: "Tools",
-      render: (_: unknown, item: any) => {
-        const count =
-          item._type === "openapi" && item._connection
-            ? item._connection.available_tools.length
-            : getMCPInstanceToolCount(item._instance || item);
-        return count > 0 ? (
-          <span className="text-sm text-muted-foreground">{count}</span>
-        ) : (
-          <span className="text-sm text-gray-400">-</span>
-        );
-      },
-    },
-    {
-      accessor: "status",
-      header: t("table.status"),
-      render: (_: string, item: any) => {
-        const healthStatus =
-          item._type === "openapi" && item._connection
-            ? getOpenAPIHealthStatus(item._connection)
-            : getHealthStatus(item._instance || item);
-        return getStatusBadge(healthStatus);
-      },
-    },
-  ];
-
   const totalItems = mcpInstances.length + openApiConnections.length;
 
   // Empty state handling
@@ -282,97 +207,68 @@ export function MyMCPsSection({
     );
   }
 
-  // Render table view
-  if (viewMode === "table") {
-    // Unified rows: MCP instances + OpenAPI connections with a Type column
-    const tableRows = [
-      ...mcpInstances.map((inst) => ({
-        id: inst.id,
-        name: inst.name,
-        description: inst.description,
-        endpoint_url: inst.endpoint_url,
-        type: "MCP" as const,
-        _type: "mcp" as const,
-        _instance: inst,
-        _serverSpec: mcpServers.find(
-          (server) => server.id === inst.server_spec_id
-        ),
-        _connection: null,
-      })),
-      ...openApiConnections.map((conn) => ({
-        id: conn.id,
-        name: conn.name,
-        description: conn.description,
-        endpoint_url: conn.base_url,
-        type: "OpenAPI" as const,
-        _type: "openapi" as const,
-        _instance: null,
-        _serverSpec: undefined,
-        _connection: conn,
-      })),
-    ];
-
-    const unifiedColumns = [
-      {
-        accessor: "type",
-        header: "Type",
-        render: (value: string) => (
-          <Badge
-            variant="outline"
-            className={
-              value === "OpenAPI"
-                ? "gap-1.5 border-orange-300 text-orange-600"
-                : "gap-1.5"
-            }
-          >
-            {value === "OpenAPI" ? (
-              <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
-            ) : (
-              <img src="/mcp.svg" alt="" className="h-3.5 w-3.5" />
-            )}
-            {value}
-          </Badge>
-        ),
-      },
-      ...instanceColumns,
-    ];
-
-    return (
-      <Table
-        data={tableRows}
-        columns={unifiedColumns}
-        onRowClick={(row) => {
-          if (row._type === "openapi") {
-            router.push(`/mcp-servers/openapi/${row.id}`);
-          } else {
-            router.push(`/mcp-servers/${row.id}`);
-          }
-        }}
-      />
-    );
-  }
-
-  // Render grid view (default)
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {mcpInstances.map((instance) => {
-        const serverSpec = mcpServers.find(
-          (server) => server.id === instance.server_spec_id
-        );
-        return (
-          <MCPInstanceCard
-            key={instance.id}
-            instance={instance}
-            serverSpec={serverSpec}
+  const items: CollectionItem[] = [
+    ...mcpInstances.map((instance): CollectionItem => {
+      const serverSpec = mcpServers.find(
+        (server) => server.id === instance.server_spec_id
+      );
+      const providerIcon = getMCPConnectionIconSrc(instance, serverSpec);
+      const count = getMCPInstanceToolCount(instance);
+      const health = getHealthStatus(instance);
+      return {
+        id: instance.id,
+        color: MCP_COLOR,
+        icon: (
+          <img
+            src={providerIcon || "/mcp.svg"}
+            alt=""
+            aria-hidden="true"
+            className="h-4 w-4 rounded object-contain"
           />
-        );
-      })}
-      {openApiConnections.map((connection) => (
-        <OpenAPIConnectionCard
-          key={`openapi-${connection.id}`}
-          connection={connection}
-        />
-      ))}
-    </div>
+        ),
+        title: instance.name,
+        description: instance.description,
+        href: `/mcp-servers/${instance.id}`,
+        badges: [{ label: "MCP", color: MCP_COLOR }],
+        meta: (
+          <span className="flex items-center gap-2">
+            {count > 0 && <span>{count}</span>}
+            {getStatusBadge(health)}
+          </span>
+        ),
+      };
+    }),
+    ...openApiConnections.map((connection): CollectionItem => {
+      const health = getOpenAPIHealthStatus(connection);
+      const count = connection.available_tools.length;
+      return {
+        id: connection.id,
+        color: OPENAPI_COLOR,
+        icon: (
+          <OpenAPIConnectionMark
+            connection={connection}
+            className="h-4 w-4 rounded text-[7px]"
+          />
+        ),
+        title: connection.name,
+        description: connection.description,
+        href: `/mcp-servers/openapi/${connection.id}`,
+        badges: [{ label: "OpenAPI", color: OPENAPI_COLOR }],
+        meta: (
+          <span className="flex items-center gap-2">
+            {count > 0 && <span>{count}</span>}
+            {getStatusBadge(health)}
+          </span>
+        ),
+      };
+    }),
+  ];
+
+  return (
+    <CollectionView
+      view={viewMode === "table" ? "list" : "grid"}
+      items={items}
+      bleed
+    />
   );
 }

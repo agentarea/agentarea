@@ -3,39 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowDownAZ,
-  ChevronDown,
-  Clock,
-  Filter,
-  Inbox,
-  Layers,
-  Rows3,
-  SlidersHorizontal,
-  Tag,
-  X,
-} from "lucide-react";
+import { ArrowDownAZ, Clock, Copy, Inbox, Layers, Rows3, Star, Tag, X } from "lucide-react";
+import CollectionView, {
+  CollectionFilterRow,
+  CollectionToolbar,
+  FilterSelect,
+  type CollectionGroup,
+  type CollectionItem,
+  shortAge,
+} from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import HeaderTabs from "@/components/HeaderTabs";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectItem } from "@/components/ui/select";
 import { listSkillsAction } from "@/lib/server-actions";
-import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
 import { setCookie } from "@/utils/cookies";
-import SkillRow from "./SkillRow";
-import SkillsCard from "./SkillsCard";
 import {
   SCOPE_META,
   SCOPE_ORDER,
@@ -104,7 +85,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const [search, setSearch] = useState(initial.search);
 
   // local-only UI state
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(
     Boolean(initial.scope) || initial.files !== "all"
@@ -176,10 +156,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     });
   }, []);
 
-  const toggleGroup = useCallback((key: string) => {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
   // Apply the non-tab filters (scope / files / search) — drives tab counts too.
   const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -244,6 +220,55 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       .filter((g) => g.items.length > 0);
   }, [group, visible, sortItems]);
 
+  // Adapt a skill into the generic CollectionView item shape. Favourite +
+  // duplicate are supplied as hover quick-actions.
+  const toItem = useCallback(
+    (skill: Skill): CollectionItem => {
+      const source = sourceMeta(skill.source_type);
+      const scope = scopeMeta(skill.network_scope);
+      const isFav = favorites.has(skill.id);
+      return {
+        id: skill.id,
+        icon: source.icon,
+        color: source.color,
+        title: skill.name,
+        description: skill.description,
+        href: `/skills/${skill.id}`,
+        badges: [
+          { label: source.label, color: source.color },
+          { label: scope.label, icon: scope.icon },
+        ],
+        meta: shortAge(skill.created_at),
+        actions: [
+          {
+            icon: Star,
+            label: isFav ? "Remove favorite" : "Add to favorites",
+            active: isFav,
+            activeColor: "#d99a00",
+            onClick: () => toggleFavorite(skill.id),
+          },
+          {
+            icon: Copy,
+            label: "Duplicate",
+            onClick: () => router.push(`/skills/create?from=${skill.id}`),
+          },
+        ],
+      };
+    },
+    [favorites, toggleFavorite, router]
+  );
+
+  const collectionGroups: CollectionGroup[] = useMemo(
+    () =>
+      groups.map((g) => ({
+        key: g.key,
+        label: g.label,
+        color: g.color,
+        items: g.items.map(toItem),
+      })),
+    [groups, toItem]
+  );
+
   const hasActiveFilters =
     Boolean(scope) || files !== "all" || Boolean(search) || sourceTab !== "all";
 
@@ -287,116 +312,63 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   };
 
   return (
-    <div className="skills-cq flex h-full w-full flex-col">
-      {/* ---------------- toolbar ---------------- */}
-      <div className="flex h-[42px] shrink-0 items-center gap-1.5 border-b border-zinc-200 px-4 dark:border-zinc-700">
-        {/* source tabs — scroll horizontally when the panel is narrow so the
-            right-hand controls always stay visible */}
-        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          {SOURCE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onTab(tab.value)}
-              className={cn(
-                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
-                sourceTab === tab.value
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              )}
-            >
-              {tab.label}
-              <span className="text-[11px] text-muted-foreground/70">
-                {tabCounts[tab.value] ?? 0}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
-
-        {/* Filter toggle */}
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((v) => !v)}
-          className={cn(
-            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
-            filtersOpen
-              ? "bg-muted text-foreground"
-              : "text-foreground/80 hover:bg-muted/60"
-          )}
-        >
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="skills-btn-label">{t("filters.filter")}</span>
-        </button>
-
-        {/* Display menu */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="skills-btn-label">{t("display.display")}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-52 p-1.5">
-            <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {t("display.grouping")}
-            </p>
-            <MenuRow
-              icon={<Layers className="h-3.5 w-3.5" />}
-              label={t("display.source")}
-              selected={group === "source"}
-              onClick={() => onGroup("source")}
-            />
-            <MenuRow
-              icon={<Tag className="h-3.5 w-3.5" />}
-              label={t("display.scope")}
-              selected={group === "scope"}
-              onClick={() => onGroup("scope")}
-            />
-            <MenuRow
-              icon={<Rows3 className="h-3.5 w-3.5" />}
-              label={t("display.none")}
-              selected={group === "none"}
-              onClick={() => onGroup("none")}
-            />
-            <div className="my-1 h-px bg-border" />
-            <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {t("display.ordering")}
-            </p>
-            <MenuRow
-              icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-              label={t("display.name")}
-              selected={order === "name"}
-              onClick={() => onOrder("name")}
-            />
-            <MenuRow
-              icon={<Clock className="h-3.5 w-3.5" />}
-              label={t("display.created")}
-              selected={order === "created"}
-              onClick={() => onOrder("created")}
-            />
-          </PopoverContent>
-        </Popover>
-
-        {/* list / grid segment */}
-        <HeaderTabs
-          className="ml-1 shrink-0"
-          value={view}
-          onChange={(v) => onView(v as ViewKey)}
-          tabs={[
-            { value: "list", label: "List view" },
-            { value: "grid", label: "Grid view" },
-          ]}
-        />
-      </div>
+    <div className="collection-cq flex h-full w-full flex-col">
+      <CollectionToolbar
+        tabs={SOURCE_TABS.map((tab) => ({
+          value: tab.value,
+          label: tab.label,
+          count: tabCounts[tab.value] ?? 0,
+        }))}
+        activeTab={sourceTab}
+        onTabChange={onTab}
+        filterLabel={t("filters.filter")}
+        filterActive={filtersOpen}
+        onToggleFilter={() => setFiltersOpen((v) => !v)}
+        displayLabel={t("display.display")}
+        groupingLabel={t("display.grouping")}
+        groupOptions={[
+          {
+            value: "source",
+            label: t("display.source"),
+            icon: <Layers className="h-3.5 w-3.5" />,
+          },
+          {
+            value: "scope",
+            label: t("display.scope"),
+            icon: <Tag className="h-3.5 w-3.5" />,
+          },
+          {
+            value: "none",
+            label: t("display.none"),
+            icon: <Rows3 className="h-3.5 w-3.5" />,
+          },
+        ]}
+        group={group}
+        onGroupChange={(v) => onGroup(v as GroupKey)}
+        orderingLabel={t("display.ordering")}
+        orderOptions={[
+          {
+            value: "name",
+            label: t("display.name"),
+            icon: <ArrowDownAZ className="h-3.5 w-3.5" />,
+          },
+          {
+            value: "created",
+            label: t("display.created"),
+            icon: <Clock className="h-3.5 w-3.5" />,
+          },
+        ]}
+        order={order}
+        onOrderChange={(v) => onOrder(v as OrderKey)}
+        view={view}
+        onViewChange={(v) => onView(v as ViewKey)}
+        listLabel="List view"
+        gridLabel="Grid view"
+      />
 
       {/* ---------------- applied filter row ---------------- */}
       {filtersOpen && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 px-3.5 py-2 dark:border-zinc-700">
+        <CollectionFilterRow>
           <FilterSelect
             value={scope || "all"}
             placeholder={t("filters.scope")}
@@ -440,153 +412,50 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               {t("filters.clear")}
             </button>
           )}
-        </div>
+        </CollectionFilterRow>
       )}
 
       {/* ---------------- body ---------------- */}
       <div className="min-h-0 flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        ) : error ? (
-          <div className="flex h-64 items-center justify-center text-destructive">
-            {t("error.loadSkills")}
-          </div>
-        ) : skills.length === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              title={t("noSkills")}
-              description={t("noSkillsDescription")}
-              iconsType="skills"
-              action={{
-                label: t("addSkill"),
-                onClick: () => router.push("/skills/create"),
-              }}
-            />
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-1.5 py-24 text-muted-foreground">
-            <Inbox className="h-6 w-6" />
-            <p className="text-sm font-semibold text-foreground">
-              {t("emptyHere")}
-            </p>
-            <p className="text-xs">{t("emptyHereDescription")}</p>
-          </div>
-        ) : view === "grid" ? (
-          <div
-            className="grid gap-3 p-4"
-            style={{
-              gridTemplateColumns: "repeat(auto-fill, minmax(264px, 1fr))",
-            }}
-          >
-            {sortItems(visible).map((skill) => (
-              <SkillsCard
-                key={skill.id}
-                skill={skill}
-                isFavorite={favorites.has(skill.id)}
-                onToggleFavorite={toggleFavorite}
-              />
-            ))}
-          </div>
-        ) : (
-          <div>
-            {groups.map((g) => (
-              <div key={g.key}>
-                {group !== "none" && (
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(g.key)}
-                    className="skill-hatch sticky top-0 z-[2] flex h-9 w-full items-center gap-2 border-b border-zinc-100 px-4 dark:border-zinc-800/70"
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                        collapsed[g.key] && "-rotate-90"
-                      )}
-                    />
-                    <span
-                      className="h-[9px] w-[9px] rounded-[3px]"
-                      style={{ backgroundColor: g.color }}
-                    />
-                    <span className="text-[12.5px] font-semibold">
-                      {g.label}
-                    </span>
-                    <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
-                      {g.items.length}
-                    </span>
-                  </button>
-                )}
-                {!collapsed[g.key] &&
-                  g.items.map((skill) => (
-                    <SkillRow
-                      key={skill.id}
-                      skill={skill}
-                      isFavorite={favorites.has(skill.id)}
-                      onToggleFavorite={toggleFavorite}
-                    />
-                  ))}
+        <CollectionView
+          view={view}
+          containerQuery={false}
+          gridClassName="p-4"
+          groups={
+            view === "list" && group !== "none" ? collectionGroups : undefined
+          }
+          items={
+            view === "grid" || group === "none"
+              ? sortItems(visible).map(toItem)
+              : undefined
+          }
+          isLoading={isLoading}
+          error={error ? t("error.loadSkills") : undefined}
+          emptyState={
+            skills.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title={t("noSkills")}
+                  description={t("noSkillsDescription")}
+                  iconsType="skills"
+                  action={{
+                    label: t("addSkill"),
+                    onClick: () => router.push("/skills/create"),
+                  }}
+                />
               </div>
-            ))}
-          </div>
-        )}
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-1.5 py-24 text-muted-foreground">
+                <Inbox className="h-6 w-6" />
+                <p className="text-sm font-semibold text-foreground">
+                  {t("emptyHere")}
+                </p>
+                <p className="text-xs">{t("emptyHereDescription")}</p>
+              </div>
+            )
+          }
+        />
       </div>
     </div>
-  );
-}
-
-function MenuRow({
-  icon,
-  label,
-  selected,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px]",
-        selected ? "text-primary" : "text-foreground/80 hover:bg-muted"
-      )}
-    >
-      <span className={selected ? "text-primary" : "text-muted-foreground"}>
-        {icon}
-      </span>
-      {label}
-    </button>
-  );
-}
-
-function FilterSelect({
-  value,
-  placeholder,
-  active,
-  onValueChange,
-  children,
-}: {
-  value: string;
-  placeholder: string;
-  active: boolean;
-  onValueChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger
-        className={cn(
-          "h-6 w-auto gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-normal shadow-none focus:ring-0",
-          active ? "font-medium text-foreground" : "text-muted-foreground"
-        )}
-      >
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
   );
 }

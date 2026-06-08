@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useMemo } from "react";
+import { Cpu } from "lucide-react";
+import CollectionView, {
+  type CollectionItem,
+} from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import Table from "@/components/Table/Table";
 import ModelsList from "./ModelsList";
-import { ProviderConfigCard } from "./ProviderItem";
 import { ProviderConfig } from "./types";
 
 interface ProviderConfigsViewProps {
@@ -21,39 +22,36 @@ export default function ProviderConfigsView({
   viewMode,
   hasNoData,
 }: ProviderConfigsViewProps) {
-  const t = useTranslations("Models.table");
-  const router = useRouter();
-
-  // Define table columns for configs
-  const configColumns = [
-    {
-      accessor: "name",
-      header: t("name"),
-      render: (value: string, item: any) => (
-        <div className="flex items-center gap-2">
-          {item.spec?.icon_url && (
+  const items = useMemo<CollectionItem[]>(
+    () =>
+      configs.map((config) => {
+        const iconUrl = (config as any).spec?.icon_url as string | undefined;
+        return {
+          id: config.id,
+          color: "#5e6ad2",
+          icon: iconUrl ? (
             <img
-              src={item.spec.icon_url}
-              alt={`${item.spec.name} icon`}
-              className="h-5 w-5 flex-shrink-0 rounded dark:invert"
+              src={iconUrl}
+              alt=""
+              aria-hidden="true"
+              className="h-4 w-4 rounded object-contain dark:invert"
             />
-          )}
-          <span className="truncate">{value}</span>
-        </div>
-      ),
-    },
-    {
-      accessor: "provider_spec_name",
-      header: t("provider"),
-    },
-    {
-      accessor: "model_instances",
-      header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
-    },
-  ];
+          ) : (
+            Cpu
+          ),
+          title: config.name,
+          href: `/admin/provider-configs/edit/${config.id}`,
+          badges: (config as any).provider_spec_name
+            ? [{ label: (config as any).provider_spec_name, color: "#5e6ad2" }]
+            : [],
+          meta: (
+            <ModelsList models={(config as any).model_instances || []} />
+          ),
+        };
+      }),
+    [configs]
+  );
 
-  // Empty state handling
   if (configs.length === 0) {
     return (
       <div className="py-1">
@@ -70,27 +68,11 @@ export default function ProviderConfigsView({
     );
   }
 
-  // Render table view
-  if (viewMode === "table") {
-    return (
-      <Table
-        data={configs}
-        columns={configColumns}
-        onRowClick={(config) => {
-          router.push(
-            `/admin/provider-configs/edit/${config.id}`
-          );
-        }}
-      />
-    );
-  }
-
-  // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {configs.map((config) => (
-        <ProviderConfigCard key={config.id} config={config} />
-      ))}
-    </div>
+    <CollectionView
+      view={viewMode === "table" ? "list" : "grid"}
+      items={items}
+      bleed
+    />
   );
 }

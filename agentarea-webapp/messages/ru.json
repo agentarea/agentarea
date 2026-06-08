@@ -447,6 +447,28 @@
       "noConfigurationsYet": "Нет конфигураций",
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
       "createConfiguration": "Создать конфигурацию"
+    },
+    "searchPlaceholder": "Поиск агентов…",
+    "emptyHere": "Здесь нет агентов",
+    "emptyHereDescription": "Под этот вид пока ничего не подходит.",
+    "filters": {
+      "all": "Все",
+      "filter": "Фильтр",
+      "model": "Модель",
+      "allModels": "Все модели",
+      "clear": "Сбросить"
+    },
+    "display": {
+      "display": "Вид",
+      "grouping": "Группировка",
+      "status": "Статус",
+      "model": "Модель",
+      "none": "Без группировки",
+      "ordering": "Сортировка",
+      "name": "Имя",
+      "activeTasks": "Активные задачи",
+      "listView": "Список",
+      "gridView": "Сетка"
     }
   },
   "MCPServersPage": {
@@ -831,6 +853,38 @@
       "artifacts": "Артефакты",
       "memory": "Память",
       "metrics": "Метрики"
+    },
+    "newTask": "Новая задача",
+    "searchPlaceholder": "Поиск задач…",
+    "emptyHere": "Здесь нет задач",
+    "emptyHereDescription": "Пока ничего не подходит под этот вид.",
+    "error": {
+      "loadFailed": "Не удалось загрузить задачи"
+    },
+    "tabsBar": {
+      "all": "Все",
+      "active": "Активные",
+      "attention": "Требуют внимания",
+      "done": "Завершённые"
+    },
+    "filters": {
+      "filter": "Фильтр",
+      "agent": "Агент",
+      "allAgents": "Все агенты",
+      "clear": "Сбросить"
+    },
+    "display": {
+      "display": "Отображение",
+      "grouping": "Группировка",
+      "none": "Без группировки",
+      "status": "Статус",
+      "agent": "Агент",
+      "ordering": "Сортировка",
+      "recent": "Недавно созданные",
+      "cost": "Стоимость",
+      "name": "Описание",
+      "listView": "Список",
+      "gridView": "Сетка"
     }
   },
   "SkillsPage": {

@@ -21,17 +21,19 @@
     @apply text-xs text-red-500;
   }
 
-  /* ---- Skills brand identity: 135° diagonal hatch ---- */
+  /* ---- Collection brand identity: 135° diagonal hatch ---- */
+  /* Shared by the reusable CollectionView (rows + cards + group headers) and
+     every page that adopts it (skills, tasks, agents, triggers, …). */
   /* group-header band — softer hatch than rows/cards */
-  .skill-hatch {
+  .collection-hatch {
     background-image: var(--hatch-soft);
   }
-  .skill-hatch:hover {
+  .collection-hatch:hover {
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
   /* row: accent hatch that softly slides in from the right edge on hover */
-  .skill-row-hatch {
+  .collection-row-hatch {
     position: absolute;
     inset: 0 0 0 auto;
     width: 230px;
@@ -46,13 +48,13 @@
       opacity 0.2s,
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .group:hover .skill-row-hatch {
+  .group:hover .collection-row-hatch {
     opacity: 0.85;
     transform: none;
   }
 
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
-  .skill-card-hatch {
+  .collection-card-hatch {
     position: absolute;
     left: 0;
     right: 0;
@@ -70,19 +72,19 @@
       opacity 0.22s,
       background-image 0.22s;
   }
-  .group:hover .skill-card-hatch {
+  .group:hover .collection-card-hatch {
     height: 100%;
     opacity: 0.9;
     background-image: var(--hatch-accent), var(--hatch);
     background-position: left bottom;
   }
 
-  /* ---- Skills responsiveness (container-query driven) ---- */
-  /* The page root opts into a size container so rows + toolbar respond to the
+  /* ---- Collection responsiveness (container-query driven) ---- */
+  /* The list root opts into a size container so rows + toolbar respond to the
      panel width rather than the viewport (correct with the sidebar open). */
-  .skills-cq {
+  .collection-cq {
     container-type: inline-size;
-    container-name: skills;
+    container-name: collection;
   }
   /* hide horizontal scrollbar on the toolbar tab strip */
   .no-scrollbar {
@@ -93,24 +95,24 @@
   }
 
   /* Row meta columns drop off progressively as space tightens. */
-  @container skills (max-width: 620px) {
-    .skill-col-date {
+  @container collection (max-width: 620px) {
+    .collection-col-date {
       display: none;
     }
   }
-  @container skills (max-width: 520px) {
-    .skill-col-scope {
+  @container collection (max-width: 520px) {
+    .collection-col-scope {
       display: none;
     }
   }
-  @container skills (max-width: 430px) {
-    .skill-col-source {
+  @container collection (max-width: 430px) {
+    .collection-col-source {
       display: none;
     }
   }
   /* Toolbar button text collapses to icons when narrow. */
-  @container skills (max-width: 560px) {
-    .skills-btn-label {
+  @container collection (max-width: 560px) {
+    .collection-btn-label {
       display: none;
     }
   }

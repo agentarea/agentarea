@@ -1,17 +1,13 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { getAllTasks, type TaskWithAgent } from "@/lib/api";
-import TasksList from "./TasksList";
+import TasksView, { type TasksInitialState } from "./TasksView";
 
 interface TasksDataProps {
-  searchQuery?: string;
-  viewMode?: string;
+  initial: TasksInitialState;
 }
 
-export async function TasksData({
-  searchQuery = "",
-  viewMode = "grid",
-}: TasksDataProps) {
+export async function TasksData({ initial }: TasksDataProps) {
   const t = await getTranslations("TasksPage");
 
   let allTasks: TaskWithAgent[] = [];
@@ -28,21 +24,11 @@ export async function TasksData({
     error = t("error.loadFailed");
   }
 
-  let filteredTasks = allTasks;
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredTasks = allTasks.filter(
-      (task) =>
-        task.description?.toLowerCase().includes(query) ||
-        task.agent_name?.toLowerCase().includes(query) ||
-        task.status?.toLowerCase().includes(query)
-    );
+  if (error) {
+    return <div className="py-6 text-center text-red-500">{error}</div>;
   }
 
-  const hasNoTasks = allTasks.length === 0;
-  const hasNoResults = filteredTasks.length === 0 && !hasNoTasks;
-
-  if (hasNoTasks) {
+  if (allTasks.length === 0) {
     return (
       <EmptyState
         title={t("noTasks")}
@@ -52,19 +38,5 @@ export async function TasksData({
     );
   }
 
-  if (hasNoResults) {
-    return (
-      <EmptyState
-        title={t("noMatchingTasks")}
-        description={t("noMatchingTasksDescription", { query: searchQuery })}
-        iconsType="tasks"
-      />
-    );
-  }
-
-  if (error) {
-    return <div className="py-6 text-center text-red-500">{error}</div>;
-  }
-
-  return <TasksList initialTasks={filteredTasks} viewMode={viewMode} />;
+  return <TasksView tasks={allTasks} initial={initial} />;
 }

@@ -5,10 +5,8 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import AgentsContent from "@/app/(main)/agents/components/AgentsContent";
-import AgentsHeaderTabs from "@/app/(main)/agents/components/AgentsHeaderTabs";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -19,29 +17,42 @@ interface AgentsBrowsePageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+function asString(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value : "";
+}
+
 export default async function AgentsBrowsePage({
   searchParams,
 }: AgentsBrowsePageProps) {
   const t = await getTranslations("AgentsPage");
-  const resolvedSearchParams = await searchParams;
-  const searchQuery =
-    typeof resolvedSearchParams.search === "string"
-      ? resolvedSearchParams.search
-      : "";
+  const sp = await searchParams;
 
-  // Read tab from URL or fallback to cookie
+  // View: prefer URL, fall back to cookie, default to the Linear list.
   const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_agents")?.value;
-  const tab =
-    typeof resolvedSearchParams.tab === "string"
-      ? resolvedSearchParams.tab
-      : cookieTab || "grid";
+  const cookieView = cookieStore.get("view_agents")?.value;
+  const urlView = asString(sp.view);
+  const view: "list" | "grid" =
+    urlView === "grid" || urlView === "list"
+      ? urlView
+      : cookieView === "grid"
+        ? "grid"
+        : "list";
+
+  const groupParam = asString(sp.group);
+  const group: "status" | "model" | "none" =
+    groupParam === "model" || groupParam === "none" ? groupParam : "status";
+
+  const orderParam = asString(sp.order);
+  const order: "name" | "tasks" = orderParam === "tasks" ? "tasks" : "name";
+
+  const statusTab = asString(sp.status) || "all";
+  const model = asString(sp.model);
+  const search = asString(sp.search);
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("browseAgents") }],
-        description: t("mainDescriptionPage"),
         controls: (
           <Link href="/agents/create">
             <Button
@@ -49,28 +60,24 @@ export default async function AgentsBrowsePage({
               size="xs"
               data-test="deploy-button"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
               {t("deployNewAgent")}
             </Button>
           </Link>
         ),
       }}
-      subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/agents" />
-          <AgentsHeaderTabs currentTab={tab} />
-        </>
-      }
+      className="p-0 overflow-hidden"
     >
       <Suspense
-        key={`${searchQuery}-${tab}`}
         fallback={
-          <div className="flex h-32 items-center justify-center">
+          <div className="flex h-64 items-center justify-center">
             <LoadingSpinner />
           </div>
         }
       >
-        <AgentsContent searchQuery={searchQuery} viewMode={tab} />
+        <AgentsContent
+          initial={{ view, group, order, statusTab, model, search }}
+        />
       </Suspense>
     </ContentBlock>
   );

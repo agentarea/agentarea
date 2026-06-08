@@ -482,6 +482,28 @@
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration"
+    },
+    "searchPlaceholder": "Search agents…",
+    "emptyHere": "No agents here",
+    "emptyHereDescription": "Nothing matches this view yet.",
+    "filters": {
+      "all": "All",
+      "filter": "Filter",
+      "model": "Model",
+      "allModels": "All models",
+      "clear": "Clear"
+    },
+    "display": {
+      "display": "Display",
+      "grouping": "Grouping",
+      "status": "Status",
+      "model": "Model",
+      "none": "No grouping",
+      "ordering": "Ordering",
+      "name": "Name",
+      "activeTasks": "Active tasks",
+      "listView": "List view",
+      "gridView": "Grid view"
     }
   },
   "MCPServersPage": {
@@ -830,6 +852,38 @@
       "artifacts": "Artifacts",
       "memory": "Memory",
       "metrics": "Metrics"
+    },
+    "newTask": "New task",
+    "searchPlaceholder": "Search tasks…",
+    "emptyHere": "No tasks here",
+    "emptyHereDescription": "Nothing matches this view yet.",
+    "error": {
+      "loadFailed": "Failed to load tasks"
+    },
+    "tabsBar": {
+      "all": "All",
+      "active": "Active",
+      "attention": "Needs attention",
+      "done": "Completed"
+    },
+    "filters": {
+      "filter": "Filter",
+      "agent": "Agent",
+      "allAgents": "All agents",
+      "clear": "Clear"
+    },
+    "display": {
+      "display": "Display",
+      "grouping": "Grouping",
+      "none": "No grouping",
+      "status": "Status",
+      "agent": "Agent",
+      "ordering": "Ordering",
+      "recent": "Recently created",
+      "cost": "Cost",
+      "name": "Description",
+      "listView": "List view",
+      "gridView": "Grid view"
     }
   },
   "SkillsPage": {

@@ -2,17 +2,16 @@
 
 import { useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
-import Table from "@/components/Table/Table";
+import CollectionView, {
+  type CollectionItem,
+  shortAge,
+} from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import { MCPServerSpecCard } from "./MCPCard";
-import { MCPServer } from "../types";
-import { getMCPServerCategory, getCategoryColorClasses, getConnectionType } from "../utils";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { listMCPServersAction as listMCPServers } from "@/lib/server-actions";
-import { FilterChips } from "./FilterChips";
+import { MCPServer } from "../types";
+import { getConnectionType, getMCPServerCategory } from "../utils";
 
 interface MCPSpecsSectionProps {
   searchParams: { [key: string]: string | string[] | undefined };
@@ -23,9 +22,7 @@ export function MCPSpecsSection({
   searchParams,
   viewMode = "grid",
 }: MCPSpecsSectionProps) {
-  const t = useTranslations("MCPServersPage.table");
   const tPage = useTranslations("MCPServersPage");
-  const router = useRouter();
 
   const searchQuery = (searchParams.search as string) || "";
   const selectedCategory = (searchParams.category as string) || "All";
@@ -78,69 +75,46 @@ export function MCPSpecsSection({
     return result;
   }, [servers, selectedCategory, selectedType]);
 
-  const handleConfigureInstance = (server: MCPServer) => {
-    router.push(`/mcp-servers/create/${server.id}`);
-  };
-
-  const serverColumns = [
-    {
-      accessor: "name",
-      header: t("name"),
-      render: (value: string, item: MCPServer) => {
-        const category = getMCPServerCategory(item.tags || []);
-        const iconSrc = (item as any).json_spec?.icons?.[0]?.src as string | undefined;
-        const title = (item as any).json_spec?.title || value;
-        return (
-          <div className="flex items-center gap-2">
-            {iconSrc && (
-              <img src={iconSrc} alt="" className="h-5 w-5 rounded object-contain shrink-0" />
-            )}
-            <span className="truncate font-semibold">{title}</span>
-            {!item.is_public && (
-              <Badge
-                variant="outline"
-                className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300 shrink-0"
-              >
-                Custom
-              </Badge>
-            )}
-            <Badge
-              className={`border text-xs shrink-0 ${getCategoryColorClasses(category)}`}
-            >
-              {category}
-            </Badge>
-          </div>
-        );
-      },
-    },
-    {
-      accessor: "description",
-      header: t("description"),
-      render: (value: string) => (
-        <span className="truncate text-sm text-muted-foreground">
-          {value || "-"}
-        </span>
-      ),
-    },
-    {
-      accessor: "version",
-      header: t("version"),
-      render: (value: string) => (
-        <span className="font-mono text-xs text-muted-foreground">
-          v{value}
-        </span>
-      ),
-    },
-    {
-      accessor: "updated_at",
-      header: t("updated"),
-      render: (value: string) => (
-        <span className="text-xs text-muted-foreground">
-          {new Date(value).toLocaleDateString()}
-        </span>
-      ),
-    },
-  ];
+  const items = useMemo<CollectionItem[]>(
+    () =>
+      filteredServers.map((server) => {
+        const category = getMCPServerCategory(server.tags || []);
+        const iconSrc = (server as any).json_spec?.icons?.[0]?.src as
+          | string
+          | undefined;
+        const title = (server as any).json_spec?.title || server.name;
+        return {
+          id: server.id,
+          color: "#5e6ad2",
+          icon: (
+            <img
+              src={iconSrc || "/mcp.svg"}
+              alt=""
+              aria-hidden="true"
+              className="h-4 w-4 rounded object-contain"
+            />
+          ),
+          title,
+          description: server.description,
+          href: `/mcp-servers/create/${server.id}`,
+          badges: [
+            { label: category, color: "#8a8f98" },
+            ...(server.is_public
+              ? []
+              : [{ label: "Custom", color: "#d97706" }]),
+          ],
+          meta: (
+            <span className="flex items-center gap-2">
+              {server.version && (
+                <span className="font-mono">v{server.version}</span>
+              )}
+              <span>{shortAge((server as any).updated_at)}</span>
+            </span>
+          ),
+        };
+      }),
+    [filteredServers]
+  );
 
   if (isLoading) {
     return (
@@ -164,55 +138,26 @@ export function MCPSpecsSection({
         {tPage("browseSpecifications")} ({total})
       </h4>
 
-      {/* FilterChips disabled — client-side filtering on paginated data is unreliable.
-         TODO: move filtering to server-side API params.
-      <div className="mb-4">
-        <FilterChips />
-      </div>
-      */}
-
-      {filteredServers.length === 0 ? (
-        <EmptyState
-          title="No MCP specifications found"
-          description="No MCP server specifications match your search"
-          iconsType="mcp"
-        />
-      ) : viewMode === "table" ? (
-        <>
-          <Table
-            data={filteredServers}
-            columns={serverColumns}
-            onRowClick={handleConfigureInstance}
+      <CollectionView
+        view={viewMode === "table" ? "list" : "grid"}
+        items={items}
+        bleed
+        emptyState={
+          <EmptyState
+            title="No MCP specifications found"
+            description="No MCP server specifications match your search"
+            iconsType="mcp"
           />
-          {/* Sentinel for infinite scroll */}
-          {hasMore && (
-            <div ref={sentinelRef} className="flex justify-center py-4">
-              {isFetchingMore && (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              )}
-            </div>
+        }
+      />
+
+      {/* Sentinel for infinite scroll */}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex justify-center py-4">
+          {isFetchingMore && (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           )}
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredServers.map((server) => (
-              <MCPServerSpecCard
-                key={server.id}
-                server={server}
-                onConfigure={handleConfigureInstance}
-              />
-            ))}
-          </div>
-          {/* Sentinel for infinite scroll */}
-          {hasMore && (
-            <div ref={sentinelRef} className="flex justify-center py-4">
-              {isFetchingMore && (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              )}
-            </div>
-          )}
-        </>
+        </div>
       )}
     </>
   );

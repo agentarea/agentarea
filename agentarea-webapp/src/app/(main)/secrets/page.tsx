@@ -15,17 +15,17 @@ export default async function SecretsPage() {
         breadcrumb: [{ label: "Secrets" }],
       }}
     >
-      <div className="main-content">
-        <Suspense
-          fallback={
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
-          <SecretsData />
-        </Suspense>
-      </div>
+      {/* No extra padding wrapper here — ContentBlock already supplies the
+          page gutter, and the secrets list bleeds it edge-to-edge. */}
+      <Suspense
+        fallback={
+          <div className="flex h-32 items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        }
+      >
+        <SecretsData />
+      </Suspense>
     </ContentBlock>
   );
 }
