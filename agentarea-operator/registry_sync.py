@@ -239,6 +239,13 @@ def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
         name = entry.get("name")
         if not name:
             continue
+        members = entry.get("members")
+        if not isinstance(members, list):
+            members = []
+        # The full built-in skill definition lives in the catalog item's spec
+        # (ADR-003): no tenant `skills` row is materialized. Carry every field
+        # the copy-on-write fork needs (content, source refs, s3 package ref,
+        # network scope, member structure).
         items.append(
             {
                 "external_id": name,
@@ -246,9 +253,14 @@ def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "description": entry.get("description"),
                 "version": entry.get("version") or "1.0.0",
                 "spec": {
+                    "name": name,
+                    "description": entry.get("description"),
                     "source_type": entry.get("source_type", "content"),
                     "content": entry.get("content"),
                     "source_url": entry.get("source_url"),
+                    "s3_path": entry.get("s3_path"),
+                    "network_scope": entry.get("network_scope", "private"),
+                    "members": members,
                 },
                 "tags": entry.get("tags", []),
             }
@@ -566,10 +578,14 @@ def _create_entity(
         # the built-in definition. No tenant `agents` row is materialized on sync;
         # a real row is created copy-on-write when a user edits the catalog agent.
         return None
+    if registry_type == "skills":
+        # Skills live in the catalog only (ADR-003), mirroring agents: the
+        # registry_item's spec is the built-in definition. No tenant `skills`
+        # row is materialized on sync; a real row is created copy-on-write when
+        # a user edits the catalog skill.
+        return None
     if registry_type == "mcp_servers":
         return _upsert_mcp_server(conn, item, workspace_id, registry_item_id)
-    if registry_type == "skills":
-        return _upsert_skill(conn, item, workspace_id, registry_item_id)
     return None
 
 
@@ -838,95 +854,3 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
     raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
 
 
-def _unique_skill_slug(conn, workspace_id: str, name: str) -> str:
-    """Workspace-unique slug via SELECT collision checks.
-
-    Safe within the operator's single per-registry transaction (own writes are
-    visible to later reads in the same tx); cross-pass idempotency is guaranteed
-    separately by the registry_item_id conflict target.
-    """
-    base = _generate_slug(name)
-
-    def _taken(candidate: str) -> bool:
-        return (
-            conn.execute(
-                _text("SELECT 1 FROM skills WHERE workspace_id = :ws AND slug = :slug LIMIT 1"),
-                {"ws": workspace_id, "slug": candidate},
-            ).fetchone()
-            is not None
-        )
-
-    if not _taken(base):
-        return base
-    for suffix in range(2, 1000):
-        candidate = f"{base}-{suffix}"
-        if not _taken(candidate):
-            return candidate
-    raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
-
-
-def _upsert_skill(
-    conn, item: dict[str, Any], workspace_id: str, registry_item_id: str | None = None
-) -> str:
-    """Idempotently upsert a catalog skill keyed on its registry item.
-
-    Dedup is by ``registry_item_id`` (provenance), backed by the partial unique
-    index ``uq_skills_registry_item`` — race-proof under overlapping reconciles,
-    unlike the previous SELECT-then-INSERT by name. The slug is immutable and
-    derived once at creation.
-    """
-    spec = item.get("spec") or {}
-
-    # Dedup by provenance: one skill per registry item. Re-sync updates in place
-    # and never touches the (immutable) slug.
-    existing = (
-        conn.execute(
-            _text("SELECT id FROM skills WHERE registry_item_id = :rid"),
-            {"rid": registry_item_id},
-        ).fetchone()
-        if registry_item_id
-        else None
-    )
-    if existing:
-        sid = str(existing[0])
-        conn.execute(
-            _text(
-                "UPDATE skills SET description = :desc, content = :content, "
-                "source_url = :url, updated_at = now() WHERE id = :id"
-            ),
-            {
-                "id": sid,
-                "desc": item.get("description"),
-                "content": spec.get("content"),
-                "url": spec.get("source_url"),
-            },
-        )
-        return sid
-
-    slug = _unique_skill_slug(conn, workspace_id, item["name"])
-    row = conn.execute(
-        _text(
-            "INSERT INTO skills (id, name, slug, description, source_type, content, "
-            "source_url, registry_item_id, source, workspace_id, created_by, "
-            "created_at, updated_at) "
-            "VALUES (:id, :name, :slug, :desc, :st, :content, :url, :rid, 'official', :ws, "
-            ":created_by, now(), now()) "
-            "ON CONFLICT (registry_item_id) WHERE registry_item_id IS NOT NULL "
-            "DO UPDATE SET description = EXCLUDED.description, content = EXCLUDED.content, "
-            "source_url = EXCLUDED.source_url, updated_at = now() "
-            "RETURNING id"
-        ),
-        {
-            "id": str(uuid.uuid4()),
-            "name": item["name"],
-            "slug": slug,
-            "desc": item.get("description"),
-            "st": spec.get("source_type", "content"),
-            "content": spec.get("content"),
-            "url": spec.get("source_url"),
-            "rid": registry_item_id,
-            "ws": workspace_id,
-            "created_by": PLATFORM_PRINCIPAL_ID,
-        },
-    ).fetchone()
-    return str(row[0])

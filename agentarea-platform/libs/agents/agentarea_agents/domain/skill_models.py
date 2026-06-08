@@ -59,8 +59,6 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         PG_UUID(as_uuid=True), nullable=True, default=None
     )
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
-    # Provenance of this resource; see agentarea_common.base.SourceKind.
-    source: Mapped[str] = mapped_column(String, nullable=False, default="workspace_custom")
 
     # Relationships
     agents: Mapped[list["Agent"]] = relationship(

@@ -66,6 +66,15 @@ class ReconcilerService:
                 logger.debug("No %s.yaml found in %s, skipping", entity_type, config_dir)
                 continue
 
+            # Built-in skills live in the registry catalog only (ADR-003): they
+            # are not materialized into the `skills` table. A real tenant row is
+            # created copy-on-write when a user edits a catalog skill.
+            if entity_type == "skills":
+                logger.debug(
+                    "Skipping skills.yaml reconcile: built-in skills are catalog-only (ADR-003)"
+                )
+                continue
+
             try:
                 specs = parse_yaml(yaml_file, entity_type)
             except YAMLValidationError as e:

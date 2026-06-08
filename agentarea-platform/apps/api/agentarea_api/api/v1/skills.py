@@ -88,6 +88,11 @@ class SkillResponse(BaseModel):
     workspace_id: str
     created_at: str
     updated_at: str
+    # Catalog provenance (ADR-003). ``is_catalog`` marks a read-only built-in
+    # skill that has not been forked into the workspace yet.
+    is_catalog: bool = False
+    registry_item_id: str | None = None
+    update_available: bool = False
 
     @classmethod
     def from_skill(cls, skill: Skill) -> "SkillResponse":
@@ -96,6 +101,7 @@ class SkillResponse(BaseModel):
         if not isinstance(network_scope, str):
             network_scope = "private"
 
+        registry_item_id = getattr(skill, "registry_item_id", None)
         return cls(
             id=str(skill.id),
             name=skill.name,
@@ -105,9 +111,12 @@ class SkillResponse(BaseModel):
             source_url=skill.source_url,
             has_files=skill.s3_path is not None,
             network_scope=network_scope,
-            workspace_id=skill.workspace_id,
+            workspace_id=getattr(skill, "workspace_id", "") or "",
             created_at=skill.created_at.isoformat() if skill.created_at else "",
             updated_at=skill.updated_at.isoformat() if skill.updated_at else "",
+            is_catalog=bool(getattr(skill, "is_catalog", False)),
+            registry_item_id=str(registry_item_id) if registry_item_id else None,
+            update_available=bool(getattr(skill, "update_available", False)),
         )
 
 
@@ -256,8 +265,8 @@ async def get_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
 ):
-    """Get a skill by ID."""
-    skill = await skill_service.get(skill_id)
+    """Get a skill by ID (tenant or catalog)."""
+    skill = await skill_service.get_with_catalog(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
     return SkillResponse.from_skill(skill)
@@ -268,8 +277,8 @@ async def get_skill_content(
     skill_id: UUID,
     skill_service: SkillServiceDep,
 ):
-    """Get the main markdown content of a skill."""
-    skill = await skill_service.get(skill_id)
+    """Get the main markdown content of a skill (tenant or catalog)."""
+    skill = await skill_service.get_with_catalog(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
