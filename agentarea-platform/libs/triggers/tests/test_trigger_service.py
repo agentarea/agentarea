@@ -14,6 +14,7 @@ from agentarea_triggers.domain.models import (
     WebhookTrigger,
 )
 from agentarea_triggers.trigger_service import (
+    TriggerExecutionError,
     TriggerNotFoundError,
     TriggerService,
     TriggerValidationError,
@@ -737,7 +738,12 @@ class TestTriggerService:
         mock_event_broker,
         sample_cron_trigger_data,
     ):
-        """Test trigger creation when agent repository is not available."""
+        """Test trigger creation fails fast when agent repository is unavailable.
+
+        The service now fails fast (project rule: fail hard, never silently
+        degrade): ``_validate_agent_exists`` raises ``DependencyUnavailableError``
+        which ``create_trigger`` wraps in ``TriggerExecutionError``.
+        """
         # Create service without agent repository
         trigger_service = TriggerService(
             repository_factory=make_trigger_repository_factory(
@@ -748,16 +754,12 @@ class TestTriggerService:
         )
         trigger_service.agent_repository = None  # No agent repository
 
-        # Setup mocks
-        sample_trigger = CronTrigger(**sample_cron_trigger_data.model_dump())
-        mock_trigger_repository.create_from_model.return_value = sample_trigger
+        # Execute and verify - should fail fast, not create the trigger
+        with pytest.raises(TriggerExecutionError) as exc_info:
+            await trigger_service.create_trigger(sample_cron_trigger_data)
 
-        # Execute - should succeed with warning logged
-        result = await trigger_service.create_trigger(sample_cron_trigger_data)
-
-        # Verify
-        assert result == sample_trigger
-        mock_trigger_repository.create_from_model.assert_called_once_with(sample_cron_trigger_data)
+        assert "Agent repository not available" in str(exc_info.value)
+        mock_trigger_repository.create_from_model.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_cron_trigger_schedules(

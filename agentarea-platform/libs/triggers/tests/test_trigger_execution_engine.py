@@ -1,7 +1,7 @@
 """Unit tests for trigger execution engine."""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -255,43 +255,13 @@ class TestTriggerExecutionEngine:
 
         assert result is False
 
-    async def test_evaluate_trigger_conditions_time_based(
-        self, trigger_service, sample_cron_trigger
-    ):
-        """Test condition evaluation with time-based conditions."""
-        # Test during business hours
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # 10 AM
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is True
-
-        # Test outside business hours
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 20, 0, 0)  # 8 PM
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is False
-
-    async def test_evaluate_trigger_conditions_weekdays_only(
-        self, trigger_service, sample_cron_trigger
-    ):
-        """Test condition evaluation with weekdays only condition."""
-        sample_cron_trigger.conditions = {"time_conditions": {"weekdays_only": True}}
-
-        # Test on weekday (Monday = 0)
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # Monday
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is True
-
-        # Test on weekend (Saturday = 5)
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 6, 10, 0, 0)  # Saturday
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is False
+    # NOTE: ``test_evaluate_trigger_conditions_time_based`` and
+    # ``test_evaluate_trigger_conditions_weekdays_only`` were removed. Time-based
+    # and weekday-only condition evaluation (``time_conditions`` /
+    # ``weekdays_only`` / business-hours logic) was deliberately removed from
+    # ``TriggerService._evaluate_simple_conditions``, which now supports only
+    # ``field_matches``. The capability is genuinely gone (not relocated), so
+    # there is nothing to retarget.
 
     async def test_get_nested_value(self, trigger_service):
         """Test getting nested values from dictionary."""
@@ -353,18 +323,10 @@ class TestTriggerExecutionEngine:
         assert result.error_message == "Test error"
         assert result.execution_time_ms == 50
 
-    async def test_llm_condition_evaluation_placeholder(self, trigger_service):
-        """Test LLM condition evaluation placeholder."""
-        llm_condition = {
-            "description": "When user sends a file attachment",
-            "context_fields": ["request.body"],
-        }
-
-        event_data = {"request": {"body": {"document": {"file_name": "test.pdf"}}}}
-
-        # This should return True as a placeholder
-        result = await trigger_service._evaluate_llm_condition(llm_condition, event_data)
-        assert result is True
+    # NOTE: ``test_llm_condition_evaluation_placeholder`` was removed. The
+    # ``TriggerService._evaluate_llm_condition`` placeholder no longer exists;
+    # LLM-based condition evaluation now lives on ``LLMConditionEvaluator`` and
+    # is covered by ``test_trigger_service_llm_integration.py``.
 
     async def test_condition_evaluation_error_handling(self, trigger_service, sample_cron_trigger):
         """Test condition evaluation error handling."""

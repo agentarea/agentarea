@@ -3,8 +3,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Mock temporalio if not present
-if "temporalio" not in sys.modules:
+# Only install the temporalio MagicMock shim when the real package is NOT
+# importable. When temporalio is actually installed we must use the real
+# modules so that ``except SomeTemporalError`` clauses catch genuine exception
+# classes (a MagicMock is not a BaseException subclass and raises TypeError).
+try:
+    import temporalio  # noqa: F401
+
+    _TEMPORALIO_AVAILABLE = True
+except ImportError:
+    _TEMPORALIO_AVAILABLE = False
+
+if not _TEMPORALIO_AVAILABLE:
     temporalio_mock = MagicMock()
     sys.modules["temporalio"] = temporalio_mock
     sys.modules["temporalio.client"] = MagicMock()
@@ -62,3 +72,20 @@ def make_trigger_repository_factory(
 def trigger_repository_factory():
     """Fixture exposing the repository-factory builder helper."""
     return make_trigger_repository_factory
+
+
+@pytest.fixture(autouse=True)
+def _reset_correlation_id():
+    """Reset the correlation-id contextvar after each test.
+
+    Several code paths call ``set_correlation_id`` (or implicitly set it via
+    ``TriggerLogger``); without resetting, the value leaks into later tests and
+    breaks assertions that expect a clean ``None`` starting state.
+    """
+    yield
+    try:
+        from agentarea_triggers.logging_utils import correlation_id_context
+
+        correlation_id_context.set(None)
+    except ImportError:
+        pass

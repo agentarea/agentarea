@@ -367,8 +367,12 @@ class TestTemporalScheduleManagerErrorHandling:
 
     async def test_create_cron_schedule_no_client(self):
         """Test schedule creation when client is unavailable."""
-        # Setup - no client
+        # Setup - no client. Mark as already "connected" so ``_ensure_client``
+        # short-circuits without building WorkflowSettings (which would raise a
+        # pydantic ValidationError for missing env), leaving ``client`` None so
+        # the no-client guard is exercised.
         schedule_manager = TemporalScheduleManager(None)
+        schedule_manager._connected = True
         trigger_id = uuid4()
 
         # Execute and verify
@@ -484,7 +488,13 @@ class TestGracefulDegradation:
     async def test_graceful_degradation_missing_agent_repository(
         self, trigger_service_partial_deps
     ):
-        """Test graceful handling when agent repository is missing."""
+        """Test fail-fast handling when agent repository is missing.
+
+        The service fails fast (project rule: fail hard, never silently
+        degrade): ``_validate_agent_exists`` raises
+        ``DependencyUnavailableError`` which ``create_trigger`` wraps in
+        ``TriggerExecutionError``.
+        """
         trigger_data = TriggerCreate(
             name="Test Trigger",
             description="Test",
@@ -494,9 +504,11 @@ class TestGracefulDegradation:
             created_by="test",
         )
 
-        # Should raise DependencyUnavailableError, not crash
-        with pytest.raises(DependencyUnavailableError):
+        # Should fail fast with a clear error, not crash or silently succeed
+        with pytest.raises(TriggerExecutionError) as exc_info:
             await trigger_service_partial_deps.create_trigger(trigger_data)
+
+        assert "Agent repository not available" in str(exc_info.value)
 
     async def test_graceful_degradation_missing_task_service(self, trigger_service_partial_deps):
         """Test graceful handling when task service is missing."""

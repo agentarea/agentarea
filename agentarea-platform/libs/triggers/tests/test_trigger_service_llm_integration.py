@@ -345,38 +345,49 @@ class TestTriggerServiceLLMIntegration:
         trigger_service.task_service.route_or_submit_task.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_validate_condition_syntax(self, trigger_service, mock_llm_condition_evaluator):
-        """Test condition syntax validation."""
+    async def test_validate_condition_syntax(self):
+        """Test condition syntax validation.
+
+        ``validate_condition_syntax`` moved from ``TriggerService`` to
+        ``LLMConditionEvaluator``; this exercises the real method directly.
+        """
+        from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
+
+        evaluator = LLMConditionEvaluator(
+            model_instance_service=AsyncMock(),
+            secret_manager=MagicMock(),
+        )
+
         conditions = {
             "type": "llm",
             "description": "when user sends a file",
             "context_fields": ["request.body"],
         }
 
-        # Mock validation to return no errors
-        mock_llm_condition_evaluator.validate_condition_syntax.return_value = []
-
-        errors = await trigger_service.validate_condition_syntax(conditions)
+        errors = await evaluator.validate_condition_syntax(conditions)
 
         assert len(errors) == 0
-        mock_llm_condition_evaluator.validate_condition_syntax.assert_called_once_with(conditions)
 
     @pytest.mark.asyncio
-    async def test_validate_condition_syntax_with_errors(
-        self, trigger_service, mock_llm_condition_evaluator
-    ):
-        """Test condition syntax validation with errors."""
+    async def test_validate_condition_syntax_with_errors(self):
+        """Test condition syntax validation with errors.
+
+        ``validate_condition_syntax`` moved from ``TriggerService`` to
+        ``LLMConditionEvaluator``; this exercises the real method directly.
+        """
+        from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
+
+        evaluator = LLMConditionEvaluator(
+            model_instance_service=AsyncMock(),
+            secret_manager=MagicMock(),
+        )
+
         conditions = {
             "type": "llm"
             # Missing required description
         }
 
-        # Mock validation to return errors
-        mock_llm_condition_evaluator.validate_condition_syntax.return_value = [
-            "LLM condition must have a 'description'"
-        ]
-
-        errors = await trigger_service.validate_condition_syntax(conditions)
+        errors = await evaluator.validate_condition_syntax(conditions)
 
         assert len(errors) == 1
         assert "must have a 'description'" in errors[0]
