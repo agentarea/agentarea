@@ -32,7 +32,8 @@ class TestTriggerExecutionIntegration:
         # Mock task creation
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        task_service.create_task_from_params.return_value = mock_task
+        mock_task.status = "submitted"
+        task_service.route_or_submit_task.return_value = mock_task
 
         return task_service
 
@@ -59,15 +60,15 @@ class TestTriggerExecutionIntegration:
         trigger_repo, execution_repo = mock_repositories
 
         # Setup trigger repository
-        trigger_repo.get.return_value = sample_trigger
-        trigger_repo.update.return_value = sample_trigger
+        trigger_repo.get_trigger.return_value = sample_trigger
+        trigger_repo.update_execution_tracking.return_value = sample_trigger
 
         # Setup execution repository
         mock_execution = TriggerExecution(
             trigger_id=sample_trigger.id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=150,
-            task_id=mock_task_service.create_task_from_params.return_value.id,
+            task_id=mock_task_service.route_or_submit_task.return_value.id,
         )
         execution_repo.create.return_value = mock_execution
 
@@ -99,16 +100,16 @@ class TestTriggerExecutionIntegration:
         assert result.execution_time_ms > 0
 
         # Verify task was created with correct parameters
-        mock_task_service.create_task_from_params.assert_called_once()
-        call_args = mock_task_service.create_task_from_params.call_args
+        mock_task_service.route_or_submit_task.assert_called_once()
+        submitted_task = mock_task_service.route_or_submit_task.call_args[0][0]
 
         # Check task creation parameters
-        assert call_args.kwargs["title"] == f"Trigger: {sample_trigger.name}"
-        assert call_args.kwargs["user_id"] == sample_trigger.created_by
-        assert call_args.kwargs["agent_id"] == sample_trigger.agent_id
+        assert submitted_task.title == f"Trigger: {sample_trigger.name}"
+        assert submitted_task.user_id == sample_trigger.created_by
+        assert submitted_task.agent_id == sample_trigger.agent_id
 
         # Check task parameters include trigger metadata
-        task_params = call_args.kwargs["task_parameters"]
+        task_params = submitted_task.task_parameters
         assert task_params["trigger_id"] == str(sample_trigger.id)
         assert task_params["trigger_type"] == "cron"
         assert task_params["trigger_name"] == sample_trigger.name
@@ -130,15 +131,15 @@ class TestTriggerExecutionIntegration:
             "time_conditions": {"hour_range": [9, 17]},
         }
 
-        trigger_repo.get.return_value = sample_trigger
-        trigger_repo.update.return_value = sample_trigger
+        trigger_repo.get_trigger.return_value = sample_trigger
+        trigger_repo.update_execution_tracking.return_value = sample_trigger
 
         # Setup execution repository
         mock_execution = TriggerExecution(
             trigger_id=sample_trigger.id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=100,
-            task_id=mock_task_service.create_task_from_params.return_value.id,
+            task_id=mock_task_service.route_or_submit_task.return_value.id,
         )
         execution_repo.create.return_value = mock_execution
 
@@ -176,7 +177,7 @@ class TestTriggerExecutionIntegration:
         assert result.task_id is not None
 
         # Verify task was created
-        mock_task_service.create_task_from_params.assert_called_once()
+        mock_task_service.route_or_submit_task.assert_called_once()
 
     async def test_trigger_execution_conditions_not_met(
         self, mock_repositories, mock_task_service, sample_trigger
@@ -187,7 +188,7 @@ class TestTriggerExecutionIntegration:
         # Setup trigger with specific conditions
         sample_trigger.conditions = {"field_matches": {"request.body.type": "expected_type"}}
 
-        trigger_repo.get.return_value = sample_trigger
+        trigger_repo.get_trigger.return_value = sample_trigger
 
         # Create trigger service
         trigger_service = TriggerService(
@@ -239,7 +240,7 @@ class TestTriggerExecutionIntegration:
             is_active=True,
         )
 
-        trigger_repo.get.return_value = webhook_trigger
+        trigger_repo.get_trigger.return_value = webhook_trigger
 
         # Create trigger service
         trigger_service = TriggerService(
@@ -288,11 +289,11 @@ class TestTriggerExecutionIntegration:
         trigger_repo, execution_repo = mock_repositories
 
         # Setup trigger repository
-        trigger_repo.get.return_value = sample_trigger
-        trigger_repo.update.return_value = sample_trigger
+        trigger_repo.get_trigger.return_value = sample_trigger
+        trigger_repo.update_execution_tracking.return_value = sample_trigger
 
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Task creation failed")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Task creation failed")
 
         # Setup execution repository for failure recording
         mock_execution = TriggerExecution(

@@ -25,7 +25,7 @@ class TestTriggerType:
     def test_trigger_type_iteration(self):
         """Test TriggerType iteration."""
         types = list(TriggerType)
-        assert len(types) == 2
+        assert len(types) == 3
         assert TriggerType.CRON in types
         assert TriggerType.WEBHOOK in types
 
@@ -93,6 +93,6 @@ class TestWebhookType:
     def test_webhook_type_iteration(self):
         """Test WebhookType iteration."""
         types = list(WebhookType)
-        assert len(types) == 6
+        assert len(types) == 9
         assert WebhookType.GENERIC in types
         assert WebhookType.TELEGRAM in types

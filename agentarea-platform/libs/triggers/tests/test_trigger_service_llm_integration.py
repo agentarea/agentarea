@@ -122,7 +122,7 @@ class TestTriggerServiceLLMIntegration:
             task_parameters=trigger_data.task_parameters,
             created_by="test_user",
         )
-        mock_trigger_repository.create_from_data.return_value = created_trigger
+        mock_trigger_repository.create_from_model.return_value = created_trigger
 
         result = await trigger_service.create_trigger(trigger_data)
 
@@ -131,7 +131,7 @@ class TestTriggerServiceLLMIntegration:
         assert "llm_parameter_extraction" in result.task_parameters
 
         # Verify repository was called
-        mock_trigger_repository.create_from_data.assert_called_once_with(trigger_data)
+        mock_trigger_repository.create_from_model.assert_called_once_with(trigger_data)
 
     @pytest.mark.asyncio
     async def test_evaluate_trigger_conditions_with_llm(
@@ -273,7 +273,7 @@ class TestTriggerServiceLLMIntegration:
         }
 
         # Mock repository to return the trigger
-        trigger_service.trigger_repository.get.return_value = trigger
+        trigger_service.trigger_repository.get_trigger.return_value = trigger
 
         # Mock condition evaluation to return True
         mock_llm_condition_evaluator.evaluate_condition.return_value = True
@@ -287,7 +287,8 @@ class TestTriggerServiceLLMIntegration:
         # Mock task creation
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        mock_task_service.create_task_from_params.return_value = mock_task
+        mock_task.status = "submitted"
+        mock_task_service.route_or_submit_task.return_value = mock_task
 
         # Mock execution recording
         trigger_service.trigger_execution_repository.create.return_value = MagicMock()
@@ -299,8 +300,9 @@ class TestTriggerServiceLLMIntegration:
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
 
         # Verify task was created with enhanced parameters
-        mock_task_service.create_task_from_params.assert_called_once()
-        task_params = mock_task_service.create_task_from_params.call_args[1]["task_parameters"]
+        mock_task_service.route_or_submit_task.assert_called_once()
+        submitted_task = mock_task_service.route_or_submit_task.call_args[0][0]
+        task_params = submitted_task.task_parameters
         assert "file_name" in task_params
         assert "user_intent" in task_params
         assert task_params["trigger_id"] == str(trigger_id)
@@ -323,7 +325,7 @@ class TestTriggerServiceLLMIntegration:
         trigger_data = {"request": {"body": {"message": "Hello, how are you?"}}}
 
         # Mock repository to return the trigger
-        trigger_service.trigger_repository.get.return_value = trigger
+        trigger_service.trigger_repository.get_trigger.return_value = trigger
 
         # Mock condition evaluation to return False
         mock_llm_condition_evaluator.evaluate_condition.return_value = False
@@ -340,7 +342,7 @@ class TestTriggerServiceLLMIntegration:
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
 
         # Verify task was NOT created
-        trigger_service.task_service.create_task_from_params.assert_not_called()
+        trigger_service.task_service.route_or_submit_task.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_validate_condition_syntax(self, trigger_service, mock_llm_condition_evaluator):

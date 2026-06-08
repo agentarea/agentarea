@@ -141,8 +141,8 @@ class TestTriggerSafetyMechanisms:
             execution_time_ms=100,
         )
         mock_trigger_execution_repository.create.return_value = execution
-        mock_trigger_repository.get.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update.return_value = sample_trigger_with_failures
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
 
         # Execute
         result = await trigger_service.record_execution(
@@ -154,7 +154,7 @@ class TestTriggerSafetyMechanisms:
         # Verify
         assert result.status == ExecutionStatus.SUCCESS
         assert sample_trigger_with_failures.consecutive_failures == 0  # Reset to 0
-        mock_trigger_repository.update.assert_called_once()
+        mock_trigger_repository.update_execution_tracking.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_record_execution_failure_increments_count(
@@ -174,8 +174,8 @@ class TestTriggerSafetyMechanisms:
             error_message="Test error",
         )
         mock_trigger_execution_repository.create.return_value = execution
-        mock_trigger_repository.get.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update.return_value = sample_trigger_with_failures
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Execute
@@ -189,7 +189,7 @@ class TestTriggerSafetyMechanisms:
         # Verify
         assert result.status == ExecutionStatus.FAILED
         assert sample_trigger_with_failures.consecutive_failures == initial_failures + 1
-        mock_trigger_repository.update.assert_called_once()
+        mock_trigger_repository.update_execution_tracking.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_trigger_auto_disabled_at_threshold(
@@ -209,8 +209,8 @@ class TestTriggerSafetyMechanisms:
             error_message="Final failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
-        mock_trigger_repository.get.return_value = sample_trigger_at_threshold
-        mock_trigger_repository.update.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_at_threshold
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Execute
@@ -228,11 +228,11 @@ class TestTriggerSafetyMechanisms:
 
         # Verify auto-disabled event was published
         mock_event_broker.publish.assert_called_once()
-        call_args = mock_event_broker.publish.call_args
-        assert call_args[1]["event_type"] == "trigger.auto_disabled"
-        assert call_args[1]["data"]["trigger_id"] == str(sample_trigger_at_threshold.id)
-        assert call_args[1]["data"]["consecutive_failures"] == 6  # 5 + 1
-        assert call_args[1]["data"]["reason"] == "consecutive_failures_threshold_exceeded"
+        envelope = mock_event_broker.publish.call_args[0][0]
+        assert envelope.event_type == "trigger.auto_disabled"
+        assert envelope.data["trigger_id"] == str(sample_trigger_at_threshold.id)
+        assert envelope.data["consecutive_failures"] == 6  # 5 + 1
+        assert envelope.data["reason"] == "consecutive_failures_threshold_exceeded"
 
     @pytest.mark.asyncio
     async def test_trigger_not_disabled_below_threshold(
@@ -251,8 +251,8 @@ class TestTriggerSafetyMechanisms:
             error_message="Another failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
-        mock_trigger_repository.get.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update.return_value = sample_trigger_with_failures
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
 
         # Execute
         await trigger_service.record_execution(
@@ -283,8 +283,8 @@ class TestTriggerSafetyMechanisms:
             error_message="Final failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
-        mock_trigger_repository.get.return_value = sample_trigger_at_threshold
-        mock_trigger_repository.update.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_at_threshold
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Make event broker fail
@@ -310,8 +310,8 @@ class TestTriggerSafetyMechanisms:
     ):
         """Test successful reset of trigger failure count."""
         # Setup mocks
-        mock_trigger_repository.get.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update.return_value = sample_trigger_with_failures
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
+        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
 
         # Execute
         result = await trigger_service.reset_trigger_failure_count(sample_trigger_with_failures.id)
@@ -319,7 +319,7 @@ class TestTriggerSafetyMechanisms:
         # Verify
         assert result is True
         assert sample_trigger_with_failures.consecutive_failures == 0
-        mock_trigger_repository.update.assert_called_once()
+        mock_trigger_repository.update_execution_tracking.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reset_trigger_failure_count_not_found(
@@ -328,14 +328,14 @@ class TestTriggerSafetyMechanisms:
         """Test reset failure count when trigger doesn't exist."""
         # Setup mocks
         trigger_id = uuid4()
-        mock_trigger_repository.get.return_value = None
+        mock_trigger_repository.get_trigger.return_value = None
 
         # Execute
         result = await trigger_service.reset_trigger_failure_count(trigger_id)
 
         # Verify
         assert result is False
-        mock_trigger_repository.update.assert_not_called()
+        mock_trigger_repository.update_execution_tracking.assert_not_called()
 
     # Test Safety Status Monitoring
 
@@ -345,7 +345,7 @@ class TestTriggerSafetyMechanisms:
     ):
         """Test getting trigger safety status."""
         # Setup mocks
-        mock_trigger_repository.get.return_value = sample_trigger_with_failures
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(sample_trigger_with_failures.id)
@@ -378,7 +378,7 @@ class TestTriggerSafetyMechanisms:
         )
 
         # Setup mocks
-        mock_trigger_repository.get.return_value = trigger_at_risk
+        mock_trigger_repository.get_trigger.return_value = trigger_at_risk
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(trigger_at_risk.id)
@@ -394,7 +394,7 @@ class TestTriggerSafetyMechanisms:
     ):
         """Test safety status for trigger that should be disabled."""
         # Setup mocks
-        mock_trigger_repository.get.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.get_trigger.return_value = sample_trigger_at_threshold
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(sample_trigger_at_threshold.id)
@@ -411,7 +411,7 @@ class TestTriggerSafetyMechanisms:
         """Test safety status when trigger doesn't exist."""
         # Setup mocks
         trigger_id = uuid4()
-        mock_trigger_repository.get.return_value = None
+        mock_trigger_repository.get_trigger.return_value = None
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(trigger_id)
@@ -457,7 +457,7 @@ class TestTriggerSafetyMechanisms:
         """Test execution tracking update when trigger doesn't exist."""
         # Setup mocks
         trigger_id = uuid4()
-        mock_trigger_repository.get.return_value = None
+        mock_trigger_repository.get_trigger.return_value = None
 
         # Execute - should not raise exception
         await trigger_service._update_trigger_execution_tracking(
@@ -465,7 +465,7 @@ class TestTriggerSafetyMechanisms:
         )
 
         # Verify no update was attempted
-        mock_trigger_repository.update.assert_not_called()
+        mock_trigger_repository.update_execution_tracking.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_custom_failure_threshold(
@@ -485,7 +485,7 @@ class TestTriggerSafetyMechanisms:
         )
 
         # Setup mocks
-        mock_trigger_repository.get.return_value = custom_trigger
+        mock_trigger_repository.get_trigger.return_value = custom_trigger
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(custom_trigger.id)
@@ -513,7 +513,7 @@ class TestTriggerSafetyMechanisms:
         )
 
         # Setup mocks
-        mock_trigger_repository.get.return_value = clean_trigger
+        mock_trigger_repository.get_trigger.return_value = clean_trigger
 
         # Execute
         result = await trigger_service.get_trigger_safety_status(clean_trigger.id)

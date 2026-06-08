@@ -137,12 +137,12 @@ class TestTemporalScheduleManager:
     async def test_delete_schedule(self, schedule_manager, mock_temporal_client):
         """Test deleting a schedule."""
         # Setup mocks
-        mock_handle = AsyncMock(spec=ScheduleHandle)
-        mock_temporal_client.get_schedule_handle.return_value = mock_handle
+        mock_handle = AsyncMock()
+        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
         trigger_id = uuid4()
 
         # Execute
-        await schedule_manager.delete_schedule(trigger_id)
+        await schedule_manager.delete_cron_schedule(trigger_id)
 
         # Verify
         schedule_id = f"cron-trigger-{trigger_id}"
@@ -157,7 +157,7 @@ class TestTemporalScheduleManager:
         trigger_id = uuid4()
 
         # Execute - should not raise exception
-        await schedule_manager.delete_schedule(trigger_id)
+        await schedule_manager.delete_cron_schedule(trigger_id)
 
         # Verify
         schedule_id = f"cron-trigger-{trigger_id}"
@@ -167,28 +167,28 @@ class TestTemporalScheduleManager:
     async def test_pause_schedule(self, schedule_manager, mock_temporal_client):
         """Test pausing a schedule."""
         # Setup mocks
-        mock_handle = AsyncMock(spec=ScheduleHandle)
-        mock_temporal_client.get_schedule_handle.return_value = mock_handle
+        mock_handle = AsyncMock()
+        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
         trigger_id = uuid4()
 
         # Execute
-        await schedule_manager.pause_schedule(trigger_id)
+        await schedule_manager.pause_cron_schedule(trigger_id)
 
         # Verify
         schedule_id = f"cron-trigger-{trigger_id}"
         mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
-        mock_handle.pause.assert_called_once_with("Trigger disabled")
+        mock_handle.pause.assert_called_once_with(note=f"Trigger {trigger_id} disabled")
 
     @pytest.mark.asyncio
     async def test_unpause_schedule(self, schedule_manager, mock_temporal_client):
         """Test unpausing a schedule."""
         # Setup mocks
-        mock_handle = AsyncMock(spec=ScheduleHandle)
-        mock_temporal_client.get_schedule_handle.return_value = mock_handle
+        mock_handle = AsyncMock()
+        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
         trigger_id = uuid4()
 
         # Execute
-        await schedule_manager.unpause_schedule(trigger_id)
+        await schedule_manager.unpause_cron_schedule(trigger_id)
 
         # Verify
         schedule_id = f"cron-trigger-{trigger_id}"
