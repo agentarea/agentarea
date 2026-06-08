@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+from .conftest import make_trigger_repository_factory
+
 # Mark all async tests
 pytestmark = pytest.mark.asyncio
 
@@ -42,7 +44,17 @@ class TestTriggerServiceErrorHandling:
     @pytest.fixture
     def trigger_service(self, mock_dependencies):
         """Create TriggerService with mocked dependencies."""
-        return TriggerService(**mock_dependencies)
+        return TriggerService(
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_dependencies["trigger_repository"],
+                execution_repo=mock_dependencies["trigger_execution_repository"],
+                agent_repo=mock_dependencies["agent_repository"],
+            ),
+            event_broker=mock_dependencies["event_broker"],
+            task_service=mock_dependencies["task_service"],
+            llm_condition_evaluator=mock_dependencies["llm_condition_evaluator"],
+            temporal_schedule_manager=mock_dependencies["temporal_schedule_manager"],
+        )
 
     @pytest.fixture
     def sample_cron_trigger_data(self):
@@ -459,15 +471,15 @@ class TestGracefulDegradation:
     @pytest.fixture
     def trigger_service_partial_deps(self):
         """Create TriggerService with some missing dependencies."""
-        return TriggerService(
-            trigger_repository=AsyncMock(),
-            trigger_execution_repository=AsyncMock(),
+        service = TriggerService(
+            repository_factory=make_trigger_repository_factory(),
             event_broker=AsyncMock(),
-            agent_repository=None,  # Missing
             task_service=None,  # Missing
             llm_condition_evaluator=None,  # Missing
             temporal_schedule_manager=None,  # Missing
         )
+        service.agent_repository = None  # Missing
+        return service
 
     async def test_graceful_degradation_missing_agent_repository(
         self, trigger_service_partial_deps

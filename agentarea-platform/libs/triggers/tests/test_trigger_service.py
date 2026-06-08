@@ -19,6 +19,8 @@ from agentarea_triggers.trigger_service import (
     TriggerValidationError,
 )
 
+from .conftest import make_trigger_repository_factory
+
 
 class TestTriggerService:
     """Test cases for TriggerService."""
@@ -75,10 +77,12 @@ class TestTriggerService:
 
         # Create service
         service = TriggerService(
-            trigger_repository=mock_trigger_repository,
-            trigger_execution_repository=mock_trigger_execution_repository,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_trigger_repository,
+                execution_repo=mock_trigger_execution_repository,
+                agent_repo=mock_agent_repository,
+            ),
             event_broker=mock_event_broker,
-            agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=mock_llm_service,
             temporal_schedule_manager=mock_temporal_schedule_manager,
@@ -730,11 +734,13 @@ class TestTriggerService:
         """Test trigger creation when agent repository is not available."""
         # Create service without agent repository
         trigger_service = TriggerService(
-            trigger_repository=mock_trigger_repository,
-            trigger_execution_repository=mock_trigger_execution_repository,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_trigger_repository,
+                execution_repo=mock_trigger_execution_repository,
+            ),
             event_broker=mock_event_broker,
-            agent_repository=None,  # No agent repository
         )
+        trigger_service.agent_repository = None  # No agent repository
 
         # Setup mocks
         sample_trigger = CronTrigger(**sample_cron_trigger_data.model_dump())
@@ -946,8 +952,10 @@ class TestTriggerServiceMonitoring:
     ):
         """Create TriggerService instance with mocked dependencies."""
         return TriggerService(
-            trigger_repository=mock_trigger_repository,
-            trigger_execution_repository=mock_trigger_execution_repository,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_trigger_repository,
+                execution_repo=mock_trigger_execution_repository,
+            ),
             event_broker=mock_event_broker,
         )
 

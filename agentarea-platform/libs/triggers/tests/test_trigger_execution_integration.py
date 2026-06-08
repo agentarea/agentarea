@@ -9,6 +9,8 @@ from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
 from agentarea_triggers.trigger_service import TriggerService
 
+from .conftest import make_trigger_repository_factory
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -71,14 +73,16 @@ class TestTriggerExecutionIntegration:
 
         # Create trigger service with mocked dependencies
         trigger_service = TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+            ),
             event_broker=AsyncMock(),
-            agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        trigger_service.agent_repository = None
 
         # Execute trigger
         execution_data = {
@@ -140,14 +144,16 @@ class TestTriggerExecutionIntegration:
 
         # Create trigger service
         trigger_service = TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+            ),
             event_broker=AsyncMock(),
-            agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        trigger_service.agent_repository = None
 
         # Test with matching conditions
         execution_data = {
@@ -185,14 +191,16 @@ class TestTriggerExecutionIntegration:
 
         # Create trigger service
         trigger_service = TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+            ),
             event_broker=AsyncMock(),
-            agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        trigger_service.agent_repository = None
 
         # Test with non-matching conditions
         execution_data = {
@@ -235,14 +243,16 @@ class TestTriggerExecutionIntegration:
 
         # Create trigger service
         trigger_service = TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+            ),
             event_broker=AsyncMock(),
-            agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        trigger_service.agent_repository = None
 
         # Test webhook execution data
         execution_data = {
@@ -295,14 +305,16 @@ class TestTriggerExecutionIntegration:
 
         # Create trigger service
         trigger_service = TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+            ),
             event_broker=AsyncMock(),
-            agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        trigger_service.agent_repository = None
 
         # Execute trigger
         execution_data = {"execution_time": datetime.utcnow().isoformat()}

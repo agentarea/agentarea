@@ -14,6 +14,8 @@ from agentarea_triggers.logging_utils import (
 from agentarea_triggers.trigger_service import TriggerService
 from agentarea_triggers.webhook_manager import DefaultWebhookManager
 
+from .conftest import make_trigger_repository_factory
+
 # Mark all async tests
 pytestmark = pytest.mark.asyncio
 
@@ -37,7 +39,17 @@ class TestErrorHandlingIntegration:
     @pytest.fixture
     def trigger_service(self, mock_dependencies):
         """Create TriggerService with mocked dependencies."""
-        return TriggerService(**mock_dependencies)
+        return TriggerService(
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_dependencies["trigger_repository"],
+                execution_repo=mock_dependencies["trigger_execution_repository"],
+                agent_repo=mock_dependencies["agent_repository"],
+            ),
+            event_broker=mock_dependencies["event_broker"],
+            task_service=mock_dependencies["task_service"],
+            llm_condition_evaluator=mock_dependencies["llm_condition_evaluator"],
+            temporal_schedule_manager=mock_dependencies["temporal_schedule_manager"],
+        )
 
     async def test_end_to_end_error_propagation(self, trigger_service, mock_dependencies):
         """Test that errors propagate correctly through the entire system."""
@@ -95,14 +107,16 @@ class TestErrorHandlingIntegration:
         """Test graceful degradation when multiple dependencies are unavailable."""
         # Setup - create service with minimal dependencies
         trigger_service = TriggerService(
-            trigger_repository=mock_dependencies["trigger_repository"],
-            trigger_execution_repository=mock_dependencies["trigger_execution_repository"],
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_dependencies["trigger_repository"],
+                execution_repo=mock_dependencies["trigger_execution_repository"],
+            ),
             event_broker=mock_dependencies["event_broker"],
-            agent_repository=None,  # Missing
             task_service=None,  # Missing
             llm_condition_evaluator=None,  # Missing
             temporal_schedule_manager=None,  # Missing
         )
+        trigger_service.agent_repository = None  # Missing
 
         trigger_data = TriggerCreate(
             name="Test Trigger",

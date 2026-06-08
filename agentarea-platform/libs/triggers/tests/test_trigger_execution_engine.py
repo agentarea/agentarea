@@ -9,6 +9,8 @@ from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution, WebhookTrigger
 from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService
 
+from .conftest import make_trigger_repository_factory
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -44,10 +46,15 @@ class TestTriggerExecutionEngine:
         """Create TriggerService with mocked dependencies."""
         trigger_repo, execution_repo = mock_repositories
 
+        deps = dict(mock_dependencies)
+        agent_repo = deps.pop("agent_repository", None)
         return TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
-            **mock_dependencies,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+                agent_repo=agent_repo,
+            ),
+            **deps,
         )
 
     @pytest.fixture

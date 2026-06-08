@@ -21,6 +21,8 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
 )
 
+from .conftest import make_trigger_repository_factory
+
 
 class TestTriggerSafetyMechanisms:
     """Test cases for trigger safety mechanisms."""
@@ -67,10 +69,12 @@ class TestTriggerSafetyMechanisms:
     ):
         """Create TriggerService instance with mocked dependencies."""
         return TriggerService(
-            trigger_repository=mock_trigger_repository,
-            trigger_execution_repository=mock_trigger_execution_repository,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=mock_trigger_repository,
+                execution_repo=mock_trigger_execution_repository,
+                agent_repo=mock_agent_repository,
+            ),
             event_broker=mock_event_broker,
-            agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=mock_temporal_schedule_manager,

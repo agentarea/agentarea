@@ -10,8 +10,12 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.deps.services import get_secret_manager, get_trigger_health_check, get_trigger_service
-from agentarea_api.api.v1.triggers import require_a2a_execute_auth
+from agentarea_api.api.deps.services import (
+    get_secret_manager,
+    get_trigger_health_check,
+    get_trigger_service,
+)
+from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
 from fastapi.testclient import TestClient
@@ -238,7 +242,7 @@ class TestTriggersAPI:
     """Test class for triggers API endpoints."""
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
     async def test_create_trigger_success(
         self,
@@ -285,7 +289,7 @@ class TestTriggersAPI:
         mock_trigger_service.create_trigger.assert_called_once()
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
     async def test_create_webhook_trigger_success(
         self,
@@ -328,7 +332,7 @@ class TestTriggersAPI:
         assert data["allowed_methods"] == ["POST"]
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
     async def test_create_trigger_validation_error(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
@@ -357,7 +361,7 @@ class TestTriggersAPI:
         assert "Invalid cron expression" in response.json()["detail"]
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
     async def test_list_triggers_success(
         self,
@@ -387,7 +391,7 @@ class TestTriggersAPI:
         assert data[0]["name"] == "Test Trigger"
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_list_triggers_with_filters(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -414,7 +418,7 @@ class TestTriggersAPI:
         assert call_args.kwargs["limit"] == 50
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_trigger_success(
         self,
         mock_auth,
@@ -443,7 +447,7 @@ class TestTriggersAPI:
         assert data["id"] == trigger_id
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_trigger_not_found(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -462,7 +466,7 @@ class TestTriggersAPI:
         assert "not found" in response.json()["detail"]
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_update_trigger_success(
         self,
         mock_auth,
@@ -502,7 +506,7 @@ class TestTriggersAPI:
         assert data["description"] == "Updated description"
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_update_trigger_not_found(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -524,7 +528,7 @@ class TestTriggersAPI:
         assert "not found" in response.json()["detail"]
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_delete_trigger_success(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -542,7 +546,7 @@ class TestTriggersAPI:
         assert response.status_code == 204
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_delete_trigger_not_found(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -560,7 +564,7 @@ class TestTriggersAPI:
         assert response.status_code == 404
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_enable_trigger_success(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -581,7 +585,7 @@ class TestTriggersAPI:
         assert data["is_active"] is True
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_disable_trigger_success(
         self, mock_auth, mock_get_service, async_client, mock_trigger_service, mock_auth_context
     ):
@@ -602,7 +606,7 @@ class TestTriggersAPI:
         assert data["is_active"] is False
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_execution_history_success(
         self,
         mock_auth,
@@ -637,7 +641,7 @@ class TestTriggersAPI:
         assert data["page_size"] == 50
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_execution_history_with_pagination(
         self,
         mock_auth,
@@ -675,7 +679,7 @@ class TestTriggersAPI:
         assert call_args.kwargs["offset"] == 25
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_trigger_status_success(
         self,
         mock_auth,

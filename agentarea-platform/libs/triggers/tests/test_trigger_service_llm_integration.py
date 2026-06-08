@@ -9,6 +9,8 @@ from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import CronTrigger, TriggerCreate, WebhookTrigger
 from agentarea_triggers.trigger_service import TriggerService
 
+from .conftest import make_trigger_repository_factory
+
 
 @pytest.fixture
 def mock_trigger_repository():
@@ -70,10 +72,12 @@ def trigger_service(
 ):
     """Create trigger service with mocked dependencies."""
     return TriggerService(
-        trigger_repository=mock_trigger_repository,
-        trigger_execution_repository=mock_trigger_execution_repository,
+        repository_factory=make_trigger_repository_factory(
+            trigger_repo=mock_trigger_repository,
+            execution_repo=mock_trigger_execution_repository,
+            agent_repo=mock_agent_repository,
+        ),
         event_broker=mock_event_broker,
-        agent_repository=mock_agent_repository,
         task_service=mock_task_service,
         llm_condition_evaluator=mock_llm_condition_evaluator,
     )
@@ -450,10 +454,8 @@ class TestTriggerServiceLLMIntegration:
         """Test trigger service functionality without LLM evaluator."""
         # Create service without LLM evaluator
         service = TriggerService(
-            trigger_repository=AsyncMock(),
-            trigger_execution_repository=AsyncMock(),
+            repository_factory=make_trigger_repository_factory(),
             event_broker=AsyncMock(),
-            agent_repository=AsyncMock(),
             task_service=AsyncMock(),
             llm_condition_evaluator=None,  # No LLM evaluator
         )
