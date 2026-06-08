@@ -48,7 +48,7 @@ class GovernancePolicyResolver:
         if not workspace_id:
             return EffectivePolicy()
 
-        layers: list[PolicyDocument] = []
+        layers: list[PolicyDocument | None] = []
         source_ids: list[str] = []
 
         ws_rules = await self._rule_repository.list_rules(

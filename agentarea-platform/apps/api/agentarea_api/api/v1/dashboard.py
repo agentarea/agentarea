@@ -443,7 +443,8 @@ async def update_workspace_settings(
     params = {"amount_usd": str(to_money(payload.monthly_cap_usd)), "period": "month"}
     if existing:
         first, *rest = existing
-        await repo.update(first.id, params=params, enabled=True)
+        if first.id is not None:
+            await repo.update(first.id, params=params, enabled=True)
         for rule in rest:
             if rule.id is not None:
                 await repo.delete(rule.id)

@@ -273,7 +273,7 @@ class BundleInstaller:
     ) -> dict[str, UUID]:
         """Returns {package agent key -> agent id}."""
         from agentarea_agents.schemas.dto import AgentCreate
-        from agentarea_agents.schemas.import_export import McpToolConfig
+        from agentarea_agents.schemas.import_export import McpToolConfig, ToolConfig
 
         agent_ids: dict[str, UUID] = {}
         for agent in package.agents:
@@ -291,7 +291,7 @@ class BundleInstaller:
                 )
                 continue
 
-            tools = [
+            tools: list[ToolConfig] = [
                 McpToolConfig(name=mcp_tool_names[ref])
                 for ref in agent.mcps
                 if ref in mcp_tool_names  # unsupported MCPs were skipped

@@ -155,7 +155,7 @@ class ToolManager:
             spec = parse_tool_spec(tool)
             if spec is None:
                 continue
-            builder = self._builders.get(tool.get("type"))
+            builder = self._builders.get(tool.get("type") or "")
             if builder is None:
                 logger.warning(
                     f"Unknown tool type: {tool.get('type')}", extra={"tool_config": tool}
@@ -417,7 +417,7 @@ class ToolManager:
             spec = parse_tool_spec(tool)
             if spec is None:
                 continue
-            builder = self._builders.get(tool.get("type"))
+            builder = self._builders.get(tool.get("type") or "")
             if builder is None:
                 logger.warning(
                     f"Unknown tool type: {tool.get('type')}",

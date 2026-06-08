@@ -1,6 +1,7 @@
 """Application service for skill collection management."""
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.repository_factory import RepositoryFactory
@@ -66,7 +67,7 @@ class SkillCollectionService:
 
         The slug is immutable once derived at creation and is not re-derived.
         """
-        updates: dict[str, object] = {}
+        updates: dict[str, Any] = {}
         if name is not None:
             updates["name"] = name
         if description is not None:

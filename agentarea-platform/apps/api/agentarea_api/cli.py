@@ -312,8 +312,8 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                     agent_repo=agent_repo,
                 )
 
-                matches = await registry_repo.find_by(name=registry_name)
-                existing = matches[0] if matches else None
+                registries = await registry_repo.list_all()
+                existing = next((r for r in registries if r.name == registry_name), None)
                 if existing:
                     registry_id = existing.id
                     click.echo(f"Found existing registry: {registry_id}")

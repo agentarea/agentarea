@@ -40,7 +40,7 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
     )
     model.id = UUID(item.id)
     if item.provider_spec_id is not None:
-        model.provider_spec_id = UUID(item.provider_spec_id)
+        model.provider_spec_id = UUID(item.provider_spec_id)  # type: ignore[assignment]
     model.registry_item_id = item.id  # type: ignore[attr-defined]
     model.is_catalog = True  # type: ignore[attr-defined]
     # Attach a transient provider_spec for the API projection (provider_name /
@@ -151,7 +151,9 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         """Project un-instantiated catalog model spec items as read-only specs."""
         catalog_items = await self._get_catalog_repository().list_items()
         shadowed = {
-            str(s.registry_item_id) for s in tenant_specs if getattr(s, "registry_item_id", None)
+            str(getattr(s, "registry_item_id", None))
+            for s in tenant_specs
+            if getattr(s, "registry_item_id", None)
         }
         projections: list[ModelSpec] = []
         for item in catalog_items:
