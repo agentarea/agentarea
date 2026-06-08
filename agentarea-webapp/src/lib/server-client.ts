@@ -1,7 +1,6 @@
 // TODO: Re-enable server-only after fixing client/server separation
 // import "server-only";
 import createClient from "openapi-fetch";
-import { headers } from "next/headers";
 import { env } from "@/env";
 import type { paths } from "../api/schema";
 import { getAuthToken } from "./getAuthToken";
@@ -45,6 +44,10 @@ export function getServerClient() {
         // proxy middleware as a per-request header). Transport only — the
         // backend authorizes membership and 403s on a slug the user can't use.
         try {
+          // Dynamic import so this module is not statically tied to
+          // "next/headers" (a server-only API). Client components transitively
+          // import the API client; a top-level import would break their bundle.
+          const { headers } = await import("next/headers");
           const requestHeaders = await headers();
           const workspaceSlug = requestHeaders.get("x-workspace-slug");
           if (workspaceSlug) {
