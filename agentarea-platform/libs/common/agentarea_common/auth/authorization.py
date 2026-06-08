@@ -2,10 +2,9 @@
 
 This module defines the abstract AuthorizationService that determines which
 workspaces a user can access. The OSS implementation grants access to the
-user's own workspace; built-in/official content is globally readable by
-provenance (``source == 'official'``) or via the global registry catalog, not by
-membership in a magic 'platform' workspace. Enterprise can replace this with
-ReBAC.
+user's own workspace; built-in/official content lives in the global registry
+catalog and is read globally by the catalog repositories, not by membership in a
+magic 'platform' workspace. Enterprise can replace this with ReBAC.
 """
 
 import logging

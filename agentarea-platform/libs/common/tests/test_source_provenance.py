@@ -1,31 +1,36 @@
-"""Unit tests for the SourceKind provenance enum and is_builtin predicate."""
+"""Unit tests for the catalog-projection ``is_builtin`` predicate (ADR-003).
+
+There is no longer a ``source`` provenance column and there are no persisted
+built-in rows. "Built-in" means a transient, read-only catalog *projection*,
+marked with ``is_catalog = True``. Copy-on-write forks carry a
+``registry_item_id`` link to the catalog item they were forked from, but are
+persisted, user-owned content and are therefore NOT built-in.
+"""
 
 from types import SimpleNamespace
 
-from agentarea_common.base import SourceKind, is_builtin
+from agentarea_common.base import is_builtin
 
 
-def test_source_kind_values():
-    assert SourceKind.OFFICIAL == "official"
-    assert SourceKind.WORKSPACE_CUSTOM == "workspace_custom"
-    assert SourceKind.IMPORTED == "imported"
+def test_is_builtin_true_when_is_catalog_set():
+    assert is_builtin(SimpleNamespace(is_catalog=True)) is True
 
 
-def test_is_builtin_true_for_official():
-    assert is_builtin(SimpleNamespace(source=SourceKind.OFFICIAL)) is True
-    # Plain string value also counts (StrEnum compares equal to its value).
-    assert is_builtin(SimpleNamespace(source="official")) is True
+def test_is_builtin_false_when_is_catalog_false():
+    assert is_builtin(SimpleNamespace(is_catalog=False)) is False
 
 
-def test_is_builtin_false_for_workspace_custom():
-    assert is_builtin(SimpleNamespace(source=SourceKind.WORKSPACE_CUSTOM)) is False
-    assert is_builtin(SimpleNamespace(source="workspace_custom")) is False
-
-
-def test_is_builtin_false_for_imported():
-    assert is_builtin(SimpleNamespace(source=SourceKind.IMPORTED)) is False
-
-
-def test_is_builtin_false_when_source_missing():
+def test_is_builtin_false_when_is_catalog_missing():
     assert is_builtin(SimpleNamespace()) is False
-    assert is_builtin(SimpleNamespace(source=None)) is False
+
+
+def test_forked_entity_is_not_builtin():
+    """A fork carries registry_item_id but is owned content -> not built-in."""
+    fork = SimpleNamespace(registry_item_id="ri-1", is_catalog=False)
+    assert is_builtin(fork) is False
+
+
+def test_catalog_projection_is_builtin():
+    """A catalog projection has is_catalog True even with a registry_item_id."""
+    projection = SimpleNamespace(registry_item_id="ri-1", is_catalog=True)
+    assert is_builtin(projection) is True

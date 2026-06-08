@@ -135,9 +135,8 @@ def _default_accessible_workspaces(workspace_id: str) -> list[str]:
     """Return default accessible workspaces for worker context.
 
     Workers (Temporal activities) read only the task's own workspace. Built-in/
-    official content is globally visible by provenance (``source == 'official'``)
-    or via the global registry catalog, so no magic 'platform' workspace is
-    injected here.
+    official content lives in the global registry catalog and is read globally by
+    the catalog repositories, so no magic 'platform' workspace is injected here.
     """
     return [workspace_id]
 

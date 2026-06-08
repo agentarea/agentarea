@@ -25,10 +25,6 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     planning: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     agent_type: Mapped[str] = mapped_column(String, nullable=False, default="stateless")
-    # Provenance of this resource; see agentarea_common.base.SourceKind.
-    # NOTE: `source` is interim (ADR-003) and slated for later cleanup; provenance
-    # is now carried by `registry_item_id` (forward link to the catalog item).
-    source: Mapped[str] = mapped_column(String, nullable=False, default="workspace_custom")
     # Forward provenance link to the catalog item this agent was forked from
     # (copy-on-write). Null for agents created from scratch. See ADR-003.
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)

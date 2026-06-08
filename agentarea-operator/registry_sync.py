@@ -409,6 +409,14 @@ def reconcile(
 
     for item in parsed:
         item["registry_url"] = source_location
+        # Built-in mcp_servers / llm_models live in the catalog only (ADR-003):
+        # they are read back globally from registry_items.spec. Persist the
+        # source registry URL inside the spec so the read-side projection can
+        # surface it (registry_items has no registry_url column).
+        if registry_type in ("mcp_servers", "llm_models"):
+            spec = item.get("spec")
+            if isinstance(spec, dict):
+                spec.setdefault("registry_url", source_location)
         existing = _get_registry_item(conn, registry_id, item["external_id"])
         if existing:
             _update_registry_item(conn, existing["id"], item)
@@ -572,7 +580,11 @@ def _create_entity(
     if registry_type == "llm_providers":
         return _upsert_provider_spec(conn, item, workspace_id)
     if registry_type == "llm_models":
-        return _upsert_model_spec(conn, item, workspace_id)
+        # Model specs live in the catalog only (ADR-003), mirroring agents/skills:
+        # the registry_item's spec is the built-in definition (read globally via
+        # CatalogModelSpecRepository). No tenant `model_specs` row is materialized;
+        # users instantiate via `model_instances`, they do not fork the spec.
+        return None
     if registry_type == "agents":
         # Agents live in the catalog only (ADR-003): the registry_item itself is
         # the built-in definition. No tenant `agents` row is materialized on sync;
@@ -585,7 +597,12 @@ def _create_entity(
         # a user edits the catalog skill.
         return None
     if registry_type == "mcp_servers":
-        return _upsert_mcp_server(conn, item, workspace_id, registry_item_id)
+        # MCP server specs live in the catalog only (ADR-003), mirroring
+        # agents/skills/models: the registry_item's spec is the built-in
+        # definition (read globally via CatalogMcpRepository). No tenant
+        # `mcp_servers` row is materialized; users instantiate via
+        # `mcp_server_instances`, they do not fork the spec.
+        return None
     return None
 
 
@@ -699,10 +716,10 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, supports_function_calling, is_active, source, "
+            "output_cost_per_token, supports_function_calling, is_active, "
             "workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :sfc, :active, 'official', :ws, :created_by, now(), now())"
+            ":mot, :icpt, :ocpt, :sfc, :active, :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -785,10 +802,10 @@ def _upsert_mcp_server(
         _text(
             "INSERT INTO mcp_servers (id, name, slug, description, docker_image_url, version, "
             "tags, is_public, env_schema, cmd, remote_url, registry_item_id, json_spec, "
-            "registry_url, source, workspace_id, created_by, created_at, updated_at) "
+            "registry_url, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :name, :slug, :desc, :img, :ver, CAST(:tags AS JSONB), false, "
             "CAST(:env AS JSONB), CAST(:cmd AS JSONB), :rurl, :rid, "
-            "CAST(:json_spec AS JSONB), :registry_url, 'official', :ws, :created_by, now(), now())"
+            "CAST(:json_spec AS JSONB), :registry_url, :ws, :created_by, now(), now())"
         ),
         {
             "id": sid,

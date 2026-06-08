@@ -1,10 +1,10 @@
-"""Tests for built-in (official) entity visibility WITHOUT a magic workspace.
+"""Tests for entity visibility WITHOUT a magic workspace (ADR-003).
 
-Built-in content is globally readable by provenance: the base
-WorkspaceScopedRepository read filter is ``workspace_id IN accessible OR
-source == 'official'`` for tables that carry a ``source`` column. The old
-``accessible_workspaces=[ws, 'platform']`` sentinel is gone — a row from another
-workspace stays hidden unless it is official.
+There is no longer a ``source`` provenance column on any table: the base
+WorkspaceScopedRepository read filter is pure workspace scoping
+(``workspace_id IN accessible``). Built-in content lives in the registry catalog
+and is read globally by the catalog repositories, not by this filter. A row from
+another workspace always stays hidden.
 """
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -27,33 +27,33 @@ def _user_context_with_system(workspace_id: str = "ws-1") -> UserContext:
     )
 
 
-def test_model_spec_filter_uses_official_source_not_platform():
-    """ModelSpec has a `source` column: built-ins are visible via source=='official',
-    NOT via a faked 'platform' workspace membership."""
+def test_model_spec_filter_is_pure_workspace_scoping():
+    """ModelSpec has NO source column anymore: the read filter is pure workspace
+    scoping. Built-in specs are read from the registry catalog, not here."""
     session = MagicMock()
     user_context = _user_context_with_system()
     repo = ModelSpecRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
     assert "ws-1" in compiled
-    assert "official" in compiled
+    assert "official" not in compiled
     assert "platform" not in compiled
 
 
-def test_provider_config_filter_uses_official_source():
-    """ProviderConfig carries `source`; built-ins visible by provenance."""
+def test_provider_config_filter_is_pure_workspace_scoping():
+    """ProviderConfig no longer carries `source`; pure workspace scoping."""
     session = MagicMock()
     user_context = _user_context_with_system()
     repo = ProviderConfigRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
     assert "ws-1" in compiled
-    assert "official" in compiled
+    assert "official" not in compiled
 
 
 def test_model_instance_filter_has_no_source_predicate():
-    """ModelInstance has NO source column: it is purely workspace-scoped, so a
-    row from another workspace must never leak in."""
+    """ModelInstance is purely workspace-scoped, so a row from another workspace
+    must never leak in."""
     session = MagicMock()
     user_context = _user_context_with_system()
     repo = ModelInstanceRepository(session, user_context)
@@ -63,29 +63,17 @@ def test_model_instance_filter_has_no_source_predicate():
     assert "official" not in compiled
 
 
-def test_official_row_from_other_workspace_is_visible():
-    """A built-in (source='official') row owned by another workspace IS visible."""
+def test_no_filter_enumerates_foreign_or_official_rows():
+    """No source OR-branch: visibility is own-workspace only. Neither another
+    workspace nor an 'official' escape hatch appears in the compiled filter."""
     session = MagicMock()
     user_context = _user_context_with_system("ws-1")
     repo = ModelSpecRepository(session, user_context)
     ws_filter = repo._get_workspace_filter()
     compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
-    # The OR-predicate makes official rows visible regardless of their workspace_id.
-    assert "OR" in compiled.upper()
-    assert "official" in compiled
-
-
-def test_custom_row_from_other_workspace_is_not_visible():
-    """A workspace_custom row owned by another workspace is NOT visible: the only
-    cross-workspace escape hatch is source=='official'."""
-    session = MagicMock()
-    user_context = _user_context_with_system("ws-1")
-    repo = ModelSpecRepository(session, user_context)
-    ws_filter = repo._get_workspace_filter()
-    compiled = str(ws_filter.compile(compile_kwargs={"literal_binds": True}))
-    # Other workspaces are not enumerated; visibility is own-workspace OR official.
     assert "ws-2" not in compiled
     assert "workspace_custom" not in compiled
+    assert "official" not in compiled
 
 
 @pytest.mark.asyncio

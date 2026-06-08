@@ -38,9 +38,6 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     json_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
     # Source registry URL (e.g. https://registry.modelcontextprotocol.io)
     registry_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
-    # Provenance of this resource; see agentarea_common.base.SourceKind.
-    # 'official' rows are platform-built-in and globally visible regardless of workspace.
-    source: Mapped[str] = mapped_column(String, nullable=False, default="workspace_custom")
 
     def __init__(
         self,

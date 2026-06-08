@@ -168,7 +168,7 @@ async def export_workspace_config(
 
     **Important Notes:**
     - Secrets (API keys, passwords) are replaced with placeholders
-    - Built-in/official resources (source="official") are excluded
+    - Built-in/catalog resources (carrying registry_item_id) are excluded
     - Only resources in the current workspace are exported
     - References to specs are included (server_spec_id, provider_spec_id)
 

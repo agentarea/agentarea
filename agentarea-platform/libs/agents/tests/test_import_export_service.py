@@ -1,18 +1,13 @@
 """SQLite-based unit tests for workspace import/export service."""
 
-import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
 import yaml
-
 from agentarea_agents.application.import_export_service import WorkspaceImportExportService
 from agentarea_agents.schemas.import_export import (
     ImportOptions,
-    ImportResult,
-    WorkspaceConfigYAML,
 )
 
 
@@ -326,6 +321,8 @@ class TestExportWorkspace:
         """Test exporting agents only."""
         mock_agent = MagicMock()
         mock_agent.workspace_id = "test-workspace"
+        mock_agent.registry_item_id = None
+        mock_agent.is_catalog = False
         mock_agent.name = "Test Agent"
         mock_agent.description = "A test agent"
         mock_agent.instruction = "You are a test agent"
@@ -348,11 +345,12 @@ class TestExportWorkspace:
         assert "provider_configs" not in exported
 
     @pytest.mark.asyncio
-    async def test_export_skips_system_agents(self, import_export_service, mock_agent_service):
-        """Test that system workspace agents are not exported."""
+    async def test_export_skips_catalog_agents(self, import_export_service, mock_agent_service):
+        """Test that catalog-projection (built-in) agents are not exported."""
         user_agent = MagicMock()
         user_agent.workspace_id = "test-workspace"
-        user_agent.source = "workspace_custom"
+        user_agent.registry_item_id = None
+        user_agent.is_catalog = False
         user_agent.name = "User Agent"
         user_agent.description = "User agent"
         user_agent.instruction = "You are a user agent"
@@ -360,16 +358,18 @@ class TestExportWorkspace:
         user_agent.planning = None
         user_agent.a2ui_enabled = None
 
-        system_agent = MagicMock()
-        system_agent.workspace_id = "platform"
-        system_agent.source = "official"
-        system_agent.name = "System Agent"
-        system_agent.description = "System agent"
-        system_agent.instruction = "You are a system agent"
-        system_agent.tools = None
-        system_agent.planning = None
+        # Built-in: a read-only catalog projection (is_catalog True, not persisted).
+        catalog_agent = MagicMock()
+        catalog_agent.workspace_id = "platform"
+        catalog_agent.registry_item_id = "ri-catalog-agent"
+        catalog_agent.is_catalog = True
+        catalog_agent.name = "Catalog Agent"
+        catalog_agent.description = "Catalog agent"
+        catalog_agent.instruction = "You are a catalog agent"
+        catalog_agent.tools = None
+        catalog_agent.planning = None
 
-        mock_agent_service.list.return_value = [user_agent, system_agent]
+        mock_agent_service.list.return_value = [user_agent, catalog_agent]
 
         result = await import_export_service.export_workspace()
         exported = yaml.safe_load(result)
@@ -378,10 +378,34 @@ class TestExportWorkspace:
         assert exported["agents"][0]["name"] == "User Agent"
 
     @pytest.mark.asyncio
+    async def test_export_includes_forked_agents(self, import_export_service, mock_agent_service):
+        """A forked agent carries registry_item_id but is owned content -> exported."""
+        forked_agent = MagicMock()
+        forked_agent.workspace_id = "test-workspace"
+        forked_agent.registry_item_id = "ri-forked-from"
+        forked_agent.is_catalog = False
+        forked_agent.name = "Forked Agent"
+        forked_agent.description = "A fork of a catalog agent"
+        forked_agent.instruction = "You are a forked agent"
+        forked_agent.tools = None
+        forked_agent.planning = None
+        forked_agent.a2ui_enabled = None
+
+        mock_agent_service.list.return_value = [forked_agent]
+
+        result = await import_export_service.export_workspace()
+        exported = yaml.safe_load(result)
+
+        assert len(exported["agents"]) == 1
+        assert exported["agents"][0]["name"] == "Forked Agent"
+
+    @pytest.mark.asyncio
     async def test_export_mcp_instances(self, import_export_service, mock_mcp_instance_service):
         """Test exporting MCP instances."""
         mock_instance = MagicMock()
         mock_instance.workspace_id = "test-workspace"
+        mock_instance.registry_item_id = None
+        mock_instance.is_catalog = False
         mock_instance.name = "Test Filesystem"
         mock_instance.description = "File access"
         mock_instance.server_spec_id = "a1b2c3d4-e5f6-789a-bcde-123456789abc"
@@ -404,6 +428,8 @@ class TestExportWorkspace:
         """Test exporting provider configs."""
         mock_config = MagicMock()
         mock_config.workspace_id = "test-workspace"
+        mock_config.registry_item_id = None
+        mock_config.is_catalog = False
         mock_config.name = "OpenAI Config"
         mock_config.description = "OpenAI provider"
         mock_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
@@ -424,32 +450,42 @@ class TestExportWorkspace:
         assert exported["provider_configs"][0]["endpoint_url"] == "https://api.openai.com"
 
     @pytest.mark.asyncio
-    async def test_export_skips_system_provider_configs(
+    async def test_export_includes_all_provider_configs(
         self, import_export_service, mock_provider_service
     ):
-        """Test that system workspace provider configs are not exported."""
+        """Provider configs are never catalog projections, so all are exported.
+
+        After the registry-catalog refactor there are no persisted built-in
+        provider configs; a config carrying a registry_item_id is still owned,
+        exportable content (not a catalog projection).
+        """
         user_config = MagicMock()
         user_config.workspace_id = "test-workspace"
-        user_config.source = "workspace_custom"
+        user_config.registry_item_id = None
+        user_config.is_catalog = False
         user_config.name = "User Config"
         user_config.description = None
         user_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
         user_config.endpoint_url = "https://api.openai.com"
 
-        system_config = MagicMock()
-        system_config.workspace_id = "platform"
-        system_config.source = "official"
-        system_config.name = "System Config"
-        system_config.description = None
-        system_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
+        # Carries a registry_item_id link but is owned content, not a projection.
+        linked_config = MagicMock()
+        linked_config.workspace_id = "test-workspace"
+        linked_config.registry_item_id = "ri-linked-config"
+        linked_config.is_catalog = False
+        linked_config.name = "Linked Config"
+        linked_config.description = None
+        linked_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
+        linked_config.endpoint_url = "https://api.openai.com"
 
-        mock_provider_service.list_provider_configs.return_value = [user_config, system_config]
+        mock_provider_service.list_provider_configs.return_value = [user_config, linked_config]
 
         result = await import_export_service.export_workspace()
         exported = yaml.safe_load(result)
 
-        assert len(exported["provider_configs"]) == 1
-        assert exported["provider_configs"][0]["name"] == "User Config"
+        assert len(exported["provider_configs"]) == 2
+        names = {c["name"] for c in exported["provider_configs"]}
+        assert names == {"User Config", "Linked Config"}
 
 
 class TestImportExportRoundtrip:
@@ -480,6 +516,8 @@ provider_configs: []
         # Mock created entities
         mock_agent = MagicMock()
         mock_agent.workspace_id = "test-workspace"
+        mock_agent.registry_item_id = None
+        mock_agent.is_catalog = False
         mock_agent.name = "Roundtrip Agent"
         mock_agent.description = "Testing roundtrip"
         mock_agent.instruction = "You are testing"
@@ -489,6 +527,8 @@ provider_configs: []
 
         mock_mcp = MagicMock()
         mock_mcp.workspace_id = "test-workspace"
+        mock_mcp.registry_item_id = None
+        mock_mcp.is_catalog = False
         mock_mcp.name = "Roundtrip MCP"
         mock_mcp.description = None
         mock_mcp.server_spec_id = "a1b2c3d4-e5f6-789a-bcde-123456789abc"
@@ -863,6 +903,8 @@ provider_configs: []
         """Test exporting skills."""
         mock_skill = MagicMock()
         mock_skill.workspace_id = "test-workspace"
+        mock_skill.registry_item_id = None
+        mock_skill.is_catalog = False
         mock_skill.id = uuid4()
         mock_skill.name = "Export Skill"
         mock_skill.description = "A skill to export"
@@ -885,6 +927,8 @@ provider_configs: []
         """Test exporting a skill that was imported from GitHub."""
         mock_skill = MagicMock()
         mock_skill.workspace_id = "test-workspace"
+        mock_skill.registry_item_id = None
+        mock_skill.is_catalog = False
         mock_skill.id = uuid4()
         mock_skill.name = "GitHub Skill"
         mock_skill.description = "From GitHub"
@@ -911,6 +955,8 @@ provider_configs: []
         skill_id = uuid4()
         mock_skill = MagicMock()
         mock_skill.id = skill_id
+        mock_skill.registry_item_id = None
+        mock_skill.is_catalog = False
         mock_skill.name = "Attached Skill"
         mock_skill.description = "Attached to agent"
         mock_skill.content = "# Content"
@@ -919,6 +965,8 @@ provider_configs: []
 
         mock_agent = MagicMock()
         mock_agent.workspace_id = "test-workspace"
+        mock_agent.registry_item_id = None
+        mock_agent.is_catalog = False
         mock_agent.name = "Agent with Skill"
         mock_agent.description = "Has skills"
         mock_agent.instruction = "Instructions"
@@ -961,6 +1009,8 @@ provider_configs: []
         skill_id = uuid4()
         mock_skill = MagicMock()
         mock_skill.workspace_id = "test-workspace"
+        mock_skill.registry_item_id = None
+        mock_skill.is_catalog = False
         mock_skill.id = skill_id
         mock_skill.name = "Roundtrip Skill"
         mock_skill.description = "For testing roundtrip"
@@ -969,6 +1019,8 @@ provider_configs: []
 
         mock_agent = MagicMock()
         mock_agent.workspace_id = "test-workspace"
+        mock_agent.registry_item_id = None
+        mock_agent.is_catalog = False
         mock_agent.name = "Roundtrip Agent"
         mock_agent.description = "Agent with skill"
         mock_agent.instruction = ""

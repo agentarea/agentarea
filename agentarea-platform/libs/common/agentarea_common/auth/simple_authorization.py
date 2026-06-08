@@ -8,9 +8,8 @@ class SimpleAuthorizationService(AuthorizationService):
     """OSS implementation of workspace access control.
 
     Pure policy: own workspace only. Built-in/official content is no longer made
-    visible by injecting a magic 'platform' workspace here — it is globally
-    readable by provenance (``source == 'official'``) in the repository layer, or
-    lives in the global registry catalog.
+    visible by injecting a magic 'platform' workspace here — it lives in the
+    global registry catalog and is read globally by the catalog repositories.
 
     Workspace memberships (added by accepting invitations) are resolved by
     the request-scoped dependency in ``auth.dependencies``, not here, so

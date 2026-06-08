@@ -17,7 +17,6 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from agentarea_common.base.source import SourceKind
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 
 from .parsers import YAMLValidationError, parse_yaml
@@ -66,12 +65,15 @@ class ReconcilerService:
                 logger.debug("No %s.yaml found in %s, skipping", entity_type, config_dir)
                 continue
 
-            # Built-in skills live in the registry catalog only (ADR-003): they
-            # are not materialized into the `skills` table. A real tenant row is
-            # created copy-on-write when a user edits a catalog skill.
-            if entity_type == "skills":
+            # Built-in skills, agents (catalog-only via copy-on-write), and the
+            # reference specs mcp_servers / models live in the registry catalog
+            # only (ADR-003): they are NOT materialized into their entity tables.
+            # They are read globally from registry_items; nothing is seeded here.
+            if entity_type in ("skills", "mcp_servers", "models"):
                 logger.debug(
-                    "Skipping skills.yaml reconcile: built-in skills are catalog-only (ADR-003)"
+                    "Skipping %s.yaml reconcile: built-in %s are catalog-only (ADR-003)",
+                    entity_type,
+                    entity_type,
                 )
                 continue
 
@@ -126,12 +128,6 @@ class ReconcilerService:
                         session.add(entity)
                         result.created += 1
                         logger.debug("Created %s: %s", entity_type, name)
-
-                    # Platform-seeded entities are built-in (provenance), so
-                    # is_builtin() holds regardless of seeding path. Only the
-                    # source-bearing tables (agents, skills) carry the column.
-                    if hasattr(entity, "source"):
-                        entity.source = SourceKind.OFFICIAL
 
                     await session.commit()
                 except Exception as e:
