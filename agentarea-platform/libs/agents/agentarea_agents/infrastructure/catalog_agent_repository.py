@@ -6,9 +6,9 @@ definition lives in the item's ``spec`` JSONB. This repository reads those
 catalog items so the agent service can project them as read-only agents.
 
 It deliberately uses raw SQL against ``registry_items`` / ``registries`` to avoid
-a cross-library dependency on ``agentarea-registry``. Reads are scoped to the
-caller's accessible workspaces (the ``platform`` workspace is injected there by
-the authorization layer, which is what makes the catalog globally readable).
+a cross-library dependency on ``agentarea-registry``. The catalog is global
+infrastructure (ADR-003): registries/registry_items are not workspace-scoped, so
+every tenant reads the same built-in agent definitions with no workspace filter.
 """
 
 from __future__ import annotations
@@ -41,26 +41,17 @@ class CatalogAgentRepository:
         self.session = session
         self.user_context = user_context
 
-    def _accessible_workspaces(self) -> list[str]:
-        workspaces = self.user_context.accessible_workspaces
-        if workspaces:
-            return list(workspaces)
-        return [self.user_context.workspace_id]
-
     async def list_items(self) -> list[CatalogAgentItem]:
-        """List all catalog agent items readable by the current user."""
+        """List all catalog agent items (global catalog, no workspace filter)."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "ri.installed_entity_id, ri.installed_version "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'agents' "
-            "AND ri.workspace_id = ANY(:workspaces) "
             "ORDER BY ri.name"
         )
-        result = await self.session.execute(
-            query, {"workspaces": self._accessible_workspaces()}
-        )
+        result = await self.session.execute(query)
         return [self._row_to_item(row) for row in result.fetchall()]
 
     async def get_item(self, item_id: str) -> CatalogAgentItem | None:
@@ -71,12 +62,9 @@ class CatalogAgentRepository:
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'agents' "
-            "AND ri.id = :item_id "
-            "AND ri.workspace_id = ANY(:workspaces)"
+            "AND ri.id = :item_id"
         )
-        result = await self.session.execute(
-            query, {"item_id": item_id, "workspaces": self._accessible_workspaces()}
-        )
+        result = await self.session.execute(query, {"item_id": item_id})
         row = result.fetchone()
         return self._row_to_item(row) if row else None
 

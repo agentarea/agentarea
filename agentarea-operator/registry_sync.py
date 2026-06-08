@@ -449,11 +449,10 @@ def _upsert_registry(
     source_url: str,
     workspace_id: str,
 ) -> str:
+    # registries are global catalog infrastructure (no workspace_id column).
     row = conn.execute(
-        _text(
-            "SELECT id FROM registries WHERE name = :name AND workspace_id = :ws"
-        ),
-        {"name": name, "ws": workspace_id},
+        _text("SELECT id FROM registries WHERE name = :name"),
+        {"name": name},
     ).fetchone()
     if row:
         registry_id = str(row[0])
@@ -474,8 +473,8 @@ def _upsert_registry(
     conn.execute(
         _text(
             "INSERT INTO registries (id, name, registry_type, source_type, source_url, "
-            "is_active, sync_mode, workspace_id, created_by, created_at, updated_at) "
-            "VALUES (:id, :name, :rt, :st, :url, true, 'manual', :ws, :created_by, now(), now())"
+            "is_active, sync_mode, created_at, updated_at) "
+            "VALUES (:id, :name, :rt, :st, :url, true, 'manual', now(), now())"
         ),
         {
             "id": registry_id,
@@ -483,8 +482,6 @@ def _upsert_registry(
             "rt": registry_type,
             "st": source_type,
             "url": source_url,
-            "ws": workspace_id,
-            "created_by": PLATFORM_PRINCIPAL_ID,
         },
     )
     return registry_id
@@ -514,9 +511,9 @@ def _create_registry_item(
     conn.execute(
         _text(
             "INSERT INTO registry_items (id, registry_id, external_id, name, description, "
-            "version, spec, tags, update_available, workspace_id, created_by, "
-            "created_at, updated_at) VALUES (:id, :rid, :ext, :name, :desc, :ver, "
-            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, :ws, :created_by, now(), now())"
+            "version, spec, tags, update_available, created_at, updated_at) "
+            "VALUES (:id, :rid, :ext, :name, :desc, :ver, "
+            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, now(), now())"
         ),
         {
             "id": item_id,
@@ -527,8 +524,6 @@ def _create_registry_item(
             "ver": item.get("version"),
             "spec": json.dumps(item.get("spec") or {}),
             "tags": json.dumps(item.get("tags") or []),
-            "ws": workspace_id,
-            "created_by": PLATFORM_PRINCIPAL_ID,
         },
     )
     return item_id
@@ -688,9 +683,10 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, supports_function_calling, is_active, workspace_id, "
-            "created_by, created_at, updated_at) VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :sfc, :active, :ws, :created_by, now(), now())"
+            "output_cost_per_token, supports_function_calling, is_active, source, "
+            "workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
+            ":mot, :icpt, :ocpt, :sfc, :active, 'official', :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -773,10 +769,10 @@ def _upsert_mcp_server(
         _text(
             "INSERT INTO mcp_servers (id, name, slug, description, docker_image_url, version, "
             "tags, is_public, env_schema, cmd, remote_url, registry_item_id, json_spec, "
-            "registry_url, workspace_id, created_by, created_at, updated_at) "
+            "registry_url, source, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :name, :slug, :desc, :img, :ver, CAST(:tags AS JSONB), false, "
             "CAST(:env AS JSONB), CAST(:cmd AS JSONB), :rurl, :rid, "
-            "CAST(:json_spec AS JSONB), :registry_url, :ws, :created_by, now(), now())"
+            "CAST(:json_spec AS JSONB), :registry_url, 'official', :ws, :created_by, now(), now())"
         ),
         {
             "id": sid,

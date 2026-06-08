@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
+from .source import SourceKind
 
 
 class WorkspaceScopedRepository[T]:
@@ -33,18 +34,32 @@ class WorkspaceScopedRepository[T]:
         self.resource_type = model_class.__name__.lower().replace("orm", "").replace("model", "")
 
     def _get_workspace_filter(self):
-        """Get the workspace filter for queries.
+        """Get the read filter for queries.
 
-        Uses accessible_workspaces from UserContext to determine which
-        workspaces the user can read from. This is resolved by the
-        AuthorizationService during request authentication.
+        A row is readable when it belongs to one of the user's accessible
+        workspaces (own workspace + real memberships, resolved by the
+        AuthorizationService during request authentication) OR, for tables that
+        carry provenance, when it is platform-official/built-in
+        (``source == 'official'``).
+
+        The official-source predicate replaces the old
+        ``accessible_workspaces=[ws, 'platform']`` sentinel: built-in content is
+        globally readable by provenance, not by faked workspace membership. A
+        row from another workspace with ``source != 'official'`` stays hidden.
         """
         workspaces = self.user_context.accessible_workspaces
         model = cast(Any, self.model_class)
         workspace_col = model.workspace_id
+
         if workspaces and len(workspaces) > 1:
-            return workspace_col.in_(workspaces)
-        return workspace_col == self.user_context.workspace_id
+            workspace_predicate = workspace_col.in_(workspaces)
+        else:
+            workspace_predicate = workspace_col == self.user_context.workspace_id
+
+        source_col = getattr(model, "source", None)
+        if source_col is not None:
+            return or_(workspace_predicate, source_col == SourceKind.OFFICIAL.value)
+        return workspace_predicate
 
     def _get_creator_workspace_filter(self):
         """Get the creator and workspace filter for queries."""
