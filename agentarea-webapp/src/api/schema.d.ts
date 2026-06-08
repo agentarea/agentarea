@@ -277,7 +277,7 @@ export interface paths {
         };
         /**
          * Get Agent
-         * @description Get an agent by UUID or workspace-scoped slug.
+         * @description Get an agent by UUID or workspace-scoped slug (tenant or catalog).
          */
         get: operations["get_agent_v1_agents__agent_id__get"];
         put?: never;
@@ -1011,56 +1011,12 @@ export interface paths {
         put?: never;
         /**
          * Preview Effective Policy
-         * @description Compute effective policy without persisting a snapshot.
+         * @description Compute effective policy from rules without persisting a snapshot.
          *
          *     Useful for UIs that need to show the merged workspace/agent/task ceiling
          *     before the user commits a task creation.
          */
         post: operations["preview_effective_policy_v1_governance_effective_policy_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/governance/policies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Policies
-         * @description List source policies in the current workspace.
-         */
-        get: operations["list_policies_v1_governance_policies_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/governance/policies/{scope_type}/{scope_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Policy
-         * @description Read one source policy in the current workspace.
-         */
-        get: operations["get_policy_v1_governance_policies__scope_type___scope_id__get"];
-        /**
-         * Upsert Policy
-         * @description Create or update a source policy, rejecting obvious lower-scope loosening.
-         */
-        put: operations["upsert_policy_v1_governance_policies__scope_type___scope_id__put"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1962,6 +1918,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Policy Rules
+         * @description List policy rules in the current workspace.
+         */
+        get: operations["list_policy_rules_v1_policies_get"];
+        put?: never;
+        /**
+         * Create Policy Rule
+         * @description Create a policy rule in the current workspace.
+         */
+        post: operations["create_policy_rule_v1_policies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/policies/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy Rule
+         * @description Read one policy rule in the current workspace.
+         */
+        get: operations["get_policy_rule_v1_policies__rule_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Policy Rule
+         * @description Delete a policy rule.
+         */
+        delete: operations["delete_policy_rule_v1_policies__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Policy Rule
+         * @description Partially update a policy rule.
+         */
+        patch: operations["update_policy_rule_v1_policies__rule_id__patch"];
+        trace?: never;
+    };
     "/v1/projects/": {
         parameters: {
             query?: never;
@@ -2418,6 +2426,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rebac/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Permission
+         * @description Check whether a subject has a relation on an object.
+         */
+        post: operations["check_permission_v1_rebac_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rebac/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Graph
+         * @description Return the full authorization graph for the current workspace.
+         */
+        get: operations["get_graph_v1_rebac_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rebac/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Access
+         * @description Resolve why (and how) a subject can access a resource.
+         *
+         *     ``allowed`` is computed via a Keto check; ``paths`` are derived by traversing
+         *     the workspace tuples directly so the UI can render the derivation.
+         */
+        post: operations["resolve_access_v1_rebac_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rebac/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Grants
+         * @description Mirror existing grants into Keto and seed a starter collection.
+         *
+         *     Idempotent: safe to call repeatedly. Steps:
+         *       1. If no collections exist, create "All skills" containing every workspace
+         *          skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.
+         *       2. For each collection_skills row, write
+         *          ``Skill:<sid>#collections@SkillCollection:<cid>``.
+         *       3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.
+         */
+        post: operations["sync_grants_v1_rebac_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rebac/tuples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tuples
+         * @description List relation tuples, enriched with object/subject display names.
+         */
+        get: operations["list_tuples_v1_rebac_tuples_get"];
+        put?: never;
+        /**
+         * Create Tuple
+         * @description Write a relation tuple to Keto.
+         */
+        post: operations["create_tuple_v1_rebac_tuples_post"];
+        /**
+         * Delete Tuple
+         * @description Delete a relation tuple from Keto.
+         */
+        delete: operations["delete_tuple_v1_rebac_tuples_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/registries/": {
         parameters: {
             query?: never;
@@ -2569,6 +2695,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/skill-collections/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collections
+         * @description List collections in the current workspace with skill counts.
+         */
+        get: operations["list_collections_v1_skill_collections__get"];
+        put?: never;
+        /**
+         * Create Collection
+         * @description Create a new collection in the current workspace.
+         */
+        post: operations["create_collection_v1_skill_collections__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skill-collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Collection
+         * @description Read one collection with its skills.
+         */
+        get: operations["get_collection_v1_skill_collections__collection_id__get"];
+        /**
+         * Update Collection
+         * @description Update a collection's name and/or description.
+         */
+        put: operations["update_collection_v1_skill_collections__collection_id__put"];
+        post?: never;
+        /**
+         * Delete Collection
+         * @description Delete a collection from the current workspace.
+         */
+        delete: operations["delete_collection_v1_skill_collections__collection_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skill-collections/{collection_id}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Skill To Collection
+         * @description Add a skill to a collection and mirror the membership into Keto.
+         */
+        post: operations["add_skill_to_collection_v1_skill_collections__collection_id__skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Skill From Collection
+         * @description Remove a skill from a collection and delete the Keto membership tuple.
+         */
+        delete: operations["remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/skills": {
         parameters: {
             query?: never;
@@ -2622,7 +2840,7 @@ export interface paths {
         };
         /**
          * Get Skill
-         * @description Get a skill by ID.
+         * @description Get a skill by ID (tenant or catalog).
          */
         get: operations["get_skill_v1_skills__skill_id__get"];
         /**
@@ -2650,7 +2868,7 @@ export interface paths {
         };
         /**
          * Get Skill Content
-         * @description Get the main markdown content of a skill.
+         * @description Get the main markdown content of a skill (tenant or catalog).
          */
         get: operations["get_skill_content_v1_skills__skill_id__content_get"];
         put?: never;
@@ -3331,7 +3549,7 @@ export interface paths {
          *
          *     **Important Notes:**
          *     - Secrets (API keys, passwords) are replaced with placeholders
-         *     - System-level resources (workspace_id="system") are excluded
+         *     - Built-in/catalog resources (carrying registry_item_id) are excluded
          *     - Only resources in the current workspace are exported
          *     - References to specs are included (server_spec_id, provider_spec_id)
          *
@@ -3440,9 +3658,32 @@ export interface paths {
         get: operations["get_workspace_settings_v1_workspace_settings_get"];
         /**
          * Update Workspace Settings
-         * @description Upsert the current workspace's settings.
+         * @description Upsert the current workspace's monthly spend cap as a policy rule.
          */
         put: operations["update_workspace_settings_v1_workspace_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workspaces
+         * @description List every workspace the current user can reach (personal + joined).
+         *
+         *     Provisions the caller's personal workspace on first call, so a brand
+         *     new user always gets at least one entry.
+         */
+        get: operations["list_workspaces_v1_workspaces_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3711,6 +3952,14 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
+        /** AddSkillRequest */
+        AddSkillRequest: {
+            /**
+             * Skill Id
+             * Format: uuid
+             */
+            skill_id: string;
+        };
         /** AgentAuthentication */
         AgentAuthentication: {
             /** Credentials */
@@ -3854,7 +4103,7 @@ export interface components {
              * Tools
              * @description Tools attached to the agent (code/mcp/agent/openapi).
              */
-            tools?: components["schemas"]["ToolConfigYAML"][] | null;
+            tools?: (components["schemas"]["CodeToolConfig"] | components["schemas"]["McpToolConfig-Input"] | components["schemas"]["AgentToolConfig"] | components["schemas"]["OpenApiToolConfig"])[] | null;
         };
         /** AgentOverviewResponse */
         AgentOverviewResponse: {
@@ -3904,12 +4153,19 @@ export interface components {
             id: string;
             /** Instruction */
             instruction?: string | null;
+            /**
+             * Is Catalog
+             * @default false
+             */
+            is_catalog: boolean;
             /** Model Id */
             model_id?: string | null;
             /** Name */
             name: string;
             /** Planning */
             planning?: boolean | null;
+            /** Registry Item Id */
+            registry_item_id?: string | null;
             /** Skills */
             skills?: {
                 [key: string]: unknown;
@@ -3919,7 +4175,12 @@ export interface components {
             /** Status */
             status: string;
             /** Tools */
-            tools?: components["schemas"]["ToolConfigYAML"][] | null;
+            tools?: (components["schemas"]["CodeToolConfig"] | components["schemas"]["McpToolConfig-Output"] | components["schemas"]["AgentToolConfig"] | components["schemas"]["OpenApiToolConfig"])[] | null;
+            /**
+             * Update Available
+             * @default false
+             */
+            update_available: boolean;
         };
         /** AgentRow */
         AgentRow: {
@@ -3960,6 +4221,33 @@ export interface components {
             /** Tags */
             tags?: string[] | null;
         };
+        /** AgentToolConfig */
+        AgentToolConfig: {
+            /** Name */
+            name: string;
+            settings?: components["schemas"]["AgentToolSettings"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "agent";
+        };
+        /**
+         * AgentToolSettings
+         * @description Settings for an agent-to-agent (delegation) tool.
+         *
+         *     ``a2a_url`` selects the *remote* transport binding; absent → same-platform
+         *     direct delegation. Lives here only — A2A is a per-edge binding, not a
+         *     property every tool type carries.
+         */
+        AgentToolSettings: {
+            /** A2A Url */
+            a2a_url?: string | null;
+            /** Description Override */
+            description_override?: string | null;
+            /** Requires User Confirmation */
+            requires_user_confirmation?: boolean | null;
+        };
         /**
          * AgentUpdate
          * @description Patch payload for an agent. All fields optional — unset = unchanged.
@@ -3985,7 +4273,7 @@ export interface components {
             /** Skill Ids */
             skill_ids?: string[] | null;
             /** Tools */
-            tools?: components["schemas"]["ToolConfigYAML"][] | null;
+            tools?: (components["schemas"]["CodeToolConfig"] | components["schemas"]["McpToolConfig-Input"] | components["schemas"]["AgentToolConfig"] | components["schemas"]["OpenApiToolConfig"])[] | null;
         };
         /**
          * AnalyzeRequest
@@ -4335,6 +4623,79 @@ export interface components {
              */
             source_url?: string | null;
         };
+        /** CheckRequest */
+        CheckRequest: {
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Relation */
+            relation: string;
+            /** Subject Id */
+            subject_id: string;
+        };
+        /** CheckResponse */
+        CheckResponse: {
+            /** Allowed */
+            allowed: boolean;
+        };
+        /** CodeToolConfig */
+        CodeToolConfig: {
+            /** Name */
+            name: string;
+            settings?: components["schemas"]["CodeToolSettings"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "code";
+        };
+        /**
+         * CodeToolSettings
+         * @description Settings for a built-in code toolset.
+         */
+        CodeToolSettings: {
+            /** Disabled Methods */
+            disabled_methods?: string[] | null;
+            /** Requires User Confirmation */
+            requires_user_confirmation?: boolean | null;
+        };
+        /** CollectionCreateRequest */
+        CollectionCreateRequest: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** CollectionDetailResponse */
+        CollectionDetailResponse: {
+            /** Description */
+            description: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Skills */
+            skills: components["schemas"]["SkillRef"][];
+        };
+        /** CollectionSummaryResponse */
+        CollectionSummaryResponse: {
+            /** Description */
+            description: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Skill Count */
+            skill_count: number;
+        };
+        /** CollectionUpdateRequest */
+        CollectionUpdateRequest: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+        };
         /**
          * ContentSafetyPolicy
          * @description Content-safety governance controls.
@@ -4545,7 +4906,7 @@ export interface components {
         EffectivePolicyPreviewRequest: {
             /** Agent Id */
             agent_id?: string | null;
-            task_policy?: components["schemas"]["PolicyDocument-Input"] | null;
+            task_policy?: components["schemas"]["PolicyDocument"] | null;
         };
         /** EffectivePolicyResponse */
         EffectivePolicyResponse: {
@@ -4722,6 +5083,45 @@ export interface components {
             interceptor_name: string;
             /** Phases */
             phases: string[];
+        };
+        /** GraphNode */
+        GraphNode: {
+            /** Color */
+            color: string;
+            /** Count */
+            count?: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "agent" | "collection" | "mcp";
+            /** Name */
+            name: string;
+            /** Subtitle */
+            subtitle: string;
+        };
+        /** GraphResponse */
+        GraphResponse: {
+            /** Edges */
+            edges: {
+                [key: string]: unknown;
+            }[];
+            /** Enabled */
+            enabled: boolean;
+            /** Nodes */
+            nodes: components["schemas"]["GraphNode"][];
+            stats: components["schemas"]["GraphStats"];
+        };
+        /** GraphStats */
+        GraphStats: {
+            /** Direct Exception Count */
+            direct_exception_count: number;
+            /** Governed Skill Count */
+            governed_skill_count: number;
+            /** Rule Count */
+            rule_count: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -5337,6 +5737,53 @@ export interface components {
             /** Stripe Profile Id */
             stripe_profile_id?: string | null;
         };
+        /** McpToolConfig */
+        "McpToolConfig-Input": {
+            /** Name */
+            name: string;
+            settings?: components["schemas"]["McpToolSettings"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "mcp";
+        };
+        /** McpToolConfig */
+        "McpToolConfig-Output": {
+            /** Name */
+            name: string;
+            settings?: components["schemas"]["McpToolSettings"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "mcp";
+        };
+        /**
+         * McpToolPermission
+         * @description A single MCP tool the agent may call, with its per-call approval gate.
+         *
+         *     Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+         */
+        McpToolPermission: {
+            /**
+             * Requires User Confirmation
+             * @default false
+             */
+            requires_user_confirmation: boolean;
+            /** Tool Name */
+            tool_name: string;
+        };
+        /**
+         * McpToolSettings
+         * @description Settings for an MCP server tool (a subset of the server's tools).
+         */
+        McpToolSettings: {
+            /** Allowed Tools */
+            allowed_tools?: components["schemas"]["McpToolPermission"][] | null;
+            /** Requires User Confirmation */
+            requires_user_confirmation?: boolean | null;
+        };
         /** MemberResponse */
         MemberResponse: {
             /**
@@ -5725,6 +6172,36 @@ export interface components {
             /** Spec Url */
             spec_url?: string | null;
         };
+        /** OpenApiToolConfig */
+        OpenApiToolConfig: {
+            /** Name */
+            name: string;
+            settings?: components["schemas"]["OpenApiToolSettings"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "openapi";
+        };
+        /**
+         * OpenApiToolSettings
+         * @description Settings for an OpenAPI connection tool.
+         *
+         *     ``load_mode`` picks schema disclosure: "explicit" inlines every operation's
+         *     schema into each LLM call (legacy); "searchable" defers them behind a
+         *     ``load_tools`` meta-tool. Honored only for openapi tools — which is exactly
+         *     why it lives here and nowhere else.
+         */
+        OpenApiToolSettings: {
+            /** Allowed Tools */
+            allowed_tools?: string[] | null;
+            /** Load Mode */
+            load_mode?: ("explicit" | "searchable") | null;
+            /** Openapi Connection Id */
+            openapi_connection_id?: string | null;
+            /** Requires User Confirmation */
+            requires_user_confirmation?: boolean | null;
+        };
         /** PaginatedPaymentsResponse */
         PaginatedPaymentsResponse: {
             /** Items */
@@ -5797,7 +6274,7 @@ export interface components {
          * PolicyDocument
          * @description Source policy document stored per scope.
          */
-        "PolicyDocument-Input": {
+        PolicyDocument: {
             approval?: components["schemas"]["ApprovalPolicy"] | null;
             budget?: components["schemas"]["BudgetPolicy-Input"] | null;
             content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
@@ -5805,50 +6282,91 @@ export interface components {
             tools?: components["schemas"]["ToolsPolicy"] | null;
         };
         /**
-         * PolicyDocument
-         * @description Source policy document stored per scope.
-         */
-        "PolicyDocument-Output": {
-            approval?: components["schemas"]["ApprovalPolicy"] | null;
-            budget?: components["schemas"]["BudgetPolicy-Output"] | null;
-            content_safety?: components["schemas"]["ContentSafetyPolicy"] | null;
-            tokens?: components["schemas"]["TokenPolicy"] | null;
-            tools?: components["schemas"]["ToolsPolicy"] | null;
-        };
-        /** PolicyResponse */
-        PolicyResponse: {
-            document: components["schemas"]["PolicyDocument-Output"];
-            /** Enabled */
-            enabled: boolean;
-            /** Id */
-            id: string;
-            /** Scope Id */
-            scope_id: string;
-            scope_type: components["schemas"]["PolicyScopeType"];
-        };
-        /**
-         * PolicyScopeType
-         * @description Supported policy scope types.
+         * PolicyEffect
+         * @description What a rule does when it applies.
          * @enum {string}
          */
-        PolicyScopeType: "workspace" | "agent" | "task";
+        PolicyEffect: "allow" | "deny" | "cap" | "approval" | "safety";
         /**
-         * PolicyUpsertRequest
-         * @description Request body for creating or updating a source policy.
+         * PolicyRuleCreateRequest
+         * @description Request body for creating a policy rule.
          */
-        PolicyUpsertRequest: {
-            document: components["schemas"]["PolicyDocument-Input"];
+        PolicyRuleCreateRequest: {
+            /** Condition */
+            condition?: string | null;
+            effect: components["schemas"]["PolicyEffect"];
             /**
              * Enabled
              * @default true
              */
             enabled: boolean;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
             /**
-             * Parent Agent Id
-             * @description Required when validating a task-scoped persisted policy against its agent.
+             * Priority
+             * @default 0
              */
-            parent_agent_id?: string | null;
+            priority: number;
+            /** Subject Id */
+            subject_id: string;
+            subject_type: components["schemas"]["PolicySubjectType"];
+            /** Target */
+            target: string;
         };
+        /**
+         * PolicyRuleResponse
+         * @description Serialized policy rule returned to clients.
+         */
+        PolicyRuleResponse: {
+            /** Condition */
+            condition?: string | null;
+            effect: components["schemas"]["PolicyEffect"];
+            /** Enabled */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Priority */
+            priority: number;
+            /** Subject Id */
+            subject_id: string;
+            subject_type: components["schemas"]["PolicySubjectType"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * PolicyRuleUpdateRequest
+         * @description Request body for partially updating a policy rule.
+         */
+        PolicyRuleUpdateRequest: {
+            /** Condition */
+            condition?: string | null;
+            effect?: components["schemas"]["PolicyEffect"] | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            } | null;
+            /** Priority */
+            priority?: number | null;
+            /** Subject Id */
+            subject_id?: string | null;
+            subject_type?: components["schemas"]["PolicySubjectType"] | null;
+            /** Target */
+            target?: string | null;
+        };
+        /**
+         * PolicySubjectType
+         * @description The kind of subject a rule binds to.
+         * @enum {string}
+         */
+        PolicySubjectType: "workspace" | "agent" | "user" | "group";
         /**
          * PreviewEntity
          * @description One thing the package will (or won't) create.
@@ -6313,6 +6831,49 @@ export interface components {
             /** Sync Mode */
             sync_mode?: string | null;
         };
+        /** ResolveHop */
+        ResolveHop: {
+            /** Color */
+            color: string;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /** ResolvePath */
+        ResolvePath: {
+            /** Hops */
+            hops: components["schemas"]["ResolveHop"][];
+            /** Relation */
+            relation: string;
+            /** Rels */
+            rels: string[];
+        };
+        /** ResolveRequest */
+        ResolveRequest: {
+            /** Resource Id */
+            resource_id: string;
+            /**
+             * Resource Kind
+             * @enum {string}
+             */
+            resource_kind: "skill" | "mcp" | "agent";
+            /** Subject Id */
+            subject_id: string;
+        };
+        /** ResolveResponse */
+        ResolveResponse: {
+            /** Allowed */
+            allowed: boolean;
+            /** Effective Relation */
+            effective_relation: string | null;
+            /** Paths */
+            paths: components["schemas"]["ResolvePath"][];
+            /** Verb */
+            verb: string;
+        };
         /**
          * SetupField
          * @description A single value the user must provide before the package can run.
@@ -6472,6 +7033,13 @@ export interface components {
             /** Parent Skill Id */
             parent_skill_id: string;
         };
+        /** SkillRef */
+        SkillRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /**
          * SkillResponse
          * @description Skill response model.
@@ -6485,16 +7053,28 @@ export interface components {
             has_files: boolean;
             /** Id */
             id: string;
+            /**
+             * Is Catalog
+             * @default false
+             */
+            is_catalog: boolean;
             /** Name */
             name: string;
             /** Network Scope */
             network_scope: string;
+            /** Registry Item Id */
+            registry_item_id?: string | null;
             /** Slug */
             slug: string;
             /** Source Type */
             source_type: string;
             /** Source Url */
             source_url: string | null;
+            /**
+             * Update Available
+             * @default false
+             */
+            update_available: boolean;
             /** Updated At */
             updated_at: string;
             /** Workspace Id */
@@ -6566,16 +7146,14 @@ export interface components {
             /** Today Usd */
             today_usd: number;
         };
-        /** SyncResponse */
-        SyncResponse: {
-            /** New Specs */
-            new_specs: number;
-            /** Total */
-            total: number;
-            /** Unchanged */
-            unchanged: number;
-            /** Updates Flagged */
-            updates_flagged: number;
+        /** SubjectSetBody */
+        SubjectSetBody: {
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Relation */
+            relation: string;
         };
         /**
          * TaskArtifactItem
@@ -6624,7 +7202,7 @@ export interface components {
              * @default false
              */
             requires_human_approval: boolean | null;
-            task_policy?: components["schemas"]["PolicyDocument-Input"] | null;
+            task_policy?: components["schemas"]["PolicyDocument"] | null;
         };
         /**
          * TaskEvent
@@ -6806,6 +7384,10 @@ export interface components {
             created_at: string;
             /** Description */
             description: string;
+            /** Escalation Id */
+            escalation_id?: string | null;
+            /** Escalation Tool Name */
+            escalation_tool_name?: string | null;
             /** Execution Id */
             execution_id?: string | null;
             /**
@@ -6837,20 +7419,6 @@ export interface components {
             max_tokens_per_call?: number | null;
         };
         /**
-         * ToolConfigYAML
-         * @description Tool configuration in YAML format.
-         */
-        ToolConfigYAML: {
-            /** Name */
-            name: string;
-            settings?: components["schemas"]["ToolSettingsYAML"] | null;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "code" | "mcp" | "agent" | "openapi";
-        };
-        /**
          * ToolResponse
          * @description Unified tool response format.
          */
@@ -6872,26 +7440,6 @@ export interface components {
              * @enum {string}
              */
             type: "code" | "mcp";
-        };
-        /**
-         * ToolSettingsYAML
-         * @description Tool settings configuration in YAML format.
-         */
-        ToolSettingsYAML: {
-            /** A2A Url */
-            a2a_url?: string | null;
-            /** Allowed Tools */
-            allowed_tools?: unknown[] | null;
-            /** Description Override */
-            description_override?: string | null;
-            /** Disabled Methods */
-            disabled_methods?: string[] | null;
-            /** Load Mode */
-            load_mode?: ("explicit" | "searchable") | null;
-            /** Openapi Connection Id */
-            openapi_connection_id?: string | null;
-            /** Requires User Confirmation */
-            requires_user_confirmation?: boolean | null;
         };
         /**
          * ToolsPolicy
@@ -7229,6 +7777,49 @@ export interface components {
             /** Webhook Type */
             webhook_type?: string | null;
         };
+        /** TupleItem */
+        TupleItem: {
+            /** Direct */
+            direct: boolean;
+            /** Fanout */
+            fanout?: number | null;
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Object Name */
+            object_name: string;
+            /** Relation */
+            relation: string;
+            /** Subject */
+            subject: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "agent" | "user" | "workspace";
+            /** Subject Name */
+            subject_name: string;
+        };
+        /** TupleWriteRequest */
+        TupleWriteRequest: {
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Relation */
+            relation: string;
+            /** Subject Id */
+            subject_id?: string | null;
+            subject_set?: components["schemas"]["SubjectSetBody"] | null;
+        };
+        /** TuplesResponse */
+        TuplesResponse: {
+            /** Count */
+            count: number;
+            /** Tuples */
+            tuples: components["schemas"]["TupleItem"][];
+        };
         /** UpcomingItem */
         UpcomingItem: {
             /** Cron Expression */
@@ -7392,6 +7983,17 @@ export interface components {
             /** Files */
             files: components["schemas"]["WorkspaceFileInfo"][];
         };
+        /** WorkspaceResponse */
+        WorkspaceResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Type */
+            type: string;
+        };
         /** WorkspaceSettingsResponse */
         WorkspaceSettingsResponse: {
             /** Monthly Cap Usd */
@@ -7544,6 +8146,24 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** SyncResponse */
+        agentarea_api__api__v1__rebac__SyncResponse: {
+            /** Collections */
+            collections: number;
+            /** Written */
+            written: number;
+        };
+        /** SyncResponse */
+        agentarea_api__api__v1__registries__SyncResponse: {
+            /** New Specs */
+            new_specs: number;
+            /** Total */
+            total: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Updates Flagged */
+            updates_flagged: number;
         };
     };
     responses: never;
@@ -9365,107 +9985,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectivePolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_policies_v1_governance_policies_get: {
-        parameters: {
-            query?: {
-                scope_type?: string | null;
-                scope_id?: string | null;
-                enabled?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_policy_v1_governance_policies__scope_type___scope_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                scope_type: string;
-                scope_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_policy_v1_governance_policies__scope_type___scope_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                scope_type: string;
-                scope_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11438,6 +11957,169 @@ export interface operations {
             };
         };
     };
+    list_policy_rules_v1_policies_get: {
+        parameters: {
+            query?: {
+                subject_type?: components["schemas"]["PolicySubjectType"] | null;
+                subject_id?: string | null;
+                effect?: components["schemas"]["PolicyEffect"] | null;
+                target?: string | null;
+                enabled?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRuleResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_policy_rule_v1_policies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRuleCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_rule_v1_policies__rule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_policy_rule_v1_policies__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_policy_rule_v1_policies__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRuleUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_projects_v1_projects__get: {
         parameters: {
             query?: {
@@ -12393,6 +13075,209 @@ export interface operations {
             };
         };
     };
+    check_permission_v1_rebac_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_graph_v1_rebac_graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphResponse"];
+                };
+            };
+        };
+    };
+    resolve_access_v1_rebac_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_grants_v1_rebac_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["agentarea_api__api__v1__rebac__SyncResponse"];
+                };
+            };
+        };
+    };
+    list_tuples_v1_rebac_tuples_get: {
+        parameters: {
+            query?: {
+                namespace?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TuplesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_tuple_v1_rebac_tuples_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TupleWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_tuple_v1_rebac_tuples_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TupleWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_registries_v1_registries__get: {
         parameters: {
             query?: {
@@ -12704,7 +13589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncResponse"];
+                    "application/json": components["schemas"]["agentarea_api__api__v1__registries__SyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -12737,6 +13622,217 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UpdateAllResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_collections_v1_skill_collections__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionSummaryResponse"][];
+                };
+            };
+        };
+    };
+    create_collection_v1_skill_collections__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_v1_skill_collections__collection_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_collection_v1_skill_collections__collection_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_collection_v1_skill_collections__collection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_skill_to_collection_v1_skill_collections__collection_id__skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -13924,6 +15020,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspaces_v1_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResponse"][];
                 };
             };
         };

@@ -16,7 +16,9 @@ type Agent = {
   status: string;
 };
 
-type ToolConfig = components["schemas"]["ToolConfigYAML"];
+// Derived from the backend union (the old single ToolConfigYAML was split into
+// discriminated Code/Mcp/Agent/OpenApi variants); track it via AgentCreate.tools.
+type ToolConfig = NonNullable<components["schemas"]["AgentCreate"]["tools"]>[number];
 
 interface DelegationConfigProps {
   agentId: string;
