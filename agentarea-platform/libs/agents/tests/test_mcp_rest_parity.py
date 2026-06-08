@@ -127,7 +127,9 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
         "capabilities",
         "agent_type",
     },
-    "runs.start": set(),
+    # ``task_policy`` is a governance-set field (budget/policy snapshot applied by
+    # the caller/PEP), not an agent-facing kwarg — agents don't set their own policy.
+    "runs.start": {"task_policy"},
     "projects.create": set(),
     "projects.update": set(),
     "providers.create_config": set(),
