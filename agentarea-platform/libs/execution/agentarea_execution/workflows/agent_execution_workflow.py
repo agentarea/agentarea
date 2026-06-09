@@ -337,8 +337,8 @@ class AgentExecutionWorkflow:
                 "UserInputSubmitted",
                 {
                     "input_request_id": input_request_id,
-                    "answer_keys": sorted(list((payload.get("answers") or {}).keys())),
-                    "secret_keys": sorted(list((payload.get("secret_refs") or {}).keys())),
+                    "answer_keys": sorted((payload.get("answers") or {}).keys()),
+                    "secret_keys": sorted((payload.get("secret_refs") or {}).keys()),
                 },
             )
         workflow.logger.info(f"User input submitted: {input_request_id}")
@@ -1920,8 +1920,8 @@ class AgentExecutionWorkflow:
             {
                 "input_request_id": input_request_id,
                 "tool_call_id": tool_call.id,
-                "answer_keys": sorted(list((submission.get("answers") or {}).keys())),
-                "secret_keys": sorted(list((submission.get("secret_refs") or {}).keys())),
+                "answer_keys": sorted((submission.get("answers") or {}).keys()),
+                "secret_keys": sorted((submission.get("secret_refs") or {}).keys()),
                 "iteration": self.state.current_iteration,
             },
         )
@@ -1980,9 +1980,7 @@ class AgentExecutionWorkflow:
                 }:
                     field_type = "text"
                 options = [
-                    str(option)
-                    for option in (raw.get("options") or [])
-                    if str(option).strip()
+                    str(option) for option in (raw.get("options") or []) if str(option).strip()
                 ]
                 question = {
                     "id": field_id,

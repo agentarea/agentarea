@@ -19,8 +19,9 @@ import {
   getAgentIconComponent,
   resolveAgentIdentity,
 } from "@/lib/agent-identity";
-import { getAgent, listAgentTasks, type Agent } from "@/lib/api";
+import { getAgent, listAgentTasks } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
+import type { Agent } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
 const fmtUsd = (v: number) =>
