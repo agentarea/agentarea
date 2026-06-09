@@ -136,6 +136,33 @@
       display: none;
     }
   }
+  /* Generic "hide on mobile" for row meta clusters / trailing columns. */
+  @container collection (max-width: 640px) {
+    .collection-hide-mobile {
+      display: none;
+    }
+  }
+  /* Section-header sub/description text drops on the smallest (xs) screens. */
+  @container collection (max-width: 480px) {
+    .collection-section-sub {
+      display: none;
+    }
+  }
+
+  /* Connections (mcp-servers) row grid: name · type · url/desc · tools/version ·
+     status/date. On mobile the type, url/desc + tools/version columns drop out,
+     leaving just name + status. */
+  .conn-row-grid {
+    grid-template-columns: minmax(0, 1.3fr) 132px minmax(0, 1.7fr) 76px 104px;
+  }
+  @container collection (max-width: 640px) {
+    .conn-row-grid {
+      grid-template-columns: minmax(0, 1fr) 104px;
+    }
+    .conn-col-hide-mobile {
+      display: none;
+    }
+  }
 }
 
 @layer base {

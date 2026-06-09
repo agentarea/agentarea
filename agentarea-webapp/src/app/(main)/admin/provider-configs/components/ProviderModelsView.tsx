@@ -48,12 +48,6 @@ interface ProviderModelsViewProps {
 /* AgentArea brand blue — drives the tile tint + accent model pills. */
 const ACCENT = "#2252b3";
 
-/* Shared row grid so both sections distribute their columns evenly and the
-   name / status / count columns line up vertically across configs + specs:
-   [ name | provider | models | status | count ]. */
-const ROW_GRID =
-  "minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.7fr) 96px 76px";
-
 /* ── hosting + status ──────────────────────────────────────────────────── */
 
 const LOCAL_PROVIDER_KEYS = new Set([
@@ -181,7 +175,7 @@ function SectionHeaderInner({
       <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
         {count}
       </span>
-      <span className="truncate text-[11.5px] font-normal text-muted-foreground/70">
+      <span className="collection-section-sub truncate text-[11.5px] font-normal text-muted-foreground/70">
         {sub}
       </span>
     </>
@@ -333,30 +327,22 @@ export default function ProviderModelsView({
             icon: providerIcon(spec?.icon_url),
             title: config.name,
             href: `/admin/provider-configs/edit/${config.id}`,
-            // evenly-distributed columns: name | provider | models | status | count
-            rowGrid: ROW_GRID,
-            rowCells: [
-              <span key="name" className="truncate text-[13px] font-medium text-foreground">
-                {config.name}
-              </span>,
-              {
-                node: (
-                  <span className="collection-subtext truncate">
-                    {providerName}
-                  </span>
-                ),
-                keepOnHover: true,
-              },
-              <span key="models" className="flex min-w-0 overflow-hidden">
-                <ModelTags models={modelNames} max={3} />
-              </span>,
-              <ConfigStatusDot key="status" status={status} />,
-              { node: <ModelCountText count={count} />, className: "justify-end" },
-            ],
-            // provider name as a muted subline under the card title (matches
-            // the design's `card-prov`); no description block on config cards
-            cardSubtitle: providerName || null,
+            // provider shown as the muted secondary text right after the name,
+            // in the first column (like /skills); the right cluster keeps the
+            // model tags · status · count.
+            description: providerName || null,
             hideDescription: true,
+            cardSubtitle: providerName || null,
+            metaPlain: true,
+            meta: (
+              <span className="collection-hide-mobile flex items-center gap-3">
+                <span className="collection-col-source flex max-w-[190px] overflow-hidden">
+                  <ModelTags models={modelNames} max={2} />
+                </span>
+                <ConfigStatusDot status={status} />
+                <ModelCountText count={count} />
+              </span>
+            ),
             cardFooter: (
               <div className="flex items-center gap-2 pr-6">
                 <ModelCountText count={count} />
@@ -395,25 +381,16 @@ export default function ProviderModelsView({
             icon: providerIcon(spec.icon_url),
             title: spec.name,
             href: `/admin/provider-configs/create/${spec.id}`,
-            // same grid: name | (description spans provider+models+status) | count
-            rowGrid: ROW_GRID,
-            rowCells: [
-              <span key="name" className="truncate text-[13px] font-medium text-foreground">
-                {spec.name}
-              </span>,
-              {
-                node: (
-                  <span className="collection-subtext truncate">
-                    {spec.description}
-                  </span>
-                ),
-                colSpan: 3,
-                keepOnHover: true,
-              },
-              { node: <ModelCountText count={count} selfHost={local} />, className: "justify-end" },
-            ],
+            // description shown right after the name in the first column
+            // (like /skills); the right cluster keeps the model count.
             description: spec.description,
             compactDescription: true,
+            metaPlain: true,
+            meta: (
+              <span className="collection-hide-mobile">
+                <ModelCountText count={count} selfHost={local} />
+              </span>
+            ),
             cardFooter: (
               <div className="flex items-center gap-2 pr-6">
                 <ModelCountText count={count} selfHost={local} />

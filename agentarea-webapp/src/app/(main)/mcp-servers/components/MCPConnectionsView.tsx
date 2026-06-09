@@ -65,11 +65,6 @@ interface MCPConnectionsViewProps {
 const MCP_COLOR = "#5e6ad2";
 const API_COLOR = "#cf6a2a";
 
-/* Shared row grid so the connections + specs sections distribute their columns
-   evenly and line up vertically: [ name | type | endpoint·desc | sub | trailing ]. */
-const CONN_ROW_GRID =
-  "minmax(0,1.3fr) 132px minmax(0,1.7fr) 76px 104px";
-
 /* status buckets — dot + label colour, used for the chip, grouping + ordering */
 const STATUS_BUCKETS: {
   key: string;
@@ -203,7 +198,7 @@ function SectionHeaderInner({
       <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
         {count}
       </span>
-      <span className="truncate text-[11.5px] font-normal text-muted-foreground/70">
+      <span className="collection-section-sub truncate text-[11.5px] font-normal text-muted-foreground/70">
         {sub}
       </span>
     </>
@@ -401,16 +396,23 @@ export default function MCPConnectionsView({
       >
         {name}
       </span>,
-      <TypePill key="type" kind={kind} />,
-      <span
-        key="endpoint"
-        className="truncate font-mono text-[11.5px] text-muted-foreground/70"
-      >
-        {endpoint || <Dash />}
-      </span>,
-      <span key="tools" className="truncate text-[11.5px] text-muted-foreground">
-        {tools > 0 ? `${tools} tools` : <Dash />}
-      </span>,
+      { node: <TypePill kind={kind} />, className: "conn-col-hide-mobile" },
+      {
+        node: (
+          <span className="truncate font-mono text-[11.5px] text-muted-foreground/70">
+            {endpoint || <Dash />}
+          </span>
+        ),
+        className: "conn-col-hide-mobile",
+      },
+      {
+        node: (
+          <span className="truncate text-[11.5px] text-muted-foreground">
+            {tools > 0 ? `${tools} tools` : <Dash />}
+          </span>
+        ),
+        className: "conn-col-hide-mobile",
+      },
       <ConnStatusDot key="status" health={health} />,
     ],
     []
@@ -458,7 +460,7 @@ export default function MCPConnectionsView({
           description: instance.description,
           href: `/mcp-servers/${instance.id}`,
           hideDescription: true,
-          rowGrid: CONN_ROW_GRID,
+          rowGridClassName: "conn-row-grid",
           rowCells: connRowCells(instance.name, "mcp", endpoint, tools, health),
           cardFooter: connCardFooter("mcp", tools, health),
         },
@@ -485,7 +487,7 @@ export default function MCPConnectionsView({
           description: connection.description,
           href: `/mcp-servers/openapi/${connection.id}`,
           hideDescription: true,
-          rowGrid: CONN_ROW_GRID,
+          rowGridClassName: "conn-row-grid",
           rowCells: connRowCells(
             connection.name,
             "api",
@@ -535,7 +537,7 @@ export default function MCPConnectionsView({
           href: `/mcp-servers/create/${server.id}`,
           compactDescription: true,
           // same shared grid as the connections section → columns line up
-          rowGrid: CONN_ROW_GRID,
+          rowGridClassName: "conn-row-grid",
           rowCells: [
             <span
               key="name"
@@ -543,21 +545,31 @@ export default function MCPConnectionsView({
             >
               {title}
             </span>,
-            <span key="pills" className="flex items-center gap-1.5">
-              {!server.is_public && <CustomPill />}
-              <ToolsPill />
-            </span>,
-            <span
-              key="desc"
-              className="truncate text-[12.5px] text-muted-foreground"
-            >
-              {server.description}
-            </span>,
-            server.version ? (
-              <VersionChip key="ver" version={server.version} />
-            ) : (
-              <span key="ver" />
-            ),
+            {
+              node: (
+                <span className="flex items-center gap-1.5">
+                  {!server.is_public && <CustomPill />}
+                  <ToolsPill />
+                </span>
+              ),
+              className: "conn-col-hide-mobile",
+            },
+            {
+              node: (
+                <span className="truncate text-[12.5px] text-muted-foreground">
+                  {server.description}
+                </span>
+              ),
+              className: "conn-col-hide-mobile",
+            },
+            {
+              node: server.version ? (
+                <VersionChip version={server.version} />
+              ) : (
+                <span />
+              ),
+              className: "conn-col-hide-mobile",
+            },
             <span
               key="date"
               className="whitespace-nowrap text-[11.5px] text-muted-foreground/70"

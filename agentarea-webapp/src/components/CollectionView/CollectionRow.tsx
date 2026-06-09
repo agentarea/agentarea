@@ -78,10 +78,13 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
           column (name) stays put; the trailing columns hide on hover so the
           open-arrow has room — matching the default row's "title stays, meta
           hides" behaviour. */}
-      {item.rowGrid ? (
+      {item.rowGrid || item.rowGridClassName ? (
         <div
-          className="relative z-[1] grid min-w-0 flex-1 items-center gap-3"
-          style={{ gridTemplateColumns: item.rowGrid }}
+          className={cn(
+            "relative z-[1] grid min-w-0 flex-1 items-center gap-3",
+            item.rowGridClassName
+          )}
+          style={item.rowGrid ? { gridTemplateColumns: item.rowGrid } : undefined}
         >
           {(item.rowCells ?? []).map((cell, i) => {
             const obj = isCellObject(cell);

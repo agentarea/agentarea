@@ -64,6 +64,10 @@ export interface CollectionItem {
    *  title/afterTitle/rowMiddle/description/meta slots are bypassed (the leading
    *  icon + hover open-arrow still render). Ignored by cards. */
   rowGrid?: string;
+  /** Row only: apply this class to the grid container instead of (or in
+   *  addition to) an inline `rowGrid` template. Lets the column template be
+   *  responsive via container queries, which can't target inline styles. */
+  rowGridClassName?: string;
   /** Row only: the cells placed on the `rowGrid`, one per column. An entry may
    *  be a bare node or `{ node, colSpan, className, keepOnHover }` to span
    *  columns, restyle the cell wrapper, or keep the cell visible on hover
