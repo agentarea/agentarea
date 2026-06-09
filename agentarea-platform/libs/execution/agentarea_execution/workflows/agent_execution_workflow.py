@@ -1980,9 +1980,7 @@ class AgentExecutionWorkflow:
                 }:
                     field_type = "text"
                 options = [
-                    str(option)
-                    for option in (raw.get("options") or [])
-                    if str(option).strip()
+                    str(option) for option in (raw.get("options") or []) if str(option).strip()
                 ]
                 question = {
                     "id": field_id,
