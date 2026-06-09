@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Bot,
   Check,
   CheckCircle2,
   Clock,
-  FileText,
+  ExternalLink,
   Inbox as InboxIcon,
   Wallet,
   X,
@@ -148,13 +149,6 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, resolved]
   );
-
-  // Default selection: first task in the active view.
-  useEffect(() => {
-    if (selId && visible.some((t) => String(t.id) === selId)) return;
-    setSelId(visible.length ? String(visible[0].id) : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
 
   const selected = visible.find((t) => String(t.id) === selId) ?? null;
 
@@ -300,9 +294,9 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
       {error ? (
         <div className="flex flex-1 items-center justify-center text-sm text-red-500">{error}</div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_432px]">
+        <div className={cn("grid min-h-0 flex-1 grid-cols-1 overflow-hidden", selected && "lg:grid-cols-[1fr_432px]")}>
           {/* ---- list pane ---- */}
-          <div className="flex min-w-0 flex-col overflow-hidden border-r border-border">
+          <div className={cn("flex min-w-0 flex-col overflow-hidden", selected && "border-r border-border")}>
             {anyChecked && (
               <div className="flex shrink-0 items-center gap-3 border-b border-border bg-primary/10 px-4 py-2">
                 <span className="text-[12.5px] font-semibold text-primary">
@@ -434,9 +428,11 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
           </div>
 
           {/* ---- detail pane ---- */}
-          <aside className="hidden min-w-0 flex-col overflow-y-auto lg:flex">
-            <DetailPane task={selected} onResolve={resolveOne} />
-          </aside>
+          {selected && (
+            <aside className="hidden min-w-0 flex-col overflow-y-auto lg:flex">
+              <DetailPane task={selected} onResolve={resolveOne} />
+            </aside>
+          )}
         </div>
       )}
     </ContentBlock>
@@ -495,9 +491,17 @@ function DetailPane({
           <StatusIcon status={status} size={14} /> {STATUS_LABEL[norm]}
         </span>
 
-        <h2 className="mb-3.5 text-[19px] font-semibold leading-tight tracking-tight">
-          {task.description || "Untitled task"}
-        </h2>
+        <div className="mb-3.5 flex items-start justify-between gap-2">
+          <h2 className="text-[19px] font-semibold leading-tight tracking-tight">
+            {task.description || "Untitled task"}
+          </h2>
+          <Link
+            href={`/tasks/${task.id}`}
+            className="mt-0.5 shrink-0 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+          >
+            <ExternalLink size={12} /> Open
+          </Link>
+        </div>
 
         <div className="mb-[18px] grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-2 text-[12.5px]">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -538,14 +542,15 @@ function DetailPane({
         )}
 
         <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-          Output preview
+          Output
         </p>
-        <div className="mb-5 overflow-hidden rounded-[10px] border border-border">
-          <div className="flex items-center gap-1.5 border-b border-border/60 bg-muted/50 px-3 py-2 text-[11px] font-semibold text-muted-foreground">
-            <FileText size={13} /> result.txt
-          </div>
+        <div className="mb-5 overflow-hidden rounded-[10px] border border-border bg-muted/30">
           <div className="whitespace-pre-wrap px-3 py-3 font-mono text-[11.5px] leading-relaxed text-foreground/80">
-            {resultText ?? (pend ? "Output will be available after the action runs." : "(no output)")}
+            {resultText ?? (
+              <span className="text-muted-foreground/60 italic">
+                {pend ? "Output will be available after the action runs." : "No output."}
+              </span>
+            )}
           </div>
         </div>
       </div>

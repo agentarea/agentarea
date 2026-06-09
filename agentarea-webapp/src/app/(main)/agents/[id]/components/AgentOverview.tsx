@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { notFound } from "next/navigation";
 import {
   ArrowUpRight,
   Boxes,
@@ -18,7 +19,7 @@ import {
   getAgentIconComponent,
   resolveAgentIdentity,
 } from "@/lib/agent-identity";
-import { getAgent, listAgentTasks } from "@/lib/api";
+import { getAgent, listAgentTasks, type Agent } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
 import { cn } from "@/lib/utils";
 
@@ -81,17 +82,21 @@ const PILL_CLASS: Record<TaskPill, { dot: string; pill: string; label: string }>
   };
 
 export async function AgentOverview({ agentId }: { agentId: string }) {
-  const [agentRes, overview, tasksRes, settings] = await Promise.all([
-    getAgent(agentId).catch(() => ({ data: null, error: "load failed" })),
-    getAgentOverview(agentId).catch(() => null),
-    listAgentTasks(agentId).catch(() => ({ data: null, error: "load failed" })),
-    getWorkspaceSettings().catch(() => null),
-  ]);
+  const agentRes = await getAgent(agentId);
+  const agent = agentRes.data as Agent | undefined;
+  if (!agent) notFound();
 
-  const agent = (agentRes?.data as any) || { id: agentId, name: agentId };
+  // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
+  const realId: string = agent.id;
   // Canonical ref for in-page links: keep URLs on the slug when available,
   // regardless of whether the page was opened by slug or id.
   const agentRef = agent.slug || agentId;
+
+  const [overview, tasksRes, settings] = await Promise.all([
+    getAgentOverview(realId).catch(() => null),
+    listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
+    getWorkspaceSettings().catch(() => null),
+  ]);
   const tasks = (tasksRes?.data as any[]) || [];
 
   const runningTasks = tasks.filter((t) =>
