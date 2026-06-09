@@ -622,6 +622,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Task Input
+         * @description Submit structured user input to a workflow waiting on request_user_input.
+         *
+         *     Secret values are written to the workspace secret manager at the API boundary.
+         *     Only secret refs are sent to Temporal/LLM context.
+         */
+        post: operations["submit_task_input_v1_agents__agent_id__tasks__task_id__input_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/tasks/{task_id}/pause": {
         parameters: {
             query?: never;
@@ -5267,6 +5290,16 @@ export interface components {
             total: number;
         };
         /**
+         * InputSecretValue
+         * @description Secret value submitted through the protected input endpoint.
+         */
+        InputSecretValue: {
+            /** Secret Name */
+            secret_name?: string | null;
+            /** Value */
+            value: string;
+        };
+        /**
          * InstallAction
          * @enum {string}
          */
@@ -7250,6 +7283,22 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * TaskInputSubmission
+         * @description Structured user input submission for a pending workflow input request.
+         */
+        TaskInputSubmission: {
+            /** Answers */
+            answers?: {
+                [key: string]: unknown;
+            };
+            /** Input Request Id */
+            input_request_id: string;
+            /** Secrets */
+            secrets?: {
+                [key: string]: string | components["schemas"]["InputSecretValue"];
+            };
+        };
         /** TaskResponse */
         TaskResponse: {
             /**
@@ -9204,6 +9253,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_task_input_v1_agents__agent_id__tasks__task_id__input_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskInputSubmission"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

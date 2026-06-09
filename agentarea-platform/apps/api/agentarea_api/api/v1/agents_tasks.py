@@ -1155,8 +1155,8 @@ async def submit_task_input(
             "status": "accepted",
             "task_id": str(task_id),
             "input_request_id": submission.input_request_id,
-            "answer_keys": sorted(list(submission.answers.keys())),
-            "secret_keys": sorted(list(secret_refs.keys())),
+            "answer_keys": sorted(submission.answers.keys()),
+            "secret_keys": sorted(secret_refs.keys()),
         }
 
     except HTTPException:
