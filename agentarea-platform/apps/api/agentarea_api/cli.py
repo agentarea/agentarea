@@ -271,6 +271,13 @@ async def _reconcile(
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
 
+    # Validate up front so a malformed entry reports a clear message instead of
+    # failing deep inside the per-registry loop with a bare KeyError.
+    for i, config in enumerate(configs):
+        if not isinstance(config, dict) or "name" not in config or "source_url" not in config:
+            click.echo(f"Registry entry {i} must be a mapping with 'name' and 'source_url'")
+            sys.exit(1)
+
     skill_repo_cls = None
     try:
         from agentarea_agents.infrastructure.skill_repository import SkillRepository
@@ -338,6 +345,10 @@ async def _reconcile(
                 else:
                     registry_type = config.get("type")
                     if not registry_type:
+                        # Detection fetches the source to inspect its shape; the
+                        # subsequent sync_registry fetches it again to parse. The
+                        # extra GET is acceptable for a one-shot reconcile — set an
+                        # explicit `type` in the manifest to skip detection.
                         registry_type = service.detect_type_from_source(config["source_url"])
                         click.echo(f"Detected type: {registry_type}")
                     registry = await service.create_registry(
