@@ -40,7 +40,12 @@ export default function CollectionCard({ item }: { item: CollectionItem }) {
       {/* top: icon + title (+ optional aside, e.g. a status dot) */}
       <div className="relative z-[1] mb-[9px] flex items-center gap-[9px]">
         {!item.hideIcon && (
-          <Tile color={item.color} icon={item.icon} variant="card" />
+          <Tile
+            color={item.color}
+            icon={item.icon}
+            variant="card"
+            fill={item.iconFill}
+          />
         )}
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
           {item.title}

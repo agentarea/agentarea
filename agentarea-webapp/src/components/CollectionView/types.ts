@@ -36,6 +36,10 @@ export interface CollectionItem {
   /** A Lucide icon → tinted Tile, or any node (e.g. an <img> logo) → rendered
    *  inside the same bordered square. */
   icon: LucideIcon | ReactNode;
+  /** The icon is a self-contained mark (solid logo / initials block) that
+   *  should fill the whole tile — drops the colour tint + border so no ring
+   *  shows around it. Pass the icon node `h-full w-full`. */
+  iconFill?: boolean;
   /** Accent colour for the tile tint and the primary dot. */
   color: string;
   title: string;
@@ -48,6 +52,24 @@ export interface CollectionItem {
   /** Row only: node rendered immediately after the title, before the
    *  description (e.g. inline type/Custom pills). Ignored by cards. */
   afterTitle?: ReactNode;
+  /** Row only: the flexible (flex-1) middle column, rendered after the title /
+   *  afterTitle fixed columns and before the trailing meta cluster. Lets a row
+   *  spread rich content (e.g. model-name pills) across the gap instead of
+   *  leaving a void. When set it takes the row's flex-1 role in place of
+   *  `description` (which still drives the card). Ignored by cards. */
+  rowMiddle?: ReactNode;
+  /** Row only: lay the row out as an evenly-distributed CSS grid using this
+   *  `grid-template-columns` value (e.g. `"1.2fr 1.2fr 1.6fr auto auto"`). When
+   *  set, `rowCells` supplies one node per column and the default
+   *  title/afterTitle/rowMiddle/description/meta slots are bypassed (the leading
+   *  icon + hover open-arrow still render). Ignored by cards. */
+  rowGrid?: string;
+  /** Row only: the cells placed on the `rowGrid`, one per column. An entry may
+   *  be a bare node or `{ node, colSpan, className }` to span columns / restyle
+   *  the cell wrapper. Ignored by cards. */
+  rowCells?: Array<
+    ReactNode | { node: ReactNode; colSpan?: number; className?: string }
+  >;
   /** Row only: override the title column width classes (e.g. a fixed
    *  `w-[200px] shrink-0` so following columns line up vertically). */
   titleClassName?: string;

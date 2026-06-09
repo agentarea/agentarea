@@ -11,7 +11,7 @@ export type {
   DisplayMenuOption,
   CollectionToolbarProps,
 } from "./CollectionToolbar";
-export { Tile, shortAge } from "./meta";
+export { Tile, shortAge, StatusDot } from "./meta";
 export type {
   CollectionItem,
   CollectionBadge,

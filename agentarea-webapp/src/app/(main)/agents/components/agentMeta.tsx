@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Activity, MoreHorizontal } from "lucide-react";
+import { StatusDot } from "@/components/CollectionView";
 import {
   Tooltip,
   TooltipContent,
@@ -127,24 +128,13 @@ export function StatusCell({
 }) {
   const { label, color } = statusMeta(status);
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 text-[12px] font-normal",
-            className
-          )}
-          style={{ color: dotOnly ? undefined : color }}
-        >
-          <span
-            className="h-[7px] w-[7px] shrink-0 rounded-full"
-            style={{ backgroundColor: color }}
-          />
-          {!dotOnly && label}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <StatusDot
+      color={color}
+      label={label}
+      dotOnly={dotOnly}
+      tooltip={label}
+      className={cn("text-[12px] font-normal", className)}
+    />
   );
 }
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import CollectionView, {
   CollectionToolbar,
+  StatusDot,
   type CollectionGroup,
   type CollectionItem,
 } from "@/components/CollectionView";
@@ -61,6 +62,11 @@ interface MCPConnectionsViewProps {
 /* brand / protocol colours (Connections design) */
 const MCP_COLOR = "#5e6ad2";
 const API_COLOR = "#cf6a2a";
+
+/* Shared row grid so the connections + specs sections distribute their columns
+   evenly and line up vertically: [ name | type | endpoint·desc | sub | trailing ]. */
+const CONN_ROW_GRID =
+  "minmax(0,1.3fr) 132px minmax(0,1.7fr) 76px 104px";
 
 /* status buckets — dot + label colour, used for the chip, grouping + ordering */
 const STATUS_BUCKETS: {
@@ -122,17 +128,9 @@ function TypePill({ kind }: { kind: "mcp" | "api" }) {
   );
 }
 
-function StatusDot({ health }: { health: HealthStatus }) {
+function ConnStatusDot({ health }: { health: HealthStatus }) {
   const s = statusMeta(health);
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-medium"
-      style={{ color: s.color }}
-    >
-      <span className="h-[7px] w-[7px] rounded-full" style={{ background: s.color }} />
-      {s.label}
-    </span>
-  );
+  return <StatusDot color={s.color} label={s.label} />;
 }
 
 function Dash() {
@@ -386,22 +384,32 @@ export default function MCPConnectionsView({
     name: string;
   };
 
-  const connMeta = useCallback(
-    (kind: "mcp" | "api", endpoint: string | null, tools: number, health: HealthStatus) => (
+  const connRowCells = useCallback(
+    (
+      name: string,
+      kind: "mcp" | "api",
+      endpoint: string | null,
+      tools: number,
+      health: HealthStatus
+    ) => [
       <span
-        className="grid items-center gap-2.5"
-        style={{ gridTemplateColumns: "76px 150px 60px 92px" }}
+        key="name"
+        className="truncate text-[13px] font-medium text-foreground"
       >
-        <TypePill kind={kind} />
-        <span className="truncate font-mono text-[11.5px] text-muted-foreground/70">
-          {endpoint || <Dash />}
-        </span>
-        <span className="text-[11.5px] text-muted-foreground">
-          {tools > 0 ? `${tools} tools` : <Dash />}
-        </span>
-        <StatusDot health={health} />
-      </span>
-    ),
+        {name}
+      </span>,
+      <TypePill key="type" kind={kind} />,
+      <span
+        key="endpoint"
+        className="truncate font-mono text-[11.5px] text-muted-foreground/70"
+      >
+        {endpoint || <Dash />}
+      </span>,
+      <span key="tools" className="truncate text-[11.5px] text-muted-foreground">
+        {tools > 0 ? `${tools} tools` : <Dash />}
+      </span>,
+      <ConnStatusDot key="status" health={health} />,
+    ],
     []
   );
 
@@ -414,7 +422,7 @@ export default function MCPConnectionsView({
             {tools > 0 ? `${tools} tools` : <Dash />}
           </span>
         ) : (
-          <StatusDot health={health} />
+          <ConnStatusDot health={health} />
         )}
       </div>
     ),
@@ -447,7 +455,8 @@ export default function MCPConnectionsView({
           description: instance.description,
           href: `/mcp-servers/${instance.id}`,
           hideDescription: true,
-          meta: connMeta("mcp", endpoint, tools, health),
+          rowGrid: CONN_ROW_GRID,
+          rowCells: connRowCells(instance.name, "mcp", endpoint, tools, health),
           cardFooter: connCardFooter("mcp", tools, health),
         },
       };
@@ -465,14 +474,22 @@ export default function MCPConnectionsView({
           icon: (
             <OpenAPIConnectionMark
               connection={connection}
-              className="h-4 w-4 rounded text-[7px]"
+              className="h-full w-full rounded-none text-[9px]"
             />
           ),
+          iconFill: true,
           title: connection.name,
           description: connection.description,
           href: `/mcp-servers/openapi/${connection.id}`,
           hideDescription: true,
-          meta: connMeta("api", connection.base_url, tools, health),
+          rowGrid: CONN_ROW_GRID,
+          rowCells: connRowCells(
+            connection.name,
+            "api",
+            connection.base_url,
+            tools,
+            health
+          ),
           cardFooter: connCardFooter("api", tools, health),
         },
       };
@@ -484,7 +501,7 @@ export default function MCPConnectionsView({
     openApiConnections,
     getInstanceHealth,
     getOpenAPIHealth,
-    connMeta,
+    connRowCells,
     connCardFooter,
   ]);
 
@@ -514,25 +531,37 @@ export default function MCPConnectionsView({
           description: server.description,
           href: `/mcp-servers/create/${server.id}`,
           compactDescription: true,
-          // fixed title + badge columns so description / badges line up vertically
-          titleClassName: "w-[200px] shrink-0",
-          afterTitle: (
-            <span className="flex w-[132px] items-center gap-1.5">
+          // same shared grid as the connections section → columns line up
+          rowGrid: CONN_ROW_GRID,
+          rowCells: [
+            <span
+              key="name"
+              className="truncate text-[13px] font-medium text-foreground"
+            >
+              {title}
+            </span>,
+            <span key="pills" className="flex items-center gap-1.5">
               {!server.is_public && <CustomPill />}
               <ToolsPill />
-            </span>
-          ),
-          meta: (
+            </span>,
             <span
-              className="grid items-center gap-2.5 text-[11.5px]"
-              style={{ gridTemplateColumns: "56px 84px" }}
+              key="desc"
+              className="truncate text-[12.5px] text-muted-foreground"
             >
-              {server.version ? <VersionChip version={server.version} /> : <span />}
-              <span className="whitespace-nowrap text-muted-foreground/70">
-                {fmtDate(server.updated_at)}
-              </span>
-            </span>
-          ),
+              {server.description}
+            </span>,
+            server.version ? (
+              <VersionChip key="ver" version={server.version} />
+            ) : (
+              <span key="ver" />
+            ),
+            <span
+              key="date"
+              className="whitespace-nowrap text-[11.5px] text-muted-foreground/70"
+            >
+              {fmtDate(server.updated_at)}
+            </span>,
+          ],
           cardFooter: (
             <div className="flex items-center gap-2.5 pr-6 text-[11.5px]">
               {server.version && <VersionChip version={server.version} />}

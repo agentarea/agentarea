@@ -1,5 +1,64 @@
 import { isValidElement, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+
+/**
+ * Status indicator — a small colour dot followed by a colour-matched label
+ * (e.g. "● Active"). The single shared status badge reused across every
+ * collection page (Tasks, Agents, Connections, Models). Purely presentational:
+ * each page maps its own domain status into a `color` + `label`; the rendering
+ * stays identical everywhere.
+ */
+export function StatusDot({
+  color,
+  label,
+  dotOnly,
+  pulse,
+  tooltip,
+  className,
+}: {
+  color: string;
+  label: ReactNode;
+  /** Render only the dot (label hidden) — for dense / icon-only contexts. */
+  dotOnly?: boolean;
+  /** Animate the dot (e.g. a running task). */
+  pulse?: boolean;
+  /** When provided, wrap in a tooltip showing this content. */
+  tooltip?: ReactNode;
+  className?: string;
+}) {
+  const content = (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-normal",
+        className
+      )}
+      style={{ color: dotOnly ? undefined : color }}
+    >
+      <span
+        className={cn(
+          "h-[7px] w-[7px] shrink-0 rounded-full",
+          pulse && "motion-safe:animate-pulse"
+        )}
+        style={{ backgroundColor: color }}
+      />
+      {!dotOnly && label}
+    </span>
+  );
+
+  if (tooltip == null) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 /**
  * Brand glyph tile — a softly colour-tinted square (13% colour over the
@@ -12,12 +71,18 @@ export function Tile({
   icon,
   variant = "row",
   size,
+  fill,
 }: {
   color: string;
   icon: LucideIcon | ReactNode;
   variant?: "row" | "card";
   /** Override the preset box size (px). Radius/glyph scale to match. */
   size?: number;
+  /** The icon is a self-contained mark (a solid logo / initials block) that
+   *  should fill the whole tile: drop the colour tint + border and let the icon
+   *  bleed edge-to-edge (pass it `h-full w-full`). The tile only supplies the
+   *  fixed box size + rounded clip. */
+  fill?: boolean;
 }) {
   const isCard = variant === "card";
   const box = size ?? (isCard ? 30 : 22);
@@ -32,14 +97,21 @@ export function Tile({
 
   return (
     <span
-      className="relative flex shrink-0 items-center justify-center overflow-hidden border"
+      className={cn(
+        "relative flex shrink-0 items-center justify-center overflow-hidden",
+        !fill && "border"
+      )}
       style={{
         width: box,
         height: box,
         borderRadius: radius,
-        color,
-        background: `color-mix(in srgb, ${color} 13%, var(--tile-base))`,
-        borderColor: `color-mix(in srgb, ${color} 26%, var(--tile-base))`,
+        ...(fill
+          ? {}
+          : {
+              color,
+              background: `color-mix(in srgb, ${color} 13%, var(--tile-base))`,
+              borderColor: `color-mix(in srgb, ${color} 26%, var(--tile-base))`,
+            }),
       }}
     >
       {IconComponent ? (

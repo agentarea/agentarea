@@ -6,36 +6,51 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
-import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
 
 export const metadata: Metadata = {
-  title: "Provider Configs",
+  title: "Models",
 };
 
-interface TasksPageProps {
+function asString(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value : "";
+}
+
+interface ProviderConfigsPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function ProviderConfigsPage({
   searchParams,
-}: TasksPageProps) {
+}: ProviderConfigsPageProps) {
   const t = await getTranslations("Models");
   const resolvedSearchParams = await searchParams;
-  const searchQuery =
-    typeof resolvedSearchParams.search === "string"
-      ? resolvedSearchParams.search
-      : "";
 
-  // Read tab from URL or fallback to cookie
+  // View mode: prefer URL, fall back to cookie, default to grid.
   const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_admin_provider-configs")?.value;
-  const tab =
-    typeof resolvedSearchParams.tab === "string"
-      ? resolvedSearchParams.tab
-      : cookieTab || "grid";
+  const cookieView = cookieStore.get("view_admin_provider-configs")?.value;
+  const urlView = asString(resolvedSearchParams.view);
+  const view: "list" | "grid" =
+    urlView === "grid" || urlView === "list"
+      ? urlView
+      : cookieView === "list"
+        ? "list"
+        : "grid";
+
+  const hostingParam = asString(resolvedSearchParams.hosting);
+  const tab: "all" | "cloud" | "local" =
+    hostingParam === "cloud" || hostingParam === "local" ? hostingParam : "all";
+
+  const groupParam = asString(resolvedSearchParams.group);
+  const group: "none" | "status" | "hosting" =
+    groupParam === "status" || groupParam === "hosting" ? groupParam : "none";
+
+  const orderParam = asString(resolvedSearchParams.order);
+  const order: "name" | "status" =
+    orderParam === "status" ? "status" : "name";
+
+  const search = asString(resolvedSearchParams.search);
 
   return (
     <ContentBlock
@@ -55,25 +70,17 @@ export default async function ProviderConfigsPage({
           </Link>
         ),
       }}
-      subheader={
-        <>
-          <SearchInput
-            urlParamName="search"
-            urlPath="/admin/provider-configs"
-          />
-          <ProviderHeaderTabs currentTab={tab} />
-        </>
-      }
+      className="overflow-hidden p-0"
     >
       <Suspense
-        key={searchQuery}
+        key={`${view}-${tab}-${group}-${order}-${search}`}
         fallback={
           <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />
           </div>
         }
       >
-        <ProvidersData searchQuery={searchQuery} viewMode={tab} />
+        <ProvidersData initial={{ view, tab, group, order, search }} />
       </Suspense>
     </ContentBlock>
   );

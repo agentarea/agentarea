@@ -1,7 +1,7 @@
 "use client";
 
 import { Bot } from "lucide-react";
-import { Tile } from "@/components/CollectionView";
+import { StatusDot, Tile } from "@/components/CollectionView";
 import {
   Tooltip,
   TooltipContent,
@@ -91,29 +91,18 @@ export function StatusCell({
   const { key, label, color, tip } = statusMeta(status);
   const running = key === "run";
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] font-normal",
-            className
-          )}
-          style={{ color: dotOnly ? undefined : color }}
-        >
-          <span
-            className={cn(
-              "h-[7px] w-[7px] shrink-0 rounded-full",
-              running && "motion-safe:animate-pulse"
-            )}
-            style={{ backgroundColor: color }}
-          />
-          {!dotOnly && label}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        {label} — {tip}
-      </TooltipContent>
-    </Tooltip>
+    <StatusDot
+      color={color}
+      label={label}
+      dotOnly={dotOnly}
+      pulse={running}
+      tooltip={
+        <>
+          {label} — {tip}
+        </>
+      }
+      className={cn("text-[12px] font-normal", className)}
+    />
   );
 }
 

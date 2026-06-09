@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { isValidElement, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,21 @@ import type { CollectionItem } from "./types";
 /** Responsive column-drop classes, applied by badge position. The meta node
  *  (e.g. a date) drops first, then the secondary badge, then the primary. */
 const BADGE_COL_CLASS = ["collection-col-source", "collection-col-scope"];
+
+type RowCell =
+  | ReactNode
+  | { node: ReactNode; colSpan?: number; className?: string };
+
+function isCellObject(
+  cell: RowCell
+): cell is { node: ReactNode; colSpan?: number; className?: string } {
+  return (
+    typeof cell === "object" &&
+    cell !== null &&
+    !isValidElement(cell) &&
+    "node" in (cell as Record<string, unknown>)
+  );
+}
 
 export default function CollectionRow({ item }: { item: CollectionItem }) {
   const router = useRouter();
@@ -46,16 +61,56 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
       {/* leading glyph */}
       {!item.hideIcon && (
         <span className="relative z-[1] flex">
-          <Tile color={item.color} icon={item.icon} variant="row" />
+          <Tile
+            color={item.color}
+            icon={item.icon}
+            variant="row"
+            fill={item.iconFill}
+          />
         </span>
       )}
 
+      {/* grid mode: evenly-distributed columns laid out on `rowGrid`. The first
+          column (name) stays put; the trailing columns hide on hover so the
+          open-arrow has room — matching the default row's "title stays, meta
+          hides" behaviour. */}
+      {item.rowGrid ? (
+        <div
+          className="relative z-[1] grid min-w-0 flex-1 items-center gap-3"
+          style={{ gridTemplateColumns: item.rowGrid }}
+        >
+          {(item.rowCells ?? []).map((cell, i) => {
+            const obj = isCellObject(cell);
+            const node = obj ? cell.node : cell;
+            const extra = obj ? cell.className : undefined;
+            const span = obj ? cell.colSpan : undefined;
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "flex min-w-0 items-center",
+                  // keep the first cell (name) visible; fade the rest on hover
+                  i > 0 && "group-hover:invisible",
+                  i > 0 && menuOpen && "invisible",
+                  extra
+                )}
+                style={span ? { gridColumn: `span ${span}` } : undefined}
+              >
+                {node}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
       {/* title — capped beside a description column, else fills the row */}
       <span
         className={cn(
           "relative z-[1] truncate text-[13px] font-medium text-foreground",
           item.titleClassName ??
-            (item.description ? "max-w-[230px] shrink-0" : "min-w-0 flex-1")
+            (item.description || item.rowMiddle
+              ? "max-w-[230px] shrink-0"
+              : "min-w-0 flex-1")
         )}
       >
         {item.title}
@@ -68,11 +123,18 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
         </span>
       )}
 
-      {/* description */}
-      {item.description != null && (
-        <span className="relative z-[1] min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
-          {item.description}
+      {/* flexible middle column: rich rowMiddle content takes priority over the
+          plain description text (which still drives the card) */}
+      {item.rowMiddle != null ? (
+        <span className="relative z-[1] flex min-w-0 flex-1 items-center overflow-hidden">
+          {item.rowMiddle}
         </span>
+      ) : (
+        item.description != null && (
+          <span className="relative z-[1] min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+            {item.description}
+          </span>
+        )
       )}
 
       {/* meta cluster — hidden on hover (or while the menu is open) to make room
@@ -117,6 +179,8 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
           </span>
         )}
       </span>
+        </>
+      )}
 
       {/* hover quick actions — hidden via opacity (not display) so the trigger
           keeps a valid layout box; otherwise Radix loses its anchor. */}
