@@ -4,6 +4,11 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_mcp_server_instance_service
+from agentarea_api.api.v1.mcp_oauth_links import (
+    MCPOAuthLinkService,
+    OAuthLinkResponse,
+    get_oauth_link_service,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
@@ -542,12 +547,11 @@ async def list_oauth_links(
     instance_id: UUID,
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    oauth_link_service: MCPOAuthLinkService = Depends(get_oauth_link_service),
 ):
     instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    raise HTTPException(
-        status_code=501,
-        detail="Use the /v1/mcp-oauth-links endpoint to list OAuth links",
-    )
+    links = await oauth_link_service.list_links(instance_id)
+    return [OAuthLinkResponse.model_validate(link) for link in links]

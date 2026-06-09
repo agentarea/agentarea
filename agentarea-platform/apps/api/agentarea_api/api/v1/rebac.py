@@ -19,7 +19,8 @@ from agentarea_agents.infrastructure.collection_repository import (
     SkillCollectionRepository,
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
-from agentarea_common.auth import UserContextDep
+from agentarea_agents.infrastructure.skill_repository import SkillRepository
+from agentarea_common.auth import UserContext, UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
@@ -231,6 +232,41 @@ async def _workspace_tuples(keto: KetoClient, namespace: str) -> list[RelationTu
     except (KetoError, KetoUnavailableError):
         logger.exception("Failed to query Keto tuples for namespace=%s", namespace)
         return []
+
+
+_NAMESPACE_REPOS: dict[str, type] = {
+    "Agent": AgentRepository,
+    "MCPServer": MCPServerRepository,
+    "Skill": SkillRepository,
+    "SkillCollection": SkillCollectionRepository,
+}
+
+
+async def _assert_object_in_workspace(
+    namespace: str,
+    object_id: str,
+    user_context: UserContext,
+    db_session: AsyncSession,
+) -> None:
+    """Raise 403/422 if namespace:object_id does not belong to the caller's workspace."""
+    repo_cls = _NAMESPACE_REPOS.get(namespace)
+    if repo_cls is None:
+        raise HTTPException(status_code=422, detail=f"Unsupported namespace: {namespace!r}")
+    try:
+        obj_uuid = UUID(object_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid object id: {object_id!r}") from None
+    found = (
+        await RepositoryFactory(db_session, user_context)
+        .create_repository(repo_cls)
+        .get_by_id(obj_uuid)
+        is not None
+    )
+    if not found:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{namespace}:{object_id} not found in your workspace",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -447,11 +483,13 @@ async def list_tuples(
 async def create_tuple(
     payload: TupleWriteRequest,
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> dict:
     """Write a relation tuple to Keto."""
     keto = get_keto()
     if keto is None:
         raise HTTPException(status_code=503, detail="Keto is disabled")
+    await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     tuple_ = _to_relation_tuple(payload)
     try:
         await keto.write_tuple(tuple_)
@@ -465,11 +503,13 @@ async def create_tuple(
 async def delete_tuple(
     payload: TupleWriteRequest,
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> None:
     """Delete a relation tuple from Keto."""
     keto = get_keto()
     if keto is None:
         raise HTTPException(status_code=503, detail="Keto is disabled")
+    await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     tuple_ = _to_relation_tuple(payload)
     try:
         await keto.delete_tuple(tuple_)
@@ -565,7 +605,10 @@ async def resolve_access(
 
     if payload.resource_kind == "skill" and keto is not None:
         # Collections that contain this skill.
-        skill_uuid = UUID(payload.resource_id)
+        try:
+            skill_uuid = UUID(payload.resource_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="resource_id is not a valid UUID") from None
         membership_query = select(collection_skills_table.c.collection_id).where(
             collection_skills_table.c.skill_id == skill_uuid
         )
@@ -701,15 +744,13 @@ async def sync_grants(
             raise HTTPException(status_code=503, detail="Keto write failed") from exc
 
     # Step 2: mirror collection memberships (scoped to workspace collections).
-    workspace_collection_ids = {str(c.id) for c in await collection_repo.list_all()}
+    workspace_cid_uuids = [c.id for c in existing_collections]
     membership_query = select(
         collection_skills_table.c.collection_id,
         collection_skills_table.c.skill_id,
-    )
+    ).where(collection_skills_table.c.collection_id.in_(workspace_cid_uuids))
     for row in (await db_session.execute(membership_query)).all():
         cid = str(row.collection_id)
-        if cid not in workspace_collection_ids:
-            continue
         try:
             await keto.write_tuple(
                 RelationTuple(
@@ -725,14 +766,12 @@ async def sync_grants(
             raise HTTPException(status_code=503, detail="Keto write failed") from exc
 
     # Step 3: mirror direct agent_skills grants (scoped to workspace skills).
-    workspace_skill_ids = set(skill_ids)
+    workspace_skill_uuids = [UUID(s) for s in skill_ids]
     agent_skill_query = select(
         agent_skills_table.c.agent_id,
         agent_skills_table.c.skill_id,
-    )
+    ).where(agent_skills_table.c.skill_id.in_(workspace_skill_uuids))
     for row in (await db_session.execute(agent_skill_query)).all():
-        if str(row.skill_id) not in workspace_skill_ids:
-            continue
         try:
             await keto.write_tuple(
                 RelationTuple(

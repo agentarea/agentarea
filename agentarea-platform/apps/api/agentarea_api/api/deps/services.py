@@ -535,7 +535,7 @@ async def get_public_webhook_manager(
 
     # Trigger lookup with system context — get_by_webhook_id doesn't filter by workspace
     system_ctx = UserContext(
-        user_id="system", workspace_id="system", roles=[], accessible_workspaces=["system"]
+        user_id="system", workspace_id="system", accessible_workspaces=["system"]
     )
     trigger_repo = TriggerRepository(session=db_session, user_context=system_ctx)
 
@@ -566,7 +566,6 @@ async def get_public_webhook_manager(
                 ctx = UserContext(
                     user_id=created_by,
                     workspace_id=workspace_id,
-                    roles=[],
                     accessible_workspaces=[workspace_id, "system"],
                 )
                 repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)

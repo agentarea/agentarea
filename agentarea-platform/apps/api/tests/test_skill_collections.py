@@ -399,5 +399,5 @@ async def test_create_tuple_disabled_raises_503(monkeypatch):
         namespace="Skill", object=str(uuid4()), relation="viewers", subject_id="Agent:x"
     )
     with pytest.raises(rebac.HTTPException) as exc_info:
-        await rebac.create_tuple(req, context)
+        await rebac.create_tuple(req, context, None)  # db_session unused: 503 precedes the guard
     assert exc_info.value.status_code == 503

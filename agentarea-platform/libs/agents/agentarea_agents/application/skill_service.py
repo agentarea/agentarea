@@ -609,7 +609,6 @@ class SkillService:
             return None
         return await self._fork_catalog_skill(item)
 
-    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def update(
         self,
         skill_id: UUID | str,
@@ -617,34 +616,22 @@ class SkillService:
     ) -> Skill | None:
         """Update a skill's metadata (name and/or description).
 
-        Uses ``model_dump(exclude_unset=True)`` so omitted fields are left
-        unchanged (true PATCH semantics). Never touches files or content; for
-        content/file edits use :meth:`set_content` or
-        :meth:`replace_package_from_files`.
-
         Editing a catalog (built-in) skill forks a real tenant copy first
         (copy-on-write) and applies the edit to that copy.
-
-        Args:
-            skill_id: The skill ID.
-            payload: SkillEditMetadata with optional name / description.
-
-        Returns:
-            Updated Skill entity or None if not found.
         """
-        repo = self._get_repository()
-
         skill = await self._resolve_for_edit(skill_id)
         if skill is None:
             return None
-
-        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
-        if not update_data:
-            return skill
-
-        return await repo.update(str(skill.id), **update_data)
+        return await self._update_audited(skill.id, payload)
 
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _update_audited(self, skill_id: UUID, payload: SkillEditMetadata) -> Skill | None:
+        repo = self._get_repository()
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+        if not update_data:
+            return await repo.get_by_id(skill_id)
+        return await repo.update(str(skill_id), **update_data)
+
     async def set_content(
         self,
         skill_id: UUID | str,
@@ -653,25 +640,17 @@ class SkillService:
         """Replace the SKILL.md content of a content-mode skill.
 
         Editing a catalog (built-in) skill forks a real tenant copy first
-        (copy-on-write) and writes the content to that copy. For a forked skill
-        that still references the catalog item's S3 package, the content is
-        written to the tenant row directly; lazy S3 file copy on package skills
-        is handled by :meth:`replace_package_from_files`.
-
-        Args:
-            skill_id: The skill ID.
-            content: New SKILL.md text (UTF-8).
-
-        Returns:
-            Updated Skill entity or None if not found.
+        (copy-on-write) and writes the content to that copy.
         """
-        repo = self._get_repository()
         skill = await self._resolve_for_edit(skill_id)
         if skill is None:
             return None
-        return await repo.update(str(skill.id), content=content)
+        return await self._set_content_audited(skill.id, content)
 
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _set_content_audited(self, skill_id: UUID, content: str) -> Skill | None:
+        return await self._get_repository().update(str(skill_id), content=content)
+
     async def replace_package_from_files(
         self,
         skill_id: UUID | str,
@@ -679,42 +658,25 @@ class SkillService:
     ) -> Skill:
         """Replace a package-mode skill's file tree with the given map.
 
-        Overwrites by S3 key, then deletes any orphaned keys (present in old
-        package but absent in the new map). Same crash window as
-        ``create_from_zip``: a failure mid-write leaves a partial package.
-
-        Requires the skill to be package-mode (``s3_path`` set). Multi-file
-        edits on content-mode skills must go through delete + recreate.
-
         Editing a catalog (built-in) skill forks a real tenant copy first
-        (copy-on-write). Copy-on-write S3 handling: a forked skill's ``s3_path``
-        still references the catalog item's (foreign) prefix. Writing files
-        always targets the tenant's OWN prefix (``skills/{workspace}/{skill}/``);
-        when that differs from the current ``s3_path`` (i.e. the skill still
-        points at the shared catalog package), the new tenant prefix is adopted
-        and the foreign catalog files are NEVER deleted — the write is the
-        copy-then-write. Orphan deletion only happens when re-writing the skill's
-        own already-owned prefix.
-
-        Args:
-            skill_id: The skill ID.
-            files: Map of relative path -> file text content. Must include a
-                root-level ``SKILL.md`` (case-insensitive).
-
-        Returns:
-            Updated Skill entity.
-
-        Raises:
-            ValueError: skill not found, skill is content-mode, or files
-                missing SKILL.md.
+        (copy-on-write). The audit event is recorded against the resolved
+        tenant skill UUID, not the original catalog UUID.
         """
-        import io
-        import zipfile
-
-        repo = self._get_repository()
         skill = await self._resolve_for_edit(skill_id)
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
+        return await self._replace_package_audited(skill.id, skill, files)
+
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _replace_package_audited(
+        self,
+        skill_id: UUID,
+        skill: Skill,
+        files: dict[str, str],
+    ) -> Skill:
+        import io
+        import zipfile
+
         if not skill.s3_path:
             raise ValueError(
                 f"Skill {skill_id} is content-mode; multi-file edits not supported. "
@@ -731,13 +693,9 @@ class SkillService:
             for path, text in files.items():
                 zf.writestr(path, text)
 
-        # The tenant's OWN package prefix. If the skill still references a
-        # foreign (catalog) prefix, this differs and we copy-on-write into the
-        # tenant prefix instead of mutating the shared catalog package.
         owns_package = skill.s3_path == self.storage_service._get_s3_prefix(
-            self.user_context.workspace_id, str(skill.id)
+            self.user_context.workspace_id, str(skill_id)
         )
-
         old_keys = (
             {f.path for f in await self.storage_service.list_files(skill.s3_path)}
             if owns_package
@@ -746,7 +704,7 @@ class SkillService:
         new_keys = set(files.keys())
 
         new_s3_path = await self.storage_service.store_package_from_zip(
-            skill_id=str(skill.id),
+            skill_id=str(skill_id),
             workspace_id=self.user_context.workspace_id,
             zip_data=buffer.getvalue(),
         )
@@ -759,14 +717,20 @@ class SkillService:
                 Delete={"Objects": [{"Key": f"{prefix}{p}"} for p in orphans]},
             )
 
-        skill = await repo.update(str(skill.id), content=new_skill_md_text, s3_path=new_s3_path)
-        if skill is None:
+        result = await self._get_repository().update(
+            str(skill_id), content=new_skill_md_text, s3_path=new_s3_path
+        )
+        if result is None:
             raise RuntimeError("Failed to update skill content")
         logger.info(
-            f"Replaced package for skill {skill.id}: {len(files)} files written, "
-            f"{len(orphans)} orphans removed (copy_on_write={not owns_package})"
+            "Replaced package for skill %s: %d files written, %d orphans removed "
+            "(copy_on_write=%s)",
+            skill_id,
+            len(files),
+            len(orphans),
+            not owns_package,
         )
-        return skill
+        return result
 
     @audited("skill.delete", resource_type="skill", resource_id_param="skill_id")
     async def delete(self, skill_id: UUID | str) -> bool:
@@ -815,8 +779,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not a multi-file package.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -863,8 +826,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not found or has no S3 storage.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -998,8 +960,7 @@ class SkillService:
             ValueError: If skill is not found or has no S3 storage.
             FileNotFoundError: If the file does not exist.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")

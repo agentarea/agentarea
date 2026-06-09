@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
 
 from . import agents_a2a, agents_well_known
+from ._rebac_grants import grant_user_relation
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,12 @@ async def create_agent(
             )
 
     agent = await agent_service.create_agent(data)
+    await grant_user_relation(
+        namespace="Agent",
+        object_id=agent.id,
+        relation="owners",
+        user_id=user_context.user_id,
+    )
     return AgentResponse.from_domain(agent)
 
 

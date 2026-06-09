@@ -23,6 +23,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
+from ._rebac_grants import grant_user_relation
+
 router = APIRouter(prefix="/skills", tags=["skills"])
 
 
@@ -196,6 +198,12 @@ async def create_skill(
                 ),
             )
 
+        await grant_user_relation(
+            namespace="Skill",
+            object_id=skill.id,
+            relation="owners",
+            user_id=skill_service.user_context.user_id,
+        )
         return SkillResponse.from_skill(skill)
 
     except GitHubRateLimitError as e:
@@ -225,6 +233,12 @@ async def upload_skill(
             zip_data=content,
             name=name,
             description=description,
+        )
+        await grant_user_relation(
+            namespace="Skill",
+            object_id=skill.id,
+            relation="owners",
+            user_id=skill_service.user_context.user_id,
         )
         return SkillResponse.from_skill(skill)
 

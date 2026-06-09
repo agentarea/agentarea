@@ -10,6 +10,8 @@ from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents.application.collection_service import SkillCollectionService
+from agentarea_agents.infrastructure.collection_repository import SkillCollectionRepository
+from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.infrastructure.database import get_db_session
@@ -123,13 +125,16 @@ async def update_collection(
     db_session: DatabaseSessionDep,
 ) -> CollectionSummaryResponse:
     """Update a collection's name and/or description."""
-    service = SkillCollectionService(RepositoryFactory(db_session, user_context))
+    factory = RepositoryFactory(db_session, user_context)
+    service = SkillCollectionService(factory)
     collection = await service.update(
         collection_id, name=payload.name, description=payload.description
     )
     if collection is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    skill_count = await service._repository.skill_count(collection_id)
+    skill_count = await factory.create_repository(SkillCollectionRepository).skill_count(
+        collection_id
+    )
     return CollectionSummaryResponse(
         id=str(collection.id),
         name=collection.name,
@@ -159,12 +164,14 @@ async def add_skill_to_collection(
     db_session: DatabaseSessionDep,
 ) -> None:
     """Add a skill to a collection and mirror the membership into Keto."""
-    service = SkillCollectionService(RepositoryFactory(db_session, user_context))
-    collection = await service._repository.get_by_id(collection_id)
-    if collection is None:
+    factory = RepositoryFactory(db_session, user_context)
+    service = SkillCollectionService(factory)
+    if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    await service.add_skill(collection_id, payload.skill_id)
+    if await factory.create_repository(SkillRepository).get_by_id(payload.skill_id) is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
 
+    # Write Keto first — if Keto is down the DB is not mutated (consistent state).
     keto = get_keto()
     if keto is not None:
         try:
@@ -185,6 +192,7 @@ async def add_skill_to_collection(
             raise HTTPException(
                 status_code=503, detail="Keto unavailable; membership tuple not written"
             ) from None
+    await service.add_skill(collection_id, payload.skill_id)
 
 
 @router.delete("/{collection_id}/skills/{skill_id}", status_code=204)
@@ -195,12 +203,12 @@ async def remove_skill_from_collection(
     db_session: DatabaseSessionDep,
 ) -> None:
     """Remove a skill from a collection and delete the Keto membership tuple."""
-    service = SkillCollectionService(RepositoryFactory(db_session, user_context))
-    collection = await service._repository.get_by_id(collection_id)
-    if collection is None:
+    factory = RepositoryFactory(db_session, user_context)
+    service = SkillCollectionService(factory)
+    if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    await service.remove_skill(collection_id, skill_id)
 
+    # Delete Keto tuple first — if Keto is down the DB is not mutated (grant stays consistent).
     keto = get_keto()
     if keto is not None:
         try:
@@ -221,3 +229,4 @@ async def remove_skill_from_collection(
             raise HTTPException(
                 status_code=503, detail="Keto unavailable; membership tuple not deleted"
             ) from None
+    await service.remove_skill(collection_id, skill_id)
