@@ -28,6 +28,10 @@ class WorkspaceContextFormatter(logging.Formatter):
         if hasattr(record, "workspace_id"):
             log_entry["workspace_id"] = cast(Any, record).workspace_id
 
+        trace_ids = _current_trace_ids()
+        if trace_ids:
+            log_entry.update(trace_ids)
+
         # Add audit event data if present
         if hasattr(record, "audit_event"):
             log_entry["audit_event"] = cast(Any, record).audit_event
@@ -117,6 +121,24 @@ def setup_logging(
     }
 
     logging.config.dictConfig(config)
+
+
+def _current_trace_ids() -> dict[str, str]:
+    """Return current OpenTelemetry trace identifiers when available."""
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return {}
+
+    span = trace.get_current_span()
+    span_context = span.get_span_context()
+    if not span_context.is_valid:
+        return {}
+
+    return {
+        "trace_id": f"{span_context.trace_id:032x}",
+        "span_id": f"{span_context.span_id:016x}",
+    }
 
 
 def update_logging_context(user_context: UserContext) -> None:

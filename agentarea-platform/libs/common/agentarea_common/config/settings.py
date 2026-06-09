@@ -12,6 +12,7 @@ from .channels import ChannelDeliverySettings
 from .database import DatabaseSettings
 from .keto import KetoSettings
 from .mcp import MCPManagerSettings, MCPSettings
+from .observability import ObservabilitySettings
 from .secrets import SecretManagerSettings
 from .triggers import TriggerSettings
 from .workflow import TaskExecutionSettings, WorkflowSettings
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     broker: RedisSettings | KafkaSettings
     mcp: MCPSettings
     mcp_manager: MCPManagerSettings = Field(default_factory=MCPManagerSettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     workflow: WorkflowSettings = Field(default_factory=WorkflowSettings)
     task_execution: TaskExecutionSettings = Field(default_factory=TaskExecutionSettings)
     triggers: TriggerSettings = Field(default_factory=TriggerSettings)
@@ -50,6 +52,7 @@ def get_settings() -> Settings:
         broker=broker,
         mcp=MCPSettings(),
         mcp_manager=MCPManagerSettings(),
+        observability=ObservabilitySettings(),
         workflow=WorkflowSettings(),
         task_execution=TaskExecutionSettings(),
         triggers=TriggerSettings(),

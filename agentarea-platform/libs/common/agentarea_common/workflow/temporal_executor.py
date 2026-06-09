@@ -16,6 +16,8 @@ from temporalio.common import RetryPolicy, WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import TemporalError
 
+from agentarea_common.config import ObservabilitySettings
+from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_common.utils.types import Artifact, Message, TextPart
 from agentarea_common.workflow.executor import (
     TaskExecutorInterface,
@@ -121,6 +123,8 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         """Ensure client is connected to Temporal server."""
         if not self._connected and self.client is None:
             try:
+                observability_settings = ObservabilitySettings()
+                setup_otel("agentarea-temporal-client", observability_settings)
                 # Connect to configured Temporal server
                 logger.info(
                     f"Connecting to Temporal server at {self.server_url} "
@@ -130,6 +134,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     self.server_url,
                     namespace=self.namespace,
                     data_converter=pydantic_data_converter,
+                    plugins=get_temporal_plugins(observability_settings),
                 )
                 self._connected = True
                 logger.info("Successfully connected to Temporal server")

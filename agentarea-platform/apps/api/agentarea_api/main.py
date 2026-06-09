@@ -223,6 +223,13 @@ def create_app() -> FastAPI:
         ],
     )
 
+    from agentarea_common.config import ObservabilitySettings
+    from agentarea_common.observability import setup_otel
+
+    observability_settings = ObservabilitySettings()
+    if setup_otel("agentarea-api", observability_settings):
+        _instrument_api(app)
+
     # Add audit context middleware (runs before route handlers)
     from agentarea_common.audit.middleware import AuditContextMiddleware
 
@@ -337,6 +344,19 @@ def create_app() -> FastAPI:
     app.openapi = custom_openapi
 
     return app
+
+
+def _instrument_api(app: FastAPI) -> None:
+    """Install OpenTelemetry instrumentation for API process dependencies."""
+    from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+    FastAPIInstrumentor.instrument_app(app)
+    AsyncPGInstrumentor().instrument()
+    RedisInstrumentor().instrument()
+    HTTPXClientInstrumentor().instrument()
 
 
 app = create_app()
