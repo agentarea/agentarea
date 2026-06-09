@@ -16,7 +16,6 @@ import uuid
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
-
 from agentarea_common.broker import DedupCache, RedisStreamsBroker
 from agentarea_triggers.channels import register_adapter
 from agentarea_triggers.channels.delivery_consumer import (
@@ -60,7 +59,7 @@ async def pipeline():
     dedup = DedupCache(REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
     try:
         await broker.ensure_group(stream, group, start="0")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f"Redis not reachable: {exc}")
 
     adapter = CapturingTelegramAdapter()

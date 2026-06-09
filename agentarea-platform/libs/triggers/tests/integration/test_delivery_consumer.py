@@ -11,7 +11,6 @@ import uuid
 
 import pytest
 import pytest_asyncio
-
 from agentarea_common.broker import DedupCache, RedisStreamsBroker
 from agentarea_triggers.channels.delivery_consumer import (
     ChannelDeliveryConsumer,
@@ -56,7 +55,7 @@ async def broker(streams):
     b = RedisStreamsBroker(REDIS_URL)
     try:
         await b.ensure_group(streams["stream"], streams["group"], start="0")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f"Redis not reachable: {exc}")
     yield b
     await b.aclose()

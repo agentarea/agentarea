@@ -18,6 +18,7 @@ export interface ToolConfig {
 
 export interface Agent {
   id: string;
+  slug?: string | null;
   name: string;
   description?: string | null;
   status: string;
@@ -37,4 +38,17 @@ export interface Agent {
   planning?: boolean | null;
   a2ui_enabled?: boolean | null;
   skills?: Array<{ id: string; name: string; description?: string | null }> | null;
+}
+
+/**
+ * Builds the canonical path to an agent's detail page.
+ * Prefers the workspace-scoped slug (nicer URLs, stable across renames-by-id),
+ * falling back to the UUID when no slug is present. The backend resolves both.
+ */
+export function agentPath(
+  agent: { slug?: string | null; id: string },
+  suffix = ""
+): string {
+  const ref = agent.slug || agent.id;
+  return `/agents/${ref}${suffix}`;
 }

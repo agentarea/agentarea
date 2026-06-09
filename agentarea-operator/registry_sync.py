@@ -1,7 +1,7 @@
 """RegistrySync reconciliation for the agentarea-operator.
 
 Parses catalog source data (mcp_servers, skills, llm_providers, llm_models,
-default_agents) and upserts the corresponding registry_items + target entities
+agents) and upserts the corresponding registry_items + target entities
 into the database via raw SQL.
 
 Parser shapes match agentarea_mcp.application.registry_service so registries
@@ -23,12 +23,16 @@ import yaml
 
 logger = logging.getLogger("agentarea-operator.registry_sync")
 
+# Keep in sync with agentarea_common.constants
+PLATFORM_WORKSPACE_ID = "platform"
+PLATFORM_PRINCIPAL_ID = "platform"
+
 VALID_TYPES = (
     "mcp_servers",
     "skills",
     "llm_providers",
     "llm_models",
-    "default_agents",
+    "agents",
 )
 
 
@@ -235,6 +239,13 @@ def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
         name = entry.get("name")
         if not name:
             continue
+        members = entry.get("members")
+        if not isinstance(members, list):
+            members = []
+        # The full built-in skill definition lives in the catalog item's spec
+        # (ADR-003): no tenant `skills` row is materialized. Carry every field
+        # the copy-on-write fork needs (content, source refs, s3 package ref,
+        # network scope, member structure).
         items.append(
             {
                 "external_id": name,
@@ -242,9 +253,14 @@ def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "description": entry.get("description"),
                 "version": entry.get("version") or "1.0.0",
                 "spec": {
+                    "name": name,
+                    "description": entry.get("description"),
                     "source_type": entry.get("source_type", "content"),
                     "content": entry.get("content"),
                     "source_url": entry.get("source_url"),
+                    "s3_path": entry.get("s3_path"),
+                    "network_scope": entry.get("network_scope", "private"),
+                    "members": members,
                 },
                 "tags": entry.get("tags", []),
             }
@@ -307,7 +323,7 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
-def _parse_default_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
+def _parse_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for entry in data.get("agents", []):
         name = entry.get("name")
@@ -325,9 +341,13 @@ def _parse_default_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "version": entry.get("version") or "1.0.0",
                 "spec": {
                     "id": agent_id,
+                    "name": name,
+                    "description": entry.get("description"),
                     "instruction": entry.get("instruction", ""),
+                    "model_id": entry.get("model_id"),
                     "tools": tools,
                     "planning": entry.get("planning", False),
+                    "events_config": entry.get("events_config"),
                 },
                 "tags": entry.get("tags", []),
             }
@@ -346,8 +366,8 @@ def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
         return _parse_llm_providers(data)
     if registry_type == "llm_models":
         return _parse_llm_models(data)
-    if registry_type == "default_agents":
-        return _parse_default_agents(data)
+    if registry_type == "agents":
+        return _parse_agents(data)
     raise ValueError(f"Unknown registry type: {registry_type}")
 
 
@@ -389,6 +409,14 @@ def reconcile(
 
     for item in parsed:
         item["registry_url"] = source_location
+        # Built-in mcp_servers / llm_models live in the catalog only (ADR-003):
+        # they are read back globally from registry_items.spec. Persist the
+        # source registry URL inside the spec so the read-side projection can
+        # surface it (registry_items has no registry_url column).
+        if registry_type in ("mcp_servers", "llm_models"):
+            spec = item.get("spec")
+            if isinstance(spec, dict):
+                spec.setdefault("registry_url", source_location)
         existing = _get_registry_item(conn, registry_id, item["external_id"])
         if existing:
             _update_registry_item(conn, existing["id"], item)
@@ -441,11 +469,10 @@ def _upsert_registry(
     source_url: str,
     workspace_id: str,
 ) -> str:
+    # registries are global catalog infrastructure (no workspace_id column).
     row = conn.execute(
-        _text(
-            "SELECT id FROM registries WHERE name = :name AND workspace_id = :ws"
-        ),
-        {"name": name, "ws": workspace_id},
+        _text("SELECT id FROM registries WHERE name = :name"),
+        {"name": name},
     ).fetchone()
     if row:
         registry_id = str(row[0])
@@ -466,8 +493,8 @@ def _upsert_registry(
     conn.execute(
         _text(
             "INSERT INTO registries (id, name, registry_type, source_type, source_url, "
-            "is_active, sync_mode, workspace_id, created_by, created_at, updated_at) "
-            "VALUES (:id, :name, :rt, :st, :url, true, 'manual', :ws, 'system', now(), now())"
+            "is_active, sync_mode, created_at, updated_at) "
+            "VALUES (:id, :name, :rt, :st, :url, true, 'manual', now(), now())"
         ),
         {
             "id": registry_id,
@@ -475,7 +502,6 @@ def _upsert_registry(
             "rt": registry_type,
             "st": source_type,
             "url": source_url,
-            "ws": workspace_id,
         },
     )
     return registry_id
@@ -505,9 +531,9 @@ def _create_registry_item(
     conn.execute(
         _text(
             "INSERT INTO registry_items (id, registry_id, external_id, name, description, "
-            "version, spec, tags, update_available, workspace_id, created_by, "
-            "created_at, updated_at) VALUES (:id, :rid, :ext, :name, :desc, :ver, "
-            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, :ws, 'system', now(), now())"
+            "version, spec, tags, update_available, created_at, updated_at) "
+            "VALUES (:id, :rid, :ext, :name, :desc, :ver, "
+            "CAST(:spec AS JSONB), CAST(:tags AS JSONB), false, now(), now())"
         ),
         {
             "id": item_id,
@@ -518,7 +544,6 @@ def _create_registry_item(
             "ver": item.get("version"),
             "spec": json.dumps(item.get("spec") or {}),
             "tags": json.dumps(item.get("tags") or []),
-            "ws": workspace_id,
         },
     )
     return item_id
@@ -555,13 +580,29 @@ def _create_entity(
     if registry_type == "llm_providers":
         return _upsert_provider_spec(conn, item, workspace_id)
     if registry_type == "llm_models":
-        return _upsert_model_spec(conn, item, workspace_id)
-    if registry_type == "default_agents":
-        return _upsert_default_agent(conn, item, workspace_id)
-    if registry_type == "mcp_servers":
-        return _upsert_mcp_server(conn, item, workspace_id, registry_item_id)
+        # Model specs live in the catalog only (ADR-003), mirroring agents/skills:
+        # the registry_item's spec is the built-in definition (read globally via
+        # CatalogModelSpecRepository). No tenant `model_specs` row is materialized;
+        # users instantiate via `model_instances`, they do not fork the spec.
+        return None
+    if registry_type == "agents":
+        # Agents live in the catalog only (ADR-003): the registry_item itself is
+        # the built-in definition. No tenant `agents` row is materialized on sync;
+        # a real row is created copy-on-write when a user edits the catalog agent.
+        return None
     if registry_type == "skills":
-        return _upsert_skill(conn, item, workspace_id, registry_item_id)
+        # Skills live in the catalog only (ADR-003), mirroring agents: the
+        # registry_item's spec is the built-in definition. No tenant `skills`
+        # row is materialized on sync; a real row is created copy-on-write when
+        # a user edits the catalog skill.
+        return None
+    if registry_type == "mcp_servers":
+        # MCP server specs live in the catalog only (ADR-003), mirroring
+        # agents/skills/models: the registry_item's spec is the built-in
+        # definition (read globally via CatalogMcpRepository). No tenant
+        # `mcp_servers` row is materialized; users instantiate via
+        # `mcp_server_instances`, they do not fork the spec.
+        return None
     return None
 
 
@@ -609,7 +650,7 @@ def _upsert_provider_spec(
         _text(
             "INSERT INTO provider_specs (id, provider_key, name, description, provider_type, "
             "icon, is_builtin, workspace_id, created_by, created_at, updated_at) "
-            "VALUES (:id, :pk, :name, :desc, :pt, :icon, :bi, :ws, 'system', now(), now())"
+            "VALUES (:id, :pk, :name, :desc, :pt, :icon, :bi, :ws, :created_by, now(), now())"
         ),
         {
             "id": pid,
@@ -620,6 +661,7 @@ def _upsert_provider_spec(
             "icon": spec.get("icon"),
             "bi": spec.get("is_builtin", True),
             "ws": workspace_id,
+            "created_by": PLATFORM_PRINCIPAL_ID,
         },
     )
     return pid
@@ -674,9 +716,10 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, supports_function_calling, is_active, workspace_id, "
-            "created_by, created_at, updated_at) VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :sfc, :active, :ws, 'system', now(), now())"
+            "output_cost_per_token, supports_function_calling, is_active, "
+            "workspace_id, created_by, created_at, updated_at) "
+            "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
+            ":mot, :icpt, :ocpt, :sfc, :active, :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -691,54 +734,10 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
             "sfc": spec.get("supports_function_calling", False),
             "active": spec.get("is_active", True),
             "ws": workspace_id,
+            "created_by": PLATFORM_PRINCIPAL_ID,
         },
     )
     return mid
-
-
-def _upsert_default_agent(conn, item: dict[str, Any], workspace_id: str) -> str:
-    spec = item.get("spec") or {}
-    agent_id = spec.get("id") or str(uuid.uuid4())
-    tools_json = json.dumps(spec.get("tools") or [])
-    row = conn.execute(
-        _text("SELECT id FROM agents WHERE id = :id"),
-        {"id": agent_id},
-    ).fetchone()
-    if row:
-        conn.execute(
-            _text(
-                "UPDATE agents SET name = :name, description = :desc, instruction = :inst, "
-                "tools = CAST(:tools AS JSONB), planning = :plan, updated_at = now() "
-                "WHERE id = :id"
-            ),
-            {
-                "id": agent_id,
-                "name": item["name"],
-                "desc": item.get("description") or "",
-                "inst": spec.get("instruction", ""),
-                "tools": tools_json,
-                "plan": spec.get("planning", False),
-            },
-        )
-        return str(agent_id)
-    conn.execute(
-        _text(
-            "INSERT INTO agents (id, name, status, description, instruction, model_id, "
-            "tools, events_config, planning, workspace_id, created_by, created_at, updated_at) "
-            "VALUES (:id, :name, 'active', :desc, :inst, NULL, CAST(:tools AS JSONB), NULL, "
-            ":plan, :ws, 'system', now(), now())"
-        ),
-        {
-            "id": agent_id,
-            "name": item["name"],
-            "desc": item.get("description") or "",
-            "inst": spec.get("instruction", ""),
-            "tools": tools_json,
-            "plan": spec.get("planning", False),
-            "ws": workspace_id,
-        },
-    )
-    return str(agent_id)
 
 
 def _upsert_mcp_server(
@@ -806,7 +805,7 @@ def _upsert_mcp_server(
             "registry_url, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :name, :slug, :desc, :img, :ver, CAST(:tags AS JSONB), false, "
             "CAST(:env AS JSONB), CAST(:cmd AS JSONB), :rurl, :rid, "
-            "CAST(:json_spec AS JSONB), :registry_url, :ws, 'system', now(), now())"
+            "CAST(:json_spec AS JSONB), :registry_url, :ws, :created_by, now(), now())"
         ),
         {
             "id": sid,
@@ -823,6 +822,7 @@ def _upsert_mcp_server(
             "json_spec": json_spec_json,
             "registry_url": item.get("registry_url"),
             "ws": workspace_id,
+            "created_by": PLATFORM_PRINCIPAL_ID,
         },
     )
     return sid
@@ -871,93 +871,3 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
     raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
 
 
-def _unique_skill_slug(conn, workspace_id: str, name: str) -> str:
-    """Workspace-unique slug via SELECT collision checks.
-
-    Safe within the operator's single per-registry transaction (own writes are
-    visible to later reads in the same tx); cross-pass idempotency is guaranteed
-    separately by the registry_item_id conflict target.
-    """
-    base = _generate_slug(name)
-
-    def _taken(candidate: str) -> bool:
-        return (
-            conn.execute(
-                _text("SELECT 1 FROM skills WHERE workspace_id = :ws AND slug = :slug LIMIT 1"),
-                {"ws": workspace_id, "slug": candidate},
-            ).fetchone()
-            is not None
-        )
-
-    if not _taken(base):
-        return base
-    for suffix in range(2, 1000):
-        candidate = f"{base}-{suffix}"
-        if not _taken(candidate):
-            return candidate
-    raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
-
-
-def _upsert_skill(
-    conn, item: dict[str, Any], workspace_id: str, registry_item_id: str | None = None
-) -> str:
-    """Idempotently upsert a catalog skill keyed on its registry item.
-
-    Dedup is by ``registry_item_id`` (provenance), backed by the partial unique
-    index ``uq_skills_registry_item`` — race-proof under overlapping reconciles,
-    unlike the previous SELECT-then-INSERT by name. The slug is immutable and
-    derived once at creation.
-    """
-    spec = item.get("spec") or {}
-
-    # Dedup by provenance: one skill per registry item. Re-sync updates in place
-    # and never touches the (immutable) slug.
-    existing = (
-        conn.execute(
-            _text("SELECT id FROM skills WHERE registry_item_id = :rid"),
-            {"rid": registry_item_id},
-        ).fetchone()
-        if registry_item_id
-        else None
-    )
-    if existing:
-        sid = str(existing[0])
-        conn.execute(
-            _text(
-                "UPDATE skills SET description = :desc, content = :content, "
-                "source_url = :url, updated_at = now() WHERE id = :id"
-            ),
-            {
-                "id": sid,
-                "desc": item.get("description"),
-                "content": spec.get("content"),
-                "url": spec.get("source_url"),
-            },
-        )
-        return sid
-
-    slug = _unique_skill_slug(conn, workspace_id, item["name"])
-    row = conn.execute(
-        _text(
-            "INSERT INTO skills (id, name, slug, description, source_type, content, "
-            "source_url, registry_item_id, workspace_id, created_by, created_at, updated_at) "
-            "VALUES (:id, :name, :slug, :desc, :st, :content, :url, :rid, :ws, 'system', "
-            "now(), now()) "
-            "ON CONFLICT (registry_item_id) WHERE registry_item_id IS NOT NULL "
-            "DO UPDATE SET description = EXCLUDED.description, content = EXCLUDED.content, "
-            "source_url = EXCLUDED.source_url, updated_at = now() "
-            "RETURNING id"
-        ),
-        {
-            "id": str(uuid.uuid4()),
-            "name": item["name"],
-            "slug": slug,
-            "desc": item.get("description"),
-            "st": spec.get("source_type", "content"),
-            "content": spec.get("content"),
-            "url": spec.get("source_url"),
-            "rid": registry_item_id,
-            "ws": workspace_id,
-        },
-    ).fetchone()
-    return str(row[0])

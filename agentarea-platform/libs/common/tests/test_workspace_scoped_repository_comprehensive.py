@@ -38,12 +38,12 @@ class TestWorkspaceScopedRepository:
     @pytest.fixture
     def user_context_workspace1(self):
         """Create user context for workspace1."""
-        return UserContext(user_id="user1", workspace_id="workspace1", roles=["user"])
+        return UserContext(user_id="user1", workspace_id="workspace1")
 
     @pytest.fixture
     def user_context_workspace2(self):
         """Create user context for workspace2."""
-        return UserContext(user_id="user2", workspace_id="workspace2", roles=["user"])
+        return UserContext(user_id="user2", workspace_id="workspace2")
 
     @pytest.fixture
     def repository_workspace1(self, mock_session, user_context_workspace1):

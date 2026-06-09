@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
 from agentarea_triggers.domain.models import TriggerCreate, WebhookTrigger
 from agentarea_triggers.infrastructure.orm import TriggerORM
@@ -23,7 +24,8 @@ class TestSchemaMigration:
     @pytest.fixture
     def repository(self, mock_session):
         """Create a TriggerRepository instance with mock session."""
-        return TriggerRepository(mock_session)
+        user_context = UserContext(user_id="test_user", workspace_id="test_workspace")
+        return TriggerRepository(mock_session, user_context)
 
     @pytest.fixture
     def sample_webhook_config(self):
@@ -53,7 +55,6 @@ class TestSchemaMigration:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             created_by="test_user",
-            max_executions_per_hour=60,
             failure_threshold=5,
             consecutive_failures=0,
             last_execution_at=None,
@@ -238,7 +239,7 @@ class TestSchemaMigration:
             consecutive_failures=0,
             webhook_id=trigger_create.webhook_id,
             allowed_methods=trigger_create.allowed_methods,
-            webhook_type=trigger_create.webhook_type.value,
+            webhook_type=trigger_create.webhook_type,
             validation_rules=trigger_create.validation_rules,
             webhook_config=trigger_create.webhook_config,
         )

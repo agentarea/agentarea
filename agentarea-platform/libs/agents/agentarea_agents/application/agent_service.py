@@ -11,10 +11,48 @@ from agentarea_common.utils.slug import generate_slug
 
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
 from agentarea_agents.domain.models import Agent
+from agentarea_agents.infrastructure.catalog_agent_repository import (
+    CatalogAgentItem,
+    CatalogAgentRepository,
+)
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
 
 logger = logging.getLogger(__name__)
+
+
+def _project_catalog_item(item: CatalogAgentItem) -> Agent:
+    """Project a catalog agent item into a transient, read-only ``Agent``.
+
+    The projected agent is NOT persisted. Its ``id`` is the catalog item's id so
+    the read/update paths can resolve it back to the registry item. The catalog
+    metadata (``is_catalog``, ``registry_item_id``, ``update_available``) is
+    attached as plain attributes for the API layer to surface.
+    """
+    spec = item.spec or {}
+    tools = spec.get("tools")
+    if not isinstance(tools, list):
+        tools = None
+
+    agent = Agent(
+        id=UUID(item.id),
+        name=item.name,
+        slug=generate_slug(item.name),
+        status="active",
+        description=item.description if item.description is not None else spec.get("description"),
+        instruction=spec.get("instruction"),
+        model_id=spec.get("model_id"),
+        tools=tools,
+        events_config=spec.get("events_config"),
+        planning=spec.get("planning"),
+        a2ui_enabled=False,
+        agent_type="stateless",
+        registry_item_id=item.id,
+    )
+    # Read-only catalog projection markers consumed by the API DTO.
+    agent.is_catalog = True  # type: ignore[attr-defined]
+    agent.update_available = False  # type: ignore[attr-defined]
+    return agent
 
 
 class AgentService(BaseCrudService[Agent]):
@@ -43,6 +81,58 @@ class AgentService(BaseCrudService[Agent]):
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
+
+    def _get_catalog_repository(self) -> CatalogAgentRepository:
+        """Get the read-only catalog (registry_items) repository for agents."""
+        return CatalogAgentRepository(
+            session=self.repository_factory.session,
+            user_context=self._user_context,
+        )
+
+    async def list(self) -> list[Agent]:  # type: ignore[override]
+        """List tenant agents plus catalog agent items projected as read-only.
+
+        A catalog item that has already been forked (a tenant ``agents`` row
+        carries its ``registry_item_id``) is shadowed by that tenant copy; the
+        copy is flagged ``update_available`` when the catalog version differs
+        from the version recorded at fork time.
+        """
+        repo = self._get_agent_repository()
+        tenant_agents = await repo.list_all()
+
+        catalog_repo = self._get_catalog_repository()
+        catalog_items = await catalog_repo.list_items()
+
+        forked_by_item: dict[str, Agent] = {
+            str(a.registry_item_id): a
+            for a in tenant_agents
+            if getattr(a, "registry_item_id", None)
+        }
+
+        result: list[Agent] = list(tenant_agents)
+        for item in catalog_items:
+            forked = forked_by_item.get(item.id)
+            if forked is not None:
+                # The tenant copy shadows the catalog projection. Flag an update
+                # when the current catalog version differs from the version
+                # recorded on the item at fork time.
+                if item.version and item.version != item.installed_version:
+                    forked.update_available = True  # type: ignore[attr-defined]
+                continue
+            result.append(_project_catalog_item(item))
+        return result
+
+    async def get_with_catalog(self, id: UUID) -> Agent | None:
+        """Get a tenant agent by id, falling back to a catalog projection.
+
+        Returns the tenant ``agents`` row if present; otherwise projects the
+        matching catalog ``registry_item`` (read-only). No DB row is created.
+        """
+        agent = await self.get(id)
+        if agent is not None:
+            return agent
+        item = await self._get_catalog_repository().get_item(str(id))
+        return _project_catalog_item(item) if item else None
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -102,11 +192,49 @@ class AgentService(BaseCrudService[Agent]):
 
         return agent
 
+    async def _fork_catalog_agent(self, item: CatalogAgentItem) -> Agent:
+        """Copy-on-write: materialize a tenant ``agents`` row from a catalog item.
+
+        Creates a real, owned agent (workspace_id/created_by come from the
+        repository's UserContext — never ``platform``), links it back to the
+        catalog item via ``registry_item_id``, and records the install on the
+        registry item (``installed_entity_id`` + ``installed_version``).
+        """
+        spec = item.spec or {}
+        tools = spec.get("tools")
+        if not isinstance(tools, list):
+            tools = None
+
+        slug = await self._resolve_unique_slug(item.name)
+        repo = self._get_agent_repository()
+        agent = await repo.create(
+            name=item.name,
+            slug=slug,
+            status="active",
+            description=item.description
+            if item.description is not None
+            else spec.get("description"),
+            instruction=spec.get("instruction"),
+            model_id=spec.get("model_id"),
+            tools=tools,
+            events_config=spec.get("events_config"),
+            planning=spec.get("planning"),
+            registry_item_id=item.id,
+        )
+        await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
+        return agent
+
     @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(self, id: UUID, payload: AgentUpdate) -> Agent | None:
         agent = await self.get(id)
         if not agent:
-            return None
+            # The id may reference a catalog (not-yet-materialized) agent.
+            # Editing one forks a real tenant copy (copy-on-write) and applies
+            # the edit to that copy.
+            item = await self._get_catalog_repository().get_item(str(id))
+            if item is None:
+                return None
+            agent = await self._fork_catalog_agent(item)
 
         await self._check_write_access(agent)
 

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { InboxData } from "./components/InboxData";
+import { getInbox, type TaskWithAgent } from "@/lib/api";
+import { InboxClient } from "./components/InboxClient";
 
 export const metadata: Metadata = {
   title: "Inbox",
 };
+
+type FilterValue = "all" | "pending" | "completed" | "failed";
 
 export default async function InboxPage({
   searchParams,
@@ -14,25 +14,23 @@ export default async function InboxPage({
   searchParams: Promise<{ filter?: string }>;
 }) {
   const { filter } = await searchParams;
-  const activeFilter = (["all", "pending", "completed", "failed"].includes(filter ?? "")
-    ? filter
-    : "pending") as "all" | "pending" | "completed" | "failed";
+  const initialFilter = (
+    ["all", "pending", "completed", "failed"].includes(filter ?? "") ? filter : "pending"
+  ) as FilterValue;
 
-  return (
-    <ContentBlock
-      header={{
-        breadcrumb: [{ label: "Inbox" }],
-      }}
-    >
-      <Suspense
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
-        <InboxData filter={activeFilter} />
-      </Suspense>
-    </ContentBlock>
-  );
+  let items: TaskWithAgent[] = [];
+  let error: string | null = null;
+
+  try {
+    const res = await getInbox();
+    if (res.error) {
+      error = "Failed to load inbox";
+    } else {
+      items = ((res.data as any)?.items ?? []) as TaskWithAgent[];
+    }
+  } catch {
+    error = "Failed to load inbox";
+  }
+
+  return <InboxClient items={items} error={error} initialFilter={initialFilter} />;
 }

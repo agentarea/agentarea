@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import {
   CreditCard,
   Gauge,
-  LayoutGrid,
   List,
   MessagesSquare,
   Settings,
@@ -23,7 +22,6 @@ const TABS = [
   { key: "payments", icon: CreditCard, labelKey: "payments" },
   // { key: "wallet", icon: Wallet, labelKey: "wallet" },
   { key: "delegation", icon: Users, labelKey: "delegation" },
-  { key: "a2ui", icon: LayoutGrid, labelKey: "a2ui" },
   { key: "settings", icon: Settings, labelKey: "settings" },
 ];
 

@@ -20,8 +20,8 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 					output: process.stdout,
 				});
 
-				const token = await new Promise<string>((resolve) => {
-					rl.question('Paste your JWT token: ', (answer) => {
+				const token = await new Promise<string>(resolve => {
+					rl.question('Paste your JWT token: ', answer => {
 						rl.close();
 						resolve(answer);
 					});
@@ -37,7 +37,9 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 				// Parse JWT to validate basic structure
 				const parts = token.trim().split('.');
 				if (parts.length !== 3) {
-					setError('Invalid token format. JWT must have 3 parts separated by dots.');
+					setError(
+						'Invalid token format. JWT must have 3 parts separated by dots.',
+					);
 					return;
 				}
 
@@ -45,7 +47,9 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 				try {
 					JSON.parse(Buffer.from(parts[1], 'base64').toString());
 				} catch {
-					setError('Invalid token payload. Token does not appear to be a valid JWT.');
+					setError(
+						'Invalid token payload. Token does not appear to be a valid JWT.',
+					);
 					return;
 				}
 
@@ -63,7 +67,8 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 				// Call callback
 				onTokenSet(token.trim());
 			} catch (err) {
-				const message = err instanceof Error ? err.message : 'Failed to save token';
+				const message =
+					err instanceof Error ? err.message : 'Failed to save token';
 				setError(message);
 				logger.error('Failed to save token:', err);
 			}
@@ -81,14 +86,22 @@ export function AuthToken({onTokenSet}: AuthTokenProps) {
 	}
 
 	return (
-		<Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan">
+		<Box
+			flexDirection="column"
+			padding={1}
+			borderStyle="round"
+			borderColor="cyan"
+		>
 			<Box marginBottom={1}>
 				<Text bold color="cyan">
 					🔐 JWT Token Configuration
 				</Text>
 			</Box>
 			<Box marginBottom={1}>
-				<Text>Paste your JWT token below. It will be saved securely in your system keychain.</Text>
+				<Text>
+					Paste your JWT token below. It will be saved securely in your system
+					keychain.
+				</Text>
 			</Box>
 			{error && (
 				<Box marginBottom={1}>

@@ -102,6 +102,24 @@ const AgentTriggers = ({
     return map;
   }, []);
 
+  // Backend stores canonical trigger types (e.g. "cron"/"webhook") that don't
+  // always match the UI option ids. Resolve those to a known option, and fall
+  // back to a generic descriptor so an unknown type never renders an error.
+  const aliasMap: Record<string, string> = { cron: "scheduled" };
+  const resolveTrigger = (eventType: string) => {
+    const direct = triggerMap[eventType];
+    if (direct) return direct;
+    const aliased = triggerMap[aliasMap[eventType]];
+    if (aliased) return { ...aliased, id: eventType };
+    return {
+      id: eventType,
+      name: eventType,
+      label: eventType,
+      description: "",
+      icon: Zap,
+    };
+  };
+
   const note = useMemo(
     () => (
       <>
@@ -148,7 +166,14 @@ const AgentTriggers = ({
             <SelectableList
               items={eventOptions}
               prefix="trigger"
-              extractTitle={(opt) => opt.label}
+              extractTitle={(opt) => (
+                <div className="flex min-w-0 flex-row items-center gap-1.5 px-[7px] py-[7px]">
+                  <opt.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+                    {opt.label}
+                  </h3>
+                </div>
+              )}
               onAdd={(opt) => appendEvent({ event_type: opt.id })}
               onRemove={(opt) => {
                 const idx = eventFields.findIndex(
@@ -177,7 +202,7 @@ const AgentTriggers = ({
               {eventFields.map((item, index) => (
                 <TriggerControl
                   key={item.id}
-                  trigger={triggerMap[item.event_type]}
+                  trigger={resolveTrigger(item.event_type)}
                   index={index}
                   control={control}
                   removeEvent={removeEvent}

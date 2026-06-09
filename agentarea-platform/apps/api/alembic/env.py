@@ -1,3 +1,5 @@
+import re
+from datetime import datetime
 from logging.config import fileConfig
 
 from agentarea_common.artifacts import ArtifactEvent  # noqa: F401
@@ -15,7 +17,7 @@ except ImportError:
 
 try:
     from agentarea_governance.infrastructure.orm import (  # noqa: F401
-        GovernancePolicyORM,
+        PolicyRuleORM,
         TaskPolicySnapshotORM,
     )
 except ImportError:
@@ -41,6 +43,19 @@ def get_url():
     return settings.sync_url
 
 
+# alembic_version.version_num is VARCHAR(32). Auto-derive every revision id from
+# the <date>_<time>_<slug> convention (matching alembic.ini file_template) and cap
+# it at 32 chars so a long migration message can never overflow the column again.
+_MAX_REVISION_LEN = 32
+
+
+def process_revision_directives(context, revision, directives):
+    for script in directives:
+        slug = re.sub(r"\W+", "_", (script.message or "migration").lower()).strip("_")
+        rev_id = f"{datetime.now():%Y%m%d_%H%M}_{slug}"[:_MAX_REVISION_LEN].rstrip("_")
+        script.rev_id = rev_id
+
+
 def run_migrations_offline() -> None:
     url = get_url()
     context.configure(
@@ -48,6 +63,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        process_revision_directives=process_revision_directives,
     )
 
     with context.begin_transaction():
@@ -64,7 +80,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            process_revision_directives=process_revision_directives,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

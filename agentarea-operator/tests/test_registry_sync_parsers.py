@@ -15,7 +15,7 @@ class TestValidTypes:
             "skills",
             "llm_providers",
             "llm_models",
-            "default_agents",
+            "agents",
         }
 
 
@@ -67,10 +67,10 @@ class TestLLMModelParser:
         assert len(items) == 1
 
 
-class TestDefaultAgentParser:
+class TestAgentParser:
     def test_basic(self):
         items = parse_source(
-            "default_agents",
+            "agents",
             {
                 "agents": [
                     {
@@ -87,7 +87,7 @@ class TestDefaultAgentParser:
         assert items[0]["spec"]["tools"][0]["name"] == "fs"
 
     def test_external_id_falls_back_to_name(self):
-        items = parse_source("default_agents", {"agents": [{"name": "X"}]})
+        items = parse_source("agents", {"agents": [{"name": "X"}]})
         assert items[0]["external_id"] == "X"
 
 

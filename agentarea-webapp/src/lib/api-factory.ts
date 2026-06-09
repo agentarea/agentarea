@@ -1703,17 +1703,143 @@ export function createApiClient(client: Client) {
       return withStatus(result);
     },
 
-    // Governance API
-    listGovernancePolicies: async (params?: {
-      scope_type?: string;
-      scope_id?: string;
+    // Policies API (unified rule model). A policy is a single rule; the old
+    // typed PolicyDocument GET/PUT endpoints are gone. Mutations from client
+    // components go through the generic proxy (/api/proxy/v1/policies); these
+    // helpers cover the server-side reads.
+    listPolicies: async (params?: {
+      subject_type?: string;
+      subject_id?: string;
+      effect?: string;
+      target?: string;
       enabled?: boolean;
     }) => {
-      const { data, error } = await client.GET(
-        "/v1/governance/policies" as any,
+      const { data, error } = await client.GET("/v1/policies" as any, {
+        params: { query: params },
+      } as any);
+      return { data, error };
+    },
+
+    createPolicy: async (body: {
+      subject_type: string;
+      subject_id: string;
+      target: string;
+      effect: string;
+      params?: Record<string, unknown>;
+      condition?: string | null;
+      enabled?: boolean;
+      priority?: number;
+    }) => {
+      const { data, error } = await client.POST("/v1/policies" as any, {
+        body: body as any,
+      } as any);
+      return { data, error };
+    },
+
+    updatePolicy: async (
+      id: string,
+      body: {
+        subject_type?: string;
+        subject_id?: string;
+        target?: string;
+        effect?: string;
+        params?: Record<string, unknown>;
+        condition?: string | null;
+        enabled?: boolean;
+        priority?: number;
+      }
+    ) => {
+      const { data, error } = await client.PATCH(
+        "/v1/policies/{id}" as any,
         {
-          params: { query: params },
+          params: { path: { id } },
+          body: body as any,
         } as any
+      );
+      return { data, error };
+    },
+
+    deletePolicy: async (id: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/policies/{id}" as any,
+        {
+          params: { path: { id } },
+        } as any
+      );
+      return { data, error };
+    },
+
+    // Resolve the effective (merged) policy for the workspace, or for a given
+    // agent/task. With no agent_id this returns the workspace baseline.
+    previewEffectivePolicy: async (body?: {
+      agent_id?: string;
+      task_policy?: Record<string, unknown>;
+    }) => {
+      const { data, error } = await client.POST(
+        "/v1/governance/effective-policy/preview" as any,
+        { body: (body ?? {}) as any }
+      );
+      return { data, error };
+    },
+
+    // ReBAC Access Explorer API
+    getRebacGraph: async () => {
+      const { data, error } = await client.GET("/v1/rebac/graph" as any, {} as any);
+      return { data, error };
+    },
+
+    listRebacTuples: async (params?: {
+      object?: string;
+      relation?: string;
+      subject?: string;
+    }) => {
+      const { data, error } = await client.GET("/v1/rebac/tuples" as any, {
+        params: { query: params },
+      } as any);
+      return { data, error };
+    },
+
+    resolveRebac: async (body: {
+      subject_id: string;
+      resource_kind: "skill" | "mcp" | "agent";
+      resource_id: string;
+    }) => {
+      const { data, error } = await client.POST("/v1/rebac/resolve" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    createRebacTuple: async (body: {
+      namespace: string;
+      object: string;
+      relation: string;
+      subject_id?: string;
+      subject_set?: string;
+    }) => {
+      const { data, error } = await client.POST("/v1/rebac/tuples" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    deleteRebacTuple: async (body: {
+      namespace: string;
+      object: string;
+      relation: string;
+      subject_id?: string;
+      subject_set?: string;
+    }) => {
+      const { data, error } = await client.DELETE("/v1/rebac/tuples" as any, {
+        body: body as any,
+      });
+      return { data, error };
+    },
+
+    listSkillCollections: async () => {
+      const { data, error } = await client.GET(
+        "/v1/skill-collections" as any,
+        {} as any
       );
       return { data, error };
     },
@@ -1736,6 +1862,16 @@ export function createApiClient(client: Client) {
         } as any
       );
       return { data, error };
+    },
+
+    // Billing API (served by the enterprise/billing service; absent in core → 404)
+    getBillingOverview: async () => {
+      const result = await client.GET("/v1/billing/overview" as any, {} as any);
+      return {
+        data: result.data,
+        error: result.error,
+        status: result.response?.status,
+      };
     },
   };
 }

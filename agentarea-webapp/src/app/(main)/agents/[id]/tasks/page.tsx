@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { listAgentTasks } from "@/lib/api";
+import { getAgent, listAgentTasks, type Agent } from "@/lib/api";
 import AgentTasksList from "./components/AgentTasksList";
 import { TaskStatus, TaskWithStatus } from "./types";
 
@@ -16,10 +17,14 @@ interface Props {
 export default async function AgentTasksPage({ params }: Props) {
   const { id } = await params;
 
-  // Загружаем начальные данные на сервере
+  const agentRes = await getAgent(id);
+  const agent = agentRes.data as Agent | undefined;
+  if (!agent) notFound();
+  const realId = agent.id;
+
   let initialTasks: TaskWithStatus[] = [];
   try {
-    const { data: tasksData, error } = await listAgentTasks(id);
+    const { data: tasksData, error } = await listAgentTasks(realId);
     if (!error && tasksData) {
       initialTasks = tasksData.map((task) => ({ ...task, taskStatus: undefined }));
     }
@@ -35,7 +40,7 @@ export default async function AgentTasksPage({ params }: Props) {
         </div>
       }
     >
-      <AgentTasksList agentId={id} initialTasks={initialTasks} />
+      <AgentTasksList agentId={realId} initialTasks={initialTasks} />
     </Suspense>
   );
 }

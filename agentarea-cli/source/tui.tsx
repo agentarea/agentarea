@@ -11,14 +11,16 @@ interface TUIProps {
 }
 
 export default function TUI({token: cliToken}: TUIProps) {
-	const [loadedToken, setLoadedToken] = useState<string | null>(cliToken || null);
+	const [loadedToken, setLoadedToken] = useState<string | null>(
+		cliToken || null,
+	);
 	const [loading, setLoading] = useState(!cliToken);
 	const [showAuthInput, setShowAuthInput] = useState(false);
 	const [tokenExpired, setTokenExpired] = useState(false);
 
 	// Setup 401 error handler for API client
 	useEffect(() => {
-		apiClient.set401Callback(async (error) => {
+		apiClient.set401Callback(async error => {
 			logger.warn('Token expired, prompting for new token');
 			setTokenExpired(true);
 		});
@@ -90,7 +92,12 @@ export default function TUI({token: cliToken}: TUIProps) {
 
 	if (!loadedToken) {
 		return (
-			<Box flexDirection="column" padding={1} borderStyle="round" borderColor="red">
+			<Box
+				flexDirection="column"
+				padding={1}
+				borderStyle="round"
+				borderColor="red"
+			>
 				<Box marginBottom={1}>
 					<Text bold color="red">
 						❌ No Authentication Token
@@ -125,7 +132,5 @@ export default function TUI({token: cliToken}: TUIProps) {
 	}
 
 	// Show interactive CLI
-	return (
-		<InteractiveCLI userEmail={userEmail} token={loadedToken} />
-	);
+	return <InteractiveCLI userEmail={userEmail} token={loadedToken} />;
 }

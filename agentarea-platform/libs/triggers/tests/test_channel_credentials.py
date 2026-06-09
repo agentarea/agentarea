@@ -16,7 +16,7 @@ class TestTelegramAdapterSecretStore:
     def secret_manager(self):
         sm = AsyncMock()
         sm.get_secret = AsyncMock(
-            return_value=json.dumps({"bot_token": "secret_bot_token"})  # noqa: S106
+            return_value=json.dumps({"bot_token": "secret_bot_token"})
         )
         return sm
 
@@ -106,7 +106,7 @@ class TestEmailAdapterSecretStore:
                 "smtp_host": "smtp.example.com",
                 "smtp_port": 587,
                 "username": "user",
-                "password": "pass",  # noqa: S106
+                "password": "pass",
                 "from_address": "bot@example.com",
                 "use_tls": True,
             })

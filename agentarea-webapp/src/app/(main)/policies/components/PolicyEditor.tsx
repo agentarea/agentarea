@@ -1,0 +1,858 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Link as LinkIcon, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import type { Policy, PolicyEffect } from "@/types/policies";
+import { EFFECT_STYLES } from "./policy-effects";
+
+// What the editor is operating on. Create modes pre-scope the rule to a
+// subject (workspace, or a picked agent); edit mode locks the subject.
+export type PolicyEditorTarget =
+  | { mode: "create-workspace" }
+  | { mode: "create-agent"; agentId?: string }
+  | { mode: "edit"; policy: Policy };
+
+interface AgentOption {
+  id: string;
+  name: string;
+}
+
+interface PolicyEditorProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  target: PolicyEditorTarget | null;
+  agents: AgentOption[];
+  workspaceId: string | null;
+  onSaved: () => void;
+}
+
+// Effects the editor can author. (`allow` exists in the model but tool grants
+// live in the Access view; the editor focuses on restrictions.)
+const EDITABLE_EFFECTS: PolicyEffect[] = [
+  "cap",
+  "deny",
+  "approval",
+  "safety",
+];
+
+// --- cap sub-form ---------------------------------------------------------
+
+type CapKind = "spend" | "service" | "tokens";
+
+interface FormState {
+  enabled: boolean;
+  // cap
+  capKind: CapKind;
+  amountUsd: string;
+  period: "month" | "run";
+  maxTokens: string;
+  maxTokensPerCall: string;
+  // deny / approval tools
+  tools: string[];
+  // approval
+  approvalAllActions: boolean;
+  approvers: string[];
+  // safety
+  promptInjection: boolean;
+  outputSanitizer: boolean;
+}
+
+const EMPTY_FORM: FormState = {
+  enabled: true,
+  capKind: "spend",
+  amountUsd: "",
+  period: "month",
+  maxTokens: "",
+  maxTokensPerCall: "",
+  tools: [],
+  approvalAllActions: true,
+  approvers: [],
+  promptInjection: true,
+  outputSanitizer: false,
+};
+
+// Loosely validate Keto subject refs (user:<id> | group:<id>#member, etc.).
+const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
+
+function parseMoney(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (Number.isNaN(n)) return null;
+  return n.toFixed(2);
+}
+
+function parseInt2(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (Number.isNaN(n) || !Number.isInteger(n)) return null;
+  return n;
+}
+
+function str(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
+}
+
+// Seed the form from an existing rule (edit mode). Unknown shapes degrade
+// gracefully — fields that don't apply stay at their defaults.
+function policyToForm(policy: Policy): { effect: PolicyEffect; form: FormState } {
+  const p =
+    typeof policy.params === "object" && policy.params !== null
+      ? (policy.params as Record<string, unknown>)
+      : {};
+  const form: FormState = { ...EMPTY_FORM, enabled: policy.enabled };
+
+  if (policy.effect === "cap") {
+    if (policy.target === "tokens") {
+      form.capKind = "tokens";
+      form.maxTokens = str(p.max_tokens);
+      form.maxTokensPerCall = str(p.max_tokens_per_call);
+    } else if (policy.target === "service") {
+      form.capKind = "service";
+      form.amountUsd = str(p.amount_usd);
+    } else {
+      form.capKind = "spend";
+      form.amountUsd = str(p.amount_usd);
+      form.period = p.period === "run" ? "run" : "month";
+    }
+  } else if (policy.effect === "deny") {
+    form.tools = policy.target.startsWith("tool:")
+      ? [policy.target.slice("tool:".length)]
+      : [];
+  } else if (policy.effect === "approval") {
+    form.approvalAllActions = policy.target === "*";
+    form.tools =
+      policy.target.startsWith("tool:") && policy.target !== "tool:*"
+        ? [policy.target.slice("tool:".length)]
+        : [];
+    form.approvers = Array.isArray(p.approvers)
+      ? (p.approvers as unknown[]).map(String).filter(Boolean)
+      : [];
+  } else if (policy.effect === "safety") {
+    form.promptInjection = Boolean(p.prompt_injection);
+    form.outputSanitizer = Boolean(p.output_sanitizer);
+  }
+
+  return { effect: policy.effect, form };
+}
+
+// A single rule body for POST /PATCH. Deny/approval over multiple tools fan out
+// into several bodies (one rule per tool).
+interface RuleBody {
+  target: string;
+  effect: PolicyEffect;
+  params: Record<string, unknown>;
+}
+
+// Build the rule bodies the form describes. Returns an error string instead
+// when the form is incomplete.
+function buildRuleBodies(
+  effect: PolicyEffect,
+  form: FormState
+): { bodies: RuleBody[] } | { error: string } {
+  if (effect === "cap") {
+    if (form.capKind === "tokens") {
+      const maxTokens = parseInt2(form.maxTokens);
+      const perCall = parseInt2(form.maxTokensPerCall);
+      if (maxTokens === null && perCall === null)
+        return { error: "Enter a token cap." };
+      const params: Record<string, unknown> = {};
+      if (maxTokens !== null) params.max_tokens = maxTokens;
+      if (perCall !== null) params.max_tokens_per_call = perCall;
+      return { bodies: [{ target: "tokens", effect, params }] };
+    }
+    const amount = parseMoney(form.amountUsd);
+    if (amount === null) return { error: "Enter a valid amount." };
+    if (form.capKind === "service")
+      return {
+        bodies: [{ target: "service", effect, params: { amount_usd: amount } }],
+      };
+    return {
+      bodies: [
+        {
+          target: "spend",
+          effect,
+          params: { amount_usd: amount, period: form.period },
+        },
+      ],
+    };
+  }
+
+  if (effect === "deny") {
+    if (form.tools.length === 0) return { error: "Add at least one tool." };
+    return {
+      bodies: form.tools.map((tool) => ({
+        target: `tool:${tool}`,
+        effect,
+        params: {},
+      })),
+    };
+  }
+
+  if (effect === "approval") {
+    const params: Record<string, unknown> = {};
+    if (form.approvers.length > 0) params.approvers = form.approvers;
+    if (form.approvalAllActions)
+      return { bodies: [{ target: "*", effect, params }] };
+    if (form.tools.length === 0)
+      return { error: "Add a tool or require approval for all actions." };
+    return {
+      bodies: form.tools.map((tool) => ({
+        target: `tool:${tool}`,
+        effect,
+        params,
+      })),
+    };
+  }
+
+  // safety
+  if (!form.promptInjection && !form.outputSanitizer)
+    return { error: "Enable at least one safety check." };
+  return {
+    bodies: [
+      {
+        target: "content",
+        effect,
+        params: {
+          prompt_injection: form.promptInjection,
+          output_sanitizer: form.outputSanitizer,
+        },
+      },
+    ],
+  };
+}
+
+// --- small building blocks ------------------------------------------------
+
+function EffectSegmented({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PolicyEffect;
+  onChange: (effect: PolicyEffect) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
+      {EDITABLE_EFFECTS.map((effect) => {
+        const style = EFFECT_STYLES[effect];
+        const active = effect === value;
+        return (
+          <button
+            key={effect}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(effect)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              active
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <span
+              className={cn("h-2 w-2 shrink-0 rounded-full", style.dot)}
+              aria-hidden
+            />
+            {style.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TagInput({
+  values,
+  onChange,
+  placeholder,
+  validate,
+  invalidHint,
+}: {
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  validate?: (value: string) => boolean;
+  invalidHint?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [hint, setHint] = useState<string | null>(null);
+
+  const add = () => {
+    const value = draft.trim();
+    if (!value) return;
+    if (validate && !validate(value)) {
+      setHint(invalidHint ?? "Invalid value");
+      return;
+    }
+    if (!values.includes(value)) onChange([...values, value]);
+    setDraft("");
+    setHint(null);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((value) => (
+            <span
+              key={value}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs"
+            >
+              {value}
+              <button
+                type="button"
+                aria-label={`Remove ${value}`}
+                onClick={() => onChange(values.filter((v) => v !== value))}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setHint(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder={placeholder}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={add}>
+          Add
+        </Button>
+      </div>
+      {hint && <p className="text-xs text-destructive">{hint}</p>}
+    </div>
+  );
+}
+
+function MoneyField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+          $
+        </span>
+        <Input
+          id={id}
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="0.00"
+          className="pl-6"
+        />
+      </div>
+    </div>
+  );
+}
+
+function NumberField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="optional"
+      />
+    </div>
+  );
+}
+
+// --- editor ---------------------------------------------------------------
+
+export default function PolicyEditor({
+  open,
+  onOpenChange,
+  target,
+  agents,
+  workspaceId,
+  onSaved,
+}: PolicyEditorProps) {
+  const [effect, setEffect] = useState<PolicyEffect>("cap");
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isEdit = target?.mode === "edit";
+
+  const subjectType = useMemo<"workspace" | "agent">(() => {
+    if (!target) return "workspace";
+    if (target.mode === "edit")
+      return target.policy.subject_type === "workspace" ? "workspace" : "agent";
+    if (target.mode === "create-agent") return "agent";
+    return "workspace";
+  }, [target]);
+
+  // Reset form whenever the editor opens for a (new) target.
+  useEffect(() => {
+    if (!open || !target) return;
+    if (target.mode === "edit") {
+      const seeded = policyToForm(target.policy);
+      setEffect(seeded.effect);
+      setForm(seeded.form);
+      setSelectedAgentId(
+        target.policy.subject_type === "agent" ? target.policy.subject_id : ""
+      );
+    } else {
+      setEffect("cap");
+      setForm(EMPTY_FORM);
+      setSelectedAgentId(
+        target.mode === "create-agent" ? target.agentId ?? "" : ""
+      );
+    }
+    setError(null);
+  }, [open, target]);
+
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const resolveSubjectId = (): string | null => {
+    if (target?.mode === "edit") return target.policy.subject_id;
+    if (subjectType === "agent") return selectedAgentId || null;
+    return workspaceId;
+  };
+
+  const save = async () => {
+    const subjectId = resolveSubjectId();
+    if (!subjectId) {
+      setError(
+        subjectType === "agent"
+          ? "Select an agent for this policy."
+          : "No workspace context available."
+      );
+      return;
+    }
+
+    const built = buildRuleBodies(effect, form);
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      if (isEdit && target?.mode === "edit") {
+        // PATCH the single rule. Edit only writes the first body (a rule edits
+        // one rule); extra tools added in edit mode are ignored to keep edit
+        // 1:1 with the backing rule.
+        const body = built.bodies[0];
+        const response = await fetch(
+          `/api/proxy/v1/policies/${target.policy.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              target: body.target,
+              effect: body.effect,
+              params: body.params,
+              enabled: form.enabled,
+            }),
+          }
+        );
+        if (!response.ok) {
+          setError(await readDetail(response, "Save failed"));
+          return;
+        }
+      } else {
+        // POST one rule per body (deny/approval may fan out over tools).
+        for (const body of built.bodies) {
+          const response = await fetch(`/api/proxy/v1/policies`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject_type: subjectType,
+              subject_id: subjectId,
+              target: body.target,
+              effect: body.effect,
+              params: body.params,
+              enabled: form.enabled,
+            }),
+          });
+          if (!response.ok) {
+            setError(await readDetail(response, "Save failed"));
+            return;
+          }
+        }
+      }
+
+      onOpenChange(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save policy");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (target?.mode !== "edit") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/proxy/v1/policies/${target.policy.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok && response.status !== 204) {
+        setError(await readDetail(response, "Delete failed"));
+        return;
+      }
+      onOpenChange(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete policy");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const title = isEdit
+    ? "Edit policy rule"
+    : subjectType === "agent"
+      ? "New agent rule"
+      : "New workspace rule";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            A policy is a single rule. It applies to{" "}
+            {subjectType === "workspace"
+              ? "every agent in this workspace"
+              : "the selected agent"}
+            . Tool access grants are managed in the Access view.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-1">
+          {/* Agent picker — only in agent create mode without a fixed agent */}
+          {target?.mode === "create-agent" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="policy-agent">Agent</Label>
+              <Select
+                value={selectedAgentId}
+                onValueChange={setSelectedAgentId}
+              >
+                <SelectTrigger id="policy-agent">
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Effect */}
+          <div className="space-y-1.5">
+            <Label>Effect</Label>
+            <EffectSegmented value={effect} onChange={setEffect} disabled={isEdit} />
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                The effect is fixed once a rule is created.
+              </p>
+            )}
+          </div>
+
+          {/* Effect-specific fields */}
+          {effect === "cap" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="cap-kind">Cap type</Label>
+                <Select
+                  value={form.capKind}
+                  onValueChange={(v) => update("capKind", v as CapKind)}
+                >
+                  <SelectTrigger id="cap-kind">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spend">Spend budget</SelectItem>
+                    <SelectItem value="service">Per-service budget</SelectItem>
+                    <SelectItem value="tokens">Token cap</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.capKind === "tokens" ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <NumberField
+                    id="max-tokens"
+                    label="Max tokens"
+                    value={form.maxTokens}
+                    onChange={(v) => update("maxTokens", v)}
+                  />
+                  <NumberField
+                    id="max-tokens-call"
+                    label="Max tokens per call"
+                    value={form.maxTokensPerCall}
+                    onChange={(v) => update("maxTokensPerCall", v)}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <MoneyField
+                    id="cap-amount"
+                    label="Amount"
+                    value={form.amountUsd}
+                    onChange={(v) => update("amountUsd", v)}
+                  />
+                  {form.capKind === "spend" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cap-period">Period</Label>
+                      <Select
+                        value={form.period}
+                        onValueChange={(v) =>
+                          update("period", v as "month" | "run")
+                        }
+                      >
+                        <SelectTrigger id="cap-period">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="month">Per month</SelectItem>
+                          <SelectItem value="run">Per run</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {effect === "deny" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <Label>Denied tools</Label>
+              <TagInput
+                values={form.tools}
+                onChange={(next) => update("tools", next)}
+                placeholder="Tool name (e.g. send_email or *)"
+              />
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                <LinkIcon className="h-3 w-3" />
+                Granting tool access is managed in the{" "}
+                <a
+                  href="/policies?view=access"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Access view
+                </a>
+                .
+              </p>
+            </section>
+          )}
+
+          {effect === "approval" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="approval-all">Require for all actions</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Off to require approval for specific tools only.
+                  </p>
+                </div>
+                <Switch
+                  id="approval-all"
+                  checked={form.approvalAllActions}
+                  onCheckedChange={(v) => update("approvalAllActions", v)}
+                />
+              </div>
+              {!form.approvalAllActions && (
+                <div className="space-y-1.5">
+                  <Label>Tools requiring approval</Label>
+                  <TagInput
+                    values={form.tools}
+                    onChange={(next) => update("tools", next)}
+                    placeholder="Tool name (e.g. send_email)"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Approvers</Label>
+                <TagInput
+                  values={form.approvers}
+                  onChange={(next) => update("approvers", next)}
+                  placeholder="user:<id> or group:<id>#member"
+                  validate={(v) => SUBJECT_REF_RE.test(v)}
+                  invalidHint="Use a subject ref like user:<id> or group:<id>#member"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to allow any workspace member to approve.
+                </p>
+              </div>
+            </section>
+          )}
+
+          {effect === "safety" && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="prompt-injection" className="font-normal">
+                  Prompt-injection detection
+                </Label>
+                <Switch
+                  id="prompt-injection"
+                  checked={form.promptInjection}
+                  onCheckedChange={(v) => update("promptInjection", v)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="output-sanitizer" className="font-normal">
+                  Output sanitizer
+                </Label>
+                <Switch
+                  id="output-sanitizer"
+                  checked={form.outputSanitizer}
+                  onCheckedChange={(v) => update("outputSanitizer", v)}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Enabled */}
+          <div className="flex items-center justify-between rounded-lg border border-border p-4">
+            <div>
+              <Label htmlFor="policy-enabled">Rule enabled</Label>
+              <p className="text-xs text-muted-foreground">
+                Disabled rules are kept but not enforced.
+              </p>
+            </div>
+            <Switch
+              id="policy-enabled"
+              checked={form.enabled}
+              onCheckedChange={(v) => update("enabled", v)}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+          {isEdit ? (
+            <Button
+              type="button"
+              variant="destructiveOutline"
+              size="sm"
+              disabled={saving}
+              onClick={remove}
+            >
+              Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              isLoading={saving}
+              disabled={saving}
+              onClick={save}
+            >
+              {isEdit ? "Save rule" : "Create rule"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Read a backend 4xx detail message, falling back to a status-based message.
+async function readDetail(response: Response, fallback: string): Promise<string> {
+  let detail = `${fallback} (${response.status})`;
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") {
+      detail = body.detail;
+    } else if (Array.isArray(body.detail)) {
+      detail = body.detail
+        .map((item) =>
+          item && typeof item === "object" && "msg" in item
+            ? String((item as { msg: unknown }).msg)
+            : String(item)
+        )
+        .join(", ");
+    }
+  } catch {
+    // keep the status-based message
+  }
+  return detail;
+}

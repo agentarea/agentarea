@@ -8,7 +8,6 @@ import {
   Eye,
   FileText,
   FileX,
-  List,
   Loader2,
   Pencil,
   Plus,
@@ -39,7 +38,6 @@ import { formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
   addSkillMemberAction as addSkillMember,
   deleteSkillAction as deleteSkill,
-  flattenSkillAction as flattenSkill,
   getSkillAction as getSkill,
   getSkillContentAction as getSkillContent,
   getSkillFileAction as getSkillFile,
@@ -107,12 +105,6 @@ export default function SkillDetailPage() {
   const [addingChildId, setAddingChildId] = useState<string>("");
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [removingChildId, setRemovingChildId] = useState<string | null>(null);
-
-  // Execution order state
-  const [showExecutionOrderDialog, setShowExecutionOrderDialog] =
-    useState(false);
-  const [executionOrder, setExecutionOrder] = useState<any[]>([]);
-  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -307,25 +299,6 @@ export default function SkillDetailPage() {
     }
   };
 
-  const handleViewExecutionOrder = async () => {
-    setIsLoadingOrder(true);
-    setShowExecutionOrderDialog(true);
-    try {
-      const { data, error } = await flattenSkill(skillId);
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to fetch execution order",
-          variant: "destructive",
-        });
-        return;
-      }
-      setExecutionOrder((data as any) || []);
-    } finally {
-      setIsLoadingOrder(false);
-    }
-  };
-
   if (loading) {
     return (
       <ContentBlock
@@ -386,15 +359,6 @@ export default function SkillDetailPage() {
         ],
         controls: (
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={handleViewExecutionOrder}
-              disabled={isLoadingOrder}
-            >
-              <List className="mr-2 h-4 w-4" />
-              View Execution Order
-            </Button>
             <Button
               variant="outline"
               size="xs"
@@ -632,44 +596,6 @@ export default function SkillDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Execution Order Dialog */}
-      <Dialog
-        open={showExecutionOrderDialog}
-        onOpenChange={setShowExecutionOrderDialog}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Execution Order</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
-            {isLoadingOrder ? (
-              <div className="flex justify-center py-6">
-                <LoadingSpinner />
-              </div>
-            ) : executionOrder.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No execution order available.
-              </p>
-            ) : (
-              <ol className="space-y-1 list-decimal list-inside">
-                {executionOrder.map((item: any, idx: number) => (
-                  <li key={idx} className="text-sm py-1 border-b last:border-0">
-                    {item.name || item.id || JSON.stringify(item)}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowExecutionOrderDialog(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </ContentBlock>
   );
 }

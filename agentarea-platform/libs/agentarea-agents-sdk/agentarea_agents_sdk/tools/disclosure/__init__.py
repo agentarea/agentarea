@@ -13,7 +13,7 @@ from .protocol import (
 from .registry import list_policies, policy_from_config, register_policy
 
 # Built-in policy registrations. `searchable` is the YAML shorthand alias users
-# put into ToolSettingsYAML.load_mode; named_lookup is the canonical name.
+# put into OpenApiToolSettings.load_mode; named_lookup is the canonical name.
 register_policy("explicit", ExplicitPolicy)
 register_policy("named_lookup", NamedLookupPolicy)
 register_policy("searchable", NamedLookupPolicy)

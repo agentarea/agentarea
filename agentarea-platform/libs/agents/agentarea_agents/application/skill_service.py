@@ -15,6 +15,10 @@ from agentarea_common.utils.slug import generate_slug
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType
+from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogSkillItem,
+    CatalogSkillRepository,
+)
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
 )
@@ -36,6 +40,38 @@ class SkillFileInfo:
     path: str
     size: int
     url: str | None = None  # Presigned URL if requested
+
+
+def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
+    """Project a catalog skill item into a transient, read-only ``Skill``.
+
+    The projected skill is NOT persisted. Its ``id`` is the catalog item's id so
+    the read/edit paths can resolve it back to the registry item. The catalog
+    metadata (``is_catalog``, ``registry_item_id``, ``update_available``) is
+    attached as plain attributes for the API layer to surface.
+
+    Files are NOT materialized: the projection reuses the catalog item's
+    ``s3_path`` reference (copy-on-write defers any S3 copy until the user edits
+    a file on a forked skill).
+    """
+    spec = item.spec or {}
+
+    skill = Skill(
+        id=UUID(item.id),
+        name=item.name,
+        slug=generate_slug(item.name),
+        description=item.description if item.description is not None else spec.get("description"),
+        source_type=spec.get("source_type") or SkillSourceType.CONTENT.value,
+        source_url=spec.get("source_url"),
+        content=spec.get("content"),
+        s3_path=spec.get("s3_path"),
+        network_scope=spec.get("network_scope") or "private",
+        registry_item_id=item.id,
+    )
+    # Read-only catalog projection markers consumed by the API DTO.
+    skill.is_catalog = True  # type: ignore[attr-defined]
+    skill.update_available = False  # type: ignore[attr-defined]
+    return skill
 
 
 class SkillService:
@@ -78,6 +114,13 @@ class SkillService:
     def _get_repository(self) -> SkillRepository:
         """Get skill repository from factory."""
         return self.repository_factory.create_repository(SkillRepository)
+
+    def _get_catalog_repository(self) -> CatalogSkillRepository:
+        """Get the read-only catalog (registry_items) repository for skills."""
+        return CatalogSkillRepository(
+            session=self.repository_factory.session,
+            user_context=self.user_context,
+        )
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -384,14 +427,46 @@ class SkillService:
         repo = self._get_repository()
         return await repo.get_by_slug(slug)
 
+    async def _catalog_projections(self, tenant_skills: list[Skill]) -> list[Skill]:
+        """Project un-forked catalog skill items as read-only ``Skill`` rows.
+
+        A catalog item that has already been forked (a tenant ``skills`` row
+        carries its ``registry_item_id``) is shadowed by that tenant copy; the
+        copy is flagged ``update_available`` when the catalog version differs
+        from the version recorded at fork time. Returns only the projections for
+        un-forked catalog items.
+        """
+        catalog_items = await self._get_catalog_repository().list_items()
+
+        forked_by_item: dict[str, Skill] = {
+            str(s.registry_item_id): s
+            for s in tenant_skills
+            if getattr(s, "registry_item_id", None)
+        }
+
+        projections: list[Skill] = []
+        for item in catalog_items:
+            forked = forked_by_item.get(item.id)
+            if forked is not None:
+                if item.version and item.version != item.installed_version:
+                    forked.update_available = True  # type: ignore[attr-defined]
+                continue
+            projections.append(_project_catalog_skill(item))
+        return projections
+
     async def list(self) -> list[Skill]:
-        """List all skills in the workspace.
+        """List tenant skills plus catalog skill items projected as read-only.
+
+        A catalog item already forked into the workspace is shadowed by the
+        tenant copy; un-forked catalog items appear as read-only projections.
 
         Returns:
             List of Skill entities.
         """
         repo = self._get_repository()
-        return await repo.list_all()
+        tenant_skills = await repo.list_all()
+        projections = await self._catalog_projections(tenant_skills)
+        return [*tenant_skills, *projections]
 
     async def list_paginated(
         self,
@@ -403,19 +478,137 @@ class SkillService:
         network_scope: str | None = None,
         from_registry: bool | None = None,
     ) -> tuple[list[Skill], int]:
-        """List skills with pagination metadata."""
+        """List skills with pagination metadata, merging catalog projections.
+
+        Tenant rows and read-only catalog projections are merged into a single
+        ordered list (tenant rows first), then paginated in memory. Forked
+        catalog items are shadowed by their tenant copy. The optional filters are
+        applied to projections too so the merged view stays consistent.
+        """
         repo = self._get_repository()
-        return await repo.list_paginated(
-            limit=limit,
-            offset=offset,
+        # Pull the full tenant set so we can dedup catalog items against forks
+        # and paginate the merged view consistently.
+        tenant_skills = await repo.list_all()
+        projections = await self._catalog_projections(tenant_skills)
+
+        merged = [*tenant_skills, *projections]
+        merged = self._filter_skills(
+            merged,
             search=search,
             source_type=source_type,
             has_files=has_files,
             network_scope=network_scope,
             from_registry=from_registry,
         )
+        total = len(merged)
+        page = merged[offset : offset + limit]
+        return page, total
 
-    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    @staticmethod
+    def _filter_skills(
+        skills: list[Skill],
+        *,
+        search: str | None,
+        source_type: str | None,
+        has_files: bool | None,
+        network_scope: str | None,
+        from_registry: bool | None,
+    ) -> list[Skill]:
+        """Apply list filters to a merged tenant + catalog skill list."""
+        result = skills
+        if search:
+            term = search.strip().lower()
+            result = [
+                s
+                for s in result
+                if term in (s.name or "").lower()
+                or term in (s.description or "").lower()
+                or term in (s.source_url or "").lower()
+            ]
+        if source_type:
+            result = [s for s in result if s.source_type == source_type]
+        if has_files is True:
+            result = [s for s in result if s.s3_path is not None]
+        elif has_files is False:
+            result = [s for s in result if s.s3_path is None]
+        if network_scope:
+            result = [s for s in result if s.network_scope == network_scope]
+        if from_registry is True:
+            result = [s for s in result if getattr(s, "registry_item_id", None) is not None]
+        elif from_registry is False:
+            result = [s for s in result if getattr(s, "registry_item_id", None) is None]
+        return result
+
+    async def get_with_catalog(self, skill_id: UUID | str) -> Skill | None:
+        """Get a tenant skill by id, falling back to a catalog projection.
+
+        Returns the tenant ``skills`` row if present; otherwise projects the
+        matching catalog ``registry_item`` (read-only). No DB row is created.
+        """
+        skill = await self.get(skill_id)
+        if skill is not None:
+            return skill
+        item = await self._get_catalog_repository().get_item(str(skill_id))
+        return _project_catalog_skill(item) if item else None
+
+    async def _fork_catalog_skill(self, item: CatalogSkillItem) -> Skill:
+        """Copy-on-write: materialize a tenant ``skills`` row from a catalog item.
+
+        Creates a real, owned skill (workspace_id/created_by come from the
+        repository's UserContext — never ``platform``), links it back to the
+        catalog item via ``registry_item_id``, and records the install on the
+        registry item (``installed_entity_id`` + ``installed_version``).
+
+        Copy-on-write semantics: the metadata/spec (name, description,
+        source_type, content, s3_path reference) is copied into the tenant row,
+        but S3 package files are NOT eagerly copied. The forked skill keeps the
+        catalog item's ``s3_path`` reference; the actual S3 file copy is deferred
+        until the user first writes a file/content on the fork (see
+        :meth:`set_content` / :meth:`replace_package_from_files`).
+
+        Skill members are not copied here: the catalog spec carries metadata
+        only, and member edits on a forked bundle go through the member API.
+        """
+        spec = item.spec or {}
+        repo = self._get_repository()
+        skill = await repo.create(
+            name=item.name,
+            slug=await self._resolve_unique_slug(item.name),
+            description=item.description
+            if item.description is not None
+            else spec.get("description"),
+            source_type=spec.get("source_type") or SkillSourceType.CONTENT.value,
+            content=spec.get("content"),
+            source_url=spec.get("source_url"),
+            s3_path=spec.get("s3_path"),
+            network_scope=spec.get("network_scope") or "private",
+            registry_item_id=item.id,
+        )
+        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), item.version)
+        logger.info(
+            "Forked catalog skill '%s' (item=%s) into tenant skill %s",
+            item.name,
+            item.id,
+            skill.id,
+        )
+        return skill
+
+    async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
+        """Resolve a skill id to an editable tenant row, forking if needed.
+
+        If the id is a tenant ``skills`` row, returns it. If it resolves to a
+        catalog (not-yet-materialized) skill, forks a real tenant copy
+        (copy-on-write) and returns that. Returns ``None`` when the id matches
+        neither.
+        """
+        skill = await self.get(skill_id)
+        if skill is not None:
+            return skill
+        item = await self._get_catalog_repository().get_item(str(skill_id))
+        if item is None:
+            return None
+        return await self._fork_catalog_skill(item)
+
     async def update(
         self,
         skill_id: UUID | str,
@@ -423,27 +616,22 @@ class SkillService:
     ) -> Skill | None:
         """Update a skill's metadata (name and/or description).
 
-        Uses ``model_dump(exclude_unset=True)`` so omitted fields are left
-        unchanged (true PATCH semantics). Never touches files or content; for
-        content/file edits use :meth:`set_content` or
-        :meth:`replace_package_from_files`.
-
-        Args:
-            skill_id: The skill ID.
-            payload: SkillEditMetadata with optional name / description.
-
-        Returns:
-            Updated Skill entity or None if not found.
+        Editing a catalog (built-in) skill forks a real tenant copy first
+        (copy-on-write) and applies the edit to that copy.
         """
-        repo = self._get_repository()
+        skill = await self._resolve_for_edit(skill_id)
+        if skill is None:
+            return None
+        return await self._update_audited(skill.id, payload)
 
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _update_audited(self, skill_id: UUID, payload: SkillEditMetadata) -> Skill | None:
+        repo = self._get_repository()
         update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
         if not update_data:
             return await repo.get_by_id(skill_id)
-
         return await repo.update(str(skill_id), **update_data)
 
-    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def set_content(
         self,
         skill_id: UUID | str,
@@ -451,17 +639,18 @@ class SkillService:
     ) -> Skill | None:
         """Replace the SKILL.md content of a content-mode skill.
 
-        Args:
-            skill_id: The skill ID.
-            content: New SKILL.md text (UTF-8).
-
-        Returns:
-            Updated Skill entity or None if not found.
+        Editing a catalog (built-in) skill forks a real tenant copy first
+        (copy-on-write) and writes the content to that copy.
         """
-        repo = self._get_repository()
-        return await repo.update(str(skill_id), content=content)
+        skill = await self._resolve_for_edit(skill_id)
+        if skill is None:
+            return None
+        return await self._set_content_audited(skill.id, content)
 
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _set_content_audited(self, skill_id: UUID, content: str) -> Skill | None:
+        return await self._get_repository().update(str(skill_id), content=content)
+
     async def replace_package_from_files(
         self,
         skill_id: UUID | str,
@@ -469,32 +658,25 @@ class SkillService:
     ) -> Skill:
         """Replace a package-mode skill's file tree with the given map.
 
-        Overwrites by S3 key, then deletes any orphaned keys (present in old
-        package but absent in the new map). Same crash window as
-        ``create_from_zip``: a failure mid-write leaves a partial package.
-
-        Requires the skill to be package-mode (``s3_path`` set). Multi-file
-        edits on content-mode skills must go through delete + recreate.
-
-        Args:
-            skill_id: The skill ID.
-            files: Map of relative path -> file text content. Must include a
-                root-level ``SKILL.md`` (case-insensitive).
-
-        Returns:
-            Updated Skill entity.
-
-        Raises:
-            ValueError: skill not found, skill is content-mode, or files
-                missing SKILL.md.
+        Editing a catalog (built-in) skill forks a real tenant copy first
+        (copy-on-write). The audit event is recorded against the resolved
+        tenant skill UUID, not the original catalog UUID.
         """
+        skill = await self._resolve_for_edit(skill_id)
+        if not skill:
+            raise ValueError(f"Skill not found: {skill_id}")
+        return await self._replace_package_audited(skill.id, skill, files)
+
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _replace_package_audited(
+        self,
+        skill_id: UUID,
+        skill: Skill,
+        files: dict[str, str],
+    ) -> Skill:
         import io
         import zipfile
 
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
-        if not skill:
-            raise ValueError(f"Skill not found: {skill_id}")
         if not skill.s3_path:
             raise ValueError(
                 f"Skill {skill_id} is content-mode; multi-file edits not supported. "
@@ -511,31 +693,44 @@ class SkillService:
             for path, text in files.items():
                 zf.writestr(path, text)
 
-        old_keys = {f.path for f in await self.storage_service.list_files(skill.s3_path)}
+        owns_package = skill.s3_path == self.storage_service._get_s3_prefix(
+            self.user_context.workspace_id, str(skill_id)
+        )
+        old_keys = (
+            {f.path for f in await self.storage_service.list_files(skill.s3_path)}
+            if owns_package
+            else set()
+        )
         new_keys = set(files.keys())
 
-        await self.storage_service.store_package_from_zip(
-            skill_id=str(skill.id),
+        new_s3_path = await self.storage_service.store_package_from_zip(
+            skill_id=str(skill_id),
             workspace_id=self.user_context.workspace_id,
             zip_data=buffer.getvalue(),
         )
 
         orphans = old_keys - new_keys
-        if orphans:
+        if owns_package and orphans:
             prefix = skill.s3_path.rstrip("/") + "/"
             self.storage_service.client.delete_objects(
                 Bucket=self.storage_service.bucket_name,
                 Delete={"Objects": [{"Key": f"{prefix}{p}"} for p in orphans]},
             )
 
-        skill = await repo.update(str(skill.id), content=new_skill_md_text)
-        if skill is None:
+        result = await self._get_repository().update(
+            str(skill_id), content=new_skill_md_text, s3_path=new_s3_path
+        )
+        if result is None:
             raise RuntimeError("Failed to update skill content")
         logger.info(
-            f"Replaced package for skill {skill_id}: {len(files)} files written, "
-            f"{len(orphans)} orphans removed"
+            "Replaced package for skill %s: %d files written, %d orphans removed "
+            "(copy_on_write=%s)",
+            skill_id,
+            len(files),
+            len(orphans),
+            not owns_package,
         )
-        return skill
+        return result
 
     @audited("skill.delete", resource_type="skill", resource_id_param="skill_id")
     async def delete(self, skill_id: UUID | str) -> bool:
@@ -584,8 +779,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not a multi-file package.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -632,8 +826,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not found or has no S3 storage.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -767,8 +960,7 @@ class SkillService:
             ValueError: If skill is not found or has no S3 storage.
             FileNotFoundError: If the file does not exist.
         """
-        repo = self._get_repository()
-        skill = await repo.get_by_id(skill_id)
+        skill = await self.get_with_catalog(skill_id)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")

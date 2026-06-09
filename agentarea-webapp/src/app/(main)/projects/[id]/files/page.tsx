@@ -67,7 +67,13 @@ export default function ProjectFilesPage() {
   const fetchUrl = useCallback(
     async (path: string) => {
       const { data } = await downloadProjectFileAction(projectId, path);
-      return (data as any)?.url ?? null;
+      if (!data?.url) return null;
+      try {
+        const { pathname } = new URL(data.url);
+        return `/api/proxy${pathname}`;
+      } catch {
+        return null;
+      }
     },
     [projectId]
   );

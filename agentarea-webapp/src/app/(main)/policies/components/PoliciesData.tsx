@@ -1,53 +1,96 @@
 import EmptyState from "@/components/EmptyState";
-import { listGovernancePolicies } from "@/lib/api";
-import { PoliciesTable } from "./PoliciesTable";
+import {
+  getRebacGraph,
+  listAgents,
+  listPolicies,
+  previewEffectivePolicy,
+} from "@/lib/api";
+import { getAuthContext } from "@/lib/getAuthContext";
+import type {
+  EffectivePolicyResponse,
+  Policy,
+  PolicyRule,
+} from "@/types/policies";
+import PoliciesEditableView from "./PoliciesEditableView";
+import { documentToRules } from "./policy-rules";
 
-type Policy = {
+interface AgentLike {
   id: string;
-  scope_type: string;
-  scope_id: string;
-  enabled: boolean;
-  document: Record<string, unknown>;
-};
+  name: string;
+}
 
 export async function PoliciesData() {
   let policies: Policy[] = [];
-  let error: string | null = null;
+  let baselineRules: PolicyRule[] = [];
+  let agents: AgentLike[] = [];
+  let policiesError: string | null = null;
 
-  try {
-    const { data, error: apiError } = await listGovernancePolicies();
-    if (apiError) {
-      console.error("Failed to fetch governance policies:", apiError);
-      error = "Failed to load policies";
-    } else {
-      policies = ((data as any) ?? []) as Policy[];
-    }
-  } catch (e) {
-    console.error("Failed to load policies data:", e);
-    error = e instanceof Error ? e.message : "Failed to load policies";
+  // getRebacGraph powers the Access view's Keto-sourced tool access; we fetch it
+  // here so the Policies view stays in lockstep with that integration even
+  // though the approved matrix surfaces tool access via the Tools column +
+  // Access-view link rather than rendering the graph inline.
+  const [policiesRes, effectiveRes, agentsRes, , authContext] =
+    await Promise.all([
+      listPolicies().catch((reason) => ({ data: null, error: reason })),
+      previewEffectivePolicy().catch((reason) => ({
+        data: null,
+        error: reason,
+      })),
+      listAgents().catch((reason) => ({ data: null, error: reason })),
+      getRebacGraph().catch(() => ({ data: null, error: null })),
+      getAuthContext(),
+    ]);
+
+  if (policiesRes.error) {
+    console.error("Failed to fetch policies:", policiesRes.error);
+    policiesError = "Failed to load policies";
+  } else {
+    policies = ((policiesRes.data as Policy[] | null) ?? []) as Policy[];
   }
+
+  if (effectiveRes.error) {
+    console.error("Failed to resolve effective policy:", effectiveRes.error);
+  } else {
+    const effective = (effectiveRes.data as EffectivePolicyResponse | null)
+      ?.effective_policy;
+    baselineRules = documentToRules(effective);
+  }
+
+  if (agentsRes.error) {
+    console.error("Failed to load agents for policy editor:", agentsRes.error);
+  } else {
+    agents = ((agentsRes.data as AgentLike[] | null) ?? []).map((a) => ({
+      id: a.id,
+      name: a.name,
+    }));
+  }
+
+  // Hard failure only when we have nothing to show at all.
+  if (policiesError && baselineRules.length === 0 && policies.length === 0) {
+    return (
+      <div className="space-y-4">
+        <EmptyState
+          title="Couldn't load policies"
+          description={policiesError}
+          iconsType="audit"
+        />
+      </div>
+    );
+  }
+
+  const hasWorkspacePolicy = policies.some(
+    (p) => p.subject_type === "workspace"
+  );
 
   return (
     <div className="space-y-4">
-      <div className="border-l-2 border-border/60 py-2 pl-3 text-sm text-muted-foreground">
-        Read-only view. Editable policies UI coming soon.
-      </div>
-
-      {error ? (
-        <EmptyState
-          title="Couldn't load policies"
-          description={error}
-          iconsType="audit"
-        />
-      ) : policies.length === 0 ? (
-        <EmptyState
-          title="No policies configured"
-          description="Governance policies define rules applied to agents and workspaces."
-          iconsType="audit"
-        />
-      ) : (
-        <PoliciesTable policies={policies} />
-      )}
+      <PoliciesEditableView
+        baseline={baselineRules}
+        policies={policies}
+        agents={agents}
+        workspaceId={authContext.workspaceId}
+        hasWorkspacePolicy={hasWorkspacePolicy}
+      />
     </div>
   );
 }

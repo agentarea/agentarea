@@ -5,7 +5,8 @@ Dispatches sync/create by registry_type:
   - "skills" → Skill records
   - "llm_providers" → ProviderSpec
   - "llm_models" → ModelSpec (references provider by provider_key)
-  - "default_agents" → Agent records (system-scoped default agents)
+  - "agents" → catalog-only built-in agents (ADR-003): the registry_item IS
+    the definition; no tenant `agents` row is materialized on sync.
 
 Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
@@ -14,7 +15,6 @@ Entity-specific details (connection_type, source_type) live in spec JSONB.
 import json
 import logging
 import urllib.request
-import uuid
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -36,7 +36,7 @@ VALID_REGISTRY_TYPES = (
     "skills",
     "llm_providers",
     "llm_models",
-    "default_agents",
+    "agents",
 )
 VALID_SOURCE_TYPES = ("url", "github", "api")
 
@@ -262,7 +262,7 @@ class RegistryService:
 
     async def _create_entity(
         self, registry_type: str, item: RegistryItem, registry_url: str | None = None
-    ) -> str:
+    ) -> str | None:
         if registry_type == "mcp_servers":
             return await self._create_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
@@ -271,8 +271,11 @@ class RegistryService:
             return await self._create_llm_provider(item)
         elif registry_type == "llm_models":
             return await self._create_llm_model(item)
-        elif registry_type == "default_agents":
-            return await self._create_default_agent(item)
+        elif registry_type == "agents":
+            # Catalog-only (ADR-003): the registry_item is the built-in agent
+            # definition; no tenant `agents` row is materialized on sync. A real
+            # row is created copy-on-write when a user edits the catalog agent.
+            return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     async def _update_entity(
@@ -286,8 +289,9 @@ class RegistryService:
             return await self._update_llm_provider(item)
         elif registry_type == "llm_models":
             return await self._update_llm_model(item)
-        elif registry_type == "default_agents":
-            return await self._update_default_agent(item)
+        elif registry_type == "agents":
+            # No materialized entity to update for catalog agents (ADR-003).
+            return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     # ── MCP Server handlers ──
@@ -486,48 +490,6 @@ class RegistryService:
     async def _update_llm_model(self, item: RegistryItem) -> Any:
         return await self._create_llm_model(item)
 
-    # ── Default agent handlers ──
-
-    async def _create_default_agent(self, item: RegistryItem) -> str:
-        if not self.agent_repo:
-            raise ValueError("Agent repository not available")
-        spec = item.spec or {}
-        agent_id = spec.get("id")
-        if agent_id:
-            try:
-                agent_uuid = uuid.UUID(str(agent_id))
-            except (TypeError, ValueError):
-                agent_uuid = uuid.uuid4()
-        else:
-            agent_uuid = uuid.uuid4()
-
-        slug = await self._resolve_unique_slug(self.agent_repo, item.name)
-
-        created = await self.agent_repo.create(
-            id=agent_uuid,
-            name=item.name,
-            slug=slug,
-            description=item.description or "",
-            instruction=spec.get("instruction", ""),
-            tools=spec.get("tools", []),
-            status="active",
-            planning=spec.get("planning", False),
-        )
-        return str(created.id)
-
-    async def _update_default_agent(self, item: RegistryItem) -> Any:
-        if not self.agent_repo:
-            raise ValueError("Agent repository not available")
-        spec = item.spec or {}
-        return await self.agent_repo.update(
-            item.installed_entity_id,
-            name=item.name,
-            description=item.description or "",
-            instruction=spec.get("instruction", ""),
-            tools=spec.get("tools", []),
-            planning=spec.get("planning", False),
-        )
-
     # ── Source fetching (format-agnostic) ──
 
     @staticmethod
@@ -568,8 +530,8 @@ class RegistryService:
             return RegistryService._parse_llm_providers(data)
         elif registry_type == "llm_models":
             return RegistryService._parse_llm_models(data)
-        elif registry_type == "default_agents":
-            return RegistryService._parse_default_agents(data)
+        elif registry_type == "agents":
+            return RegistryService._parse_agents(data)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     @staticmethod
@@ -854,7 +816,7 @@ class RegistryService:
         return items
 
     @staticmethod
-    def _parse_default_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
+    def _parse_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
         agents = data.get("agents", [])
         items = []
         for entry in agents:
@@ -873,9 +835,13 @@ class RegistryService:
                     "version": entry.get("version") or "1.0.0",
                     "spec": {
                         "id": agent_id,
+                        "name": name,
+                        "description": entry.get("description"),
                         "instruction": entry.get("instruction", ""),
+                        "model_id": entry.get("model_id"),
                         "tools": tools,
                         "planning": entry.get("planning", False),
+                        "events_config": entry.get("events_config"),
                     },
                     "tags": entry.get("tags", []),
                 }

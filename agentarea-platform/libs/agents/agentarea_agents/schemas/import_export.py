@@ -1,8 +1,8 @@
 """Pydantic schemas for agent import/export YAML configuration."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 
 class SkillYAML(BaseModel):
@@ -48,31 +48,78 @@ class SkillYAML(BaseModel):
         return self
 
 
-class ToolSettingsYAML(BaseModel):
-    """Tool settings configuration in YAML format."""
+class McpToolPermission(BaseModel):
+    """A single MCP tool the agent may call, with its per-call approval gate.
 
-    disabled_methods: list[str] | None = None  # For code tools
-    # FIXME: should be a proper typed model (e.g. MCPToolPermission) instead of Any
-    allowed_tools: list[Any] | None = (
-        None  # str (legacy) or {tool_name, requires_user_confirmation}
-    )
-    a2a_url: str | None = None  # For agent tools — explicit A2A endpoint URL
-    description_override: str | None = None  # For agent tools — custom description
-    requires_user_confirmation: bool | None = None  # Require human approval before execution
-    openapi_connection_id: str | None = None  # For openapi tools — stable UUID lookup
-    # Disclosure mode for the tool's schemas. "explicit" puts every operation's
-    # full schema into every LLM call (legacy). "searchable" defers schemas
-    # behind a `load_tools` meta-tool, with a name+description catalog in the
-    # system prompt. Currently honored only for openapi tools.
+    Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+    """
+
+    tool_name: str
+    requires_user_confirmation: bool = False
+
+
+class BaseToolSettings(BaseModel):
+    """Settings common to every tool type.
+
+    ``requires_user_confirmation`` is the one genuinely cross-cutting gate
+    (human approval before a tool call). Everything type-specific lives on the
+    concrete settings classes below, so a tool only ever carries fields it can
+    actually use — e.g. ``a2a_url`` is unrepresentable on a code tool.
+    """
+
+    requires_user_confirmation: bool | None = None
+
+
+class CodeToolSettings(BaseToolSettings):
+    """Settings for a built-in code toolset."""
+
+    disabled_methods: list[str] | None = None
+
+
+class McpToolSettings(BaseToolSettings):
+    """Settings for an MCP server tool (a subset of the server's tools)."""
+
+    allowed_tools: list[McpToolPermission] | None = None
+
+    @field_validator("allowed_tools", mode="before")
+    @classmethod
+    def _normalize_allowed(cls, v: Any) -> Any:
+        """Coerce the legacy ``["tool_name", ...]`` form into permission objects."""
+        if not isinstance(v, list):
+            return v
+        return [{"tool_name": item} if isinstance(item, str) else item for item in v]
+
+
+class AgentToolSettings(BaseToolSettings):
+    """Settings for an agent-to-agent (delegation) tool.
+
+    ``a2a_url`` selects the *remote* transport binding; absent → same-platform
+    direct delegation. Lives here only — A2A is a per-edge binding, not a
+    property every tool type carries.
+    """
+
+    description_override: str | None = None
+    a2a_url: str | None = None
+
+
+class OpenApiToolSettings(BaseToolSettings):
+    """Settings for an OpenAPI connection tool.
+
+    ``load_mode`` picks schema disclosure: "explicit" inlines every operation's
+    schema into each LLM call (legacy); "searchable" defers them behind a
+    ``load_tools`` meta-tool. Honored only for openapi tools — which is exactly
+    why it lives here and nowhere else.
+    """
+
+    openapi_connection_id: str | None = None
+    allowed_tools: list[str] | None = None
     load_mode: Literal["explicit", "searchable"] | None = None
 
 
-class ToolConfigYAML(BaseModel):
-    """Tool configuration in YAML format."""
+class BaseToolConfig(BaseModel):
+    """Shared shape for every tool config variant."""
 
-    type: Literal["code", "mcp", "agent", "openapi"]
     name: str
-    settings: ToolSettingsYAML | None = None
 
     @field_validator("name")
     @classmethod
@@ -81,6 +128,39 @@ class ToolConfigYAML(BaseModel):
         if not v or not v.strip():
             raise ValueError("Tool name cannot be empty")
         return v.strip()
+
+
+class CodeToolConfig(BaseToolConfig):
+    type: Literal["code"] = "code"
+    settings: CodeToolSettings | None = None
+
+
+class McpToolConfig(BaseToolConfig):
+    type: Literal["mcp"] = "mcp"
+    settings: McpToolSettings | None = None
+
+
+class AgentToolConfig(BaseToolConfig):
+    type: Literal["agent"] = "agent"
+    settings: AgentToolSettings | None = None
+
+
+class OpenApiToolConfig(BaseToolConfig):
+    type: Literal["openapi"] = "openapi"
+    settings: OpenApiToolSettings | None = None
+
+
+# Discriminated union on ``type``: Pydantic selects the right variant and
+# rejects unknown types. Each variant declares only the settings it supports,
+# so illegal field/type combinations are unrepresentable in the typed surface
+# (and the OpenAPI schema emits a proper ``oneOf`` + discriminator). Legacy rows
+# that carried cross-type keys parse fine — the alien keys are simply dropped.
+ToolConfig = Annotated[
+    CodeToolConfig | McpToolConfig | AgentToolConfig | OpenApiToolConfig,
+    Field(discriminator="type"),
+]
+
+TOOL_CONFIG_ADAPTER: TypeAdapter[ToolConfig] = TypeAdapter(ToolConfig)
 
 
 class AgentYAML(BaseModel):
@@ -93,7 +173,7 @@ class AgentYAML(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     instruction: str = Field(default="", max_length=5000)
-    tools: list[ToolConfigYAML] | None = None
+    tools: list[ToolConfig] | None = None
     planning: bool | None = False
     a2ui_enabled: bool | None = False
     agent_type: str = Field(

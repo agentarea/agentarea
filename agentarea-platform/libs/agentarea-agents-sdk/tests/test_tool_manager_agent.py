@@ -18,7 +18,7 @@ class TestToolManagerAgentDiscovery:
 
     @pytest.mark.asyncio
     async def test_agent_tool_added_to_discovered_tools(self):
-        """Agent tools should be discovered and added via A2AAgentToolFactory."""
+        """Agent tools should be discovered and added via AgentToolFactory."""
         agent_service = AsyncMock()
         agent_service.get_by_name = AsyncMock(return_value=_make_mock_agent())
         mcp_service = AsyncMock()

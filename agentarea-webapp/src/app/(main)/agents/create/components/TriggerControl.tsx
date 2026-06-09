@@ -18,6 +18,7 @@ interface Trigger {
   label?: string;
   description?: string;
   icon?: React.ComponentType<{ className?: string }>;
+  iconSrc?: string;
   available_methods?: Method[];
   available_tools?: Array<{
     name: string;
@@ -199,7 +200,7 @@ export const TriggerControl = ({
       value={`trigger-${index}`}
       controls={controls}
       title={renderTitle()}
-      iconSrc={trigger.icon ? undefined : "/Icon.svg"}
+      iconSrc={trigger.icon ? undefined : trigger.iconSrc || "/Icon.svg"}
     >
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">

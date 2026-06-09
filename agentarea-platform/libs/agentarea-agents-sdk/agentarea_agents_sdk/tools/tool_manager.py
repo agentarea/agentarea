@@ -5,19 +5,18 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
-from .a2a_tool_factory import A2AAgentToolFactory
 from .base_tool import ToolRegistry
-from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
 from .decorator_tool import ToolsetAdapter
 from .mcp_tool import MCPToolFactory
 from .openapi_tool import OpenAPIToolFactory, _slugify_name
+from .tool_builders import (
+    ToolBuildContext,
+    build_tool_builder_registry,
+    parse_tool_spec,
+)
 from .tool_provider import (
-    AgentToolProvider,
     BuiltinToolProvider,
-    CodeToolProvider,
-    MCPToolProvider,
-    OpenAPIToolProvider,
     ToolProvider,
 )
 
@@ -51,6 +50,8 @@ class ToolManager:
         """
         self.registry = ToolRegistry()
         self._openapi_connection_service = openapi_connection_service
+        # GoF Registry: tool type -> build strategy (see tool_builders.py).
+        self._builders = build_tool_builder_registry()
 
         # Register built-in tools
         self.registry.register(ToolsetAdapter(CompletionTool()))
@@ -139,94 +140,28 @@ class ToolManager:
             logger.info(f"No tools configured for agent {agent_id}")
             return result
 
+        ctx = ToolBuildContext(
+            manager=self,
+            mcp_server_instance_service=mcp_server_instance_service,
+            agent_service=agent_service,
+            base_url=base_url,
+            auth_token=auth_token,
+            task_service=task_service,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            force_explicit=force_explicit,
+        )
         for tool in tools_config:
-            tool_type = tool.get("type")
-            tool_name = tool.get("name")
-            if not isinstance(tool_name, str) or not tool_name:
-                logger.warning("Skipping tool with missing name", extra={"tool_config": tool})
+            spec = parse_tool_spec(tool)
+            if spec is None:
                 continue
-            settings = tool.get("settings", {})
-            if not isinstance(settings, dict):
-                settings = {}
-
-            if tool_type == "code":
-                disabled_methods = settings.get("disabled_methods", [])
-                toolset_methods = (
-                    {method: False for method in disabled_methods} if disabled_methods else {}
-                )
-
-                tool_instance = create_code_tool_instance(tool_name, toolset_methods)
-                if tool_instance:
-                    from .decorator_tool import Toolset, ToolsetAdapter
-
-                    if isinstance(tool_instance, Toolset):
-                        tool_instance = ToolsetAdapter(tool_instance)
-
-                    result.explicit_tools.append(tool_instance.get_openai_function_definition())
-                    logger.info(f"Added code tool: {tool_name}")
-                else:
-                    logger.warning(f"Unknown code tool requested: {tool_name}")
-
-            elif tool_type == "mcp":
-                raw_allowed = settings.get("allowed_tools") or []
-                allowed_names = [
-                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
-                ]
-                mcp_tools = await self._discover_mcp_tools_by_name(
-                    tool_name, allowed_names, mcp_server_instance_service
-                )
-                for mcp_tool in mcp_tools:
-                    result.explicit_tools.append(mcp_tool.get_openai_function_definition())
-
-            elif tool_type == "agent":
-                if not agent_service or not base_url:
-                    logger.warning(
-                        f"Skipping agent tool '{tool_name}': agent_service or base_url not provided"
-                    )
-                    continue
-
-                a2a_tool = await A2AAgentToolFactory.create_tool(
-                    agent_name=tool_name,
-                    agent_service=agent_service,
-                    base_url=base_url,
-                    a2a_url_override=settings.get("a2a_url"),
-                    auth_token=auth_token,
-                    description_override=settings.get("description_override"),
-                    task_service=task_service,
-                    workspace_id=workspace_id,
-                    user_id=user_id,
-                )
-                if a2a_tool:
-                    result.explicit_tools.append(a2a_tool.get_openai_function_definition())
-                    logger.info(f"Added agent tool: {tool_name}")
-
-            elif tool_type == "openapi":
-                # OpenAPI connection tool. Prefer settings.openapi_connection_id (UUID,
-                # stable across renames) over tool.name so renaming a connection does
-                # not break the agent link. Fall back to tool.name for legacy entries.
-                connection_ref = settings.get("openapi_connection_id") or tool_name
-                raw_allowed = settings.get("allowed_tools") or []
-                allowed_names = [
-                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
-                ]
-                load_mode = settings.get("load_mode")
-                if load_mode == "searchable" and not force_explicit:
-                    entries = await self._build_openapi_searchable_entries(
-                        connection_ref, allowed_names, self._openapi_connection_service
-                    )
-                    result.searchable_entries.extend(entries)
-                else:
-                    openapi_tools = await self._discover_openapi_tools_by_name(
-                        connection_ref, allowed_names, self._openapi_connection_service
-                    )
-                    for openapi_tool in openapi_tools:
-                        result.explicit_tools.append(openapi_tool.get_openai_function_definition())
-
-            else:
+            builder = self._builders.get(tool.get("type") or "")
+            if builder is None:
                 logger.warning(
-                    f"Unknown tool type: {tool_type}",
-                    extra={"tool_config": tool},
+                    f"Unknown tool type: {tool.get('type')}", extra={"tool_config": tool}
                 )
+                continue
+            await builder.add_explicit(spec, ctx, result)
 
         logger.info(
             "Discovered %d explicit tools and %d searchable entries for agent %s",
@@ -468,104 +403,28 @@ class ToolManager:
         if not tools_config:
             return providers
 
+        ctx = ToolBuildContext(
+            manager=self,
+            mcp_server_instance_service=mcp_server_instance_service,
+            agent_service=agent_service,
+            base_url=base_url,
+            auth_token=auth_token,
+            task_service=task_service,
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
         for tool in tools_config:
-            tool_type = tool.get("type")
-            tool_name = tool.get("name")
-            if not isinstance(tool_name, str) or not tool_name:
-                logger.warning(
-                    "Skipping tool provider with missing name", extra={"tool_config": tool}
-                )
+            spec = parse_tool_spec(tool)
+            if spec is None:
                 continue
-            settings = tool.get("settings", {})
-            if not isinstance(settings, dict):
-                settings = {}
-
-            if tool_type == "code":
-                disabled_methods = settings.get("disabled_methods", [])
-                toolset_methods = (
-                    {method: False for method in disabled_methods} if disabled_methods else {}
-                )
-                tool_instance = create_code_tool_instance(tool_name, toolset_methods)
-                if tool_instance:
-                    from .decorator_tool import Toolset, ToolsetAdapter
-
-                    if isinstance(tool_instance, Toolset):
-                        tool_instance = ToolsetAdapter(tool_instance)
-
-                    providers.append(
-                        CodeToolProvider(
-                            name=tool_name,
-                            tools=[tool_instance.get_openai_function_definition()],
-                        )
-                    )
-
-            elif tool_type == "mcp":
-                raw_allowed = settings.get("allowed_tools") or []
-                allowed_names = [
-                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
-                ]
-                mcp_tools = await self._discover_mcp_tools_by_name(
-                    tool_name, allowed_names, mcp_server_instance_service
-                )
-                if mcp_tools:
-                    tool_defs = [t.get_openai_function_definition() for t in mcp_tools]
-                    providers.append(
-                        MCPToolProvider(
-                            name=tool_name,
-                            instance_id="",
-                            tools=tool_defs,
-                        )
-                    )
-
-            elif tool_type == "agent":
-                if not agent_service or not base_url:
-                    continue
-
-                a2a_tool = await A2AAgentToolFactory.create_tool(
-                    agent_name=tool_name,
-                    agent_service=agent_service,
-                    base_url=base_url,
-                    a2a_url_override=settings.get("a2a_url"),
-                    auth_token=auth_token,
-                    description_override=settings.get("description_override"),
-                    task_service=task_service,
-                    workspace_id=workspace_id,
-                    user_id=user_id,
-                )
-                if a2a_tool:
-                    providers.append(
-                        AgentToolProvider(
-                            name=tool_name,
-                            agent_id="",
-                            tools=[a2a_tool.get_openai_function_definition()],
-                        )
-                    )
-
-            elif tool_type == "openapi":
-                # Prefer settings.openapi_connection_id (UUID, stable across renames).
-                connection_ref = settings.get("openapi_connection_id") or tool_name
-                raw_allowed = settings.get("allowed_tools") or []
-                allowed_names = [
-                    str(t["tool_name"] if isinstance(t, dict) else t) for t in raw_allowed
-                ]
-                openapi_tools = await self._discover_openapi_tools_by_name(
-                    connection_ref, allowed_names, self._openapi_connection_service
-                )
-                if openapi_tools:
-                    tool_defs = [t.get_openai_function_definition() for t in openapi_tools]
-                    providers.append(
-                        OpenAPIToolProvider(
-                            name=tool_name,
-                            connection_id=str(connection_ref),
-                            tools=tool_defs,
-                        )
-                    )
-
-            else:
+            builder = self._builders.get(tool.get("type") or "")
+            if builder is None:
                 logger.warning(
-                    f"Unknown tool type: {tool_type}",
+                    f"Unknown tool type: {tool.get('type')}",
                     extra={"tool_config": tool},
                 )
+                continue
+            await builder.add_provider(spec, ctx, providers)
 
         logger.info(f"Discovered {len(providers)} tool providers for agent {agent_id}")
         return providers

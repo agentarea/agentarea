@@ -24,6 +24,10 @@ from sqlalchemy import create_engine, text
 
 logger = logging.getLogger("agentarea-operator")
 
+# Keep in sync with agentarea_common.constants
+PLATFORM_WORKSPACE_ID = "platform"
+PLATFORM_PRINCIPAL_ID = "platform"
+
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+psycopg2://user:password@localhost:5432/agentarea",
@@ -113,7 +117,7 @@ def sync_provider_config(
     name = spec["name"]
     endpoint_url = spec.get("endpointUrl")
     is_public = spec.get("isPublic", True)
-    workspace_id = spec.get("workspaceId", "system")
+    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
     discover = spec.get("discoverModels", False)
     explicit_models = spec.get("models", [])
 
@@ -160,10 +164,10 @@ def sync_provider_config(
                 text(
                     "INSERT INTO provider_configs "
                     "(id, provider_spec_id, name, api_key, endpoint_url, "
-                    "is_active, is_public, workspace_id, created_by, "
+                    "is_active, is_public, source, workspace_id, created_by, "
                     "created_at, updated_at) "
                     "VALUES (:id, :spec_id, :name, :key, :url, "
-                    "true, :pub, :ws, 'system', now(), now())"
+                    "true, :pub, 'official', :ws, :created_by, now(), now())"
                 ),
                 {
                     "id": config_id,
@@ -173,6 +177,7 @@ def sync_provider_config(
                     "url": endpoint_url,
                     "pub": is_public,
                     "ws": workspace_id,
+                    "created_by": PLATFORM_PRINCIPAL_ID,
                 },
             )
 
@@ -243,7 +248,7 @@ def _upsert_model_spec_and_instance(
                 "context_window, is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
                 "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, true, "
-                ":ws, 'system', now(), now())"
+                ":ws, :created_by, now(), now())"
             ),
             {
                 "id": model_spec_id,
@@ -253,6 +258,7 @@ def _upsert_model_spec_and_instance(
                 "desc": model.get("description", ""),
                 "cw": model.get("context_window", 4096),
                 "ws": workspace_id,
+                "created_by": PLATFORM_PRINCIPAL_ID,
             },
         )
 
@@ -279,7 +285,7 @@ def _upsert_model_instance(
                 "is_active, is_public, workspace_id, created_by, "
                 "created_at, updated_at) "
                 "VALUES (:id, :cid, :msid, :name, true, true, "
-                ":ws, 'system', now(), now())"
+                ":ws, :created_by, now(), now())"
             ),
             {
                 "id": str(uuid.uuid4()),
@@ -287,6 +293,7 @@ def _upsert_model_instance(
                 "msid": model_spec_id,
                 "name": model_name,
                 "ws": workspace_id,
+                "created_by": PLATFORM_PRINCIPAL_ID,
             },
         )
 
@@ -348,7 +355,7 @@ def on_provider_config_delete(spec, meta, namespace, **_):
     """Handle deletion — deactivate (don't delete) the ProviderConfig."""
     cr_name = meta["name"]
     name = spec["name"]
-    workspace_id = spec.get("workspaceId", "system")
+    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
 
     logger.info("Deactivating LLMProviderConfig %s/%s", namespace, cr_name)
 
@@ -433,7 +440,7 @@ def _sync_registrysync(spec: dict, cr_name: str, namespace: str) -> dict:
     from registry_sync import reconcile as rs_reconcile
 
     registry_type = spec["type"]
-    workspace_id = spec.get("workspaceId", "system")
+    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
     source_type, location, configmap_body = _resolve_source(spec, namespace)
     with engine.begin() as conn:
         return rs_reconcile(
@@ -491,7 +498,7 @@ def on_registry_sync_delete(spec, meta, namespace, **_):
     stops future reconciliation but does not yank catalog entries users depend on.
     """
     cr_name = meta["name"]
-    workspace_id = spec.get("workspaceId", "system")
+    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
     logger.info("Deleting RegistrySync %s/%s", namespace, cr_name)
     try:
         with engine.begin() as conn:

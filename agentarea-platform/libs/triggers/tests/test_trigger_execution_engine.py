@@ -1,13 +1,15 @@
 """Unit tests for trigger execution engine."""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution, WebhookTrigger
 from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService
+
+from .conftest import make_trigger_repository_factory
 
 pytestmark = pytest.mark.asyncio
 
@@ -44,10 +46,15 @@ class TestTriggerExecutionEngine:
         """Create TriggerService with mocked dependencies."""
         trigger_repo, execution_repo = mock_repositories
 
+        deps = dict(mock_dependencies)
+        agent_repo = deps.pop("agent_repository", None)
         return TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
-            **mock_dependencies,
+            repository_factory=make_trigger_repository_factory(
+                trigger_repo=trigger_repo,
+                execution_repo=execution_repo,
+                agent_repo=agent_repo,
+            ),
+            **deps,
         )
 
     @pytest.fixture
@@ -89,13 +96,13 @@ class TestTriggerExecutionEngine:
         trigger_repo, execution_repo = mock_repositories
 
         # Setup mocks
-        trigger_repo.get.return_value = sample_cron_trigger
-        trigger_repo.update.return_value = sample_cron_trigger
+        trigger_repo.get_trigger.return_value = sample_cron_trigger
+        trigger_repo.update_execution_tracking.return_value = sample_cron_trigger
 
         # Mock task creation
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        trigger_service.task_service.create_task_from_params.return_value = mock_task
+        trigger_service.task_service.route_or_submit_task.return_value = mock_task
 
         # Mock execution recording
         mock_execution = TriggerExecution(
@@ -116,7 +123,7 @@ class TestTriggerExecutionEngine:
         assert result.execution_time_ms > 0
 
         # Verify task was created
-        trigger_service.task_service.create_task_from_params.assert_called_once()
+        trigger_service.task_service.route_or_submit_task.assert_called_once()
 
         # Verify execution was recorded
         execution_repo.create.assert_called_once()
@@ -124,7 +131,7 @@ class TestTriggerExecutionEngine:
     async def test_execute_trigger_not_found(self, trigger_service, mock_repositories):
         """Test trigger execution when trigger doesn't exist."""
         trigger_repo, _ = mock_repositories
-        trigger_repo.get.return_value = None
+        trigger_repo.get_trigger.return_value = None
 
         trigger_id = uuid4()
         execution_data = {"execution_time": datetime.utcnow().isoformat()}
@@ -140,7 +147,7 @@ class TestTriggerExecutionEngine:
 
         # Make trigger inactive
         sample_cron_trigger.is_active = False
-        trigger_repo.get.return_value = sample_cron_trigger
+        trigger_repo.get_trigger.return_value = sample_cron_trigger
 
         # Mock execution recording
         mock_execution = TriggerExecution(
@@ -160,7 +167,7 @@ class TestTriggerExecutionEngine:
         assert result.error_message == "Trigger is inactive"
 
         # Verify task was not created
-        trigger_service.task_service.create_task_from_params.assert_not_called()
+        trigger_service.task_service.route_or_submit_task.assert_not_called()
 
     # Rate limiting test removed - rate limiting moved to infrastructure layer
 
@@ -171,11 +178,11 @@ class TestTriggerExecutionEngine:
         trigger_repo, execution_repo = mock_repositories
 
         # Setup mocks
-        trigger_repo.get.return_value = sample_cron_trigger
-        trigger_repo.update.return_value = sample_cron_trigger
+        trigger_repo.get_trigger.return_value = sample_cron_trigger
+        trigger_repo.update_execution_tracking.return_value = sample_cron_trigger
 
         # Mock task creation failure
-        trigger_service.task_service.create_task_from_params.side_effect = Exception(
+        trigger_service.task_service.route_or_submit_task.side_effect = Exception(
             "Task creation failed"
         )
 
@@ -230,8 +237,8 @@ class TestTriggerExecutionEngine:
         """Test condition evaluation with field matching."""
         event_data = {"request": {"body": {"type": "test", "message": "Hello world"}}}
 
-        result = await trigger_service.evaluate_trigger_conditions(
-            sample_webhook_trigger, event_data
+        result = await trigger_service._evaluate_simple_conditions(
+            sample_webhook_trigger.conditions, event_data
         )
 
         assert result is True
@@ -242,49 +249,19 @@ class TestTriggerExecutionEngine:
         """Test condition evaluation with field mismatch."""
         event_data = {"request": {"body": {"type": "other", "message": "Hello world"}}}
 
-        result = await trigger_service.evaluate_trigger_conditions(
-            sample_webhook_trigger, event_data
+        result = await trigger_service._evaluate_simple_conditions(
+            sample_webhook_trigger.conditions, event_data
         )
 
         assert result is False
 
-    async def test_evaluate_trigger_conditions_time_based(
-        self, trigger_service, sample_cron_trigger
-    ):
-        """Test condition evaluation with time-based conditions."""
-        # Test during business hours
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # 10 AM
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is True
-
-        # Test outside business hours
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 20, 0, 0)  # 8 PM
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is False
-
-    async def test_evaluate_trigger_conditions_weekdays_only(
-        self, trigger_service, sample_cron_trigger
-    ):
-        """Test condition evaluation with weekdays only condition."""
-        sample_cron_trigger.conditions = {"time_conditions": {"weekdays_only": True}}
-
-        # Test on weekday (Monday = 0)
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # Monday
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is True
-
-        # Test on weekend (Saturday = 5)
-        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
-            mock_datetime.utcnow.return_value = datetime(2024, 1, 6, 10, 0, 0)  # Saturday
-
-            result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
-            assert result is False
+    # NOTE: ``test_evaluate_trigger_conditions_time_based`` and
+    # ``test_evaluate_trigger_conditions_weekdays_only`` were removed. Time-based
+    # and weekday-only condition evaluation (``time_conditions`` /
+    # ``weekdays_only`` / business-hours logic) was deliberately removed from
+    # ``TriggerService._evaluate_simple_conditions``, which now supports only
+    # ``field_matches``. The capability is genuinely gone (not relocated), so
+    # there is nothing to retarget.
 
     async def test_get_nested_value(self, trigger_service):
         """Test getting nested values from dictionary."""
@@ -346,18 +323,10 @@ class TestTriggerExecutionEngine:
         assert result.error_message == "Test error"
         assert result.execution_time_ms == 50
 
-    async def test_llm_condition_evaluation_placeholder(self, trigger_service):
-        """Test LLM condition evaluation placeholder."""
-        llm_condition = {
-            "description": "When user sends a file attachment",
-            "context_fields": ["request.body"],
-        }
-
-        event_data = {"request": {"body": {"document": {"file_name": "test.pdf"}}}}
-
-        # This should return True as a placeholder
-        result = await trigger_service._evaluate_llm_condition(llm_condition, event_data)
-        assert result is True
+    # NOTE: ``test_llm_condition_evaluation_placeholder`` was removed. The
+    # ``TriggerService._evaluate_llm_condition`` placeholder no longer exists;
+    # LLM-based condition evaluation now lives on ``LLMConditionEvaluator`` and
+    # is covered by ``test_trigger_service_llm_integration.py``.
 
     async def test_condition_evaluation_error_handling(self, trigger_service, sample_cron_trigger):
         """Test condition evaluation error handling."""
@@ -365,7 +334,9 @@ class TestTriggerExecutionEngine:
         sample_cron_trigger.conditions = {"invalid_condition_type": {"bad": "config"}}
 
         # Should return True (default) when condition evaluation fails
-        result = await trigger_service.evaluate_trigger_conditions(sample_cron_trigger, {})
+        result = await trigger_service._evaluate_simple_conditions(
+            sample_cron_trigger.conditions, {}
+        )
         assert result is True
 
 
@@ -380,7 +351,7 @@ class TestTriggerExecutionIntegration:
         # Mock task creation
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        task_service.create_task_from_params.return_value = mock_task
+        task_service.route_or_submit_task.return_value = mock_task
 
         return task_service
 

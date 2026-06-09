@@ -1,0 +1,176 @@
+{{- if .Values.keto.enabled }}
+{{- $ketoConfigMapName := default (printf "%s-keto-config" (include "agentarea.fullname" .)) .Values.keto.configMapOverrideName -}}
+{{- if not .Values.keto.configMapOverrideName }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $ketoConfigMapName }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+data:
+  keto.yml: |
+{{ .Values.keto.config | indent 4 }}
+  namespaces.keto.ts: |
+{{ .Values.keto.namespaces | indent 4 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-keto
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+spec:
+  replicas: {{ default 1 .Values.keto.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: keto
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: keto
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: keto
+          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/keto" .Values.keto.image.repository }}:{{ default "v0.12.0" .Values.keto.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: read
+              containerPort: 4466
+              protocol: TCP
+            - name: write
+              containerPort: 4467
+              protocol: TCP
+            - name: metrics
+              containerPort: 4468
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+            - name: DSN
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.keto.database.name | default "keto" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+          command: ["sh","-c"]
+          args:
+            - keto serve -c /etc/config/keto/keto.yml
+          volumeMounts:
+            - name: keto-config
+              mountPath: /etc/config/keto
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: read
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/alive
+              port: read
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: keto-config
+          configMap:
+            name: {{ $ketoConfigMapName }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-keto-read
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4466
+      targetPort: read
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-keto-write
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4467
+      targetPort: write
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: keto
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-keto-migrate
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keto-migrate
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: keto-migrate
+    spec:
+      restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      volumes:
+        - name: keto-config
+          configMap:
+            name: {{ $ketoConfigMapName }}
+      containers:
+        - name: keto-migrate
+          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/keto" .Values.keto.image.repository }}:{{ default "v0.12.0" .Values.keto.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["sh","-c"]
+          args:
+            - keto migrate up -y -c /etc/config/keto/keto.yml
+          volumeMounts:
+            - name: keto-config
+              mountPath: /etc/config/keto
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+            - name: DSN
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.keto.database.name | default "keto" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+{{- end }}

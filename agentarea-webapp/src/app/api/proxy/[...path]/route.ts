@@ -43,6 +43,22 @@ async function handleRequest(
       headers.set("Authorization", `Bearer ${authToken}`);
     }
 
+    // Forward the active workspace. The proxy middleware does not run on /api
+    // routes, so the slug isn't injected as a header here — derive it from the
+    // caller's page URL (Referer = /w/{slug}/...), or honor an explicit header
+    // if a client sent one. Transport only; the backend authorizes membership.
+    let workspaceSlug = request.headers.get("x-workspace-slug");
+    if (!workspaceSlug) {
+      const referer = request.headers.get("referer");
+      const match = referer?.match(/\/w\/([^/?#]+)/);
+      if (match) {
+        workspaceSlug = decodeURIComponent(match[1]);
+      }
+    }
+    if (workspaceSlug) {
+      headers.set("X-Workspace-Slug", workspaceSlug);
+    }
+
     // Get request body if present
     let body: string | undefined;
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -61,10 +77,18 @@ async function handleRequest(
       body,
     });
 
-    // Get response data
-    const responseData = await response.text();
+    // Non-JSON responses (file streaming, images, PDFs, etc.):
+    // forward body and Content-Type directly so the browser can render them.
+    const backendContentType = response.headers.get("content-type") || "";
+    if (!backendContentType.includes("application/json")) {
+      return new NextResponse(response.body, {
+        status: response.status,
+        headers: { "content-type": backendContentType },
+      });
+    }
 
-    // Parse JSON if possible
+    // JSON responses: parse and re-serialize (preserves existing behaviour).
+    const responseData = await response.text();
     let jsonData;
     try {
       jsonData = JSON.parse(responseData);
@@ -72,7 +96,6 @@ async function handleRequest(
       jsonData = responseData;
     }
 
-    // Return the response with the same status code
     return NextResponse.json(jsonData, {
       status: response.status,
       headers: {

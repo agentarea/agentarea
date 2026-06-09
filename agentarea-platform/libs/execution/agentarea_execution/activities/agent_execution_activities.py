@@ -306,8 +306,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
 
-            # Get agent from database with skills
+            # Get agent from database with skills. Built-in agents live in the
+            # registry catalog (ADR-003) and are run directly from their
+            # definition (run-from-definition) without materializing a tenant
+            # row, so fall back to the catalog projection when there is no
+            # tenant agent for this id.
             agent = await agent_service.get_with_skills(request.agent_id)
+            if not agent:
+                agent = await agent_service.get_with_catalog(request.agent_id)
             if not agent:
                 raise ValueError(f"Agent {request.agent_id} not found")
 
@@ -863,8 +869,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         event_broker=dependencies.event_broker,
                     )
 
-                    from agentarea_agents_sdk.tools.a2a_tool_factory import (
-                        A2AAgentToolFactory,
+                    from agentarea_agents_sdk.tools.agent_tool_factory import (
+                        AgentToolFactory,
                     )
 
                     for tool_config in agent_configs:
@@ -872,7 +878,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         if not agent_name:
                             continue
 
-                        delegation_tool = await A2AAgentToolFactory.create_tool(
+                        delegation_tool = await AgentToolFactory.create_tool(
                             agent_name=agent_name,
                             agent_service=agent_service,
                             base_url=base_url,

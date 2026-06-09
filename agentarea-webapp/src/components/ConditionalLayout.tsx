@@ -6,10 +6,8 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import QuickTaskDialog from "@/components/QuickTask/QuickTaskDialog";
 import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSidebar";
-import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
+import { Sidebar, SidebarProvider, SidebarRail } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useAuth } from "@/hooks/useAuth";
-import { PROTECTED_ROUTE_PREFIXES as PROTECTED_ROUTES } from "@/lib/auth-session";
 import { navData } from "@/lib/nav-data";
 
 interface ConditionalLayoutProps {
@@ -17,6 +15,8 @@ interface ConditionalLayoutProps {
   sidebarDefaultOpen?: boolean;
 }
 
+// Routes that render their own full-page chrome (landing, auth, error) and
+// therefore must not be wrapped in the app shell / sidebar.
 const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
 
 const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
@@ -26,24 +26,18 @@ export default function ConditionalLayout({
   sidebarDefaultOpen,
 }: ConditionalLayoutProps) {
   const pathname = usePathname();
-  const { isSignedIn, isLoaded } = useAuth();
 
-  // Always skip layout for auth pages and root page
-  const shouldUseNoLayout =
-    NO_LAYOUT_ROUTES.some((route) => pathname.startsWith(route)) ||
-    pathname === "/";
+  // The layout shell is chosen purely from the route, never from auth state.
+  // This keeps SidebarProvider (and the sidebar's open/collapsed state) mounted
+  // across auth re-renders; auth only gates the content area below via
+  // <AuthGuard>. Previously the shell was conditional on useAuth + a hardcoded
+  // route list, so a flapping session (or a route missing from the list) could
+  // unmount the provider and silently reset/disable the sidebar.
+  const useNoLayout =
+    pathname === "/" ||
+    NO_LAYOUT_ROUTES.some((route) => pathname.startsWith(route));
 
-  if (shouldUseNoLayout) {
-    return <>{children}</>;
-  }
-
-  // For unknown routes: only use main layout if user is authenticated
-  const isKnownRoute = PROTECTED_ROUTES.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  if (!isKnownRoute && isLoaded && !isSignedIn) {
-    // Unknown route + unauthenticated = no layout (clean 404)
+  if (useNoLayout) {
     return <>{children}</>;
   }
 
@@ -52,41 +46,42 @@ export default function ConditionalLayout({
   );
 
   return (
-    <AuthGuard>
-      <SidebarProvider defaultOpen={sidebarDefaultOpen}>
-        <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
-          <Sidebar collapsible="icon">
-            <div className="relative h-full w-full overflow-hidden">
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.div
-                  key={isSettings ? "settings-sidebar" : "main-sidebar"}
-                  initial={{ x: -10, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -10, opacity: 0 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 260,
-                    damping: 30,
-                    mass: 1,
-                  }}
-                  className="absolute inset-0 flex flex-col h-full w-full"
-                >
-                  {isSettings ? (
-                    <SettingsSidebarContent />
-                  ) : (
-                    <AppSidebarContent data={navData} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </Sidebar>
-          <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative">
-            {children}
-          </main>
-        </div>
-        <ThemeToggle className="fixed bottom-2 right-2 z-50" />
-        <QuickTaskDialog />
-      </SidebarProvider>
-    </AuthGuard>
+    <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+      <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
+        <Sidebar collapsible="icon">
+          <div className="relative h-full w-full overflow-hidden">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={isSettings ? "settings-sidebar" : "main-sidebar"}
+                initial={{ x: -10, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -10, opacity: 0 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 260,
+                  damping: 30,
+                  mass: 1,
+                }}
+                className="absolute inset-0 flex flex-col h-full w-full"
+              >
+                {isSettings ? (
+                  <SettingsSidebarContent />
+                ) : (
+                  <AppSidebarContent data={navData} />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          {/* Rail lives outside the overflow-hidden animated wrapper so its
+              -right-4 toggle strip is not clipped and stays clickable. */}
+          <SidebarRail />
+        </Sidebar>
+        <main className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative">
+          <AuthGuard>{children}</AuthGuard>
+        </main>
+      </div>
+      <ThemeToggle className="fixed bottom-2 right-2 z-50" />
+      <QuickTaskDialog />
+    </SidebarProvider>
   );
 }

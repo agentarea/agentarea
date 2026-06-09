@@ -1,8 +1,10 @@
 """Authorization service interface for workspace access control.
 
 This module defines the abstract AuthorizationService that determines which
-workspaces a user can access. The OSS implementation uses a simple rule
-(user's workspace + system). Enterprise can replace this with ReBAC.
+workspaces a user can access. The OSS implementation grants access to the
+user's own workspace; built-in/official content lives in the global registry
+catalog and is read globally by the catalog repositories, not by membership in a
+magic 'platform' workspace. Enterprise can replace this with ReBAC.
 """
 
 import logging
@@ -11,8 +13,6 @@ from abc import ABC, abstractmethod
 from .context import UserContext
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_WORKSPACE_ID = "system"
 
 
 class AuthorizationService(ABC):

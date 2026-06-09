@@ -65,9 +65,7 @@ class JWTTokenHandler:
                 self.logger.error("JWT token missing 'workspace_id' claim")
                 raise MissingWorkspaceContext(missing_field="workspace_id", user_id=user_id)
 
-            return UserContext(
-                user_id=user_id, workspace_id=workspace_id, roles=payload.get("roles", [])
-            )
+            return UserContext(user_id=user_id, workspace_id=workspace_id)
 
         except jwt.InvalidTokenError as e:
             self.logger.error(f"JWT validation failed: {e}")

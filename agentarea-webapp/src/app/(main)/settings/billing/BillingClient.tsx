@@ -6,165 +6,263 @@ import {
   Check,
   CreditCard,
   Crown,
+  Gauge,
   LayoutDashboard,
   ListChecks,
   Plug,
   Sparkles,
-  Zap,
 } from "lucide-react";
-import ContentBlock from "@/components/ContentBlock";
+import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type {
+  BillingPlanKey,
+  BillingSubscription,
+  BillingUsageItem,
+} from "./actions";
 
-export default function BillingClient() {
+type UsageIcon = React.ComponentType<{ className?: string }>;
+
+const USAGE_META: Record<string, { labelKey: string; icon: UsageIcon }> = {
+  workspaces: { labelKey: "usage.workspaces", icon: LayoutDashboard },
+  agents: { labelKey: "usage.agents", icon: Bot },
+  mcp_connections: { labelKey: "usage.mcpConnections", icon: Plug },
+  task_runs: { labelKey: "usage.taskRuns", icon: ListChecks },
+};
+
+const PLAN_ORDER: BillingPlanKey[] = ["payg", "enterprise"];
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+interface Props {
+  subscription: BillingSubscription | null;
+  usage: BillingUsageItem[];
+  available: boolean;
+  error: string | null;
+}
+
+export default function BillingClient({
+  subscription,
+  usage,
+  available,
+  error,
+}: Props) {
   const t = useTranslations("BillingPage");
-  const tSettings = useTranslations("SettingsPage");
-
-  const plans = [
-    {
-      key: "free",
-      current: true,
-      highlighted: false,
-    },
-    {
-      key: "pro",
-      current: false,
-      highlighted: true,
-    },
-    {
-      key: "enterprise",
-      current: false,
-      highlighted: false,
-    },
-  ];
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: tSettings("title"), href: "/settings" },
-          { label: t("title") },
-        ],
-        description: t("description"),
-      }}
-    >
-      <div className="mx-auto max-w-4xl">
-        <div className="space-y-4">
-          <section id="current-plan" className="border-0 p-0">
-            <div className="px-4 pt-3">
-              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                {t("currentPlan.title")}
-              </h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                {t("currentPlan.subtitle")}
-              </p>
+    <div className="mx-auto max-w-4xl">
+      <div className="space-y-4">
+        <CurrentPlanSection
+          subscription={subscription}
+          available={available}
+          error={error}
+        />
+
+        <section id="plans" className="border-0 p-0">
+          <div className="px-4 pt-3">
+            <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              {t("availablePlans.title")}
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              {t("availablePlans.subtitle")}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
+            {PLAN_ORDER.map((planKey) => (
+              <PlanCard
+                key={planKey}
+                planKey={planKey}
+                current={subscription?.plan === planKey}
+                highlighted={planKey === "payg"}
+              />
+            ))}
+          </div>
+        </section>
+
+        <UsageSection usage={usage} available={available} error={error} />
+      </div>
+    </div>
+  );
+}
+
+function CurrentPlanSection({
+  subscription,
+  available,
+  error,
+}: {
+  subscription: BillingSubscription | null;
+  available: boolean;
+  error: string | null;
+}) {
+  const t = useTranslations("BillingPage");
+
+  return (
+    <section id="current-plan" className="border-0 p-0">
+      <div className="px-4 pt-3">
+        <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          {t("currentPlan.title")}
+        </h2>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          {t("currentPlan.subtitle")}
+        </p>
+      </div>
+      <div className="p-4">
+        {subscription ? (
+          <Card>
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
+              <CreditCard className="h-4 w-4" />
             </div>
-            <div className="p-4">
-              <div
-                className={cn(
-                  "group relative flex items-start gap-3 w-full p-4",
-                  "bg-white dark:bg-zinc-900",
-                  "border border-zinc-200/60 dark:border-zinc-800",
-                  "rounded-md transition-all duration-300 ease-out",
-                  "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
-                  "relative overflow-hidden"
-                )}
-              >
-                <div
-                  className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(
-                      -45deg,
-                      currentColor,
-                      currentColor 1px,
-                      transparent 1px,
-                      transparent 10px
-                    )`,
-                  }}
-                />
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
-                  <CreditCard className="h-4 w-4" />
+            <div className="flex-1 min-w-0 z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                    {t(`plans.${subscription.plan}.name`)}
+                  </p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {t(`plans.${subscription.plan}.description`)}
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0 z-10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                        {t("currentPlan.freePlan")}
-                      </p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {t("currentPlan.freePlanDescription")}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                      {t("currentPlan.active")}
-                    </div>
-                  </div>
-                </div>
+                <StatusBadge status={subscription.status} />
               </div>
             </div>
-          </section>
-
-          <section id="plans" className="border-0 p-0">
-            <div className="px-4 pt-3">
-              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                {t("availablePlans.title")}
-              </h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                {t("availablePlans.subtitle")}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
-              {plans.map((plan) => (
-                <PlanCard
-                  key={plan.key}
-                  planKey={plan.key}
-                  current={plan.current}
-                  highlighted={plan.highlighted}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section id="usage" className="border-0 p-0">
-            <div className="px-4 pt-3">
-              <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                {t("usage.title")}
-              </h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                {t("usage.subtitle")}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">
-              <UsageCard
-                label={t("usage.workspaces")}
-                used={1}
-                limit={1}
-                icon={LayoutDashboard}
-              />
-              <UsageCard
-                label={t("usage.agents")}
-                used={0}
-                limit={3}
-                icon={Bot}
-              />
-              <UsageCard
-                label={t("usage.mcpConnections")}
-                used={0}
-                limit={5}
-                icon={Plug}
-              />
-              <UsageCard
-                label={t("usage.taskRuns")}
-                used={0}
-                limit={1000}
-                icon={ListChecks}
-              />
-            </div>
-          </section>
-        </div>
+          </Card>
+        ) : (
+          <BillingEmptyState available={available} error={error} />
+        )}
       </div>
-    </ContentBlock>
+    </section>
+  );
+}
+
+function UsageSection({
+  usage,
+  available,
+  error,
+}: {
+  usage: BillingUsageItem[];
+  available: boolean;
+  error: string | null;
+}) {
+  const t = useTranslations("BillingPage");
+
+  return (
+    <section id="usage" className="border-0 p-0">
+      <div className="px-4 pt-3">
+        <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          {t("usage.title")}
+        </h2>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          {t("usage.subtitle")}
+        </p>
+      </div>
+      <div className="p-4">
+        {usage.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {usage.map((item) => (
+              <UsageCard key={item.key} item={item} />
+            ))}
+          </div>
+        ) : (
+          <BillingEmptyState available={available} error={error} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations("BillingPage");
+  const isActive = status === "active";
+  const label = t.has(`currentPlan.statuses.${status}`)
+    ? t(`currentPlan.statuses.${status}`)
+    : humanizeKey(status);
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1.5 text-xs",
+        isActive
+          ? "text-green-600 dark:text-green-400"
+          : "text-amber-600 dark:text-amber-400"
+      )}
+    >
+      <div
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          isActive ? "bg-green-500" : "bg-amber-500"
+        )}
+      />
+      {label}
+    </div>
+  );
+}
+
+function BillingEmptyState({
+  available,
+  error,
+}: {
+  available: boolean;
+  error: string | null;
+}) {
+  const t = useTranslations("BillingPage");
+
+  if (error) {
+    return (
+      <EmptyState
+        title={t("loadError.title")}
+        description={t("loadError.description")}
+        iconsType="payments"
+      />
+    );
+  }
+
+  return (
+    <EmptyState
+      title={available ? t("empty.title") : t("unavailable.title")}
+      description={
+        available ? t("empty.description") : t("unavailable.description")
+      }
+      iconsType="payments"
+    />
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "group relative flex items-start gap-3 w-full p-4",
+        "bg-white dark:bg-zinc-900",
+        "border border-zinc-200/60 dark:border-zinc-800",
+        "rounded-md transition-all duration-300 ease-out",
+        "shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]",
+        "relative overflow-hidden"
+      )}
+    >
+      <HatchBackground />
+      {children}
+    </div>
+  );
+}
+
+function HatchBackground() {
+  return (
+    <div
+      className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
+      style={{
+        backgroundImage: `repeating-linear-gradient(
+          -45deg,
+          currentColor,
+          currentColor 1px,
+          transparent 1px,
+          transparent 10px
+        )`,
+      }}
+    />
   );
 }
 
@@ -173,13 +271,13 @@ function PlanCard({
   current,
   highlighted,
 }: {
-  planKey: string;
+  planKey: BillingPlanKey;
   current: boolean;
   highlighted: boolean;
 }) {
   const t = useTranslations("BillingPage");
 
-  const featuresMap: Record<string, string[]> = {
+  const featuresMap: Record<BillingPlanKey, string[]> = {
     free: [
       "plans.free.features.workspace",
       "plans.free.features.agents",
@@ -187,15 +285,13 @@ function PlanCard({
       "plans.free.features.support",
       "plans.free.features.taskRuns",
     ],
-    pro: [
-      "plans.pro.features.workspaces",
-      "plans.pro.features.agents",
-      "plans.pro.features.mcpConnections",
-      "plans.pro.features.support",
-      "plans.pro.features.taskRuns",
-      "plans.pro.features.collaboration",
-      "plans.pro.features.analytics",
-      "plans.pro.features.execution",
+    payg: [
+      "plans.payg.features.noMonthlyFee",
+      "plans.payg.features.usageBased",
+      "plans.payg.features.agents",
+      "plans.payg.features.mcpConnections",
+      "plans.payg.features.collaboration",
+      "plans.payg.features.support",
     ],
     enterprise: [
       "plans.enterprise.features.everything",
@@ -224,18 +320,7 @@ function PlanCard({
           : "border-zinc-200/60 dark:border-zinc-800"
       )}
     >
-      <div
-        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(
-            -45deg,
-            currentColor,
-            currentColor 1px,
-            transparent 1px,
-            transparent 10px
-          )`,
-        }}
-      />
+      <HatchBackground />
       {highlighted && (
         <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-normal px-2.5 py-1 rounded-bl-md z-20">
           {t("availablePlans.recommended")}
@@ -294,9 +379,7 @@ function PlanCard({
             }
           >
             <Sparkles className="h-3 w-3 mr-1.5" />
-            {t("availablePlans.upgradeTo", {
-              planName: t(`plans.${planKey}.name`),
-            })}
+            {t("availablePlans.setUpBilling")}
           </Button>
         )}
       </div>
@@ -304,19 +387,18 @@ function PlanCard({
   );
 }
 
-function UsageCard({
-  label,
-  used,
-  limit,
-  icon: Icon,
-}: {
-  label: string;
-  used: number;
-  limit: number;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-  const isNearLimit = percentage >= 80;
+function UsageCard({ item }: { item: BillingUsageItem }) {
+  const t = useTranslations("BillingPage");
+  const meta = USAGE_META[item.key];
+  const Icon = meta?.icon ?? Gauge;
+  const label = meta ? t(meta.labelKey) : humanizeKey(item.key);
+
+  const isUnlimited = item.limit === null;
+  const percentage =
+    !isUnlimited && item.limit! > 0
+      ? Math.min((item.used / item.limit!) * 100, 100)
+      : 0;
+  const isNearLimit = !isUnlimited && percentage >= 80;
 
   return (
     <div
@@ -329,18 +411,7 @@ function UsageCard({
         "relative overflow-hidden"
       )}
     >
-      <div
-        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(
-            -45deg,
-            currentColor,
-            currentColor 1px,
-            transparent 1px,
-            transparent 10px
-          )`,
-        }}
-      />
+      <HatchBackground />
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
         <Icon className="h-4 w-4" />
       </div>
@@ -350,7 +421,8 @@ function UsageCard({
             {label}
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {used} / {limit.toLocaleString()}
+            {item.used.toLocaleString()} /{" "}
+            {isUnlimited ? t("usage.unlimited") : item.limit!.toLocaleString()}
           </span>
         </div>
         <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">

@@ -4,11 +4,9 @@ import * as React from "react";
 import { Github, SquarePen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
-  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -96,21 +94,6 @@ export function AppSidebarContent({ data }: { data: any }) {
           </div>
         )}
       </SidebarFooter>
-      <SidebarRail />
     </>
-  );
-}
-
-export function AppSidebar({
-  ...props
-}: React.ComponentProps<typeof Sidebar> & { data: any }) {
-  return (
-    <Sidebar
-      collapsible="icon"
-      {...props}
-      className=""
-    >
-      <AppSidebarContent data={props.data} />
-    </Sidebar>
   );
 }

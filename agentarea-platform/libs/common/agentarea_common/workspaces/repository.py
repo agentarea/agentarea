@@ -15,11 +15,12 @@ use it only for explicit policy checks inside the calling service.
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     INVITATION_STATUS_PENDING,
+    Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
 )
@@ -101,3 +102,46 @@ class WorkspaceMembershipRepository:
         await self.session.delete(membership)
         await self.session.commit()
         return True
+
+
+class WorkspaceRepository:
+    """Persistence for the reified ``Workspace`` entity.
+
+    Like the invitation/membership repos this does not extend
+    ``WorkspaceScopedRepository``: a workspace is *the* scope, so scoping
+    a workspace lookup by workspace would be circular.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def add(self, workspace: Workspace) -> Workspace:
+        self.session.add(workspace)
+        await self.session.commit()
+        await self.session.refresh(workspace)
+        return workspace
+
+    async def get(self, workspace_id: str) -> Workspace | None:
+        result = await self.session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_slug(self, slug: str) -> Workspace | None:
+        result = await self.session.execute(select(Workspace).where(Workspace.slug == slug))
+        return result.scalar_one_or_none()
+
+    async def list_for_user(self, user_id: str) -> list[Workspace]:
+        """Workspaces the user can reach: their own + any joined via membership."""
+        member_workspace_ids = select(WorkspaceMembership.workspace_id).where(
+            WorkspaceMembership.user_id == user_id
+        )
+        result = await self.session.execute(
+            select(Workspace)
+            .where(
+                or_(
+                    Workspace.owner_user_id == user_id,
+                    Workspace.id.in_(member_workspace_ids),
+                )
+            )
+            .order_by(Workspace.created_at.asc())
+        )
+        return list(result.scalars().all())

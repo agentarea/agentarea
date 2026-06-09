@@ -43,7 +43,6 @@ class TestJWTTokenHandler:
             user_id="test-user-123",
             workspace_id="test-workspace-456",
             email="test@example.com",
-            roles=["user", "admin"],
             secret_key="test-secret-key",
         )
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -55,7 +54,7 @@ class TestJWTTokenHandler:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.roles == ["user", "admin"]
+        assert context.accessible_workspaces == ["test-workspace-456"]
 
     async def test_extract_user_context_missing_authorization_header(
         self, jwt_handler, mock_request
@@ -209,7 +208,7 @@ class TestJWTTokenHandler:
         # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_optional_claims(self, jwt_handler, mock_request):
-        """Test extraction with optional claims (email, roles)."""
+        """Test extraction with optional claims (email)."""
         # Arrange - Token without optional claims
         payload = {
             "sub": "test-user",
@@ -226,7 +225,7 @@ class TestJWTTokenHandler:
         # Assert
         assert context.user_id == "test-user"
         assert context.workspace_id == "test-workspace"
-        assert context.roles == []  # Default empty list
+        assert context.email is None
 
     async def test_extract_user_context_with_all_claims(self, jwt_handler, mock_request):
         """Test extraction with all possible claims."""
@@ -235,7 +234,6 @@ class TestJWTTokenHandler:
             user_id="full-user-123",
             workspace_id="full-workspace-456",
             email="full@example.com",
-            roles=["user", "admin", "moderator"],
             secret_key="test-secret-key",
         )
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -246,7 +244,7 @@ class TestJWTTokenHandler:
         # Assert
         assert context.user_id == "full-user-123"
         assert context.workspace_id == "full-workspace-456"
-        assert context.roles == ["user", "admin", "moderator"]
+        assert context.accessible_workspaces == ["full-workspace-456"]
 
     async def test_extract_user_context_case_insensitive_bearer(self, jwt_handler, mock_request):
         """Test that Bearer token extraction is case sensitive (as per spec)."""
@@ -382,7 +380,6 @@ class TestJWTTokenHandler:
             "sub": "test-user",
             "workspace_id": "test-workspace",
             "email": None,
-            "roles": None,
             "iat": datetime.now(UTC),
             "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
@@ -395,7 +392,7 @@ class TestJWTTokenHandler:
         # Assert
         assert context.user_id == "test-user"
         assert context.workspace_id == "test-workspace"
-        assert context.roles == []  # Should default to empty list
+        assert context.email is None
 
 
 class TestJWTTestUtils:
@@ -409,7 +406,6 @@ class TestJWTTestUtils:
         payload = jwt.decode(token, options={"verify_signature": False})
         assert payload["sub"] == "test-user"
         assert payload["workspace_id"] == "test-workspace"
-        assert payload["roles"] == ["user"]
 
     def test_generate_test_jwt_token_with_all_params(self):
         """Test JWT token generation with all parameters."""
@@ -417,7 +413,6 @@ class TestJWTTestUtils:
             user_id="full-user",
             workspace_id="full-workspace",
             email="test@example.com",
-            roles=["admin", "user"],
             expires_in_minutes=60,
             secret_key="custom-secret",
             algorithm="HS512",
@@ -430,26 +425,21 @@ class TestJWTTestUtils:
         assert payload["sub"] == "full-user"
         assert payload["workspace_id"] == "full-workspace"
         assert payload["email"] == "test@example.com"
-        assert payload["roles"] == ["admin", "user"]
 
     def test_create_test_user_context(self):
         """Test test user context creation."""
-        context = create_test_user_context(
-            user_id="test-user", workspace_id="test-workspace", roles=["admin"]
-        )
+        context = create_test_user_context(user_id="test-user", workspace_id="test-workspace")
 
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user"
         assert context.workspace_id == "test-workspace"
-        assert context.roles == ["admin"]
 
     def test_create_admin_test_token(self):
         """Test admin test token creation."""
         token = create_admin_test_token()
 
         payload = jwt.decode(token, options={"verify_signature": False})
-        assert "admin" in payload["roles"]
-        assert "user" in payload["roles"]
+        assert payload["sub"] == "admin-user-123"
         assert payload["email"] == "admin@example.com"
 
     def test_create_basic_test_token(self):
@@ -457,7 +447,7 @@ class TestJWTTestUtils:
         token = create_basic_test_token()
 
         payload = jwt.decode(token, options={"verify_signature": False})
-        assert payload["roles"] == ["user"]
+        assert payload["sub"] == "basic-user-123"
 
     def test_create_expired_test_token(self):
         """Test expired test token creation."""

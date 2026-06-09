@@ -10,15 +10,18 @@ Entity-specific details (connection_type, source_type, etc.) live in spec JSONB.
 from datetime import datetime
 from typing import Any
 
-from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from agentarea_common.base.models import BaseModel
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Registry(BaseModel, WorkspaceScopedMixin):
+class Registry(BaseModel):
     """A configured external source of entity definitions.
+
+    Global catalog infrastructure — NOT workspace-scoped. Built-in/official
+    content lives here once and is readable by every tenant.
 
     registry_type determines what gets created on sync:
         - "mcp_servers": creates MCPServer specs
@@ -67,8 +70,10 @@ class Registry(BaseModel, WorkspaceScopedMixin):
         self.item_count = 0
 
 
-class RegistryItem(BaseModel, WorkspaceScopedMixin):
+class RegistryItem(BaseModel):
     """A cached catalog entry synced from a Registry.
+
+    Global catalog infrastructure — NOT workspace-scoped.
 
     On first sync, each item auto-creates the target entity.
     On re-sync, version changes are flagged but not auto-applied.

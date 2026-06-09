@@ -1,0 +1,27 @@
+# Ory Keto Configuration for AgentArea ReBAC
+#
+# DSN is overridden via the docker-compose environment variable (-c flag picks
+# up ${DSN} from the environment, mirroring the Kratos setup).
+
+version: v0.12.0
+
+dsn: ${DSN}
+
+namespaces:
+  location: file:///etc/config/keto/namespaces.keto.ts
+
+serve:
+  read:
+    host: 0.0.0.0
+    port: 4466
+  write:
+    host: 0.0.0.0
+    port: 4467
+  metrics:
+    host: 0.0.0.0
+    port: 4468
+
+log:
+  level: debug
+  format: text
+  leak_sensitive_values: true

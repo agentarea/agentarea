@@ -1,16 +1,44 @@
 {
-	"name": "agentarea-cli",
-	"version": "0.0.0",
+	"name": "@agentarea/cli",
+	"version": "0.1.0",
+	"description": "Interactive CLI for AgentArea — authenticate, discover agents, submit tasks, and monitor real-time execution via SSE.",
 	"license": "Apache-2.0",
-	"bin": "dist/cli.js",
+	"author": "AgentArea",
+	"homepage": "https://github.com/agentarea/agentarea/tree/main/agentarea-cli#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agentarea/agentarea.git",
+		"directory": "agentarea-cli"
+	},
+	"bugs": {
+		"url": "https://github.com/agentarea/agentarea/issues"
+	},
+	"keywords": [
+		"agentarea",
+		"cli",
+		"agents",
+		"ai",
+		"ink",
+		"sse"
+	],
+	"bin": {
+		"agentarea": "dist/cli.js"
+	},
 	"type": "module",
+	"packageManager": "pnpm@9.15.4",
 	"engines": {
 		"node": ">=16"
+	},
+	"publishConfig": {
+		"access": "public"
 	},
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
-		"test": "prettier --check . && xo && ava"
+		"typecheck": "tsc --noEmit",
+		"lint": "prettier --check . && xo",
+		"test": "prettier --check . && tsc --noEmit",
+		"prepublishOnly": "npm run build"
 	},
 	"files": [
 		"dist"
@@ -58,7 +86,8 @@
 		"semicolon": true,
 		"prettier": true,
 		"rules": {
-			"react/prop-types": "off"
+			"react/prop-types": "off",
+			"unicorn/expiring-todo-comments": "off"
 		}
 	},
 	"prettier": "@vdemedes/prettier-config",

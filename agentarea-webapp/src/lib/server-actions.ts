@@ -57,6 +57,7 @@ import {
   enableTrigger,
   disableTrigger,
   deleteTrigger,
+  listTriggers,
   listMCPServers,
   listOpenAPIConnections,
   getOpenAPIConnection,
@@ -397,6 +398,14 @@ export async function importWorkspaceAction(body: {
   override_existing?: boolean;
 }) {
   return await importWorkspace(body);
+}
+
+export async function listTriggersAction(params?: {
+  agent_id?: string;
+  trigger_type?: string;
+  active_only?: boolean;
+}) {
+  return await listTriggers(params);
 }
 
 export async function enableTriggerAction(triggerId: string) {

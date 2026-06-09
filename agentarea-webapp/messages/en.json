@@ -122,6 +122,7 @@
     "network": "Network",
     "members": "Members",
     "budgets": "Budgets",
+    "accessControl": "Access control",
     "secrets": "Secrets",
     "policies": "Policies",
     "settings": "Settings",
@@ -284,12 +285,30 @@
   "BillingPage": {
     "title": "Billing",
     "description": "Manage your subscription and billing",
+    "unavailable": {
+      "title": "Billing isn't available here",
+      "description": "This deployment doesn't include the billing service. Subscription and usage are managed by your provider."
+    },
+    "empty": {
+      "title": "No billing data yet",
+      "description": "Subscription and usage details will appear here once available."
+    },
+    "loadError": {
+      "title": "Couldn't load billing",
+      "description": "Something went wrong while loading your billing information. Please try again."
+    },
     "currentPlan": {
       "title": "Current Plan",
       "subtitle": "Your active subscription",
       "freePlan": "Free Plan",
       "freePlanDescription": "1 workspace, 3 agents, 1,000 task runs / month",
-      "active": "Active"
+      "active": "Active",
+      "statuses": {
+        "active": "Active",
+        "trialing": "Trial",
+        "past_due": "Past due",
+        "canceled": "Canceled"
+      }
     },
     "availablePlans": {
       "title": "Available Plans",
@@ -297,7 +316,8 @@
       "recommended": "RECOMMENDED",
       "currentPlan": "Current Plan",
       "contactSales": "Contact Sales",
-      "upgradeTo": "Upgrade to {planName}"
+      "upgradeTo": "Upgrade to {planName}",
+      "setUpBilling": "Set up billing"
     },
     "usage": {
       "title": "Usage",
@@ -305,7 +325,8 @@
       "workspaces": "Workspaces",
       "agents": "Agents",
       "mcpConnections": "MCP Connections",
-      "taskRuns": "Task Runs"
+      "taskRuns": "Task Runs",
+      "unlimited": "Unlimited"
     },
     "plans": {
       "free": {
@@ -321,20 +342,18 @@
           "taskRuns": "1,000 task runs / month"
         }
       },
-      "pro": {
-        "name": "Pro",
-        "price": "$49",
-        "period": "per month",
-        "description": "For teams building agent organizations",
+      "payg": {
+        "name": "Pay as you go",
+        "price": "Usage-based",
+        "period": "",
+        "description": "Pay only for what your agents actually use",
         "features": {
-          "workspaces": "Unlimited workspaces",
+          "noMonthlyFee": "No monthly fee",
+          "usageBased": "Billed per task & token used",
           "agents": "Unlimited agents",
           "mcpConnections": "Unlimited MCP connections",
-          "support": "Priority support",
-          "taskRuns": "50,000 task runs / month",
           "collaboration": "Team collaboration",
-          "analytics": "Advanced analytics",
-          "execution": "Priority execution"
+          "support": "Priority support"
         }
       },
       "enterprise": {
@@ -343,7 +362,7 @@
         "period": "",
         "description": "For organizations with advanced needs",
         "features": {
-          "everything": "Everything in Pro",
+          "everything": "Everything in Pay as you go",
           "sso": "SSO / SAML",
           "sla": "Custom SLA",
           "infrastructure": "Dedicated infrastructure",
@@ -383,7 +402,7 @@
     "overview": "Overview",
     "createTask": "Create Task",
     "activeTasks": "Active Tasks",
-    "currentTasks": "Current Tasks",
+    "currentTasks": "Tasks",
     "payments": "Payments",
     "delegation": "Delegation",
     "a2ui": "A2UI",

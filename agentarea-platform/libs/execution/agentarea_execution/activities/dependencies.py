@@ -134,12 +134,11 @@ class ActivityServiceContainer:
 def _default_accessible_workspaces(workspace_id: str) -> list[str]:
     """Return default accessible workspaces for worker context.
 
-    Workers (Temporal activities) run with system-level access and need
-    visibility into both the task's workspace and system entities.
+    Workers (Temporal activities) read only the task's own workspace. Built-in/
+    official content lives in the global registry catalog and is read globally by
+    the catalog repositories, so no magic 'platform' workspace is injected here.
     """
-    from agentarea_common.auth.authorization import SYSTEM_WORKSPACE_ID
-
-    return [workspace_id, SYSTEM_WORKSPACE_ID]
+    return [workspace_id]
 
 
 def create_user_context(user_context_data: dict[str, Any]) -> UserContext:

@@ -40,6 +40,24 @@ export function getServerClient() {
           // Continue without Authorization header if authentication fails
         }
 
+        // Forward the active workspace (carried from the /w/{slug} URL by the
+        // proxy middleware as a per-request header). Transport only — the
+        // backend authorizes membership and 403s on a slug the user can't use.
+        try {
+          // Dynamic import so this module is not statically tied to
+          // "next/headers" (a server-only API). Client components transitively
+          // import the API client; a top-level import would break their bundle.
+          const { headers } = await import("next/headers");
+          const requestHeaders = await headers();
+          const workspaceSlug = requestHeaders.get("x-workspace-slug");
+          if (workspaceSlug) {
+            request.headers.set("X-Workspace-Slug", workspaceSlug);
+          }
+        } catch {
+          // headers() is unavailable outside a request scope (e.g. build-time
+          // prefetch) — fall back to the user's personal workspace.
+        }
+
         return request;
       },
       async onResponse({ response }) {

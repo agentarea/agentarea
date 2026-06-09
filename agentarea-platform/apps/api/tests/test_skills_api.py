@@ -156,7 +156,7 @@ async def test_get_skill_content_returns_full_content(async_client, mock_skill_s
     skill.name = "Content Skill"
     skill.content = "---\nname: Content Skill\n---\n# Content Skill\nBody"
 
-    mock_skill_service.get.return_value = skill
+    mock_skill_service.get_with_catalog.return_value = skill
 
     response = await async_client.get(f"/v1/skills/{skill_id}/content")
 

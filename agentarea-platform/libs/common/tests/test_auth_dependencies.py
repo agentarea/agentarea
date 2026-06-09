@@ -56,7 +56,6 @@ class TestJWTTokenHandler:
             "sub": "test-user-123",
             "workspace_id": "test-workspace-456",
             "email": "test@example.com",
-            "roles": ["user", "admin"],
         }
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -66,7 +65,7 @@ class TestJWTTokenHandler:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.roles == ["user", "admin"]
+        assert context.accessible_workspaces == ["test-workspace-456"]
 
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_token(self, jwt_handler, mock_request):
@@ -131,7 +130,7 @@ class TestJWTTokenHandler:
 
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.roles == []  # Default empty list
+        assert context.accessible_workspaces == ["test-workspace-456"]
 
 
 class TestGetUserContext:
@@ -159,7 +158,7 @@ class TestGetUserContext:
         mock_authz = Mock(spec=AuthorizationService)
 
         async def mock_get_accessible_workspaces(user_context):
-            return [user_context.workspace_id, "test-workspace", "system"]
+            return [user_context.workspace_id, "test-workspace", "platform"]
 
         mock_authz.get_accessible_workspaces = mock_get_accessible_workspaces
         register_singleton(AuthorizationService, mock_authz)

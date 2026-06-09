@@ -1,10 +1,13 @@
 """Task domain models."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 class Task(BaseModel):
@@ -197,18 +200,39 @@ class SimpleTask(BaseModel):
         self._validate_datetime_fields()
 
     def _validate_datetime_fields(self) -> None:
-        """Validate that datetime fields have logical relationships."""
-        # started_at should not be before created_at
+        """Surface illogical datetime relationships without breaking hydration.
+
+        This runs on every construction, including loading existing rows from
+        the database. Raising here would make any task with legacy-inconsistent
+        timestamps un-loadable and 500 every read path that touches it (e.g. the
+        SSE event stream). Such skew exists in practice — e.g. a past bulk
+        migration that overwrote ``created_at`` while preserving the original
+        ``started_at``. So we log a warning instead of raising: the signal is
+        kept, but reads stay total.
+        """
         if self.started_at and self.started_at < self.created_at:
-            raise ValueError("started_at cannot be before created_at")
+            logger.warning(
+                "Task %s has started_at (%s) before created_at (%s)",
+                self.id,
+                self.started_at,
+                self.created_at,
+            )
 
-        # completed_at should not be before started_at
         if self.completed_at and self.started_at and self.completed_at < self.started_at:
-            raise ValueError("completed_at cannot be before started_at")
+            logger.warning(
+                "Task %s has completed_at (%s) before started_at (%s)",
+                self.id,
+                self.completed_at,
+                self.started_at,
+            )
 
-        # completed_at should not be before created_at
         if self.completed_at and self.completed_at < self.created_at:
-            raise ValueError("completed_at cannot be before created_at")
+            logger.warning(
+                "Task %s has completed_at (%s) before created_at (%s)",
+                self.id,
+                self.completed_at,
+                self.created_at,
+            )
 
     def is_completed(self) -> bool:
         """Check if the task is in a completed state."""

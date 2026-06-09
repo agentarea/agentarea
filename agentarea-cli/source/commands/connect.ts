@@ -58,14 +58,18 @@ function mcpServerName(name: string): string {
 }
 
 function targetSuffix(name: string): string {
-	return name
-		.toUpperCase()
-		.replace(/[^A-Z0-9]+/g, '_')
-		.replace(/^_+|_+$/g, '') || 'DEFAULT';
+	return (
+		name
+			.toUpperCase()
+			.replace(/[^A-Z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '') || 'DEFAULT'
+	);
 }
 
 function tokenEnvVar(name: string): string {
-	return name === 'default' ? 'AGENTAREA_TOKEN' : `AGENTAREA_${targetSuffix(name)}_TOKEN`;
+	return name === 'default'
+		? 'AGENTAREA_TOKEN'
+		: `AGENTAREA_${targetSuffix(name)}_TOKEN`;
 }
 
 function mcpUrl(apiUrl: string): string {
@@ -162,7 +166,11 @@ function codexManagedBlock(apiUrl: string, name: string): string {
 	].join('\n');
 }
 
-async function writeCodexConfig(apiUrl: string, scope: Scope, name: string): Promise<string> {
+async function writeCodexConfig(
+	apiUrl: string,
+	scope: Scope,
+	name: string,
+): Promise<string> {
 	const configPath = codexConfigPath(scope);
 	let existing = '';
 
@@ -184,10 +192,15 @@ async function writeCodexConfig(apiUrl: string, scope: Scope, name: string): Pro
 	if (managedPattern.test(existing)) {
 		nextConfig = existing.replace(managedPattern, nextBlock);
 	} else {
-		const tablePattern = new RegExp(`^\\[mcp_servers\\.${mcpServerName(name)}\\]`, 'm');
+		const tablePattern = new RegExp(
+			`^\\[mcp_servers\\.${mcpServerName(name)}\\]`,
+			'm',
+		);
 		if (tablePattern.test(existing)) {
 			throw new Error(
-				`Refusing to overwrite existing unmanaged Codex MCP config ${mcpServerName(name)} at ${configPath}`,
+				`Refusing to overwrite existing unmanaged Codex MCP config ${mcpServerName(
+					name,
+				)} at ${configPath}`,
 			);
 		}
 
@@ -199,7 +212,11 @@ async function writeCodexConfig(apiUrl: string, scope: Scope, name: string): Pro
 	return configPath;
 }
 
-function codexInstructions(apiUrl: string, configPath: string, name: string): string {
+function codexInstructions(
+	apiUrl: string,
+	configPath: string,
+	name: string,
+): string {
 	return [
 		'Codex connection',
 		`- target: ${name}`,
@@ -221,7 +238,9 @@ function claudeInstructions(
 	token: AuthToken,
 	name: string,
 ): string {
-	const tokenPlaceholder = token.accessToken ? '<stored-agentarea-token>' : '<agentarea-token>';
+	const tokenPlaceholder = token.accessToken
+		? '<stored-agentarea-token>'
+		: '<agentarea-token>';
 
 	return [
 		'Claude Code connection',
@@ -232,7 +251,11 @@ function claudeInstructions(
 		'- token source: stored Agentarea CLI token',
 		'',
 		'Run:',
-		`  claude mcp add --transport http ${mcpServerName(name)} --scope ${scope} ${mcpUrl(apiUrl)} --header "Authorization: Bearer ${tokenPlaceholder}"`,
+		`  claude mcp add --transport http ${mcpServerName(
+			name,
+		)} --scope ${scope} ${mcpUrl(
+			apiUrl,
+		)} --header "Authorization: Bearer ${tokenPlaceholder}"`,
 		'',
 		'No per-tool sync is needed. Hosted third-party MCP access changes in Agentarea policy.',
 	].join('\n');
@@ -252,7 +275,9 @@ export async function connectClient(
 	options: ConnectOptions,
 ): Promise<boolean> {
 	if (client !== 'codex' && client !== 'claude') {
-		console.error('Usage: agentarea-cli connect <codex|claude> [--scope=project|user]');
+		console.error(
+			'Usage: agentarea-cli connect <codex|claude> [--scope=project|user]',
+		);
 		return false;
 	}
 
@@ -260,7 +285,9 @@ export async function connectClient(
 	const name = normalizedName(options.name);
 	const statePath = await saveConnectionState(client, scope, options);
 	const codexConfig =
-		client === 'codex' ? await writeCodexConfig(options.apiUrl, scope, name) : '';
+		client === 'codex'
+			? await writeCodexConfig(options.apiUrl, scope, name)
+			: '';
 	const output =
 		client === 'codex'
 			? codexInstructions(options.apiUrl, codexConfig, name)

@@ -33,15 +33,22 @@ class WorkspaceScopedRepository[T]:
         self.resource_type = model_class.__name__.lower().replace("orm", "").replace("model", "")
 
     def _get_workspace_filter(self):
-        """Get the workspace filter for queries.
+        """Get the read filter for queries: pure workspace scoping.
 
-        Uses accessible_workspaces from UserContext to determine which
-        workspaces the user can read from. This is resolved by the
-        AuthorizationService during request authentication.
+        A row is readable when it belongs to one of the user's accessible
+        workspaces (own workspace + real memberships, resolved by the
+        AuthorizationService during request authentication). A row from another
+        workspace stays hidden.
+
+        Built-in/official content is no longer surfaced by a ``source`` column
+        OR-branch here (ADR-003): built-in agents/skills and the reference specs
+        mcp_servers/model_specs live in the registry catalog and are read
+        globally by their catalog repositories, not by this filter.
         """
         workspaces = self.user_context.accessible_workspaces
         model = cast(Any, self.model_class)
         workspace_col = model.workspace_id
+
         if workspaces and len(workspaces) > 1:
             return workspace_col.in_(workspaces)
         return workspace_col == self.user_context.workspace_id

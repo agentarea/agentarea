@@ -1,5 +1,6 @@
 """Agents API endpoints for managing AI agents."""
 
+import logging
 import re
 from contextlib import suppress
 from typing import Any, Literal, cast
@@ -11,7 +12,10 @@ from agentarea_agents.schemas.dto import (
     AgentCreate,
     AgentUpdate,
 )
-from agentarea_agents.schemas.import_export import ToolConfigYAML
+from agentarea_agents.schemas.import_export import (
+    TOOL_CONFIG_ADAPTER,
+    ToolConfig,
+)
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_api.api.deps.services import (
     get_agent_service,
@@ -25,9 +29,12 @@ from agentarea_common.config import get_database
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from . import agents_a2a, agents_well_known
+from ._rebac_grants import grant_user_relation
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -99,12 +106,17 @@ class AgentResponse(BaseModel):
     description: str | None = None
     instruction: str | None = None
     model_id: str | None = None
-    tools: list[ToolConfigYAML] | None = None
+    tools: list[ToolConfig] | None = None
     events_config: dict | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
     agent_type: str = "stateless"
     skills: list[dict] | None = None
+    # Catalog provenance (ADR-003). ``is_catalog`` marks a read-only built-in
+    # agent that has not been forked into the workspace yet.
+    is_catalog: bool = False
+    registry_item_id: str | None = None
+    update_available: bool = False
 
     @classmethod
     def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
@@ -112,7 +124,18 @@ class AgentResponse(BaseModel):
         if agent.tools:
             agent_tools = cast(Any, agent.tools)
             if isinstance(agent_tools, list):
-                tools = [ToolConfigYAML(**tool) for tool in agent_tools if isinstance(tool, dict)]
+                tools = []
+                for tool in agent_tools:
+                    if not isinstance(tool, dict):
+                        continue
+                    try:
+                        tools.append(TOOL_CONFIG_ADAPTER.validate_python(tool))
+                    except ValidationError:
+                        # Skip a malformed/legacy tool entry rather than failing
+                        # the whole agent read.
+                        logger.warning(
+                            "Skipping unparseable tool config", extra={"tool_config": tool}
+                        )
             elif isinstance(agent_tools, dict):
                 tools = []
 
@@ -123,6 +146,7 @@ class AgentResponse(BaseModel):
                 for skill in agent.skills
             ]
 
+        registry_item_id = getattr(agent, "registry_item_id", None)
         return cls(
             id=cast(UUID, agent.id),
             slug=str(agent.slug),
@@ -137,6 +161,9 @@ class AgentResponse(BaseModel):
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
             agent_type=str(agent.agent_type),
             skills=skills,
+            is_catalog=bool(getattr(agent, "is_catalog", False)),
+            registry_item_id=str(registry_item_id) if registry_item_id else None,
+            update_available=bool(getattr(agent, "update_available", False)),
         )
 
 
@@ -179,6 +206,12 @@ async def create_agent(
             )
 
     agent = await agent_service.create_agent(data)
+    await grant_user_relation(
+        namespace="Agent",
+        object_id=agent.id,
+        relation="owners",
+        user_id=user_context.user_id,
+    )
     return AgentResponse.from_domain(agent)
 
 
@@ -278,11 +311,14 @@ async def get_agent(
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
-    """Get an agent by UUID or workspace-scoped slug."""
+    """Get an agent by UUID or workspace-scoped slug (tenant or catalog)."""
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = await agent_service.get_with_skills(resolved_id)
+    if not agent:
+        # Fall back to a read-only catalog projection (no DB row materialized).
+        agent = await agent_service.get_with_catalog(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)

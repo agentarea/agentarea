@@ -10,10 +10,17 @@ from .models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
+    WORKSPACE_TYPE_PERSONAL,
+    WORKSPACE_TYPE_SHARED,
+    Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
 )
-from .repository import WorkspaceInvitationRepository, WorkspaceMembershipRepository
+from .repository import (
+    WorkspaceInvitationRepository,
+    WorkspaceMembershipRepository,
+    WorkspaceRepository,
+)
 from .service import (
     InvitationAlreadyAccepted,
     InvitationExpired,
@@ -21,20 +28,28 @@ from .service import (
     InvitationRevoked,
     WorkspaceInvitationService,
     WorkspaceMembershipService,
+    WorkspaceService,
 )
+from .slug import slugify
 
 __all__ = [
     "INVITATION_STATUS_ACCEPTED",
     "INVITATION_STATUS_PENDING",
     "INVITATION_STATUS_REVOKED",
+    "WORKSPACE_TYPE_PERSONAL",
+    "WORKSPACE_TYPE_SHARED",
     "InvitationAlreadyAccepted",
     "InvitationExpired",
     "InvitationNotFound",
     "InvitationRevoked",
+    "Workspace",
     "WorkspaceInvitation",
     "WorkspaceInvitationRepository",
     "WorkspaceInvitationService",
     "WorkspaceMembership",
     "WorkspaceMembershipRepository",
     "WorkspaceMembershipService",
+    "WorkspaceRepository",
+    "WorkspaceService",
+    "slugify",
 ]

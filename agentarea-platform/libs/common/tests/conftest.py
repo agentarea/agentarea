@@ -40,8 +40,4 @@ def test_user_context():
 @pytest.fixture
 def test_admin_context():
     """Test admin user context."""
-    return UserContext(
-        user_id="admin-user-123",
-        workspace_id="test-workspace-456",
-        roles=["user", "admin"],
-    )
+    return UserContext(user_id="admin-user-123", workspace_id="test-workspace-456")

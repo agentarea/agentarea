@@ -21,7 +21,7 @@ export default function App({token: cliToken, apiUrl}: AppProps) {
 
 	// Setup 401 error handler for API client
 	useEffect(() => {
-		apiClient.set401Callback(async (error) => {
+		apiClient.set401Callback(async error => {
 			logger.warn('401 Unauthorized received, prompting for new token');
 		});
 	}, []);

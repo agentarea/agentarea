@@ -16,6 +16,14 @@ type JsonSpecLike = {
   title?: unknown;
 };
 
+/**
+ * Minimal shape needed to resolve a connection icon: just the `json_spec`.
+ * Both the OpenAPI-schema instance and server types (whose `json_spec` is a
+ * `Record<string, unknown>`) satisfy this, so callers pass them directly — no
+ * `as any`. Kept narrow on purpose so it doesn't drag in `verification`/`tools`.
+ */
+export type IconSpecSource = { json_spec?: Record<string, unknown> | null };
+
 type MCPInstanceLike = {
   name?: string;
   tools?: unknown;
@@ -84,8 +92,8 @@ export function getEffectiveMCPVerificationStatus(
 }
 
 export function getMCPConnectionIconSrc(
-  instance: MCPInstanceLike,
-  serverSpec?: MCPServerLike | null
+  instance: IconSpecSource,
+  serverSpec?: IconSpecSource | null
 ): string | undefined {
   return (
     firstIconSrc(instance.json_spec) ?? firstIconSrc(serverSpec?.json_spec)

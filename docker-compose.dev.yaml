@@ -43,6 +43,10 @@ services:
       - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
       - KRATOS_ISSUER=${KRATOS_ISSUER:-https://agentarea.dev}
       - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
+      # Keto ReBAC (access explorer)
+      - KETO_ENABLED=${KETO_ENABLED:-true}
+      - KETO_READ_URL=${KETO_READ_URL:-http://keto:4466}
+      - KETO_WRITE_URL=${KETO_WRITE_URL:-http://keto:4467}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -118,7 +122,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}" "${KETO_DB:-keto}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -504,6 +508,45 @@ services:
       db:
         condition: service_healthy
       kratos-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Ory Keto ReBAC migration
+  keto-migrate:
+    image: oryd/keto:v0.12.0
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
+    command: migrate up -y -c /etc/config/keto/keto.yml
+    volumes:
+      - ./config/auth/keto:/etc/config/keto
+    networks:
+      - auth-network
+    depends_on:
+      db:
+        condition: service_healthy
+      postgres_init:
+        condition: service_completed_successfully
+
+  # Ory Keto ReBAC permission server
+  keto:
+    image: oryd/keto:v0.12.0
+    ports:
+      - "4466:4466" # read API
+      - "4467:4467" # write API
+      - "4468:4468" # metrics
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
+      LOG_LEVEL: debug
+    command: serve -c /etc/config/keto/keto.yml
+    volumes:
+      - ./config/auth/keto:/etc/config/keto
+    networks:
+      - auth-network
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+      keto-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
 

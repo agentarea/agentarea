@@ -119,6 +119,10 @@ class TaskWithAgent(BaseModel):
     created_at: datetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
+    # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
+    # approve/reject the pending escalation inline without re-fetching task events.
+    escalation_id: str | None = None
+    escalation_tool_name: str | None = None
 
     @classmethod
     def from_task_response(cls, task: TaskResponse, agent_name: str) -> "TaskWithAgent":
@@ -216,7 +220,7 @@ async def get_task_by_id(
             raise HTTPException(status_code=404, detail="Task not found")
 
         task = task_service.task_repository._orm_to_domain(task_orm)
-        agent = await agent_service.get(task.agent_id)
+        agent = await agent_service.get_with_catalog(task.agent_id)
         result_dict = task.result if isinstance(task.result, dict) else None
         total_cost = result_dict.get("total_cost") if result_dict else None
 
@@ -269,6 +273,95 @@ class TaskSSEEvent(BaseModel):
     data: dict[str, Any]
 
 
+_TERMINAL_EVENT_TYPES = {
+    "task_completed",
+    "task_failed",
+    "task_cancelled",
+    "workflow_completed",
+    "workflow_failed",
+    "WorkflowCompleted",
+    "WorkflowFailed",
+    "WorkflowCancelled",
+}
+
+
+async def _tail_task_events_sse(
+    task_id: UUID,
+    agent_id: UUID,
+    execution_id: str | None,
+    *,
+    emit_connected: bool = True,
+) -> AsyncGenerator[str, None]:
+    """Stream a task's events as SSE by tailing the ``task_events`` table.
+
+    The DB is the single source of truth: the workflow's publish activity
+    inserts events there, so this works for both live tasks (events arrive as
+    they happen) and tasks that already finished (full history is replayed).
+
+    This deliberately tails the DB instead of subscribing to Redis pub/sub: a
+    subscriber attaches only *after* the task starts, so for a fast task the
+    workflow events are published before the subscription exists and are lost
+    (pub/sub does not replay). Tailing the durable event log has no such race.
+    """
+    import asyncio
+
+    from agentarea_api.api.deps.database import get_db_session
+    from sqlalchemy import text
+
+    poll_interval_seconds = 0.25
+    max_wall_time_seconds = 30 * 60
+
+    if emit_connected:
+        yield _format_sse_event(
+            "connected",
+            {
+                "task_id": str(task_id),
+                "agent_id": str(agent_id),
+                "execution_id": execution_id,
+                "message": "Connected to task event stream",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
+
+    seen_event_ids: set[str] = set()
+    terminal_seen = False
+    deadline = asyncio.get_event_loop().time() + max_wall_time_seconds
+
+    while not terminal_seen and asyncio.get_event_loop().time() < deadline:
+        async with get_db_session() as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT id, event_type, timestamp, data "
+                        "FROM task_events "
+                        "WHERE task_id = :task_id "
+                        "ORDER BY timestamp ASC"
+                    ),
+                    {"task_id": str(task_id)},
+                )
+            ).fetchall()
+
+        new_rows = [r for r in rows if str(r.id) not in seen_event_ids]
+        for row in new_rows:
+            event_id = str(row.id)
+            seen_event_ids.add(event_id)
+            event_type = row.event_type
+            row_data = dict(row.data or {})
+            sse_event = {
+                "event_type": event_type,
+                "event_id": event_id,
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "data": _filter_domain_fields(row_data),
+            }
+            yield _format_sse_event(event_type, sse_event)
+            if event_type in _TERMINAL_EVENT_TYPES:
+                terminal_seen = True
+                break
+
+        if not terminal_seen:
+            await asyncio.sleep(poll_interval_seconds)
+
+
 @router.post("/")
 async def create_task_for_agent_with_stream(
     agent_id: UUID,
@@ -279,8 +372,10 @@ async def create_task_for_agent_with_stream(
     event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Create and execute a task for the specified agent with real-time SSE stream."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
+    # Verify agent exists. Built-in agents live in the registry catalog (ADR-003)
+    # and are run directly from their definition (no fork on run), so accept a
+    # catalog projection here too.
+    agent = await agent_service.get_with_catalog(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
@@ -328,40 +423,16 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
-            # If workflow started successfully, stream events from event stream service
+            # Stream execution events by tailing the durable event log. We
+            # already emitted "connected" above, so suppress the helper's own.
+            # Tailing the DB (not Redis pub/sub) is what makes a fast task's
+            # events show up: they are published before any subscriber could
+            # attach, but they are durably logged, so replay is lossless.
             if task.execution_id and task.status in ["running", "pending"]:
-                async for event in event_stream_service.stream_events_for_task(
-                    task.id, event_patterns=["workflow.*"]
+                async for chunk in _tail_task_events_sse(
+                    task.id, agent_id, task.execution_id, emit_connected=False
                 ):
-                    # Convert task service event to SSE format
-                    event_type = event.get("event_type", "task_event")
-
-                    # Add execution context (use full event_data from stream service)
-                    event_data = event.get("event_data", {})
-                    event_data.update(
-                        {
-                            "task_id": str(task.id),
-                            "agent_id": str(agent_id),
-                            "execution_id": task.execution_id,
-                            "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
-                        }
-                    )
-
-                    # Filter out domain-specific fields for internal stream consumers
-                    filtered_event_data = _filter_domain_fields(event_data)
-
-                    yield _format_sse_event(event_type, filtered_event_data)
-
-                    # Check for terminal states
-                    if event_type in [
-                        "task_completed",
-                        "task_failed",
-                        "task_cancelled",
-                        "workflow_completed",
-                        "workflow_failed",
-                    ]:
-                        logger.info(f"Task {task.id} reached terminal state: {event_type}")
-                        break
+                    yield chunk
             else:
                 # Task failed to start
                 yield _format_sse_event(
@@ -1235,87 +1306,12 @@ async def stream_task_events(
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Create SSE stream by tailing the task_events table.
+        # Create SSE stream by tailing the task_events table (single source of
+        # truth, no pub/sub race) via the shared helper.
         async def event_stream() -> AsyncGenerator[str, None]:
-            """Generate Server-Sent Events for task updates.
-
-            Tails the ``task_events`` table — events are inserted there by
-            the workflow's publish activity, so this naturally works for
-            both live tasks (events arrive as they happen) and late
-            subscribers (full history is replayed). The DB is the single
-            source of truth, which avoids the pub/sub race where events
-            published before the SSE handler subscribes would be lost.
-
-            The poll exits as soon as a terminal event is observed; an
-            outer wall-clock limit guards against tasks that never
-            terminate (the client can always reconnect).
-            """
-            import asyncio
-
-            from agentarea_api.api.deps.database import get_db_session
-            from sqlalchemy import text
-
-            poll_interval_seconds = 0.25
-            max_wall_time_seconds = 30 * 60
-            terminal_event_types = {
-                "task_completed",
-                "task_failed",
-                "task_cancelled",
-                "workflow_completed",
-                "workflow_failed",
-                "WorkflowCompleted",
-                "WorkflowFailed",
-            }
-
             try:
-                yield _format_sse_event(
-                    "connected",
-                    {
-                        "task_id": str(task_id),
-                        "agent_id": str(agent_id),
-                        "execution_id": task.execution_id,
-                        "message": "Connected to task event stream",
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    },
-                )
-
-                seen_event_ids: set[str] = set()
-                terminal_seen = False
-                deadline = asyncio.get_event_loop().time() + max_wall_time_seconds
-
-                while not terminal_seen and asyncio.get_event_loop().time() < deadline:
-                    async with get_db_session() as session:
-                        rows = (
-                            await session.execute(
-                                text(
-                                    "SELECT id, event_type, timestamp, data "
-                                    "FROM task_events "
-                                    "WHERE task_id = :task_id "
-                                    "ORDER BY timestamp ASC"
-                                ),
-                                {"task_id": str(task_id)},
-                            )
-                        ).fetchall()
-
-                    new_rows = [r for r in rows if str(r.id) not in seen_event_ids]
-                    for row in new_rows:
-                        event_id = str(row.id)
-                        seen_event_ids.add(event_id)
-                        event_type = row.event_type
-                        row_data = dict(row.data or {})
-                        sse_event = {
-                            "event_type": event_type,
-                            "event_id": event_id,
-                            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                            "data": _filter_domain_fields(row_data),
-                        }
-                        yield _format_sse_event(event_type, sse_event)
-                        if event_type in terminal_event_types:
-                            terminal_seen = True
-                            break
-
-                    if not terminal_seen:
-                        await asyncio.sleep(poll_interval_seconds)
+                async for chunk in _tail_task_events_sse(task_id, agent_id, task.execution_id):
+                    yield chunk
 
             except Exception as e:
                 logger.error(f"Fatal error in SSE stream for task {task_id}: {e}")

@@ -162,7 +162,9 @@ export function useAuth() {
 			const parts = jwtToken.split('.');
 			if (parts.length === 3) {
 				try {
-					const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+					const decoded = JSON.parse(
+						Buffer.from(parts[1], 'base64').toString(),
+					);
 					const user: User = {
 						id: decoded.sub || decoded.user_id || 'unknown',
 						email: decoded.email || 'unknown',
@@ -178,9 +180,9 @@ export function useAuth() {
 					}));
 
 					// Save to storage
-					tokenStorage.saveToken(token).catch(err =>
-						logger.warn('Failed to save token to storage:', err),
-					);
+					tokenStorage
+						.saveToken(token)
+						.catch(err => logger.warn('Failed to save token to storage:', err));
 				} catch (decodeError) {
 					logger.warn('Could not decode JWT payload:', decodeError);
 					setState(prev => ({

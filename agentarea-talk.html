@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentArea — Control plane для агентов</title>
+<style>
+  :root{
+    --ink:#0F172A;
+    --muted:#64748B;
+    --faint:#94A3B8;
+    --line:#E2E8F0;
+    --paper:#FFFFFF;
+    --primary:#2563EB;
+    --primary-d:#1E3A8A;
+    --danger:#E11D48;
+    --bg:#0B0D12;
+    --sans:"Inter","SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--sans)}
+  #scaler{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #stage{width:1280px;height:720px;position:relative;transform-origin:center center}
+
+  .slide{position:absolute;inset:0;background:var(--paper);color:var(--ink);
+    padding:60px 76px;display:flex;flex-direction:column;
+    opacity:0;visibility:hidden;transition:opacity .35s ease;}
+  .slide.active{opacity:1;visibility:visible}
+
+  /* chrome */
+  .slide .foot{position:absolute;left:76px;right:76px;bottom:34px;display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+  .topbar{height:4px;width:54px;background:var(--primary);margin-bottom:30px;flex:0 0 auto}
+
+  .kicker{font-size:14px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--primary);margin-bottom:18px}
+  .kicker.alert{color:var(--danger)}
+  h1{font-size:74px;font-weight:800;line-height:1.02;letter-spacing:-.02em}
+  h2{font-size:46px;font-weight:800;line-height:1.08;letter-spacing:-.015em}
+  h3{font-size:30px;font-weight:700;line-height:1.12}
+  .lead{font-size:22px;font-weight:400;color:var(--muted);line-height:1.45}
+
+  .center{justify-content:center}
+  .grow{flex:1;min-height:0;display:flex;flex-direction:column}
+
+  /* TITLE */
+  .title .head{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+  .title h1{margin-top:auto}
+  .title .sub{font-size:24px;font-weight:500;color:var(--ink);margin-top:26px;max-width:760px;line-height:1.4}
+  .title .meta{margin-top:30px;color:var(--muted);font-size:17px}
+
+  /* DIVIDER (full color) */
+  .divider{background:var(--primary);color:#fff;justify-content:center;padding:60px 90px}
+  .divider.ink{background:var(--ink)}
+  .divider.danger{background:var(--danger)}
+  .divider .kicker{color:rgba(255,255,255,.82)}
+  .divider h2{font-size:60px}
+  .divider .note{font-size:23px;color:rgba(255,255,255,.85);margin-top:28px;max-width:840px;line-height:1.45}
+  .divider .foot{color:rgba(255,255,255,.55)}
+
+  /* heading block */
+  .hblock{margin-bottom:30px}
+  .hblock h2{max-width:1000px}
+  .hblock .lead{margin-top:16px;max-width:980px}
+
+  /* bullets */
+  ul.bul{list-style:none;display:flex;flex-direction:column;gap:18px;margin-top:6px}
+  ul.bul li{position:relative;padding-left:30px;font-size:23px;line-height:1.4;color:var(--ink)}
+  ul.bul li::before{content:"";position:absolute;left:0;top:11px;width:11px;height:11px;background:var(--primary)}
+  ul.bul li b{font-weight:700}
+  ul.bul.muted li{color:var(--muted)}
+
+  /* incident */
+  .quotebar{border-left:5px solid var(--danger);padding:14px 26px;margin-top:10px}
+  .quotebar p{font-size:30px;font-weight:700;line-height:1.18;color:var(--ink)}
+  .src{margin-top:18px;font-family:var(--mono);font-size:14px;color:var(--faint);letter-spacing:.06em}
+
+  /* two-col */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:48px;flex:1;min-height:0;align-content:center}
+  .cols .c .lab{font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px}
+  .cols .c.a .lab{color:var(--muted)}
+  .cols .c.b .lab{color:var(--primary)}
+  .cols .c .big{font-size:34px;font-weight:800;line-height:1.1;margin-bottom:18px}
+  .cols .c.a .big{color:var(--muted)}
+
+  /* cards grid */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;flex:1;min-height:0;align-content:center}
+  .cards.two{grid-template-columns:repeat(2,1fr)}
+  .card{border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:8px}
+  .card .n{font-family:var(--mono);font-size:13px;color:var(--primary);letter-spacing:.1em}
+  .card .t{font-size:24px;font-weight:700;line-height:1.1}
+  .card .d{font-size:16px;color:var(--muted);line-height:1.35}
+
+  /* construction bars */
+  .bars{flex:1;display:flex;gap:120px;align-items:flex-end;justify-content:center;padding:30px 40px 0}
+  .barcol{display:flex;flex-direction:column;align-items:center;gap:16px;justify-content:flex-end;height:100%}
+  .barcol .bar{width:150px;background:var(--faint);border-radius:8px 8px 0 0}
+  .barcol.up .bar{background:var(--primary)}
+  .barcol .cap{font-size:18px;font-weight:600;text-align:center}
+  .barcol .val{font-size:14px;color:var(--muted)}
+
+  /* escalation steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:14px;flex:1;min-height:0}
+  .step{border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px}
+  .step .n{font-family:var(--mono);font-size:13px;color:var(--primary);letter-spacing:.1em}
+  .step .t{font-size:23px;font-weight:700}
+  .step .d{font-size:15px;color:var(--muted);line-height:1.3}
+  .step.final{background:var(--primary);border-color:var(--primary);color:#fff}
+  .step.final .n{color:rgba(255,255,255,.8)}
+  .step.final .d{color:rgba(255,255,255,.85)}
+  .step.final .badge{margin-top:auto;display:flex;flex-wrap:wrap;gap:6px}
+  .step.final .badge span{font-family:var(--mono);font-size:11px;border:1px solid rgba(255,255,255,.55);border-radius:5px;padding:3px 7px}
+
+  /* mesh */
+  .mesh{display:grid;gap:7px;flex:1;align-content:center}
+  .cell{border:1px solid var(--line);border-radius:7px;padding:7px 8px;display:flex;flex-direction:column;gap:2px;font-family:var(--mono);background:#fff}
+  .cell .id{font-size:10px;color:var(--faint);letter-spacing:.06em}
+  .cell .sp{font-size:13px;font-weight:700;color:var(--ink)}
+  .cell.hot{border-color:var(--danger);border-width:2px;background:#FEF2F4}
+  .cell.hot .sp{color:var(--danger)}
+
+  /* owasp */
+  .owasp{display:grid;grid-template-columns:1fr 1fr;gap:0 56px;flex:1;align-content:center}
+  .owasp .row{display:flex;gap:18px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--line)}
+  .owasp .code{font-family:var(--mono);font-size:16px;color:var(--faint);min-width:64px;letter-spacing:.06em}
+  .owasp .name{font-size:20px}
+  .owasp .row.hi .code{color:var(--danger)}
+  .owasp .row.hi .name{font-weight:800}
+  .owasp .row.hi{border-bottom-color:var(--danger)}
+
+  /* pipeline */
+  .pipe{display:flex;align-items:stretch;flex:1;padding:40px 0}
+  .node{flex:1;border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px 14px;text-align:center}
+  .node .lab{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--primary)}
+  .node .t{font-size:27px;font-weight:800}
+  .node .d{font-size:14px;color:var(--muted)}
+  .arrow{display:flex;align-items:center;justify-content:center;width:48px;color:var(--faint);font-size:26px}
+
+  /* duo before/after */
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:0;flex:1;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .duo .col{padding:34px 36px;display:flex;flex-direction:column}
+  .duo .col.bad{background:#FEF2F4}
+  .duo .col.good{background:#EFF4FF;border-left:1px solid var(--line)}
+  .duo .lab{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px}
+  .duo .col.bad .lab{color:var(--danger)}
+  .duo .col.good .lab{color:var(--primary)}
+  .duo .big{font-size:40px;font-weight:800;margin-bottom:22px}
+  .duo .col.bad .big{color:var(--danger)}
+  .duo .col.good .big{color:var(--primary)}
+  .duo ul{list-style:none;display:flex;flex-direction:column;gap:14px}
+  .duo li{font-size:19px;color:var(--ink);padding-left:24px;position:relative}
+  .duo li::before{content:"";position:absolute;left:0;top:9px;width:8px;height:8px;border-radius:50%}
+  .duo .bad li::before{background:var(--danger)}
+  .duo .good li::before{background:var(--primary)}
+
+  /* question stack */
+  .qstack{flex:1;display:flex;flex-direction:column;justify-content:center;gap:0}
+  .q{padding:18px 0;border-bottom:1px solid var(--line);font-size:34px;font-weight:300;color:var(--faint)}
+  .q.last{color:var(--danger);font-weight:800;border-bottom:none}
+
+  /* contact */
+  .contact .links{margin-top:30px;display:flex;flex-direction:column;gap:12px;font-size:19px}
+  .contact .links span{opacity:.9}
+  .contact .links a{color:#fff;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.45);width:fit-content;padding-bottom:3px}
+
+  /* nav */
+  #dots{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:60}
+  #dots button{width:7px;height:7px;border:none;border-radius:50%;background:#3A3F4B;cursor:pointer;padding:0}
+  #dots button.on{background:var(--primary)}
+  #hint{position:fixed;bottom:14px;right:18px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#4B5563;z-index:60}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="stage">
+
+  <!-- 1 TITLE -->
+  <section class="slide title">
+    <div class="head"><span>AgentArea</span><span>16:10 · Артём Астапенко</span></div>
+    <div class="topbar"></div>
+    <h1>Control plane<br>для агентов</h1>
+    <div class="sub">Контроль и безопасность в мультиагентных системах. Когда у каждого пользователя десятки агентов — кто-то должен ими управлять.</div>
+    <div class="meta">Доклад не про модели. Про то, что вокруг них.</div>
+  </section>
+
+  <!-- 2 INCIDENT -->
+  <section class="slide">
+    <div class="topbar" style="background:var(--danger)"></div>
+    <div class="kicker alert">Недавний инцидент</div>
+    <div class="hblock"><h2>Vercel показал главное: агентов раскатывают быстрее, чем учатся ими управлять.</h2></div>
+    <div class="grow" style="justify-content:center">
+      <p class="lead" style="max-width:920px">По данным Vercel, инцидент начался с компрометации <b>Context.ai</b> — стороннего AI-инструмента, которым пользовался сотрудник. Один скомпрометированный инструмент в руках агента — и периметр уже пройден.</p>
+      <div class="quotebar"><p>«Agent deployment is moving faster than agent governance.»</p></div>
+      <div class="src">Источник: Vercel, отчёт об инциденте</div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>02 / 23</span></div>
+  </section>
+
+  <!-- 3 THE SHIFT -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Сдвиг</div>
+    <div class="hblock"><h2>Агенты выходят из демо в реальные операционные процессы. И вопрос меняется.</h2></div>
+    <div class="cols">
+      <div class="c a">
+        <div class="lab">Раньше</div>
+        <div class="big">Что агент МОЖЕТ?</div>
+        <p class="lead">Вопрос про возможности модели.</p>
+      </div>
+      <div class="c b">
+        <div class="lab">Теперь</div>
+        <div class="big">Что ему ПОЗВОЛЕНО?</div>
+        <ul class="bul">
+          <li>К чему у него доступ?</li>
+          <li>Что требует апрува?</li>
+          <li>Как задан его scope?</li>
+          <li>Как понять, что работа сделана верно?</li>
+          <li>Как провести аудит постфактум?</li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>03 / 23</span></div>
+  </section>
+
+  <!-- 4 AGENT = INTERN -->
+  <section class="slide center">
+    <div class="topbar"></div>
+    <div class="kicker">Простая аналогия</div>
+    <h2 style="font-size:54px;max-width:900px">Управлять оператором мы умеем. Агент — это интерн.</h2>
+    <p class="lead" style="margin-top:24px;max-width:820px">Способный, буквальный, без понимания последствий. Вы бы дали новому стажёру root и безлимитную карту в первый день? Нет. А агенту — даём.</p>
+    <div class="foot"><span>AgentArea</span><span>04 / 23</span></div>
+  </section>
+
+  <!-- 5 WHAT INTERN HAS -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Что есть у интерна</div>
+    <div class="hblock"><h2>За сто лет мы построили это для людей. Для агентов — пока ничего.</h2></div>
+    <div class="cards">
+      <div class="card"><span class="n">01</span><div class="t">Бюджет</div><div class="d">лимит расходов, а не безлимитная карта</div></div>
+      <div class="card"><span class="n">02</span><div class="t">Доступы по задаче</div><div class="d">scoped, а не root на всё</div></div>
+      <div class="card"><span class="n">03</span><div class="t">Надзор</div><div class="d">кто-то видит, что он делает</div></div>
+      <div class="card"><span class="n">04</span><div class="t">Ревью перед прод</div><div class="d">апрув на важное действие</div></div>
+      <div class="card"><span class="n">05</span><div class="t">Онбординг / оффбординг</div><div class="d">пришёл — выдали, ушёл — отозвали</div></div>
+      <div class="card"><span class="n">06</span><div class="t">Что НЕ давать</div><div class="d">least privilege по умолчанию</div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>05 / 23</span></div>
+  </section>
+
+  <!-- 6 OFFICE — DIVIDER -->
+  <section class="slide divider">
+    <div class="kicker">Поворот</div>
+    <h2>Единица — не агент.<br>Это офис, куда вы его сажаете.</h2>
+    <p class="note">Где вы решаете, что ему дать, а что нет. У этого офиса есть техническое имя — <b>control plane</b>.</p>
+    <div class="foot"><span>AgentArea</span><span>06 / 23</span></div>
+  </section>
+
+  <!-- 7 CONSTRUCTION -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">И это не метафора</div>
+    <div class="hblock"><h2>Капекс переехал из офисов для людей в офисы для агентов.</h2></div>
+    <div class="bars">
+      <div class="barcol"><div class="bar" style="height:32%"></div><div class="cap">Офисы для людей</div><div class="val">строительство ↓</div></div>
+      <div class="barcol up"><div class="bar" style="height:86%"></div><div class="cap">Дата-центры</div><div class="val">= офисы для агентов ↑</div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>07 / 23</span></div>
+  </section>
+
+  <!-- 8 EMPTY INSIDE — DIVIDER -->
+  <section class="slide divider danger">
+    <div class="kicker" style="color:rgba(255,255,255,.85)">Недостающий этаж</div>
+    <h2>Бетон залит.<br>Правил внутри — нет.</h2>
+    <p class="note">Офис без HR, без пропусков, без менеджера — это просто комната, набитая интернами с root-доступом.</p>
+    <div class="foot"><span>AgentArea</span><span>08 / 23</span></div>
+  </section>
+
+  <!-- 9 ESCALATION -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Как это происходит у каждого</div>
+    <div class="hblock"><h2>Чем больше агентов — тем меньше это про агента.</h2></div>
+    <div class="steps">
+      <div class="step"><span class="n">01</span><div class="t">Один агент</div><div class="d">всё понятно</div></div>
+      <div class="step"><span class="n">02</span><div class="t">+ инструмент</div><div class="d">дали руки</div></div>
+      <div class="step"><span class="n">03</span><div class="t">Инструменты множатся</div><div class="d">дали больше рук</div></div>
+      <div class="step"><span class="n">04</span><div class="t">Делегация</div><div class="d">агент зовёт агента</div></div>
+      <div class="step"><span class="n">05</span><div class="t">Sandbox</div><div class="d">надо изолировать</div></div>
+      <div class="step final"><span class="n">06</span><div class="t">Control plane</div><div class="d">я уже рисую не агента, а политику</div><div class="badge"><span>Budget cap</span><span>No prod write</span><span>Approval</span><span>SLA</span></div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>09 / 23</span></div>
+  </section>
+
+  <!-- 10 MESH -->
+  <section class="slide">
+    <div class="topbar" style="background:var(--danger)"></div>
+    <div class="kicker alert">Пик · тишина 3 секунды</div>
+    <div class="hblock"><h2>Умножьте на каждого сотрудника.</h2></div>
+    <div class="mesh" id="mesh"></div>
+    <div class="foot"><span>Кто видит, какой агент слил $200 и пишет в прод?</span><span>10 / 23</span></div>
+  </section>
+
+  <!-- 11 OWASP -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">OWASP Top 10 for Agentic Apps · 2026</div>
+    <div class="hblock"><h2>4 из 10 рисков индустрия уже назвала. Все 4 — про офис, не про интерна.</h2></div>
+    <div class="owasp">
+      <div class="row hi"><span class="code">ASI03</span><span class="name">Identity &amp; Privilege Abuse</span></div>
+      <div class="row"><span class="code">ASI01</span><span class="name">Memory &amp; Context Poisoning</span></div>
+      <div class="row hi"><span class="code">ASI07</span><span class="name">Insecure Inter-Agent Comms</span></div>
+      <div class="row"><span class="code">ASI02</span><span class="name">Tool Misuse</span></div>
+      <div class="row hi"><span class="code">ASI08</span><span class="name">Cascading Failures</span></div>
+      <div class="row"><span class="code">ASI04</span><span class="name">Resource Overload</span></div>
+      <div class="row hi"><span class="code">ASI10</span><span class="name">Rogue Agents</span></div>
+      <div class="row"><span class="code">ASI05</span><span class="name">Excessive Agency</span></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>11 / 23</span></div>
+  </section>
+
+  <!-- 12 INJECTION -->
+  <section class="slide center">
+    <div class="topbar" style="background:var(--danger)"></div>
+    <div class="kicker alert">Знакомая история</div>
+    <h2 style="font-size:54px;max-width:920px">Prompt injection — это новый SQL injection.</h2>
+    <p class="lead" style="margin-top:24px;max-width:840px">Раньше мы научились не доверять вводу пользователя. Теперь надо не доверять выводу модели. Та же история, новый слой.</p>
+    <div class="foot"><span>AgentArea</span><span>12 / 23</span></div>
+  </section>
+
+  <!-- 13 THESIS — DIVIDER -->
+  <section class="slide divider ink">
+    <div class="kicker">Тезис</div>
+    <h2 style="font-size:64px">Модель — не продукт.<br>Продукт — это control plane.</h2>
+    <div class="foot"><span>AgentArea</span><span>13 / 23</span></div>
+  </section>
+
+  <!-- 14 GOVERNANCE AS INFRA -->
+  <section class="slide center">
+    <div class="topbar"></div>
+    <div class="kicker">Как мы это видим</div>
+    <h2 style="max-width:1000px">Governance — не комплаенс-надстройка. Governance — это базовая инфраструктура.</h2>
+    <p class="lead" style="margin-top:24px;max-width:960px">Будущее — не куча разрозненных агентов, у каждого свои промпты, тулзы и OAuth-токены. Это организации, управляющие <b style="color:var(--ink)">сетями агентов с реальной операционной ответственностью</b>.</p>
+    <div class="foot"><span>AgentArea</span><span>14 / 23</span></div>
+  </section>
+
+  <!-- 15 CONTROL NOT A BRAKE -->
+  <section class="slide center">
+    <div class="topbar"></div>
+    <div class="kicker">Рефрейм</div>
+    <h2 style="font-size:54px;max-width:900px">Контроль — не тормоз. Это разрешение на скорость.</h2>
+    <p class="lead" style="margin-top:24px;max-width:840px">Без него агентов вообще не выкатишь в прод. Control plane не замедляет — он разблокирует масштаб.</p>
+    <div class="foot"><span>AgentArea</span><span>15 / 23</span></div>
+  </section>
+
+  <!-- 16 SKEPTIC -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker alert">Очевидное возражение</div>
+    <div class="hblock"><h2>«Почему это не построят сами облака или OpenAI?»</h2></div>
+    <div class="grow" style="justify-content:center">
+      <p style="font-size:30px;font-weight:600;line-height:1.35;max-width:920px">Control plane по определению <span style="color:var(--primary)">над вендором</span>. Никто не отдаст контроль над всеми агентами тому, кто продаёт одного.</p>
+      <p style="font-size:30px;font-weight:800;margin-top:24px;color:var(--ink)">VPC не принадлежит Cisco.</p>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>16 / 23</span></div>
+  </section>
+
+  <!-- 17 MOATS -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Почему это бизнес, а не фича</div>
+    <div class="hblock"><h2>Если ценность влезает в промпт — ты обёртка.</h2></div>
+    <div class="cards">
+      <div class="card"><span class="n">MOAT 01</span><div class="t">Доверие</div><div class="d">бренд, на который полагаются</div></div>
+      <div class="card"><span class="n">MOAT 02</span><div class="t">Регуляторика</div><div class="d">комплаенс, аудит, сертификации</div></div>
+      <div class="card"><span class="n">MOAT 03</span><div class="t">Данные</div><div class="d">как агенты себя ведут</div></div>
+      <div class="card"><span class="n">MOAT 04</span><div class="t">Отношения</div><div class="d">встроенность в процессы</div></div>
+      <div class="card"><span class="n">MOAT 05</span><div class="t">Сети</div><div class="d">ценность растёт с участниками</div></div>
+      <div class="card"><span class="n">MOAT 06</span><div class="t">Управление</div><div class="d">это нельзя зашить в промпт</div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>17 / 23</span></div>
+  </section>
+
+  <!-- 18 MARKET -->
+  <section class="slide center">
+    <div class="topbar"></div>
+    <div class="kicker">Рынок уже двинулся</div>
+    <h2 style="max-width:1000px">Вопрос не в том, будут ли у компании агенты.</h2>
+    <p class="lead" style="margin-top:24px;max-width:920px">А в том, будет ли она владеть слоем, где они работают. Вендоры закрывают доступ сторонним агентам — компании хотят свой control plane.</p>
+    <div class="foot"><span>AgentArea</span><span>18 / 23</span></div>
+  </section>
+
+  <!-- 19 ARCHITECTURE -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">AgentArea · архитектура</div>
+    <div class="hblock"><h2>Офис для агента, собранный. VPC-подход для агентов.</h2></div>
+    <div class="pipe">
+      <div class="node"><span class="lab">Кто</span><div class="t">Identity</div><div class="d">каждый агент — личность</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="lab">Что можно</span><div class="t">Policy</div><div class="d">ReBAC · права по отношениям</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="lab">Где</span><div class="t">Sandbox</div><div class="d">изоляция исполнения</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="lab">Что сделал</span><div class="t">Audit</div><div class="d">каждое действие — событие</div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>19 / 23</span></div>
+  </section>
+
+  <!-- 20 BEFORE / AFTER -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Кульминация · та же сетка из 30</div>
+    <div class="duo" style="margin-top:18px">
+      <div class="col bad">
+        <div class="lab">Без control plane</div>
+        <div class="big">Хаос</div>
+        <ul><li>$200 утекли — никто не видит</li><li>агент пишет в прод по письму</li><li>нет границ, нет следов</li></ul>
+      </div>
+      <div class="col good">
+        <div class="lab">С AgentArea</div>
+        <div class="big">Порядок</div>
+        <ul><li>бейджи политик горят</li><li>один агент остановлен</li><li>аудит виден, можно откатить</li></ul>
+      </div>
+    </div>
+    <div class="foot"><span>Теперь ты видишь, кто слил $200. И можешь остановить.</span><span>20 / 23</span></div>
+  </section>
+
+  <!-- 21 UNDER THE HOOD -->
+  <section class="slide">
+    <div class="topbar"></div>
+    <div class="kicker">Под капотом · для тех, кто спросит</div>
+    <div class="hblock"><h2>То, что 15 лет работает в облаках — теперь для агентов.</h2></div>
+    <div class="cards two">
+      <div class="card"><span class="n">AUTHZ</span><div class="t">ReBAC · Ory Keto</div><div class="d">права через отношения, не роли</div></div>
+      <div class="card"><span class="n">ISOLATION</span><div class="t">Sandbox</div><div class="d">files · secrets · network · logs</div></div>
+      <div class="card"><span class="n">VISIBILITY</span><div class="t">Observability</div><div class="d">событие в БД + стрим в UI</div></div>
+      <div class="card"><span class="n">TRUST</span><div class="t">Делегация &amp; Identity</div><div class="d">явная передача прав</div></div>
+    </div>
+    <div class="foot"><span>AgentArea</span><span>21 / 23</span></div>
+  </section>
+
+  <!-- 22 2008 — DIVIDER -->
+  <section class="slide divider">
+    <div class="kicker">Где мы сейчас</div>
+    <h2 style="font-size:64px">Сейчас 2008-й год<br>для агентов.</h2>
+    <p class="note">Для облака мы построили control plane — VPC, IAM, политики. Для агентов его ещё нет.</p>
+    <div class="foot"><span>AgentArea</span><span>22 / 23</span></div>
+  </section>
+
+  <!-- 23 CONTACT -->
+  <section class="slide divider danger contact">
+    <div class="kicker" style="color:rgba(255,255,255,.85)">Спасибо</div>
+    <h2 style="font-size:72px">AgentArea</h2>
+    <div class="links">
+      <span>Артём Астапенко</span>
+      <a href="#">agentarea.ai</a>
+      <a href="#">давайте поговорим</a>
+    </div>
+    <div class="foot"><span>Governed agentic networks · open infrastructure</span><span>23 / 23</span></div>
+  </section>
+
+</div></div>
+
+<div id="dots"></div>
+<div id="hint">← →  ·  F — fullscreen</div>
+
+<script>
+  // chaos mesh
+  (function(){
+    const m=document.getElementById('mesh');
+    const cols=10,rows=3;
+    m.style.gridTemplateColumns='repeat('+cols+',1fr)';
+    const sp=[120,60,80,200,50,90,110,75,130,45,60,100,80,150,70,95,65,140,90,55,110,120,70,160,85,100,60,130,75,105];
+    const hot=new Set([3,17,23]);
+    for(let i=0;i<cols*rows;i++){
+      const c=document.createElement('div');
+      c.className='cell'+(hot.has(i)?' hot':'');
+      c.innerHTML='<span class="id">A'+String(i+1).padStart(2,'0')+'</span><span class="sp">$'+sp[i]+'</span>';
+      m.appendChild(c);
+    }
+  })();
+
+  // fit-to-screen scaling
+  const stage=document.getElementById('stage');
+  function fit(){
+    const s=Math.min(window.innerWidth/1280,window.innerHeight/720)*0.94;
+    stage.style.transform='scale('+s+')';
+  }
+  window.addEventListener('resize',fit);fit();
+
+  // navigation
+  const slides=[...document.querySelectorAll('.slide')];
+  const dotsWrap=document.getElementById('dots');
+  let idx=0;
+  slides.forEach((_,i)=>{const b=document.createElement('button');b.onclick=()=>go(i);dotsWrap.appendChild(b);});
+  const dots=[...dotsWrap.children];
+  function go(i){
+    idx=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach((s,j)=>s.classList.toggle('active',j===idx));
+    dots.forEach((d,j)=>d.classList.toggle('on',j===idx));
+  }
+  const next=()=>go(idx+1),prev=()=>go(idx-1);
+  go(0);
+
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' '].includes(e.key)){next();e.preventDefault();}
+    if(['ArrowLeft','PageUp'].includes(e.key)){prev();e.preventDefault();}
+    if(e.key==='Home')go(0);
+    if(e.key==='End')go(slides.length-1);
+    if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+  });
+  document.addEventListener('click',e=>{
+    if(e.target.closest('#dots')||e.target.closest('a'))return;
+    if(e.clientX>window.innerWidth*0.6)next();else if(e.clientX<window.innerWidth*0.4)prev();
+  });
+  let sx=0;
+  document.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+  document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx;if(dx<-40)next();else if(dx>40)prev();},{passive:true});
+</script>
+</body>
+</html>

@@ -119,10 +119,35 @@ class UpdateAllResponse(BaseModel):
     errors: int
 
 
+async def require_platform_catalog_write(user_context: UserContextDep) -> None:
+    """ReBAC guard for mutating the global registry catalog.
+
+    Registries/registry_items are global, platform-owned catalog infrastructure
+    (ADR-003) — they have no per-workspace owner. Writing them therefore requires
+    write access to the platform scope, decided by the AuthorizationService (the
+    ReBAC abstraction: own-workspace rule in OSS, Keto relations in enterprise).
+    No RBAC roles are involved. Reads stay open so every workspace sees built-ins.
+    """
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+    from agentarea_common.di.container import resolve
+
+    authz = resolve(AuthorizationService)
+    if not await authz.can_write_workspace(user_context, PLATFORM_WORKSPACE_ID):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the platform may modify the global registry catalog",
+        )
+
+
 # ── Registry CRUD ──
 
 
-@router.post("/", response_model=RegistryResponse)
+@router.post(
+    "/",
+    response_model=RegistryResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def create_registry(
     data: RegistryCreate,
     user_context: UserContextDep,
@@ -186,7 +211,11 @@ async def get_registry(
     return RegistryResponse.from_domain(registry)
 
 
-@router.patch("/{registry_id}", response_model=RegistryResponse)
+@router.patch(
+    "/{registry_id}",
+    response_model=RegistryResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def update_registry(
     registry_id: UUID,
     data: RegistryUpdate,
@@ -202,7 +231,10 @@ async def update_registry(
     return RegistryResponse.from_domain(registry)
 
 
-@router.delete("/{registry_id}")
+@router.delete(
+    "/{registry_id}",
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def delete_registry(
     registry_id: UUID,
     user_context: UserContextDep,
@@ -217,7 +249,11 @@ async def delete_registry(
 # ── Sync ──
 
 
-@router.post("/{registry_id}/sync", response_model=SyncResponse)
+@router.post(
+    "/{registry_id}/sync",
+    response_model=SyncResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def sync_registry(
     registry_id: UUID,
     user_context: UserContextDep,
@@ -263,7 +299,10 @@ async def get_catalog_item(
 # ── Update specs ──
 
 
-@router.post("/catalog/items/{item_id}/update")
+@router.post(
+    "/catalog/items/{item_id}/update",
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def update_item_spec(
     item_id: UUID,
     user_context: UserContextDep,
@@ -277,7 +316,11 @@ async def update_item_spec(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/{registry_id}/update-all", response_model=UpdateAllResponse)
+@router.post(
+    "/{registry_id}/update-all",
+    response_model=UpdateAllResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
 async def update_all_specs(
     registry_id: UUID,
     user_context: UserContextDep,

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle, Clock, XCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
+import { cn } from "@/lib/utils";
 import {
   HealthCheck,
   HealthStatus,
@@ -26,6 +26,25 @@ import {
   OpenAPIConnectionCard,
   OpenAPIConnectionMark,
 } from "./MCPCard";
+
+// Strip noisy provenance tails (e.g. "… OAuth status: needs_verification.")
+// from registry-sourced descriptions so the cell reads cleanly.
+function cleanDescription(value?: string | null): string {
+  if (!value) return "";
+  return value
+    .split(/\.?\s*OAuth status:/i)[0]
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hostOf(url?: string | null): string {
+  if (!url) return "";
+  try {
+    return new URL(url).host;
+  } catch {
+    return url.replace(/^https?:\/\//, "").split("/")[0];
+  }
+}
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
@@ -146,47 +165,61 @@ export function MyMCPsSection({
     return STATUS_TO_HEALTH[connection.status] ?? "unknown";
   };
 
-  // Get status badge component
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "connected":
-        return (
-          <Badge variant="teal" className="w-fit">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            {t("status.connected")}
-          </Badge>
-        );
-      case "healthy":
-      case "running":
-        return (
-          <Badge variant="success" className="w-fit">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            {t("status.running")}
-          </Badge>
-        );
-      case "unhealthy":
-      case "error":
-        return (
-          <Badge variant="destructive" className="w-fit">
-            <XCircle className="mr-1 h-3 w-3" />
-            {t("status.error")}
-          </Badge>
-        );
-      case "starting":
-        return (
-          <Badge variant="yellow" className="w-fit">
-            <Clock className="mr-1 h-3 w-3" />
-            {t("status.starting")}
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="yellow" className="w-fit">
-            <AlertCircle className="mr-1 h-3 w-3" />
-            {t("status.setup")}
-          </Badge>
-        );
+  // Linear-style status: a coloured dot + label, lighter than a filled badge.
+  const getStatusDot = (status: string) => {
+    const tone: "green" | "red" | "amber" =
+      status === "connected" || status === "healthy" || status === "running"
+        ? "green"
+        : status === "unhealthy" || status === "error"
+          ? "red"
+          : "amber";
+    const label =
+      status === "connected"
+        ? t("status.connected")
+        : status === "healthy" || status === "running"
+          ? t("status.running")
+          : status === "unhealthy" || status === "error"
+            ? t("status.error")
+            : status === "starting"
+              ? t("status.starting")
+              : t("status.setup");
+    const tones = {
+      green: {
+        dot: "bg-emerald-500 ring-emerald-500/20",
+        text: "text-emerald-600 dark:text-emerald-400",
+      },
+      red: {
+        dot: "bg-red-500 ring-red-500/20",
+        text: "text-red-600 dark:text-red-400",
+      },
+      amber: {
+        dot: "bg-amber-500 ring-amber-500/20",
+        text: "text-amber-600 dark:text-amber-400",
+      },
+    }[tone];
+    return (
+      <span
+        className={cn(
+          "inline-flex w-fit items-center gap-2 text-[12.5px] font-medium",
+          tones.text
+        )}
+      >
+        <span className={cn("h-[7px] w-[7px] rounded-full ring-[3px]", tones.dot)} />
+        {label}
+      </span>
+    );
+  };
+
+  // Subtitle under the connection name — transport for MCP, host for OpenAPI.
+  const rowSubtitle = (item: any): string => {
+    if (item._type === "openapi" && item._connection) {
+      return hostOf(item._connection.base_url) || "OpenAPI";
     }
+    const type = (item._instance?.json_spec?.type as string) || "";
+    if (type === "url") return "Remote MCP";
+    if (type === "bundle") return "Bundle";
+    if (type === "docker") return "Docker";
+    return "MCP server";
   };
 
   // Define table columns for instances
@@ -200,22 +233,37 @@ export function MyMCPsSection({
             ? getMCPConnectionIconSrc(item._instance, item._serverSpec)
             : undefined;
         return (
-          <span className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-3">
             {item._type === "openapi" && item._connection ? (
               <OpenAPIConnectionMark
                 connection={item._connection}
-                className="h-5 w-5 shrink-0 rounded text-[7px]"
+                className="h-7 w-7 shrink-0 rounded-lg text-[9px]"
               />
-            ) : providerIcon ? (
-              <img
-                src={providerIcon}
-                alt=""
-                aria-hidden="true"
-                className="h-5 w-5 shrink-0 rounded object-contain"
-              />
-            ) : null}
-            <span className="truncate">{value}</span>
-          </span>
+            ) : (
+              <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-800">
+                {providerIcon ? (
+                  <img
+                    src={providerIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-[18px] w-[18px] object-contain"
+                  />
+                ) : (
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    {(value?.[0] || "?").toUpperCase()}
+                  </span>
+                )}
+              </span>
+            )}
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium text-foreground">
+                {value}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {rowSubtitle(item)}
+              </div>
+            </div>
+          </div>
         );
       },
     },
@@ -223,15 +271,17 @@ export function MyMCPsSection({
       accessor: "description",
       header: t("table.description"),
       render: (value: string) => (
-        <span className="truncate text-sm text-gray-500">{value || "-"}</span>
+        <span className="line-clamp-1 text-[12.5px] text-muted-foreground">
+          {cleanDescription(value) || "—"}
+        </span>
       ),
     },
     {
       accessor: "endpoint_url",
       header: t("table.endpoint"),
       render: (value: string) => (
-        <span className="truncate font-mono text-xs text-gray-400">
-          {value || "-"}
+        <span className="truncate font-mono text-[11.5px] text-muted-foreground/70">
+          {value || "—"}
         </span>
       ),
     },
@@ -244,9 +294,11 @@ export function MyMCPsSection({
             ? item._connection.available_tools.length
             : getMCPInstanceToolCount(item._instance || item);
         return count > 0 ? (
-          <span className="text-sm text-muted-foreground">{count}</span>
+          <span className="font-mono text-[12px] text-foreground/70 tabular-nums">
+            {count}
+          </span>
         ) : (
-          <span className="text-sm text-gray-400">-</span>
+          <span className="text-[12px] text-muted-foreground/50">—</span>
         );
       },
     },
@@ -258,7 +310,7 @@ export function MyMCPsSection({
           item._type === "openapi" && item._connection
             ? getOpenAPIHealthStatus(item._connection)
             : getHealthStatus(item._instance || item);
-        return getStatusBadge(healthStatus);
+        return getStatusDot(healthStatus);
       },
     },
   ];

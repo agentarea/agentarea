@@ -51,42 +51,52 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
         }
       };
 
-      // Handle custom event types - updated to match our workflow events
+      // Named SSE events use the backend's canonical PascalCase event_type as
+      // the event name (see _format_sse_event / eventTypes.ts). Listening for
+      // snake_case names here means none of these listeners ever fire, so live
+      // events never reach the UI. Keep the snake_case system events (connected,
+      // task_*) that really are emitted lowercase.
       const eventTypes = [
+        "WorkflowStarted",
+        "WorkflowCompleted",
+        "WorkflowFailed",
+        "WorkflowCancelled",
+        "IterationStarted",
+        "IterationCompleted",
+        "LLMCallStarted",
+        "LLMCallCompleted",
+        "LLMCallFailed",
+        "LLMCallChunk",
+        "ToolCallStarted",
+        "ToolCallCompleted",
+        "ToolCallFailed",
+        "HumanApprovalRequested",
+        "HumanApprovalReceived",
+        "HumanApprovalDenied",
+        "ContextWarning",
+        "ContextCompacted",
+        "connected",
+        "task_created",
         "task_completed",
         "task_failed",
-        "workflow_completed",
-        "workflow_failed",
-        "workflow_started",
-        "iteration_started",
-        "iteration_completed",
-        "llm_call_started",
-        "llm_call_completed",
-        "llm_call_failed",
-        "tool_call_started",
-        "tool_call_completed",
-        "tool_call_failed",
-        "budget_warning",
-        "budget_exceeded",
-        "human_approval_requested",
-        "human_approval_received",
-        "human_approval_denied",
-        "connected",
         "error",
       ];
 
       eventTypes.forEach((eventType) => {
         eventSource.addEventListener(eventType, (event) => {
+          // A native EventSource connection error is also dispatched as an
+          // "error" event, but it is a plain Event with no `.data`. Don't try
+          // to JSON.parse it (that yielded `"undefined" is not valid JSON`);
+          // connection-level errors are handled by `onerror` below.
+          const raw = (event as MessageEvent).data;
+          if (raw == null) return;
           try {
-            const data = JSON.parse((event as MessageEvent).data);
+            const data = JSON.parse(raw);
             onMessage?.({ type: eventType, data });
           } catch (e) {
             console.error(`Failed to parse ${eventType} event:`, e);
             // Try to send raw data if JSON parsing fails
-            onMessage?.({
-              type: eventType,
-              data: (event as MessageEvent).data,
-            });
+            onMessage?.({ type: eventType, data: raw });
           }
         });
       });

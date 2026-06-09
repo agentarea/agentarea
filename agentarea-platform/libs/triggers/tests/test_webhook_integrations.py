@@ -1,8 +1,9 @@
 """Unit tests for WebhookManager integrations."""
 
-import pytest
-from uuid import uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
+
+import pytest
 from agentarea_triggers.domain.enums import WebhookType
 from agentarea_triggers.domain.models import WebhookTrigger
 from agentarea_triggers.webhook_manager import (
@@ -10,6 +11,7 @@ from agentarea_triggers.webhook_manager import (
     WebhookExecutionCallback,
     WebhookRequestData,
 )
+
 
 class MockWebhookExecutionCallback(WebhookExecutionCallback):
     """Mock webhook execution callback for testing."""
@@ -154,8 +156,8 @@ async def test_parse_github_webhook(webhook_manager):
     assert parsed_data["webhook_type"] == "github"
     assert parsed_data["github_event"] == "issues"
     assert parsed_data["github_delivery"] == "delivery_123"
-    assert parsed_data["repository"] == "owner/repo"
-    assert parsed_data["sender"] == "testuser"
+    assert parsed_data["repository"]["full_name"] == "owner/repo"
+    assert parsed_data["sender"]["login"] == "testuser"
     assert parsed_data["action"] == "opened"
     assert parsed_data["raw_data"] == github_payload
 
@@ -193,9 +195,9 @@ async def test_parse_slack_webhook(webhook_manager):
     parsed_data = await webhook_manager._parse_webhook_data(trigger, request_data)
 
     assert parsed_data["webhook_type"] == "slack"
-    assert parsed_data["slack_team_id"] == "T12345"
-    assert parsed_data["slack_channel_id"] == "C12345"
-    assert parsed_data["slack_user_id"] == "U12345"
-    assert parsed_data["slack_text"] == "Hello Slack"
-    assert parsed_data["slack_timestamp"] == "1234567890.123456"
+    assert parsed_data["team_id"] == "T12345"
+    assert parsed_data["channel"] == "C12345"
+    assert parsed_data["user"] == "U12345"
+    assert parsed_data["text"] == "Hello Slack"
+    assert parsed_data["ts"] == "1234567890.123456"
     assert parsed_data["raw_data"] == slack_payload

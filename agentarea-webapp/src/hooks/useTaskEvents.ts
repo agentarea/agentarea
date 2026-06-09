@@ -145,6 +145,11 @@ export function useTaskEvents(
   const eventsRef = useRef<DisplayEvent[]>([]);
   const loadedHistory = useRef(false);
   const chunkBufferRef = useRef<Map<string, DisplayEvent>>(new Map());
+  // Once a task reaches a terminal event the backend closes the SSE stream.
+  // EventSource treats a server-closed stream as an error and would otherwise
+  // reconnect forever (replaying history each time). We close cleanly instead.
+  const terminalReachedRef = useRef(false);
+  const disconnectRef = useRef<() => void>(() => {});
 
   // SSE URL for real-time events
   const sseUrl =
@@ -346,6 +351,23 @@ export function useTaskEvents(
         if (onEventRef.current) {
           onEventRef.current(displayEvent);
         }
+
+        // Terminal event → the backend will close the stream. Disconnect
+        // cleanly so EventSource doesn't fire onerror and reconnect-loop.
+        const eventType: string =
+          parsedData.event_type || (sseEvent.type as string) || "";
+        const TERMINAL_EVENT_TYPES = [
+          "WorkflowCompleted",
+          "WorkflowFailed",
+          "WorkflowCancelled",
+          "task_completed",
+          "task_failed",
+          "task_cancelled",
+        ];
+        if (TERMINAL_EVENT_TYPES.includes(eventType)) {
+          terminalReachedRef.current = true;
+          disconnectRef.current();
+        }
       } catch (error) {
         console.error(
           "Failed to process SSE event:",
@@ -372,6 +394,12 @@ export function useTaskEvents(
   }, []);
 
   const handleSSEError = useCallback((error: Event) => {
+    // A terminal task closes the stream on purpose — that surfaces here as an
+    // EventSource error. Don't flag it as a connection error to the UI.
+    if (terminalReachedRef.current) {
+      setState((prev) => ({ ...prev, connected: false }));
+      return;
+    }
     setState((prev) => ({ ...prev, connected: false }));
     const errorMessage = "SSE connection error";
     setState((prev) => ({ ...prev, error: errorMessage }));
@@ -404,6 +432,16 @@ export function useTaskEvents(
     reconnect: true,
     reconnectInterval: 3000,
   });
+
+  // Let handleSSEMessage (a stable callback) reach the live disconnect fn.
+  useEffect(() => {
+    disconnectRef.current = disconnect;
+  }, [disconnect]);
+
+  // A new task starts a fresh stream; clear the terminal latch.
+  useEffect(() => {
+    terminalReachedRef.current = false;
+  }, [agentId, taskId]);
 
   // Load historical events on mount
   useEffect(() => {

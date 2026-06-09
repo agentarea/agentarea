@@ -31,15 +31,19 @@ from . import (
     model_specs,
     network,
     openapi_connections,
+    policies,
     projects,
     provider_configs,
     provider_specs,
+    rebac,
     registries,
+    skill_collections,
     skills,
     triggers,
     wallet,
     workspace_config,
     workspace_invitations,
+    workspaces,
 )
 
 # ============================================================================
@@ -96,12 +100,19 @@ protected_v1_router.include_router(workspace_config.router)
 
 # Workspace invitations + memberships - PROTECTED
 protected_v1_router.include_router(workspace_invitations.router)
+protected_v1_router.include_router(workspaces.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
 
 # Bundle import (analyze + install) - PROTECTED
 protected_v1_router.include_router(bundles.router)
+
+# Skill collections (grouping for ReBAC fan-out) - PROTECTED
+protected_v1_router.include_router(skill_collections.router)
+
+# ReBAC access explorer (Keto-backed graph, tuples, check, resolve, sync) - PROTECTED
+protected_v1_router.include_router(rebac.router)
 
 # MCP Auth Configs - PROTECTED
 protected_v1_router.include_router(mcp_auth_configs.router)
@@ -139,8 +150,11 @@ protected_v1_router.include_router(audit.router)
 protected_v1_router.include_router(dashboard.router)
 protected_v1_router.include_router(agent_overview.router)
 
-# Governance policies (CRUD + effective-policy preview + task snapshots) - PROTECTED
+# Governance effective-policy preview + task snapshots - PROTECTED
 protected_v1_router.include_router(governance.router)
+
+# Unified policy rules (source of truth CRUD) - PROTECTED
+protected_v1_router.include_router(policies.router)
 
 # Inbox - PROTECTED
 protected_v1_router.include_router(inbox.router)
