@@ -198,16 +198,25 @@ def validate():
 @click.option(
     "--source",
     multiple=True,
-    help="Registry source file/URL (can be repeated). Auto-detects type.",
+    help="Registry source file/URL (can be repeated). Type is auto-detected.",
 )
-def reconcile(registries_config: str | None, source: tuple[str, ...]):
+@click.option(
+    "--config-file",
+    default=None,
+    help="Path to a YAML/JSON manifest listing registry sources.",
+)
+def reconcile(registries_config: str | None, source: tuple[str, ...], config_file: str | None):
     """Idempotent reconcile — ensure registries exist and sync them."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    asyncio.run(_reconcile(registries_config, source))
+    asyncio.run(_reconcile(registries_config, source, config_file))
 
 
-async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
+async def _reconcile(
+    registries_config: str | None,
+    sources: tuple[str, ...],
+    config_file: str | None = None,
+):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
     from agentarea_mcp.infrastructure.repository import MCPServerRepository
@@ -233,21 +242,30 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
             click.echo(f"Failed to parse REGISTRIES_CONFIG: {e}")
             sys.exit(1)
 
-    # Add any --source args as auto-detected registries
+    # Load a manifest file (YAML or JSON list of registry definitions)
+    if config_file:
+        import yaml
+
+        try:
+            with open(config_file) as f:
+                file_configs = yaml.safe_load(f)
+        except (OSError, yaml.YAMLError) as e:
+            click.echo(f"Failed to read --config-file {config_file}: {e}")
+            sys.exit(1)
+        if not isinstance(file_configs, list):
+            click.echo(f"--config-file {config_file} must contain a list of registries")
+            sys.exit(1)
+        configs.extend(file_configs)
+        click.echo(f"Loaded {len(file_configs)} registries from {config_file}")
+
+    # Add any --source args (type is inferred from the fetched payload)
     for src in sources:
         name = (
             os.path.basename(src).rsplit(".", 1)[0]
             if not src.startswith("http")
             else src.split("/")[-1]
         )
-        configs.append(
-            {
-                "name": name,
-                "type": "mcp_servers",
-                "source_type": "url",
-                "source_url": src,
-            }
-        )
+        configs.append({"name": name, "source_url": src})
 
     if not configs:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
@@ -318,9 +336,13 @@ async def _reconcile(registries_config: str | None, sources: tuple[str, ...]):
                     registry_id = existing.id
                     click.echo(f"Found existing registry: {registry_id}")
                 else:
+                    registry_type = config.get("type")
+                    if not registry_type:
+                        registry_type = service.detect_type_from_source(config["source_url"])
+                        click.echo(f"Detected type: {registry_type}")
                     registry = await service.create_registry(
                         name=registry_name,
-                        registry_type=config.get("type", "mcp_servers"),
+                        registry_type=registry_type,
                         source_type=config.get("source_type", "url"),
                         source_url=config["source_url"],
                         description=config.get("description"),
