@@ -97,7 +97,11 @@ async def test_dedup_first_claim_succeeds_duplicate_fails():
     cache = DedupCache(REDIS_URL, prefix="test-dedup", ttl_seconds=60)
     try:
         key = f"k:{uuid.uuid4()}"
-        assert await cache.claim(key) is True
+        try:
+            first = await cache.claim(key)
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"Redis not reachable: {exc}")
+        assert first is True
         assert await cache.claim(key) is False
     finally:
         await cache.aclose()

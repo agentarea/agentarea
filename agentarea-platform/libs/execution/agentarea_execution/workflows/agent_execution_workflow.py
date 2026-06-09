@@ -1667,12 +1667,14 @@ class AgentExecutionWorkflow:
 
         self.state.success = True
         self.state.final_response = result_text
-        agent_type = str(self.state.agent_config.get("agent_type") or "stateless").lower()
-        self._awaiting_input = agent_type == "stateful"
+        # Every agent stays alive after completing a turn to accept follow-up
+        # messages (the chat is conversational). Delegation children are the
+        # only exception — that is handled in the main loop via
+        # _is_delegation_child(), not here.
+        self._awaiting_input = True
 
         workflow.logger.info(f"Task completed: {result_text}")
-        if self._awaiting_input:
-            workflow.logger.info("Entering awaiting_input state for follow-up messages")
+        workflow.logger.info("Entering awaiting_input state for follow-up messages")
 
         # Update task status to completed immediately so UI reflects it
         await workflow.execute_activity(

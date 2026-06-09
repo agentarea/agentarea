@@ -20,6 +20,7 @@ every tenant reads the same built-in spec definitions with no workspace filter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from agentarea_common.auth.context import UserContext
@@ -38,6 +39,8 @@ class CatalogMcpItem:
     spec: dict[str, Any]
     tags: list[str]
     registry_url: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class CatalogMcpRepository:
@@ -50,7 +53,8 @@ class CatalogMcpRepository:
     async def list_items(self) -> list[CatalogMcpItem]:
         """List all catalog MCP server items (global catalog, no workspace filter)."""
         query = text(
-            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags "
+            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags, "
+            "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'mcp_servers' "
@@ -62,7 +66,8 @@ class CatalogMcpRepository:
     async def get_item(self, item_id: str) -> CatalogMcpItem | None:
         """Get a single catalog MCP server item by its registry-item id."""
         query = text(
-            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags "
+            "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, ri.tags, "
+            "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'mcp_servers' "
@@ -76,6 +81,8 @@ class CatalogMcpRepository:
     def _row_to_item(row: Any, registry_url: str | None) -> CatalogMcpItem:
         spec = row.spec if isinstance(row.spec, dict) else {}
         tags = row.tags if isinstance(row.tags, list) else []
+        created_at = row.created_at or row.updated_at or datetime.utcnow()
+        updated_at = row.updated_at or created_at
         return CatalogMcpItem(
             id=str(row.id),
             name=row.name,
@@ -84,4 +91,6 @@ class CatalogMcpRepository:
             spec=spec,
             tags=tags,
             registry_url=spec.get("registry_url") or registry_url,
+            created_at=created_at,
+            updated_at=updated_at,
         )

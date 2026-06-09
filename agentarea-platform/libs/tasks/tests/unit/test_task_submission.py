@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_governance.domain.policies import EffectivePolicy
 from agentarea_tasks.domain.models import SimpleTask, Task
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -52,10 +53,15 @@ def _make_service(temporal_executor=None):
     task_manager.submit_task = AsyncMock(side_effect=_submit)
     task_manager.temporal_executor = temporal_executor
 
+    policy_resolver = MagicMock()
+    policy_resolver.resolve = AsyncMock(return_value=EffectivePolicy())
+    policy_resolver.snapshot = AsyncMock()
+
     service = TaskService(
         repository_factory=repo_factory,
         event_broker=event_broker,
         task_manager=task_manager,
+        policy_resolver=policy_resolver,
     )
     # Short-circuit create_task for unit isolation (bypasses audit decorator + db plumbing).
     service.create_task = AsyncMock(side_effect=lambda t: t)

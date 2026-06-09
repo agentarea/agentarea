@@ -653,7 +653,7 @@ class MCPServerInstanceService:
                 instance_id=instance.id,
                 server_spec_id=instance.server_spec_id,
                 name=instance.name,
-                status=instance.status,
+                status=(instance.verification or {}).get("status", "pending"),
             )
         )
 

@@ -113,7 +113,7 @@ class PolicyRuleRepository:
             if key in ("subject_type", "effect"):
                 value = str(value)
             setattr(row, key, value)
-        row.updated_at = datetime.now(UTC)
+        row.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
         return _to_rule(row)
 
@@ -122,7 +122,7 @@ class PolicyRuleRepository:
         if row is None:
             return None
         row.enabled = enabled
-        row.updated_at = datetime.now(UTC)
+        row.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await self.session.flush()
         return _to_rule(row)
 

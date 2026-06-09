@@ -7,6 +7,7 @@ are reference specs users instantiate via ``model_instances``. These tests
 exercise the repository merge with light fakes, no database.
 """
 
+from datetime import datetime
 from uuid import uuid4
 
 from agentarea_common.auth.context import UserContext
@@ -17,8 +18,10 @@ from agentarea_llm.infrastructure.model_spec_repository import (
     _project_catalog_model_spec,
 )
 
+_TS = datetime(2024, 1, 2, 3, 4, 5)
 
-def _item(item_id=None, name="GPT-4", spec=None, provider_spec_id=None, is_active=True):
+
+def _item(item_id=None, name="GPT-4", spec=None, provider_spec_id=None, is_active=True, ts=_TS):
     return CatalogModelSpecItem(
         id=item_id or str(uuid4()),
         name=name,
@@ -34,6 +37,8 @@ def _item(item_id=None, name="GPT-4", spec=None, provider_spec_id=None, is_activ
         provider_spec_id=provider_spec_id or str(uuid4()),
         provider_key="openai",
         provider_name="OpenAI",
+        created_at=ts,
+        updated_at=ts,
     )
 
 
@@ -66,6 +71,16 @@ def test_project_marks_read_only_with_provider_relation():
     # provider_spec is attached transiently for the API projection.
     assert spec.provider_spec.provider_key == "openai"
     assert spec.provider_spec.name == "OpenAI"
+
+
+def test_project_carries_registry_item_timestamps():
+    """Transient projection never persists, so DB-default timestamps never fire.
+    The response schema requires non-null datetimes, so the projection must
+    carry the registry item's own timestamps."""
+    ts = datetime(2024, 1, 2, 3, 4, 5)
+    spec = _project_catalog_model_spec(_item(ts=ts))
+    assert spec.created_at == ts
+    assert spec.updated_at == ts
 
 
 async def test_catalog_projections_shadows_instantiated_and_projects_rest():

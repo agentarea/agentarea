@@ -56,6 +56,11 @@ def _project_catalog_mcp_server(item: CatalogMcpItem) -> MCPServer:
         registry_url=item.registry_url,
     )
     server.id = UUID(item.id)
+    # Transient projection is never persisted, so the DB-default timestamps never
+    # fire (they run on INSERT). Carry the registry item's own non-null
+    # timestamps so the response schema's required datetimes are populated.
+    server.created_at = item.created_at
+    server.updated_at = item.updated_at
     server.is_catalog = True  # type: ignore[attr-defined]
     return server
 

@@ -211,7 +211,15 @@ def downgrade() -> None:
     """Recreate an empty governance_policies table and drop policies.
 
     Data recompose is best-effort/empty — see the module docstring.
+    Raises RuntimeError if policies rows exist to prevent silent data loss.
     """
+    bind = op.get_bind()
+    count = bind.execute(sa.text("SELECT COUNT(*) FROM policies")).scalar()
+    if count:
+        raise RuntimeError(
+            f"downgrade() would permanently destroy {count} policy rule(s). "
+            "Back up or export the policies table before rolling back this migration."
+        )
     op.create_table(
         "governance_policies",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),

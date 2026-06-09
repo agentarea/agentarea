@@ -7,7 +7,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, desc, func, select, update
+from sqlalchemy import and_, desc, func, literal_column, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -748,10 +748,13 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
 
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
-        # Create time buckets
+        # Create time buckets. Keep the date_trunc precision as a SQL literal:
+        # asyncpg binds repeated "hour" strings as separate parameters, and
+        # Postgres then treats SELECT/GROUP BY expressions as different.
+        time_bucket = func.date_trunc(literal_column("'hour'"), TriggerExecutionORM.executed_at)
         stmt = (
             select(
-                func.date_trunc("hour", TriggerExecutionORM.executed_at).label("time_bucket"),
+                time_bucket.label("time_bucket"),
                 func.count(TriggerExecutionORM.id).label("total_count"),
                 func.count(
                     case((TriggerExecutionORM.status == ExecutionStatus.SUCCESS.value, 1))
@@ -769,8 +772,8 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                     TriggerExecutionORM.executed_at >= cutoff_time,
                 )
             )
-            .group_by(func.date_trunc("hour", TriggerExecutionORM.executed_at))
-            .order_by(func.date_trunc("hour", TriggerExecutionORM.executed_at))
+            .group_by(time_bucket)
+            .order_by(time_bucket)
         )
 
         result = await self.session.execute(stmt)

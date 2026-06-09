@@ -39,6 +39,11 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         is_active=spec.get("is_active", True),
     )
     model.id = UUID(item.id)
+    # Transient projection is never persisted, so DB-default timestamps never
+    # fire (they run on INSERT). Carry the registry item's own non-null
+    # timestamps so the response schema's required datetimes are populated.
+    model.created_at = item.created_at
+    model.updated_at = item.updated_at
     if item.provider_spec_id is not None:
         model.provider_spec_id = UUID(item.provider_spec_id)  # type: ignore[assignment]
     model.registry_item_id = item.id  # type: ignore[attr-defined]

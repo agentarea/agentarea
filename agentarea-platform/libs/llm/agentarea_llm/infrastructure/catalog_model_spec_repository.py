@@ -26,6 +26,7 @@ every tenant reads the same built-in spec definitions with no workspace filter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from agentarea_common.auth.context import UserContext
@@ -45,6 +46,8 @@ class CatalogModelSpecItem:
     provider_spec_id: str | None
     provider_key: str | None
     provider_name: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class CatalogModelSpecRepository:
@@ -63,6 +66,7 @@ class CatalogModelSpecRepository:
         """
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
+            "ri.created_at, ri.updated_at, "
             "ps.id AS provider_spec_id, ps.provider_key, ps.name AS provider_name "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
@@ -77,6 +81,7 @@ class CatalogModelSpecRepository:
         """Get a single catalog model spec item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
+            "ri.created_at, ri.updated_at, "
             "ps.id AS provider_spec_id, ps.provider_key, ps.name AS provider_name "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
@@ -100,4 +105,6 @@ class CatalogModelSpecRepository:
             provider_spec_id=str(row.provider_spec_id) if row.provider_spec_id else None,
             provider_key=row.provider_key or spec.get("provider_key"),
             provider_name=row.provider_name,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
         )
