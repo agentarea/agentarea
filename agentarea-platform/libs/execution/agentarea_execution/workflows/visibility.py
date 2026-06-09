@@ -13,7 +13,12 @@ class EventVisibility:
     RESULT: Final[set[str]] = {"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"}
 
     # Agent needs human input — shown on interactive channels
-    INTERACTION: Final[set[str]] = {"HumanApprovalRequested", "HumanApprovalReceived"}
+    INTERACTION: Final[set[str]] = {
+        "HumanApprovalRequested",
+        "HumanApprovalReceived",
+        "HumanInputRequested",
+        "HumanInputReceived",
+    }
 
     # Progress indicators — shown on concise channels
     STATUS: Final[set[str]] = {

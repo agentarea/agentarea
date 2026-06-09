@@ -21,6 +21,7 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 
 INBOX_STATUSES = [
     "waiting_for_approval",
+    "waiting_for_input",
     "completed",
     "failed",
 ]

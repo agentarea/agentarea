@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -12,6 +13,7 @@ from agentarea_agents.application.temporal_workflow_service import (
 )
 from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
     get_agent_service,
     get_event_stream_service,
     get_model_instance_service,
@@ -45,6 +47,25 @@ class A2UIActionPayload(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class InputSecretValue(BaseModel):
+    """Secret value submitted through the protected input endpoint."""
+
+    value: str = Field(..., min_length=1)
+    secret_name: str | None = Field(default=None, max_length=256)
+
+    model_config = {"extra": "forbid"}
+
+
+class TaskInputSubmission(BaseModel):
+    """Structured user input submission for a pending workflow input request."""
+
+    input_request_id: str = Field(..., min_length=1, max_length=128)
+    answers: dict[str, Any] = Field(default_factory=dict)
+    secrets: dict[str, str | InputSecretValue] = Field(default_factory=dict)
+
+    model_config = {"extra": "forbid"}
+
+
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
 # Global tasks router (not agent-specific)
@@ -71,6 +92,17 @@ class TaskCommandPayload(BaseModel):
     budget_usd: float | None = None
     message: str | None = None
     message_id: str | None = None
+
+
+_SECRET_NAME_SAFE_RE = re.compile(r"[^A-Za-z0-9_.:/-]+")
+
+
+def _default_input_secret_name(task_id: UUID, field_name: str) -> str:
+    """Build a stable workspace secret name for a submitted input field."""
+    sanitized = _SECRET_NAME_SAFE_RE.sub("_", field_name).strip("._:/-")
+    if not sanitized:
+        sanitized = "secret"
+    return f"task-input/{task_id}/{sanitized}"
 
 
 class TaskResponse(BaseModel):
@@ -1055,6 +1087,82 @@ async def send_a2ui_action(
         raise
     except Exception as e:
         logger.error(f"Failed to send A2UI action for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{task_id}/input")
+async def submit_task_input(
+    agent_id: UUID,
+    task_id: UUID,
+    submission: TaskInputSubmission,
+    user_context: UserContextDep,
+    secret_manager: BaseSecretManagerDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Submit structured user input to a workflow waiting on request_user_input.
+
+    Secret values are written to the workspace secret manager at the API boundary.
+    Only secret refs are sent to Temporal/LLM context.
+    """
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    execution_id = f"task-{task_id}"
+
+    try:
+        status = await workflow_task_service.get_workflow_status(execution_id)
+        if status.get("status") == "unknown":
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        current_status = status.get("status", "").lower()
+        if current_status in ["completed", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400, detail=f"Cannot submit input to task in '{current_status}' state"
+            )
+
+        secret_refs: dict[str, dict[str, str]] = {}
+        for field_name, raw_secret in submission.secrets.items():
+            if isinstance(raw_secret, InputSecretValue):
+                secret_value = raw_secret.value
+                secret_name = raw_secret.secret_name or _default_input_secret_name(
+                    task_id, field_name
+                )
+            else:
+                secret_value = str(raw_secret)
+                secret_name = _default_input_secret_name(task_id, field_name)
+
+            await secret_manager.set_secret(secret_name, secret_value)
+            secret_refs[field_name] = {
+                "secret_name": secret_name,
+                "secret_ref": f"secret:{secret_name}",
+            }
+
+        payload = {
+            "input_request_id": submission.input_request_id,
+            "answers": submission.answers,
+            "secret_refs": secret_refs,
+            "submitted_by": str(user_context.user_id),
+        }
+        success = await workflow_task_service.send_workflow_command(
+            execution_id, "submit_user_input", payload
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to submit input to workflow")
+
+        return {
+            "status": "accepted",
+            "task_id": str(task_id),
+            "input_request_id": submission.input_request_id,
+            "answer_keys": sorted(list(submission.answers.keys())),
+            "secret_keys": sorted(list(secret_refs.keys())),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to submit input for task {task_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
