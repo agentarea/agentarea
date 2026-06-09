@@ -47,8 +47,15 @@ export default function CollectionCard({ item }: { item: CollectionItem }) {
             fill={item.iconFill}
           />
         )}
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
-          {item.title}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13.5px] font-semibold text-foreground">
+            {item.title}
+          </span>
+          {item.cardSubtitle != null && (
+            <span className="block truncate text-[11px] text-muted-foreground/70">
+              {item.cardSubtitle}
+            </span>
+          )}
         </span>
         {item.headerAside != null && (
           <span className="flex shrink-0 items-center">{item.headerAside}</span>
@@ -59,7 +66,7 @@ export default function CollectionCard({ item }: { item: CollectionItem }) {
       {!item.hideDescription && (
         <p
           className={cn(
-            "relative z-[1] mb-3 text-[12.5px] leading-[1.5] text-muted-foreground",
+            "collection-subtext relative z-[1] mb-3 leading-[1.5]",
             item.compactDescription ? "truncate" : "line-clamp-2 h-[38px]"
           )}
         >

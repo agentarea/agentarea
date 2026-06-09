@@ -22,6 +22,26 @@
     "editProviderConfig": "Редактировать {configName}",
     "createProviderConfigForProvider": "Создать конфигурацию {providerName}"
   },
+  "Collection": {
+    "all": "Все",
+    "filter": "Фильтр",
+    "display": "Вид",
+    "grouping": "Группировка",
+    "ordering": "Сортировка",
+    "noGrouping": "Без группировки",
+    "listView": "Список",
+    "gridView": "Сетка",
+    "clear": "Сбросить",
+    "search": "Поиск…",
+    "status": "Статус",
+    "type": "Тип",
+    "name": "Имя",
+    "agent": "Агент",
+    "hosting": "Хостинг",
+    "nextRun": "Следующий запуск",
+    "cloud": "Облако",
+    "selfHosted": "Self-hosted"
+  },
   "Common": {
     "search": "Поиск",
     "saveChanges": "Сохранить изменения",

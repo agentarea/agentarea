@@ -56,7 +56,6 @@ export default async function ProviderConfigsPage({
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title"), href: "/admin/provider-configs" }],
-        description: t("description"),
         controls: (
           <Link href="/admin/provider-configs/create">
             <Button

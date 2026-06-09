@@ -12,8 +12,10 @@ import {
   LayoutGrid,
   Rows3,
   Tag,
+  X,
 } from "lucide-react";
 import CollectionView, {
+  CollectionFilterRow,
   CollectionToolbar,
   StatusDot,
   type CollectionGroup,
@@ -260,7 +262,7 @@ export default function MCPConnectionsView({
   initial,
 }: MCPConnectionsViewProps) {
   const t = useTranslations("MCPServersPage");
-  const tCommon = useTranslations("Common");
+  const tc = useTranslations("Collection");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -270,6 +272,7 @@ export default function MCPConnectionsView({
   const [group, setGroup] = useState<GroupKey>(initial.group);
   const [order, setOrder] = useState<OrderKey>(initial.order);
   const [search, setSearch] = useState(initial.search);
+  const [filtersOpen, setFiltersOpen] = useState(Boolean(initial.search));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // ── health polling (drives connection status) ──
@@ -703,35 +706,45 @@ export default function MCPConnectionsView({
         ]}
         activeTab={tab}
         onTabChange={onTab}
-        searchSlot={
-          <input
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder={`${tCommon("search")}…`}
-            className="h-7 w-full max-w-[260px] bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-          />
-        }
-        displayLabel="Display"
-        groupingLabel="Group connections"
+        filterActive={filtersOpen}
+        onToggleFilter={() => setFiltersOpen((v) => !v)}
         groupOptions={[
-          { value: "none", label: "No grouping", icon: <Rows3 className="h-3.5 w-3.5" /> },
-          { value: "status", label: "Status", icon: <Activity className="h-3.5 w-3.5" /> },
-          { value: "type", label: "Type", icon: <Tag className="h-3.5 w-3.5" /> },
+          { value: "none", label: tc("noGrouping"), icon: <Rows3 className="h-3.5 w-3.5" /> },
+          { value: "status", label: tc("status"), icon: <Activity className="h-3.5 w-3.5" /> },
+          { value: "type", label: tc("type"), icon: <Tag className="h-3.5 w-3.5" /> },
         ]}
         group={group}
         onGroupChange={onGroup}
-        orderingLabel="Ordering"
         orderOptions={[
-          { value: "name", label: "Name", icon: <ArrowDownAZ className="h-3.5 w-3.5" /> },
-          { value: "status", label: "Status", icon: <Activity className="h-3.5 w-3.5" /> },
+          { value: "name", label: tc("name"), icon: <ArrowDownAZ className="h-3.5 w-3.5" /> },
+          { value: "status", label: tc("status"), icon: <Activity className="h-3.5 w-3.5" /> },
         ]}
         order={order}
         onOrderChange={onOrder}
         view={view}
         onViewChange={(v) => onView(v as ViewKey)}
-        listLabel="List view"
-        gridLabel="Grid view"
       />
+
+      {filtersOpen && (
+        <CollectionFilterRow>
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder={tc("search")}
+            className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => onSearch("")}
+              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+              {tc("clear")}
+            </button>
+          )}
+        </CollectionFilterRow>
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto">
         {isEmpty ? (

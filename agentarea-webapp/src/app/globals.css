@@ -21,6 +21,13 @@
     @apply text-xs text-red-500;
   }
 
+  /* Shared "subtext" treatment for collection rows + cards — the muted, light
+     secondary detail text (schedule, provider, description, and similar). Keep
+     these in sync by using this class instead of repeating the utilities. */
+  .collection-subtext {
+    @apply text-[12.5px] font-light text-muted-foreground;
+  }
+
   /* ---- Collection brand identity: 135° diagonal hatch ---- */
   /* Shared by the reusable CollectionView (rows + cards + group headers) and
      every page that adopts it (skills, tasks, agents, triggers, …). */

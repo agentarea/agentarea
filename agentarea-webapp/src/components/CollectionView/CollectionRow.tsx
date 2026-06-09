@@ -12,13 +12,17 @@ import type { CollectionItem } from "./types";
  *  (e.g. a date) drops first, then the secondary badge, then the primary. */
 const BADGE_COL_CLASS = ["collection-col-source", "collection-col-scope"];
 
-type RowCell =
-  | ReactNode
-  | { node: ReactNode; colSpan?: number; className?: string };
+type RowCellObject = {
+  node: ReactNode;
+  colSpan?: number;
+  className?: string;
+  /** Keep this cell visible on hover (default: every cell after the first
+   *  fades to make room for the open-arrow). */
+  keepOnHover?: boolean;
+};
+type RowCell = ReactNode | RowCellObject;
 
-function isCellObject(
-  cell: RowCell
-): cell is { node: ReactNode; colSpan?: number; className?: string } {
+function isCellObject(cell: RowCell): cell is RowCellObject {
   return (
     typeof cell === "object" &&
     cell !== null &&
@@ -84,14 +88,16 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
             const node = obj ? cell.node : cell;
             const extra = obj ? cell.className : undefined;
             const span = obj ? cell.colSpan : undefined;
+            // first cell (name) always stays; the rest fade on hover unless the
+            // cell opts to keep itself visible (e.g. provider / description)
+            const fades = i > 0 && !(obj && cell.keepOnHover);
             return (
               <div
                 key={i}
                 className={cn(
                   "flex min-w-0 items-center",
-                  // keep the first cell (name) visible; fade the rest on hover
-                  i > 0 && "group-hover:invisible",
-                  i > 0 && menuOpen && "invisible",
+                  fades && "group-hover:invisible",
+                  fades && menuOpen && "invisible",
                   extra
                 )}
                 style={span ? { gridColumn: `span ${span}` } : undefined}
@@ -131,7 +137,7 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
         </span>
       ) : (
         item.description != null && (
-          <span className="relative z-[1] min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+          <span className="collection-subtext relative z-[1] min-w-0 flex-1 truncate">
             {item.description}
           </span>
         )

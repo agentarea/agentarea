@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Filter, SlidersHorizontal } from "lucide-react";
 import HeaderTabs from "@/components/HeaderTabs";
 import {
@@ -77,25 +78,35 @@ export default function CollectionToolbar({
   tabs,
   activeTab,
   onTabChange,
-  filterLabel = "Filter",
+  filterLabel,
   filterActive,
   onToggleFilter,
   searchSlot,
-  displayLabel = "Display",
-  groupingLabel = "Grouping",
+  displayLabel,
+  groupingLabel,
   groupOptions,
   group,
   onGroupChange,
-  orderingLabel = "Ordering",
+  orderingLabel,
   orderOptions,
   order,
   onOrderChange,
   view,
   onViewChange,
-  listLabel = "List view",
-  gridLabel = "Grid view",
+  listLabel,
+  gridLabel,
   className,
 }: CollectionToolbarProps) {
+  // Generic chrome labels default to the shared, translated "Collection"
+  // namespace so every page renders identical (localized) toolbar text.
+  const t = useTranslations("Collection");
+  const filterText = filterLabel ?? t("filter");
+  const displayText = displayLabel ?? t("display");
+  const groupingText = groupingLabel ?? t("grouping");
+  const orderingText = orderingLabel ?? t("ordering");
+  const listText = listLabel ?? t("listView");
+  const gridText = gridLabel ?? t("gridView");
+
   const hasDisplay =
     (groupOptions?.length ?? 0) > 0 || (orderOptions?.length ?? 0) > 0;
 
@@ -148,7 +159,7 @@ export default function CollectionToolbar({
             )}
           >
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="collection-btn-label">{filterLabel}</span>
+            <span className="collection-btn-label">{filterText}</span>
           </button>
         </>
       )}
@@ -174,14 +185,14 @@ export default function CollectionToolbar({
               className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
             >
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="collection-btn-label">{displayLabel}</span>
+              <span className="collection-btn-label">{displayText}</span>
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-52 p-1.5">
             {groupOptions && groupOptions.length > 0 && (
               <>
                 <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                  {groupingLabel}
+                  {groupingText}
                 </p>
                 {groupOptions.map((opt) => (
                   <MenuRow
@@ -200,7 +211,7 @@ export default function CollectionToolbar({
             {orderOptions && orderOptions.length > 0 && (
               <>
                 <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                  {orderingLabel}
+                  {orderingText}
                 </p>
                 {orderOptions.map((opt) => (
                   <MenuRow
@@ -222,8 +233,8 @@ export default function CollectionToolbar({
         value={view}
         onChange={(v) => onViewChange(v as CollectionViewMode)}
         tabs={[
-          { value: "list", label: listLabel },
-          { value: "grid", label: gridLabel },
+          { value: "list", label: listText },
+          { value: "grid", label: gridText },
         ]}
       />
     </div>

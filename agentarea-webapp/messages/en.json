@@ -22,6 +22,26 @@
     "editProviderConfig": "Edit {configName}",
     "createProviderConfigForProvider": "Create {providerName} Config"
   },
+  "Collection": {
+    "all": "All",
+    "filter": "Filter",
+    "display": "Display",
+    "grouping": "Grouping",
+    "ordering": "Ordering",
+    "noGrouping": "No grouping",
+    "listView": "List view",
+    "gridView": "Grid view",
+    "clear": "Clear",
+    "search": "Search…",
+    "status": "Status",
+    "type": "Type",
+    "name": "Name",
+    "agent": "Agent",
+    "hosting": "Hosting",
+    "nextRun": "Next run",
+    "cloud": "Cloud",
+    "selfHosted": "Self-hosted"
+  },
   "Common": {
     "search": "Search",
     "saveChanges": "Save changes",

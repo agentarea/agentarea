@@ -65,10 +65,18 @@ export interface CollectionItem {
    *  icon + hover open-arrow still render). Ignored by cards. */
   rowGrid?: string;
   /** Row only: the cells placed on the `rowGrid`, one per column. An entry may
-   *  be a bare node or `{ node, colSpan, className }` to span columns / restyle
-   *  the cell wrapper. Ignored by cards. */
+   *  be a bare node or `{ node, colSpan, className, keepOnHover }` to span
+   *  columns, restyle the cell wrapper, or keep the cell visible on hover
+   *  (cells after the first otherwise fade to clear the open-arrow). Ignored by
+   *  cards. */
   rowCells?: Array<
-    ReactNode | { node: ReactNode; colSpan?: number; className?: string }
+    | ReactNode
+    | {
+        node: ReactNode;
+        colSpan?: number;
+        className?: string;
+        keepOnHover?: boolean;
+      }
   >;
   /** Row only: override the title column width classes (e.g. a fixed
    *  `w-[200px] shrink-0` so following columns line up vertically). */
@@ -82,6 +90,10 @@ export interface CollectionItem {
   /** Hover quick-actions. Empty/undefined ⇒ only the diagonal open-arrow shows. */
   actions?: CollectionAction[];
 
+  /** Card only: a small muted subtitle shown directly under the title inside
+   *  the card header (e.g. the provider name on a Provider config card).
+   *  Ignored by rows. */
+  cardSubtitle?: ReactNode;
   /** Card only: node shown at the right end of the card header row (e.g. a
    *  status dot). Ignored by rows. */
   headerAside?: ReactNode;

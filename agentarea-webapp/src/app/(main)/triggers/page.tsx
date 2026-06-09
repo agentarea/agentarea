@@ -3,14 +3,16 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
-import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
 export const metadata = {
   title: "Automation",
 };
+
+function asString(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value : "";
+}
 
 export default async function TriggersPage({
   searchParams,
@@ -20,42 +22,50 @@ export default async function TriggersPage({
   const t = await getTranslations("TriggersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
+  // View mode: prefer URL, fall back to cookie, default to list.
   const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_triggers")?.value;
-  const viewMode =
-    typeof resolvedSearchParams.tab === "string"
-      ? (resolvedSearchParams.tab as "grid" | "table")
-      : (cookieTab as "grid" | "table") || "grid";
+  const cookieView = cookieStore.get("view_triggers")?.value;
+  const urlView = asString(resolvedSearchParams.view);
+  const view: "list" | "grid" =
+    urlView === "grid" || urlView === "list"
+      ? urlView
+      : cookieView === "grid"
+        ? "grid"
+        : "list";
 
-  const searchQuery =
-    typeof resolvedSearchParams.search === "string"
-      ? resolvedSearchParams.search
-      : "";
+  const typeParam = asString(resolvedSearchParams.type);
+  const tab: "all" | "cron" | "webhook" =
+    typeParam === "cron" || typeParam === "webhook" ? typeParam : "all";
+
+  const groupParam = asString(resolvedSearchParams.group);
+  const group: "none" | "status" | "type" | "agent" =
+    groupParam === "status" || groupParam === "type" || groupParam === "agent"
+      ? groupParam
+      : "none";
+
+  const orderParam = asString(resolvedSearchParams.order);
+  const order: "name" | "status" | "next" =
+    orderParam === "status" || orderParam === "next" ? orderParam : "name";
+
+  const search = asString(resolvedSearchParams.search);
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        description: t("description"),
         controls: <CreateTriggerButton />,
       }}
-      subheader={
-        <>
-          <SearchInput urlParamName="search" urlPath="/triggers" />
-          <TriggersHeaderTabs currentTab={viewMode} />
-        </>
-      }
+      className="overflow-hidden p-0"
     >
-      <Suspense key={`${viewMode}-${searchQuery}`} fallback={
-        <div className="flex h-64 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }>
-        <TriggersContent
-          viewMode={viewMode}
-          searchQuery={searchQuery}
-        />
+      <Suspense
+        key={`${view}-${tab}-${group}-${order}-${search}`}
+        fallback={
+          <div className="flex h-64 items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        }
+      >
+        <TriggersContent initial={{ view, tab, group, order, search }} />
       </Suspense>
     </ContentBlock>
   );

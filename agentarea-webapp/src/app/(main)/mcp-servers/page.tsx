@@ -54,7 +54,6 @@ export default async function MCPServersPage({
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        description: t("description"),
         controls: <AddConnectionDropdown />,
       }}
       className="overflow-hidden p-0"
