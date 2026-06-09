@@ -323,6 +323,7 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         env:
           PRIMARY_IMAGE: ${{ steps.image.outputs.primary }}
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
@@ -331,5 +332,12 @@ jobs:
       - name: Inspect manifest
         env:
           PRIMARY_IMAGE: ${{ steps.image.outputs.primary }}
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
         run: |
-          docker buildx imagetools inspect "${PRIMARY_IMAGE}:${{ steps.version.outputs.version }}-${{ github.sha }}"
+          MANIFEST_TAG="$(
+            jq -er --arg image "$PRIMARY_IMAGE" '
+              .tags | map(select(startswith($image + ":"))) | first
+            ' <<< "$DOCKER_METADATA_OUTPUT_JSON"
+          )"
+
+          docker buildx imagetools inspect "$MANIFEST_TAG"
