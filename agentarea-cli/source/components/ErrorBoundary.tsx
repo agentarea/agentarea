@@ -13,7 +13,10 @@ interface ErrorBoundaryState {
 	errorMessage: string;
 }
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+	ErrorBoundaryProps,
+	ErrorBoundaryState
+> {
 	constructor(props: ErrorBoundaryProps) {
 		super(props);
 		this.state = {
@@ -39,7 +42,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 	override render() {
 		if (this.state.hasError) {
 			return (
-				<Box flexDirection="column" paddingX={1} paddingY={1} borderStyle="round" borderColor="red">
+				<Box
+					flexDirection="column"
+					paddingX={1}
+					paddingY={1}
+					borderStyle="round"
+					borderColor="red"
+				>
 					<Box marginBottom={1}>
 						<Text bold color="red">
 							❌ Application Error

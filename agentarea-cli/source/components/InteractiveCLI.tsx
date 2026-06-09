@@ -38,13 +38,19 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 	if (!process.stdin.isTTY) {
 		return (
 			<Box flexDirection="column" paddingX={1} paddingY={1}>
-				<Box marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={1}>
+				<Box
+					marginBottom={1}
+					borderStyle="round"
+					borderColor="cyan"
+					paddingX={1}
+				>
 					<Text bold color="cyan">
 						🤖 AgentArea CLI {userEmail}
 					</Text>
 				</Box>
 				<Text color="red">
-					✗ Interactive mode requires a TTY. Use a proper terminal or provide commands via command-line flags.
+					✗ Interactive mode requires a TTY. Use a proper terminal or provide
+					commands via command-line flags.
 				</Text>
 			</Box>
 		);
@@ -75,8 +81,8 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 
 	const updateSuggestions = (currentInput: string) => {
 		if (currentInput.startsWith('/')) {
-			const matching = COMMANDS.filter((cmd) =>
-				cmd.startsWith(currentInput.toLowerCase())
+			const matching = COMMANDS.filter(cmd =>
+				cmd.startsWith(currentInput.toLowerCase()),
 			);
 			setSuggestions(matching);
 		} else {
@@ -86,7 +92,7 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 
 	const executeCommandAndSetOutput = async (command: string) => {
 		const result = await executeCommand(command);
-		setOutput((prev) => [...prev, result]);
+		setOutput(prev => [...prev, result]);
 
 		if (command === '/exit') {
 			setIsExiting(true);
@@ -106,10 +112,10 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 						message: 'Available commands:',
 						data: (
 							<Box flexDirection="column">
-								<Text>  /agents        - List all agents</Text>
-								<Text>  /auth          - Change authentication token</Text>
-								<Text>  /help          - Show help</Text>
-								<Text>  /exit          - Exit CLI</Text>
+								<Text> /agents - List all agents</Text>
+								<Text> /auth - Change authentication token</Text>
+								<Text> /help - Show help</Text>
+								<Text> /exit - Exit CLI</Text>
 							</Box>
 						),
 					};
@@ -155,15 +161,13 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 						{agents.map((agent, index) => (
 							<Box key={agent.id} flexDirection="column" marginBottom={0}>
 								<Text>
-									  {index + 1}. <Text bold>{agent.name}</Text>{' '}
+									{index + 1}. <Text bold>{agent.name}</Text>{' '}
 									<Text dimColor>({agent.id.substring(0, 8)}...)</Text>
 								</Text>
 								{agent.description && (
-									<Text dimColor>     {agent.description}</Text>
+									<Text dimColor> {agent.description}</Text>
 								)}
-								{agent.status && (
-									<Text dimColor>     Status: {agent.status}</Text>
-								)}
+								{agent.status && <Text dimColor> Status: {agent.status}</Text>}
 							</Box>
 						))}
 					</Box>
@@ -173,7 +177,8 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 			let message = 'Failed to load agents';
 
 			if ((error as AxiosError)?.response?.status === 401) {
-				message = 'Authentication failed. Your token may have expired. Please use /auth to update.';
+				message =
+					'Authentication failed. Your token may have expired. Please use /auth to update.';
 			} else if ((error as AxiosError)?.response?.status === 403) {
 				message = 'Access denied. You do not have permission to list agents.';
 			} else if ((error as AxiosError)?.code === 'ECONNREFUSED') {
@@ -189,7 +194,8 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 	const handleAuthCommand = async (): Promise<CommandResult> => {
 		return {
 			type: 'info',
-			message: 'Auth command - update token via /auth (not yet fully implemented)',
+			message:
+				'Auth command - update token via /auth (not yet fully implemented)',
 		};
 	};
 
@@ -214,15 +220,11 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 						</>
 					)}
 					{result.type === 'error' && (
-						<Text color="red">
-							✗ {result.message}
-						</Text>
+						<Text color="red">✗ {result.message}</Text>
 					)}
 					{result.type === 'info' && (
 						<>
-							<Text color="cyan">
-								ℹ {result.message}
-							</Text>
+							<Text color="cyan">ℹ {result.message}</Text>
 							{result.data && <Box marginLeft={2}>{result.data}</Box>}
 						</>
 					)}
@@ -232,9 +234,9 @@ export function InteractiveCLI({userEmail, token}: InteractiveCLIProps) {
 			{/* Suggestions */}
 			{suggestions.length > 0 && (
 				<Box flexDirection="column" marginBottom={1}>
-					{suggestions.map((suggestion) => (
+					{suggestions.map(suggestion => (
 						<Text key={suggestion} color="gray" dimColor>
-							  {suggestion}
+							{suggestion}
 						</Text>
 					))}
 				</Box>

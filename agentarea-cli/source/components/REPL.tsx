@@ -46,7 +46,7 @@ export function REPL({userEmail, token}: REPLProps) {
 		let currentLineIndex = 0;
 		let isClosed = false;
 
-		rl.on('line', async (line) => {
+		rl.on('line', async line => {
 			lines.push(line);
 		});
 
@@ -74,7 +74,7 @@ export function REPL({userEmail, token}: REPLProps) {
 						setIsRunning(false);
 						process.exit(0);
 					}
-					setOutput((prev) => [...prev, result]);
+					setOutput(prev => [...prev, result]);
 				}
 
 				setTimeout(processNextCommand, 100);
@@ -104,10 +104,10 @@ export function REPL({userEmail, token}: REPLProps) {
 						message: 'Available commands:',
 						data: (
 							<Box flexDirection="column">
-								<Text>  /agents        - List all agents</Text>
-								<Text>  /auth          - Change authentication token</Text>
-								<Text>  /help          - Show help</Text>
-								<Text>  /exit          - Exit CLI</Text>
+								<Text> /agents - List all agents</Text>
+								<Text> /auth - Change authentication token</Text>
+								<Text> /help - Show help</Text>
+								<Text> /exit - Exit CLI</Text>
 							</Box>
 						),
 					};
@@ -153,22 +153,21 @@ export function REPL({userEmail, token}: REPLProps) {
 						{agents.map((agent, index) => (
 							<Box key={agent.id} flexDirection="column" marginBottom={0}>
 								<Text>
-									  {index + 1}. <Text bold>{agent.name}</Text>{' '}
+									{index + 1}. <Text bold>{agent.name}</Text>{' '}
 									<Text dimColor>({agent.id.substring(0, 8)}...)</Text>
 								</Text>
 								{agent.description && (
-									<Text dimColor>     {agent.description}</Text>
+									<Text dimColor> {agent.description}</Text>
 								)}
-								{agent.status && (
-									<Text dimColor>     Status: {agent.status}</Text>
-								)}
+								{agent.status && <Text dimColor> Status: {agent.status}</Text>}
 							</Box>
 						))}
 					</Box>
 				),
 			};
 		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to load agents';
+			const message =
+				error instanceof Error ? error.message : 'Failed to load agents';
 			return {type: 'error', message};
 		}
 	};
@@ -180,8 +179,8 @@ export function REPL({userEmail, token}: REPLProps) {
 				output: process.stdout,
 			});
 
-			const newToken = await new Promise<string>((resolve) => {
-				rl.question('Enter new JWT token: ', (answer) => {
+			const newToken = await new Promise<string>(resolve => {
+				rl.question('Enter new JWT token: ', answer => {
 					rl.close();
 					resolve(answer.trim());
 				});
@@ -195,7 +194,8 @@ export function REPL({userEmail, token}: REPLProps) {
 			if (parts.length !== 3) {
 				return {
 					type: 'error',
-					message: 'Invalid token format. JWT must have 3 parts separated by dots.',
+					message:
+						'Invalid token format. JWT must have 3 parts separated by dots.',
 				};
 			}
 
@@ -210,7 +210,8 @@ export function REPL({userEmail, token}: REPLProps) {
 
 			return {type: 'success', message: 'Token updated successfully'};
 		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to update token';
+			const message =
+				error instanceof Error ? error.message : 'Failed to update token';
 			return {type: 'error', message};
 		}
 	};
@@ -221,7 +222,13 @@ export function REPL({userEmail, token}: REPLProps) {
 
 	return (
 		<Box flexDirection="column" padding={1}>
-			<Box marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={1} paddingY={0}>
+			<Box
+				marginBottom={1}
+				borderStyle="round"
+				borderColor="cyan"
+				paddingX={1}
+				paddingY={0}
+			>
 				<Text bold color="cyan">
 					🤖 AgentArea CLI {userEmail}
 				</Text>
@@ -238,15 +245,11 @@ export function REPL({userEmail, token}: REPLProps) {
 						</>
 					)}
 					{result.type === 'error' && (
-						<Text color="red">
-							✗ {result.message}
-						</Text>
+						<Text color="red">✗ {result.message}</Text>
 					)}
 					{result.type === 'info' && (
 						<>
-							<Text color="cyan">
-								ℹ {result.message}
-							</Text>
+							<Text color="cyan">ℹ {result.message}</Text>
 							{result.data && <Box marginLeft={2}>{result.data}</Box>}
 						</>
 					)}

@@ -27,21 +27,27 @@ export function AgentsList() {
 					},
 				});
 				setAgents(response.data.data || response.data || []);
-				logger.info(`Loaded ${(response.data.data || response.data).length} agents`);
+				logger.info(
+					`Loaded ${(response.data.data || response.data).length} agents`,
+				);
 			} catch (err) {
 				let message = 'Failed to load agents';
 				const axiosError = err as AxiosError;
 
 				if (axiosError?.response?.status === 401) {
-					message = 'Authentication failed. Your token may have expired. Please provide a new token.';
+					message =
+						'Authentication failed. Your token may have expired. Please provide a new token.';
 				} else if (axiosError?.response?.status === 403) {
 					message = 'Access denied. You do not have permission to list agents.';
 				} else if (axiosError?.code === 'ECONNREFUSED') {
-					message = 'Could not connect to API server at http://localhost:8000. Is it running?';
+					message =
+						'Could not connect to API server at http://localhost:8000. Is it running?';
 				} else if (axiosError?.code === 'ETIMEDOUT') {
-					message = 'API request timed out. The server may be slow or unreachable.';
+					message =
+						'API request timed out. The server may be slow or unreachable.';
 				} else if (axiosError?.code === 'EPERM') {
-					message = 'Could not connect to API server. Check that it is running on http://localhost:8000';
+					message =
+						'Could not connect to API server. Check that it is running on http://localhost:8000';
 				} else if (err instanceof Error) {
 					message = err.message;
 				}
@@ -66,9 +72,16 @@ export function AgentsList() {
 
 	if (error) {
 		return (
-			<Box flexDirection="column" padding={1} borderStyle="round" borderColor="red">
+			<Box
+				flexDirection="column"
+				padding={1}
+				borderStyle="round"
+				borderColor="red"
+			>
 				<Box marginBottom={1}>
-					<Text bold color="red">❌ Failed to load agents</Text>
+					<Text bold color="red">
+						❌ Failed to load agents
+					</Text>
 				</Box>
 				<Box>
 					<Text color="red">{error}</Text>
@@ -80,7 +93,7 @@ export function AgentsList() {
 	if (agents.length === 0) {
 		return (
 			<Box flexDirection="column" padding={1}>
-				<Text color="yellow">ℹ️  No agents found</Text>
+				<Text color="yellow">ℹ️ No agents found</Text>
 			</Box>
 		);
 	}
@@ -92,7 +105,7 @@ export function AgentsList() {
 					✓ Agents ({agents.length})
 				</Text>
 			</Box>
-			{agents.map((agent) => (
+			{agents.map(agent => (
 				<Box key={agent.id} flexDirection="column" marginBottom={1}>
 					<Box>
 						<Text bold>{agent.name}</Text>

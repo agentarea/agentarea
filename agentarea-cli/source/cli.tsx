@@ -60,16 +60,11 @@ if (command) {
 		apiUrl: cli.flags.apiUrl,
 		scope: cli.flags.scope,
 		name: cli.flags.name,
-	}).catch((error) => {
+	}).catch(error => {
 		console.error('CLI command failed:', error);
 		process.exit(1);
 	});
 } else {
 	// No command provided - launch TUI mode
-	render(
-		<App
-			token={token}
-			apiUrl={cli.flags.apiUrl}
-		/>,
-	);
+	render(<App token={token} apiUrl={cli.flags.apiUrl} />);
 }

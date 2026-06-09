@@ -51,7 +51,9 @@ export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {
 
 			try {
 				// Show welcome message with user info
-				console.log(formatHeader(`🤖 AgentArea CLI ${formatHighlight(userEmail)}`));
+				console.log(
+					formatHeader(`🤖 AgentArea CLI ${formatHighlight(userEmail)}`),
+				);
 
 				// Available commands for autocomplete
 				const availableCommands = ['/agents', '/auth', '/help', '/exit'];
@@ -59,7 +61,7 @@ export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {
 				// REPL loop
 				let shouldExit = false;
 				while (!shouldExit && !isClosed) {
-					const command = await new Promise<string>((resolve) => {
+					const command = await new Promise<string>(resolve => {
 						if (isClosed) {
 							resolve('/exit');
 						} else {
@@ -101,7 +103,12 @@ export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {
 					}
 
 					// Process command
-					const result = await processCommand(command, token, rl, availableCommands);
+					const result = await processCommand(
+						command,
+						token,
+						rl,
+						availableCommands,
+					);
 
 					// Display result (no extra blank lines)
 					if (result.type === 'success') {
@@ -201,7 +208,9 @@ async function handleAgentsCommand(): Promise<CommandResult> {
 
 		const agentsList = agents
 			.map((agent, index) => {
-				let output = `  ${index + 1}. ${formatHighlight(agent.name)} ${formatDim(`(${agent.id.substring(0, 8)}...)`)}`;
+				let output = `  ${index + 1}. ${formatHighlight(
+					agent.name,
+				)} ${formatDim(`(${agent.id.substring(0, 8)}...)`)}`;
 				if (agent.description) {
 					output += `\n     ${formatDim(agent.description)}`;
 				}
@@ -218,15 +227,18 @@ async function handleAgentsCommand(): Promise<CommandResult> {
 			data: agentsList,
 		};
 	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Failed to load agents';
+		const message =
+			error instanceof Error ? error.message : 'Failed to load agents';
 		return {type: 'error', message};
 	}
 }
 
-async function handleAuthCommand(rl: readline.Interface): Promise<CommandResult> {
+async function handleAuthCommand(
+	rl: readline.Interface,
+): Promise<CommandResult> {
 	try {
-		const newToken = await new Promise<string>((resolve) => {
-			rl.question('Enter new JWT token: ', (answer) => {
+		const newToken = await new Promise<string>(resolve => {
+			rl.question('Enter new JWT token: ', answer => {
 				resolve(answer.trim());
 			});
 		});
@@ -240,7 +252,8 @@ async function handleAuthCommand(rl: readline.Interface): Promise<CommandResult>
 		if (parts.length !== 3) {
 			return {
 				type: 'error',
-				message: 'Invalid token format. JWT must have 3 parts separated by dots.',
+				message:
+					'Invalid token format. JWT must have 3 parts separated by dots.',
 			};
 		}
 
@@ -256,7 +269,8 @@ async function handleAuthCommand(rl: readline.Interface): Promise<CommandResult>
 
 		return {type: 'success', message: 'Token updated successfully'};
 	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Failed to update token';
+		const message =
+			error instanceof Error ? error.message : 'Failed to update token';
 		return {type: 'error', message};
 	}
 }

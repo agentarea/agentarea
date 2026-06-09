@@ -1,0 +1,78 @@
+name: Release CLI
+
+# Publishes @agentarea/cli to npm.
+#
+# Versioned INDEPENDENTLY from the platform (VERSION / docker images / helm).
+# Triggered by pushing a tag in the dedicated `cli-vX.Y.Z` namespace, so it
+# never collides with the platform's `vX.Y.Z` release tags.
+#
+# Preconditions:
+#   - Tag name is `cli-vX.Y.Z` (semver)
+#   - agentarea-cli/package.json version == X.Y.Z (enforced below)
+#   - Repo secret NPM_TOKEN is set (npm automation token with publish rights
+#     for the @agentarea scope)
+#
+# Manual fallback: `cd agentarea-cli && npm publish`.
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agentarea-cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+          cache-dependency-path: 'agentarea-cli/pnpm-lock.yaml'
+
+      - name: Verify tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG_VERSION package.json=$PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Publish to npm
+        run: pnpm publish --provenance --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
