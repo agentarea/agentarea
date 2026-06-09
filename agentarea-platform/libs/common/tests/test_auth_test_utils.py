@@ -24,7 +24,6 @@ class TestGenerateTestJWTToken:
             user_id="test-user",
             workspace_id="test-workspace",
             email="test@example.com",
-            roles=["user", "admin"],
             expires_in_minutes=60,
         )
 
@@ -34,7 +33,6 @@ class TestGenerateTestJWTToken:
         assert payload["sub"] == "test-user"
         assert payload["workspace_id"] == "test-workspace"
         assert payload["email"] == "test@example.com"
-        assert payload["roles"] == ["user", "admin"]
         assert payload["iss"] == "agentarea-test"
         assert payload["aud"] == "agentarea-api"
         assert "iat" in payload
@@ -51,7 +49,6 @@ class TestGenerateTestJWTToken:
 
         assert payload["sub"] == "minimal-user"
         assert payload["workspace_id"] == "minimal-workspace"
-        assert payload["roles"] == ["user"]  # Default role
         assert "email" not in payload  # Should be omitted when None
 
     def test_generate_token_custom_secret(self):
@@ -91,17 +88,13 @@ class TestCreateTestUserContext:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.roles == ["user"]
 
     def test_create_context_with_custom_values(self):
         """Test creating user context with custom values."""
-        context = create_test_user_context(
-            user_id="custom-user", workspace_id="custom-workspace", roles=["admin", "developer"]
-        )
+        context = create_test_user_context(user_id="custom-user", workspace_id="custom-workspace")
 
         assert context.user_id == "custom-user"
         assert context.workspace_id == "custom-workspace"
-        assert context.roles == ["admin", "developer"]
 
     def test_create_context_no_email(self):
         """Test creating user context without email."""
@@ -111,7 +104,7 @@ class TestCreateTestUserContext:
 
         assert context.user_id == "no-email-user"
         assert context.workspace_id == "no-email-workspace"
-        assert context.roles == ["user"]
+        assert context.email is None
 
 
 class TestTokenHelpers:
@@ -123,10 +116,8 @@ class TestTokenHelpers:
 
         token = create_admin_test_token()
 
-        # Decode and verify token has admin role
         payload = jwt.decode(token, "test-secret", algorithms=["HS256"], audience="agentarea-api")
-        assert "admin" in payload["roles"]
-        assert "user" in payload["roles"]
+        assert payload["sub"] == "admin-user-123"
         assert payload["email"] == "admin@example.com"
 
     def test_create_basic_test_token(self, monkeypatch):
@@ -135,9 +126,8 @@ class TestTokenHelpers:
 
         token = create_basic_test_token()
 
-        # Decode and verify token has only user role
         payload = jwt.decode(token, "test-secret", algorithms=["HS256"], audience="agentarea-api")
-        assert payload["roles"] == ["user"]
+        assert payload["sub"] == "basic-user-123"
         assert "email" not in payload
 
     def test_create_expired_test_token(self, monkeypatch):

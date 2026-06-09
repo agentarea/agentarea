@@ -52,7 +52,7 @@ class TestWorkspaceErrorHandling:
     @pytest.fixture
     def user_context(self):
         """Create test user context."""
-        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
+        return UserContext(user_id="test-user", workspace_id="test-workspace")
 
     @pytest.fixture
     def repository(self, mock_session, user_context):

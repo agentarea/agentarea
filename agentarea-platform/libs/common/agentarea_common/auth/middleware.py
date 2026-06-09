@@ -98,8 +98,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,
-                    # In a real implementation, roles would come from token or DB
-                    roles=[],
                 )
                 ContextManager.set_context(user_context)
 

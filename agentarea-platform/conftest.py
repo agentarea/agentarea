@@ -87,7 +87,7 @@ def test_user_context():
     """Create test user context."""
     from agentarea_common.auth.context import UserContext
 
-    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"])
+    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456")
 
 
 @pytest.fixture
@@ -95,38 +95,20 @@ def test_admin_context():
     """Create test admin user context."""
     from agentarea_common.auth.context import UserContext
 
-    return UserContext(
-        user_id="admin-user-123", workspace_id="test-workspace-456", roles=["user", "admin"]
-    )
+    return UserContext(user_id="admin-user-123", workspace_id="test-workspace-456")
 
 
 def generate_test_jwt_token(
     user_id: str = "test-user",
     workspace_id: str = "test-workspace",
     email: str | None = None,
-    roles: list[str] | None = None,
     expires_in_minutes: int = 30,
     secret_key: str = "test-secret-key-for-testing",  # noqa: S107
     algorithm: str = "HS256",
     issuer: str | None = None,
     audience: str | None = None,
 ) -> str:
-    """Generate a test JWT token.
-
-    Args:
-        user_id: User ID for the token
-        workspace_id: Workspace ID for the token
-        email: Optional email address
-        roles: Optional list of roles
-        expires_in_minutes: Token expiration in minutes
-        secret_key: Secret key for signing
-        algorithm: JWT algorithm
-        issuer: Optional issuer claim
-        audience: Optional audience claim
-
-    Returns:
-        JWT token string
-    """
+    """Generate a test JWT token."""
     payload = {
         "sub": user_id,
         "workspace_id": workspace_id,
@@ -136,8 +118,6 @@ def generate_test_jwt_token(
 
     if email:
         payload["email"] = email
-    if roles:
-        payload["roles"] = roles
     if issuer:
         payload["iss"] = issuer
     if audience:
@@ -159,7 +139,6 @@ def valid_jwt_token(test_jwt_secret):
         user_id="test-user-123",
         workspace_id="test-workspace-456",
         email="test@example.com",
-        roles=["user"],
         secret_key=test_jwt_secret,
     )
 
@@ -182,7 +161,6 @@ def admin_jwt_token(test_jwt_secret):
         user_id="admin-user-123",
         workspace_id="test-workspace-456",
         email="admin@example.com",
-        roles=["user", "admin"],
         secret_key=test_jwt_secret,
     )
 

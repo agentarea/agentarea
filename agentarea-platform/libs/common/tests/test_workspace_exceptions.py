@@ -104,7 +104,7 @@ class TestWorkspaceErrorHandlers:
     @pytest.fixture
     def user_context(self):
         """Create a test user context."""
-        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
+        return UserContext(user_id="test-user", workspace_id="test-workspace")
 
     @pytest.mark.asyncio
     async def test_workspace_access_denied_handler(self, mock_request):
@@ -191,7 +191,7 @@ class TestWorkspaceUtilities:
     @pytest.fixture
     def user_context(self):
         """Create a test user context."""
-        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
+        return UserContext(user_id="test-user", workspace_id="test-workspace")
 
     def test_raise_workspace_access_denied(self, user_context):
         """Test raise_workspace_access_denied utility."""

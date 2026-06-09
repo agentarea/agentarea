@@ -178,7 +178,6 @@ class MCPAuthMiddleware:
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,
-                    roles=[],
                 )
                 await _resolve_accessible_workspaces(user_context)
                 _mcp_user_context_var.set(user_context)

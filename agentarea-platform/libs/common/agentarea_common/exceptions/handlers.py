@@ -31,7 +31,6 @@ def _get_workspace_context_for_logging() -> dict[str, Any]:
             return {
                 "workspace_id": context.workspace_id,
                 "user_id": context.user_id,
-                "roles": context.roles,
             }
     except Exception:  # noqa: S110
         # If context is not available, return empty dict

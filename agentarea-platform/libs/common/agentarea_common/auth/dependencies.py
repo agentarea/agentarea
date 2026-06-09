@@ -194,7 +194,6 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
         return UserContext(
             user_id=str(record.created_by),
             workspace_id=str(record.workspace_id),
-            roles=[],
         )
 
 
@@ -273,7 +272,6 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         return UserContext(
             user_id=subject,
             workspace_id=workspace_id,
-            roles=[],
         )
 
     except Exception as e:
@@ -362,7 +360,6 @@ async def get_user_context(
             user_id=auth_result.token.user_id,
             workspace_id=auth_result.token.user_id,
             email=auth_result.token.email,
-            roles=[],  # TODO: Extract roles from token or database
         )
 
         # Resolve which workspaces this user can access
@@ -460,7 +457,6 @@ async def get_optional_user(
             user_id=auth_result.token.user_id,
             workspace_id=auth_result.token.user_id,
             email=auth_result.token.email,
-            roles=[],
         )
 
         # Resolve accessible workspaces

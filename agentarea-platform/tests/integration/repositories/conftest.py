@@ -452,7 +452,7 @@ async def model_factory():
 @pytest_asyncio.fixture
 def user_context():
     """Create a test user context."""
-    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"])
+    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456")
 
 
 # Repository Fixtures

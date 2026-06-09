@@ -169,7 +169,6 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
     user_context = UserContext(
         user_id=auth_context.user_id,
         workspace_id=auth_context.workspace_id,
-        roles=[],  # A2A doesn't use roles, use permissions instead
     )
 
     # Set context in ContextManager so repositories can access it
