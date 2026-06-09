@@ -87,6 +87,10 @@ export interface CollectionItem {
   /** Row-only trailing node — cost, date, avatars, … Cards ignore it (use
    *  `cardFooter` for card-specific content). */
   meta?: ReactNode;
+  /** Row only: render `meta` without the default collapse-at-620px wrapper, so
+   *  a multi-column meta can manage its own per-column responsive dropping
+   *  (each cell carries its own `collection-col-*` class). */
+  metaPlain?: boolean;
   /** Hover quick-actions. Empty/undefined ⇒ only the diagonal open-arrow shows. */
   actions?: CollectionAction[];
 

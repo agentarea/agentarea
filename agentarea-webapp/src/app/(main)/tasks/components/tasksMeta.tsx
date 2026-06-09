@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot } from "lucide-react";
+import { Bot, Calendar } from "lucide-react";
 import { StatusDot, Tile } from "@/components/CollectionView";
 import {
   Tooltip,
@@ -93,7 +93,7 @@ export function StatusCell({
   return (
     <StatusDot
       color={color}
-      label={label}
+      label={<span className="collection-status-label">{label}</span>}
       dotOnly={dotOnly}
       pulse={running}
       tooltip={
@@ -196,5 +196,45 @@ export function CreatedCell({
         {fmtTime(iso)}
       </span>
     </span>
+  );
+}
+
+/** Inline created-date chip — calendar icon + full date, with a tooltip
+ *  spelling out that it's the creation date + time. Used in card footers. */
+export function CreatedInline({
+  iso,
+  className,
+}: {
+  iso: string | null | undefined;
+  className?: string;
+}) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) {
+    return <span className={cn("text-muted-foreground/70", className)}>—</span>;
+  }
+  const date = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const full = d.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 tabular-nums",
+            className
+          )}
+        >
+          <Calendar className="h-3 w-3" strokeWidth={1.7} />
+          {date}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Created {full}</TooltipContent>
+    </Tooltip>
   );
 }

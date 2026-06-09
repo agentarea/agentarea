@@ -117,6 +117,19 @@
       display: none;
     }
   }
+  /* Status column behaves like the name — it never hides. When space gets tight
+     it collapses to just its colour dot (label hidden, width shrinks). */
+  .collection-status {
+    width: 120px;
+  }
+  @container collection (max-width: 430px) {
+    .collection-status {
+      width: auto;
+    }
+    .collection-status-label {
+      display: none;
+    }
+  }
   /* Toolbar button text collapses to icons when narrow. */
   @container collection (max-width: 560px) {
     .collection-btn-label {

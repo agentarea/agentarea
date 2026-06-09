@@ -29,7 +29,7 @@ import {
   AGENT_COLOR,
   CostCell,
   CreatedCell,
-  fmtTime,
+  CreatedInline,
   StatusCell,
   STATUS_GROUP_ORDER,
   statusMeta,
@@ -176,13 +176,17 @@ export default function TasksView({
       href: `/tasks/${task.id}`,
       hideIcon: true,
       hideDescription: true,
+      // metaPlain: bypass the row's collapse-at-620 wrapper so each column drops
+      // on its own breakpoint. Status is the exception — it never hides (just
+      // collapses to its dot when narrow), like the name.
+      metaPlain: true,
       meta: (
         <div className="flex items-center gap-3.5 text-left">
-          <AgentCell name={name} className="w-[150px] min-w-[150px]" />
-          <StatusCell
-            status={task.status}
-            className="collection-col-source w-[120px]"
+          <AgentCell
+            name={name}
+            className="collection-col-source w-[150px] min-w-[150px]"
           />
+          <StatusCell status={task.status} className="collection-status" />
           <CostCell
             cost={cost}
             className="collection-col-scope w-[84px] text-right"
@@ -202,10 +206,7 @@ export default function TasksView({
           <span className="text-border">·</span>
           <CostCell cost={cost} />
           <span className="text-border">·</span>
-          <span className="inline-flex shrink-0 items-center gap-1 font-mono tabular-nums">
-            <Clock className="h-3 w-3" strokeWidth={1.7} />
-            {fmtTime(task.created_at)}
-          </span>
+          <CreatedInline iso={task.created_at} />
         </div>
       ),
     };

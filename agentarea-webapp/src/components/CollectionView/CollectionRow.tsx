@@ -179,11 +179,14 @@ export default function CollectionRow({ item }: { item: CollectionItem }) {
             </span>
           )
         )}
-        {item.meta != null && (
-          <span className="collection-col-date text-right text-[11.5px] text-muted-foreground/80">
-            {item.meta}
-          </span>
-        )}
+        {item.meta != null &&
+          (item.metaPlain ? (
+            item.meta
+          ) : (
+            <span className="collection-col-date text-right text-[11.5px] text-muted-foreground/80">
+              {item.meta}
+            </span>
+          ))}
       </span>
         </>
       )}
