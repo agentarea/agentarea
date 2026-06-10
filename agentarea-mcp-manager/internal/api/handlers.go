@@ -12,14 +12,12 @@ import (
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
-	"github.com/agentarea/mcp-manager/internal/templates"
 )
 
 // Handler holds the HTTP handlers and dependencies
 type Handler struct {
 	backend          backends.Backend
 	containerManager *container.Manager // Keep for backward compatibility
-	templateLoader   *templates.Loader
 	sandboxControl   *sandboxcontrol.Service
 	logger           *slog.Logger
 	startTime        time.Time
@@ -27,12 +25,11 @@ type Handler struct {
 }
 
 // NewHandler creates a new API handler
-func NewHandler(backend backends.Backend, containerManager *container.Manager, templateLoader *templates.Loader, logger *slog.Logger, version string) *Handler {
+func NewHandler(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger, version string) *Handler {
 	sandboxControl := newSandboxControlService(logger)
 	return &Handler{
 		backend:          backend,
 		containerManager: containerManager,
-		templateLoader:   templateLoader,
 		sandboxControl:   sandboxControl,
 		logger:           logger,
 		startTime:        time.Now(),
@@ -47,9 +44,6 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Health check
 	router.GET("/health", h.healthCheck)
-
-	// Templates
-	router.GET("/templates", h.listTemplates)
 
 	// Instance management (backend-agnostic)
 	router.GET("/instances", h.listInstances)
@@ -112,25 +106,6 @@ func (h *Handler) healthCheck(c *gin.Context) {
 		ContainersRunning: instancesRunning, // Keep field name for backward compatibility
 		Timestamp:         time.Now(),
 		Uptime:            uptime,
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-// listTemplates returns a list of available MCP templates
-func (h *Handler) listTemplates(c *gin.Context) {
-	if h.templateLoader == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"templates": []models.MCPProviderTemplate{},
-			"total":     0,
-		})
-		return
-	}
-
-	templates := h.templateLoader.List()
-	response := gin.H{
-		"templates": templates,
-		"total":     len(templates),
 	}
 
 	c.JSON(http.StatusOK, response)

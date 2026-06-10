@@ -22,7 +22,6 @@ import (
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/secrets"
-	"github.com/agentarea/mcp-manager/internal/templates"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
@@ -97,17 +96,6 @@ func main() {
 		if featureService.IsEnabled(f) {
 			logger.Info("Feature enabled", slog.String("feature", string(f)))
 		}
-	}
-
-	// Initialize template loader
-	templateLoader := templates.NewLoader(cfg.MCPProvidersPath)
-	if err := templateLoader.Load(); err != nil {
-		logger.Warn("Failed to load MCP templates",
-			slog.String("path", cfg.MCPProvidersPath),
-			slog.String("error", err.Error()))
-	} else {
-		logger.Info("Loaded MCP templates",
-			slog.Int("count", len(templateLoader.List())))
 	}
 
 	// Create context for graceful shutdown
@@ -202,7 +190,7 @@ func main() {
 
 	// Setup HTTP router
 	router := setupRouter(cfg, logger)
-	handler := api.NewHandler(backend, containerManager, templateLoader, logger, version)
+	handler := api.NewHandler(backend, containerManager, logger, version)
 	handler.SetupRoutes(router)
 
 	if features.IsEnabled(features.WarmPool) {

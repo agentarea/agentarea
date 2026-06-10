@@ -81,31 +81,6 @@ type HealthResponse struct {
 	Uptime            string    `json:"uptime,omitempty"`
 }
 
-// MCPEnvVar represents an environment variable for an MCP provider
-type MCPEnvVar struct {
-	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description" yaml:"description"`
-	Required    bool   `json:"required" yaml:"required"`
-	Default     string `json:"default,omitempty" yaml:"default,omitempty"`
-	Secret      bool   `json:"secret,omitempty" yaml:"secret,omitempty"`
-}
-
-// MCPProviderTemplate represents an MCP provider template
-type MCPProviderTemplate struct {
-	ID           string      `json:"id" yaml:"id"`
-	Name         string      `json:"name" yaml:"name"`
-	Description  string      `json:"description" yaml:"description"`
-	Icon         string      `json:"icon" yaml:"icon"`
-	DockerImage  string      `json:"docker_image" yaml:"docker_image"`
-	EnvVars      []MCPEnvVar `json:"env_vars" yaml:"env_vars"`
-	Capabilities []string    `json:"capabilities" yaml:"capabilities"`
-}
-
-// MCPProviderList represents the list of MCP providers from YAML
-type MCPProviderList struct {
-	Providers map[string]MCPProviderTemplate `json:"providers" yaml:"providers"`
-}
-
 // ListContainersResponse represents the response for listing containers
 type ListContainersResponse struct {
 	Containers []Container `json:"containers"`
