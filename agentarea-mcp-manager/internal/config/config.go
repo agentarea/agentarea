@@ -32,9 +32,6 @@ type Config struct {
 	// Environment override (for forcing backend selection)
 	Environment string `json:"environment"`
 
-	// Path to MCP providers YAML file
-	MCPProvidersPath string `json:"mcp_providers_path"`
-
 	// Feature flags configuration
 	Features FeaturesConfig `json:"features"`
 }
@@ -117,7 +114,6 @@ func Load() *Config {
 		CoreAPIURL:       getEnv("CORE_API_URL", "http://localhost:8000"),
 		Kubernetes:       loadKubernetesConfig(),
 		Environment:      getEnv("BACKEND_ENVIRONMENT", ""),
-		MCPProvidersPath: getEnv("MCP_PROVIDERS_YAML", "/app/data/mcp_providers.yaml"),
 		Features:         loadFeaturesConfig(),
 	}
 }
