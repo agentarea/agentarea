@@ -21,89 +21,22 @@
 
 - name: mcp-servers-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json
-  description: Built-in MCP server catalog (4247 entries; mirror of registry.modelcontextprotocol.io)
+  description: Built-in MCP server catalog (mirror of registry.modelcontextprotocol.io)
 
 - name: llm-providers-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
-  description: Built-in LLM provider catalog (84 providers)
+  description: Built-in LLM provider catalog
 
 - name: llm-models-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
-  description: Built-in LLM model catalog (2290 models)
+  description: Built-in LLM model catalog
 
-# Skills — 25 shards of ~5000 each (123k total, metadata stubs).
+- name: skills-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
+  description: Built-in skill catalog — curated subset of official/known-good collections (anthropics, openai, cloudflare, vercel-labs, obra/superpowers)
 
-- name: skills-shard-001
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-001.json
-
-- name: skills-shard-002
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-002.json
-
-- name: skills-shard-003
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-003.json
-
-- name: skills-shard-004
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-004.json
-
-- name: skills-shard-005
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-005.json
-
-- name: skills-shard-006
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-006.json
-
-- name: skills-shard-007
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-007.json
-
-- name: skills-shard-008
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-008.json
-
-- name: skills-shard-009
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-009.json
-
-- name: skills-shard-010
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-010.json
-
-- name: skills-shard-011
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-011.json
-
-- name: skills-shard-012
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-012.json
-
-- name: skills-shard-013
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-013.json
-
-- name: skills-shard-014
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-014.json
-
-- name: skills-shard-015
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-015.json
-
-- name: skills-shard-016
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-016.json
-
-- name: skills-shard-017
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-017.json
-
-- name: skills-shard-018
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-018.json
-
-- name: skills-shard-019
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-019.json
-
-- name: skills-shard-020
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-020.json
-
-- name: skills-shard-021
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-021.json
-
-- name: skills-shard-022
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-022.json
-
-- name: skills-shard-023
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-023.json
-
-- name: skills-shard-024
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-024.json
-
-- name: skills-shard-025
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-025.json
+# Extended skill catalog (full scrape, metadata stubs; large file, slow sync).
+# Uncomment to install everything:
+# - name: skills-catalog-full
+#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-full.json
+#   description: Full skill catalog (metadata stubs from scraped public collections)
