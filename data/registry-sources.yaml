@@ -3,77 +3,107 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # Remote registries that seed the built-in catalog (registry_items) for a
-# platform install. They live in our S3 bucket `agentarea-mcp-registry` and are
-# produced by the landing repo (../landing):
-#   - MCP servers : mirror of registry.modelcontextprotocol.io (3.6k+ servers)
-#   - Skills      : transform of majiayu000/claude-skill-registry, sharded by
-#                   ../landing/scripts/build-skills.mjs
-#   - Agents      : curated showcase list at ../landing/data/agents.json
-#
-# Of these, only MCP servers is published in a reconcile-ready shape today.
-# Skills and Agents are documented below so their sources aren't lost.
+# platform install. Published to the S3 bucket `agentarea-mcp-registry` and
+# produced from the landing repo (../landing).
 #
 # HOW TO INSTALL (reconcile into the system)
-#   Feed this manifest to the idempotent `reconcile` CLI command:
-#
-#       uv run agentarea-api reconcile --config-file data/registry-sources.yaml
+#   uv run agentarea-api reconcile --config-file data/registry-sources.yaml
 #
 #   reconcile creates each registry if missing, fetches the source URL, infers
-#   the type from the payload shape, parses it, and upserts catalog items.
-#   Re-run any time to resync.
+#   the type from the payload shape (servers/providers/models/skills), parses
+#   it, and upserts catalog items. Idempotent — re-run any time to resync.
 #
-# Each entry:
-#   name        registry name (stable identifier)
-#   source_url  HTTP(S) URL or local path to the catalog document
-#   type        optional — auto-detected from the payload when omitted
-#   description optional human note
+# NOTE: llm_providers / llm_models require an API image built from current main
+# (the published :latest still only supports mcp_servers + skills). Skills are
+# metadata stubs (catalog entries without full SKILL.md bodies). Agents are NOT
+# published to the registry yet — they live locally at ../landing/data/agents.json.
 # ─────────────────────────────────────────────────────────────────────────────
 
 - name: mcp-servers-catalog
-  # S3 mirror of the official MCP registry ({ servers: [...] }).
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json
-  description: Built-in MCP server catalog (mirror of registry.modelcontextprotocol.io)
+  description: Built-in MCP server catalog (4247 entries; mirror of registry.modelcontextprotocol.io)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Skills catalog (S3) — REFERENCE ONLY, not yet reconcilable.
-#
-# The skills registry on S3 uses the landing site's *paginated* layout, which
-# does not match the reconcile skills parser (it expects a single
-# `{ skills: [...] }` document with content/members/s3_path). Captured here so
-# the URLs are not lost; add an active entry once either the parser learns the
-# paginated shape or a flattened `skills.json` is published.
-#
-# Base:  https://agentarea-mcp-registry.s3.amazonaws.com/registry/skills
-#   index.json                  — metadata, categories, topByStars, pagesTotal
-#   lookup.json                 — { skillId: pageNumber }
-#   pages/page-{N}.json         — 100 skills per shard (1..pagesTotal), stars DESC
-#   categories/{category}.json  — all skills for a category
-#
-# Upstream (rebuilt + uploaded by ../landing/scripts/build-skills.mjs):
-#   https://raw.githubusercontent.com/majiayu000/claude-skill-registry-core/main/registry.json
-#
-# - name: skills-catalog
-#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/skills/skills.json
-#   description: Built-in skills catalog
-# ─────────────────────────────────────────────────────────────────────────────
+- name: llm-providers-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
+  description: Built-in LLM provider catalog (84 providers)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Agents catalog — REFERENCE ONLY, not yet reconcilable.
-#
-# Source: ../landing/data/agents.json — a curated showcase list (7 agents) used
-# by the landing site. Two gaps before it can be reconciled:
-#   1. It is a bare JSON array, not the `{ agents: [...] }` document the parser
-#      reads (reconcile would see zero items).
-#   2. The entries are display-only (id/name/description/category/tags + skill
-#      and mcp *slugs*); they lack the instruction/model_id/tools an agent
-#      registry_item needs.
-#   3. It is local to the landing repo — not published to a URL the platform
-#      can fetch.
-#
-# Publish a `{ agents: [...] }` document in the reconcile shape (e.g. to the
-# same S3 bucket) and add an active entry here.
-#
-# - name: agents-catalog
-#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/agents.json
-#   description: Built-in agent catalog
-# ─────────────────────────────────────────────────────────────────────────────
+- name: llm-models-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
+  description: Built-in LLM model catalog (2290 models)
+
+# Skills — 25 shards of ~5000 each (123k total, metadata stubs).
+
+- name: skills-shard-001
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-001.json
+
+- name: skills-shard-002
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-002.json
+
+- name: skills-shard-003
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-003.json
+
+- name: skills-shard-004
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-004.json
+
+- name: skills-shard-005
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-005.json
+
+- name: skills-shard-006
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-006.json
+
+- name: skills-shard-007
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-007.json
+
+- name: skills-shard-008
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-008.json
+
+- name: skills-shard-009
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-009.json
+
+- name: skills-shard-010
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-010.json
+
+- name: skills-shard-011
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-011.json
+
+- name: skills-shard-012
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-012.json
+
+- name: skills-shard-013
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-013.json
+
+- name: skills-shard-014
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-014.json
+
+- name: skills-shard-015
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-015.json
+
+- name: skills-shard-016
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-016.json
+
+- name: skills-shard-017
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-017.json
+
+- name: skills-shard-018
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-018.json
+
+- name: skills-shard-019
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-019.json
+
+- name: skills-shard-020
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-020.json
+
+- name: skills-shard-021
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-021.json
+
+- name: skills-shard-022
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-022.json
+
+- name: skills-shard-023
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-023.json
+
+- name: skills-shard-024
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-024.json
+
+- name: skills-shard-025
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-shards/skills-025.json
