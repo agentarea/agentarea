@@ -8,6 +8,10 @@
 #   - MCP servers : mirror of registry.modelcontextprotocol.io (3.6k+ servers)
 #   - Skills      : transform of majiayu000/claude-skill-registry, sharded by
 #                   ../landing/scripts/build-skills.mjs
+#   - Agents      : curated showcase list at ../landing/data/agents.json
+#
+# Of these, only MCP servers is published in a reconcile-ready shape today.
+# Skills and Agents are documented below so their sources aren't lost.
 #
 # HOW TO INSTALL (reconcile into the system)
 #   Feed this manifest to the idempotent `reconcile` CLI command:
@@ -51,4 +55,25 @@
 # - name: skills-catalog
 #   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/skills/skills.json
 #   description: Built-in skills catalog
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agents catalog — REFERENCE ONLY, not yet reconcilable.
+#
+# Source: ../landing/data/agents.json — a curated showcase list (7 agents) used
+# by the landing site. Two gaps before it can be reconciled:
+#   1. It is a bare JSON array, not the `{ agents: [...] }` document the parser
+#      reads (reconcile would see zero items).
+#   2. The entries are display-only (id/name/description/category/tags + skill
+#      and mcp *slugs*); they lack the instruction/model_id/tools an agent
+#      registry_item needs.
+#   3. It is local to the landing repo — not published to a URL the platform
+#      can fetch.
+#
+# Publish a `{ agents: [...] }` document in the reconcile shape (e.g. to the
+# same S3 bucket) and add an active entry here.
+#
+# - name: agents-catalog
+#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/agents.json
+#   description: Built-in agent catalog
 # ─────────────────────────────────────────────────────────────────────────────
