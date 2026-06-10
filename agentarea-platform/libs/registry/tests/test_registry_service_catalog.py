@@ -5,7 +5,9 @@ DB-coupled entity creation is verified in operator handler tests and the
 end-to-end minikube smoke test.
 """
 
+import pytest
 from agentarea_registry.application.service import (
+    TYPE_BY_TOPLEVEL_KEY,
     VALID_REGISTRY_TYPES,
     RegistryService,
 )
@@ -22,6 +24,58 @@ class TestValidTypes:
 
     def test_includes_agents(self):
         assert "agents" in VALID_REGISTRY_TYPES
+
+
+class TestDetectType:
+    @pytest.mark.parametrize(("key", "expected"), list(TYPE_BY_TOPLEVEL_KEY.items()))
+    def test_detects_each_type_from_its_key(self, key, expected):
+        assert RegistryService._detect_type({key: []}) == expected
+
+    def test_every_detectable_type_is_a_valid_registry_type(self):
+        # Guards the mapping against drift: every detected type must be one
+        # create_registry accepts, and every valid type must be detectable.
+        assert set(TYPE_BY_TOPLEVEL_KEY.values()) == set(VALID_REGISTRY_TYPES)
+
+    def test_detection_key_matches_parser_key(self):
+        # The detection key for each type must be the same top-level key the
+        # corresponding parser reads, or detection silently mis-routes. Feed a
+        # one-item doc under the detected key and assert the parser sees it.
+        sentinels = {
+            "mcp_servers": {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "x/y",
+                            "remotes": [{"type": "streamable-http", "url": "https://x"}],
+                        }
+                    }
+                ]
+            },
+            "skills": {"skills": [{"name": "x"}]},
+            "llm_providers": {"providers": [{"provider_key": "x", "name": "X"}]},
+            "llm_models": {"models": [{"provider_key": "x", "model_name": "m"}]},
+            "agents": {"agents": [{"name": "x"}]},
+        }
+        for rtype, data in sentinels.items():
+            assert RegistryService._detect_type(data) == rtype
+            assert len(RegistryService._parse_source(rtype, data)) == 1
+
+    def test_rejects_unknown_shape(self):
+        with pytest.raises(ValueError, match="cannot detect registry type"):
+            RegistryService._detect_type({"widgets": []})
+
+    def test_rejects_non_mapping(self):
+        with pytest.raises(ValueError, match="not a mapping"):
+            RegistryService._detect_type([{"name": "x"}])
+
+    def test_rejects_ambiguous_shape(self):
+        with pytest.raises(ValueError, match="ambiguous"):
+            RegistryService._detect_type({"servers": [], "skills": []})
+
+    def test_ignores_non_list_key(self):
+        # A key present but not a list must not trigger a match.
+        with pytest.raises(ValueError, match="cannot detect registry type"):
+            RegistryService._detect_type({"servers": {"not": "a list"}})
 
 
 class TestParseLLMProviders:
@@ -196,9 +250,7 @@ class TestParseSourceDispatch:
         assert result[0]["external_id"] == "p/m"
 
     def test_dispatches_agents(self):
-        result = RegistryService._parse_source(
-            "agents", {"agents": [{"name": "A"}]}
-        )
+        result = RegistryService._parse_source("agents", {"agents": [{"name": "A"}]})
         assert result[0]["name"] == "A"
 
     def test_unknown_type_raises(self):

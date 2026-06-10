@@ -40,6 +40,17 @@ VALID_REGISTRY_TYPES = (
 )
 VALID_SOURCE_TYPES = ("url", "github", "api")
 
+# Top-level catalog key -> registry type. Each catalog document carries exactly
+# one of these keys, so the registry type can be inferred from the payload shape
+# when it is not stated explicitly.
+TYPE_BY_TOPLEVEL_KEY = {
+    "servers": "mcp_servers",
+    "skills": "skills",
+    "providers": "llm_providers",
+    "models": "llm_models",
+    "agents": "agents",
+}
+
 
 class RegistryService:
     """Manages registry CRUD, sync, and spec update operations."""
@@ -517,6 +528,28 @@ class RegistryService:
             return json.loads(raw)
         except json.JSONDecodeError:
             return yaml.safe_load(raw)
+
+    @staticmethod
+    def _detect_type(data: Any) -> str:
+        """Infer the registry type from a fetched catalog's top-level key."""
+        if not isinstance(data, dict):
+            raise ValueError("cannot detect registry type: source root is not a mapping")
+        matched = [
+            rtype for key, rtype in TYPE_BY_TOPLEVEL_KEY.items() if isinstance(data.get(key), list)
+        ]
+        if len(matched) == 1:
+            return matched[0]
+        if not matched:
+            raise ValueError(
+                "cannot detect registry type: expected one top-level key of "
+                f"{list(TYPE_BY_TOPLEVEL_KEY)}"
+            )
+        raise ValueError(f"ambiguous registry type: multiple catalog keys present {matched}")
+
+    @classmethod
+    def detect_type_from_source(cls, source_url: str) -> str:
+        """Fetch a source and infer its registry type from the payload shape."""
+        return cls._detect_type(cls._fetch_source(source_url))
 
     # ── Source parsing (type-dispatched) ──
 

@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AgentArea platform catalog sources (canonical record — do not lose these URLs)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Remote registries that seed the built-in catalog (registry_items) for a
+# platform install. They live in our S3 bucket `agentarea-mcp-registry` and are
+# produced by the landing repo (../landing):
+#   - MCP servers : mirror of registry.modelcontextprotocol.io (3.6k+ servers)
+#   - Skills      : transform of majiayu000/claude-skill-registry, sharded by
+#                   ../landing/scripts/build-skills.mjs
+#
+# HOW TO INSTALL (reconcile into the system)
+#   Feed this manifest to the idempotent `reconcile` CLI command:
+#
+#       uv run agentarea-api reconcile --config-file data/registry-sources.yaml
+#
+#   reconcile creates each registry if missing, fetches the source URL, infers
+#   the type from the payload shape, parses it, and upserts catalog items.
+#   Re-run any time to resync.
+#
+# Each entry:
+#   name        registry name (stable identifier)
+#   source_url  HTTP(S) URL or local path to the catalog document
+#   type        optional — auto-detected from the payload when omitted
+#   description optional human note
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: mcp-servers-catalog
+  # S3 mirror of the official MCP registry ({ servers: [...] }).
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json
+  description: Built-in MCP server catalog (mirror of registry.modelcontextprotocol.io)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Skills catalog (S3) — REFERENCE ONLY, not yet reconcilable.
+#
+# The skills registry on S3 uses the landing site's *paginated* layout, which
+# does not match the reconcile skills parser (it expects a single
+# `{ skills: [...] }` document with content/members/s3_path). Captured here so
+# the URLs are not lost; add an active entry once either the parser learns the
+# paginated shape or a flattened `skills.json` is published.
+#
+# Base:  https://agentarea-mcp-registry.s3.amazonaws.com/registry/skills
+#   index.json                  — metadata, categories, topByStars, pagesTotal
+#   lookup.json                 — { skillId: pageNumber }
+#   pages/page-{N}.json         — 100 skills per shard (1..pagesTotal), stars DESC
+#   categories/{category}.json  — all skills for a category
+#
+# Upstream (rebuilt + uploaded by ../landing/scripts/build-skills.mjs):
+#   https://raw.githubusercontent.com/majiayu000/claude-skill-registry-core/main/registry.json
+#
+# - name: skills-catalog
+#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/skills/skills.json
+#   description: Built-in skills catalog
+# ─────────────────────────────────────────────────────────────────────────────
