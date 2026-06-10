@@ -58,7 +58,6 @@ export default async function TriggersPage({
       className="overflow-hidden p-0"
     >
       <Suspense
-        key={`${view}-${tab}-${group}-${order}-${search}`}
         fallback={
           <div className="flex h-64 items-center justify-center">
             <LoadingSpinner />

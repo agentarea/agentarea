@@ -11,10 +11,11 @@ import {
   Coins,
   Inbox,
   Rows3,
-  X,
 } from "lucide-react";
 import CollectionView, {
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
   CollectionToolbar,
   FilterSelect,
   type CollectionGroup,
@@ -68,6 +69,7 @@ export default function TasksView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const t = useTranslations("TasksPage");
+  const tv = useTranslations("TasksPage.view");
 
   const [view, setView] = useState<ViewKey>(initial.view);
   const [group, setGroup] = useState<GroupKey>(initial.group);
@@ -228,7 +230,7 @@ export default function TasksView({
         const sm = statusMeta(k);
         return {
           key: sm.key,
-          label: sm.label,
+          label: tv(sm.labelKey),
           color: sm.color,
           items: (buckets.get(k) ?? []).map(toItem),
         };
@@ -251,7 +253,7 @@ export default function TasksView({
         color: AGENT_COLOR,
         items: list.map(toItem),
       }));
-  }, [group, visible, sortTasks, toItem]);
+  }, [group, visible, sortTasks, toItem, tv]);
 
   const hasActiveFilters = Boolean(agent) || Boolean(search) || tab !== "all";
 
@@ -359,23 +361,16 @@ export default function TasksView({
                 </SelectItem>
               ))}
             </FilterSelect>
-            <div className="relative">
-              <input
-                value={search}
-                onChange={(e) => onSearch(e.target.value)}
-                placeholder={t("searchPlaceholder")}
-                className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-              />
-            </div>
+            <CollectionSearchInput
+              value={search}
+              onChange={onSearch}
+              placeholder={t("searchPlaceholder")}
+            />
             {hasActiveFilters && (
-              <button
-                type="button"
+              <CollectionFilterClear
                 onClick={clearFilters}
-                className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-                {t("filters.clear")}
-              </button>
+                label={t("filters.clear")}
+              />
             )}
           </CollectionFilterRow>
         )}

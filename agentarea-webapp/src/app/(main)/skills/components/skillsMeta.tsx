@@ -16,23 +16,24 @@ import type { SkillNetworkScope, SkillSourceType } from "@/types/skill";
  */
 
 export interface MetaEntry {
-  label: string;
+  /** Key under the `SkillsPage.view` namespace for the localized label. */
+  labelKey: string;
   /** Solid accent colour used for the dot, row glyph and grid icon. */
   color: string;
   icon: LucideIcon;
 }
 
 export const SOURCE_META: Record<SkillSourceType, MetaEntry> = {
-  content: { label: "Content", color: "#27a08c", icon: FileText },
-  github: { label: "GitHub", color: "#5e6ad2", icon: Github },
-  zip: { label: "Uploaded", color: "#d99a00", icon: Upload },
-  path: { label: "Local", color: "#d4519e", icon: FolderGit2 },
+  content: { labelKey: "sourceContent", color: "#27a08c", icon: FileText },
+  github: { labelKey: "sourceGithub", color: "#5e6ad2", icon: Github },
+  zip: { labelKey: "sourceUploaded", color: "#d99a00", icon: Upload },
+  path: { labelKey: "sourceLocal", color: "#d4519e", icon: FolderGit2 },
 };
 
 export const SCOPE_META: Record<SkillNetworkScope, MetaEntry> = {
-  private: { label: "Private", color: "#8a8f98", icon: Lock },
-  ingress: { label: "Ingress", color: "#27a08c", icon: Globe },
-  egress: { label: "Egress", color: "#d99a00", icon: Globe },
+  private: { labelKey: "scopePrivate", color: "#8a8f98", icon: Lock },
+  ingress: { labelKey: "scopeIngress", color: "#27a08c", icon: Globe },
+  egress: { labelKey: "scopeEgress", color: "#d99a00", icon: Globe },
 };
 
 export function sourceMeta(type: string): MetaEntry {

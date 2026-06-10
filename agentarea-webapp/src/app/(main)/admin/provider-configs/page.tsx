@@ -34,9 +34,9 @@ export default async function ProviderConfigsPage({
   const view: "list" | "grid" =
     urlView === "grid" || urlView === "list"
       ? urlView
-      : cookieView === "list"
-        ? "list"
-        : "grid";
+      : cookieView === "grid"
+        ? "grid"
+        : "list";
 
   const hostingParam = asString(resolvedSearchParams.hosting);
   const tab: "all" | "cloud" | "local" =
@@ -72,7 +72,6 @@ export default async function ProviderConfigsPage({
       className="overflow-hidden p-0"
     >
       <Suspense
-        key={`${view}-${tab}-${group}-${order}-${search}`}
         fallback={
           <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />

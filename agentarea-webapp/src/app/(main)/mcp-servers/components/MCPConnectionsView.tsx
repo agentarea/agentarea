@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -8,21 +8,21 @@ import {
   ArrowDownAZ,
   Boxes,
   Check,
-  ChevronDown,
   LayoutGrid,
   Rows3,
   Tag,
-  X,
 } from "lucide-react";
 import CollectionView, {
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
+  CollectionSectionHeader,
   CollectionToolbar,
   StatusDot,
   type CollectionGroup,
   type CollectionItem,
 } from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import { cn } from "@/lib/utils";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import { setCookie } from "@/utils/cookies";
 import {
@@ -68,14 +68,14 @@ const API_COLOR = "#cf6a2a";
 /* status buckets — dot + label colour, used for the chip, grouping + ordering */
 const STATUS_BUCKETS: {
   key: string;
-  label: string;
+  labelKey: string;
   color: string;
   match: HealthStatus[];
 }[] = [
-  { key: "connected", label: "Connected", color: "#1f9a6d", match: ["connected", "healthy"] },
-  { key: "starting", label: "Starting", color: "#c98a12", match: ["starting"] },
-  { key: "error", label: "Error", color: "#d6453d", match: ["unhealthy"] },
-  { key: "setup", label: "Setup", color: "#c98a12", match: ["unknown"] },
+  { key: "connected", labelKey: "statusConnected", color: "#1f9a6d", match: ["connected", "healthy"] },
+  { key: "starting", labelKey: "statusStarting", color: "#c98a12", match: ["starting"] },
+  { key: "error", labelKey: "statusError", color: "#d6453d", match: ["unhealthy"] },
+  { key: "setup", labelKey: "statusSetup", color: "#c98a12", match: ["unknown"] },
 ];
 
 function statusMeta(health: HealthStatus) {
@@ -126,8 +126,9 @@ function TypePill({ kind }: { kind: "mcp" | "api" }) {
 }
 
 function ConnStatusDot({ health }: { health: HealthStatus }) {
+  const t = useTranslations("MCPServersPage.view");
   const s = statusMeta(health);
-  return <StatusDot color={s.color} label={s.label} />;
+  return <StatusDot color={s.color} label={t(s.labelKey)} />;
 }
 
 function Dash() {
@@ -145,6 +146,7 @@ function fmtDate(iso?: string | null) {
 
 /** Orange "Custom" pill shown on catalog spec rows. */
 function CustomPill() {
+  const t = useTranslations("MCPServersPage.view");
   return (
     <span
       className="inline-flex h-[20px] items-center rounded-md border px-[7px] text-[11px] font-medium"
@@ -154,17 +156,18 @@ function CustomPill() {
         borderColor: `color-mix(in srgb, ${API_COLOR} 36%, var(--tile-base))`,
       }}
     >
-      Custom
+      {t("custom")}
     </span>
   );
 }
 
 /** Neutral "Tools" pill (grid glyph + label). */
 function ToolsPill() {
+  const t = useTranslations("MCPServersPage.view");
   return (
     <span className="inline-flex h-[20px] items-center gap-1 rounded-md border border-border bg-background px-[7px] text-[11px] font-medium text-foreground/70">
       <LayoutGrid className="h-3 w-3" strokeWidth={1.8} />
-      Tools
+      {t("tools")}
     </span>
   );
 }
@@ -178,75 +181,6 @@ function VersionChip({ version }: { version: string }) {
   );
 }
 
-function SectionHeaderInner({
-  icon,
-  name,
-  count,
-  sub,
-}: {
-  icon: ReactNode;
-  name: string;
-  count: number;
-  sub: string;
-}) {
-  return (
-    <>
-      <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] bg-primary/10 text-primary">
-        {icon}
-      </span>
-      <span className="text-[12.5px] font-semibold text-foreground">{name}</span>
-      <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
-        {count}
-      </span>
-      <span className="collection-section-sub truncate text-[11.5px] font-normal text-muted-foreground/70">
-        {sub}
-      </span>
-    </>
-  );
-}
-
-function SectionHeader({
-  icon,
-  name,
-  count,
-  sub,
-  variant,
-  collapsed,
-  onToggle,
-}: {
-  icon: ReactNode;
-  name: string;
-  count: number;
-  sub: string;
-  variant: ViewKey;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  // Grid view: plain header — no hatch background, no collapse chevron.
-  if (variant === "grid") {
-    return (
-      <div className="flex items-center gap-2 px-4 pb-2.5 pt-5">
-        <SectionHeaderInner icon={icon} name={name} count={count} sub={sub} />
-      </div>
-    );
-  }
-  // List view: hatched, sticky, collapsible bar.
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="collection-hatch sticky top-0 z-[3] flex h-9 w-full items-center gap-2 border-b border-t border-zinc-100 px-4 first:border-t-0 dark:border-zinc-800/70"
-    >
-      <ChevronDown
-        className={cn(
-          "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-          collapsed && "-rotate-90"
-        )}
-      />
-      <SectionHeaderInner icon={icon} name={name} count={count} sub={sub} />
-    </button>
-  );
-}
 
 /* ── view ──────────────────────────────────────────────────────────────── */
 
@@ -257,6 +191,7 @@ export default function MCPConnectionsView({
   initial,
 }: MCPConnectionsViewProps) {
   const t = useTranslations("MCPServersPage");
+  const tv = useTranslations("MCPServersPage.view");
   const tc = useTranslations("Collection");
   const router = useRouter();
   const pathname = usePathname();
@@ -408,14 +343,14 @@ export default function MCPConnectionsView({
       {
         node: (
           <span className="truncate text-[11.5px] text-muted-foreground">
-            {tools > 0 ? `${tools} tools` : <Dash />}
+            {tools > 0 ? tv("toolsCount", { count: tools }) : <Dash />}
           </span>
         ),
         className: "conn-col-hide-mobile",
       },
       <ConnStatusDot key="status" health={health} />,
     ],
-    []
+    [tv]
   );
 
   const connCardFooter = useCallback(
@@ -424,14 +359,14 @@ export default function MCPConnectionsView({
         <TypePill kind={kind} />
         {kind === "api" ? (
           <span className="text-[11.5px] text-muted-foreground">
-            {tools > 0 ? `${tools} tools` : <Dash />}
+            {tools > 0 ? tv("toolsCount", { count: tools }) : <Dash />}
           </span>
         ) : (
           <ConnStatusDot health={health} />
         )}
       </div>
     ),
-    []
+    [tv]
   );
 
   const connEntries = useMemo<ConnEntry[]>(() => {
@@ -588,13 +523,13 @@ export default function MCPConnectionsView({
                   className="h-[7px] w-[7px] rounded-full"
                   style={{ backgroundColor: transportColor }}
                 />
-                {isRemote ? "Remote" : "Local"}
+                {isRemote ? tv("remote") : tv("local")}
               </span>
             </div>
           ),
         };
       }),
-    [mcpServers]
+    [mcpServers, tv]
   );
 
   // ── filtering ──
@@ -640,8 +575,8 @@ export default function MCPConnectionsView({
     if (view !== "list" || group === "none") return undefined;
     if (group === "type") {
       return [
-        { key: "mcp", label: "MCP servers", color: MCP_COLOR },
-        { key: "api", label: "OpenAPI", color: API_COLOR },
+        { key: "mcp", label: tv("groupMcp"), color: MCP_COLOR },
+        { key: "api", label: tv("groupApi"), color: API_COLOR },
       ]
         .map((g) => ({
           ...g,
@@ -653,13 +588,13 @@ export default function MCPConnectionsView({
     }
     return STATUS_BUCKETS.map((b) => ({
       key: b.key,
-      label: b.label,
+      label: tv(b.labelKey),
       color: b.color,
       items: sortConns(visibleConns.filter((e) => b.match.includes(e.health))).map(
         (e) => e.item
       ),
     })).filter((g) => g.items.length > 0);
-  }, [view, group, visibleConns, sortConns]);
+  }, [view, group, visibleConns, sortConns, tv]);
 
   const mineItems = useMemo(
     () => sortConns(visibleConns).map((e) => e.item),
@@ -712,7 +647,7 @@ export default function MCPConnectionsView({
     <div className="collection-cq flex h-full w-full flex-col">
       <CollectionToolbar
         tabs={[
-          { value: "all", label: "All", count: counts.all },
+          { value: "all", label: tc("all"), count: counts.all },
           { value: "mcp", label: "MCP", count: counts.mcp },
           { value: "openapi", label: "OpenAPI", count: counts.openapi },
         ]}
@@ -739,22 +674,8 @@ export default function MCPConnectionsView({
 
       {filtersOpen && (
         <CollectionFilterRow>
-          <input
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder={tc("search")}
-            className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => onSearch("")}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {tc("clear")}
-            </button>
-          )}
+          <CollectionSearchInput value={search} onChange={onSearch} />
+          {search && <CollectionFilterClear onClick={() => onSearch("")} />}
         </CollectionFilterRow>
       )}
 
@@ -762,19 +683,19 @@ export default function MCPConnectionsView({
         {isEmpty ? (
           <div className="p-4">
             <EmptyState
-              title="No connections"
-              description="No MCP servers or OpenAPI connections configured yet"
+              title={tv("emptyTitle")}
+              description={tv("emptyDescription")}
               iconsType="mcp"
             />
           </div>
         ) : (
           <>
             {/* SECTION 1 — My connections (always) */}
-            <SectionHeader
+            <CollectionSectionHeader
               icon={<Check className="h-3 w-3" strokeWidth={2.4} />}
               name={t("myConnections")}
               count={visibleConns.length}
-              sub="Configured in this workspace"
+              sub={tv("myConnectionsSub")}
               variant={view}
               collapsed={!!collapsed.mine}
               onToggle={() => toggle("mine")}
@@ -790,8 +711,8 @@ export default function MCPConnectionsView({
                 emptyState={
                   <div className="px-4 py-3 text-[12px] text-muted-foreground">
                     {search
-                      ? "No connections match this filter."
-                      : "No connections configured yet."}
+                      ? tv("noConnectionsMatch")
+                      : tv("noConnectionsYet")}
                   </div>
                 }
               />
@@ -800,11 +721,11 @@ export default function MCPConnectionsView({
             {/* SECTION 2 — Browse MCP specifications (hidden for OpenAPI-only) */}
             {tab !== "openapi" && (
               <>
-                <SectionHeader
+                <CollectionSectionHeader
                   icon={<Boxes className="h-3 w-3" strokeWidth={2} />}
                   name={t("browseSpecifications")}
                   count={visibleSpecs.length}
-                  sub="Servers available to connect"
+                  sub={tv("specsSub")}
                   variant={view}
                   collapsed={!!collapsed.specs}
                   onToggle={() => toggle("specs")}
@@ -818,7 +739,7 @@ export default function MCPConnectionsView({
                     items={visibleSpecs}
                     emptyState={
                       <div className="px-4 py-3 text-[12px] text-muted-foreground">
-                        No specifications match this search.
+                        {tv("noSpecsMatch")}
                       </div>
                     }
                   />

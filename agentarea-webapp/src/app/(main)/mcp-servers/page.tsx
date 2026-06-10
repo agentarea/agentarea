@@ -30,9 +30,9 @@ export default async function MCPServersPage({
   const view: "list" | "grid" =
     urlView === "grid" || urlView === "list"
       ? urlView
-      : cookieView === "list"
-        ? "list"
-        : "grid";
+      : cookieView === "grid"
+        ? "grid"
+        : "list";
 
   const protocolParam = asString(resolvedSearchParams.protocol);
   const tab: "all" | "mcp" | "openapi" =

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDownAZ, Clock, Copy, Inbox, Layers, Rows3, Star, Tag, X } from "lucide-react";
+import { ArrowDownAZ, Clock, Copy, Inbox, Layers, Rows3, Star, Tag } from "lucide-react";
 import CollectionView, {
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
   CollectionToolbar,
   FilterSelect,
   type CollectionGroup,
@@ -39,12 +41,12 @@ interface InitialState {
   search: string;
 }
 
-const SOURCE_TABS: { value: string; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "content", label: "Content" },
-  { value: "github", label: "GitHub" },
-  { value: "zip", label: "Uploaded" },
-  { value: "path", label: "Local" },
+const SOURCE_TABS: { value: string; labelKey?: string }[] = [
+  { value: "all" },
+  { value: "content", labelKey: "sourceContent" },
+  { value: "github", labelKey: "sourceGithub" },
+  { value: "zip", labelKey: "sourceUploaded" },
+  { value: "path", labelKey: "sourceLocal" },
 ];
 
 async function fetchAllSkills(): Promise<Skill[]> {
@@ -70,6 +72,8 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const t = useTranslations("SkillsPage");
+  const tv = useTranslations("SkillsPage.view");
+  const tc = useTranslations("Collection");
 
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -215,10 +219,10 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       .map((key) => {
         const items = sortItems(visible.filter((s) => s[field] === key));
         const m = meta(key);
-        return { key, label: m.label, color: m.color, items };
+        return { key, label: tv(m.labelKey), color: m.color, items };
       })
       .filter((g) => g.items.length > 0);
-  }, [group, visible, sortItems]);
+  }, [group, visible, sortItems, tv]);
 
   // Adapt a skill into the generic CollectionView item shape. Favourite +
   // duplicate are supplied as hover quick-actions.
@@ -235,27 +239,27 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         description: skill.description,
         href: `/skills/${skill.id}`,
         badges: [
-          { label: source.label, color: source.color },
-          { label: scope.label, icon: scope.icon },
+          { label: tv(source.labelKey), color: source.color },
+          { label: tv(scope.labelKey), icon: scope.icon },
         ],
-        meta: shortAge(skill.created_at),
+        meta: shortAge(skill.created_at, tc),
         actions: [
           {
             icon: Star,
-            label: isFav ? "Remove favorite" : "Add to favorites",
+            label: isFav ? tv("removeFavorite") : tv("addFavorite"),
             active: isFav,
             activeColor: "#d99a00",
             onClick: () => toggleFavorite(skill.id),
           },
           {
             icon: Copy,
-            label: "Duplicate",
+            label: tv("duplicate"),
             onClick: () => router.push(`/skills/create?from=${skill.id}`),
           },
         ],
       };
     },
-    [favorites, toggleFavorite, router]
+    [favorites, toggleFavorite, router, tv, tc]
   );
 
   const collectionGroups: CollectionGroup[] = useMemo(
@@ -316,7 +320,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       <CollectionToolbar
         tabs={SOURCE_TABS.map((tab) => ({
           value: tab.value,
-          label: tab.label,
+          label: tab.labelKey ? tv(tab.labelKey) : tc("all"),
           count: tabCounts[tab.value] ?? 0,
         }))}
         activeTab={sourceTab}
@@ -362,8 +366,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         onOrderChange={(v) => onOrder(v as OrderKey)}
         view={view}
         onViewChange={(v) => onView(v as ViewKey)}
-        listLabel="List view"
-        gridLabel="Grid view"
       />
 
       {/* ---------------- applied filter row ---------------- */}
@@ -378,7 +380,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <SelectItem value="all">{t("filters.allScopes")}</SelectItem>
             {SCOPE_ORDER.map((s) => (
               <SelectItem key={s} value={s}>
-                {SCOPE_META[s].label}
+                {tv(SCOPE_META[s].labelKey)}
               </SelectItem>
             ))}
           </FilterSelect>
@@ -394,23 +396,16 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               {t("filters.withoutFiles")}
             </SelectItem>
           </FilterSelect>
-          <div className="relative">
-            <input
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              placeholder={t("searchPlaceholder")}
-              className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-            />
-          </div>
+          <CollectionSearchInput
+            value={search}
+            onChange={onSearch}
+            placeholder={t("searchPlaceholder")}
+          />
           {hasActiveFilters && (
-            <button
-              type="button"
+            <CollectionFilterClear
               onClick={clearFilters}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {t("filters.clear")}
-            </button>
+              label={t("filters.clear")}
+            />
           )}
         </CollectionFilterRow>
       )}

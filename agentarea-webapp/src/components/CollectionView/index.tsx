@@ -5,13 +5,16 @@ export {
   default as CollectionToolbar,
   FilterSelect,
   CollectionFilterRow,
+  CollectionSearchInput,
+  CollectionFilterClear,
 } from "./CollectionToolbar";
+export { default as CollectionSectionHeader } from "./CollectionSectionHeader";
 export type {
   CollectionTab,
   DisplayMenuOption,
   CollectionToolbarProps,
 } from "./CollectionToolbar";
-export { Tile, shortAge, StatusDot } from "./meta";
+export { Tile, shortAge, StatusDot, AgentChip, AGENT_COLOR } from "./meta";
 export type {
   CollectionItem,
   CollectionBadge,

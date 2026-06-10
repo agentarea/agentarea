@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -8,14 +8,15 @@ import {
   ArrowDownAZ,
   Boxes,
   Check,
-  ChevronDown,
   Cloud,
   Cpu,
   Rows3,
-  X,
 } from "lucide-react";
 import CollectionView, {
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
+  CollectionSectionHeader,
   CollectionToolbar,
   StatusDot,
   type CollectionGroup,
@@ -79,10 +80,10 @@ function isLocalHosting(
 /* config status buckets — dot + label colour, drives the chip, grouping +
    ordering. We only surface states the data can actually prove. */
 type StatusKey = "active" | "local" | "inactive";
-const STATUS_BUCKETS: { key: StatusKey; label: string; color: string }[] = [
-  { key: "active", label: "Active", color: "#1f9a6d" },
-  { key: "local", label: "Local", color: "#27a08c" },
-  { key: "inactive", label: "Inactive", color: "#8a8f98" },
+const STATUS_BUCKETS: { key: StatusKey; color: string }[] = [
+  { key: "active", color: "#1f9a6d" },
+  { key: "local", color: "#27a08c" },
+  { key: "inactive", color: "#8a8f98" },
 ];
 
 function statusMeta(key: StatusKey) {
@@ -96,10 +97,17 @@ function configStatus(config: ProviderConfig, local: boolean): StatusKey {
 
 /* ── small presentational pieces (match the prototype) ─────────────────── */
 
+const STATUS_LABEL_KEY: Record<StatusKey, string> = {
+  active: "statusActive",
+  local: "statusLocal",
+  inactive: "statusInactive",
+};
+
 /** Maps a config status into the shared StatusDot (dot + colour-matched label). */
 function ConfigStatusDot({ status }: { status: StatusKey }) {
+  const t = useTranslations("Models.view");
   const s = statusMeta(status);
-  return <StatusDot color={s.color} label={s.label} />;
+  return <StatusDot color={s.color} label={t(STATUS_LABEL_KEY[status])} />;
 }
 
 /** Mono accent pill, e.g. `gpt-4o`. */
@@ -141,99 +149,30 @@ function ModelTags({ models, max = 2 }: { models: string[]; max?: number }) {
 
 /** Inline `N models` / `Self-host` label. */
 function ModelCountText({ count, selfHost }: { count: number; selfHost?: boolean }) {
+  const t = useTranslations("Models.view");
   return (
     <span className="whitespace-nowrap text-[11.5px] text-muted-foreground">
       {selfHost ? (
-        "Self-host"
+        t("selfHost")
       ) : (
         <>
           <span className="font-mono font-semibold text-foreground/80">{count}</span>{" "}
-          {count === 1 ? "model" : "models"}
+          {t("modelWord", { count })}
         </>
       )}
     </span>
   );
 }
 
-function SectionHeaderInner({
-  icon,
-  name,
-  count,
-  sub,
-}: {
-  icon: ReactNode;
-  name: string;
-  count: number;
-  sub: string;
-}) {
-  return (
-    <>
-      <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] bg-primary/10 text-primary">
-        {icon}
-      </span>
-      <span className="text-[12.5px] font-semibold text-foreground">{name}</span>
-      <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
-        {count}
-      </span>
-      <span className="collection-section-sub truncate text-[11.5px] font-normal text-muted-foreground/70">
-        {sub}
-      </span>
-    </>
-  );
-}
-
-function SectionHeader({
-  icon,
-  name,
-  count,
-  sub,
-  variant,
-  collapsed,
-  onToggle,
-}: {
-  icon: ReactNode;
-  name: string;
-  count: number;
-  sub: string;
-  variant: ViewKey;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  // Grid view: plain header — no hatch background, no collapse chevron.
-  if (variant === "grid") {
-    return (
-      <div className="flex items-center gap-2 px-4 pb-2.5 pt-5">
-        <SectionHeaderInner icon={icon} name={name} count={count} sub={sub} />
-      </div>
-    );
-  }
-  // List view: hatched, sticky, collapsible bar.
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="collection-hatch sticky top-0 z-[3] flex h-9 w-full items-center gap-2 border-b border-t border-zinc-100 px-4 first:border-t-0 dark:border-zinc-800/70"
-    >
-      <ChevronDown
-        className={cn(
-          "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-          collapsed && "-rotate-90"
-        )}
-      />
-      <SectionHeaderInner icon={icon} name={name} count={count} sub={sub} />
-    </button>
-  );
-}
-
 /* ── helpers ───────────────────────────────────────────────────────────── */
 
-function modelLabel(model: any): string {
+function modelLabel(model: any, unknown: string): string {
   return (
     model.model_display_name ||
     model.display_name ||
     model.model_name ||
     model.name ||
-    "Unknown"
+    unknown
   );
 }
 
@@ -263,6 +202,7 @@ export default function ProviderModelsView({
   const searchParams = useSearchParams();
 
   const tc = useTranslations("Collection");
+  const t = useTranslations("Models.view");
 
   const [view, setView] = useState<ViewKey>(initial.view);
   const [tab, setTab] = useState<TabKey>(initial.tab);
@@ -312,7 +252,7 @@ export default function ProviderModelsView({
         );
         const status = configStatus(config, local);
         const instances = config.model_instances ?? [];
-        const modelNames = instances.map(modelLabel);
+        const modelNames = instances.map((m) => modelLabel(m, t("unknownModel")));
         const count = instances.length;
         const providerName =
           config.provider_spec_name ?? spec?.name ?? "";
@@ -353,7 +293,7 @@ export default function ProviderModelsView({
           },
         };
       }),
-    [configs]
+    [configs, t]
   );
 
   // ── spec items (Provider specs) ──
@@ -445,8 +385,8 @@ export default function ProviderModelsView({
     if (view !== "list" || group === "none") return undefined;
     if (group === "hosting") {
       return [
-        { key: "cloud", label: "Cloud", color: ACCENT, local: false },
-        { key: "local", label: "Self-hosted", color: "#27a08c", local: true },
+        { key: "cloud", label: t("groupCloud"), color: ACCENT, local: false },
+        { key: "local", label: t("groupSelfHosted"), color: "#27a08c", local: true },
       ]
         .map((g) => ({
           key: g.key,
@@ -460,13 +400,13 @@ export default function ProviderModelsView({
     }
     return STATUS_BUCKETS.map((b) => ({
       key: b.key,
-      label: b.label,
+      label: t(STATUS_LABEL_KEY[b.key]),
       color: b.color,
       items: sortConfigs(visibleConfigs.filter((e) => e.status === b.key)).map(
         (e) => e.item
       ),
     })).filter((g) => g.items.length > 0);
-  }, [view, group, visibleConfigs, sortConfigs]);
+  }, [view, group, visibleConfigs, sortConfigs, t]);
 
   const configItems = useMemo(
     () => sortConfigs(visibleConfigs).map((e) => e.item),
@@ -545,22 +485,8 @@ export default function ProviderModelsView({
 
       {filtersOpen && (
         <CollectionFilterRow>
-          <input
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder={tc("search")}
-            className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => onSearch("")}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {tc("clear")}
-            </button>
-          )}
+          <CollectionSearchInput value={search} onChange={onSearch} />
+          {search && <CollectionFilterClear onClick={() => onSearch("")} />}
         </CollectionFilterRow>
       )}
 
@@ -568,19 +494,19 @@ export default function ProviderModelsView({
         {isEmpty ? (
           <div className="p-4">
             <EmptyState
-              title="No providers"
-              description="No provider configurations or specifications are available yet."
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
               iconsType="llm"
             />
           </div>
         ) : (
           <>
             {/* SECTION 1 — Provider configs */}
-            <SectionHeader
+            <CollectionSectionHeader
               icon={<Check className="h-3 w-3" strokeWidth={2.4} />}
-              name="Provider configs"
+              name={t("configsSection")}
               count={visibleConfigs.length}
-              sub="Connected in this workspace"
+              sub={t("configsSub")}
               variant={view}
               collapsed={!!collapsed.configs}
               onToggle={() => toggle("configs")}
@@ -595,20 +521,18 @@ export default function ProviderModelsView({
                 items={configGroups ? undefined : configItems}
                 emptyState={
                   <div className="px-4 py-3 text-[12px] text-muted-foreground">
-                    {search
-                      ? "No configurations match this filter."
-                      : "No provider configurations yet."}
+                    {search ? t("noConfigsMatch") : t("noConfigsYet")}
                   </div>
                 }
               />
             )}
 
             {/* SECTION 2 — Provider specs */}
-            <SectionHeader
+            <CollectionSectionHeader
               icon={<Boxes className="h-3 w-3" strokeWidth={2} />}
-              name="Provider specs"
+              name={t("specsSection")}
               count={visibleSpecItems.length}
-              sub="Available providers to configure"
+              sub={t("specsSub")}
               variant={view}
               collapsed={!!collapsed.specs}
               onToggle={() => toggle("specs")}
@@ -622,7 +546,7 @@ export default function ProviderModelsView({
                 items={visibleSpecItems}
                 emptyState={
                   <div className="px-4 py-3 text-[12px] text-muted-foreground">
-                    No providers match this search.
+                    {t("noProvidersMatch")}
                   </div>
                 }
               />

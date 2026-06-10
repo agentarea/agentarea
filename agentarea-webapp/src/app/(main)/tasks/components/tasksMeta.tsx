@@ -1,7 +1,8 @@
 "use client";
 
-import { Bot, Calendar } from "lucide-react";
-import { StatusDot, Tile } from "@/components/CollectionView";
+import { useTranslations } from "next-intl";
+import { Calendar } from "lucide-react";
+import { AgentChip, StatusDot } from "@/components/CollectionView";
 import {
   Tooltip,
   TooltipContent,
@@ -9,47 +10,25 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+export { AGENT_COLOR } from "@/components/CollectionView";
+
 /* ---------------- status ---------------- */
 
 export interface TaskStatusMeta {
   /** Coarse status bucket used for tabs + grouping. */
   key: "run" | "input" | "pending" | "done" | "fail";
-  label: string;
+  /** Keys under `TasksPage.view` for the localized label + tooltip. */
+  labelKey: string;
+  tipKey: string;
   color: string;
-  tip: string;
 }
 
 const STATUS_BY_KEY: Record<TaskStatusMeta["key"], TaskStatusMeta> = {
-  run: {
-    key: "run",
-    label: "Running",
-    color: "#2252b3",
-    tip: "Agent is working on this task",
-  },
-  input: {
-    key: "input",
-    label: "Input required",
-    color: "#c98a00",
-    tip: "Waiting for your approval to continue",
-  },
-  pending: {
-    key: "pending",
-    label: "Pending",
-    color: "#8a8f98",
-    tip: "Queued, not started yet",
-  },
-  done: {
-    key: "done",
-    label: "Completed",
-    color: "#1f9d6b",
-    tip: "Finished successfully",
-  },
-  fail: {
-    key: "fail",
-    label: "Failed",
-    color: "#d6453d",
-    tip: "Task ended with an error",
-  },
+  run: { key: "run", labelKey: "runLabel", tipKey: "runTip", color: "#2252b3" },
+  input: { key: "input", labelKey: "inputLabel", tipKey: "inputTip", color: "#c98a00" },
+  pending: { key: "pending", labelKey: "pendingLabel", tipKey: "pendingTip", color: "#8a8f98" },
+  done: { key: "done", labelKey: "doneLabel", tipKey: "doneTip", color: "#1f9d6b" },
+  fail: { key: "fail", labelKey: "failLabel", tipKey: "failTip", color: "#d6453d" },
 };
 
 /** Order known status buckets appear in tabs and grouping. */
@@ -73,10 +52,6 @@ export function statusMeta(status: string | null | undefined): TaskStatusMeta {
 
 /* ---------------- agent ---------------- */
 
-/** Single agent accent — agents don't carry per-agent icons yet, so (like the
- *  /agents page) every agent renders with the Bot glyph in this colour. */
-export const AGENT_COLOR = "#5e6ad2";
-
 /* ---------------- cells ---------------- */
 
 export function StatusCell({
@@ -88,8 +63,10 @@ export function StatusCell({
   dotOnly?: boolean;
   className?: string;
 }) {
-  const { key, label, color, tip } = statusMeta(status);
+  const t = useTranslations("TasksPage.view");
+  const { key, labelKey, tipKey, color } = statusMeta(status);
   const running = key === "run";
+  const label = t(labelKey);
   return (
     <StatusDot
       color={color}
@@ -98,7 +75,7 @@ export function StatusCell({
       pulse={running}
       tooltip={
         <>
-          {label} — {tip}
+          {label} — {t(tipKey)}
         </>
       }
       className={cn("text-[12px] font-normal", className)}
@@ -115,23 +92,7 @@ export function AgentCell({
   size?: number;
   className?: string;
 }) {
-  const display = name || "Unknown agent";
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "inline-flex items-center gap-2 text-[12.5px] text-foreground/80",
-            className
-          )}
-        >
-          <Tile color={AGENT_COLOR} icon={Bot} size={size} />
-          <span className="truncate">{display}</span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{display}</TooltipContent>
-    </Tooltip>
-  );
+  return <AgentChip name={name} size={size} className={className} />;
 }
 
 export function CostCell({
@@ -141,6 +102,7 @@ export function CostCell({
   cost: number | null | undefined;
   className?: string;
 }) {
+  const t = useTranslations("TasksPage.view");
   const has = cost != null && !Number.isNaN(cost);
   return (
     <Tooltip>
@@ -156,7 +118,7 @@ export function CostCell({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {has ? `Run cost: $${cost!.toFixed(4)}` : "No cost recorded"}
+        {has ? t("runCost", { cost: `$${cost!.toFixed(4)}` }) : t("noCost")}
       </TooltipContent>
     </Tooltip>
   );
@@ -208,6 +170,7 @@ export function CreatedInline({
   iso: string | null | undefined;
   className?: string;
 }) {
+  const t = useTranslations("TasksPage.view");
   const d = iso ? new Date(iso) : null;
   if (!d || Number.isNaN(d.getTime())) {
     return <span className={cn("text-muted-foreground/70", className)}>—</span>;
@@ -234,7 +197,7 @@ export function CreatedInline({
           {date}
         </span>
       </TooltipTrigger>
-      <TooltipContent>Created {full}</TooltipContent>
+      <TooltipContent>{t("created", { date: full })}</TooltipContent>
     </Tooltip>
   );
 }

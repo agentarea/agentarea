@@ -3,9 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, ArrowDownAZ, Bot, Brain, Inbox, Rows3, X } from "lucide-react";
+import { Activity, ArrowDownAZ, Bot, Brain, Inbox, Rows3 } from "lucide-react";
 import CollectionView, {
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
   CollectionToolbar,
   FilterSelect,
   type CollectionGroup,
@@ -17,6 +19,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Agent, ModelInfo } from "@/types/agent";
 import { setCookie } from "@/utils/cookies";
 import {
+  agentStatusLabel,
   ModelCell,
   modelLabel,
   StatusCell,
@@ -57,6 +60,8 @@ export default function AgentsView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const t = useTranslations("AgentsPage");
+  const tv = useTranslations("AgentsPage.view");
+  const noModelLabel = tv("noModel");
 
   const [view, setView] = useState<ViewKey>(initial.view);
   const [group, setGroup] = useState<GroupKey>(initial.group);
@@ -89,7 +94,10 @@ export default function AgentsView({
     [view, group, order, statusTab, model, search, searchParams, router, pathname]
   );
 
-  const modelKey = (a: EnrichedAgent) => modelLabel(a.model_info) || "No model";
+  const modelKey = useCallback(
+    (a: EnrichedAgent) => modelLabel(a.model_info) || noModelLabel,
+    [noModelLabel]
+  );
 
   // model / search filters — also drive the status tab counts
   const baseFiltered = useMemo(() => {
@@ -103,43 +111,48 @@ export default function AgentsView({
       }
       return true;
     });
-  }, [agents, model, search]);
+  }, [agents, model, search, modelKey]);
 
   // status tabs (only statuses that exist, ordered)
   const statusTabs = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { count: number; label: string }>();
     for (const a of baseFiltered) {
-      const label = statusMeta(a.status).label;
-      counts.set(label, (counts.get(label) ?? 0) + 1);
+      const key = statusMeta(a.status).labelKey;
+      const e = counts.get(key) ?? {
+        count: 0,
+        label: agentStatusLabel(tv, a.status),
+      };
+      e.count += 1;
+      counts.set(key, e);
     }
-    const labelOrder = (label: string) => {
+    const keyOrder = (key: string) => {
       const idx = STATUS_GROUP_ORDER.findIndex(
-        (s) => statusMeta(s).label === label
+        (s) => statusMeta(s).labelKey === key
       );
       return idx < 0 ? 99 : idx;
     };
     const tabs = [...counts.entries()]
-      .sort(([a], [b]) => labelOrder(a) - labelOrder(b) || a.localeCompare(b))
-      .map(([label, n]) => ({ value: label, label, count: n }));
+      .sort(([a], [b]) => keyOrder(a) - keyOrder(b) || a.localeCompare(b))
+      .map(([key, { count, label }]) => ({ value: key, label, count }));
     return [
       { value: "all", label: t("filters.all"), count: baseFiltered.length },
       ...tabs,
     ];
-  }, [baseFiltered, t]);
+  }, [baseFiltered, t, tv]);
 
   const modelOptions = useMemo(() => {
     const set = new Set<string>();
     for (const a of agents) set.add(modelKey(a));
     return [...set].sort((a, b) =>
-      a === "No model" ? 1 : b === "No model" ? -1 : a.localeCompare(b)
+      a === noModelLabel ? 1 : b === noModelLabel ? -1 : a.localeCompare(b)
     );
-  }, [agents]);
+  }, [agents, modelKey, noModelLabel]);
 
   const visible = useMemo(
     () =>
       statusTab === "all"
         ? baseFiltered
-        : baseFiltered.filter((a) => statusMeta(a.status).label === statusTab),
+        : baseFiltered.filter((a) => statusMeta(a.status).labelKey === statusTab),
     [baseFiltered, statusTab]
   );
 
@@ -218,14 +231,14 @@ export default function AgentsView({
         const ord = STATUS_GROUP_ORDER.indexOf(
           (agent.status || "").toLowerCase()
         );
-        const bucket = buckets.get(sm.label) ?? {
-          label: sm.label,
+        const bucket = buckets.get(sm.labelKey) ?? {
+          label: agentStatusLabel(tv, agent.status),
           color: sm.color,
           order: ord < 0 ? 99 : ord,
           items: [],
         };
         bucket.items.push(agent);
-        buckets.set(sm.label, bucket);
+        buckets.set(sm.labelKey, bucket);
       }
       return [...buckets.values()]
         .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
@@ -247,15 +260,15 @@ export default function AgentsView({
     }
     return [...buckets.entries()]
       .sort(([a], [b]) =>
-        a === "No model" ? 1 : b === "No model" ? -1 : a.localeCompare(b)
+        a === noModelLabel ? 1 : b === noModelLabel ? -1 : a.localeCompare(b)
       )
       .map(([label, list]) => ({
         key: label,
         label,
-        color: label === "No model" ? "#a4a8b0" : AGENT_COLOR,
+        color: label === noModelLabel ? "#a4a8b0" : AGENT_COLOR,
         items: list.map(toItem),
       }));
-  }, [group, visible, sortAgents, toItem]);
+  }, [group, visible, sortAgents, toItem, tv, modelKey, noModelLabel]);
 
   const hasActiveFilters =
     Boolean(model) || Boolean(search) || statusTab !== "all";
@@ -360,23 +373,16 @@ export default function AgentsView({
                 </SelectItem>
               ))}
             </FilterSelect>
-            <div className="relative">
-              <input
-                value={search}
-                onChange={(e) => onSearch(e.target.value)}
-                placeholder={t("searchPlaceholder")}
-                className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-              />
-            </div>
+            <CollectionSearchInput
+              value={search}
+              onChange={onSearch}
+              placeholder={t("searchPlaceholder")}
+            />
             {hasActiveFilters && (
-              <button
-                type="button"
+              <CollectionFilterClear
                 onClick={clearFilters}
-                className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-                {t("filters.clear")}
-              </button>
+                label={t("filters.clear")}
+              />
             )}
           </CollectionFilterRow>
         )}

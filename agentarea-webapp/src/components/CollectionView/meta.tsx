@@ -1,11 +1,15 @@
 import { isValidElement, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Bot, type LucideIcon } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+/** Shared accent colour for the agent chip (the Bot tile tint). */
+export const AGENT_COLOR = "#5e6ad2";
 
 /**
  * Status indicator — a small colour dot followed by a colour-matched label
@@ -123,15 +127,65 @@ export function Tile({
   );
 }
 
-/** Compact relative age, e.g. "today", "3d", "2w", "5mo", "1y". */
-export function shortAge(iso: string | null | undefined): string {
+/** Compact relative age, e.g. "today", "3d", "2w", "5mo", "1y". Pass the
+ *  `Collection` translator `t` to localize; omit it for the plain English form. */
+export function shortAge(
+  iso: string | null | undefined,
+  t?: (key: string, values?: Record<string, string | number>) => string
+): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "—";
   const days = Math.floor((Date.now() - then) / 86_400_000);
-  if (days < 1) return "today";
-  if (days < 7) return `${days}d`;
-  if (days < 30) return `${Math.floor(days / 7)}w`;
-  if (days < 365) return `${Math.floor(days / 30)}mo`;
-  return `${Math.floor(days / 365)}y`;
+  if (!t) {
+    if (days < 1) return "today";
+    if (days < 7) return `${days}d`;
+    if (days < 30) return `${Math.floor(days / 7)}w`;
+    if (days < 365) return `${Math.floor(days / 30)}mo`;
+    return `${Math.floor(days / 365)}y`;
+  }
+  if (days < 1) return t("ageToday");
+  if (days < 7) return t("ageDays", { n: days });
+  if (days < 30) return t("ageWeeks", { n: Math.floor(days / 7) });
+  if (days < 365) return t("ageMonths", { n: Math.floor(days / 30) });
+  return t("ageYears", { n: Math.floor(days / 365) });
+}
+
+/**
+ * Agent chip — a Bot tile + agent name, the single shared representation of an
+ * agent across collection rows/cards (Tasks, Automation, …). The hover tooltip
+ * (showing the full name) is on by default; pass `tooltip={false}` where the
+ * name can't truncate (e.g. roomy card footers) or there's no TooltipProvider.
+ */
+export function AgentChip({
+  name,
+  size = 18,
+  tooltip = true,
+  className,
+}: {
+  name: string | null | undefined;
+  size?: number;
+  tooltip?: boolean;
+  className?: string;
+}) {
+  const t = useTranslations("Collection");
+  const display = name || t("unknownAgent");
+  const content = (
+    <span
+      className={cn(
+        "inline-flex min-w-0 items-center gap-2 text-[12.5px] text-foreground/80",
+        className
+      )}
+    >
+      <Tile color={AGENT_COLOR} icon={Bot} size={size} />
+      <span className="truncate">{display}</span>
+    </span>
+  );
+  if (!tooltip) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent>{display}</TooltipContent>
+    </Tooltip>
+  );
 }

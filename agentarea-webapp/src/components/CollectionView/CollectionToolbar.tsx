@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Filter, SlidersHorizontal } from "lucide-react";
+import { Filter, SlidersHorizontal, X } from "lucide-react";
 import HeaderTabs from "@/components/HeaderTabs";
 import {
   Popover,
@@ -304,5 +304,53 @@ export function CollectionFilterRow({ children }: { children: ReactNode }) {
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 px-3.5 py-2 dark:border-zinc-700">
       {children}
     </div>
+  );
+}
+
+/** The shared search box used inside a `CollectionFilterRow`. Placeholder
+ *  defaults to the localized generic "Search…". */
+export function CollectionSearchInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const t = useTranslations("Collection");
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder ?? t("search")}
+      className={cn(
+        "h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary",
+        className
+      )}
+    />
+  );
+}
+
+/** The shared "✕ Clear" button used at the end of a `CollectionFilterRow`. */
+export function CollectionFilterClear({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  const t = useTranslations("Collection");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
+    >
+      <X className="h-3.5 w-3.5" />
+      {label ?? t("clear")}
+    </button>
   );
 }

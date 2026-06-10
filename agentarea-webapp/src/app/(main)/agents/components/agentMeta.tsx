@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Activity, MoreHorizontal } from "lucide-react";
 import { StatusDot } from "@/components/CollectionView";
@@ -15,24 +16,36 @@ import { getToolAvatars } from "@/utils/toolsDisplay";
 /* ---------------- status ---------------- */
 
 export interface AgentStatusMeta {
-  label: string;
+  /** Stable identity used for tabs / grouping (statuses with the same label key
+   *  merge — e.g. published + active). For unknown statuses it's the raw value. */
+  labelKey: string;
   color: string;
+  known: boolean;
 }
 
-const STATUS_META: Record<string, AgentStatusMeta> = {
-  published: { label: "Active", color: "#1f9d6b" },
-  active: { label: "Active", color: "#1f9d6b" },
-  pending: { label: "Pending", color: "#c98a00" },
-  paused: { label: "Paused", color: "#c98a00" },
-  draft: { label: "Draft", color: "#a4a8b0" },
-  rejected: { label: "Rejected", color: "#d6453d" },
+const STATUS_META: Record<string, { labelKey: string; color: string }> = {
+  published: { labelKey: "statusActive", color: "#1f9d6b" },
+  active: { labelKey: "statusActive", color: "#1f9d6b" },
+  pending: { labelKey: "statusPending", color: "#c98a00" },
+  paused: { labelKey: "statusPaused", color: "#c98a00" },
+  draft: { labelKey: "statusDraft", color: "#a4a8b0" },
+  rejected: { labelKey: "statusRejected", color: "#d6453d" },
 };
 
 export function statusMeta(status: string | null | undefined): AgentStatusMeta {
   const key = (status || "").toLowerCase();
-  if (STATUS_META[key]) return STATUS_META[key];
-  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : "Unknown";
-  return { label, color: "#a4a8b0" };
+  if (STATUS_META[key]) return { ...STATUS_META[key], known: true };
+  return { labelKey: key || "unknown", color: "#a4a8b0", known: false };
+}
+
+/** Resolve a status into its localized display label (handles unknown). */
+export function agentStatusLabel(
+  t: (key: string) => string,
+  status: string | null | undefined
+): string {
+  const key = (status || "").toLowerCase();
+  if (STATUS_META[key]) return t(STATUS_META[key].labelKey);
+  return key ? key.charAt(0).toUpperCase() + key.slice(1) : t("unknown");
 }
 
 /** Group ordering for the "Status" grouping (known states first). */
@@ -63,6 +76,7 @@ export function ModelCell({
   model: ModelInfo | null | undefined;
   className?: string;
 }) {
+  const t = useTranslations("AgentsPage.view");
   const name = modelLabel(model);
   const provider = model?.provider_name;
   const iconUrl = model?.provider_icon_url ?? null;
@@ -78,7 +92,7 @@ export function ModelCell({
         <span className="grid h-[17px] w-[17px] shrink-0 place-items-center rounded-[5px] border border-dashed border-border text-muted-foreground">
           <MoreHorizontal className="h-2.5 w-2.5" />
         </span>
-        <span className="truncate">Unknown model</span>
+        <span className="truncate">{t("unknownModel")}</span>
       </span>
     );
   }
@@ -94,7 +108,7 @@ export function ModelCell({
         <span className="grid h-[17px] w-[17px] shrink-0 place-items-center overflow-hidden rounded-[5px] dark:bg-white/85 dark:p-[2.5px] dark:ring-1 dark:ring-white/10">
           <Image
             src={iconUrl}
-            alt={provider || "Model"}
+            alt={provider || t("modelAlt")}
             width={17}
             height={17}
             className="h-full w-full object-contain"
@@ -126,7 +140,9 @@ export function StatusCell({
   dotOnly?: boolean;
   className?: string;
 }) {
-  const { label, color } = statusMeta(status);
+  const t = useTranslations("AgentsPage.view");
+  const { color } = statusMeta(status);
+  const label = agentStatusLabel(t, status);
   return (
     <StatusDot
       color={color}
@@ -147,6 +163,7 @@ export function TasksCell({
   count: number;
   className?: string;
 }) {
+  const tt = useTranslations("AgentsPage.view");
   if (!count) {
     return (
       <Tooltip>
@@ -160,7 +177,7 @@ export function TasksCell({
             —
           </span>
         </TooltipTrigger>
-        <TooltipContent>No active tasks</TooltipContent>
+        <TooltipContent>{tt("noActiveTasks")}</TooltipContent>
       </Tooltip>
     );
   }
@@ -180,7 +197,7 @@ export function TasksCell({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {count} active task{count > 1 ? "s" : ""} running
+        {tt("activeTasksRunning", { count })}
       </TooltipContent>
     </Tooltip>
   );
@@ -195,6 +212,7 @@ export function ToolsCell({
   agent: Agent;
   className?: string;
 }) {
+  const tl = useTranslations("AgentsPage.view");
   const tools = getToolAvatars(agent);
 
   if (tools.length === 0) {
@@ -207,10 +225,10 @@ export function ToolsCell({
               className
             )}
           >
-            No tools
+            {tl("noTools")}
           </span>
         </TooltipTrigger>
-        <TooltipContent>No tools connected</TooltipContent>
+        <TooltipContent>{tl("noToolsConnected")}</TooltipContent>
       </Tooltip>
     );
   }
@@ -240,7 +258,7 @@ export function ToolsCell({
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-[240px]">
-        Tools: {tools.map((t) => t.name).join(", ")}
+        {tl("toolsList", { names: tools.map((tool) => tool.name).join(", ") })}
       </TooltipContent>
     </Tooltip>
   );

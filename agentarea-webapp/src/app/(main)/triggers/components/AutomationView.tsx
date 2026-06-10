@@ -11,24 +11,21 @@ import {
   Rows3,
   Tag,
   Webhook,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import CollectionView, {
+  AgentChip,
+  CollectionFilterClear,
   CollectionFilterRow,
+  CollectionSearchInput,
   CollectionToolbar,
   StatusDot,
-  Tile,
   type CollectionGroup,
   type CollectionItem,
 } from "@/components/CollectionView";
 import EmptyState from "@/components/EmptyState";
-import { cn } from "@/lib/utils";
 import { setCookie } from "@/utils/cookies";
 import { findTriggerCatalogEntry } from "./triggerDisplay";
-
-/* agent chip colour — matches the Bot tile used on /tasks */
-const AGENT_COLOR = "#5e6ad2";
 
 type ViewKey = "list" | "grid";
 type TabKey = "all" | "cron" | "webhook";
@@ -51,13 +48,13 @@ interface AutomationViewProps {
 
 /* ── type (cron / webhook) ─────────────────────────────────────────────── */
 
+/** A next-intl translator (loosely typed for use in module-level helpers). */
+type TFn = (key: string, values?: Record<string, string | number>) => string;
+
 type TypeKey = "cron" | "webhook";
-const TYPE_META: Record<
-  TypeKey,
-  { label: string; icon: LucideIcon; color: string }
-> = {
-  cron: { label: "Cron", icon: Clock, color: "#2252b3" },
-  webhook: { label: "Webhook", icon: Webhook, color: "#7a5af5" },
+const TYPE_META: Record<TypeKey, { icon: LucideIcon; color: string }> = {
+  cron: { icon: Clock, color: "#2252b3" },
+  webhook: { icon: Webhook, color: "#7a5af5" },
 };
 
 function triggerKind(trigger: any): TypeKey {
@@ -67,10 +64,10 @@ function triggerKind(trigger: any): TypeKey {
 /* ── status (active / paused / error) ──────────────────────────────────── */
 
 type StatusKey = "active" | "paused" | "error";
-const STATUS_META: Record<StatusKey, { label: string; color: string }> = {
-  active: { label: "Active", color: "#1f9d6b" },
-  paused: { label: "Paused", color: "#8a8f98" },
-  error: { label: "Error", color: "#d6453d" },
+const STATUS_META: Record<StatusKey, { labelKey: string; color: string }> = {
+  active: { labelKey: "statusActive", color: "#1f9d6b" },
+  paused: { labelKey: "statusPaused", color: "#8a8f98" },
+  error: { labelKey: "statusError", color: "#d6453d" },
 };
 const STATUS_ORDER: StatusKey[] = ["error", "active", "paused"];
 
@@ -82,126 +79,95 @@ function triggerStatus(trigger: any): StatusKey {
 
 /* ── schedule + next-run text ──────────────────────────────────────────── */
 
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
-/** Format `hour minute` (24h fields) as e.g. "9:00 AM", "midnight", "noon". */
-function clockText(hourField: string, minField: string): string | null {
+/** Format `hour minute` (24h fields) as e.g. "9:00", or the localized
+ *  "midnight" / "noon". */
+function clockText(hourField: string, minField: string, tv: TFn): string | null {
   const h = Number(hourField);
   const m = Number(minField);
   if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
-  if (h === 0 && m === 0) return "midnight";
-  if (h === 12 && m === 0) return "noon";
-  const ampm = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  if (h === 0 && m === 0) return tv("midnight");
+  if (h === 12 && m === 0) return tv("noon");
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
-/** Turn a standard 5-field cron expression into design-style English, falling
- *  back to the raw expression for anything exotic. */
-function humanizeCron(expr: string): string {
+/** Turn a standard 5-field cron expression into localized English/Russian,
+ *  falling back to the raw expression for anything exotic. */
+function humanizeCron(expr: string, tv: TFn): string {
   const parts = expr.trim().split(/\s+/);
   if (parts.length < 5) return expr;
   const [min, hour, dom, mon, dow] = parts;
   const everyDay = dom === "*" && mon === "*" && dow === "*";
 
-  // Every N minutes / every minute
+  // Every N minutes / every minute / every hour
   if (hour === "*" && everyDay) {
-    if (min === "*") return "Every minute";
-    if (/^\*\/\d+$/.test(min)) return `Every ${min.slice(2)} minutes`;
-    if (min === "0") return "Every hour";
+    if (min === "*") return tv("everyMinute");
+    if (/^\*\/\d+$/.test(min)) return tv("everyNMinutes", { n: Number(min.slice(2)) });
+    if (min === "0") return tv("everyHour");
   }
   // Every N hours
   if (min === "0" && /^\*\/\d+$/.test(hour) && everyDay) {
-    return `Every ${hour.slice(2)} hours`;
+    return tv("everyNHours", { n: Number(hour.slice(2)) });
   }
 
-  const time = clockText(hour, min);
+  const time = clockText(hour, min, tv);
   if (time) {
-    // Daily
-    if (everyDay) {
-      return time === "midnight"
-        ? "Every day at midnight"
-        : `Every day at ${time}`;
-    }
+    if (everyDay) return tv("everyDayAt", { time });
     if (dom === "*" && mon === "*") {
-      // Weekday / weekend ranges
-      if (dow === "1-5") return `Weekdays at ${time}`;
-      if (dow === "0,6" || dow === "6,0") return `Weekends at ${time}`;
-      // A single weekday
+      if (dow === "1-5") return tv("weekdaysAt", { time });
+      if (dow === "0,6" || dow === "6,0") return tv("weekendsAt", { time });
       const d = Number(dow);
       if (Number.isInteger(d) && d >= 0 && d <= 6) {
-        return `Every ${WEEKDAYS[d]} at ${time}`;
+        return tv("everyWeekdayAt", { day: d, time });
       }
     }
-    // Monthly on a day-of-month
     if (/^\d+$/.test(dom) && dow === "*") {
-      return `Monthly on day ${dom} at ${time}`;
+      return tv("monthlyAt", { dom, time });
     }
   }
   return expr;
 }
 
-function scheduleText(trigger: any, entry: any, kind: TypeKey): string {
+function scheduleText(trigger: any, entry: any, kind: TypeKey, tv: TFn): string {
   if (kind === "cron") {
-    if (trigger.cron_expression) return humanizeCron(trigger.cron_expression);
-    return trigger.description || "Scheduled";
+    if (trigger.cron_expression) return humanizeCron(trigger.cron_expression, tv);
+    return trigger.description || tv("scheduled");
   }
   const sub = entry?.name || trigger.webhook_type;
-  if (sub && !/^(generic|webhook)$/i.test(sub)) return `On ${sub}`;
-  return trigger.description || "On incoming request";
+  if (sub && !/^(generic|webhook)$/i.test(sub)) return tv("onSub", { name: sub });
+  return trigger.description || tv("onIncomingRequest");
 }
 
 /** Compact future delta, e.g. "in 3m", "in 9h", "in 5d". */
-function relativeFuture(iso?: string | null): string | null {
+function relativeFuture(iso: string | null | undefined, tv: TFn): string | null {
   if (!iso) return null;
   const ts = new Date(iso).getTime();
   if (Number.isNaN(ts)) return null;
   const diff = ts - Date.now();
-  if (diff <= 0) return "now";
+  if (diff <= 0) return tv("relNow");
   const m = Math.round(diff / 60_000);
-  if (m < 60) return `in ${m}m`;
+  if (m < 60) return tv("relMin", { n: m });
   const h = Math.round(m / 60);
-  if (h < 24) return `in ${h}h`;
-  return `in ${Math.round(h / 24)}d`;
+  if (h < 24) return tv("relHour", { n: h });
+  return tv("relDay", { n: Math.round(h / 24) });
 }
 
 /* ── small presentational pieces (match the prototype) ─────────────────── */
 
 function TypePill({ kind }: { kind: TypeKey }) {
-  const { label, icon: Icon, color } = TYPE_META[kind];
+  const t = useTranslations("TriggersPage");
+  const { icon: Icon, color } = TYPE_META[kind];
   return (
     <span className="inline-flex h-[22px] w-max items-center gap-1.5 rounded-md border border-border bg-background px-2 text-[11.5px] font-medium text-foreground/80">
       <Icon className="h-3.5 w-3.5" strokeWidth={1.8} style={{ color }} />
-      {label}
+      {t(`type.${kind}`)}
     </span>
   );
 }
 
-/** Agent chip — Bot tile + name, identical to the one used on /tasks. */
-function AgentCell({ name, className }: { name: string; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex min-w-0 items-center gap-2 text-left text-[12.5px] text-foreground/80",
-        className
-      )}
-    >
-      <Tile color={AGENT_COLOR} icon={Bot} size={18} />
-      <span className="truncate">{name}</span>
-    </span>
-  );
-}
 
 function NextRun({ iso }: { iso?: string | null }) {
-  const rel = relativeFuture(iso);
+  const tv = useTranslations("TriggersPage.view");
+  const rel = relativeFuture(iso, tv);
   if (!rel) {
     return <span className="text-[12px] text-muted-foreground/60">—</span>;
   }
@@ -214,8 +180,11 @@ function NextRun({ iso }: { iso?: string | null }) {
 }
 
 function StatusChip({ status }: { status: StatusKey }) {
+  const tv = useTranslations("TriggersPage.view");
   const s = STATUS_META[status];
-  return <StatusDot color={s.color} label={s.label} className="text-[12px]" />;
+  return (
+    <StatusDot color={s.color} label={tv(s.labelKey)} className="text-[12px]" />
+  );
 }
 
 /* ── view ──────────────────────────────────────────────────────────────── */
@@ -230,6 +199,8 @@ export default function AutomationView({
   const searchParams = useSearchParams();
 
   const tc = useTranslations("Collection");
+  const t = useTranslations("TriggersPage");
+  const tv = useTranslations("TriggersPage.view");
 
   const [view, setView] = useState<ViewKey>(initial.view);
   const [tab, setTab] = useState<TabKey>(initial.tab);
@@ -276,7 +247,7 @@ export default function AutomationView({
         const entry = findTriggerCatalogEntry(trigger, catalog);
         const status = triggerStatus(trigger);
         const agent = trigger.agent_name || "Unknown agent";
-        const schedule = scheduleText(trigger, entry, kind);
+        const schedule = scheduleText(trigger, entry, kind, tv);
         const { color, icon: Icon } = TYPE_META[kind];
         return {
           kind,
@@ -299,7 +270,7 @@ export default function AutomationView({
                 style={{ gridTemplateColumns: "88px 160px 86px 96px" }}
               >
                 <TypePill kind={kind} />
-                <AgentCell name={agent} />
+                <AgentChip name={agent} tooltip={false} />
                 <NextRun iso={trigger.next_run_time} />
                 <StatusChip status={status} />
               </span>
@@ -313,13 +284,13 @@ export default function AutomationView({
                   <TypePill kind={kind} />
                   <StatusChip status={status} />
                 </div>
-                <AgentCell name={agent} className="pr-6" />
+                <AgentChip name={agent} tooltip={false} className="pr-6" />
               </div>
             ),
           },
         };
       }),
-    [triggers, catalog]
+    [triggers, catalog, tv]
   );
 
   // ── filtering ──
@@ -360,7 +331,7 @@ export default function AutomationView({
     if (group === "status") {
       return STATUS_ORDER.map((key) => ({
         key,
-        label: STATUS_META[key].label,
+        label: tv(STATUS_META[key].labelKey),
         color: STATUS_META[key].color,
         items: sortEntries(visible.filter((e) => e.status === key)).map(
           (e) => e.item
@@ -371,7 +342,7 @@ export default function AutomationView({
       return (["cron", "webhook"] as TypeKey[])
         .map((key) => ({
           key,
-          label: TYPE_META[key].label,
+          label: t(`type.${key}`),
           color: TYPE_META[key].color,
           items: sortEntries(visible.filter((e) => e.kind === key)).map(
             (e) => e.item
@@ -393,7 +364,7 @@ export default function AutomationView({
         ),
       }))
       .filter((g) => g.items.length > 0);
-  }, [view, group, visible, sortEntries]);
+  }, [view, group, visible, sortEntries, t, tv]);
 
   const items = useMemo(
     () => sortEntries(visible).map((e) => e.item),
@@ -434,8 +405,8 @@ export default function AutomationView({
       <CollectionToolbar
         tabs={[
           { value: "all", label: tc("all"), count: counts.all },
-          { value: "cron", label: "Cron", count: counts.cron },
-          { value: "webhook", label: "Webhook", count: counts.webhook },
+          { value: "cron", label: t("type.cron"), count: counts.cron },
+          { value: "webhook", label: t("type.webhook"), count: counts.webhook },
         ]}
         activeTab={tab}
         onTabChange={onTab}
@@ -462,22 +433,8 @@ export default function AutomationView({
 
       {filtersOpen && (
         <CollectionFilterRow>
-          <input
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder={tc("search")}
-            className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => onSearch("")}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {tc("clear")}
-            </button>
-          )}
+          <CollectionSearchInput value={search} onChange={onSearch} />
+          {search && <CollectionFilterClear onClick={() => onSearch("")} />}
         </CollectionFilterRow>
       )}
 
@@ -485,8 +442,8 @@ export default function AutomationView({
         {entries.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              title="No triggers yet"
-              description="Create a trigger to automate your agent workflows."
+              title={t("noTriggers")}
+              description={t("noTriggersDescription")}
               iconsType="triggers"
             />
           </div>
@@ -501,8 +458,8 @@ export default function AutomationView({
             emptyState={
               <div className="px-4 py-3 text-[12px] text-muted-foreground">
                 {search
-                  ? "No triggers match this filter."
-                  : "No triggers in this view."}
+                  ? tv("noMatch")
+                  : tv("noneInView")}
               </div>
             }
           />
