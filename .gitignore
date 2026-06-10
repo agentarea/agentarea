@@ -141,3 +141,9 @@ tmp/
 
 # MCP OAuth catalog dump (generated; lives in S3, not git)
 mcp-oauth-catalog.yaml
+
+# Stray business/marketing artifacts — keep out of the code repo
+competitors-*
+tam-sam-som.html
+network-layout-variants.html
+agentarea-talk.html
