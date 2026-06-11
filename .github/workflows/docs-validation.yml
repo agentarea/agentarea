@@ -8,6 +8,9 @@ on:
     paths:
       - 'docs/**'
 
+permissions:
+  contents: read
+
 jobs:
   validate-docs:
     name: Validate Mintlify Documentation

@@ -917,7 +917,9 @@ async def handle_message_stream_sse(
     except ValueError as e:
         # Handle TaskService validation errors (e.g., agent not found in TaskService)
         duration_ms = (time.time() - start_time) * 1000
-        error_message = f"Invalid parameters: {e}"
+        # Log the full validation detail server-side; return a generic
+        # JSON-RPC invalid-params message to the caller to avoid leaking
+        # internal exception details.
         log_a2a_operation(
             "message_stream",
             agent_id,
@@ -925,14 +927,14 @@ async def handle_message_stream_sse(
             request_id,
             status="failed",
             duration_ms=duration_ms,
-            error=error_message,
+            error=f"Invalid parameters: {e}",
         )
 
         async def error_stream():
             error_data = {
                 "event": "error",
                 "code": -32602,
-                "message": error_message,
+                "message": "Invalid parameters",
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 

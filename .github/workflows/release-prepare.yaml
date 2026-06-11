@@ -12,6 +12,9 @@ on:
           - minor
           - major
 
+permissions:
+  contents: read
+
 jobs:
   # Step 1: Validate current state BEFORE making any changes
   validate-current-state:

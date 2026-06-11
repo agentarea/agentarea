@@ -491,12 +491,12 @@ async def triggers_health_check(
 
         return health_status
 
-    except Exception as e:
-        logger.error(f"Triggers health check failed: {e}")
+    except Exception:
+        logger.error("Triggers health check failed", exc_info=True)
         return {
             "overall_status": "unhealthy",
             "service": "triggers",
-            "error": str(e),
+            "error": "health check failed",
             "timestamp": datetime.utcnow().isoformat(),
             "components": {},
         }
