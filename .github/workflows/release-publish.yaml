@@ -51,7 +51,10 @@ jobs:
 
           bash scripts/verify-version-sync.sh
 
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Pin to 7 chars: ci.yml/docker metadata tag images with a fixed
+          # 7-char {{sha}}, while `git rev-parse --short` auto-extends to 8+ as
+          # the repo grows, which would look for a non-existent source tag.
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
 
