@@ -18,6 +18,12 @@ permissions:
 jobs:
   # Step 1: Validate current state BEFORE making any changes
   validate-current-state:
+    # ci.yml's docker jobs declare packages: write; GitHub validates a called
+    # workflow's job permissions even when skip-docker short-circuits them, so
+    # the caller must grant packages: write (overrides the top-level default).
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/ci.yml
     with:
       skip-docker: true
