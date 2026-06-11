@@ -147,3 +147,9 @@ competitors-*
 tam-sam-som.html
 network-layout-variants.html
 agentarea-talk.html
+
+# Standalone Docker runtime data
+/data/postgres/
+/data/rustfs/
+/data/valkey/
+/data/mcp-containers/
