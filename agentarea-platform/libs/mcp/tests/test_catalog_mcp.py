@@ -58,7 +58,8 @@ def test_project_marks_read_only_with_provenance():
     item = _item(spec={"connection_type": "url", "url": "https://api/mcp", "env_schema": []})
     server = _project_catalog_mcp_server(item)
     assert str(server.id) == item.id
-    assert server.registry_item_id == item.id
+    # registry_item_id is stored as a real uuid; the fixture id is its string form
+    assert str(server.registry_item_id) == item.id
     assert server.is_catalog is True
     assert server.remote_url == "https://api/mcp"
     assert server.registry_url == "https://registry.example.com"
