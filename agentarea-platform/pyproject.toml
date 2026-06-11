@@ -25,7 +25,6 @@ dependencies = [
 members = [
     "apps/api",
     "apps/worker",
-    "apps/cli",
     "libs/common",
     "libs/agents",
     "libs/agentarea-agents-sdk",
@@ -78,7 +77,6 @@ agentarea-registry = { workspace = true }
 agentarea-bundles = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
-agentarea-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
