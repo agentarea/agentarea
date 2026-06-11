@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
@@ -516,23 +517,28 @@ async def get_provider_logo(
     if not re.match(r"^[a-zA-Z0-9_-]+$", provider_key):
         raise HTTPException(status_code=400, detail="Invalid provider key")
 
-    import os
-
     from fastapi.responses import FileResponse
 
-    # Map provider key to icon file
-    icon_path = f"core/static/icons/providers/{provider_key.lower()}.svg"
+    # Resolve and confine the icon path to the providers directory. The regex
+    # above already rejects separators, but we canonicalize and verify
+    # containment as defense in depth against path traversal.
+    icons_dir = Path("core/static/icons/providers").resolve()
+    icon_path = (icons_dir / f"{provider_key.lower()}.svg").resolve()
+    if not icon_path.is_relative_to(icons_dir):
+        raise HTTPException(status_code=400, detail="Invalid provider key")
 
-    if os.path.exists(icon_path):
+    if icon_path.is_file():
         return FileResponse(
-            icon_path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"}
+            str(icon_path),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"},
         )
 
     # Return default icon if specific one doesn't exist
-    default_path = "core/static/icons/providers/default.svg"
-    if os.path.exists(default_path):
+    default_path = icons_dir / "default.svg"
+    if default_path.is_file():
         return FileResponse(
-            default_path,
+            str(default_path),
             media_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=3600"},
         )
