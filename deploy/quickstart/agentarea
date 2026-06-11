@@ -5,6 +5,9 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yaml"
 ENV_FILE="$ROOT_DIR/.env"
 
+# Built-in MCP catalog source (reconciled into registry_items on demand).
+CATALOG_MCP_SOURCE="https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json"
+
 compose() {
   COMPOSE_PROJECT_NAME=agentarea docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
@@ -29,7 +32,8 @@ Commands:
   pull        Pull AgentArea images
   migrate     Run database migrations
   config      Print or edit the .env config file
-  up          Start AgentArea in the background
+  up          Start AgentArea in the background (asks to populate the catalog)
+  reconcile   Populate the built-in MCP catalog (idempotent)
   down        Stop AgentArea
   restart     Restart AgentArea
   logs        Follow service logs
@@ -113,6 +117,36 @@ ask() {
   printf '%s' "$answer"
 }
 
+wait_for_app() {
+  i=0
+  while [ "$i" -lt 60 ]; do
+    if compose ps app 2>/dev/null | grep -q "healthy"; then
+      return 0
+    fi
+    sleep 2
+    i=$((i + 1))
+  done
+  return 1
+}
+
+reconcile() {
+  require_docker
+  if ! wait_for_app; then
+    echo "API is not healthy yet. Once it is up, run: $ROOT_DIR/agentarea reconcile" >&2
+    return 1
+  fi
+  echo "Populating the built-in MCP catalog (fetches the MCP registry; this can take a minute)..."
+  compose exec -T app agentarea-api reconcile --source "$CATALOG_MCP_SOURCE"
+}
+
+prompt_reconcile() {
+  answer=$(ask "Populate the built-in MCP catalog now (reconcile)? [y/N]" "N")
+  case "$answer" in
+    y | Y | yes | YES) reconcile ;;
+    *) echo "Skipped. Populate it later with: $ROOT_DIR/agentarea reconcile" ;;
+  esac
+}
+
 cmd="${1:-}"
 case "$cmd" in
   doctor)
@@ -133,6 +167,10 @@ case "$cmd" in
     require_docker
     compose up -d
     open_urls
+    prompt_reconcile
+    ;;
+  reconcile)
+    reconcile
     ;;
   down)
     require_docker
