@@ -519,28 +519,26 @@ async def get_provider_logo(
 
     from fastapi.responses import FileResponse
 
-    # Resolve and confine the icon path to the providers directory. The regex
-    # above already rejects separators, but we canonicalize and verify
-    # containment as defense in depth against path traversal.
     icons_dir = Path("core/static/icons/providers").resolve()
-    icon_path = (icons_dir / f"{provider_key.lower()}.svg").resolve()
-    if not icon_path.is_relative_to(icons_dir):
-        raise HTTPException(status_code=400, detail="Invalid provider key")
+    if not icons_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Provider logo not found")
 
-    if icon_path.is_file():
-        return FileResponse(
-            str(icon_path),
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+    # Serve only files discovered by listing the icons directory. The path
+    # handed to FileResponse comes from the directory enumeration, never from
+    # concatenating the user-provided key, so traversal is structurally
+    # impossible (the key is only used to match an existing entry by name).
+    def serve_icon(name: str) -> FileResponse | None:
+        for entry in icons_dir.iterdir():
+            if entry.name == name and entry.is_file():
+                return FileResponse(
+                    str(entry),
+                    media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=3600"},
+                )
+        return None
 
-    # Return default icon if specific one doesn't exist
-    default_path = icons_dir / "default.svg"
-    if default_path.is_file():
-        return FileResponse(
-            str(default_path),
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+    response = serve_icon(f"{provider_key.lower()}.svg") or serve_icon("default.svg")
+    if response is not None:
+        return response
 
     raise HTTPException(status_code=404, detail="Provider logo not found")
