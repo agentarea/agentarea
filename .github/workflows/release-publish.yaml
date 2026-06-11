@@ -75,7 +75,7 @@ jobs:
           - api
           - worker
           - frontend
-          - bootstrap
+          - operator
           - mcp-manager
           - mcp-runner
           - events
