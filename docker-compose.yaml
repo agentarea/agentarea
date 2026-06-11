@@ -127,7 +127,7 @@ services:
   rustfs:
     image: rustfs/rustfs:latest
     volumes:
-      - rustfs_data:/data
+      - ./data/rustfs:/data
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
@@ -147,9 +147,9 @@ services:
       - POSTGRES_DB=postgres  # Maintenance DB; postgres_init creates the main app DB plus aux DBs
     volumes:
       # postgres:18 stores data under /var/lib/postgresql/<ver>/docker, so the
-      # volume must mount at the parent dir — mounting the legacy .../data path
+      # mount must target the parent dir — mounting the legacy .../data path
       # makes the image refuse to start. Matches docker-compose.dev.yaml.
-      - postgres_data:/var/lib/postgresql
+      - ./data/postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -165,7 +165,7 @@ services:
     container_name: agentarea-valkey
     restart: always
     volumes:
-      - valkey_data:/data
+      - ./data/valkey:/data
     networks:
       - default
       - mcp-network
@@ -181,7 +181,7 @@ services:
       - /tmp
       - /run
     volumes:
-      - mcp_containers:/var/lib/containers/storage
+      - ./data/mcp-containers:/var/lib/containers/storage
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - mcp-network
@@ -376,13 +376,6 @@ services:
       kratos-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-  rustfs_data:
-  valkey_data:
-  mcp_containers:
-    driver: local
 
 networks:
   mcp-network:
