@@ -22,7 +22,7 @@ import (
 	"github.com/agentarea/event-service/internal/submit"
 )
 
-const version = "0.0.10"
+const version = "0.0.11"
 
 func main() {
 	// Structured logging
