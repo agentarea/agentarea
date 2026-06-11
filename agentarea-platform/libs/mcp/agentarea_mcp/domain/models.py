@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, String, UniqueConstraint
@@ -30,9 +31,11 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     cmd: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     # Remote URL for URL-type MCP servers (e.g. https://api.githubcopilot.com/mcp/)
     remote_url: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
-    # Provenance: links back to the registry catalog item this spec was installed from
-    registry_item_id: Mapped[str | None] = mapped_column(
-        PG_UUID(as_uuid=False), nullable=True, default=None
+    # Provenance: links back to the registry catalog item this spec was installed from.
+    # Column is a real Postgres uuid; bind as UUID (as_uuid=False makes asyncpg send a
+    # VARCHAR, which Postgres rejects against the uuid column on insert).
+    registry_item_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, default=None
     )
     # Raw ServerJSON spec from MCP registry — source of truth for icons, headers, variables, etc.
     json_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
@@ -52,7 +55,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
         remote_url: str | None = None,
-        registry_item_id: str | None = None,
+        registry_item_id: UUID | str | None = None,
         json_spec: dict[str, Any] | None = None,
         registry_url: str | None = None,
         # Note: user_id and workspace_id are now handled by BaseModel
@@ -71,6 +74,8 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self.env_schema = env_schema or []
         self.cmd = cmd
         self.remote_url = remote_url
-        self.registry_item_id = registry_item_id
+        self.registry_item_id = (
+            UUID(registry_item_id) if isinstance(registry_item_id, str) else registry_item_id
+        )
         self.json_spec = json_spec
         self.registry_url = registry_url
