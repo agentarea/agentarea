@@ -1,6 +1,6 @@
 [project]
 name = "agentarea-execution"
-version = "0.0.10"
+version = "0.0.11"
 description = "AgentArea execution library"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.11"

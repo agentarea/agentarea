@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-governance"
-version = "0.0.10"
+version = "0.0.11"
 description = "Unified interceptor framework for agent execution governance and security"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
