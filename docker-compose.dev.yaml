@@ -237,11 +237,13 @@ services:
       - mcp-network
 
   mcp-manager:
-    image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
+    # Dev image is tagged :dev so `make up-dev` builds never clobber the
+    # published :latest prod image (same single Dockerfile, dev target).
+    image: agentarea/agentarea-mcp-manager:dev
     build:
       context: agentarea-mcp-manager
-      dockerfile: Dockerfile.dev
-      target: development
+      dockerfile: Dockerfile
+      target: dev
       platforms:
         - linux/amd64
         - linux/arm64

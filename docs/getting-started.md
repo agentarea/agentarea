@@ -101,15 +101,15 @@ docker compose -f docker-compose.dev.yaml up -d
 ```
 
 ### CLI Usage
+
+AgentArea ships an interactive CLI (`@agentarea/cli`) for authenticating, discovering agents, and streaming task output. See [`agentarea-cli/readme.md`](../agentarea-cli/readme.md) for full usage.
+
 ```bash
-# Access CLI inside container
-docker compose -f docker-compose.dev.yaml exec app bash
+# Install globally
+npm install --global agentarea-cli
 
-# Run CLI commands
-python -m agentarea_cli --help
-
-# Example: Create an agent
-python -m agentarea_cli agent create --name "test-agent" --type "chat"
+# Launch the interactive CLI
+agentarea-cli
 ```
 
 ## 🧪 Testing Your Setup

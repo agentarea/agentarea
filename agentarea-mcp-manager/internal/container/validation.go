@@ -31,7 +31,7 @@ type ContainerValidator struct {
 // NewContainerValidator creates a new container validator
 func NewContainerValidator(logger *slog.Logger, manager *Manager, runtime string) *ContainerValidator {
 	if runtime == "" {
-		runtime = "podman"
+		runtime = "docker"
 	}
 	return &ContainerValidator{
 		logger:  logger,
