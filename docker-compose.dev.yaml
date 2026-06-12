@@ -268,7 +268,6 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
-      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
