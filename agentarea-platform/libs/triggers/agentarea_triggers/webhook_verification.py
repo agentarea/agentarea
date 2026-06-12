@@ -192,14 +192,14 @@ class GenericHMACVerifier(SignatureVerifier):
         try:
             signature = headers.get(self.header_name, "")
             if not signature:
-                logger.warning(f"Missing signature header: {self.header_name}")
+                logger.warning("Missing expected webhook signature header")
                 return False
 
             body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
 
             hash_func = getattr(hashlib, self.algorithm, None)
             if not hash_func:
-                logger.error(f"Unsupported hash algorithm: {self.algorithm}")
+                logger.error("Unsupported webhook hash algorithm configured")
                 return False
 
             expected = (

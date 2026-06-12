@@ -191,7 +191,9 @@ async def proxy_instance(
             upstream_url, instance_type, allow_private=allow_private
         )
     except ValueError as exc:
-        logger.warning("Rejected SSRF-unsafe MCP upstream for %s: %s", instance_id, exc)
+        # Strip CR/LF from the user-controlled path param to prevent log forging.
+        safe_instance_id = str(instance_id).replace("\r", "").replace("\n", "")
+        logger.warning("Rejected SSRF-unsafe MCP upstream for %s: %s", safe_instance_id, exc)
         raise HTTPException(
             status_code=400, detail=f"Upstream MCP URL is not allowed: {exc}"
         ) from exc
