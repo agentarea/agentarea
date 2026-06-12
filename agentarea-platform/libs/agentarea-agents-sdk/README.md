@@ -54,7 +54,7 @@ asyncio.run(example())
 import asyncio
 from agentic.models.llm_model import LLMModel, LLMRequest
 from agentic.tools.tool_executor import ToolExecutor
-from agentic.tools.calculate_tool import CalculateTool
+from agentic.tools.completion_tool import CompletionTool
 from agentic.prompts import PromptBuilder
 
 async def advanced_example():
@@ -67,7 +67,7 @@ async def advanced_example():
 
     # Set up tools
     tool_executor = ToolExecutor()
-    tool_executor.registry.register(CalculateTool())
+    tool_executor.registry.register(CompletionTool())
     tools = tool_executor.get_openai_functions()
 
     # Create request with tools
@@ -150,7 +150,7 @@ This demonstrates:
 ### Tools (`tools/`)
 
 - `BaseTool`: Base class for all tools
-- `CalculateTool`: Mathematical calculations
+- `MathToolset`: Safe arithmetic operations (add, subtract, multiply, divide, …)
 - `CompletionTool`: Task completion signaling
 - `MCPTool`: Model Context Protocol integration
 - `ToolExecutor`: Tool orchestration and execution

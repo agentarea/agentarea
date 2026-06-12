@@ -353,6 +353,82 @@ class TestDefaultWebhookManager:
         assert "headers" in call_args[0][1]
 
     @pytest.mark.asyncio
+    async def test_handle_webhook_rejects_invalid_signature(
+        self, webhook_manager, mock_execution_callback
+    ):
+        """A trigger with a signing secret rejects a bad signature before executing."""
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="Signed Webhook",
+            description="",
+            agent_id=uuid4(),
+            webhook_id="signed_webhook_bad",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GENERIC,
+            created_by="test_user",
+            is_active=True,
+            validation_rules={"signing_secret": "s3cr3t"},
+        )
+        await webhook_manager.register_webhook(trigger)
+
+        response = await webhook_manager.handle_webhook_request(
+            webhook_id=trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json", "x-webhook-signature": "bad"},
+            body={"test": "data"},
+            query_params={},
+            raw_body=b'{"test": "data"}',
+        )
+
+        assert response["status_code"] != 200
+        mock_execution_callback.execute_webhook_trigger.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_webhook_accepts_valid_signature(
+        self, webhook_manager, mock_execution_callback
+    ):
+        """A trigger with a signing secret proceeds to execute on a valid signature."""
+        import hashlib
+        import hmac
+
+        secret = "s3cr3t"  # noqa: S105
+        raw = b'{"test": "data"}'
+        sig = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="Signed Webhook",
+            description="",
+            agent_id=uuid4(),
+            webhook_id="signed_webhook_ok",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GENERIC,
+            created_by="test_user",
+            is_active=True,
+            validation_rules={"signing_secret": secret},
+        )
+        mock_execution_callback.execute_webhook_trigger.return_value = TriggerExecution(
+            id=uuid4(),
+            trigger_id=trigger.id,
+            executed_at=datetime.utcnow(),
+            status=ExecutionStatus.SUCCESS,
+            execution_time_ms=100,
+        )
+        await webhook_manager.register_webhook(trigger)
+
+        response = await webhook_manager.handle_webhook_request(
+            webhook_id=trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json", "x-webhook-signature": sig},
+            body={"test": "data"},
+            query_params={},
+            raw_body=raw,
+        )
+
+        assert response["status_code"] == 200
+        mock_execution_callback.execute_webhook_trigger.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_parse_telegram_webhook(self, webhook_manager, sample_telegram_trigger):
         """Test parsing Telegram webhook data."""
         telegram_data = {

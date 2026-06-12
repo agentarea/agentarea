@@ -33,7 +33,6 @@ class MathToolset(Toolset):
         tan: bool = True,
         log: bool = True,
         abs: bool = True,
-        evaluate: bool = True,
     ):
         """Initialize the MathToolset with configurable individual tools.
 
@@ -49,7 +48,6 @@ class MathToolset(Toolset):
             tan: Enable tangent function tool.
             log: Enable logarithm tool.
             abs: Enable absolute value tool.
-            evaluate: Enable expression evaluation tool.
         """
         self._add_enabled = add
         self._subtract_enabled = subtract
@@ -62,7 +60,6 @@ class MathToolset(Toolset):
         self._tan_enabled = tan
         self._log_enabled = log
         self._abs_enabled = abs
-        self._evaluate_enabled = evaluate
         # Initialize the parent class WITHOUT calling _discover_tool_methods yet
         # We'll override the _tool_methods after parent initialization
         super().__init__()
@@ -319,29 +316,3 @@ class MathToolset(Toolset):
             return f"|{number}| = {result}"
         except Exception as e:
             return f"Error in absolute value calculation: {e}"
-
-    @tool_method
-    async def evaluate(self, expression: str) -> str:
-        """Safely evaluate a mathematical expression.
-
-        Args:
-            expression: Mathematical expression to evaluate (e.g., "2 + 3 * 4", "sqrt(16) + 5").
-
-        Returns:
-            Result of the expression evaluation.
-        """
-        if not self._evaluate_enabled:
-            return "Error: expression evaluation is disabled for this toolset instance"
-
-        try:
-            # Define allowed operations for safe evaluation
-
-            # Replace common math functions with their Python equivalents
-            expression = expression.replace("^", "**")  # Power operator
-
-            # Simple eval for basic expressions - in production use safer parser
-            result = eval(expression)
-            return f"{expression} = {result}"
-
-        except Exception as e:
-            return f"Cannot evaluate '{expression}': {str(e)}"

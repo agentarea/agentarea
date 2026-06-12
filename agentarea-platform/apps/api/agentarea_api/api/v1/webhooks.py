@@ -1,5 +1,6 @@
 """Webhook endpoints for trigger system."""
 
+import json
 import logging
 from typing import Any
 
@@ -41,19 +42,23 @@ async def handle_webhook(
         query_params = dict(request.query_params)
 
         body = None
+        # Capture the exact raw bytes BEFORE parsing — HMAC signature
+        # verification must run over the unmodified payload, never a
+        # re-serialized dict (whitespace/key-order/escaping would differ).
+        raw_body: bytes | None = None
         content_type = headers.get("content-type", "").lower()
 
         if method in ["POST", "PUT", "PATCH"]:
+            raw_body = await request.body()
             try:
                 if "application/json" in content_type:
-                    body = await request.json()
+                    body = json.loads(raw_body) if raw_body else None
                 elif "application/x-www-form-urlencoded" in content_type:
                     body = dict(await request.form())
                 elif "multipart/form-data" in content_type:
                     body = dict(await request.form())
                 else:
-                    body_bytes = await request.body()
-                    body = body_bytes.decode("utf-8") if body_bytes else None
+                    body = raw_body.decode("utf-8") if raw_body else None
             except Exception as e:
                 logger.warning(f"Failed to parse request body for webhook {webhook_id}: {e}")
                 body = None
@@ -64,6 +69,7 @@ async def handle_webhook(
             headers=headers,
             body=body,
             query_params=query_params,
+            raw_body=raw_body,
         )
 
         status_code = result.get("status_code", 200)

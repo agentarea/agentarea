@@ -280,3 +280,72 @@ def get_verifier(webhook_type: str) -> SignatureVerifier | None:
     if verifier_cls:
         return verifier_cls()
     return None
+
+
+def resolve_signing_secret(
+    webhook_type: str,
+    validation_rules: dict | None,
+    webhook_config: dict | None,
+) -> str | None:
+    """Resolve the configured signing secret for a webhook type.
+
+    Looks up the type's secret key (e.g. ``signing_secret`` / ``webhook_secret``)
+    in ``validation_rules`` first, then ``webhook_config``. Returns None when no
+    secret is configured (signature verification not enabled for this trigger).
+    """
+    key = SIGNING_SECRET_KEYS.get(webhook_type)
+    if not key:
+        return None
+    for source in (validation_rules, webhook_config):
+        if source:
+            value = source.get(key)
+            if value:
+                return str(value)
+    return None
+
+
+def verify_webhook_signature(
+    webhook_type: str | None,
+    validation_rules: dict | None,
+    webhook_config: dict | None,
+    headers: dict[str, str],
+    body: bytes | str | None,
+) -> bool | None:
+    """Verify an incoming webhook's signature against the configured secret.
+
+    Returns:
+        True  -- a signing secret is configured and the signature is valid.
+        False -- a signing secret is configured but verification failed
+                 (bad signature, missing headers, or no raw body to verify).
+        None  -- no signing secret configured / no verifier for this type:
+                 signature verification is not enabled, caller may proceed.
+
+    The signature MUST be computed over the exact raw request body. Callers
+    must pass the unparsed bytes, never a re-serialized dict.
+    """
+    wt = (webhook_type or "generic").lower()
+    secret = resolve_signing_secret(wt, validation_rules, webhook_config)
+    if not secret:
+        return None
+
+    if body is None:
+        logger.warning(
+            "Signing secret configured for webhook_type=%s but no raw body to verify", wt
+        )
+        return False
+
+    if wt == "generic":
+        rules = validation_rules or {}
+        verifier: SignatureVerifier = GenericHMACVerifier(
+            header_name=rules.get("signature_header", "x-webhook-signature"),
+            algorithm=rules.get("signature_algorithm", "sha256"),
+            prefix=rules.get("signature_prefix", ""),
+        )
+    else:
+        resolved = get_verifier(wt)
+        if resolved is None:
+            return None
+        verifier = resolved
+
+    headers_lower = {k.lower(): v for k, v in headers.items()}
+    return verifier.verify(headers_lower, body, secret)

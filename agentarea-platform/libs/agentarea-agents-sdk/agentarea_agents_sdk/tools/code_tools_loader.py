@@ -24,9 +24,8 @@ def _ensure_all_toolsets_imported() -> None:
     a missing optional dependency (e.g. ``agentarea_api.*`` in a worker-only
     install) should not crash the loader.
     """
-    # Agent-runtime SDK code tools (calculator, math, file, web).
+    # Agent-runtime SDK code tools (math, file, web).
     sdk_modules = [
-        "agentarea_agents_sdk.tools.calculate_tool",
         "agentarea_agents_sdk.tools.math_toolset",
         "agentarea_agents_sdk.tools.file_toolset",
         "agentarea_agents_sdk.tools.workspace_files_toolset",
