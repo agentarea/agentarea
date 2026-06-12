@@ -37,9 +37,7 @@ class EchoTool:
         return {
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "Text to echo back"}
-                },
+                "properties": {"text": {"type": "string", "description": "Text to echo back"}},
                 "required": ["text"],
             }
         }
