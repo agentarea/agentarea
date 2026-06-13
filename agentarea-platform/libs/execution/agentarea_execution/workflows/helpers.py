@@ -1,6 +1,7 @@
 """Helper classes and utilities for agent execution workflows."""
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any, cast
 
 from temporalio import workflow
@@ -53,6 +54,46 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
 def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
     """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
     return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+class ToolAction(str, Enum):
+    """Verdict of the tool-call policy decision (single PEP for every tool)."""
+
+    ALLOW = "allow"
+    DENY = "deny"
+    REQUIRE_APPROVAL = "require_approval"
+
+
+def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) -> ToolAction:
+    """Single policy decision point applied to EVERY capability tool call.
+
+    Consolidates ``ToolsPolicy`` (allow/deny) and ``ApprovalPolicy`` from the
+    resolved governance snapshot into one verdict, with precedence:
+
+    1. tool in ``tools.denied``                -> DENY
+    2. ``tools.allowed`` set and tool not in it -> DENY  (allow-list mode;
+       ``allowed=None`` means "no allow-list", ``allowed=[]`` denies all)
+    3. approval required (global flag or tool in escalation_rules)
+       -> REQUIRE_APPROVAL
+    4. otherwise                                -> ALLOW
+
+    Deny wins over allow wins over approval. Pure and deterministic so it is
+    safe to call inside the Temporal workflow.
+    """
+    tools = (effective_policy or {}).get("tools") or {}
+
+    denied = tools.get("denied") or []
+    if tool_name in denied:
+        return ToolAction.DENY
+
+    allowed = tools.get("allowed")
+    if allowed is not None and tool_name not in allowed:
+        return ToolAction.DENY
+
+    if policy_requires_approval(effective_policy, tool_name):
+        return ToolAction.REQUIRE_APPROVAL
+
+    return ToolAction.ALLOW
 
 
 def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
