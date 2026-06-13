@@ -489,6 +489,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_instance.model_spec, "endpoint_url", None
             )
             context_window = getattr(model_instance.model_spec, "context_window", 128000)
+            max_output_tokens = getattr(model_instance.model_spec, "max_output_tokens", None)
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             provider_display_name = getattr(
@@ -502,6 +503,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             api_key_secret=api_key_secret,
             endpoint_url=endpoint_url,
             context_window=context_window,
+            max_output_tokens=max_output_tokens,
             display_name=display_name,
             provider_display_name=provider_display_name,
             resolved_at=datetime.now(UTC).isoformat(),
@@ -537,12 +539,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_name = None
             endpoint_url = None
             api_key = None
+            max_output_tokens = None
 
             if request.resolved_model:
                 cached = request.resolved_model
                 provider_type = cached.get("provider_type")
                 model_name = cached.get("model_name")
                 endpoint_url = cached.get("endpoint_url")
+                max_output_tokens = cached.get("max_output_tokens")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
@@ -583,6 +587,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     # Decode API key from secret manager
                     # (provider_config.api_key is a secret name/placeholder)
+                    max_output_tokens = getattr(
+                        model_instance.model_spec, "max_output_tokens", None
+                    )
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
                         from agentarea_common.config import get_database
@@ -612,11 +619,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
             # Create structured request
+            # Without an explicit cap, providers reserve credits/quota for the
+            # model's full output ceiling (e.g. 64k), which can 402 a low-balance
+            # key. Fall back to the model_spec's max_output_tokens.
+            effective_max_tokens = request.max_tokens or max_output_tokens
+
             llm_request = LLMRequest(
                 messages=request.messages,
                 tools=request.tools,
                 temperature=request.temperature,
-                max_tokens=request.max_tokens,
+                max_tokens=effective_max_tokens,
             )
 
             # Use streaming with ainvoke_stream and publish events
