@@ -105,8 +105,17 @@ export default function ModelInstances({
           endpoint_url: endpointUrl || null,
         });
         if (error) {
-          const detail = (error as any)?.detail ?? t("failedToDiscoverCheckKey");
-          toast.error(typeof detail === "string" ? detail : t("failedToDiscover"));
+          // Surface the real backend error. Only fall back to a NEUTRAL generic
+          // message — never blame the API key for non-auth failures (e.g. a 500
+          // would otherwise be reported as "Check API key", which is misleading).
+          const d = (error as any)?.detail;
+          const msg =
+            typeof d === "string" && d
+              ? d
+              : Array.isArray(d) && d[0]?.msg
+                ? d[0].msg
+                : (error as any)?.message || t("failedToDiscover");
+          toast.error(msg);
           return;
         }
         const result = data as { discovered?: number; new_models?: number };

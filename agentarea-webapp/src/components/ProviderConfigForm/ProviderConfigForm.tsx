@@ -428,10 +428,12 @@ export default function ProviderConfigForm({
           toast.success(t("toast.configurationUpdatedSuccessfully"));
         }
       } else {
+        // These messages are ICU plurals on {modelCount}; passing the arg avoids
+        // next-intl returning the raw key (e.g. "ProviderConfigForm.toast.…").
         toast.success(
           isEdit
-            ? t("toast.configurationUpdated")
-            : t("toast.configurationCreated")
+            ? t("toast.configurationUpdated", { modelCount: 0 })
+            : t("toast.configurationCreated", { modelCount: 0 })
         );
       }
 
