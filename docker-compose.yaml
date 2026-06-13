@@ -187,6 +187,9 @@ services:
       LOG_LEVEL: INFO
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://app:8000
+      # Route sandbox code-execution to the sandbox-executor container. The
+      # embedded runner in mcp-manager consumes the queue and delegates here.
+      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -196,6 +199,22 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
+
+  # Sandbox executor — isolated jail that actually runs agent code (data plane).
+  # mcp-manager (control plane) delegates executions here so untrusted code
+  # never runs inside the manager. In K8s this role is the warm-pool pods.
+  sandbox-executor:
+    image: agentarea/sandbox-executor:${VERSION:-latest}
+    container_name: agentarea-sandbox-executor
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+      - /workspace
+    networks:
+      - mcp-network
+      - default
+    environment:
+      ACTIVATION_PORT: "8080"
 
   # Temporal Infrastructure Services
   temporal:

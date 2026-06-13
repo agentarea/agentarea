@@ -11,12 +11,18 @@ import (
 	"time"
 
 	redis "github.com/go-redis/redis/v8"
-	corev1 "k8s.io/api/core/v1"
 
-	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
+
+// SandboxExecutor runs a sandbox script on whatever data plane the backend owns:
+// a Kubernetes warm pod (k8s backend) or the sandbox-executor container (docker
+// backend). The runner is the control plane and never executes code itself — it
+// always delegates across this boundary.
+type SandboxExecutor interface {
+	ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error)
+}
 
 type Config struct {
 	RequestStream string
@@ -28,14 +34,14 @@ type Config struct {
 }
 
 type Runner struct {
-	cfg     Config
-	store   *sandboxcontrol.RedisStore
-	service *sandboxcontrol.Service
-	wp      *warmpool.Client
-	logger  *slog.Logger
+	cfg      Config
+	store    *sandboxcontrol.RedisStore
+	service  *sandboxcontrol.Service
+	executor SandboxExecutor
+	logger   *slog.Logger
 }
 
-func New(cfg Config, store *sandboxcontrol.RedisStore, backend *backends.KubernetesBackend, logger *slog.Logger) *Runner {
+func New(cfg Config, store *sandboxcontrol.RedisStore, executor SandboxExecutor, logger *slog.Logger) *Runner {
 	if cfg.RequestStream == "" {
 		cfg.RequestStream = sandboxcontrol.DefaultExecutionRequestStream
 	}
@@ -61,11 +67,11 @@ func New(cfg Config, store *sandboxcontrol.RedisStore, backend *backends.Kuberne
 		"agentarea.sandbox-runner",
 	)
 	return &Runner{
-		cfg:     cfg,
-		store:   store,
-		service: sandboxcontrol.NewService(store, eventBus),
-		wp:      backend.GetWarmPoolClient(),
-		logger:  logger,
+		cfg:      cfg,
+		store:    store,
+		service:  sandboxcontrol.NewService(store, eventBus),
+		executor: executor,
+		logger:   logger,
 	}
 }
 
@@ -212,21 +218,7 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 		req.WorkflowID = record.ID
 	}
 
-	var pod *corev1.Pod
-	var err error
-	if req.WorkflowID != "" {
-		pod, err = r.wp.FindOrAssignPodForWorkflow(ctx, req.WorkflowID)
-	} else {
-		pod, err = r.wp.FindAvailablePod(ctx)
-	}
-	if err != nil {
-		return nil, err
-	}
-	result, err := r.wp.ExecuteInPod(ctx, pod, req)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return r.executor.ExecuteSandbox(ctx, req)
 }
 
 func (r *Runner) ack(ctx context.Context, messageID string) error {

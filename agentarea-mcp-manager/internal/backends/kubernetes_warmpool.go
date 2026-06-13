@@ -20,6 +20,29 @@ func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
 	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
 }
 
+// ExecuteSandbox runs a sandbox script on the warm-pool data plane. A
+// WorkflowID pins execution to a sticky pod (so /workspace/wf-<id>/ persists
+// across calls); otherwise any available warm pod is used. Implements
+// sandboxrunner.SandboxExecutor.
+func (k *KubernetesBackend) ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error) {
+	wp := k.GetWarmPoolClient()
+	if wp == nil {
+		return nil, fmt.Errorf("warm pool client unavailable")
+	}
+
+	var pod *corev1.Pod
+	var err error
+	if req.WorkflowID != "" {
+		pod, err = wp.FindOrAssignPodForWorkflow(ctx, req.WorkflowID)
+	} else {
+		pod, err = wp.FindAvailablePod(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return wp.ExecuteInPod(ctx, pod, req)
+}
+
 // CreateInstanceWithWarmPool creates MCP instance using warm pool for fast activation
 func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec *InstanceSpec) (*InstanceResult, error) {
 	instanceName := k.sanitizeInstanceName(spec.Name)

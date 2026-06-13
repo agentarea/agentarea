@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
 // DockerBackend implements the Backend interface using the existing container.Manager (Docker CLI)
@@ -32,6 +34,18 @@ func NewDockerBackend(cfg *config.Config, logger *slog.Logger) *DockerBackend {
 // GetManager returns the underlying container manager for backward compatibility
 func (d *DockerBackend) GetManager() *container.Manager {
 	return d.manager
+}
+
+// ExecuteSandbox runs a sandbox script against the configured sandbox-executor
+// container (dev/compose data plane). The manager is the trusted control plane
+// and never runs untrusted code itself — it delegates to the executor jail over
+// HTTP. Implements sandboxrunner.SandboxExecutor.
+func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.PostExecute(ctx, base+"/execute", req, 30*time.Second)
 }
 
 // Initialize initializes the Docker backend

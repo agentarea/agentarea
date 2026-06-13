@@ -222,21 +222,26 @@ func (c *Client) ExecuteInPod(ctx context.Context, pod *corev1.Pod, req ExecuteR
 	if podIP == "" {
 		return nil, fmt.Errorf("pod has no IP address")
 	}
+	return PostExecute(ctx, fmt.Sprintf("http://%s:8080/execute", podIP), req, c.timeout)
+}
 
-	url := fmt.Sprintf("http://%s:8080/execute", podIP)
-
+// PostExecute sends an ExecuteRequest to a sandbox executor's /execute endpoint
+// and returns the parsed result. The endpoint is the same whether it is a
+// Kubernetes warm pod (warm-pool data plane) or the dev/compose sandbox-executor
+// container, so both backends share this transport.
+func PostExecute(ctx context.Context, executeURL string, req ExecuteRequest, baseTimeout time.Duration) (*ExecuteResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	timeout := c.timeout
+	timeout := baseTimeout
 	if req.TimeoutSeconds > 0 {
 		// Add buffer for network overhead
 		timeout = time.Duration(req.TimeoutSeconds+5) * time.Second
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", executeURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
