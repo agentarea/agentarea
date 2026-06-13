@@ -190,6 +190,7 @@ source = { editable = "libs/bundles" }
 dependencies = [
     { name = "agentarea-agents" },
     { name = "agentarea-common" },
+    { name = "agentarea-governance" },
     { name = "agentarea-mcp" },
     { name = "agentarea-triggers" },
     { name = "pydantic" },
@@ -200,6 +201,7 @@ dependencies = [
 requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-mcp", editable = "libs/mcp" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "pydantic", specifier = ">=2.4.2" },

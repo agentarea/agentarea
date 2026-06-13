@@ -52,3 +52,40 @@ def test_setup_refs_extraction():
 
 def test_resolve_placeholders_substitutes_and_keeps_missing():
     assert resolve_placeholders("${setup.a}/${setup.b}", {"a": "1"}) == "1/${setup.b}"
+
+
+def test_policy_valid_and_defaults():
+    pkg = Bundle.model_validate(
+        {"name": "p", "policies": [{"key": "c", "target": "spend", "effect": "cap"}]}
+    )
+    pol = pkg.policies[0]
+    assert pol.subject == "workspace"  # default
+    assert pol.enabled is True and pol.priority == 0
+
+
+def test_policy_invalid_effect_rejected():
+    with pytest.raises(ValidationError):
+        Bundle.model_validate(
+            {"name": "p", "policies": [{"key": "c", "target": "*", "effect": "nuke"}]}
+        )
+
+
+def test_policy_invalid_key_rejected():
+    with pytest.raises(ValidationError):
+        Bundle.model_validate(
+            {"name": "p", "policies": [{"key": "9bad", "target": "*", "effect": "deny"}]}
+        )
+
+
+def test_metadata_defaults_and_fields():
+    assert Bundle(name="p").metadata.capabilities == []
+    pkg = Bundle.model_validate(
+        {"name": "p", "metadata": {"developer": "AgentArea", "capabilities": ["write"]}}
+    )
+    assert pkg.metadata.developer == "AgentArea"
+    assert pkg.metadata.capabilities == ["write"]
+
+
+def test_metadata_extra_keys_forbidden():
+    with pytest.raises(ValidationError):
+        Bundle.model_validate({"name": "p", "metadata": {"unknown": 1}})

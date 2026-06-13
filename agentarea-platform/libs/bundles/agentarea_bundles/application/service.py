@@ -48,12 +48,15 @@ class BundleService:
         # Repositories for existence checks / idempotency.
         from agentarea_agents.infrastructure.repository import AgentRepository
         from agentarea_agents.infrastructure.skill_repository import SkillRepository
+        from agentarea_governance.application.service import GovernancePolicyService
         from agentarea_triggers.infrastructure.repository import TriggerRepository
 
         self._agent_repository = repository_factory.create_repository(AgentRepository)
         self._skill_repository = repository_factory.create_repository(SkillRepository)
         self._trigger_repository = repository_factory.create_repository(TriggerRepository)
         self._bundle_repository = repository_factory.create_repository(InstalledBundleRepository)
+        # Governance service owns PolicyRule creation; built from the same factory.
+        self._governance_service = GovernancePolicyService(repository_factory)
 
     # -- analyze ------------------------------------------------------------
 
@@ -78,6 +81,7 @@ class BundleService:
             agent_repository=self._agent_repository,
             trigger_service=self._trigger_service,
             trigger_repository=self._trigger_repository,
+            governance_service=self._governance_service,
             user_context=self._user_context,
         )
         result = await installer.install(package, setup_values)

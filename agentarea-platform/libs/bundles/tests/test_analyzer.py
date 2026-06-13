@@ -116,3 +116,42 @@ async def test_existence_marks_already_exists():
     assert statuses[("skill", "sk")] == EntityStatus.ALREADY_EXISTS
     assert statuses[("agent", "lead")] == EntityStatus.ALREADY_EXISTS
     assert statuses[("automation", "daily")] == EntityStatus.ALREADY_EXISTS
+
+
+async def test_policy_preview_entities():
+    pkg = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+agents: [{key: lead, name: Lead, model: gpt-4o}]
+policies:
+  - {key: cap, subject: workspace, target: spend, effect: cap}
+  - {key: deny, subject: lead, target: "tool:send_email", effect: deny}
+"""
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is True
+    pol = {e.key: e for e in preview.entities if e.kind.value == "policy"}
+    assert set(pol) == {"cap", "deny"}
+    assert "cap spend on workspace" in pol["cap"].detail
+
+
+async def test_policy_unknown_subject_blocks():
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\n'
+        'policies: [{key: x, subject: ghost, target: "*", effect: deny}]\n'
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+    assert any("subject 'ghost'" in i.message for i in preview.block_issues)
+
+
+async def test_duplicate_policy_key_blocks():
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\npolicies:\n'
+        '  - {key: dup, subject: workspace, target: spend, effect: cap}\n'
+        '  - {key: dup, subject: workspace, target: tokens, effect: cap}\n'
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+    assert any("duplicate policy key 'dup'" in i.message for i in preview.block_issues)

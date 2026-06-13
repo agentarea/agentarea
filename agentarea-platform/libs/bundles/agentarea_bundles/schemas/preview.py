@@ -14,6 +14,7 @@ class EntityKind(StrEnum):
     SKILL = "skill"
     AGENT = "agent"
     AUTOMATION = "automation"
+    POLICY = "policy"
 
 
 class EntityStatus(StrEnum):
