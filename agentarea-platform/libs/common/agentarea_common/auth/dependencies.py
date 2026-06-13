@@ -248,15 +248,21 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
     """
     import jwt as pyjwt
 
+    from agentarea_common.config import get_settings
+
     try:
         jwks_client = _get_hydra_jwks()
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
+        # Enforce audience when configured (HYDRA_AUDIENCE); otherwise stay
+        # back-compatible and skip aud verification.
+        hydra_audience = get_settings().mcp.HYDRA_AUDIENCE
         payload = pyjwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            options={"verify_aud": False},
+            audience=hydra_audience or None,
+            options={"verify_aud": bool(hydra_audience)},
         )
 
         subject = payload.get("sub", "")
