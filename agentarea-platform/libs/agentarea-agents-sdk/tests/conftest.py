@@ -18,6 +18,63 @@ sys.path.insert(
 collect_ignore = ["__init__.py"]
 
 
+class EchoTool:
+    """Minimal, side-effect-free BaseTool used as a generic test fixture.
+
+    Replaces the removed eval()-based CalculateTool in tests that only exercise
+    the tool registry / executor / agent mechanics rather than calculation.
+    """
+
+    @property
+    def name(self) -> str:
+        return "echo"
+
+    @property
+    def description(self) -> str:
+        return "Echo back the provided text."
+
+    def get_schema(self) -> dict:
+        return {
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "Text to echo back"}},
+                "required": ["text"],
+            }
+        }
+
+    def get_openai_function_definition(self) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                **self.get_schema(),
+            },
+        }
+
+    async def execute(self, **kwargs) -> dict:
+        if "text" not in kwargs:
+            return {
+                "success": False,
+                "result": "No text provided",
+                "tool_name": self.name,
+                "error": "text is required",
+            }
+        text = kwargs.get("text", "")
+        return {
+            "success": True,
+            "result": text,
+            "tool_name": self.name,
+            "error": None,
+        }
+
+
+@pytest.fixture
+def echo_tool_cls():
+    """Provide the EchoTool class as a safe stand-in test tool."""
+    return EchoTool
+
+
 @pytest.fixture
 def test_model():
     """Default model configuration for tests."""

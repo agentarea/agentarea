@@ -19,6 +19,7 @@ from .logging_utils import (
     generate_correlation_id,
     set_correlation_id,
 )
+from .webhook_verification import verify_webhook_signature
 
 logger = TriggerLogger(__name__)
 
@@ -91,6 +92,7 @@ class WebhookManager(ABC):
         headers: dict[str, str],
         body: Any,
         query_params: dict[str, str],
+        raw_body: bytes | None = None,
     ) -> dict[str, Any]:
         """Process incoming webhook request:
         1. Find trigger by webhook_id
@@ -216,6 +218,7 @@ class DefaultWebhookManager(WebhookManager):
         headers: dict[str, str],
         body: Any,
         query_params: dict[str, str],
+        raw_body: bytes | None = None,
     ) -> dict[str, Any]:
         """Process incoming webhook request."""
         correlation_id = generate_correlation_id()
@@ -277,6 +280,24 @@ class DefaultWebhookManager(WebhookManager):
                     allowed_methods=trigger.allowed_methods,
                 )
                 return await self.get_webhook_response(False, f"Method {method} not allowed")
+
+            # Verify cryptographic signature when a signing secret is configured.
+            # None => not enabled (proceed); False => configured but invalid (reject).
+            signature_result = verify_webhook_signature(
+                trigger.webhook_type,
+                trigger.validation_rules,
+                trigger.webhook_config,
+                headers,
+                raw_body,
+            )
+            if signature_result is False:
+                logger.warning(
+                    "Webhook signature verification failed",
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    webhook_type=trigger.webhook_type,
+                )
+                return await self.get_webhook_response(False, "Signature verification failed")
 
             # Apply validation rules
             try:

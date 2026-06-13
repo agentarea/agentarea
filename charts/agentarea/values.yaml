@@ -507,7 +507,7 @@ mcpManager:
     port: 80
   
   # Backend type: "docker" or "kubernetes"
-  # "docker" requires privileged mode for container management
+  # "docker" drives containers through the host Docker socket (hostPath mount)
   # "kubernetes" uses native K8s resources (Deployments, Services, HTTPRoutes)
   backend: "kubernetes"
   

@@ -1,88 +1,66 @@
-# Build stage
+# syntax=docker/dockerfile:1
+
+# ---- Build stage ----
 FROM golang:1.25-alpine AS builder
 
-# Install build dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Set working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum
+# Cache dependencies
 COPY go.mod go.sum ./
-
-# Download dependencies
 RUN go mod download
 
-# Copy source code
+# Build both binaries for the target architecture.
+# -ldflags="-s -w" strips debug symbols + DWARF (~30% smaller, no runtime impact).
 COPY . .
-
-# Build the application for target architecture
 ARG TARGETARCH
 ARG TARGETOS
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager \
-    && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/sandbox-runner ./cmd/sandbox-runner
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager \
+    && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -installsuffix cgo -o bin/sandbox-runner ./cmd/sandbox-runner
 
-# Runtime stage
-FROM alpine:3.20
+# ---- Production stage (default build target) ----
+# Slim runtime: ships only the docker CLI so the manager can drive containers
+# through the mounted Docker socket. No podman/buildah/skopeo, no privileged mode.
+FROM alpine:3.20 AS production
 
-# Install runtime dependencies including Podman
-RUN apk add --no-cache \
-    ca-certificates \
-    curl \
-    podman \
-    buildah \
-    skopeo \
-    fuse-overlayfs \
-    shadow \
-    dumb-init \
-    iptables \
+RUN apk add --no-cache ca-certificates docker-cli dumb-init \
     && rm -rf /var/cache/apk/*
 
-# Configure Podman
-RUN mkdir -p /etc/containers \
-    && printf '[registries.search]\nregistries = ["docker.io", "quay.io"]\n' > /etc/containers/registries.conf \
-    && printf '[storage]\ndriver = "overlay"\nrunroot = "/tmp/containers"\ngraphroot = "/var/lib/containers/storage"\n\n[storage.options]\nmount_program = "/usr/bin/fuse-overlayfs"\n' > /etc/containers/storage.conf \
-    && printf '[engine]\nlock_type="file"\n\n[containers]\n' > /etc/containers/containers.conf
-
-# Create non-root user for Podman
-RUN adduser -D -u 1000 -g users -s /bin/sh podman-user \
-    && mkdir -p /home/podman-user/.local/share/containers \
-    && chown -R podman-user:users /home/podman-user/.local \
-    && echo "podman-user:100000:65536" > /etc/subuid \
-    && echo "podman-user:100000:65536" > /etc/subgid
-
-# Set working directory
 WORKDIR /app
 
-# Copy binary from builder stage
 COPY --from=builder /app/bin/mcp-manager /app/mcp-manager
 COPY --from=builder /app/bin/sandbox-runner /app/sandbox-runner
 
-# Copy startup script
-COPY start-go.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
-# Copy templates directory structure (will be mounted)
+# Templates are mounted at runtime
 RUN mkdir -p /app/templates
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD /app/mcp-manager --health || exit 1
 
-# Expose port
-EXPOSE 8000
+# 8000: mcp-manager API, 80: internal proxy
+EXPOSE 8000 80
 
-# Switch to non-root user for setup
-USER podman-user
-
-# Initialize Podman for the user
-RUN podman system migrate 2>/dev/null || true
-
-# Switch back to root to run the service (needed for container management)
-USER root
-
-# Use dumb-init for proper signal handling
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["/app/mcp-manager"]
 
-# Run the application via startup script (initializes Podman first)
-CMD ["/bin/sh", "/app/start.sh"]
+# ---- Development stage (hot reload via Air) ----
+# Same docker-CLI runtime model as production, plus the Go toolchain + Air so a
+# bind-mounted source tree rebuilds on change. Build with `--target dev`.
+FROM golang:1.25-alpine AS dev
+
+RUN apk add --no-cache git ca-certificates docker-cli dumb-init \
+    && rm -rf /var/cache/apk/*
+
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Pre-cache dependencies so the first reload is fast
+COPY go.mod go.sum ./
+RUN go mod download
+
+EXPOSE 8000 80
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["sh", "-c", "if [ -f /app/.air.toml ] && command -v air >/dev/null 2>&1; then exec air -c /app/.air.toml; else exec /app/start-dev.sh; fi"]

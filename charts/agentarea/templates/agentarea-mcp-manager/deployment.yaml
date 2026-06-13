@@ -79,27 +79,16 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
-          {{- if eq (default "docker" .Values.mcpManager.backend) "docker" }}
-          # Docker/Podman backend requires privileged access
+          {{- if eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+          # Docker backend: drive containers through the host Docker socket.
           volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-            - name: run
-              mountPath: /run
-            - name: containers-storage
-              mountPath: /var/lib/containers/storage
-            - name: cgroup
-              mountPath: /sys/fs/cgroup
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
       volumes:
-        - name: tmp
-          emptyDir: {}
-        - name: run
-          emptyDir: {}
-        - name: containers-storage
-          emptyDir: {}
-        - name: cgroup
+        - name: docker-sock
           hostPath:
-            path: /sys/fs/cgroup
+            path: /var/run/docker.sock
+            type: Socket
       {{- else }}
           # Kubernetes backend - no special volumes needed
       {{- end }}

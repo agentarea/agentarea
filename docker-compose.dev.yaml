@@ -237,11 +237,13 @@ services:
       - mcp-network
 
   mcp-manager:
-    image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
+    # Dev image is tagged :dev so `make up-dev` builds never clobber the
+    # published :latest prod image (same single Dockerfile, dev target).
+    image: agentarea/agentarea-mcp-manager:dev
     build:
       context: agentarea-mcp-manager
-      dockerfile: Dockerfile.dev
-      target: development
+      dockerfile: Dockerfile
+      target: dev
       platforms:
         - linux/amd64
         - linux/arm64
@@ -268,7 +270,6 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
-      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings

@@ -548,7 +548,9 @@ async def get_public_webhook_manager(
             self._settings = settings
             self._trigger_repo = trigger_repo
 
-        async def handle_webhook_request(self, webhook_id, method, headers, body, query_params):
+        async def handle_webhook_request(
+            self, webhook_id, method, headers, body, query_params, raw_body=None
+        ):
             # Find trigger without workspace scoping
             trigger = await self._trigger_repo.get_by_webhook_id(webhook_id)
             if not trigger:
@@ -583,7 +585,7 @@ async def get_public_webhook_manager(
                 mgr._registered_webhooks[webhook_id] = trigger
 
                 return await mgr.handle_webhook_request(
-                    webhook_id, method, headers, body, query_params
+                    webhook_id, method, headers, body, query_params, raw_body=raw_body
                 )
 
         async def is_healthy(self):

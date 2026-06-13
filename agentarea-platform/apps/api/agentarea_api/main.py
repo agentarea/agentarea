@@ -235,13 +235,20 @@ def create_app() -> FastAPI:
 
     app.add_middleware(AuditContextMiddleware)
 
-    # Add CORS middleware
+    # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
+    # allow_credentials=True a wildcard would reflect any origin for credentialed
+    # cross-site reads. Configure via CORS_ALLOWED_ORIGINS.
+    from agentarea_common.config import get_settings
+
+    _cors = get_settings().app
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=_cors.cors_allowed_origins,
+        allow_origin_regex=_cors.CORS_ALLOWED_ORIGIN_REGEX,
+        allow_credentials=_cors.CORS_ALLOW_CREDENTIALS,
+        allow_methods=_cors.cors_allowed_methods,
+        allow_headers=_cors.cors_allowed_headers,
+        max_age=_cors.CORS_MAX_AGE,
     )
 
     # Mount static files - this serves all files from static/ at /static/

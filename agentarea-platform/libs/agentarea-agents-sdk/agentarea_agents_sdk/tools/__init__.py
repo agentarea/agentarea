@@ -4,7 +4,6 @@ from .a2a_agent_tool import A2AAgentTool
 from .agent_delegation_tool import AgentDelegationTool
 from .agent_tool_factory import AgentToolFactory
 from .base_tool import BaseTool, ToolExecutionError, ToolRegistry
-from .calculate_tool import CalculateTool
 from .completion_tool import CompletionTool
 from .decorator_tool import Toolset, ToolsetAdapter, tool_method
 from .file_toolset import FileToolset
@@ -34,7 +33,6 @@ __all__ = [
     "AgentDelegationTool",
     "AgentToolFactory",
     "BaseTool",
-    "CalculateTool",
     "CompletionTool",
     "FileToolset",
     "MCPTool",

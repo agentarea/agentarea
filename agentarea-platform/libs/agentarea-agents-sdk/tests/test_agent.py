@@ -43,11 +43,9 @@ class TestAgentCreation:
         assert agent.max_tokens == 200
         assert agent.max_iterations == 5
 
-    def test_agent_with_custom_tools(self, test_model):
+    def test_agent_with_custom_tools(self, test_model, echo_tool_cls):
         """Test agent creation with custom tools."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
-
-        custom_tool = CalculateTool()
+        custom_tool = echo_tool_cls()
         agent = create_agent(
             name="Tool Agent",
             instruction="Agent with custom tools.",
@@ -58,7 +56,7 @@ class TestAgentCreation:
         # Check that tools are registered
         tools = agent.tool_executor.registry.list_tools()
         tool_names = [tool.name for tool in tools]
-        assert "calculate" in tool_names
+        assert "echo" in tool_names
 
     def test_agent_without_default_tools(self, test_model):
         """Test agent creation without default tools."""
@@ -132,34 +130,31 @@ class TestAgentExecution:
         assert len(result) > 0
 
     @pytest.mark.asyncio
-    async def test_agent_tool_usage(self, test_model, skip_if_no_llm):
+    async def test_agent_tool_usage(self, test_model, skip_if_no_llm, echo_tool_cls):
         """Test that agent can use tools."""
         skip_if_no_llm()
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
 
         agent = create_agent(
-            name="Calculator Agent",
-            instruction="You are a math assistant that uses tools.",
+            name="Echo Agent",
+            instruction="You are an assistant that echoes text using the echo tool.",
             model=test_model,
-            tools=[CalculateTool()],
+            tools=[echo_tool_cls()],
         )
 
         tool_used = False
-        async for content in agent.run_stream("Calculate 5 * 3"):
-            if "[Tool calculate:" in content:
+        async for content in agent.run_stream("Echo back the word hello"):
+            if "[Tool echo:" in content:
                 tool_used = True
                 break
 
-        assert tool_used, "Agent should use calculation tool"
+        assert tool_used, "Agent should use the echo tool"
 
 
 class TestAgentUtilities:
     """Test agent utility methods."""
 
-    def test_add_tool(self, test_model):
+    def test_add_tool(self, test_model, echo_tool_cls):
         """Test adding custom tools to agent."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
-
         agent = create_agent(
             name="Tool Agent",
             instruction="Agent for tool testing.",
@@ -171,12 +166,12 @@ class TestAgentUtilities:
         assert len(agent.tool_executor.registry.list_tools()) == 0
 
         # Add a tool
-        agent.add_tool(CalculateTool())
+        agent.add_tool(echo_tool_cls())
 
         # Should now have one tool
         tools = agent.tool_executor.registry.list_tools()
         assert len(tools) == 1
-        assert tools[0].name == "calculate"
+        assert tools[0].name == "echo"
 
     def test_get_conversation_history(self, test_model):
         """Test getting conversation history (currently returns empty list)."""

@@ -35,27 +35,25 @@ class TestToolExecutor:
     """Test the ToolExecutor functionality."""
 
     @pytest.mark.asyncio
-    async def test_tool_registration_and_execution(self):
+    async def test_tool_registration_and_execution(self, echo_tool_cls):
         """Test tool registration and execution."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
         from agentarea_agents_sdk.tools.tool_executor import ToolExecutor
 
         tool_executor = ToolExecutor()
-        tool_executor.registry.register(CalculateTool())
+        tool_executor.registry.register(echo_tool_cls())
 
         # Test tool registration
         tools = tool_executor.get_openai_functions()
         assert len(tools) > 0, "Should have registered tools"
 
         # Test tool execution
-        result = await tool_executor.execute_tool("calculate", {"expression": "2 + 2"})
+        result = await tool_executor.execute_tool("echo", {"text": "hello"})
         assert result is not None, "Tool should return a result"
-        assert result.get("success") is True, "Calculation should succeed"
-        assert "4" in str(result.get("result", "")), "Should calculate 2+2=4"
+        assert result.get("success") is True, "Execution should succeed"
+        assert "hello" in str(result.get("result", "")), "Should echo back input"
 
-    def test_tool_registry_operations(self):
+    def test_tool_registry_operations(self, echo_tool_cls):
         """Test tool registry operations."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
         from agentarea_agents_sdk.tools.completion_tool import CompletionTool
         from agentarea_agents_sdk.tools.tool_executor import ToolExecutor
 
@@ -66,10 +64,10 @@ class TestToolExecutor:
         len(initial_tools)
 
         # Register tools
-        calc_tool = CalculateTool()
+        echo_tool = echo_tool_cls()
         completion_tool = CompletionTool()
 
-        tool_executor.registry.register(calc_tool)
+        tool_executor.registry.register(echo_tool)
         tool_executor.registry.register(completion_tool)
 
         # Should have at least the two tools we registered
@@ -78,13 +76,13 @@ class TestToolExecutor:
         assert len(tools) >= 2
 
         tool_names = [tool.name for tool in tools]
-        assert "calculate" in tool_names
+        assert "echo" in tool_names
         assert "completion" in tool_names
 
         # Test getting specific tool
-        retrieved_tool = tool_executor.registry.get("calculate")
+        retrieved_tool = tool_executor.registry.get("echo")
         assert retrieved_tool is not None
-        assert retrieved_tool.name == "calculate"
+        assert retrieved_tool.name == "echo"
 
 
 class TestLLMModel:
@@ -133,20 +131,18 @@ class TestTools:
     """Test individual tool implementations."""
 
     @pytest.mark.asyncio
-    async def test_calculate_tool(self):
-        """Test the calculate tool."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
-
-        tool = CalculateTool()
+    async def test_echo_tool(self, echo_tool_cls):
+        """Test the echo fixture tool implements the BaseTool contract."""
+        tool = echo_tool_cls()
 
         # Test basic properties
-        assert tool.name == "calculate"
+        assert tool.name == "echo"
         assert hasattr(tool, "description")
 
         # Test execution
-        result = await tool.execute(expression="10 + 5")
+        result = await tool.execute(text="hello world")
         assert result.get("success") is True
-        assert "15" in str(result.get("result", ""))
+        assert "hello world" in str(result.get("result", ""))
 
     @pytest.mark.asyncio
     async def test_completion_tool(self):
@@ -164,11 +160,9 @@ class TestTools:
         assert result.get("success") is True
         assert isinstance(result.get("result"), str)
 
-    def test_tool_openai_function_definition(self):
+    def test_tool_openai_function_definition(self, echo_tool_cls):
         """Test that tools provide proper OpenAI function definitions."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
-
-        tool = CalculateTool()
+        tool = echo_tool_cls()
         function_def = tool.get_openai_function_definition()
 
         assert isinstance(function_def, dict)
@@ -180,4 +174,4 @@ class TestTools:
         assert "name" in function_info
         assert "description" in function_info
         assert "parameters" in function_info
-        assert function_info["name"] == "calculate"
+        assert function_info["name"] == "echo"

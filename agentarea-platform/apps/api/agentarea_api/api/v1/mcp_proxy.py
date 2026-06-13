@@ -25,12 +25,14 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.config import get_settings
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -80,12 +82,13 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
     return out
 
 
-async def _resolve_upstream_url(instance, server_spec) -> str:
-    """Compute the full upstream MCP endpoint URL for an instance.
+async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
+    """Compute the upstream MCP endpoint URL and the instance type.
 
     URL-type instances carry their full endpoint URL on the parent server
     spec (remote_url). Container-backed instances expose MCP at ``/mcp`` on
-    the resolved internal URL.
+    the resolved internal URL. The returned type drives SSRF handling: only
+    ``url`` upstreams are user-controlled and must be validated/pinned.
     """
     json_spec: dict[str, Any] = instance.json_spec or {}
     instance_type = json_spec.get("type") or json_spec.get("server_type")
@@ -100,23 +103,55 @@ async def _resolve_upstream_url(instance, server_spec) -> str:
     if instance_type == "url":
         legacy = json_spec.get("endpoint_url") or json_spec.get("url")
         if legacy:
-            return legacy
+            return legacy, instance_type
         if server_spec is not None and getattr(server_spec, "remote_url", None):
-            return server_spec.remote_url
+            return server_spec.remote_url, instance_type
         spec_json = getattr(server_spec, "json_spec", None) or {}
         if spec_json.get("type") == "url":
-            return spec_json.get("endpoint_url") or spec_json.get("url") or ""
-        return ""
+            return spec_json.get("endpoint_url") or spec_json.get("url") or "", instance_type
+        return "", instance_type
 
     # Container-backed: use the property which builds http://mcp-<id>:port
     # and append /mcp (the MCP Streamable HTTP endpoint convention).
     try:
         base = instance.endpoint_url
     except ValueError:
-        return ""
+        return "", instance_type
     if not base:
-        return ""
-    return base.rstrip("/") + "/mcp"
+        return "", instance_type
+    return base.rstrip("/") + "/mcp", instance_type
+
+
+def _guard_and_pin_upstream(
+    upstream_url: str, instance_type: str | None, *, allow_private: bool
+) -> tuple[str | httpx.URL, str | None, dict | None]:
+    """SSRF chokepoint for outbound proxy requests.
+
+    Container/command upstreams are internally generated (``http://mcp-<id>:port``)
+    and pass through unchanged. URL-type upstreams are user-controlled, so they
+    are validated against private/metadata ranges (unless ``allow_private``) and
+    pinned to the resolved IP to defeat DNS rebinding — the Host header and TLS
+    SNI keep the original hostname.
+
+    Returns ``(request_target, host_header, extensions)``.
+
+    Raises:
+        ValueError: If a URL-type upstream is not safe to fetch.
+    """
+    if instance_type != "url":
+        return upstream_url, None, None
+
+    resolved_ips = validate_url(upstream_url, allow_private=allow_private)
+    target = build_pinned_target(upstream_url, resolved_ips[0] if resolved_ips else None)
+    request_target = httpx.URL(
+        scheme=target.scheme,
+        host=target.host,
+        port=target.port,
+        path=target.path,
+        query=target.raw_query,
+    )
+    extensions = {"sni_hostname": target.original_host} if target.original_host else None
+    return request_target, target.original_host, extensions
 
 
 @router.api_route(
@@ -141,14 +176,32 @@ async def proxy_instance(
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_by_id(instance.server_spec_id)
 
-    upstream_url = await _resolve_upstream_url(instance, server_spec)
+    upstream_url, instance_type = await _resolve_upstream_url(instance, server_spec)
     if not upstream_url:
         raise HTTPException(
             status_code=400,
             detail="Instance has no resolvable upstream MCP URL",
         )
 
+    # SSRF guard: validate + pin user-controlled URL-type upstreams before any
+    # outbound request. Container/command upstreams are internal and pass through.
+    allow_private = get_settings().mcp.ALLOW_PRIVATE_URLS
+    try:
+        request_target, pinned_host, extensions = _guard_and_pin_upstream(
+            upstream_url, instance_type, allow_private=allow_private
+        )
+    except ValueError as exc:
+        # Strip CR/LF from the user-controlled path param to prevent log forging.
+        safe_instance_id = str(instance_id).replace("\r", "").replace("\n", "")
+        logger.warning("Rejected SSRF-unsafe MCP upstream for %s: %s", safe_instance_id, exc)
+        raise HTTPException(
+            status_code=400, detail=f"Upstream MCP URL is not allowed: {exc}"
+        ) from exc
+
     outbound_headers = _filter_inbound_headers(request.headers)
+    if pinned_host:
+        # Connect to the pinned IP but present the original hostname upstream.
+        outbound_headers.setdefault("Host", pinned_host)
     if instance.auth_config_id:
         auth_repo = MCPAuthConfigRepository(db_session, user_context)
         auth_config = await auth_repo.get_by_id(instance.auth_config_id)
@@ -170,10 +223,11 @@ async def proxy_instance(
     try:
         upstream_req = client.build_request(
             request.method,
-            upstream_url,
+            request_target,
             content=body,
             params=params,
             headers=outbound_headers,
+            extensions=extensions or {},
         )
         upstream_resp = await client.send(upstream_req, stream=True)
     except httpx.HTTPError as exc:

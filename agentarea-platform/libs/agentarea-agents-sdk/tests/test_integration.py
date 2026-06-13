@@ -163,16 +163,15 @@ class TestErrorHandling:
             create_agent(name="Test Agent", instruction="Test instruction", model="invalid_format")
 
     @pytest.mark.asyncio
-    async def test_tool_execution_error_handling(self):
+    async def test_tool_execution_error_handling(self, echo_tool_cls):
         """Test that tool execution errors are handled gracefully."""
-        from agentarea_agents_sdk.tools.calculate_tool import CalculateTool
         from agentarea_agents_sdk.tools.tool_executor import ToolExecutor
 
         tool_executor = ToolExecutor()
-        tool_executor.registry.register(CalculateTool())
+        tool_executor.registry.register(echo_tool_cls())
 
         # Try to execute with invalid arguments
-        result = await tool_executor.execute_tool("calculate", {"invalid": "args"})
+        result = await tool_executor.execute_tool("echo", {"invalid": "args"})
 
         # Should return an error result, not raise an exception
         assert result is not None

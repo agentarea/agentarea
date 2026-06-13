@@ -11,14 +11,14 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
-// DockerBackend implements the Backend interface using the existing container.Manager (Podman)
+// DockerBackend implements the Backend interface using the existing container.Manager (Docker CLI)
 type DockerBackend struct {
 	manager *container.Manager
 	config  *config.Config
 	logger  *slog.Logger
 }
 
-// NewDockerBackend creates a new Docker/Podman backend
+// NewDockerBackend creates a new Docker backend
 func NewDockerBackend(cfg *config.Config, logger *slog.Logger) *DockerBackend {
 	manager := container.NewManager(cfg, logger)
 
