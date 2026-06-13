@@ -61,7 +61,11 @@ export default function BaseInfo({
           </div>
 
           <div className="space-y-2">
-            <FormLabel htmlFor="api_key" required icon={Key}>
+            <FormLabel
+              htmlFor="api_key"
+              required={!endpointUrlValue?.trim()}
+              icon={Key}
+            >
               {t("apiKey")}
             </FormLabel>
             <Controller
@@ -93,7 +97,7 @@ export default function BaseInfo({
                   size="xs"
                   variant="outline"
                   onClick={() => onDiscoverModels(apiKeyValue || "", endpointUrlValue || undefined)}
-                  disabled={!apiKeyValue || isDiscovering}
+                  disabled={(!apiKeyValue?.trim() && !endpointUrlValue?.trim()) || isDiscovering}
                 >
                   <RefreshCw
                     className={`mr-1.5 h-3 w-3 ${isDiscovering ? "animate-spin" : ""}`}
