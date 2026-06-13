@@ -35,7 +35,7 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 TRIGGERS_AVAILABLE = True
@@ -1030,10 +1030,30 @@ async def get_execution_correlations(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+def _verify_internal_token(http_request: Request) -> None:
+    """Gate an internal-only endpoint with a shared secret.
+
+    The Go event service must send ``X-Internal-Token`` matching
+    ``INTERNAL_API_TOKEN``. When the token is unset the check is skipped
+    (back-compat); set it to require authentication on this endpoint.
+    """
+    import hmac
+
+    from agentarea_common.config import get_settings
+
+    expected = get_settings().app.INTERNAL_API_TOKEN
+    if not expected:
+        return
+    provided = http_request.headers.get("x-internal-token", "")
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing internal service token")
+
+
 @public_router.post("/{trigger_id}/execute", response_model=dict[str, Any])
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
+    http_request: Request,
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Execute a trigger with the provided event data.
@@ -1045,6 +1065,7 @@ async def execute_trigger(
     Args:
         trigger_id: The unique identifier of the trigger
         request: Events and channel origin data
+        http_request: Raw request, used to verify the internal service token
         trigger_service: Injected trigger service
 
     Returns:
@@ -1053,6 +1074,7 @@ async def execute_trigger(
     Raises:
         HTTPException: If trigger not found or execution fails
     """
+    _verify_internal_token(http_request)
     _check_triggers_availability()
 
     try:

@@ -20,6 +20,11 @@ class AppSettings(BaseAppSettings):
     # imports keep working; tighten per deployment if needed.
     MAX_REQUEST_BODY_BYTES: int = 50 * 1024 * 1024  # 50 MB
 
+    # Shared secret for internal service-to-service calls (e.g. the Go event
+    # service calling the public trigger-execute endpoint). When set, those
+    # endpoints require a matching X-Internal-Token header. Unset = not enforced.
+    INTERNAL_API_TOKEN: str | None = None
+
     # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
     API_BASE_URL: str = "http://localhost:8000"
     # AgentArea frontend URL (users are redirected here to log in if no session)

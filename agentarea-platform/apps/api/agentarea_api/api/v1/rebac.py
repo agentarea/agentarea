@@ -269,6 +269,23 @@ async def _assert_object_in_workspace(
         )
 
 
+async def _assert_workspace_admin(user_context: UserContext) -> None:
+    """Only a workspace owner/admin may mutate the authorization graph.
+
+    Writing/deleting relation tuples grants or revokes access across the
+    workspace, so it must not be available to every member.
+    """
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    authz = resolve(AuthorizationService)
+    if not await authz.can_write_workspace(user_context, user_context.workspace_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a workspace admin may modify the authorization graph",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -489,7 +506,18 @@ async def create_tuple(
     keto = get_keto()
     if keto is None:
         raise HTTPException(status_code=503, detail="Keto is disabled")
+    await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
+    # Validate the subject too: a subject_set pointing at one of our entity
+    # namespaces must also belong to the caller's workspace, so admins cannot
+    # grant access to/from an object in another workspace.
+    if payload.subject_set is not None and payload.subject_set.namespace in _NAMESPACE_REPOS:
+        await _assert_object_in_workspace(
+            payload.subject_set.namespace,
+            payload.subject_set.object,
+            user_context,
+            db_session,
+        )
     tuple_ = _to_relation_tuple(payload)
     try:
         await keto.write_tuple(tuple_)
@@ -509,6 +537,7 @@ async def delete_tuple(
     keto = get_keto()
     if keto is None:
         raise HTTPException(status_code=503, detail="Keto is disabled")
+    await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     tuple_ = _to_relation_tuple(payload)
     try:
