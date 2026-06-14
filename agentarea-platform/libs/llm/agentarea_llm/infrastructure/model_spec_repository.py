@@ -184,9 +184,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         and a subsequent INSERT then hits the unique violation.
         """
         pid = (
-            provider_spec_id
-            if isinstance(provider_spec_id, UUID)
-            else UUID(str(provider_spec_id))
+            provider_spec_id if isinstance(provider_spec_id, UUID) else UUID(str(provider_spec_id))
         )
         result = await self.session.execute(
             select(ModelSpec).where(

@@ -3527,4 +3527,3 @@ class AgentExecutionWorkflow:
             },
             "context": self.context_manager.get_status() if self.context_manager else None,
         }
-
