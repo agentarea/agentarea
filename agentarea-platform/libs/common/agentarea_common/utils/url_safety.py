@@ -65,7 +65,9 @@ def validate_outbound_url(url: str, *, allow_private: bool = False) -> None:
         raise UnsafeUrlError(f"Could not resolve host {host!r}") from exc
 
     for info in infos:
-        addr = info[4][0].split("%")[0]  # strip IPv6 zone id (e.g. fe80::1%eth0)
+        # info[4] is the sockaddr; its first element is the address string. Cast
+        # for the type checker (the stub types the tuple element as str | int).
+        addr = str(info[4][0]).split("%")[0]  # strip IPv6 zone id (e.g. fe80::1%eth0)
         ip = ipaddress.ip_address(addr)
         if _is_blocked_ip(ip):
             raise UnsafeUrlError(
