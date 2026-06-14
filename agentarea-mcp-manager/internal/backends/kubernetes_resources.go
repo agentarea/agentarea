@@ -80,7 +80,9 @@ func (k *KubernetesBackend) createSecret(ctx context.Context, instanceName strin
 
 // createDeployment creates a Deployment for the MCP server
 func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName string, spec *InstanceSpec) error {
-	labels := k.getCommonLabels(instanceName)
+	// Operator labels first, platform labels (incl. the managed-by label the
+	// egress NetworkPolicy selects on) applied on top so they can't be clobbered.
+	labels := mergeStringMaps(k.k8sConfig.InstancePod.Labels, k.getCommonLabels(instanceName))
 
 	// Convert ResourceList to config.ResourceRequirements
 	var configRequests, configLimits *config.ResourceRequirements
@@ -233,11 +235,11 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 
 	container.VolumeMounts = volumeMounts
 
-	// Determine runtime class based on trust level
+	// Determine runtime class. The operator-configured class wins: a caller may
+	// only choose a runtime class when none is enforced cluster-wide, so a request
+	// can never downgrade away a sandbox runtime (e.g. gVisor/Kata) set by config.
 	runtimeClassName := k.k8sConfig.RuntimeClass
-
-	// If instance specifies a runtime class, use it
-	if spec.RuntimeClass != "" {
+	if runtimeClassName == "" && spec.RuntimeClass != "" {
 		runtimeClassName = spec.RuntimeClass
 	}
 
@@ -264,9 +266,18 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						SecurityContext: &corev1.PodSecurityContext{
 							RunAsNonRoot: &k.k8sConfig.SecurityContext.RunAsNonRoot,
 							RunAsUser:    &k.k8sConfig.SecurityContext.RunAsUser,
+							// Restrict the syscall surface; untrusted MCP images
+							// should not have unfiltered kernel access.
+							SeccompProfile: &corev1.SeccompProfile{
+								Type: corev1.SeccompProfileTypeRuntimeDefault,
+							},
 						},
 						Containers: []corev1.Container{container},
 						Volumes:    k.createVolumes(spec),
+						// MCP servers proxy external upstreams and never call the
+						// kube-apiserver; withholding the SA token means a hostile
+						// image cannot use it to reach the control plane.
+						AutomountServiceAccountToken: boolPtr(false),
 					}
 					if k.k8sConfig.PodServiceAccountName != "" {
 						spec.ServiceAccountName = k.k8sConfig.PodServiceAccountName
@@ -275,18 +286,36 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 					if runtimeClassName != "" {
 						spec.RuntimeClassName = &runtimeClassName
 					}
+					// Operator-supplied scheduling/placement. These have no platform
+					// security invariant to protect, so they apply as-is.
+					ip := k.k8sConfig.InstancePod
+					if len(ip.NodeSelector) > 0 {
+						spec.NodeSelector = ip.NodeSelector
+					}
+					if len(ip.Tolerations) > 0 {
+						spec.Tolerations = ip.Tolerations
+					}
+					if ip.Affinity != nil {
+						spec.Affinity = ip.Affinity
+					}
+					if ip.PriorityClassName != "" {
+						spec.PriorityClassName = ip.PriorityClassName
+					}
+					for _, name := range ip.ImagePullSecrets {
+						spec.ImagePullSecrets = append(spec.ImagePullSecrets, corev1.LocalObjectReference{Name: name})
+					}
 					return spec
 				}(),
 			},
 		},
 	}
 
-	// Add resource annotations
-	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
-		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-	}
-	deployment.Spec.Template.ObjectMeta.Annotations["agentarea.io/instance-id"] = spec.InstanceID
-	deployment.Spec.Template.ObjectMeta.Annotations["agentarea.io/workspace-id"] = spec.WorkspaceID
+	// Operator annotations first, platform annotations applied on top (win).
+	annotations := mergeStringMaps(k.k8sConfig.InstancePod.Annotations, map[string]string{
+		"agentarea.io/instance-id":  spec.InstanceID,
+		"agentarea.io/workspace-id": spec.WorkspaceID,
+	})
+	deployment.Spec.Template.ObjectMeta.Annotations = annotations
 
 	if err := k.client.Create(ctx, deployment); err != nil {
 		return fmt.Errorf("failed to create deployment: %w", err)
@@ -841,4 +870,23 @@ func (k *KubernetesBackend) performHTTPHealthCheck(_ context.Context, instanceNa
 // Helper function for int32 pointer
 func int32Ptr(i int32) *int32 {
 	return &i
+}
+
+// Helper function for bool pointer
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// mergeStringMaps returns base overlaid with override; override keys win. Used to
+// apply operator-supplied labels/annotations while guaranteeing platform-managed
+// keys cannot be clobbered (platform map is passed as override).
+func mergeStringMaps(base, override map[string]string) map[string]string {
+	out := make(map[string]string, len(base)+len(override))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range override {
+		out[k] = v
+	}
+	return out
 }

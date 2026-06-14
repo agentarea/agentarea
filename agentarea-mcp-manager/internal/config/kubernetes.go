@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // KubernetesConfig holds Kubernetes-specific configuration
@@ -40,6 +42,9 @@ type KubernetesConfig struct {
 	SecurityContext SecurityContextConfig `json:"security_context"`
 	NetworkPolicy   NetworkPolicyConfig   `json:"network_policy"`
 
+	// Operator-supplied customization applied to every spawned MCP instance pod.
+	InstancePod InstancePodConfig `json:"instance_pod"`
+
 	// Observability
 	Monitoring MonitoringConfig `json:"monitoring"`
 
@@ -72,6 +77,23 @@ type NetworkPolicyConfig struct {
 	AllowedNamespaces []string            `json:"allowed_namespaces"`
 	IngressRules      []NetworkPolicyRule `json:"ingress_rules"`
 	EgressRules       []NetworkPolicyRule `json:"egress_rules"`
+}
+
+// InstancePodConfig is operator-supplied customization merged onto every spawned
+// MCP instance pod. All fields are optional (empty = no change). Platform
+// security invariants (managed-by label, securityContext, seccomp, the SA-token
+// withholding, runtime-class clamp) are applied AFTER these and always win, so
+// nothing here can weaken instance isolation. The JSON tags are camelCase to
+// match the Helm values keys verbatim (the chart passes this struct as a single
+// JSON-encoded env var, KUBERNETES_INSTANCE_POD).
+type InstancePodConfig struct {
+	Labels            map[string]string   `json:"labels,omitempty"`
+	Annotations       map[string]string   `json:"annotations,omitempty"`
+	NodeSelector      map[string]string   `json:"nodeSelector,omitempty"`
+	Tolerations       []corev1.Toleration `json:"tolerations,omitempty"`
+	Affinity          *corev1.Affinity    `json:"affinity,omitempty"`
+	ImagePullSecrets  []string            `json:"imagePullSecrets,omitempty"`
+	PriorityClassName string              `json:"priorityClassName,omitempty"`
 }
 
 // NetworkPolicyRule defines a network policy rule

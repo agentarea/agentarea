@@ -505,7 +505,47 @@ mcpManager:
   service:
     type: ClusterIP
     port: 80
-  
+
+  # Egress restriction for spawned MCP instance pods (which may run untrusted,
+  # user-supplied images). Denies cluster-internal + cloud-metadata egress while
+  # allowing DNS + public internet. CIDRs are configurable so this is not pinned
+  # to any cloud provider. Requires a CNI that enforces NetworkPolicy (e.g. Cilium
+  # on DOKS); a no-op on clusters without enforcement.
+  instanceNetworkPolicy:
+    enabled: true
+    # Namespace running CoreDNS/kube-dns (for the DNS egress allowance).
+    dnsNamespace: kube-system
+    # Internal/link-local ranges the instance may NOT reach. Defaults cover
+    # RFC1918 + link-local (169.254.0.0/16 includes the 169.254.169.254 cloud
+    # metadata endpoint). Add your cluster's pod/service CIDR if it falls outside
+    # these (e.g. some providers use 100.64.0.0/10).
+    blockedEgressCIDRs:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 169.254.0.0/16
+    # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
+    # specific in-cluster dependency).
+    extraEgress: []
+
+  # Operator customization merged onto every spawned MCP instance pod. All fields
+  # are optional; empty = no change. Platform security invariants (managed-by
+  # label, securityContext/seccomp, withheld SA token, runtime-class clamp) are
+  # always applied on top and cannot be weakened from here. Passed to the manager
+  # as a single JSON env var (KUBERNETES_INSTANCE_POD); tolerations/affinity use
+  # the standard Kubernetes object shape.
+  instancePod:
+    labels: {}
+    annotations: {}
+    # Pin instance pods to a dedicated node pool (provision the pool itself in
+    # your infra; this only schedules onto it).
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    # Names of imagePullSecrets for private MCP images.
+    imagePullSecrets: []
+    priorityClassName: ""
+
   # Backend type: "docker" or "kubernetes"
   # "docker" drives containers through the host Docker socket (hostPath mount)
   # "kubernetes" uses native K8s resources (Deployments, Services, HTTPRoutes)

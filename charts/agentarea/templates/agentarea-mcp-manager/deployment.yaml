@@ -40,6 +40,13 @@ spec:
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- $ip := .Values.mcpManager.instancePod }}
+            {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
+            # Operator customization for spawned MCP instance pods (one JSON blob;
+            # parsed by the manager into the instance pod spec).
+            - name: KUBERNETES_INSTANCE_POD
+              value: {{ $ip | toJson | quote }}
+            {{- end }}
             {{- if or .Values.mcpManager.envVars .Values.global.envVars }}
             {{- $mcpEnv := default dict .Values.mcpManager.envVars -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -199,6 +201,16 @@ func loadKubernetesConfig() KubernetesConfig {
 
 	// Network policy
 	config.NetworkPolicy.Enabled = getEnvBool("KUBERNETES_NETWORK_POLICY_ENABLED", config.NetworkPolicy.Enabled)
+
+	// Operator-supplied instance pod customization (labels/annotations/scheduling),
+	// passed by the chart as one JSON blob. Parse failures are logged and ignored
+	// so a malformed value cannot break instance creation.
+	if raw := getEnv("KUBERNETES_INSTANCE_POD", ""); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &config.InstancePod); err != nil {
+			slog.Warn("ignoring invalid KUBERNETES_INSTANCE_POD", slog.String("error", err.Error()))
+			config.InstancePod = InstancePodConfig{}
+		}
+	}
 
 	// Monitoring
 	config.Monitoring.Enabled = getEnvBool("KUBERNETES_MONITORING_ENABLED", config.Monitoring.Enabled)
