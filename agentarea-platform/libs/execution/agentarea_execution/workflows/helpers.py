@@ -1,7 +1,7 @@
 """Helper classes and utilities for agent execution workflows."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, cast
 
 from temporalio import workflow
@@ -56,7 +56,7 @@ def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
     return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
 
 
-class ToolAction(str, Enum):
+class ToolAction(StrEnum):
     """Verdict of the tool-call policy decision (single PEP for every tool)."""
 
     ALLOW = "allow"
