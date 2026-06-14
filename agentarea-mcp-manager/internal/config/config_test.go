@@ -11,3 +11,46 @@ func TestLoadKubernetesConfigPodServiceAccountName(t *testing.T) {
 		t.Fatalf("PodServiceAccountName = %q, want %q", cfg.PodServiceAccountName, "agentarea-mcp-runtime")
 	}
 }
+
+// TestLoadInstancePodFromEnv locks the chart->manager contract: the JSON the
+// Helm chart emits for KUBERNETES_INSTANCE_POD (toJson of mcpManager.instancePod)
+// must parse into InstancePodConfig with the expected k8s-shaped fields.
+func TestLoadInstancePodFromEnv(t *testing.T) {
+	t.Setenv("KUBERNETES_INSTANCE_POD", `{
+		"labels": {"team": "x"},
+		"annotations": {"a": "b"},
+		"nodeSelector": {"pool": "mcp"},
+		"tolerations": [{"key": "mcp", "operator": "Exists", "effect": "NoSchedule"}],
+		"imagePullSecrets": ["regcred"],
+		"priorityClassName": "high"
+	}`)
+
+	ip := loadKubernetesConfig().InstancePod
+
+	if ip.Labels["team"] != "x" || ip.Annotations["a"] != "b" {
+		t.Fatalf("labels/annotations not parsed: %+v", ip)
+	}
+	if ip.NodeSelector["pool"] != "mcp" {
+		t.Fatalf("nodeSelector not parsed: %+v", ip.NodeSelector)
+	}
+	if len(ip.Tolerations) != 1 || ip.Tolerations[0].Key != "mcp" || string(ip.Tolerations[0].Effect) != "NoSchedule" {
+		t.Fatalf("tolerations not parsed: %+v", ip.Tolerations)
+	}
+	if len(ip.ImagePullSecrets) != 1 || ip.ImagePullSecrets[0] != "regcred" {
+		t.Fatalf("imagePullSecrets not parsed: %+v", ip.ImagePullSecrets)
+	}
+	if ip.PriorityClassName != "high" {
+		t.Fatalf("priorityClassName = %q", ip.PriorityClassName)
+	}
+}
+
+// Malformed JSON must be ignored (empty config), never break instance creation.
+func TestLoadInstancePodInvalidJSONIgnored(t *testing.T) {
+	t.Setenv("KUBERNETES_INSTANCE_POD", "{not valid json")
+
+	ip := loadKubernetesConfig().InstancePod
+
+	if ip.Labels != nil || ip.NodeSelector != nil || len(ip.Tolerations) != 0 {
+		t.Fatalf("expected empty InstancePod on invalid JSON, got %+v", ip)
+	}
+}

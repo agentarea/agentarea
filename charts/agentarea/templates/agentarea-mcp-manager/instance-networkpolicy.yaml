@@ -1,0 +1,53 @@
+{{- if and .Values.mcpManager.enabled .Values.mcpManager.instanceNetworkPolicy.enabled }}
+# Restricts EGRESS from spawned MCP instance pods (which may run user-supplied,
+# untrusted images). They proxy external upstreams, so they are allowed DNS +
+# public internet but denied every cluster-internal and link-local range. That
+# blocks cloud-metadata theft (169.254.169.254), kube-apiserver access, and
+# lateral movement to other tenants' instance pods (which also sit on
+# cluster-internal IPs). Ingress is intentionally left open: inbound is fronted
+# by the Service/gateway, and cross-pod reachability is already cut by every
+# instance's egress deny.
+#
+# Pods are selected by the managed-by label that mcp-manager stamps on every
+# instance pod, so the policy auto-applies with no per-pod wiring. CIDRs and the
+# DNS namespace are values-driven -- not pinned to any cloud provider; override
+# blockedEgressCIDRs for clusters whose internal ranges differ.
+#
+# Requires a CNI that enforces NetworkPolicy (e.g. Cilium on DOKS); a no-op on
+# clusters without enforcement.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-instances-egress
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: mcp-manager
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution (CoreDNS/kube-dns).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.mcpManager.instanceNetworkPolicy.dnsNamespace | quote }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Public internet only: all destinations except the configured private ranges.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- range .Values.mcpManager.instanceNetworkPolicy.blockedEgressCIDRs }}
+              - {{ . | quote }}
+              {{- end }}
+    {{- with .Values.mcpManager.instanceNetworkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
