@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -203,11 +204,10 @@ func main() {
 		}
 	}
 
-	// Run the sandbox execution consumer in-process so code execution works
-	// without a standalone runner (e.g. docker-compose). In Kubernetes it can
-	// coexist with standalone sandbox-runner replicas via the shared consumer
-	// group, or be disabled with SANDBOX_EMBEDDED_RUNNER=false to keep the
-	// control plane free of execution work.
+	// Run the sandbox execution consumer in-process (opt-in) so code execution
+	// works without a standalone runner — used by docker-compose. Off by default
+	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
+	// execution work out of the (more privileged) control plane.
 	startEmbeddedSandboxRunner(ctx, cfg, backend, logger)
 
 	// Start HTTP server
@@ -375,12 +375,14 @@ func startSandboxWorkflowGC(ctx context.Context, logger *slog.Logger, client *wa
 }
 
 // startEmbeddedSandboxRunner runs the sandbox execution consumer in-process,
-// delegating actual execution to the backend's data plane (k8s warm pod or the
-// docker sandbox-executor). This makes code execution work in docker-compose
-// without a standalone sandbox-runner. Disable with SANDBOX_EMBEDDED_RUNNER=false.
+// delegating actual execution to the backend's data plane (the docker
+// sandbox-executor). This makes code execution work in docker-compose without a
+// standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
+// default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
+// execution work out of the more-privileged control plane.
 func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
-	if v := os.Getenv("SANDBOX_EMBEDDED_RUNNER"); v == "false" || v == "0" {
-		logger.Info("Embedded sandbox runner disabled (SANDBOX_EMBEDDED_RUNNER)")
+	if enabled, _ := strconv.ParseBool(os.Getenv("SANDBOX_EMBEDDED_RUNNER")); !enabled {
+		logger.Info("Embedded sandbox runner disabled (set SANDBOX_EMBEDDED_RUNNER=true to enable)")
 		return
 	}
 
