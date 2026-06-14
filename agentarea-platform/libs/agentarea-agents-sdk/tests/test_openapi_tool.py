@@ -494,7 +494,9 @@ class TestOpenAPIToolFactory:
         svc.get_connection = AsyncMock(return_value=None)
         svc.list_connections = AsyncMock(return_value=([conn], 1))
 
-        tools = await mod.OpenAPIToolFactory.create_tools_from_connection(_CONNECTION_NAME, None, svc)
+        tools = await mod.OpenAPIToolFactory.create_tools_from_connection(
+            _CONNECTION_NAME, None, svc
+        )
 
         assert len(tools) == 3
         assert all(isinstance(t, mod.OpenAPITool) for t in tools)
@@ -515,7 +517,9 @@ class TestOpenAPIToolFactory:
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
-        tools = await mod.OpenAPIToolFactory.create_tools_from_connection(conn.id, ["opA", "opC"], svc)
+        tools = await mod.OpenAPIToolFactory.create_tools_from_connection(
+            conn.id, ["opA", "opC"], svc
+        )
 
         names = [t.name for t in tools]
         assert "opA" in names

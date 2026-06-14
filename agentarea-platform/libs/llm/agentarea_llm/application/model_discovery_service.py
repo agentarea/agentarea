@@ -123,10 +123,10 @@ class ModelDiscoveryService:
         if endpoint_url:
             try:
                 validate_outbound_url(url, allow_private=self._allow_private_endpoints)
-            except UnsafeUrlError as e:
-                logger.warning(
-                    "Rejected unsafe discovery endpoint for provider %s: %s", provider_key, e
-                )
+            except UnsafeUrlError:
+                # Do not interpolate the user-supplied endpoint/host into the log
+                # message (log-injection); the rejection itself is the signal.
+                logger.warning("Rejected model-discovery endpoint blocked by outbound SSRF guard")
                 return []
 
         headers = self._build_headers(provider_key, api_key)

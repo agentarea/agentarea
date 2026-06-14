@@ -79,7 +79,7 @@ async def test_task_service_event_streaming():
     task_manager = MockTaskManager()
 
     # Create TaskService instance (for backward compatibility in this test)
-    TaskService(
+    task_service = TaskService(
         task_repository=task_repo, event_broker=event_broker, task_manager=task_manager
     )
 
