@@ -198,6 +198,60 @@ class BundleAutomation(BaseModel):
         return v
 
 
+class BundlePolicy(BaseModel):
+    """A governance rule the package installs (maps to a PolicyRule).
+
+    Portable like everything else: ``subject`` is the literal "workspace" or a
+    BundleAgent ``key`` (never a DB id); the installer resolves it to a real
+    subject id. ``target``/``effect``/``params`` mirror the unified governance
+    rule model, so this is "our policy format" — not a new one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1)
+    subject: str = Field(
+        default="workspace",
+        description='"workspace" or a BundleAgent key the rule binds to.',
+    )
+    target: str = Field(
+        min_length=1,
+        description='Selector, e.g. "tool:send_email", "spend", "content", "*".',
+    )
+    effect: Literal["allow", "deny", "cap", "approval", "safety"]
+    params: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Effect-specific params, e.g. {amount_usd, period} for cap.",
+    )
+    condition: str | None = Field(default=None, description="Optional CEL condition.")
+    priority: int = Field(default=0)
+    enabled: bool = Field(default=True)
+    message: str | None = Field(default=None, description="Human-readable reason.")
+
+    @field_validator("key")
+    @classmethod
+    def _valid_key(cls, v: str) -> str:
+        if not _KEY_RE.match(v):
+            raise ValueError(f"policy key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        return v
+
+
+class BundleMetadata(BaseModel):
+    """Marketplace presentation metadata (parity with plugin/app listings)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    developer: str | None = Field(default=None, description="Publisher name.")
+    category: str | None = Field(default=None)
+    capabilities: list[str] = Field(
+        default_factory=list, description='e.g. ["interactive", "write"].'
+    )
+    icon: str | None = Field(default=None, description="Icon URL or asset reference.")
+    website: str | None = Field(default=None)
+    privacy_url: str | None = Field(default=None)
+    terms_url: str | None = Field(default=None)
+
+
 class Bundle(BaseModel):
     """The canonical, fully-inlined package object."""
 
@@ -207,11 +261,13 @@ class Bundle(BaseModel):
     name: str = Field(min_length=1, description="Stable package identifier (idempotency key).")
     display_name: str | None = Field(default=None)
     description: str = Field(default="")
+    metadata: BundleMetadata = Field(default_factory=BundleMetadata)
     setup: list[SetupField] = Field(default_factory=list)
     mcps: list[BundleMcp] = Field(default_factory=list)
     skills: list[BundleSkill] = Field(default_factory=list)
     agents: list[BundleAgent] = Field(default_factory=list)
     automations: list[BundleAutomation] = Field(default_factory=list)
+    policies: list[BundlePolicy] = Field(default_factory=list)
 
     @field_validator("schema_version")
     @classmethod

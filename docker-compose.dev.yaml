@@ -270,6 +270,10 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
+      # Run the sandbox execution consumer in-process (no standalone runner in
+      # compose) and route code-execution to the sandbox-executor container.
+      SANDBOX_EMBEDDED_RUNNER: "true"
+      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings

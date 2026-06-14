@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/providers"
+	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
+	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
@@ -201,6 +204,12 @@ func main() {
 		}
 	}
 
+	// Run the sandbox execution consumer in-process (opt-in) so code execution
+	// works without a standalone runner — used by docker-compose. Off by default
+	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
+	// execution work out of the (more privileged) control plane.
+	startEmbeddedSandboxRunner(ctx, cfg, backend, logger)
+
 	// Start HTTP server
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -363,6 +372,39 @@ func startSandboxWorkflowGC(ctx context.Context, logger *slog.Logger, client *wa
 			}
 		}
 	}()
+}
+
+// startEmbeddedSandboxRunner runs the sandbox execution consumer in-process,
+// delegating actual execution to the backend's data plane (the docker
+// sandbox-executor). This makes code execution work in docker-compose without a
+// standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
+// default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
+// execution work out of the more-privileged control plane.
+func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
+	if enabled, _ := strconv.ParseBool(os.Getenv("SANDBOX_EMBEDDED_RUNNER")); !enabled {
+		logger.Info("Embedded sandbox runner disabled (set SANDBOX_EMBEDDED_RUNNER=true to enable)")
+		return
+	}
+
+	executor, ok := backend.(sandboxrunner.SandboxExecutor)
+	if !ok {
+		logger.Warn("Backend does not support sandbox execution; embedded runner not started")
+		return
+	}
+
+	store, err := sandboxcontrol.NewRedisStore(cfg.Redis.URL, os.Getenv("SANDBOX_CONTROL_REDIS_PREFIX"), 24*time.Hour)
+	if err != nil {
+		logger.Warn("Embedded sandbox runner not started: redis store unavailable", slog.String("error", err.Error()))
+		return
+	}
+
+	runner := sandboxrunner.New(sandboxrunner.ConfigFromEnv(), store, executor, logger)
+	go func() {
+		if err := runner.Run(ctx); err != nil && err != context.Canceled {
+			logger.Error("Embedded sandbox runner stopped", slog.String("error", err.Error()))
+		}
+	}()
+	logger.Info("Embedded sandbox runner started")
 }
 
 func getDurationEnv(name string, fallback time.Duration) time.Duration {

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import yaml
+from agentarea_governance.domain.rules import parse_target
 from pydantic import ValidationError
 
 from agentarea_bundles.schemas.bundle import Bundle, BundleMcp, setup_refs
@@ -119,6 +120,7 @@ class BundleAnalyzer:
         )
         await self._populate_agent_entities(package, entities)
         await self._analyze_automations(package, agent_keys, entities, issues)
+        self._analyze_policies(package, agent_keys, entities, issues)
 
         installable = not any(i.severity is IssueSeverity.BLOCK for i in issues)
         return ImportPreview(
@@ -138,6 +140,7 @@ class BundleAnalyzer:
             ("skill", package.skills),
             ("agent", package.agents),
             ("automation", package.automations),
+            ("policy", package.policies),
         ):
             seen: set[str] = set()
             for item in items:
@@ -315,6 +318,52 @@ class BundleAnalyzer:
                     name=auto.key,
                     status=EntityStatus.ALREADY_EXISTS if exists else EntityStatus.WILL_CREATE,
                     detail=f"cron '{auto.cron}' ({auto.timezone}), enabled={auto.enabled}",
+                )
+            )
+
+    def _analyze_policies(
+        self,
+        package: Bundle,
+        agent_keys: set[str],
+        entities: list[PreviewEntity],
+        issues: list[PreviewIssue],
+    ) -> None:
+        for policy in package.policies:
+            if policy.subject != "workspace" and policy.subject not in agent_keys:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=(
+                            f"policy '{policy.key}' subject '{policy.subject}' is neither "
+                            f"'workspace' nor a known agent key"
+                        ),
+                        entity_key=policy.key,
+                    )
+                )
+            # Validate the target selector against the governance compiler. An
+            # unrecognized target compiles to nothing at runtime, so a deny/
+            # approval/cap would install yet silently never enforce. Block it at
+            # analyze-time instead of shipping a false sense of restriction.
+            try:
+                parse_target(policy.target)
+            except ValueError as exc:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=(
+                            f"policy '{policy.key}' target '{policy.target}' is invalid "
+                            f"({exc}); it would install but never enforce"
+                        ),
+                        entity_key=policy.key,
+                    )
+                )
+            entities.append(
+                PreviewEntity(
+                    kind=EntityKind.POLICY,
+                    key=policy.key,
+                    name=policy.key,
+                    status=EntityStatus.WILL_CREATE,
+                    detail=f"{policy.effect} {policy.target} on {policy.subject}",
                 )
             )
 

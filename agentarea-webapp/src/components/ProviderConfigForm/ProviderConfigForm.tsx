@@ -145,8 +145,20 @@ export default function ProviderConfigForm({
     resolver: zodResolver(
       isEdit
         ? providerConfigSchema
-        : providerConfigSchema.extend({
-            api_key: z.string().min(1, "API key is required"),
+        : providerConfigSchema.superRefine((data, ctx) => {
+            // API key is required for hosted providers, but optional when a
+            // custom endpoint URL is set — self-hosted / proxy backends
+            // (ollama, vLLM, OpenAI-compatible gateways) often accept
+            // keyless traffic, and the backend suppresses the Authorization
+            // header when the key is empty.
+            if (!data.endpoint_url?.trim() && !data.api_key?.trim()) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["api_key"],
+                message:
+                  "API key is required (or set a custom endpoint URL for keyless proxies)",
+              });
+            }
           })
     ),
     defaultValues: {

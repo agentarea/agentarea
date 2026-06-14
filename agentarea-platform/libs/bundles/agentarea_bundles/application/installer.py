@@ -72,6 +72,7 @@ class BundleInstaller:
         agent_repository: Any,
         trigger_service: Any,
         trigger_repository: Any,
+        governance_service: Any,
         user_context: Any,
     ) -> None:
         self._mcp_server_service = mcp_server_service
@@ -82,6 +83,7 @@ class BundleInstaller:
         self._agent_repository = agent_repository
         self._trigger_service = trigger_service
         self._trigger_repository = trigger_repository
+        self._governance_service = governance_service
         self._user_context = user_context
 
     async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
@@ -100,6 +102,7 @@ class BundleInstaller:
             package, setup_values, mcp_tool_names, skill_ids, result
         )
         await self._install_automations(package, agent_ids, result)
+        await self._install_policies(package, agent_ids, result)
         return result
 
     # -- MCP ----------------------------------------------------------------
@@ -383,5 +386,83 @@ class BundleInstaller:
                     action=InstallAction.CREATED,
                     id=str(trigger.id),
                     detail=f"enabled={auto.enabled}",
+                )
+            )
+
+    # -- policies -----------------------------------------------------------
+
+    async def _install_policies(
+        self, package: Bundle, agent_ids: dict[str, UUID], result: InstallResult
+    ) -> None:
+        from agentarea_governance.domain.rules import (
+            PolicyEffect,
+            PolicyRule,
+            PolicySubjectType,
+        )
+
+        for policy in package.policies:
+            # Resolve the portable subject reference to a concrete (type, id).
+            if policy.subject == "workspace":
+                subject_type = PolicySubjectType.WORKSPACE
+                subject_id = self._user_context.workspace_id
+            else:
+                agent_id = agent_ids.get(policy.subject)
+                if agent_id is None:
+                    result.entities.append(
+                        InstalledEntity(
+                            kind=EntityKind.POLICY,
+                            key=policy.key,
+                            name=policy.key,
+                            action=InstallAction.SKIPPED,
+                            detail=f"agent '{policy.subject}' was not created",
+                        )
+                    )
+                    continue
+                subject_type = PolicySubjectType.AGENT
+                subject_id = str(agent_id)
+
+            effect = PolicyEffect(policy.effect)
+
+            # Idempotent by (subject, target, effect): rules have no name.
+            existing = await self._governance_service.list_rules(
+                subject_type=subject_type,
+                subject_id=subject_id,
+                target=policy.target,
+                effect=effect,
+            )
+            if existing:
+                result.entities.append(
+                    InstalledEntity(
+                        kind=EntityKind.POLICY,
+                        key=policy.key,
+                        name=policy.key,
+                        action=InstallAction.REUSED,
+                        id=str(existing[0].id) if existing[0].id else None,
+                    )
+                )
+                continue
+
+            params = dict(policy.params)
+            if policy.message:
+                params.setdefault("message", policy.message)
+            rule = PolicyRule(
+                enabled=policy.enabled,
+                priority=policy.priority,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                target=policy.target,
+                effect=effect,
+                params=params,
+                condition=policy.condition,
+            )
+            created = await self._governance_service.create_rule(rule=rule, subject_id=subject_id)
+            result.entities.append(
+                InstalledEntity(
+                    kind=EntityKind.POLICY,
+                    key=policy.key,
+                    name=policy.key,
+                    action=InstallAction.CREATED,
+                    id=str(created.id) if created.id else None,
+                    detail=f"{policy.effect} {policy.target} on {policy.subject}",
                 )
             )

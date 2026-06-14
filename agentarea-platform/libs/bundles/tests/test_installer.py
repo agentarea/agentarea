@@ -82,6 +82,14 @@ class FakeTriggerRepo:
     async def list_all(self): return self.existing
 
 
+class FakeGovernanceSvc:
+    def __init__(self, existing=None): self.existing = existing or []; self.created = []
+    async def list_rules(self, **kwargs): return self.existing
+    async def create_rule(self, *, rule, subject_id):
+        self.created.append((rule, subject_id))
+        return SimpleNamespace(id=uuid4())
+
+
 def _installer(**overrides):
     deps = dict(
         mcp_server_service=FakeMcpServerSvc(),
@@ -92,10 +100,60 @@ def _installer(**overrides):
         agent_repository=FakeAgentRepo(),
         trigger_service=FakeTriggerSvc(),
         trigger_repository=FakeTriggerRepo(),
+        governance_service=FakeGovernanceSvc(),
         user_context=SimpleNamespace(user_id="u", workspace_id="w"),
     )
     deps.update(overrides)
     return BundleInstaller(**deps), deps
+
+
+POLICIES = """
+schema_version: "0.1.0"
+name: pol
+agents: [{key: lead, name: Lead, model: gpt-4o}]
+policies:
+  - {key: cap, subject: workspace, target: spend, effect: cap, params: {amount_usd: 50}}
+  - {key: deny, subject: lead, target: "tool:send_email", effect: deny, message: no email}
+"""
+
+
+async def test_policies_install_on_workspace_and_agent():
+    inst, deps = _installer()
+    res = await inst.install(parse_bundle(POLICIES), {})
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("policy", "cap")] == InstallAction.CREATED
+    assert actions[("policy", "deny")] == InstallAction.CREATED
+    gov = deps["governance_service"]
+    assert len(gov.created) == 2
+    # workspace cap bound to workspace id; agent deny bound to the created agent id
+    subjects = {str(r.subject_type): sid for r, sid in gov.created}
+    assert subjects["workspace"] == "w"
+    # message folded into params
+    deny_rule = next(r for r, _ in gov.created if r.effect.value == "deny")
+    assert deny_rule.params.get("message") == "no email"
+
+
+async def test_policy_idempotent_when_rule_exists():
+    inst, deps = _installer(governance_service=FakeGovernanceSvc(existing=[SimpleNamespace(id=uuid4())]))
+    res = await inst.install(parse_bundle(POLICIES), {})
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("policy", "cap")] == InstallAction.REUSED
+    assert deps["governance_service"].created == []  # nothing created
+
+
+async def test_policy_skipped_when_agent_subject_missing():
+    pkg = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+policies: [{key: orphan, subject: ghost, target: "*", effect: deny}]
+"""
+    )
+    inst, deps = _installer()
+    res = await inst.install(pkg, {})
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("policy", "orphan")] == InstallAction.SKIPPED
+    assert deps["governance_service"].created == []
 
 
 async def test_missing_required_setup_blocks_install():

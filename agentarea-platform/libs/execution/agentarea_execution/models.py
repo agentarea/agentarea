@@ -23,6 +23,7 @@ class ResolvedModelInfo(BaseModel):
     api_key_secret: str | None = None  # secret manager key name, not the actual key
     endpoint_url: str | None = None
     context_window: int = 128000
+    max_output_tokens: int | None = None  # model_spec cap; bounds the per-call max_tokens
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging

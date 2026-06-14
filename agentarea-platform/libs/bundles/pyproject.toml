@@ -13,6 +13,7 @@ dependencies = [
     "agentarea-agents",
     "agentarea-mcp",
     "agentarea-triggers",
+    "agentarea-governance",
     "pydantic>=2.4.2",
     "PyYAML>=6.0",
 ]
@@ -22,6 +23,7 @@ agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-triggers = { workspace = true }
+agentarea-governance = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentarea_bundles"]

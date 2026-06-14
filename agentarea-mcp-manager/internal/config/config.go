@@ -70,6 +70,11 @@ type ContainerConfig struct {
 	// Resource limits
 	DefaultMemoryLimit string `json:"default_memory_limit"`
 	DefaultCPULimit    string `json:"default_cpu_limit"`
+
+	// SandboxExecutorURL is the HTTP endpoint of the sandbox-executor data
+	// plane used by the docker backend (dev/compose). When set, sandbox
+	// executions are routed here instead of a Kubernetes warm pod.
+	SandboxExecutorURL string `json:"sandbox_executor_url"`
 }
 
 // LoggingConfig holds logging configuration
@@ -105,6 +110,7 @@ func Load() *Config {
 			ShutdownTimeout:    getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
+			SandboxExecutorURL: getEnv("SANDBOX_EXECUTOR_URL", ""),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -113,10 +119,10 @@ func Load() *Config {
 		Redis: RedisConfig{
 			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
 		},
-		CoreAPIURL:       getEnv("CORE_API_URL", "http://localhost:8000"),
-		Kubernetes:       loadKubernetesConfig(),
-		Environment:      getEnv("BACKEND_ENVIRONMENT", ""),
-		Features:         loadFeaturesConfig(),
+		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
+		Kubernetes:  loadKubernetesConfig(),
+		Environment: getEnv("BACKEND_ENVIRONMENT", ""),
+		Features:    loadFeaturesConfig(),
 	}
 }
 

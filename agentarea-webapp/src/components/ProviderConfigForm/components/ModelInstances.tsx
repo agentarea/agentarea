@@ -78,7 +78,8 @@ export default function ModelInstances({
         toast.error(t("selectProviderFirst"));
         return;
       }
-      if (!apiKey || !apiKey.trim()) {
+      // Keyless proxies (custom endpoint, no auth) can still be discovered.
+      if ((!apiKey || !apiKey.trim()) && (!endpointUrl || !endpointUrl.trim())) {
         toast.error(t("enterApiKeyToDiscover"));
         return;
       }
@@ -101,7 +102,7 @@ export default function ModelInstances({
       } else {
         const { data, error } = await discoverModelsPreviewAction({
           provider_key: providerKey!,
-          api_key: apiKey!.trim(),
+          api_key: apiKey?.trim() || "",
           endpoint_url: endpointUrl || null,
         });
         if (error) {
