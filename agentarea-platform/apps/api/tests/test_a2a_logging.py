@@ -1,6 +1,5 @@
 """Unit tests for A2A logging and monitoring functionality."""
 
-import json
 import logging
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
@@ -262,10 +261,6 @@ class TestA2ALogging:
 
             mock_task_event_service = MagicMock()
             mock_context_instance.get_task_event_service.return_value = mock_task_event_service
-
-            # Test the activity (this would normally be called by Temporal)
-            # For now, just verify the structure is correct
-            events_json = [json.dumps(test_event)]
 
             # The actual test would require running the activity, but we can verify
             # the event structure is correct for A2A enhancement

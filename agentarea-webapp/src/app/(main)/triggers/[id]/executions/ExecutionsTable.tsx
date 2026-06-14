@@ -1,6 +1,5 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +31,6 @@ export default function ExecutionsTable({
   triggerId,
   currentPage,
 }: ExecutionsTableProps) {
-  const t = useTranslations("TriggersPage.detail");
-
   const columns = [
     {
       accessor: "id",

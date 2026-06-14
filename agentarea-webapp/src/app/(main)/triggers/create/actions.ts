@@ -14,10 +14,6 @@ const TriggerCreateSchema = z.object({
   failure_threshold: z.number().int().positive().optional(),
 });
 
-const TriggerUpdateSchema = TriggerCreateSchema.partial().extend({
-  id: z.string().uuid(),
-});
-
 export type TriggerFormState = {
   message: string;
   errors?: { [key: string]: string[] };

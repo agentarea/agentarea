@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useMentions } from "@/hooks/useMentions";
@@ -115,7 +115,6 @@ export default function FullChat({
   const {
     selectedFiles,
     fileInputRef,
-    handleFileSelect,
     removeFile,
     openFileDialog,
     clearFiles,
@@ -144,7 +143,6 @@ export default function FullChat({
   // Mention functionality
   const {
     showMentions,
-    mentionQuery,
     mentionPosition,
     filteredAgents,
     selectedMentionIndex,
@@ -153,7 +151,6 @@ export default function FullChat({
     handleInputChange: handleMentionInputChange,
     handleAgentSelect,
     handleKeyDown: handleMentionKeyDown,
-    setShowMentions,
   } = useMentions({
     textareaRef,
     containerRef: cardContainerRef,
@@ -468,7 +465,7 @@ export default function FullChat({
           onScrollToBottom={() => {
             scrollToBottom();
             requestAnimationFrame(() => {
-              const atBottom = checkIfAtBottom();
+              checkIfAtBottom();
               // isAtBottom state is managed by scroll handler
             });
           }}

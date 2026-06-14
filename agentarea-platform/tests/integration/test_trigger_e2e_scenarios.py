@@ -18,10 +18,7 @@ from fastapi.testclient import TestClient
 try:
     from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
     from agentarea_triggers.domain.models import (
-        CronTrigger,
         TriggerCreate,
-        TriggerExecution,
-        WebhookTrigger,
     )
     from agentarea_triggers.infrastructure.repository import (
         TriggerExecutionRepository,
@@ -331,9 +328,9 @@ class TestTriggerE2EScenarios:
             created_by="test_user",
         )
 
-        trigger1 = await trigger_service.create_trigger(trigger1_data)
-        trigger2 = await trigger_service.create_trigger(trigger2_data)
-        trigger3 = await trigger_service.create_trigger(trigger3_data)
+        await trigger_service.create_trigger(trigger1_data)
+        await trigger_service.create_trigger(trigger2_data)
+        await trigger_service.create_trigger(trigger3_data)
 
         # Send webhook request for main branch
         webhook_request_data = {

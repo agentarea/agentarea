@@ -32,16 +32,6 @@ def main():
         "--disable-warnings",  # Disable warnings for cleaner output
     ]
 
-    # Test discovery patterns
-    test_patterns = [
-        "core/tests/integration/test_trigger_e2e_scenarios.py",
-        "core/tests/integration/test_trigger_webhook_http_integration.py",
-        "core/tests/integration/test_trigger_lifecycle_management.py",
-        "core/tests/integration/test_trigger_safety_integration.py",
-        "core/tests/integration/test_trigger_performance_concurrent.py",
-        "core/tests/integration/test_trigger_comprehensive_suite.py",
-    ]
-
     # Check if trigger system is available
     try:
         from agentarea_triggers.trigger_service import TriggerService

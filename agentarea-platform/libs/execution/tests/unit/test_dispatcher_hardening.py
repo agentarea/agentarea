@@ -1,7 +1,7 @@
 """Tests for dispatcher hardening: never-empty result, last_dispatch queue."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +12,7 @@ class TestDispatcherNeverEmptyResult:
     @pytest.mark.asyncio
     async def test_mcp_execute_exception_returns_populated_result(self):
         """Exception in execute_tool must produce a non-empty result string."""
-        from agentarea_execution.models import MCPToolRequest, MCPToolResult
+        from agentarea_execution.models import MCPToolResult
 
         # Simulate the inner exception-handler path by calling the activity logic directly.
         # We test the shape of MCPToolResult on failure — result must never be empty.

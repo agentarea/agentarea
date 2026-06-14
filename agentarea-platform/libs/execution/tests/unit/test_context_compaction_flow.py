@@ -4,7 +4,6 @@ Tests the full compaction lifecycle: large conversations triggering compaction,
 boundary preservation, tool pair safety, multiple compactions, orphan repair.
 """
 
-import pytest
 
 from agentarea_execution.workflows.context_manager import (
     ContextWindowManager,
@@ -148,7 +147,6 @@ class TestCompactionBoundary:
         boundary = find_compaction_boundary(messages, keep_recent=6)
         assert boundary > 0
         # Verify both halves have valid tool pairs
-        compactable = messages[1:boundary]  # skip system prompt
         kept = messages[boundary:]
         assert validate_tool_pairs(kept)
 

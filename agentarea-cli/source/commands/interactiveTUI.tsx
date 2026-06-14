@@ -1,5 +1,4 @@
-import React, {useEffect, useState} from 'react';
-import {Box, Text} from 'ink';
+import {useEffect} from 'react';
 import {logger} from '../utils/logger.js';
 import {apiClient} from '../services/apiClient.js';
 import {tokenStorage} from '../utils/storage.js';
@@ -11,8 +10,6 @@ import {
 	formatHeader,
 	formatHighlight,
 	formatDim,
-	showCursor,
-	hideCursor,
 } from '../utils/formatting.js';
 import readline from 'readline';
 
@@ -65,9 +62,6 @@ export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {
 						if (isClosed) {
 							resolve('/exit');
 						} else {
-							let currentInput = '';
-							let suggestions: string[] = [];
-
 							// Handle line event
 							const handleLine = (input: string) => {
 								rl.removeListener('line', handleLine);
@@ -79,22 +73,6 @@ export function InteractiveTUI({userEmail, token}: InteractiveTUIProps) {
 
 							// Listen for input
 							rl.on('line', handleLine);
-
-							// Handle keypress for autocomplete
-							if (process.stdin.isTTY) {
-								const originalOnData = process.stdin.listeners('data')[0];
-								const handleKeypress = (key: any) => {
-									// Don't process if already resolved
-									if (!rl.listeners('line').includes(handleLine)) return;
-
-									// For terminal input, just let readline handle it
-									if (originalOnData) {
-										originalOnData(key);
-									}
-								};
-
-								// Just use readline as-is for simplicity
-							}
 						}
 					});
 

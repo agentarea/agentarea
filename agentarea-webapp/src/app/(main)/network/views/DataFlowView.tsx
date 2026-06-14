@@ -97,7 +97,6 @@ const LANE_META: Record<
 const ROW_H = 150;
 const CLUSTER_GAP = 90;
 const NODE_HALF_W = 80;
-const NODE_HALF_H = 60;
 const LANE_PAD = 56;
 const LANE_HEADER = 80;
 

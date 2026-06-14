@@ -14,9 +14,6 @@ _PRIVATE_NETWORKS = [
     ipaddress.ip_network("fc00::/7"),
 ]
 
-_SPEC_MAX_SIZE = 5 * 1024 * 1024  # 5MB
-
-
 def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
     """Validate a URL is safe to fetch and return resolved IP addresses.
 

@@ -12,7 +12,6 @@ import { MCPServer } from "../types";
 import { getMCPServerCategory, getCategoryColorClasses, getConnectionType } from "../utils";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { listMCPServersAction as listMCPServers } from "@/lib/server-actions";
-import { FilterChips } from "./FilterChips";
 
 interface MCPSpecsSectionProps {
   searchParams: { [key: string]: string | string[] | undefined };

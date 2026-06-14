@@ -9,14 +9,13 @@ These tests use a real PostgreSQL database to verify:
 
 import asyncio
 import os
-import uuid
 from typing import AsyncGenerator
 
 import pytest
 from agentarea_common.auth import UserContext
 from agentarea_secrets.database_secret_manager import DatabaseSecretManager, EncryptedSecret
 from cryptography.fernet import Fernet
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from agentarea_common.base.models import BaseModel

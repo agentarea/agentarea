@@ -101,15 +101,6 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
 # This lets Cursor use our API_BASE_URL as the single AS URL for all ops.
 # ---------------------------------------------------------------------------
 
-_HYDRA_PROXY_PATHS = (
-    "/oauth2/",
-    "/.well-known/jwks.json",
-    "/userinfo",
-    "/oauth2/sessions/logout",
-    "/credentials",
-)
-
-
 @oauth_as_router.get("/oauth2/auth")
 async def hydra_auth_redirect(request: Request) -> Response:
     """Redirect the browser to Hydra's actual /oauth2/auth endpoint.

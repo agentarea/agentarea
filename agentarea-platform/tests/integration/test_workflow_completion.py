@@ -156,8 +156,6 @@ class TestWorkflowCompletion:
     async def test_workflow_state_persistence_during_execution(self, execution_request):
         """Test that workflow state persists correctly during execution."""
 
-        state_snapshots = []
-
         async def mock_build_agent_config(*args, **kwargs):
             return {
                 "id": str(execution_request.agent_id),

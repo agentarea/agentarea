@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 
 # Import trigger system components
 try:
-    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
-    from agentarea_triggers.domain.models import TriggerCreate, WebhookTrigger
+    from agentarea_triggers.domain.enums import TriggerType, WebhookType
+    from agentarea_triggers.domain.models import TriggerCreate
     from agentarea_triggers.infrastructure.repository import (
         TriggerExecutionRepository,
         TriggerRepository,

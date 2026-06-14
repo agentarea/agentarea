@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { getTriggerMetrics } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, CheckCircle, Clock, Hash } from "lucide-react";
+import { CheckCircle, Clock, Hash } from "lucide-react";
 
 interface Props {
   params: Promise<{ id: string }>;

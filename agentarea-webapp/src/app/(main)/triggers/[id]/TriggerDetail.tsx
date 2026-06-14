@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { Bot, Check, Clock, Copy, Hash, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";

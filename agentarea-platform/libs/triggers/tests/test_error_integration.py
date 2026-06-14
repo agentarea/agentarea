@@ -195,7 +195,6 @@ class TestErrorHandlingIntegration:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Verify that some succeed and some fail with proper error handling
-        successes = [r for r in results if not isinstance(r, Exception)]
         failures = [r for r in results if isinstance(r, Exception)]
 
         # Should have both successes and failures

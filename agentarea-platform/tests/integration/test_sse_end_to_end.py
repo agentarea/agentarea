@@ -133,7 +133,7 @@ async def test_end_to_end_workflow():
     # Create TaskService (like API setup)
     task_repository = MockTaskRepository()
     task_manager = MockTaskManager()
-    task_service = TaskService(
+    TaskService(
         task_repository=task_repository, event_broker=event_broker, task_manager=task_manager
     )
 

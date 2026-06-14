@@ -7,11 +7,9 @@ so we can exercise pure state-mutation logic in plain unit tests.
 
 import asyncio
 import logging
-from unittest.mock import MagicMock
 
 import pytest
 
-from agentarea_execution.workflows import agent_execution_workflow as wf_mod
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_execution.workflows.models import AgentGoal, ContinueAsNewState
 

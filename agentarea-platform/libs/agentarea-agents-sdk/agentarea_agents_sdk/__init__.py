@@ -79,5 +79,4 @@ __all__ = [
     "BaseAgentRunner",
     "ExecutionResult",
     "RunnerConfig",
-    "SyncAgentRunner",
 ]

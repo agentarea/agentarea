@@ -366,7 +366,6 @@ export function ChatInputArea({
         type="file"
         multiple
         onChange={(e) => {
-          const files = Array.from(e.target.files || []);
           // This is a bit hacky, but we don't have a direct handler for file select
           // The parent component should handle this via fileInputRef
         }}

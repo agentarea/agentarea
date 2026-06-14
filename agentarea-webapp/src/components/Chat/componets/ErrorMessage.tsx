@@ -22,21 +22,6 @@ interface ErrorData {
 const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
   const t = useTranslations("ErrorMessage");
 
-  const getErrorStyles = () => {
-    if (data.retryable !== false) {
-      return {
-        container:
-          "bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800",
-        text: "text-yellow-700 dark:text-yellow-300",
-      };
-    }
-    return {
-      container:
-        "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800",
-      text: "text-red-700 dark:text-red-300",
-    };
-  };
-
   return (
     <MessageWrapper type="error">
       <BaseMessage

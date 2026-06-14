@@ -2,7 +2,6 @@ import { Edit, Trash2 } from "lucide-react";
 import { Control, useWatch } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import type { AgentFormValues, MCPToolConfig } from "../types";
 import { MethodsList } from "./MethodsList";
 

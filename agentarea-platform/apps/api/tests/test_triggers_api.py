@@ -37,8 +37,6 @@ try:
         TriggerService,
         TriggerValidationError,
     )
-
-    TRIGGERS_AVAILABLE = True
 except ImportError:
     # Create mock classes for testing
     class TriggerType:
@@ -94,8 +92,6 @@ except ImportError:
 
     class TriggerNotFoundError(Exception):
         pass
-
-    TRIGGERS_AVAILABLE = False
 
 
 @pytest.fixture

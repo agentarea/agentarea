@@ -1,7 +1,6 @@
 """Test workflow with real infrastructure to identify malformed response source."""
 
 import logging
-import os
 from datetime import timedelta
 from uuid import uuid4
 
@@ -47,9 +46,6 @@ class RealTestDependencies:
 @pytest.mark.asyncio
 async def test_workflow_with_real_infrastructure_and_database():
     """Test workflow using real infrastructure but with test database setup."""
-
-    # Skip if no Ollama available
-    docker_host = os.environ.get("LLM_DOCKER_HOST", "localhost")
 
     # Create real dependencies
     dependencies = RealTestDependencies()
@@ -174,8 +170,6 @@ async def test_database_setup_verification():
 @pytest.mark.asyncio
 async def test_real_activity_call_directly():
     """Test calling the real LLM activity directly to see its behavior."""
-
-    docker_host = os.environ.get("LLM_DOCKER_HOST", "localhost")
 
     # Create real dependencies
     dependencies = RealTestDependencies()

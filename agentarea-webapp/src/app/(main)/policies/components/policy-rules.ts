@@ -5,7 +5,6 @@ import type {
   PolicyRule,
 } from "@/types/policies";
 import {
-  isCapTarget,
   isToolTarget,
   toolNameFromTarget,
 } from "@/types/policies";

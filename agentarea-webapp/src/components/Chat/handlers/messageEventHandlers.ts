@@ -4,7 +4,6 @@
  */
 
 import { parseEventToMessage } from "../EventParser";
-import { MessageComponentType } from "../MessageComponents";
 import {
   accumulateLLMChunk,
   finalizeLLMChunk,

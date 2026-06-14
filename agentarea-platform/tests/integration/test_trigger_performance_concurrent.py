@@ -17,10 +17,7 @@ import pytest
 try:
     from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
     from agentarea_triggers.domain.models import (
-        CronTrigger,
         TriggerCreate,
-        TriggerExecution,
-        WebhookTrigger,
     )
     from agentarea_triggers.infrastructure.repository import (
         TriggerExecutionRepository,

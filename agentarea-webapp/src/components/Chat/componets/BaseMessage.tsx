@@ -1,4 +1,3 @@
-import { ChevronUp } from "lucide-react";
 import {
   Accordion,
   AccordionContent,

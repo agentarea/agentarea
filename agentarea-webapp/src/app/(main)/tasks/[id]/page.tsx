@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Send, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
@@ -26,8 +26,6 @@ import {
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
   cancelAgentTaskAction as cancelAgentTask,
-  pauseAgentTaskAction as pauseAgentTask,
-  resumeAgentTaskAction as resumeAgentTask,
   sendTaskCommandAction as sendTaskCommand,
 } from "@/lib/server-actions";
 import { resolveEscalationAction } from "@/lib/server-actions";
@@ -37,7 +35,7 @@ export default function TaskDetailsPage() {
   const { task, taskStatus, loading, error, refresh } = useTaskContext();
   const router = useRouter();
 
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -103,59 +101,6 @@ export default function TaskDetailsPage() {
     await refresh();
     await refreshEvents();
     setRefreshing(false);
-  };
-
-  // Task control handlers
-  const handlePauseTask = async () => {
-    if (!task) return;
-
-    try {
-      setControlling(true);
-      const { error } = await pauseAgentTask(task.agent_id, task.id);
-
-      if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while pausing the task";
-        toast.error("Failed to pause task", {
-          description: errorMessage,
-        });
-      } else {
-        toast.success("Task paused successfully");
-        await refresh();
-      }
-    } catch (err) {
-      toast.error("Failed to pause task", {
-        description: "An unexpected error occurred",
-      });
-    } finally {
-      setControlling(false);
-    }
-  };
-
-  const handleResumeTask = async () => {
-    if (!task) return;
-
-    try {
-      setControlling(true);
-      const { error } = await resumeAgentTask(task.agent_id, task.id);
-
-      if (error) {
-        const errorMessage =
-          error.detail?.[0]?.msg || "An error occurred while resuming the task";
-        toast.error("Failed to resume task", {
-          description: errorMessage,
-        });
-      } else {
-        toast.success("Task resumed successfully");
-        await refresh();
-      }
-    } catch (err) {
-      toast.error("Failed to resume task", {
-        description: "An unexpected error occurred",
-      });
-    } finally {
-      setControlling(false);
-    }
   };
 
   const handleCancelTask = async () => {

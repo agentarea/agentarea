@@ -87,16 +87,16 @@ class TestWorkspaceDataIsolation:
             record_w1_u1 = await repo_w1_u1.create(
                 name="Record W1 U1", description="Created by user1 in workspace1", category="test"
             )
-            record_w1_u2 = await repo_w1_u2.create(
+            await repo_w1_u2.create(
                 name="Record W1 U2", description="Created by user2 in workspace1", category="test"
             )
             record_w2_u1 = await repo_w2_u1.create(
                 name="Record W2 U1", description="Created by user1 in workspace2", category="test"
             )
-            record_w2_u3 = await repo_w2_u3.create(
+            await repo_w2_u3.create(
                 name="Record W2 U3", description="Created by user3 in workspace2", category="test"
             )
-            record_w3_admin = await repo_w3_admin.create(
+            await repo_w3_admin.create(
                 name="Record W3 Admin",
                 description="Created by admin in workspace3",
                 category="admin",
@@ -146,10 +146,10 @@ class TestWorkspaceDataIsolation:
             repo_u2 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user2"])
 
             # Create records by different users in same workspace
-            record_u1_1 = await repo_u1.create(name="User1 Record 1", category="shared")
-            record_u1_2 = await repo_u1.create(name="User1 Record 2", category="private")
+            await repo_u1.create(name="User1 Record 1", category="shared")
+            await repo_u1.create(name="User1 Record 2", category="private")
             record_u2_1 = await repo_u2.create(name="User2 Record 1", category="shared")
-            record_u2_2 = await repo_u2.create(name="User2 Record 2", category="private")
+            await repo_u2.create(name="User2 Record 2", category="private")
 
             # Test workspace-scoped filtering (default behavior)
             u1_workspace_records = await repo_u1.list_all()

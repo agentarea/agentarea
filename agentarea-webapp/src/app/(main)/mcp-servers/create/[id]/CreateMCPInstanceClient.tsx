@@ -165,9 +165,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
   const {
     register,
-    handleSubmit,
     getValues,
-    formState: { isSubmitting },
   } = useForm<UrlFormValues>({
     defaultValues: {
       instanceName: getTitle(server),

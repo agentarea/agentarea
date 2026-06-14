@@ -4,7 +4,6 @@ Tests that _execute_tool_calls correctly separates agent calls, regular calls,
 recall_history calls, and completion calls.
 """
 
-import pytest
 
 from agentarea_execution.workflows.models import ToolCall
 

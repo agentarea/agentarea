@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { ExternalLink } from "lucide-react";
-import { useRouter } from "next/navigation";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { Button } from "@/components/ui/button";
 import { deleteInstance } from "./actions";
@@ -21,7 +20,6 @@ export default function MCPInstanceHeaderControls({
   hasAuthConfig?: boolean;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail");
-  const router = useRouter();
   const [isActioning, setIsActioning] = useState(false);
 
   const isUrlType = instanceType === "url";

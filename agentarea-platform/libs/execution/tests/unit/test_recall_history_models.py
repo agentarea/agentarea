@@ -1,8 +1,7 @@
 """Tests for RecallHistoryRequest/Result models."""
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-import pytest
 
 from agentarea_execution.models import RecallHistoryRequest, RecallHistoryResult
 

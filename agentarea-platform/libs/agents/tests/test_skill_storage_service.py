@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agentarea_agents.infrastructure.skill_storage_service import (
-    FileInfo,
     SkillStorageService,
 )
 

@@ -3,8 +3,7 @@
 Tests factory logic for creating different secret manager types.
 """
 
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager, get_secret_manager

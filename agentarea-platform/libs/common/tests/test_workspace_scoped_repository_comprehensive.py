@@ -99,8 +99,6 @@ class TestWorkspaceScopedRepository:
 
         # Assert
         mock_session.execute.assert_called_once()
-        # Verify the query includes workspace filter
-        call_args = mock_session.execute.call_args[0][0]
         # The query should filter by both id and workspace_id
         assert result is not None
         assert result.workspace_id == "workspace1"
@@ -329,7 +327,7 @@ class TestWorkspaceScopedRepository:
         mock_session.refresh = AsyncMock()
 
         # Act
-        result = await repository_workspace1.update(
+        await repository_workspace1.update(
             test_id,
             name="updated",
             created_by="hacker",  # Should be ignored

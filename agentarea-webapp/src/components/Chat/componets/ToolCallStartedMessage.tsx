@@ -13,7 +13,7 @@ interface ToolCallStartedData {
 const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({
   data,
 }) => {
-  const [showCalling, setShowCalling] = useState(true);
+  const [showCalling] = useState(true);
   const t = useTranslations("Chat.Messages");
 
   useEffect(() => {

@@ -113,9 +113,6 @@ class TemporalTaskManager(BaseTaskManager):
         try:
             logger.info(f"Submitting task {task.id} for execution")
 
-            # Convert SimpleTask to Task for repository operations
-            task_domain = self._simple_task_to_task(task)
-
             # Start temporal workflow for task execution
             workflow_id = f"task-{task.id}"
 
