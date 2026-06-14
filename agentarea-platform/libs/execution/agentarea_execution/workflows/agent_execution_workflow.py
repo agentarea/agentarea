@@ -2121,7 +2121,7 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
-        return approved
+        return bool(approved)
 
     async def _gate_tool_call(self, tool_call: ToolCall) -> bool:
         """Single policy enforcement point applied to EVERY capability tool call.

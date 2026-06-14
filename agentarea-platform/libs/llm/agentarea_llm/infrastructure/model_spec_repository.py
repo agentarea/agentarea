@@ -204,6 +204,8 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         """
         provider_spec_id = kwargs.get("provider_spec_id")
         model_name = kwargs.get("model_name")
+        if provider_spec_id is None or model_name is None:
+            raise ValueError("provider_spec_id and model_name are required for upsert")
         existing = await self._find_global_by_provider_and_model(provider_spec_id, model_name)
         if existing:
             owned = str(getattr(existing, "workspace_id", "")) == str(
