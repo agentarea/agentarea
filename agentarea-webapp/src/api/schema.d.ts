@@ -4472,11 +4472,14 @@ export interface components {
             display_name?: string | null;
             /** Mcps */
             mcps?: components["schemas"]["BundleMcp"][];
+            metadata?: components["schemas"]["BundleMetadata"];
             /**
              * Name
              * @description Stable package identifier (idempotency key).
              */
             name: string;
+            /** Policies */
+            policies?: components["schemas"]["BundlePolicy"][];
             /**
              * Schema Version
              * @default 0.1.0
@@ -4505,11 +4508,14 @@ export interface components {
             display_name?: string | null;
             /** Mcps */
             mcps?: components["schemas"]["BundleMcp"][];
+            metadata?: components["schemas"]["BundleMetadata"];
             /**
              * Name
              * @description Stable package identifier (idempotency key).
              */
             name: string;
+            /** Policies */
+            policies?: components["schemas"]["BundlePolicy"][];
             /**
              * Schema Version
              * @default 0.1.0
@@ -4619,6 +4625,91 @@ export interface components {
              * @description Instance display name created in the workspace.
              */
             name: string;
+        };
+        /**
+         * BundleMetadata
+         * @description Marketplace presentation metadata (parity with plugin/app listings).
+         */
+        BundleMetadata: {
+            /**
+             * Capabilities
+             * @description e.g. ["interactive", "write"].
+             */
+            capabilities?: string[];
+            /** Category */
+            category?: string | null;
+            /**
+             * Developer
+             * @description Publisher name.
+             */
+            developer?: string | null;
+            /**
+             * Icon
+             * @description Icon URL or asset reference.
+             */
+            icon?: string | null;
+            /** Privacy Url */
+            privacy_url?: string | null;
+            /** Terms Url */
+            terms_url?: string | null;
+            /** Website */
+            website?: string | null;
+        };
+        /**
+         * BundlePolicy
+         * @description A governance rule the package installs (maps to a PolicyRule).
+         *
+         *     Portable like everything else: ``subject`` is the literal "workspace" or a
+         *     BundleAgent ``key`` (never a DB id); the installer resolves it to a real
+         *     subject id. ``target``/``effect``/``params`` mirror the unified governance
+         *     rule model, so this is "our policy format" — not a new one.
+         */
+        BundlePolicy: {
+            /**
+             * Condition
+             * @description Optional CEL condition.
+             */
+            condition?: string | null;
+            /**
+             * Effect
+             * @enum {string}
+             */
+            effect: "allow" | "deny" | "cap" | "approval" | "safety";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * Message
+             * @description Human-readable reason.
+             */
+            message?: string | null;
+            /**
+             * Params
+             * @description Effect-specific params, e.g. {amount_usd, period} for cap.
+             */
+            params?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Priority
+             * @default 0
+             */
+            priority: number;
+            /**
+             * Subject
+             * @description "workspace" or a BundleAgent key the rule binds to.
+             * @default workspace
+             */
+            subject: string;
+            /**
+             * Target
+             * @description Selector, e.g. "tool:send_email", "spend", "content", "*".
+             */
+            target: string;
         };
         /**
          * BundleSkill
@@ -4939,7 +5030,7 @@ export interface components {
          * EntityKind
          * @enum {string}
          */
-        EntityKind: "mcp" | "skill" | "agent" | "automation";
+        EntityKind: "mcp" | "skill" | "agent" | "automation" | "policy";
         /**
          * EntityStatus
          * @enum {string}
