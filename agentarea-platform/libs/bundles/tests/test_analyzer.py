@@ -94,19 +94,24 @@ agents: [{key: a, name: A, model: gpt-4o, mcps: [bad]}]
 
 
 async def test_agent_without_model_blocks():
-    pkg = parse_bundle(
-        'schema_version: "0.1.0"\nname: p\nagents: [{key: a, name: A}]\n'
-    )
+    pkg = parse_bundle('schema_version: "0.1.0"\nname: p\nagents: [{key: a, name: A}]\n')
     preview = await BundleAnalyzer().analyze(pkg)
     assert preview.installable is False
     assert any("has no model" in i.message for i in preview.block_issues)
 
 
 class _AllExist:
-    async def agent_exists(self, name): return True
-    async def mcp_instance_exists(self, name): return True
-    async def skill_exists(self, name): return True
-    async def trigger_exists(self, name): return True
+    async def agent_exists(self, name):
+        return True
+
+    async def mcp_instance_exists(self, name):
+        return True
+
+    async def skill_exists(self, name):
+        return True
+
+    async def trigger_exists(self, name):
+        return True
 
 
 async def test_existence_marks_already_exists():
@@ -146,11 +151,23 @@ async def test_policy_unknown_subject_blocks():
     assert any("subject 'ghost'" in i.message for i in preview.block_issues)
 
 
+async def test_policy_invalid_target_blocks():
+    # A target the governance compiler can't parse would install but never
+    # enforce; analyze must block it instead of shipping a silent no-op deny.
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\n'
+        'policies: [{key: x, subject: workspace, target: "bogus:thing", effect: deny}]\n'
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+    assert any("target 'bogus:thing' is invalid" in i.message for i in preview.block_issues)
+
+
 async def test_duplicate_policy_key_blocks():
     pkg = parse_bundle(
         'schema_version: "0.1.0"\nname: p\npolicies:\n'
-        '  - {key: dup, subject: workspace, target: spend, effect: cap}\n'
-        '  - {key: dup, subject: workspace, target: tokens, effect: cap}\n'
+        "  - {key: dup, subject: workspace, target: spend, effect: cap}\n"
+        "  - {key: dup, subject: workspace, target: tokens, effect: cap}\n"
     )
     preview = await BundleAnalyzer().analyze(pkg)
     assert preview.installable is False

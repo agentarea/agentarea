@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import yaml
+from agentarea_governance.domain.rules import parse_target
 from pydantic import ValidationError
 
 from agentarea_bundles.schemas.bundle import Bundle, BundleMcp, setup_refs
@@ -335,6 +336,23 @@ class BundleAnalyzer:
                         message=(
                             f"policy '{policy.key}' subject '{policy.subject}' is neither "
                             f"'workspace' nor a known agent key"
+                        ),
+                        entity_key=policy.key,
+                    )
+                )
+            # Validate the target selector against the governance compiler. An
+            # unrecognized target compiles to nothing at runtime, so a deny/
+            # approval/cap would install yet silently never enforce. Block it at
+            # analyze-time instead of shipping a false sense of restriction.
+            try:
+                parse_target(policy.target)
+            except ValueError as exc:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=(
+                            f"policy '{policy.key}' target '{policy.target}' is invalid "
+                            f"({exc}); it would install but never enforce"
                         ),
                         entity_key=policy.key,
                     )
