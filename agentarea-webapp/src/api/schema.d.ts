@@ -3374,6 +3374,7 @@ export interface paths {
          *     Args:
          *         trigger_id: The unique identifier of the trigger
          *         request: Events and channel origin data
+         *         http_request: Raw request, used to verify the internal service token
          *         trigger_service: Injected trigger service
          *
          *     Returns:

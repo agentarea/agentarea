@@ -43,11 +43,12 @@ with workflow.unsafe.imports_passed_through():
         EventManager,
         MessageBuilder,
         StateValidator,
+        ToolAction,
         ToolCallExtractor,
         build_output_summary,
         caller_can_approve,
+        decide_tool_action,
         policy_approvers,
-        policy_requires_approval,
         resolve_effective_budget,
     )
     from .models import (
@@ -2012,6 +2013,141 @@ class AgentExecutionWorkflow:
             normalized["options"] = options
         return [normalized]
 
+    async def _deny_tool_call(self, tool_call: ToolCall, tool_name: str, reason: str) -> None:
+        """Reject a tool call by policy: surface the reason to the LLM, never run it."""
+        workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=f"Tool call denied by policy: {reason}",
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+        )
+
+    async def _require_tool_approval(
+        self, tool_call: ToolCall, tool_name: str, tool_args: dict
+    ) -> bool:
+        """Run the human-in-the-loop escalation flow. Returns True if approved."""
+        escalation_id = str(workflow.uuid4())
+        escalation = PendingEscalation(
+            escalation_id=escalation_id,
+            tool_call_id=tool_call.id,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            approvers=policy_approvers(self.state.effective_policy),
+        )
+        self._pending_escalations[escalation_id] = escalation
+        self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
+
+        # Persist approval status to DB so inbox can query it
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="waiting_for_approval",
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
+        self.event_manager.add_event(
+            EventTypes.HUMAN_APPROVAL_REQUESTED,
+            {
+                "escalation_id": escalation_id,
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "iteration": self.state.current_iteration,
+                "arguments": tool_args,
+                "approvers": escalation.approvers,
+                "message": f"Tool '{tool_name}' requires human approval",
+            },
+        )
+        await self._publish_events_immediately()
+
+        # Wait for THIS specific escalation to be resolved
+        await workflow.wait_condition(lambda: escalation.resolved)
+
+        approved = escalation.approved
+        if not approved:
+            deny_msg = escalation.deny_comment or "Denied by user"
+            self.event_manager.add_event(
+                EventTypes.HUMAN_APPROVAL_DENIED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "iteration": self.state.current_iteration,
+                    "comment": deny_msg,
+                },
+            )
+            await self._publish_events_immediately()
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Tool call denied by human operator: {deny_msg}",
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
+        else:
+            self.event_manager.add_event(
+                EventTypes.HUMAN_APPROVAL_RECEIVED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "iteration": self.state.current_iteration,
+                },
+            )
+            await self._publish_events_immediately()
+
+        # Clean up and restore running status once no escalations remain
+        del self._pending_escalations[escalation_id]
+        if not self._pending_escalations:
+            self.state.status = ExecutionStatus.EXECUTING
+            await workflow.execute_activity(
+                Activities.UPDATE_TASK_STATUS,
+                args=[
+                    UpdateTaskStatusRequest(
+                        task_id=self.state.task_id,
+                        status="running",
+                        workspace_id=self.state.workspace_id,
+                    )
+                ],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
+        return bool(approved)
+
+    async def _gate_tool_call(self, tool_call: ToolCall) -> bool:
+        """Single policy enforcement point applied to EVERY capability tool call.
+
+        Returns True if the call may proceed; False if it was denied by policy
+        or its approval was rejected (a tool message has already been appended
+        so the LLM sees the outcome).
+        """
+        import json
+
+        tool_name = tool_call.function["name"]
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        decision = decide_tool_action(self.state.effective_policy, tool_name)
+        workflow.logger.info(f"Tool '{tool_name}' policy decision: {decision.value}")
+
+        if decision is ToolAction.DENY:
+            await self._deny_tool_call(tool_call, tool_name, "not permitted by policy")
+            return False
+        if decision is ToolAction.REQUIRE_APPROVAL:
+            return await self._require_tool_approval(tool_call, tool_name, tool_args)
+        return True
+
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
         """Execute a single MCP tool call using Pydantic models."""
         tool_name = tool_call.function["name"]
@@ -2024,127 +2160,9 @@ class AgentExecutionWorkflow:
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
 
-        # Approval gating before starting the tool activity — driven solely by the
-        # governance ApprovalPolicy on the task's effective_policy snapshot.
-        approval_required = self._tool_requires_approval(tool_name)
-        workflow.logger.info(
-            f"Tool '{tool_name}' policy approval check: requires_approval={approval_required}"
-        )
-
-        if approval_required:
-            escalation_id = str(workflow.uuid4())
-            escalation = PendingEscalation(
-                escalation_id=escalation_id,
-                tool_call_id=tool_call.id,
-                tool_name=tool_name,
-                tool_args=tool_args,
-                approvers=policy_approvers(self.state.effective_policy),
-            )
-            self._pending_escalations[escalation_id] = escalation
-
-            self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
-
-            # Persist approval status to DB so inbox can query it
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        task_id=self.state.task_id,
-                        status="waiting_for_approval",
-                        workspace_id=self.state.workspace_id,
-                    )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-            )
-
-            # Publish approval requested event with escalation_id
-            self.event_manager.add_event(
-                EventTypes.HUMAN_APPROVAL_REQUESTED,
-                {
-                    "escalation_id": escalation_id,
-                    "tool_name": tool_name,
-                    "tool_call_id": tool_call.id,
-                    "iteration": self.state.current_iteration,
-                    "arguments": tool_args,
-                    "approvers": escalation.approvers,
-                    "message": f"Tool '{tool_name}' requires human approval",
-                },
-            )
-            await self._publish_events_immediately()
-
-            # Wait for THIS specific escalation to be resolved
-            await workflow.wait_condition(lambda: escalation.resolved)
-
-            if not escalation.approved:
-                # Denied — add tool result as denied, don't execute
-                deny_msg = escalation.deny_comment or "Denied by user"
-                self.event_manager.add_event(
-                    EventTypes.HUMAN_APPROVAL_DENIED,
-                    {
-                        "escalation_id": escalation_id,
-                        "tool_name": tool_name,
-                        "tool_call_id": tool_call.id,
-                        "iteration": self.state.current_iteration,
-                        "comment": deny_msg,
-                    },
-                )
-                await self._publish_events_immediately()
-
-                # Add denied result as tool response so LLM knows
-                self.state.messages.append(
-                    Message(
-                        role="tool",
-                        content=f"Tool call denied by human operator: {deny_msg}",
-                        tool_call_id=tool_call.id,
-                        name=tool_name,
-                    )
-                )
-
-                # Clean up and update status
-                del self._pending_escalations[escalation_id]
-                if not self._pending_escalations:
-                    self.state.status = ExecutionStatus.EXECUTING
-                    await workflow.execute_activity(
-                        Activities.UPDATE_TASK_STATUS,
-                        args=[
-                            UpdateTaskStatusRequest(
-                                task_id=self.state.task_id,
-                                status="running",
-                                workspace_id=self.state.workspace_id,
-                            )
-                        ],
-                        start_to_close_timeout=ACTIVITY_TIMEOUT,
-                        retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-                    )
-                return
-
-            # Approved — continue to execute
-            self.event_manager.add_event(
-                EventTypes.HUMAN_APPROVAL_RECEIVED,
-                {
-                    "escalation_id": escalation_id,
-                    "tool_name": tool_name,
-                    "tool_call_id": tool_call.id,
-                    "iteration": self.state.current_iteration,
-                },
-            )
-            await self._publish_events_immediately()
-            del self._pending_escalations[escalation_id]
-            if not self._pending_escalations:
-                self.state.status = ExecutionStatus.EXECUTING
-                await workflow.execute_activity(
-                    Activities.UPDATE_TASK_STATUS,
-                    args=[
-                        UpdateTaskStatusRequest(
-                            task_id=self.state.task_id,
-                            status="running",
-                            workspace_id=self.state.workspace_id,
-                        )
-                    ],
-                    start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-                )
+        # Single policy enforcement point (allow / deny / require-approval).
+        if not await self._gate_tool_call(tool_call):
+            return
 
         # Publish tool call started event (only after approval if required)
         self.event_manager.add_event(
@@ -2626,6 +2644,8 @@ class AgentExecutionWorkflow:
 
     async def _execute_skill_activation(self, tool_call: ToolCall) -> None:
         """Execute skill activation locally (no Temporal activity needed)."""
+        if not await self._gate_tool_call(tool_call):
+            return
         try:
             args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
@@ -2663,6 +2683,8 @@ class AgentExecutionWorkflow:
 
     async def _execute_skill_script(self, tool_call: ToolCall) -> None:
         """Execute a skill-bundled script via MCP Manager sandbox."""
+        if not await self._gate_tool_call(tool_call):
+            return
         try:
             args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
@@ -2806,6 +2828,8 @@ class AgentExecutionWorkflow:
         efficient (no polling), durable (survives worker crashes), and
         supports cancellation propagation.
         """
+        if not await self._gate_tool_call(tool_call):
+            return
         tool_name = tool_call.function["name"]
         agent_info = self._agent_tool_registry[tool_name]
         agent_id = agent_info["agent_id"]
@@ -3503,12 +3527,3 @@ class AgentExecutionWorkflow:
             },
             "context": self.context_manager.get_status() if self.context_manager else None,
         }
-
-    def _tool_requires_approval(self, tool_name: str) -> bool:
-        """Whether this tool call needs human approval.
-
-        Single source of truth is the governance ApprovalPolicy on the task's
-        effective_policy snapshot — not per-tool agent config. When this returns
-        True the loop pauses on the existing human-in-the-loop path.
-        """
-        return policy_requires_approval(self.state.effective_policy, tool_name)

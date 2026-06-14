@@ -15,6 +15,11 @@ class MCPSettings(BaseAppSettings):
     HYDRA_PUBLIC_URL: str = "http://hydra:4444"
     HYDRA_ADMIN_URL: str = "http://hydra:4445"
     HYDRA_BROWSER_URL: str = "http://localhost:4444"
+    # Expected audience for Hydra-issued OAuth tokens. When set, the API
+    # enforces the `aud` claim (rejecting tokens minted for other clients).
+    # Unset = audience not verified (back-compat); set to this API's resource
+    # identifier to harden the MCP OAuth path.
+    HYDRA_AUDIENCE: str | None = None
     MCP_OAUTH_SCOPES: str = "openid offline_access"
     # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)
     ALLOW_PRIVATE_URLS: bool = False

@@ -235,6 +235,16 @@ def create_app() -> FastAPI:
 
     app.add_middleware(AuditContextMiddleware)
 
+    # Reject oversized request bodies (413) before buffering — cheap DoS guard.
+    from agentarea_common.config import get_settings as _get_settings
+
+    from agentarea_api.api.body_size_middleware import BodySizeLimitMiddleware
+
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=_get_settings().app.MAX_REQUEST_BODY_BYTES,
+    )
+
     # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
     # allow_credentials=True a wildcard would reflect any origin for credentialed
     # cross-site reads. Configure via CORS_ALLOWED_ORIGINS.
