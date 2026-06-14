@@ -15,11 +15,8 @@ import pytest
 try:
     from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
     from agentarea_triggers.domain.models import (
-        CronTrigger,
         TriggerCreate,
-        TriggerExecution,
         TriggerUpdate,
-        WebhookTrigger,
     )
     from agentarea_triggers.infrastructure.repository import (
         TriggerExecutionRepository,
@@ -427,7 +424,6 @@ class TestTriggerLifecycleManagement:
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = created_trigger.id
-        webhook_id = created_trigger.webhook_id
 
         # Create some execution history
         execution_data = {

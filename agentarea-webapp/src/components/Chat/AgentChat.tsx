@@ -79,7 +79,6 @@ export default function AgentChat({
   const {
     selectedFiles,
     fileInputRef,
-    handleFileSelect,
     removeFile,
     openFileDialog,
     clearFiles,
@@ -269,7 +268,7 @@ export default function AgentChat({
             onClick={() => {
               scrollToBottom();
               requestAnimationFrame(() => {
-                const atBottom = checkIfAtBottom();
+                checkIfAtBottom();
                 // isAtBottom state is managed by scroll handler
               });
             }}

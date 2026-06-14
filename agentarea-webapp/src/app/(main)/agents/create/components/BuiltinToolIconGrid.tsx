@@ -164,7 +164,6 @@ export const BuiltinToolIconGrid = ({
           const IconComponent = getToolIcon(tool.name, tool.category);
           const hasMethodSelection =
             tool.available_methods && tool.available_methods.length > 0;
-          const toolConfig = getToolConfig(tool.name);
           const enabledMethodsCount = hasMethodSelection
             ? tool.available_methods!.filter((method) =>
                 isMethodEnabled(tool.name, method.name)

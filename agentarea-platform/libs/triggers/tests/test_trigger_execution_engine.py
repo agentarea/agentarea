@@ -360,10 +360,6 @@ class TestTriggerExecutionIntegration:
         # This would be an integration test that verifies the full flow
         # from trigger execution to task creation
 
-        trigger_id = uuid4()
-        agent_id = uuid4()
-        execution_data = {"execution_time": datetime.utcnow().isoformat(), "source": "cron"}
-
         # Verify task creation was called with correct parameters
         # This test would need actual integration setup
         pass

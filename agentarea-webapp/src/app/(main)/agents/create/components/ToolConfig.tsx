@@ -97,11 +97,10 @@ const ToolConfig = ({
 }: ToolConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [scrollToolId, setScrollToolId] = useState<string | null>(null);
-  const [scrollBuiltinToolId, setScrollBuiltinToolId] = useState<string | null>(
+  const [scrollToolId] = useState<string | null>(null);
+  const [scrollBuiltinToolId] = useState<string | null>(
     null
   );
-  const [loadingBuiltinTools, setLoadingBuiltinTools] = useState(false);
   const [selectedMethods, setSelectedMethods] = useState<
     Record<string, Record<string, boolean>>
   >({});

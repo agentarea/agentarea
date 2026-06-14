@@ -13,7 +13,6 @@ import pytest
 import pytest_asyncio
 
 from agentarea_common.auth.context import UserContext
-from agentarea_mcp.application.mcp_env_service import MCPEnvironmentService
 from agentarea_mcp.application.service import MCPServerInstanceService
 
 

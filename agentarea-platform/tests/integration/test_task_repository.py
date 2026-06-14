@@ -39,16 +39,16 @@ async def test_get_by_agent_id_workspace_scoped(workspace_scoped_repository, tes
     agent2_id = uuid4()
 
     # Create tasks for agent1 - these will be automatically scoped to workspace
-    task1 = await workspace_scoped_repository.create(
+    await workspace_scoped_repository.create(
         agent_id=agent1_id, description="Task 1 for agent 1", parameters={"param": "value1"}
     )
 
-    task2 = await workspace_scoped_repository.create(
+    await workspace_scoped_repository.create(
         agent_id=agent1_id, description="Task 2 for agent 1", parameters={"param": "value2"}
     )
 
     # Create task for agent2
-    task3 = await workspace_scoped_repository.create(
+    await workspace_scoped_repository.create(
         agent_id=agent2_id, description="Task 1 for agent 2", parameters={"param": "value3"}
     )
 

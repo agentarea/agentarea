@@ -294,7 +294,7 @@ class TestTriggerServiceLLMIntegration:
         trigger_service.trigger_execution_repository.create.return_value = MagicMock()
         trigger_service.trigger_repository.update_execution_tracking.return_value = None
 
-        result = await trigger_service.execute_trigger(trigger_id, trigger_data)
+        await trigger_service.execute_trigger(trigger_id, trigger_data)
 
         # Verify condition was evaluated
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()

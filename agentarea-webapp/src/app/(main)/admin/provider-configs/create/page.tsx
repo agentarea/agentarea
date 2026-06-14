@@ -19,7 +19,6 @@ export default async function CreateProviderConfigPage({
 }) {
   const resolvedSearchParams = await searchParams;
   const t = await getTranslations("Models");
-  const tCommon = await getTranslations("Common");
 
   // Get the provider_spec_id from query params if provided
   const preselectedProviderId =

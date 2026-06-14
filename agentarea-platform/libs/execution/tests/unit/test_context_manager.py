@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from agentarea_execution.workflows.context_manager import (
     ContextWindowManager,
     estimate_tokens,
@@ -82,12 +81,7 @@ class TestEstimateTokensForMessages:
                 "content": "3",
             },
         ]
-        no_tool_messages = [
-            {"role": "user", "content": "Use the calculator"},
-            {"role": "assistant", "content": "Sure, let me calculate that."},
-        ]
         with_tools = estimate_tokens_for_messages(messages)
-        without_tools = estimate_tokens_for_messages(no_tool_messages)
         # Tool call messages should count at least as much
         assert with_tools >= 0
         assert isinstance(with_tools, int)

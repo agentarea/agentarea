@@ -40,16 +40,12 @@ Note:
 """
 
 import asyncio
-import base64
-import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import httpx
 import pytest
-import yaml
 
 
 # Configuration

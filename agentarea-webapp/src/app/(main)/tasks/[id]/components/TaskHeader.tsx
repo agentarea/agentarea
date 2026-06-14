@@ -8,7 +8,6 @@ import {
   Share2,
 } from "lucide-react";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskStatusIcon } from "@/components/ui/task-status-icon";
 import { TaskWithAgent } from "@/lib/api";

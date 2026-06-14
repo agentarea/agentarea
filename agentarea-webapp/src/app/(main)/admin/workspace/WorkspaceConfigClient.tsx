@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DollarSign, Download, FileUp, Upload } from "lucide-react";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
@@ -34,8 +34,6 @@ export default function WorkspaceConfigClient() {
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentCap, setCurrentCap] = useState<number | null | undefined>(undefined);
   const [capInput, setCapInput] = useState("");

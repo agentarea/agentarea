@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 
 import httpx
+from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,12 @@ class DiscoveryResult:
 class ModelDiscoveryService:
     """Discovers available models from LLM provider APIs."""
 
-    def __init__(self, timeout: int = 30):
+    def __init__(self, timeout: int = 30, allow_private_endpoints: bool = False):
         self._timeout = timeout
+        # User-supplied endpoint_url is validated against non-public address
+        # classes (SSRF guard). Self-host installs targeting private endpoints
+        # can opt out via allow_private_endpoints=True.
+        self._allow_private_endpoints = allow_private_endpoints
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
         base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
@@ -112,6 +117,17 @@ class ModelDiscoveryService:
         if not url:
             logger.warning("No base URL for provider %s and no endpoint_url provided", provider_key)
             return []
+
+        # Only the user-supplied endpoint_url is untrusted; built-in provider
+        # base URLs (incl. ollama's localhost default) are trusted and skipped.
+        if endpoint_url:
+            try:
+                validate_outbound_url(url, allow_private=self._allow_private_endpoints)
+            except UnsafeUrlError:
+                # Do not interpolate the user-supplied endpoint/host into the log
+                # message (log-injection); the rejection itself is the signal.
+                logger.warning("Rejected model-discovery endpoint blocked by outbound SSRF guard")
+                return []
 
         headers = self._build_headers(provider_key, api_key)
 

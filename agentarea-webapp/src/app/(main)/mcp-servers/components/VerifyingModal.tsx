@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, XCircle } from "lucide-react";
 import {
   Dialog,
@@ -35,7 +34,6 @@ export function VerifyingModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const router = useRouter();
   const startedAt = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

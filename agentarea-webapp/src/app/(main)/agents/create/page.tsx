@@ -13,7 +13,6 @@ export const metadata: Metadata = {
 
 export default async function CreateAgentPage() {
   const t = await getTranslations("AgentsPage");
-  const tCommon = await getTranslations("Common");
 
   return (
     <ChatProvider>

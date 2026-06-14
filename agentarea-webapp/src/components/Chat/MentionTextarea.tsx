@@ -167,8 +167,6 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
   const handleInput = useCallback(() => {
     if (!contentEditableRef.current || isUpdatingRef.current) return;
 
-    const html = contentEditableRef.current.innerHTML;
-    
     // Convert HTML back to plain text with mentions
     let text = "";
     const walker = document.createTreeWalker(
@@ -264,4 +262,3 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
 });
 
 MentionTextarea.displayName = "MentionTextarea";
-

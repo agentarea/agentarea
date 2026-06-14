@@ -4,7 +4,7 @@ Tests the integration between skills and agent execution workflow
 without requiring full infrastructure (database, S3, Temporal).
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest

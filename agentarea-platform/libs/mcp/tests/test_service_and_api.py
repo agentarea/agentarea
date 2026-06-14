@@ -2,7 +2,6 @@
 
 import asyncio
 import uuid
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +11,7 @@ from agentarea_mcp.application.service import (
     derive_bundle_verification,
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION, VERIFICATION_SCHEMA_VERSION
+from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
 
 

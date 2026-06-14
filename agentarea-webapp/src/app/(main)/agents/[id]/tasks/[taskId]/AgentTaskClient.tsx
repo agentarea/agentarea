@@ -1,11 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Bot,
-  CheckCircle,
   Clock,
   Pause,
   Play,

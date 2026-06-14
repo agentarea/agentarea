@@ -41,6 +41,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
           # security-and-quality adds the maintainability/correctness queries
           # (e.g. py/call/wrong-number-class-arguments) on top of security.
           queries: security-and-quality

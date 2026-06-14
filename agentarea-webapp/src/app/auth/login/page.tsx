@@ -4,7 +4,7 @@ import { OryPageParams, getFlowFactory } from "@ory/nextjs/app";
 import { FlowType, LoginFlow } from "@ory/client-fetch";
 // CSS imported via globals.css
 import config from "@/ory.config";
-import { getOryBrowserConfig, rewriteFlowForBrowser } from "@/lib/auth/browser-config";
+import { rewriteFlowForBrowser } from "@/lib/auth/browser-config";
 import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/auth/client";
 import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
 

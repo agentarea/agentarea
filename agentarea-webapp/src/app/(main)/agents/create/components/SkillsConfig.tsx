@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Sparkles, Trash2 } from "lucide-react";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -26,7 +25,6 @@ const SkillsConfig = ({
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(true);
-  const t = useTranslations("AgentsPage");
 
   // Fetch available skills
   useEffect(() => {

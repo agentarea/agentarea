@@ -123,16 +123,6 @@ class TestKratosAuthProvider:
     @pytest.mark.asyncio
     async def test_verify_token_expired(self, kratos_provider):
         """Test token verification fails for expired tokens."""
-        # Create expired token
-        headers = {"kid": "test-key-1"}
-        payload = {
-            "sub": "test-user",
-            "iss": "https://test.agentarea.dev",
-            "aud": "test-api",
-            "exp": datetime.now(UTC) - timedelta(hours=1),  # Expired
-            "iat": datetime.now(UTC) - timedelta(hours=2),
-        }
-
         # This will fail signature validation before expiry check
         # so we'll just test the expired signature error handling
         token = "expired.token.here"

@@ -16,7 +16,6 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listAgentTasksAction } from "@/lib/server-actions";

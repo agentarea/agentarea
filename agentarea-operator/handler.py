@@ -11,7 +11,6 @@ Env vars:
     WATCH_NAMESPACE    – Namespace to watch (default: all)
 """
 
-import json
 import logging
 import os
 import uuid

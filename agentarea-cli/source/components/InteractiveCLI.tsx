@@ -1,9 +1,7 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import {Box, Text} from 'ink';
 import {useInput} from 'ink';
-import {logger} from '../utils/logger.js';
 import {apiClient} from '../services/apiClient.js';
-import {tokenStorage} from '../utils/storage.js';
 import {type AxiosError} from 'axios';
 
 interface InteractiveCLIProps {

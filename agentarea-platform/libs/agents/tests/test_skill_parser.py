@@ -7,8 +7,6 @@ import pytest
 
 from agentarea_agents.application.skill_parser import (
     ParsedSkill,
-    SkillFileInfo,
-    SkillMetadata,
     SkillPackageManifest,
     SkillParser,
 )

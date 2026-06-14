@@ -8,13 +8,13 @@ root cause of A2A losing channel routing and metadata defaults.
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_governance.domain.policies import EffectivePolicy
-from agentarea_tasks.domain.models import SimpleTask, Task
+from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 

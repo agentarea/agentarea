@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 import {
   Select,
   SelectContent,
@@ -11,7 +11,6 @@ import {
 
 export default function LanguageSelect() {
   const locale = useLocale() as "en" | "ru";
-  const t = useTranslations("SettingsPage");
 
   const onSelectChange = (value: string) => {
     const newLocale = value as "en" | "ru";

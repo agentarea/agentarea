@@ -16,10 +16,7 @@ import pytest
 try:
     from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
     from agentarea_triggers.domain.models import (
-        CronTrigger,
         TriggerCreate,
-        TriggerExecution,
-        WebhookTrigger,
     )
     from agentarea_triggers.infrastructure.repository import (
         TriggerExecutionRepository,
@@ -442,7 +439,7 @@ class TestTriggerSafetyIntegration:
         }
 
         # Execution should still be attempted but may fail due to disabled state
-        result = await trigger_service.execute_trigger(trigger_id, execution_data)
+        await trigger_service.execute_trigger(trigger_id, execution_data)
         # Behavior depends on implementation - could skip or fail
 
     # Edge Cases and Error Handling

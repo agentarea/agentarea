@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
@@ -23,8 +22,6 @@ export default async function AgentPageWrapper({
   className = "h-full w-full px-4 py-5",
   controls,
 }: AgentPageWrapperProps) {
-  const t = await getTranslations("AgentsPage");
-
   const content = (
     <Suspense
       fallback={

@@ -1,0 +1,9 @@
+name: "AgentArea CodeQL config"
+
+# Alembic migration files declare module-level globals (revision, down_revision,
+# branch_labels, depends_on) that are read by the Alembic framework, not by our
+# code. The security-and-quality suite flags them as py/unused-global-variable.
+# They are required boilerplate and must not be deleted, so exclude generated
+# migrations from analysis to remove the noise.
+paths-ignore:
+  - "**/alembic/versions/**"

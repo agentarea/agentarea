@@ -7,13 +7,6 @@ import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { fetchAuditLogs, type AuditEvent } from "./actions";
 
 const ACTION_COLORS: Record<string, string> = {
@@ -91,20 +84,6 @@ export default function AuditLogClient({
   const [resourceFilter, setResourceFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const applyFilter = (resourceType: string) => {
-    setResourceFilter(resourceType);
-    startTransition(async () => {
-      const { data } = await fetchAuditLogs({
-        resource_type: resourceType === "all" ? undefined : resourceType,
-        limit: 50,
-      });
-      if (data) {
-        setEvents(data.events);
-        setCursor(data.next_cursor);
-      }
-    });
-  };
 
   const loadMore = () => {
     if (!cursor) return;

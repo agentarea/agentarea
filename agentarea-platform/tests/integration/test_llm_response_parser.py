@@ -472,7 +472,7 @@ if __name__ == "__main__":
         for test_name, test_coro in tests:
             try:
                 logger.info(f"\n🧪 Running {test_name} test...")
-                result = await test_coro
+                await test_coro
                 results[test_name] = True
                 logger.info(f"✅ {test_name} test passed")
             except Exception as e:

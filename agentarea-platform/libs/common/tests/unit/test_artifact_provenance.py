@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import pytest
 from agentarea_common.artifacts import (
     ACTION_CREATED,
     ACTION_DELETED,

@@ -6,8 +6,7 @@ Tests encryption, decryption, CRUD operations, and error handling.
 import pytest
 from agentarea_secrets.database_secret_manager import DatabaseSecretManager, EncryptedSecret
 from cryptography.fernet import Fernet
-from sqlalchemy import select
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 class TestDatabaseSecretManager:

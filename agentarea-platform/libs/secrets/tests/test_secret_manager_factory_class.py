@@ -3,7 +3,7 @@
 Tests the factory pattern implementation with proper settings usage.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from agentarea_common.config.secrets import SecretManagerSettings

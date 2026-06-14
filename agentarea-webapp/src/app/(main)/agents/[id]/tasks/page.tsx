@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listAgentTasks, type Agent } from "@/lib/api";
 import AgentTasksList from "./components/AgentTasksList";
-import { TaskStatus, TaskWithStatus } from "./types";
+import { TaskWithStatus } from "./types";
 
 export const metadata: Metadata = {
   title: "Agent Tasks",

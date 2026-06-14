@@ -1,6 +1,5 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
-import {logger} from '../utils/logger.js';
 import {apiClient} from '../services/apiClient.js';
 import {tokenStorage} from '../utils/storage.js';
 import readline from 'readline';
@@ -24,10 +23,8 @@ interface Agent {
 	created_at?: string;
 }
 
-const COMMANDS = ['/agents', '/auth', '/help', '/exit'];
-
 export function REPL({userEmail, token}: REPLProps) {
-	const [input, setInput] = useState('');
+	const [input] = useState('');
 	const [output, setOutput] = useState<CommandResult[]>([]);
 	const [isRunning, setIsRunning] = useState(true);
 

@@ -1,8 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { User } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatTimestamp } from "../../../utils/dateUtils";
 import { renderTextWithMentions } from "@/utils/mentions";
 import BaseMessage from "./BaseMessage";

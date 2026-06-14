@@ -10,7 +10,6 @@ Usage:
     python examples/startup-org/test_e2e.py
 """
 
-import json
 import os
 import sys
 import time

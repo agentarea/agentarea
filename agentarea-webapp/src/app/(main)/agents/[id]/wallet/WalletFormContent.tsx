@@ -16,7 +16,6 @@ import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Badge } from "@/components/ui/badge";
 import Divider from "@/components/ui/divider";
 import { Input } from "@/components/ui/input";
-import Note from "@/components/ui/note";
 import {
   Select,
   SelectContent,
@@ -50,8 +49,8 @@ interface WalletFormContentProps {
 
 export default function WalletFormContent({ agentId }: WalletFormContentProps) {
   const { wallet, loading, refetch } = useAgentWallet(agentId);
-  const { createWallet, loading: creating } = useCreateWallet(agentId);
-  const { updateWallet, loading: updating } = useUpdateWallet(agentId);
+  const { createWallet } = useCreateWallet(agentId);
+  const { updateWallet } = useUpdateWallet(agentId);
   const { deleteWallet, loading: deleting } = useDeleteWallet(agentId);
 
   const [walletType, setWalletType] = useState<string>("dual");

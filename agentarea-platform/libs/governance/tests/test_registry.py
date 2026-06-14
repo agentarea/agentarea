@@ -1,8 +1,6 @@
 """Tests for InterceptorRegistry."""
 
 import logging
-import pytest
-from uuid import uuid4
 
 from agentarea_governance.domain.enums import (
     InterceptorAction,
