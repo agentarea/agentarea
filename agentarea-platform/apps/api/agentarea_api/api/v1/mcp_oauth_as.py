@@ -15,12 +15,26 @@ Steps 4-6 are proxied via /.well-known/... and the full oauth2/* proxy below so
 that the single AS URL (API_BASE_URL) works for both discovery and token ops.
 """
 
+import re
+
 import httpx
 from agentarea_common.config import get_settings
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
+
+# Conservative allowlist for the proxied /oauth2/{path} subpath. The host is
+# fixed to HYDRA_PUBLIC_URL, so the caller can only influence the path/query;
+# restrict the path to OAuth2-style identifiers and forbid parent traversal so a
+# request cannot escape /oauth2/ on the Hydra host (partial-SSRF hardening).
+_SAFE_OAUTH2_SUBPATH = re.compile(r"^[A-Za-z0-9._~/-]+$")
+
+
+def _is_safe_oauth2_subpath(path: str) -> bool:
+    if not path or not _SAFE_OAUTH2_SUBPATH.match(path):
+        return False
+    return ".." not in path.split("/")
 
 
 def _hydra_public_url() -> str:
@@ -172,6 +186,12 @@ async def hydra_dcr_proxy(request: Request) -> Response:
 )
 async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
     """Proxy all /oauth2/* requests through to Hydra (excluding /register handled above)."""
+    if not _is_safe_oauth2_subpath(path):
+        return JSONResponse(
+            content={"error": "invalid_request", "error_description": "invalid oauth2 path"},
+            status_code=400,
+        )
+
     hydra_url = _hydra_public_url()
     target = f"{hydra_url}/oauth2/{path}"
     if request.url.query:
