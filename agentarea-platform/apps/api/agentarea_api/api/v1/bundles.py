@@ -19,7 +19,7 @@ from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config import get_settings
-from agentarea_openapi.application.url_validator import validate_url
+from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
@@ -51,17 +51,49 @@ async def fetch_bundle_source(
         httpx.HTTPStatusError: the URL returned a non-2xx (including redirects).
         httpx.RequestError: the request could not be completed.
     """
-    validate_url(url, allow_private=allow_private)
+    resolved_ips = validate_url(url, allow_private=allow_private)
+
+    # SSRF defenses mirror the OpenAPI fetcher: validate_url confirms the scheme
+    # and rejects private targets, then build_pinned_target pins the request to
+    # the already-vetted IP (anti-DNS-rebinding) and keeps the destination
+    # identifiers (scheme/host/port) separate from the user-controlled path/query
+    # so the HTTP sink never receives a single string that mixes the two.
+    target = build_pinned_target(url, resolved_ips[0] if resolved_ips else None)
+
+    request_headers: dict[str, str] = {}
+    if target.original_host:
+        request_headers["Host"] = target.original_host
+
+    fetch_url = httpx.URL(
+        scheme=target.scheme,
+        host=target.host,
+        port=target.port,
+        path=target.path,
+        query=target.raw_query,
+    )
+    # Connect to the pinned IP, but validate the TLS cert against the original
+    # hostname via SNI.
+    extensions = {"sni_hostname": target.original_host} if target.original_host else None
+
     async with httpx.AsyncClient(
         timeout=_FETCH_TIMEOUT_SECONDS,
+        headers=request_headers,
         follow_redirects=False,
+        verify=True,
         transport=transport,
     ) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        if len(response.content) > _MAX_BUNDLE_BYTES:
-            raise ValueError("bundle source exceeds 5MB limit")
-        return response.text
+        async with client.stream("GET", fetch_url, extensions=extensions) as response:
+            response.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+                total += len(chunk)
+                if total > _MAX_BUNDLE_BYTES:
+                    raise ValueError("bundle source exceeds 5MB limit")
+                chunks.append(chunk)
+
+    content = b"".join(chunks)
+    return content.decode(response.encoding or "utf-8", errors="replace")
 
 
 # ============================================================================
@@ -104,9 +136,7 @@ class AnalyzeRequest(BaseModel):
     deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
     """
 
-    source: str | None = Field(
-        default=None, description="Raw bundle source text (YAML or JSON)."
-    )
+    source: str | None = Field(default=None, description="Raw bundle source text (YAML or JSON).")
     source_url: str | None = Field(
         default=None, description="URL to fetch raw bundle source from (YAML or JSON)."
     )
@@ -153,7 +183,10 @@ async def analyze_bundle(
                 detail=f"bundle URL returned HTTP {exc.response.status_code}",
             ) from exc
         except httpx.RequestError as exc:
-            logger.error("Failed to fetch bundle from %s: %s", body.source_url, exc)
+            # Strip CR/LF from the user-provided URL before logging to prevent
+            # log-forging via injected newlines.
+            safe_url = body.source_url.replace("\r", "").replace("\n", "")
+            logger.error("Failed to fetch bundle from %s", safe_url, exc_info=exc)
             raise HTTPException(
                 status_code=400, detail="failed to fetch bundle from the provided URL"
             ) from exc

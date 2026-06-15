@@ -97,9 +97,7 @@ class TestA2ADelegationFlow:
     @pytest.mark.asyncio
     async def test_delegation_round_trip_returns_specialist_result(self):
         """Core flow: coordinator invokes tool, specialist replies, result incorporated."""
-        patcher, mock_client = _mock_http_client(
-            _make_specialist_response(_SPECIALIST_RESULT)
-        )
+        patcher, mock_client = _mock_http_client(_make_specialist_response(_SPECIALIST_RESULT))
 
         with patcher:
             result = await self.tool.execute(
@@ -127,9 +125,7 @@ class TestA2ADelegationFlow:
     @pytest.mark.asyncio
     async def test_auth_token_forwarded_to_specialist(self):
         """Coordinator's bearer token must be forwarded in the Authorization header."""
-        patcher, mock_client = _mock_http_client(
-            _make_specialist_response(_SPECIALIST_RESULT)
-        )
+        patcher, mock_client = _mock_http_client(_make_specialist_response(_SPECIALIST_RESULT))
 
         with patcher:
             await self.tool.execute(message="Summarise Q2 data.")
