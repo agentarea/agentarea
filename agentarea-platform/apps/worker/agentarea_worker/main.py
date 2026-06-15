@@ -137,8 +137,10 @@ class AgentAreaWorker:
         # Discover extensions and wire permission service
         from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
         from agentarea_common.auth.simple_permission import SimplePermissionService
+        from agentarea_common.auth.workspace_authorization import (
+            WorkspaceScopedAuthorizationService,
+        )
         from agentarea_common.config.app import get_app_settings
         from agentarea_common.di.container import register_factory, register_singleton
         from agentarea_common.extensions import discover_extensions
@@ -161,7 +163,7 @@ class AgentAreaWorker:
         if authz_factory:
             register_factory(AuthorizationService, authz_factory)
         else:
-            register_singleton(AuthorizationService, SimpleAuthorizationService())
+            register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
         # Create governance interceptor pipeline
         from agentarea_governance.bridges.temporal_bridge import (

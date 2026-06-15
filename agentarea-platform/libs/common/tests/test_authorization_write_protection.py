@@ -6,12 +6,12 @@ import pytest
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentUpdate
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 
 
 @pytest.fixture
 def authz():
-    return SimpleAuthorizationService()
+    return WorkspaceScopedAuthorizationService()
 
 
 @pytest.fixture

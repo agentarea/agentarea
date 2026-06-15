@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_llm.domain.models import ModelInstance, ProviderConfig
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -169,13 +169,13 @@ def test_default_user_context_only_own_workspace():
 
 
 @pytest.mark.asyncio
-async def test_simple_authorization_grants_only_own_workspace():
-    """SimpleAuthorizationService grants access to the user's own workspace only.
+async def test_workspace_authorization_grants_only_own_workspace():
+    """WorkspaceScopedAuthorizationService grants access to the user's own workspace only.
 
     Built-in/official content is no longer surfaced by injecting a magic
     'platform' workspace here — it is globally readable by provenance instead.
     """
-    authz = SimpleAuthorizationService()
+    authz = WorkspaceScopedAuthorizationService()
     user_context = UserContext(user_id="user-1", workspace_id="ws-1")
     workspaces = await authz.get_accessible_workspaces(user_context)
     assert workspaces == ["ws-1"]
@@ -183,9 +183,9 @@ async def test_simple_authorization_grants_only_own_workspace():
 
 
 @pytest.mark.asyncio
-async def test_simple_authorization_write_own_workspace():
-    """SimpleAuthorizationService allows writes only to own workspace."""
-    authz = SimpleAuthorizationService()
+async def test_workspace_authorization_write_own_workspace():
+    """WorkspaceScopedAuthorizationService allows writes only to own workspace."""
+    authz = WorkspaceScopedAuthorizationService()
     user_context = UserContext(user_id="user-1", workspace_id="ws-1")
     assert await authz.can_write_workspace(user_context, "ws-1") is True
     assert await authz.can_write_workspace(user_context, "system") is False

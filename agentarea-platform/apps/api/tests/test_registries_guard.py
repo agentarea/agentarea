@@ -7,7 +7,7 @@ workspace user must be rejected; the platform principal is allowed.
 
 import pytest
 from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
@@ -18,7 +18,7 @@ from fastapi import HTTPException
 def _register_authz():
     from agentarea_common.auth.authorization import AuthorizationService
 
-    register_singleton(AuthorizationService, SimpleAuthorizationService())
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
 
 async def test_regular_user_cannot_write_catalog():
