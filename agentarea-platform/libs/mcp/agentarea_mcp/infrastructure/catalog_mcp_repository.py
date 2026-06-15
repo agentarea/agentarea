@@ -57,7 +57,7 @@ class CatalogMcpRepository:
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
-            "WHERE r.registry_type = 'mcp_servers' "
+            "WHERE r.registry_type = 'mcp_servers' AND r.is_active "
             "ORDER BY ri.name"
         )
         result = await self.session.execute(query)

@@ -3,7 +3,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.utils.slug import generate_slug
-from sqlalchemy import String, case, cast, or_, select
+from sqlalchemy import String, case, cast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -130,6 +130,19 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
                     self.model_class.description.ilike(pattern),
                 )
             )
+
+        # Hide specs backed by a deactivated registry (e.g. an unpublished
+        # catalog mirror). Show a spec only if it is user-created (no registry
+        # link) or its backing registry is active. Without this the list would
+        # surface every reconciled catalog row, including deactivated mirrors.
+        query = query.where(
+            text(
+                "(mcp_servers.registry_item_id IS NULL OR EXISTS ("
+                "SELECT 1 FROM registry_items ri "
+                "JOIN registries r ON r.id = ri.registry_id "
+                "WHERE ri.id = mcp_servers.registry_item_id AND r.is_active))"
+            )
+        )
 
         return query
 
