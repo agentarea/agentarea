@@ -16,7 +16,7 @@ from agentarea_common.config.broker import RedisSettings
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
 from faststream.redis import RedisBroker
 
@@ -31,25 +31,25 @@ class MockTaskRepository:
     def __init__(self):
         self.tasks = {}
 
-    async def get(self, task_id: UUID) -> SimpleTask | None:
+    async def get(self, task_id: UUID) -> AgentTask | None:
         return self.tasks.get(task_id)
 
-    async def create(self, task: SimpleTask) -> SimpleTask:
+    async def create(self, task: AgentTask) -> AgentTask:
         self.tasks[task.id] = task
         return task
 
-    async def update(self, task: SimpleTask) -> SimpleTask:
+    async def update(self, task: AgentTask) -> AgentTask:
         self.tasks[task.id] = task
         return task
 
-    async def list_tasks(self, **kwargs) -> list[SimpleTask]:
+    async def list_tasks(self, **kwargs) -> list[AgentTask]:
         return list(self.tasks.values())
 
 
 class MockTaskManager:
     """Mock task manager for testing."""
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         return task
 
     async def cancel_task(self, task_id: UUID) -> bool:
@@ -142,7 +142,7 @@ async def test_end_to_end_workflow():
     event_stream_service = EventStreamService(redis_broker)
 
     # Create and store test task
-    test_task = SimpleTask(
+    test_task = AgentTask(
         id=task_id,
         title="End-to-End Test Task",
         description="Testing workflow event streaming",

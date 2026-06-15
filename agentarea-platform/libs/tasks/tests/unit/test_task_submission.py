@@ -14,7 +14,7 @@ import pytest
 
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_governance.domain.policies import EffectivePolicy
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 
@@ -91,7 +91,7 @@ def _build_task(**overrides):
         },
     )
     base.update(overrides)
-    return SimpleTask(**base)
+    return AgentTask(**base)
 
 
 @pytest.mark.asyncio
@@ -105,13 +105,13 @@ async def test_submit_task_routes_through_canonical_method_and_invokes_task_mana
     mocks["agent_repo"].get.assert_awaited_once_with(task.agent_id)
     mocks["task_manager"].submit_task.assert_awaited_once()
     submitted_arg = mocks["task_manager"].submit_task.await_args.args[0]
-    assert isinstance(submitted_arg, SimpleTask)
+    assert isinstance(submitted_arg, AgentTask)
     assert result.execution_id is not None
 
 
 @pytest.mark.asyncio
 async def test_submit_task_preserves_caller_provided_id_metadata_and_parameters():
-    """A2A pre-builds the SimpleTask. The id, metadata and task_parameters must survive."""
+    """A2A pre-builds the AgentTask. The id, metadata and task_parameters must survive."""
     service, mocks = _make_service()
     pre_id = uuid4()
     task = _build_task(

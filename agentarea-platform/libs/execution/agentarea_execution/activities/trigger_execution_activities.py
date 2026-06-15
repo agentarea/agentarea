@@ -251,7 +251,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Create task from trigger
                 task_id = None
                 try:
-                    from agentarea_tasks.domain.models import SimpleTask
+                    from agentarea_tasks.domain.models import AgentTask
                     from agentarea_tasks.infrastructure.repository import TaskRepository
                     from agentarea_tasks.task_service import TaskService
                     from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -295,7 +295,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         task_params["channel_origin"] = channel_origin
 
                     # Submit task (creates DB record AND starts Temporal workflow)
-                    task = SimpleTask(
+                    task = AgentTask(
                         title=f"Trigger: {trigger.name}",
                         description=query,
                         query=query,
@@ -504,7 +504,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         execution_data = request.execution_data
         try:
-            from agentarea_tasks.domain.models import SimpleTask
+            from agentarea_tasks.domain.models import AgentTask
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -567,7 +567,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     else (trigger.description or f"Execute trigger {trigger.name}")
                 )
 
-                task = SimpleTask(
+                task = AgentTask(
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,

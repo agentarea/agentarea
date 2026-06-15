@@ -24,7 +24,7 @@ from agentarea_governance.domain.policies import (
 from .domain.base_service import BaseTaskService
 from .domain.exceptions import BudgetCapExceededError
 from .domain.interfaces import BaseTaskManager
-from .domain.models import SimpleTask
+from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
 from .schemas.dto import RunCreate
 
@@ -171,7 +171,7 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "submitted",
         task_policy: PolicyDocument | None = None,
-    ) -> SimpleTask:
+    ) -> AgentTask:
         """Persist a task with governance snapshot. Does not dispatch to Temporal.
 
         Canonical persist-only entrypoint used by delegation activities, trigger
@@ -197,7 +197,7 @@ class TaskService(BaseTaskService):
         metadata["agent_name"] = agent_name
         metadata["requires_human_approval"] = requires_human_approval
 
-        task = SimpleTask(
+        task = AgentTask(
             id=new_task_id,
             title=title or description,
             description=description,
@@ -219,8 +219,8 @@ class TaskService(BaseTaskService):
         stored_task.effective_policy = effective_policy.to_json_dict()
         return stored_task
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
-        """Submit a pre-built SimpleTask. Thin alias delegating to the canonical
+    async def submit_task(self, task: AgentTask) -> AgentTask:
+        """Submit a pre-built AgentTask. Thin alias delegating to the canonical
         ``create_and_execute_task_with_workflow`` so A2A and MCP callers get the
         same metadata enrichment, channel routing, and defaults as REST.
 
@@ -250,12 +250,12 @@ class TaskService(BaseTaskService):
         workspace_id: str,
         user_id: str | None = None,
         created_via: str = "api",
-    ) -> SimpleTask:
+    ) -> AgentTask:
         """Start a new agent run from a validated DTO.
 
         This is the payload-style public entry shared by REST, MCP toolset,
         and any other surface that wants the Pydantic-validated contract
-        instead of building a ``SimpleTask`` by hand. Internally it delegates
+        instead of building a ``AgentTask`` by hand. Internally it delegates
         to ``create_and_execute_task_with_workflow`` so all lifecycle, channel
         routing, and metadata defaults stay in a single place.
 
@@ -267,7 +267,7 @@ class TaskService(BaseTaskService):
                 (defaults to ``"api"``; toolset overrides to ``"mcp"``).
 
         Returns:
-            The created (or routed-into) ``SimpleTask`` with execution info.
+            The created (or routed-into) ``AgentTask`` with execution info.
         """
         metadata_overrides: dict[str, Any] = {"created_via": created_via}
         if payload.project_id is not None:
@@ -284,7 +284,7 @@ class TaskService(BaseTaskService):
             metadata_overrides=metadata_overrides,
         )
 
-    async def route_or_submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def route_or_submit_task(self, task: AgentTask) -> AgentTask:
         """Route message to an active workflow if one exists, otherwise submit a new task.
 
         This is the single routing point for all channel-originated tasks.
@@ -302,8 +302,8 @@ class TaskService(BaseTaskService):
         return await self.submit_task(task)
 
     async def _try_route_to_active_workflow(
-        self, task: SimpleTask, chat_id: str
-    ) -> SimpleTask | None:
+        self, task: AgentTask, chat_id: str
+    ) -> AgentTask | None:
         """Try to route a message to an existing active workflow for this channel.
 
         Returns the existing task (with status="routed") if successful, None otherwise.
@@ -333,7 +333,7 @@ class TaskService(BaseTaskService):
                     chat_id,
                 )
                 # Return existing task marked as routed
-                candidate_as_simple = SimpleTask(
+                candidate_as_simple = AgentTask(
                     id=candidate.id,
                     title=task.title,
                     description=candidate.description,
@@ -362,23 +362,23 @@ class TaskService(BaseTaskService):
 
     async def get_user_tasks(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """Get tasks for a specific user."""
         return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
 
     async def get_agent_tasks(
         self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """Get tasks for a specific agent."""
-        # Get Task domain models from repository and convert to SimpleTask
+        # Get Task domain models from repository and convert to AgentTask
         if hasattr(self.task_repository, "list_all"):
             # Get raw TaskORM objects from workspace repository
             task_orms = await self.task_repository.list_all(
                 creator_scoped=creator_scoped, limit=limit, offset=offset, agent_id=agent_id
             )
-            # Convert TaskORM -> Task -> SimpleTask
+            # Convert TaskORM -> Task -> AgentTask
             tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
-            return [self._task_to_simple_task(task) for task in tasks]
+            return [self._task_to_agent_task(task) for task in tasks]
         else:
             # Fallback for repositories that don't support workspace scoping
             return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
@@ -398,7 +398,7 @@ class TaskService(BaseTaskService):
         limit: int = 100,
         workspace_id: str | None = None,
         hours: int = 168,  # Default to 7 days
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """Get recent tasks within a time period for monitoring and analytics.
 
         Args:
@@ -423,16 +423,16 @@ class TaskService(BaseTaskService):
                     limit=limit * 2,  # Get more to account for time filtering
                     offset=0,
                 )
-                # Convert TaskORM -> Task -> SimpleTask and filter by time
+                # Convert TaskORM -> Task -> AgentTask and filter by time
                 tasks = []
                 for task_orm in task_orms:
                     task = self.task_repository._orm_to_domain(task_orm)
-                    simple_task = self._task_to_simple_task(task)
+                    agent_task = self._task_to_agent_task(task)
 
                     # Filter by time and workspace
-                    if simple_task.created_at and simple_task.created_at >= cutoff_time:
-                        if workspace_id is None or simple_task.workspace_id == workspace_id:
-                            tasks.append(simple_task)
+                    if agent_task.created_at and agent_task.created_at >= cutoff_time:
+                        if workspace_id is None or agent_task.workspace_id == workspace_id:
+                            tasks.append(agent_task)
 
                     if len(tasks) >= limit:
                         break
@@ -477,7 +477,7 @@ class TaskService(BaseTaskService):
         execution_id: str | None = None,
         result: dict[str, Any] | None = None,
         error: str | None = None,
-    ) -> SimpleTask | None:
+    ) -> AgentTask | None:
         """Update task status and related fields.
 
         Args:
@@ -494,7 +494,7 @@ class TaskService(BaseTaskService):
         if not task:
             return None
 
-        # Update the task using the SimpleTask's update_status method
+        # Update the task using the AgentTask's update_status method
         task.update_status(status, execution_id=execution_id, result=result, error_message=error)
 
         # Persist the update
@@ -502,7 +502,7 @@ class TaskService(BaseTaskService):
 
     async def list_agent_tasks(
         self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """List tasks for an agent.
 
         Args:
@@ -517,7 +517,7 @@ class TaskService(BaseTaskService):
 
     async def list_agent_tasks_with_workflow_status(
         self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """List tasks for an agent enriched with workflow status.
 
         Args:
@@ -544,7 +544,7 @@ class TaskService(BaseTaskService):
 
         return enriched_tasks
 
-    async def get_task_with_workflow_status(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task_with_workflow_status(self, task_id: UUID) -> AgentTask | None:
         """Get a task enriched with workflow status.
 
         Args:
@@ -565,7 +565,7 @@ class TaskService(BaseTaskService):
 
         return await self._enrich_task_with_workflow_status(task)
 
-    async def _enrich_task_with_workflow_status(self, task: SimpleTask) -> SimpleTask:
+    async def _enrich_task_with_workflow_status(self, task: AgentTask) -> AgentTask:
         """Enrich a task with current workflow status.
 
         Temporal is the recovery oracle for terminal states; the DB is the
@@ -609,7 +609,7 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
-    ) -> SimpleTask:
+    ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
         REST handlers, A2A handlers, and MCP tools all funnel through this
@@ -641,7 +641,7 @@ class TaskService(BaseTaskService):
         channel_origin = (parameters or {}).get("channel_origin", {})
         chat_id = channel_origin.get("chat_id") if channel_origin else None
         if chat_id:
-            draft = SimpleTask(
+            draft = AgentTask(
                 id=new_task_id,
                 title=title or description,
                 description=description,

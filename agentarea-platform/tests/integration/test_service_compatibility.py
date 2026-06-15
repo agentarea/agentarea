@@ -184,7 +184,7 @@ class ServiceCompatibilityTester:
         try:
             from agentarea_agents.infrastructure.repository import AgentRepository
             from agentarea_common.events.broker import EventBroker
-            from agentarea_tasks.domain.models import SimpleTask
+            from agentarea_tasks.domain.models import AgentTask
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -196,7 +196,7 @@ class ServiceCompatibilityTester:
             mock_agent_repository = AsyncMock(spec=AgentRepository)
 
             # Create test task
-            test_task = SimpleTask(
+            test_task = AgentTask(
                 id=uuid4(),
                 title="Test Task",
                 description="Test task for compatibility testing",
@@ -363,13 +363,13 @@ class ServiceCompatibilityTester:
             )
             return False
 
-    def test_simple_task_model_enhancements(self) -> bool:
-        """Test that SimpleTask model has been enhanced with additional fields."""
+    def test_agent_task_model_enhancements(self) -> bool:
+        """Test that AgentTask model has been enhanced with additional fields."""
         try:
-            from agentarea_tasks.domain.models import SimpleTask
+            from agentarea_tasks.domain.models import AgentTask
 
-            # Create a SimpleTask instance
-            task = SimpleTask(
+            # Create a AgentTask instance
+            task = AgentTask(
                 title="Test Task",
                 description="Test Description",
                 query="Test Query",
@@ -382,10 +382,10 @@ class ServiceCompatibilityTester:
 
             for field in enhanced_fields:
                 if not hasattr(task, field):
-                    raise ValueError(f"SimpleTask missing enhanced field: {field}")
+                    raise ValueError(f"AgentTask missing enhanced field: {field}")
 
             # Test that the model can be instantiated with enhanced fields
-            enhanced_task = SimpleTask(
+            enhanced_task = AgentTask(
                 title="Enhanced Task",
                 description="Enhanced Description",
                 query="Enhanced Query",
@@ -401,15 +401,15 @@ class ServiceCompatibilityTester:
             assert enhanced_task.metadata["test"] == "value"
 
             self.log_test_result(
-                "SimpleTask Model Enhancements", True, "SimpleTask model has all enhanced fields"
+                "AgentTask Model Enhancements", True, "AgentTask model has all enhanced fields"
             )
             return True
 
         except Exception as e:
             self.log_test_result(
-                "SimpleTask Model Enhancements",
+                "AgentTask Model Enhancements",
                 False,
-                "SimpleTask model enhancements are missing",
+                "AgentTask model enhancements are missing",
                 e,
             )
             return False
@@ -503,8 +503,8 @@ class ServiceCompatibilityTester:
         # Test 6: Test backward compatibility methods
         self.test_backward_compatibility_methods()
 
-        # Test 7: Test SimpleTask model enhancements
-        self.test_simple_task_model_enhancements()
+        # Test 7: Test AgentTask model enhancements
+        self.test_agent_task_model_enhancements()
 
         # Test 8: Test repository enhanced methods
         self.test_repository_enhanced_methods()

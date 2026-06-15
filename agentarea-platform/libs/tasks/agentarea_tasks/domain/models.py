@@ -145,12 +145,14 @@ class TaskUpdate(BaseModel):
         super().__setattr__(name, value)
 
 
-# Enhanced SimpleTask model for A2A compatibility and task management
-class SimpleTask(BaseModel):
-    """Enhanced task model for A2A protocol compatibility and task management.
+# Service/API-layer task model for A2A compatibility and task management
+class AgentTask(BaseModel):
+    """Task model for A2A protocol compatibility and task management.
 
-    This model extends the original SimpleTask with additional fields for
-    enhanced task lifecycle management while maintaining backward compatibility.
+    The richer service/API-layer view of a task: it carries the lifecycle and
+    A2A fields (title, query, task_parameters, effective_policy, timestamps)
+    on top of the basic ``Task`` domain model it is converted to/from at the
+    repository boundary.
     """
 
     # Original fields (maintained for backward compatibility)

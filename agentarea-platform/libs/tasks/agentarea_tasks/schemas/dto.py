@@ -1,7 +1,7 @@
 """Run / task DTOs — single source of truth for REST, MCP toolset, and service.
 
 A "run" in product terminology is a single execution of an agent against a
-user-supplied message. Internally it is persisted as a ``SimpleTask`` and
+user-supplied message. Internally it is persisted as a ``AgentTask`` and
 driven by a Temporal workflow, but the public contract is intentionally
 slimmer than the full task domain model: only the knobs callers (REST
 clients, MCP tools, A2A peers) actually need to start a run live here.

@@ -13,7 +13,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 from .domain.interfaces import BaseTaskManager
-from .domain.models import SimpleTask
+from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
 
 logger = logging.getLogger(__name__)
@@ -28,9 +28,9 @@ class DirectTaskManager(BaseTaskManager):
 
     def __init__(self, task_repository: TaskRepository):
         self.task_repository = task_repository
-        self._tasks: dict[UUID, SimpleTask] = {}
+        self._tasks: dict[UUID, AgentTask] = {}
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit and immediately execute a task in-process."""
         logger.info(f"DirectTaskManager: executing task {task.id} in-process")
 
@@ -46,7 +46,7 @@ class DirectTaskManager(BaseTaskManager):
 
         return task
 
-    async def _execute(self, task: SimpleTask) -> None:
+    async def _execute(self, task: AgentTask) -> None:
         """Run the agent loop using DB-resolved config, same as Temporal workflow."""
         try:
             # Resolve agent config from DB — same chain as build_agent_config_activity
@@ -186,7 +186,7 @@ class DirectTaskManager(BaseTaskManager):
             )
             self._tasks[task.id] = task
 
-    async def _resolve_agent(self, task: SimpleTask):
+    async def _resolve_agent(self, task: AgentTask):
         """Resolve agent config from DB — same chain as build_agent_config_activity.
 
         Returns (LLMModel, instruction, skills_data).
@@ -261,13 +261,13 @@ class DirectTaskManager(BaseTaskManager):
 
     # --- BaseTaskManager interface ---
 
-    async def get_task(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task(self, task_id: UUID) -> AgentTask | None:
         task = self._tasks.get(task_id)
         if task:
             return task
         task_domain = await self.task_repository.get_task(task_id)
         if task_domain:
-            return self._task_to_simple_task(task_domain)
+            return self._task_to_agent_task(task_domain)
         return None
 
     async def cancel_task(self, task_id: UUID) -> bool:
@@ -281,9 +281,9 @@ class DirectTaskManager(BaseTaskManager):
         status=None,
         limit=100,
         offset=0,
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         tasks = await self.task_repository.list_tasks(limit=limit, offset=offset)
-        return [self._task_to_simple_task(t) for t in tasks]
+        return [self._task_to_agent_task(t) for t in tasks]
 
     async def get_task_status(self, task_id: UUID) -> str | None:
         task = await self.get_task(task_id)
@@ -293,8 +293,8 @@ class DirectTaskManager(BaseTaskManager):
         task = await self.get_task(task_id)
         return task.result if task else None
 
-    def _task_to_simple_task(self, task) -> SimpleTask:
-        return SimpleTask(
+    def _task_to_agent_task(self, task) -> AgentTask:
+        return AgentTask(
             id=task.id,
             title=getattr(task, "title", ""),
             description=getattr(task, "description", ""),

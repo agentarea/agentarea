@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.events.redis_event_broker import RedisEventBroker
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
 from faststream.redis import RedisBroker
 
@@ -25,14 +25,14 @@ class MockTaskRepository:
     def __init__(self):
         self.tasks = {}
 
-    async def get(self, task_id: UUID) -> SimpleTask | None:
+    async def get(self, task_id: UUID) -> AgentTask | None:
         return self.tasks.get(task_id)
 
-    async def create(self, task: SimpleTask) -> SimpleTask:
+    async def create(self, task: AgentTask) -> AgentTask:
         self.tasks[task.id] = task
         return task
 
-    async def update(self, task: SimpleTask) -> SimpleTask:
+    async def update(self, task: AgentTask) -> AgentTask:
         self.tasks[task.id] = task
         return task
 
@@ -47,7 +47,7 @@ class MockEventBroker:
 class MockTaskManager:
     """Mock task manager for testing."""
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         return task
 
     async def cancel_task(self, task_id: UUID) -> bool:
@@ -85,7 +85,7 @@ async def test_task_service_event_streaming():
 
     # Create a test task
     task_id = uuid4()
-    test_task = SimpleTask(
+    test_task = AgentTask(
         id=task_id,
         title="Test Task",
         description="Test streaming events",

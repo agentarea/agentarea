@@ -59,7 +59,7 @@ from agentarea_common.utils.types import (
 from agentarea_common.utils.types import (
     MessageSendResponse as SendMessageResponse,
 )
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
@@ -300,8 +300,8 @@ def convert_a2a_message_to_task(
     a2a_method: str,
     request_id: str,
     task_id: str | None = None,
-) -> SimpleTask:
-    """Convert A2A message to SimpleTask with proper authentication context and user metadata."""
+) -> AgentTask:
+    """Convert A2A message to AgentTask with proper authentication context and user metadata."""
     message_content = ""
     if message_params.message and message_params.message.parts:
         for part in message_params.message.parts:
@@ -373,7 +373,7 @@ def convert_a2a_message_to_task(
         if client_metadata:
             a2a_metadata["client_metadata"] = client_metadata
 
-    return SimpleTask(
+    return AgentTask(
         id=UUID(task_id) if task_id else uuid4(),
         title="A2A Message Task",
         description="Task created from A2A message",
@@ -387,9 +387,9 @@ def convert_a2a_message_to_task(
     )
 
 
-def convert_simple_task_to_a2a_task(task: SimpleTask):
-    """Convert SimpleTask to A2A protocol Task format with current workflow status."""
-    # Map SimpleTask status to TaskState enum
+def convert_agent_task_to_a2a_task(task: AgentTask):
+    """Convert AgentTask to A2A protocol Task format with current workflow status."""
+    # Map AgentTask status to TaskState enum
     task_state_mapping = {
         "submitted": TaskState.SUBMITTED,
         "pending": TaskState.SUBMITTED,
@@ -1007,8 +1007,8 @@ async def handle_task_get(request_id, params, task_service, agent_id, auth_conte
             },
         )
 
-        # Convert SimpleTask to A2A protocol Task format
-        a2a_task = convert_simple_task_to_a2a_task(task)
+        # Convert AgentTask to A2A protocol Task format
+        a2a_task = convert_agent_task_to_a2a_task(task)
 
         return GetTaskResponse(jsonrpc="2.0", id=request_id, result=a2a_task)
     except A2AValidationError as e:
@@ -1110,7 +1110,7 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
             )
 
             # Convert to A2A protocol Task format
-            a2a_task = convert_simple_task_to_a2a_task(updated_task)
+            a2a_task = convert_agent_task_to_a2a_task(updated_task)
 
             return CancelTaskResponse(jsonrpc="2.0", id=request_id, result=a2a_task)
         else:
@@ -1170,7 +1170,7 @@ async def handle_task_resubscribe(
 
         # If task already terminal, return final status
         if task.status in ("completed", "failed", "cancelled", "canceled", "rejected"):
-            a2a_task = convert_simple_task_to_a2a_task(task)
+            a2a_task = convert_agent_task_to_a2a_task(task)
 
             async def done_stream():
                 final = JSONRPCResponse(
@@ -1270,7 +1270,7 @@ async def handle_task_list(request_id, params, task_service, agent_id, auth_cont
     offset = params.get("offset", 0)
 
     tasks = await task_service.get_agent_tasks(agent_id, limit=limit, offset=offset)
-    a2a_tasks = [convert_simple_task_to_a2a_task(t).model_dump(by_alias=True) for t in tasks]
+    a2a_tasks = [convert_agent_task_to_a2a_task(t).model_dump(by_alias=True) for t in tasks]
 
     return JSONRPCResponse(jsonrpc="2.0", id=request_id, result=a2a_tasks)
 

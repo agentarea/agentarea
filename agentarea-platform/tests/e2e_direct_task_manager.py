@@ -22,7 +22,7 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_script_dir, "..", "..", ".env.local"))
 
 from agentarea_tasks.direct_task_manager import DirectTaskManager
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 if not OPENROUTER_API_KEY:
@@ -44,7 +44,7 @@ async def main():
     )
 
     # Create task with skills in metadata
-    task = SimpleTask(
+    task = AgentTask(
         id=uuid4(),
         title="Math with skill",
         description="Solve: 42 * 17 + 99",

@@ -36,7 +36,7 @@ from agentarea_api.api.v1.agents_a2a import (
 from agentarea_common.utils.types import (
     JSONRPCResponse,
 )
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class MockTaskService:
         self.should_fail_submission = False
         self.should_fail_streaming = False
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit task and simulate Temporal workflow execution."""
         if self.should_fail_submission:
             raise ValueError("Task submission failed")
@@ -93,7 +93,7 @@ class MockTaskService:
 
         return task
 
-    def _setup_task_events(self, task: SimpleTask):
+    def _setup_task_events(self, task: AgentTask):
         """Set up mock events for task streaming."""
         self.task_events[task.id] = [
             {
@@ -152,7 +152,7 @@ class MockTaskService:
             yield event
             await asyncio.sleep(0.01)  # Simulate real-time streaming
 
-    async def get_task_with_workflow_status(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task_with_workflow_status(self, task_id: UUID) -> AgentTask | None:
         """Get task with current workflow status."""
         # Find task in submitted tasks
         task = None
@@ -483,7 +483,7 @@ async def test_a2a_task_management_endpoints():
 
     # Create a task
     task_id = uuid4()
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Test Task",
         description="Task for management testing",
@@ -809,7 +809,7 @@ async def test_a2a_task_workflow_status_integration():
 
     # Create a task
     task_id = uuid4()
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Workflow Status Test",
         description="Test workflow status integration",

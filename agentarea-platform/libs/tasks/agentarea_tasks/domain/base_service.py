@@ -14,7 +14,7 @@ from uuid import UUID
 from agentarea_common.events.broker import EventBroker
 
 from .events import TaskStatusChanged, TaskUpdated
-from .models import SimpleTask, Task
+from .models import AgentTask, Task
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class BaseTaskService(ABC):
         self.task_repository = task_repository
         self.event_broker = event_broker
 
-    async def create_task(self, task: SimpleTask) -> SimpleTask:
+    async def create_task(self, task: AgentTask) -> AgentTask:
         """Create a new task with validation and event publishing.
 
         Args:
@@ -73,7 +73,7 @@ class BaseTaskService(ABC):
         if not task.updated_at:
             task.updated_at = task.created_at
 
-        # Convert SimpleTask to Task domain model for repository
+        # Convert AgentTask to Task domain model for repository
 
         task_domain = Task(
             id=task.id,
@@ -95,8 +95,8 @@ class BaseTaskService(ABC):
         # Persist the task
         created_task_domain = await self.task_repository.create_task(task_domain)
 
-        # Convert back to SimpleTask for return
-        created_task = SimpleTask(
+        # Convert back to AgentTask for return
+        created_task = AgentTask(
             id=created_task_domain.id,
             title=task.title,  # Preserve original title
             description=created_task_domain.description,
@@ -135,7 +135,7 @@ class BaseTaskService(ABC):
         logger.info(f"Created task {created_task.id} for agent {created_task.agent_id}")
         return created_task
 
-    async def get_task(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task(self, task_id: UUID) -> AgentTask | None:
         """Get a task by ID.
 
         Args:
@@ -148,9 +148,9 @@ class BaseTaskService(ABC):
         if not task_domain:
             return None
 
-        return self._task_to_simple_task(task_domain)
+        return self._task_to_agent_task(task_domain)
 
-    async def update_task(self, task: SimpleTask) -> SimpleTask:
+    async def update_task(self, task: AgentTask) -> AgentTask:
         """Update an existing task with validation and event publishing.
 
         Args:
@@ -178,7 +178,7 @@ class BaseTaskService(ABC):
         old_status = existing_task.status
         new_status = task.status
 
-        # Convert SimpleTask to Task domain model for repository
+        # Convert AgentTask to Task domain model for repository
         from .models import Task
 
         task_domain = Task(
@@ -202,8 +202,8 @@ class BaseTaskService(ABC):
         # Persist the update
         updated_task_domain = await self.task_repository.update_task(task_domain)
 
-        # Convert back to SimpleTask for return
-        updated_task = SimpleTask(
+        # Convert back to AgentTask for return
+        updated_task = AgentTask(
             id=updated_task_domain.id,
             title=task.title,  # Preserve original title
             description=updated_task_domain.description,
@@ -258,7 +258,7 @@ class BaseTaskService(ABC):
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """List tasks with optional filtering.
 
         Args:
@@ -289,8 +289,8 @@ class BaseTaskService(ABC):
         else:
             tasks = await self.task_repository.list_tasks()
 
-        # Convert Task domain models to SimpleTask
-        return [self._task_to_simple_task(task) for task in tasks]
+        # Convert Task domain models to AgentTask
+        return [self._task_to_agent_task(task) for task in tasks]
 
     async def delete_task(self, task_id: UUID) -> bool:
         """Delete a task by ID.
@@ -316,16 +316,16 @@ class BaseTaskService(ABC):
 
     # Protected methods for subclasses
 
-    def _task_to_simple_task(self, task: Task) -> SimpleTask:
-        """Convert Task domain model to SimpleTask.
+    def _task_to_agent_task(self, task: Task) -> AgentTask:
+        """Convert Task domain model to AgentTask.
 
         Args:
             task: Task domain model from repository
 
         Returns:
-            SimpleTask model for service/API layer
+            AgentTask model for service/API layer
         """
-        return SimpleTask(
+        return AgentTask(
             id=task.id,
             title=task.description,  # Use description as title
             description=task.description,
@@ -345,7 +345,7 @@ class BaseTaskService(ABC):
             metadata=task.metadata,
         )
 
-    async def _validate_task(self, task: SimpleTask) -> None:
+    async def _validate_task(self, task: AgentTask) -> None:
         """Validate a task before creation or update.
 
         This method performs common validation that applies to all task types.
@@ -410,7 +410,7 @@ class BaseTaskService(ABC):
     # Abstract methods that subclasses must implement
 
     @abstractmethod
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a task for execution.
 
         This method must be implemented by subclasses to define their specific
