@@ -285,20 +285,16 @@ class TaskService(BaseTaskService):
         )
 
     async def route_or_submit_task(self, task: AgentTask) -> AgentTask:
-        """Route message to an active workflow if one exists, otherwise submit a new task.
+        """Submit a channel-originated task, routing follow-ups to an active workflow.
 
-        This is the single routing point for all channel-originated tasks.
-        If a running/completed workflow exists for the same agent + chat_id,
-        the message is delivered as a follow-up signal instead of creating a new task.
+        Named entry point for trigger/channel callers. The routing itself — if a
+        running workflow already exists for the same agent + chat_id, deliver the
+        message to it as a follow-up signal instead of creating a new task — lives
+        canonically in ``create_and_execute_task_with_workflow`` (reached via
+        ``submit_task``). This delegates straight there so routing happens exactly
+        once; doing its own routing pass here as well would query and signal the
+        workflow twice on the no-match path.
         """
-        channel_origin = (task.task_parameters or {}).get("channel_origin", {})
-        chat_id = channel_origin.get("chat_id")
-
-        if chat_id:
-            routed = await self._try_route_to_active_workflow(task, str(chat_id))
-            if routed:
-                return routed
-
         return await self.submit_task(task)
 
     async def _try_route_to_active_workflow(
