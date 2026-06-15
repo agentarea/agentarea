@@ -25,7 +25,7 @@ export interface SelectOption {
   icon?: string;
 }
 
-export interface SimpleSelectOption {
+export interface MinimalSelectOption {
   id: string | number;
   label: string;
 }
@@ -33,11 +33,11 @@ export interface SimpleSelectOption {
 export interface SelectGroup {
   label: string;
   icon?: string;
-  options: (SelectOption | SimpleSelectOption)[];
+  options: (SelectOption | MinimalSelectOption)[];
 }
 
 interface SearchableSelectProps {
-  options: (SelectOption | SimpleSelectOption)[];
+  options: (SelectOption | MinimalSelectOption)[];
   groups?: SelectGroup[];
   value?: string | number;
   onValueChange: (value: string | number) => void;
@@ -46,9 +46,9 @@ interface SearchableSelectProps {
   className?: string;
   emptyMessage?: string | React.ReactNode;
   defaultIcon?: React.ReactNode;
-  renderOption?: (option: SelectOption | SimpleSelectOption) => React.ReactNode;
+  renderOption?: (option: SelectOption | MinimalSelectOption) => React.ReactNode;
   renderTrigger?: (
-    selectedOption: SelectOption | SimpleSelectOption | undefined
+    selectedOption: SelectOption | MinimalSelectOption | undefined
   ) => React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -126,7 +126,7 @@ export function SearchableSelect({
     return defaultIcon || <Bot className="h-5 w-5 text-muted-foreground" />;
   };
 
-  const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
+  const renderOptionContent = (option: SelectOption | MinimalSelectOption) => (
     <div className="flex items-center gap-2">
       <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
         {"icon" in option && renderIcon(option as SelectOption)}
@@ -141,7 +141,7 @@ export function SearchableSelect({
   );
 
   const renderDefaultTrigger = (
-    selectedOption: SelectOption | SimpleSelectOption | undefined
+    selectedOption: SelectOption | MinimalSelectOption | undefined
   ) => {
     if (selectedOption) {
       return renderOptionContent(selectedOption);
@@ -153,7 +153,7 @@ export function SearchableSelect({
     );
   };
 
-  const renderDefaultOption = (option: SelectOption | SimpleSelectOption) => {
+  const renderDefaultOption = (option: SelectOption | MinimalSelectOption) => {
     const isSelected = option.id === value;
     return (
       <>
