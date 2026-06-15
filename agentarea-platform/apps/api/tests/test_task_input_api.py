@@ -9,6 +9,7 @@ from agentarea_api.api.deps.services import get_secret_manager
 from agentarea_api.api.v1 import agents_tasks
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -38,6 +39,7 @@ def _app_for(agent_service, workflow_service, secret_manager, context: UserConte
     return app
 
 
+@pytest.mark.flow(MainFlow.TASK_INPUT)
 @pytest.mark.asyncio
 async def test_task_input_submit_stores_secrets_and_signals_refs_only():
     agent_id = uuid4()

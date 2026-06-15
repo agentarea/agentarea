@@ -1,7 +1,17 @@
 name: Integration Tests
 
 on:
-  workflow_dispatch:  # Manual trigger only — integration tests not yet stable
+  workflow_dispatch:  # Still manually triggerable
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'agentarea-platform/**'
+  # The stable `smoke-test` job (migrations + repo layer + Temporal workflow)
+  # gates every platform PR. The heavier `integration-tests` job stays gated to
+  # main or the `run-integration-tests` label (see its own `if:`), so flaky
+  # full-suite tests do not block PRs while they are being hardened.
 
 permissions:
   contents: read

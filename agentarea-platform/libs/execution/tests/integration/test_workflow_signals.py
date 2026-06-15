@@ -21,6 +21,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from agentarea_common.testing.flows import MainFlow
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -292,6 +293,7 @@ def _reset_globals():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.flow(MainFlow.SIGNALS_HITL)
 @pytest.mark.asyncio
 async def test_request_user_input_waits_for_queued_reply_then_continues():
     """The built-in request_user_input tool pauses until structured input resumes it."""

@@ -6,6 +6,7 @@ import pytest
 from agentarea_api.api.deps.services import get_public_webhook_manager, get_webhook_manager
 from agentarea_api.api.v1.webhooks import router
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -54,6 +55,7 @@ def client(app_with_webhooks):
     return TestClient(app_with_webhooks)
 
 
+@pytest.mark.flow(MainFlow.WEBHOOKS)
 class TestWebhookEndpoints:
     """Test webhook API endpoints."""
 

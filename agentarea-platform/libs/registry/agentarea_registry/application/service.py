@@ -7,6 +7,9 @@ Dispatches sync/create by registry_type:
   - "llm_models" → ModelSpec (references provider by provider_key)
   - "agents" → catalog-only built-in agents (ADR-003): the registry_item IS
     the definition; no tenant `agents` row is materialized on sync.
+  - "bundles" → catalog-only installable bundles: the registry_item.spec IS
+    the canonical Bundle definition. Nothing is materialized on sync; the
+    bundle is provisioned into a workspace on demand via BundleService.install.
 
 Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
@@ -37,6 +40,7 @@ VALID_REGISTRY_TYPES = (
     "llm_providers",
     "llm_models",
     "agents",
+    "bundles",
 )
 VALID_SOURCE_TYPES = ("url", "github", "api")
 
@@ -49,6 +53,7 @@ TYPE_BY_TOPLEVEL_KEY = {
     "providers": "llm_providers",
     "models": "llm_models",
     "agents": "agents",
+    "bundles": "bundles",
 }
 
 
@@ -287,6 +292,11 @@ class RegistryService:
             # definition; no tenant `agents` row is materialized on sync. A real
             # row is created copy-on-write when a user edits the catalog agent.
             return None
+        elif registry_type == "bundles":
+            # Catalog-only: the registry_item.spec is the canonical Bundle. It is
+            # provisioned into a workspace on demand via BundleService.install, so
+            # nothing is materialized on sync.
+            return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     async def _update_entity(
@@ -302,6 +312,9 @@ class RegistryService:
             return await self._update_llm_model(item)
         elif registry_type == "agents":
             # No materialized entity to update for catalog agents (ADR-003).
+            return None
+        elif registry_type == "bundles":
+            # No materialized entity to update for catalog bundles.
             return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
@@ -565,6 +578,8 @@ class RegistryService:
             return RegistryService._parse_llm_models(data)
         elif registry_type == "agents":
             return RegistryService._parse_agents(data)
+        elif registry_type == "bundles":
+            return RegistryService._parse_bundles(data)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     @staticmethod
@@ -877,6 +892,36 @@ class RegistryService:
                         "events_config": entry.get("events_config"),
                     },
                     "tags": entry.get("tags", []),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _parse_bundles(data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Parse installable bundles.
+
+        Each catalog entry IS a canonical Bundle (the same shape the
+        ``/v1/bundles/install`` endpoint consumes). The whole entry is stored as
+        the registry_item ``spec`` so install can run against it unchanged;
+        ``external_id`` is the bundle ``name`` (its idempotency key).
+        """
+        items = []
+        for entry in data.get("bundles", []):
+            name = entry.get("name")
+            if not name:
+                continue
+            metadata = entry.get("metadata") or {}
+            tags = entry.get("tags") or metadata.get("capabilities") or []
+            if not isinstance(tags, list):
+                tags = []
+            items.append(
+                {
+                    "external_id": name,
+                    "name": entry.get("display_name") or name,
+                    "description": entry.get("description"),
+                    "version": entry.get("schema_version") or entry.get("version") or "0.1.0",
+                    "spec": entry,
+                    "tags": tags,
                 }
             )
         return items

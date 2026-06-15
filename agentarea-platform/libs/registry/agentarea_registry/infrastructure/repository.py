@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_registry.domain.models import Registry, RegistryItem
@@ -109,7 +109,20 @@ class RegistryItemRepository:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[RegistryItem]:
-        return await self.list_all(limit=limit, offset=offset, registry_id=registry_id)
+        # Alphabetical by name, case-insensitive (so "monday.com"/"v0.dev" sort
+        # naturally, not after "Zapier"). Ordering precedes pagination so the
+        # catalog is consistently A→Z across pages / infinite scroll.
+        query = (
+            select(RegistryItem)
+            .where(RegistryItem.registry_id == registry_id)
+            .order_by(func.lower(RegistryItem.name))
+        )
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def create(self, **kwargs: Any) -> RegistryItem:
         record = RegistryItem(**kwargs)

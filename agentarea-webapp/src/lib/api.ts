@@ -13,6 +13,7 @@ export const {
   getAgent,
   deleteAgent,
   updateAgent,
+  installAgent,
 
   // Agent Task API
   listAgentTasks,
@@ -117,6 +118,7 @@ export const {
   createSkill,
   uploadSkill,
   updateSkill,
+  installSkill,
   deleteSkill,
 
   // MCP Auth Config API
@@ -302,7 +304,7 @@ export const listProviderConfigsWithModelInstances = async (params?: {
 
   return {
     configs: { data: configsWithModels, error: null },
-    specs: providersResponse
+    specs: providersResponse,
   };
 };
 
@@ -344,7 +346,13 @@ export type TaskWithAgent = TaskResponse & {
 };
 
 // Re-export skill types for convenience
-export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
+export type {
+  Skill,
+  SkillContent,
+  SkillFile,
+  SkillCreateRequest,
+  SkillUpdateRequest,
+} from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
 

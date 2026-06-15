@@ -1,104 +1,108 @@
 "use server";
 
+import type { components } from "@/api/schema";
+import { env } from "@/env";
+import {
+  addAgentToProject,
+  addMcpInstanceToProject,
+  addSkillMember,
+  addSkillToProject,
+  bulkCreateModelInstances,
+  cancelAgentTask,
+  checkMCPServerInstanceConfiguration,
+  createAgentWallet,
+  createMCPAuthConfig,
+  createMCPServer,
+  createMCPServerInstance,
+  createModelInstance,
+  createOpenAPIConnection,
+  createProject,
+  createProviderConfig,
+  createSkill,
+  deleteAgentWallet,
+  deleteModelInstance,
+  deleteOpenAPIConnection,
+  deleteProject,
+  deleteProjectFile,
+  deleteSkill,
+  deleteTrigger,
+  disableTrigger,
+  discoverMCPInstanceTools,
+  discoverModels,
+  discoverModelsPreview,
+  discoverOpenAPITools,
+  downloadProjectFile,
+  downloadWorkspaceFile,
+  enableTrigger,
+  exportWorkspace,
+  flattenSkill,
+  fundAgentWallet,
+  getAgent,
+  getAgentTaskStatus,
+  getAgentWallet,
+  getAgentWalletBalance,
+  getAgentWalletPayments,
+  getAllTasks,
+  getMCPHealthStatus,
+  getMCPServerInstance,
+  getModelSpec,
+  getNetworkTopology,
+  getOpenAPIConnection,
+  getProject,
+  getSkill,
+  getSkillContent,
+  getSkillFile,
+  getSkillFiles,
+  getTask,
+  importWorkspace,
+  installAgent,
+  installSkill,
+  listAgents,
+  listAgentTasks,
+  listMCPAuthConfigs,
+  listMCPServerInstances,
+  listMCPServers,
+  listModelInstances,
+  listModelSpecs,
+  listOpenAPIConnections,
+  listProjectFiles,
+  listProjects,
+  listProviderSpecs,
+  listProviderSpecsWithModels,
+  listSkillMembers,
+  listSkills,
+  listTriggers,
+  listWorkspaceFiles,
+  pauseAgentTask,
+  previewOpenAPISpec,
+  removeAgentFromProject,
+  removeMcpInstanceFromProject,
+  removeSkillFromProject,
+  removeSkillMember,
+  resolveEscalation,
+  resumeAgentTask,
+  sendTaskCommand,
+  testModelInstance,
+  updateAgent,
+  updateAgentWallet,
+  updateMCPServerInstance,
+  updateOpenAPIConnection,
+  updateProject,
+  updateProviderConfig,
+  updateSkill,
+  uploadProjectFile,
+  workspaceFileHistory,
+} from "@/lib/api";
 import {
   getWorkspaceSettings,
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
-import {
-  getAgent,
-  updateAgent,
-  listAgents,
-  listModelInstances,
-  getModelSpec,
-  listModelSpecs,
-  testModelInstance,
-  pauseAgentTask,
-  resumeAgentTask,
-  sendTaskCommand,
-  cancelAgentTask,
-  getAllTasks,
-  getTask,
-  getAgentTaskStatus,
-  createSkill,
-  getSkill,
-  getSkillContent,
-  getSkillFiles,
-  getSkillFile,
-  updateSkill,
-  deleteSkill,
-  getMCPHealthStatus,
-  checkMCPServerInstanceConfiguration,
-  createMCPServer,
-  listSkills,
-  createMCPServerInstance,
-  getMCPServerInstance,
-  updateMCPServerInstance,
-  listAgentTasks,
-  listProviderSpecs,
-  listProviderSpecsWithModels,
-  createProviderConfig,
-  updateProviderConfig,
-  createModelInstance,
-  bulkCreateModelInstances,
-  deleteModelInstance,
-  discoverModels,
-  discoverModelsPreview,
-  listMCPAuthConfigs,
-  createMCPAuthConfig,
-  resolveEscalation,
-  listSkillMembers,
-  addSkillMember,
-  removeSkillMember,
-  flattenSkill,
-  discoverMCPInstanceTools,
-  getNetworkTopology,
-  exportWorkspace,
-  importWorkspace,
-  enableTrigger,
-  disableTrigger,
-  deleteTrigger,
-  listTriggers,
-  listMCPServers,
-  listOpenAPIConnections,
-  getOpenAPIConnection,
-  deleteOpenAPIConnection,
-  discoverOpenAPITools,
-  createOpenAPIConnection,
-  updateOpenAPIConnection,
-  previewOpenAPISpec,
-  listMCPServerInstances,
-  listProjects,
-  getProject,
-  createProject,
-  updateProject,
-  deleteProject,
-  addSkillToProject,
-  removeSkillFromProject,
-  addAgentToProject,
-  removeAgentFromProject,
-  addMcpInstanceToProject,
-  removeMcpInstanceFromProject,
-  listProjectFiles,
-  uploadProjectFile,
-  downloadProjectFile,
-  deleteProjectFile,
-  listWorkspaceFiles,
-  downloadWorkspaceFile,
-  workspaceFileHistory,
-  getAgentWallet,
-  createAgentWallet,
-  updateAgentWallet,
-  deleteAgentWallet,
-  getAgentWalletBalance,
-  getAgentWalletPayments,
-  fundAgentWallet,
-} from "@/lib/api";
-import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
-import type { components } from "@/api/schema";
 
 function isUUID(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }
 
 export async function getAgentAction(agentId: string) {
@@ -110,6 +114,10 @@ export async function updateAgentAction(
   body: Parameters<typeof updateAgent>[1]
 ) {
   return await updateAgent(agentId, body);
+}
+
+export async function installAgentAction(agentId: string) {
+  return await installAgent(agentId);
 }
 
 export async function listModelInstancesAction(params?: {
@@ -345,9 +353,17 @@ export async function getSkillFileAction(skillId: string, filePath: string) {
 
 export async function updateSkillAction(
   skillId: string,
-  skill: { name?: string | null; description?: string | null; content?: string | null }
+  skill: {
+    name?: string | null;
+    description?: string | null;
+    content?: string | null;
+  }
 ) {
   return await updateSkill(skillId, skill);
+}
+
+export async function installSkillAction(skillId: string) {
+  return await installSkill(skillId);
 }
 
 export async function deleteSkillAction(skillId: string) {
@@ -361,18 +377,30 @@ export async function resolveEscalationAction(
   approved: boolean,
   comment: string = ""
 ) {
-  return await resolveEscalation(agentId, taskId, escalationId, approved, comment);
+  return await resolveEscalation(
+    agentId,
+    taskId,
+    escalationId,
+    approved,
+    comment
+  );
 }
 
 export async function listSkillMembersAction(skillId: string) {
   return await listSkillMembers(skillId);
 }
 
-export async function addSkillMemberAction(skillId: string, childSkillId: string) {
+export async function addSkillMemberAction(
+  skillId: string,
+  childSkillId: string
+) {
   return await addSkillMember(skillId, childSkillId);
 }
 
-export async function removeSkillMemberAction(skillId: string, childSkillId: string) {
+export async function removeSkillMemberAction(
+  skillId: string,
+  childSkillId: string
+) {
   return await removeSkillMember(skillId, childSkillId);
 }
 
@@ -431,7 +459,9 @@ export async function listMCPServersAction(params?: {
   return await listMCPServers(params);
 }
 
-export async function listOpenAPIConnectionsAction(params?: Parameters<typeof listOpenAPIConnections>[0]) {
+export async function listOpenAPIConnectionsAction(
+  params?: Parameters<typeof listOpenAPIConnections>[0]
+) {
   return await listOpenAPIConnections(params);
 }
 
@@ -447,7 +477,9 @@ export async function discoverOpenAPIToolsAction(connectionId: string) {
   return await discoverOpenAPITools(connectionId);
 }
 
-export async function createOpenAPIConnectionAction(body: Parameters<typeof createOpenAPIConnection>[0]) {
+export async function createOpenAPIConnectionAction(
+  body: Parameters<typeof createOpenAPIConnection>[0]
+) {
   return await createOpenAPIConnection(body);
 }
 
@@ -505,7 +537,10 @@ export async function oauthAuthorizeAction(instanceId: string) {
   return { data: await res.json(), error: null };
 }
 
-export async function validateConnectionAction(url: string, headers: Record<string, string>) {
+export async function validateConnectionAction(
+  url: string,
+  headers: Record<string, string>
+) {
   const token = await getAuthToken();
   const res = await fetch(
     `${env.API_URL}/v1/mcp-server-instances/validate-connection`,
@@ -544,7 +579,11 @@ export async function createProjectAction(project: {
 
 export async function updateProjectAction(
   projectId: string,
-  project: { name?: string | null; description?: string | null; instructions?: string | null }
+  project: {
+    name?: string | null;
+    description?: string | null;
+    instructions?: string | null;
+  }
 ) {
   return await updateProject(projectId, project as any);
 }
@@ -553,27 +592,45 @@ export async function deleteProjectAction(projectId: string) {
   return await deleteProject(projectId);
 }
 
-export async function addSkillToProjectAction(projectId: string, skillId: string) {
+export async function addSkillToProjectAction(
+  projectId: string,
+  skillId: string
+) {
   return await addSkillToProject(projectId, skillId);
 }
 
-export async function removeSkillFromProjectAction(projectId: string, skillId: string) {
+export async function removeSkillFromProjectAction(
+  projectId: string,
+  skillId: string
+) {
   return await removeSkillFromProject(projectId, skillId);
 }
 
-export async function addAgentToProjectAction(projectId: string, agentId: string) {
+export async function addAgentToProjectAction(
+  projectId: string,
+  agentId: string
+) {
   return await addAgentToProject(projectId, agentId);
 }
 
-export async function removeAgentFromProjectAction(projectId: string, agentId: string) {
+export async function removeAgentFromProjectAction(
+  projectId: string,
+  agentId: string
+) {
   return await removeAgentFromProject(projectId, agentId);
 }
 
-export async function addMcpInstanceToProjectAction(projectId: string, mcpInstanceId: string) {
+export async function addMcpInstanceToProjectAction(
+  projectId: string,
+  mcpInstanceId: string
+) {
   return await addMcpInstanceToProject(projectId, mcpInstanceId);
 }
 
-export async function removeMcpInstanceFromProjectAction(projectId: string, mcpInstanceId: string) {
+export async function removeMcpInstanceFromProjectAction(
+  projectId: string,
+  mcpInstanceId: string
+) {
   return await removeMcpInstanceFromProject(projectId, mcpInstanceId);
 }
 
@@ -581,7 +638,10 @@ export async function listProjectFilesAction(projectId: string) {
   return await listProjectFiles(projectId);
 }
 
-export async function uploadProjectFileAction(projectId: string, formData: FormData) {
+export async function uploadProjectFileAction(
+  projectId: string,
+  formData: FormData
+) {
   // Validate projectId as UUID to prevent path traversal / SSRF
   if (!/^[a-f0-9-]{36}$/.test(projectId)) {
     return { data: null, error: { detail: "Invalid project ID" } };
@@ -601,7 +661,9 @@ export async function uploadProjectFileAction(projectId: string, formData: FormD
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Upload failed" }));
     return { data: null, error: errorData };
   }
 
@@ -609,11 +671,17 @@ export async function uploadProjectFileAction(projectId: string, formData: FormD
   return { data, error: null };
 }
 
-export async function downloadProjectFileAction(projectId: string, filePath: string) {
+export async function downloadProjectFileAction(
+  projectId: string,
+  filePath: string
+) {
   return await downloadProjectFile(projectId, filePath);
 }
 
-export async function deleteProjectFileAction(projectId: string, filePath: string) {
+export async function deleteProjectFileAction(
+  projectId: string,
+  filePath: string
+) {
   return await deleteProjectFile(projectId, filePath);
 }
 
@@ -636,7 +704,10 @@ export async function previewOpenAPISpecAction(body: {
   return await previewOpenAPISpec(body);
 }
 
-export async function initMCPOAuthConnectAction(instanceId: string, returnTo: string = "") {
+export async function initMCPOAuthConnectAction(
+  instanceId: string,
+  returnTo: string = ""
+) {
   if (!isUUID(instanceId)) {
     return { error: "Invalid instance ID" };
   }
@@ -650,15 +721,12 @@ export async function initMCPOAuthConnectAction(instanceId: string, returnTo: st
   base.pathname = "/v1/mcp-oauth/authorize";
   base.search = params.toString();
 
-  const resp = await fetch(
-    base.href,
-    {
-      headers: {
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
-      redirect: "manual",
-    }
-  );
+  const resp = await fetch(base.href, {
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    redirect: "manual",
+  });
 
   if (!resp.ok) {
     const body = await resp.text();
@@ -692,7 +760,12 @@ export async function getAgentWalletBalanceAction(agentId: string) {
 
 export async function getAgentWalletPaymentsAction(
   agentId: string,
-  params?: { protocol?: string; status?: string; page?: number; page_size?: number }
+  params?: {
+    protocol?: string;
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }
 ) {
   return await getAgentWalletPayments(agentId, params);
 }
@@ -706,15 +779,29 @@ export async function getWorkspaceSettingsAction() {
     const data = await getWorkspaceSettings();
     return { data, error: null };
   } catch (err) {
-    return { data: null, error: err instanceof Error ? err.message : "Failed to load workspace settings" };
+    return {
+      data: null,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to load workspace settings",
+    };
   }
 }
 
-export async function updateWorkspaceSettingsAction(monthly_cap_usd: number | null) {
+export async function updateWorkspaceSettingsAction(
+  monthly_cap_usd: number | null
+) {
   try {
     const data = await updateWorkspaceSettings(monthly_cap_usd);
     return { data, error: null };
   } catch (err) {
-    return { data: null, error: err instanceof Error ? err.message : "Failed to update workspace settings" };
+    return {
+      data: null,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to update workspace settings",
+    };
   }
 }

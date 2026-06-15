@@ -8,6 +8,7 @@ from agentarea_agents.application.skill_service import SkillFileInfo, SkillServi
 from agentarea_api.api.v1.skills import get_skill_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.testing.flows import MainFlow
 from httpx import ASGITransport, AsyncClient
 
 
@@ -19,8 +20,10 @@ async def async_client():
 
 
 @pytest.fixture
-def mock_skill_service():
-    return AsyncMock(spec=SkillService)
+def mock_skill_service(mock_user_context):
+    service = AsyncMock(spec=SkillService)
+    service.user_context = mock_user_context
+    return service
 
 
 @pytest.fixture
@@ -46,6 +49,7 @@ def override_dependencies(mock_skill_service, mock_user_context):
     app.dependency_overrides.pop(get_user_context, None)
 
 
+@pytest.mark.flow(MainFlow.SKILLS)
 @pytest.mark.asyncio
 async def test_list_skills_returns_metadata_only(async_client, mock_skill_service):
     now = datetime.utcnow()
@@ -168,6 +172,38 @@ async def test_get_skill_content_returns_full_content(async_client, mock_skill_s
 
 
 @pytest.mark.asyncio
+async def test_install_skill_materializes_catalog_skill(async_client, mock_skill_service):
+    skill_id = uuid4()
+    now = datetime.utcnow()
+    skill = MagicMock()
+    skill.id = uuid4()
+    skill.name = "Catalog Skill"
+    skill.slug = "catalog-skill"
+    skill.description = "Catalog description"
+    skill.source_type = "content"
+    skill.source_url = None
+    skill.s3_path = None
+    skill.network_scope = "private"
+    skill.workspace_id = "test_workspace"
+    skill.created_at = now
+    skill.updated_at = now
+    skill.registry_item_id = skill_id
+    skill.is_catalog = False
+    skill.update_available = False
+
+    mock_skill_service.install_catalog_skill.return_value = skill
+
+    response = await async_client.post(f"/v1/skills/{skill_id}/install")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(skill.id)
+    assert data["registry_item_id"] == str(skill_id)
+    assert data["is_catalog"] is False
+    mock_skill_service.install_catalog_skill.assert_called_once_with(skill_id)
+
+
+@pytest.mark.asyncio
 async def test_list_skill_files_returns_manifest(async_client, mock_skill_service):
     skill_id = uuid4()
     files = [
@@ -184,9 +220,7 @@ async def test_list_skill_files_returns_manifest(async_client, mock_skill_servic
     assert len(data["files"]) == 2
     assert data["files"][0]["path"] == "SKILL.md"
     assert data["files"][0]["url"] == "https://example.com/skill.md"
-    mock_skill_service.get_skill_files.assert_called_once_with(
-        skill_id, include_urls=True
-    )
+    mock_skill_service.get_skill_files.assert_called_once_with(skill_id, include_urls=True)
 
 
 @pytest.mark.asyncio
@@ -201,6 +235,4 @@ async def test_get_skill_file_returns_url(async_client, mock_skill_service):
     assert response.status_code == 200
     data = response.json()
     assert data["url"] == "https://example.com/file.txt"
-    mock_skill_service.get_skill_file_url.assert_called_once_with(
-        skill_id, "templates/file.txt"
-    )
+    mock_skill_service.get_skill_file_url.assert_called_once_with(skill_id, "templates/file.txt")

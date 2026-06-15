@@ -37,11 +37,13 @@ export default async function MembersPage() {
         description: t("description"),
       }}
     >
-      <MembersClient
-        members={members}
-        invitations={invitations}
-        currentUserId={userId}
-      />
+      <div className="main-content">
+        <MembersClient
+          members={members}
+          invitations={invitations}
+          currentUserId={userId}
+        />
+      </div>
     </ContentBlock>
   );
 }

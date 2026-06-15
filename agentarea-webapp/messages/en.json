@@ -112,6 +112,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "explore": "Explore",
     "providers": "Providers",
     "providerConfigs": "Models",
     "apiKeys": "API Keys",
@@ -391,6 +392,8 @@
   },
   "AgentsPage": {
     "createAgent": "Create agent",
+    "yourAgents": "Your agents",
+    "catalogAgents": "Catalog",
     "noToolsConf": "No tools configured",
     "name": "Name",
     "status": "Status",
@@ -501,7 +504,8 @@
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration"
-    }
+    },
+    "browseCatalog": "Browse the catalog"
   },
   "MCPServersPage": {
     "title": "Connections",
@@ -872,11 +876,13 @@
       "skillNotFound": "Skill not found",
       "loadFileContent": "Failed to load file content",
       "updateSkill": "Failed to update skill",
-      "deleteSkill": "Failed to delete skill"
+      "deleteSkill": "Failed to delete skill",
+      "installSkill": "Failed to add skill to workspace"
     },
     "success": {
       "skillUpdated": "Skill updated successfully",
-      "skillDeleted": "Skill deleted successfully"
+      "skillDeleted": "Skill deleted successfully",
+      "skillInstalled": "Skill added to workspace"
     },
     "confirm": {
       "deleteSkillTitle": "Delete Skill",
@@ -925,7 +931,10 @@
       "source": "Source",
       "updated": "Updated",
       "skillConfiguration": "Skill Configuration",
-      "editable": "Editable"
+      "editable": "Editable",
+      "catalogTemplate": "Catalog template",
+      "customize": "Customize",
+      "installing": "Adding..."
     },
     "source": {
       "github": "GitHub",
@@ -1026,7 +1035,8 @@
       "created": "Created"
     },
     "emptyHere": "No skills here",
-    "emptyHereDescription": "Nothing matches this view yet."
+    "emptyHereDescription": "Nothing matches this view yet.",
+    "browseCatalog": "Browse the catalog"
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",

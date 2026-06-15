@@ -175,7 +175,11 @@ async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUI
     with suppress(ValueError):
         return UUID(identifier)
     agent = await agent_service.get_by_slug(identifier)
-    return agent.id if agent else None
+    if agent:
+        return agent.id
+    # Built-in catalog agents aren't in the tenant table; resolve by projected slug.
+    catalog_agent = await agent_service.get_catalog_by_slug(identifier)
+    return catalog_agent.id if catalog_agent else None
 
 
 @router.post("/", response_model=AgentResponse)
@@ -321,6 +325,27 @@ async def get_agent(
         agent = await agent_service.get_with_catalog(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    return AgentResponse.from_domain(agent, include_skills=True)
+
+
+@router.post("/{agent_id}/install", response_model=AgentResponse)
+async def install_agent(
+    agent_id: str,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    """Add a built-in catalog agent to the workspace (copy-on-write fork).
+
+    Resolves a catalog agent by UUID or slug and materializes a tenant copy.
+    Idempotent: returns the existing workspace copy if already installed.
+    """
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.install_catalog_agent(resolved_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.get_with_skills(agent.id) or agent
     return AgentResponse.from_domain(agent, include_skills=True)
 
 

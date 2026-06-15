@@ -33,6 +33,7 @@ VALID_TYPES = (
     "llm_providers",
     "llm_models",
     "agents",
+    "bundles",
 )
 
 
@@ -355,6 +356,35 @@ def _parse_agents(data: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+def _parse_bundles(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse installable bundles into catalog items.
+
+    Each entry IS a canonical Bundle (the shape /v1/bundles/install consumes);
+    the whole entry is stored as the registry_item spec. external_id is the
+    bundle name (its idempotency key). Catalog-only: no entity is materialized.
+    """
+    items: list[dict[str, Any]] = []
+    for entry in data.get("bundles", []):
+        name = entry.get("name")
+        if not name:
+            continue
+        metadata = entry.get("metadata") or {}
+        tags = entry.get("tags") or metadata.get("capabilities") or []
+        if not isinstance(tags, list):
+            tags = []
+        items.append(
+            {
+                "external_id": name,
+                "name": entry.get("display_name") or name,
+                "description": (entry.get("description") or "")[:500],
+                "version": entry.get("schema_version") or entry.get("version") or "0.1.0",
+                "spec": entry,
+                "tags": tags,
+            }
+        )
+    return items
+
+
 def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         data = {}
@@ -368,6 +398,8 @@ def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
         return _parse_llm_models(data)
     if registry_type == "agents":
         return _parse_agents(data)
+    if registry_type == "bundles":
+        return _parse_bundles(data)
     raise ValueError(f"Unknown registry type: {registry_type}")
 
 

@@ -10,6 +10,7 @@ from agentarea_agents.application.temporal_workflow_service import TemporalWorkf
 from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.testing.flows import MainFlow
 from httpx import ASGITransport, AsyncClient
 
 
@@ -74,6 +75,7 @@ SAMPLE_ACTION = {
 }
 
 
+@pytest.mark.flow(MainFlow.A2UI_ACTION)
 class TestA2UIActionEndpoint:
     """Test POST /v1/agents/{agent_id}/tasks/{task_id}/a2ui/action"""
 

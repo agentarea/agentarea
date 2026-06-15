@@ -286,6 +286,25 @@ async def get_skill(
     return SkillResponse.from_skill(skill)
 
 
+@router.post("/{skill_id}/install", response_model=SkillResponse)
+async def install_skill(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+):
+    """Add a built-in catalog skill to the workspace."""
+    skill = await skill_service.install_catalog_skill(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    await grant_user_relation(
+        namespace="Skill",
+        object_id=skill.id,
+        relation="owners",
+        user_id=skill_service.user_context.user_id,
+    )
+    return SkillResponse.from_skill(skill)
+
+
 @router.get("/{skill_id}/content", response_model=SkillContentResponse)
 async def get_skill_content(
     skill_id: UUID,

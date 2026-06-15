@@ -18,6 +18,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.testing.flows import MainFlow
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
@@ -237,6 +238,7 @@ def sample_execution_data():
 class TestTriggersAPI:
     """Test class for triggers API endpoints."""
 
+    @pytest.mark.flow(MainFlow.TRIGGERS)
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
@@ -748,7 +750,10 @@ class TestTriggersAPI:
         data = response.json()
         assert data["overall_status"] == "unhealthy"
         assert data["service"] == "triggers"
-        assert "Database connection failed" in data["error"]
+        # Internal error details must not leak to clients: the endpoint returns a
+        # generic message and logs the real exception with exc_info instead.
+        assert data["error"] == "health check failed"
+        assert "Database connection failed" not in str(data)
 
     async def test_invalid_trigger_type(self, async_client):
         """Test trigger creation with invalid trigger type."""

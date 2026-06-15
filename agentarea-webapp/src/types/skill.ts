@@ -12,6 +12,9 @@ export interface Skill {
   workspace_id: string;
   created_at: string;
   updated_at: string;
+  is_catalog?: boolean | null;
+  registry_item_id?: string | null;
+  update_available?: boolean | null;
 }
 
 export interface PaginatedSkills {

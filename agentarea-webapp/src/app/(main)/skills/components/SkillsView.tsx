@@ -15,6 +15,7 @@ import {
   Tag,
   X,
 } from "lucide-react";
+import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -34,6 +35,7 @@ import { listSkillsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
 import { setCookie } from "@/utils/cookies";
+import { getValidTimestamp } from "@/utils/dateUtils";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import {
@@ -75,6 +77,8 @@ async function fetchAllSkills(): Promise<Skill[]> {
       page,
       page_size: 100,
       paginated: true,
+      // Only your own skills here — the registry/catalog lives in Explore.
+      from_registry: false,
     });
     const res = data as PaginatedSkills | null;
     if (!res?.items?.length) break;
@@ -219,7 +223,8 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       } else {
         out.sort(
           (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            (getValidTimestamp(b.created_at) ?? 0) -
+            (getValidTimestamp(a.created_at) ?? 0)
         );
       }
       return out;
@@ -454,7 +459,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             {t("error.loadSkills")}
           </div>
         ) : skills.length === 0 ? (
-          <div className="p-4">
+          <div className="space-y-4 p-4">
             <EmptyState
               title={t("noSkills")}
               description={t("noSkillsDescription")}
@@ -464,6 +469,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
                 onClick: () => router.push("/skills/create"),
               }}
             />
+            <CatalogSuggestions type="skills" />
           </div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-1.5 py-24 text-muted-foreground">

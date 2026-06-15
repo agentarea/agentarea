@@ -1,15 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatDistanceToNow } from "date-fns";
-import { ExternalLink, Hash, Clock } from "lucide-react";
-import { Skill } from "@/lib/api";
+import { Clock, ExternalLink, Hash } from "lucide-react";
 import {
   InfoPanelExpandableText,
   InfoPanelField,
   InfoPanelSection,
   InfoPanelValueBox,
 } from "@/components/InfoPanel";
+import { Skill } from "@/lib/api";
+import { formatRelativeTime } from "@/utils/dateUtils";
 
 interface SkillDetailsProps {
   skill: Skill;
@@ -20,7 +20,10 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
   const t = useTranslations("SkillsPage");
 
   return (
-    <InfoPanelSection title={tDetail("details")} contentClassName="space-y-3 text-xs">
+    <InfoPanelSection
+      title={tDetail("details")}
+      contentClassName="space-y-3 text-xs"
+    >
       <div className="space-y-1">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {tDetail("name")}
@@ -55,7 +58,7 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
           {tDetail("updated")}
         </div>
         <div className="text-[13px] font-medium text-foreground">
-          {formatDistanceToNow(new Date(skill.updated_at), { addSuffix: true })}
+          {formatRelativeTime(skill.updated_at)}
         </div>
       </div>
 

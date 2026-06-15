@@ -35,14 +35,22 @@ class FakeAgentRepo:
         return list(self._agents)
 
     async def get(self, _id):
-        return None
+        return next((a for a in self._agents if str(a.id) == str(_id)), None)
 
     async def get_by_slug(self, _slug):
         return None
 
+    async def get_by_registry_item_id(self, registry_item_id):
+        return next(
+            (a for a in self._agents if getattr(a, "registry_item_id", None) == registry_item_id),
+            None,
+        )
+
     async def create(self, **kwargs):
+        agent = Agent(id=uuid4(), **kwargs)
         self.created_kwargs.append(kwargs)
-        return Agent(id=uuid4(), **kwargs)
+        self._agents.append(agent)
+        return agent
 
 
 class FakeCatalogRepo:
@@ -117,6 +125,22 @@ async def test_get_with_catalog_returns_none_for_unknown():
     assert await svc.get_with_catalog(uuid4()) is None
 
 
+async def test_get_catalog_by_slug_resolves_projected_slug():
+    # A built-in catalog agent is reachable by the slug it is projected with
+    # (generate_slug(name)), even though it has no tenant ``agents`` row.
+    item = _item(name="Customer Support")
+    svc = _service(FakeAgentRepo(), FakeCatalogRepo([item]))
+    agent = await svc.get_catalog_by_slug("customer-support")
+    assert agent is not None
+    assert str(agent.id) == item.id
+    assert getattr(agent, "is_catalog", False) is True
+
+
+async def test_get_catalog_by_slug_returns_none_for_unknown():
+    svc = _service(FakeAgentRepo(), FakeCatalogRepo([_item(name="Other")]))
+    assert await svc.get_catalog_by_slug("customer-support") is None
+
+
 async def test_list_shadows_forked_and_projects_unforked():
     item_unforked = _item(name="Unforked", version="1")
     item_forked = _item(name="Forked", version="2", installed_version="1")
@@ -126,7 +150,7 @@ async def test_list_shadows_forked_and_projects_unforked():
     repo = FakeAgentRepo([forked_copy])
     svc = _service(repo, FakeCatalogRepo([item_unforked, item_forked]))
 
-    result = await svc.list()
+    result = await svc.list(include_catalog=True)
     ids = [str(a.id) for a in result]
 
     # The user's forked copy is present; the catalog item it came from is shadowed.
@@ -138,6 +162,59 @@ async def test_list_shadows_forked_and_projects_unforked():
     assert getattr(projection, "is_catalog", False) is True
     # A newer catalog version flags the forked copy for update.
     assert getattr(forked_copy, "update_available", False) is True
+
+
+async def test_list_excludes_catalog_by_default():
+    # The working-set list (default) returns only tenant agents — catalog lives
+    # in Explore. Forked copies still get their update_available flag.
+    item_unforked = _item(name="Unforked", version="1")
+    item_forked = _item(name="Forked", version="2", installed_version="1")
+    forked_copy = Agent(
+        id=uuid4(), name="Forked copy", slug="forked-copy", registry_item_id=item_forked.id
+    )
+    repo = FakeAgentRepo([forked_copy])
+    svc = _service(repo, FakeCatalogRepo([item_unforked, item_forked]))
+
+    result = await svc.list()
+    ids = [str(a.id) for a in result]
+
+    assert ids == [str(forked_copy.id)]
+    assert item_unforked.id not in ids
+    assert all(not getattr(a, "is_catalog", False) for a in result)
+    # Update flagging still works without projecting the catalog.
+    assert getattr(forked_copy, "update_available", False) is True
+
+
+async def test_install_catalog_agent_forks_once():
+    item = _item(name="Customer Support", version="3")
+    repo = FakeAgentRepo()
+    catalog = FakeCatalogRepo([item])
+    svc = _service(repo, catalog)
+
+    agent = await svc.install_catalog_agent(UUID(item.id))
+
+    assert agent is not None
+    assert agent.registry_item_id == item.id
+    assert len(repo.created_kwargs) == 1
+    assert catalog.installed == [(item.id, str(agent.id), "3")]
+
+
+async def test_install_catalog_agent_is_idempotent():
+    item = _item(name="Customer Support")
+    repo = FakeAgentRepo()
+    svc = _service(repo, FakeCatalogRepo([item]))
+
+    first = await svc.install_catalog_agent(UUID(item.id))
+    second = await svc.install_catalog_agent(UUID(item.id))
+
+    # Second install returns the existing copy; no duplicate fork.
+    assert first.id == second.id
+    assert len(repo.created_kwargs) == 1
+
+
+async def test_install_catalog_agent_unknown_returns_none():
+    svc = _service(FakeAgentRepo(), FakeCatalogRepo([]))
+    assert await svc.install_catalog_agent(uuid4()) is None
 
 
 async def test_fork_creates_owned_copy_and_marks_installed():

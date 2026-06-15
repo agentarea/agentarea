@@ -6,6 +6,7 @@ import { Inter } from "next/font/google";
 import { cookies } from "next/headers";
 import { SessionProvider } from "@ory/elements-react/client";
 import { getServerSession } from "@ory/nextjs/app";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -88,9 +89,11 @@ export default async function RootLayout({
         <SessionProvider session={session}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
-              <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>
-                {children}
-              </ConditionalLayout>
+              <NuqsAdapter>
+                <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>
+                  {children}
+                </ConditionalLayout>
+              </NuqsAdapter>
             </NextIntlClientProvider>
           </ThemeProvider>
         </SessionProvider>

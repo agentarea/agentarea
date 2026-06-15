@@ -8,6 +8,7 @@ from agentarea_api.api.v1.mcp_proxy import (
     _filter_outbound_headers,
     _resolve_upstream_url,
 )
+from agentarea_common.testing.flows import MainFlow
 
 # ----- _resolve_upstream_url -----
 
@@ -21,7 +22,10 @@ async def test_resolve_upstream_url_url_type_from_server_remote_url():
         json_spec={},
     )
 
-    assert await _resolve_upstream_url(instance, server_spec) == "https://mcp.clickup.com/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "https://mcp.clickup.com/mcp",
+        "url",
+    )
 
 
 @pytest.mark.asyncio
@@ -32,7 +36,10 @@ async def test_resolve_upstream_url_legacy_endpoint_url_on_instance():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "https://legacy.example/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "https://legacy.example/mcp",
+        "url",
+    )
 
 
 @pytest.mark.asyncio
@@ -44,7 +51,10 @@ async def test_resolve_upstream_url_docker_appends_mcp_path():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "http://mcp-abc:8000/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "http://mcp-abc:8000/mcp",
+        "docker",
+    )
 
 
 @pytest.mark.asyncio
@@ -56,7 +66,10 @@ async def test_resolve_upstream_url_docker_strips_trailing_slash():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "http://mcp-abc:8000/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "http://mcp-abc:8000/mcp",
+        "docker",
+    )
 
 
 @pytest.mark.asyncio
@@ -67,12 +80,13 @@ async def test_resolve_upstream_url_url_type_returns_empty_without_remote_url():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == ""
+    assert await _resolve_upstream_url(instance, server_spec) == ("", "url")
 
 
 # ----- header filters -----
 
 
+@pytest.mark.flow(MainFlow.MCP_PROXY)
 def test_filter_inbound_drops_authorization_and_host():
     headers = {
         "Authorization": "Bearer user-token",

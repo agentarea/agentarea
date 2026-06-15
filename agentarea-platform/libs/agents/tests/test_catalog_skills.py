@@ -7,6 +7,7 @@ exercise that wiring with light fakes, no database — mirroring
 ``test_catalog_agents.py``.
 """
 
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.skill_service import (
@@ -19,6 +20,7 @@ from agentarea_common.auth.context import UserContext
 
 
 def _item(item_id=None, name="Built-in", version="1", installed_version=None, spec=None):
+    now = datetime.now()
     return CatalogSkillItem(
         id=item_id or str(uuid4()),
         name=name,
@@ -27,6 +29,8 @@ def _item(item_id=None, name="Built-in", version="1", installed_version=None, sp
         spec=spec or {"source_type": "content", "content": "# Built-in"},
         installed_entity_id=None,
         installed_version=installed_version,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -43,6 +47,16 @@ class FakeSkillRepo:
 
     async def get_by_slug(self, _slug):
         return None
+
+    async def get_by_registry_item_id(self, registry_item_id):
+        return next(
+            (
+                s
+                for s in self._skills
+                if str(getattr(s, "registry_item_id", "")) == str(registry_item_id)
+            ),
+            None,
+        )
 
     async def create(self, **kwargs):
         self.created_kwargs.append(kwargs)
@@ -109,6 +123,8 @@ def test_project_catalog_skill_marks_read_only_with_provenance():
     assert skill.content == "# Hello"
     assert skill.source_type == "content"
     assert skill.source_url == "https://example.com"
+    assert skill.created_at == item.created_at
+    assert skill.updated_at == item.updated_at
 
 
 async def test_get_with_catalog_falls_back_to_projection():
@@ -177,6 +193,22 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert kw["source_url"] == "https://x"
     # The install is recorded on the catalog item with the new skill id + version.
     assert catalog.installed == [(item.id, str(skill.id), "3")]
+
+
+async def test_install_catalog_skill_is_idempotent():
+    item = _item(name="Builtin Install", version="4")
+    repo = FakeSkillRepo()
+    catalog = FakeCatalogRepo([item])
+    svc = _service(repo, catalog)
+
+    first = await svc.install_catalog_skill(UUID(item.id))
+    second = await svc.install_catalog_skill(UUID(item.id))
+
+    assert first is not None
+    assert second is not None
+    assert first.id == second.id
+    assert len(repo.created_kwargs) == 1
+    assert repo.created_kwargs[0]["registry_item_id"] == item.id
 
 
 async def test_update_on_catalog_id_forks_tenant_copy():

@@ -1,0 +1,63 @@
+# Productivity Lite — a base bundle you can install in one flow.
+#
+# Zero required setup: it installs a small productivity agent plus two skills.
+# `model` is pre-filled (optional), so the review screen needs no input — just
+# Install. Swap the model in the form if your workspace uses a different one.
+#
+# Try it: paste this at /bundles/import, or deep-link
+#   https://app.agentarea.ai/bundles/import?src=<url-to-this-file>
+schema_version: "0.1.0"
+name: productivity-lite
+display_name: Productivity Lite
+description: >-
+  A lightweight productivity assistant that helps you plan your day, triage
+  tasks, and keep notes — installable in one click with no configuration.
+metadata:
+  developer: AgentArea
+  category: productivity
+  capabilities: [interactive]
+
+setup:
+  - key: model
+    label: Model
+    type: string
+    required: false
+    default: gpt-4o
+    help: Provider model id used by the assistant (e.g. gpt-4o, claude-3-5-sonnet).
+
+skills:
+  - key: daily_planning
+    name: Daily Planning
+    source_type: content
+    content: |
+      # Daily Planning
+
+      Help the user plan their day. When asked what to work on:
+      1. Ask for or recall the current goals and deadlines.
+      2. Propose a prioritized, time-boxed plan (most important first).
+      3. Keep it realistic — no more than 3-5 focus items per day.
+      4. End with a one-line summary the user can act on immediately.
+
+  - key: task_triage
+    name: Task Triage
+    source_type: content
+    content: |
+      # Task Triage
+
+      Turn a messy list of tasks into an ordered plan.
+      - Group by urgency x importance (Eisenhower).
+      - Flag anything stale or blocked, and suggest a next action for each.
+      - Surface the single highest-leverage task to do first.
+
+agents:
+  - key: assistant
+    name: Productivity Assistant
+    model: ${setup.model}
+    instruction: |
+      You are a concise, practical productivity assistant. You help the user
+      plan their day, triage tasks, and capture notes. Prefer short, actionable
+      answers over long explanations. Use the attached planning and triage
+      skills when the user asks what to work on or hands you a list of tasks.
+    skills:
+      - daily_planning
+      - task_triage

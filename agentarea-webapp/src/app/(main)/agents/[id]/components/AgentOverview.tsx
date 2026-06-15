@@ -23,6 +23,7 @@ import { getAgent, listAgentTasks } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
 import type { Agent } from "@/types/agent";
 import { cn } from "@/lib/utils";
+import { CatalogAgentPreview } from "./CatalogAgentPreview";
 
 const fmtUsd = (v: number) =>
   new Intl.NumberFormat("en-US", {
@@ -87,11 +88,18 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   const agent = agentRes.data as Agent | undefined;
   if (!agent) notFound();
 
-  // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
-  const realId: string = agent.id;
   // Canonical ref for in-page links: keep URLs on the slug when available,
   // regardless of whether the page was opened by slug or id.
   const agentRef = agent.slug || agentId;
+
+  // A read-only catalog agent has no tenant row, tasks, spend or guardrails.
+  // Show a preview + "Add to workspace" CTA instead of the operational dashboard.
+  if (agent.is_catalog) {
+    return <CatalogAgentPreview agent={agent} agentRef={agentRef} />;
+  }
+
+  // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
+  const realId: string = agent.id;
 
   const [overview, tasksRes, settings] = await Promise.all([
     getAgentOverview(realId).catch(() => null),

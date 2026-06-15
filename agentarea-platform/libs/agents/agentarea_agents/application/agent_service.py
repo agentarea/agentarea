@@ -89,37 +89,39 @@ class AgentService(BaseCrudService[Agent]):
             user_context=self._user_context,
         )
 
-    async def list(self) -> list[Agent]:  # type: ignore[override]
-        """List tenant agents plus catalog agent items projected as read-only.
+    async def list(self, include_catalog: bool = False) -> list[Agent]:  # type: ignore[override]
+        """List the workspace's own agents.
 
-        A catalog item that has already been forked (a tenant ``agents`` row
-        carries its ``registry_item_id``) is shadowed by that tenant copy; the
-        copy is flagged ``update_available`` when the catalog version differs
+        Catalog (built-in) agents live in the registry and are discovered via
+        Explore — they are NOT part of the working set, so they are excluded by
+        default. Pass ``include_catalog=True`` to also project unforked catalog
+        items as read-only (ADR-003).
+
+        Forked copies (a tenant ``agents`` row carrying ``registry_item_id``) are
+        always flagged ``update_available`` when the catalog version has moved on
         from the version recorded at fork time.
         """
         repo = self._get_agent_repository()
         tenant_agents = await repo.list_all()
 
-        catalog_repo = self._get_catalog_repository()
-        catalog_items = await catalog_repo.list_items()
-
+        catalog_items = await self._get_catalog_repository().list_items()
         forked_by_item: dict[str, Agent] = {
             str(a.registry_item_id): a
             for a in tenant_agents
             if getattr(a, "registry_item_id", None)
         }
+        for item in catalog_items:
+            forked = forked_by_item.get(item.id)
+            if forked is not None and item.version and item.version != item.installed_version:
+                forked.update_available = True  # type: ignore[attr-defined]
+
+        if not include_catalog:
+            return list(tenant_agents)
 
         result: list[Agent] = list(tenant_agents)
         for item in catalog_items:
-            forked = forked_by_item.get(item.id)
-            if forked is not None:
-                # The tenant copy shadows the catalog projection. Flag an update
-                # when the current catalog version differs from the version
-                # recorded on the item at fork time.
-                if item.version and item.version != item.installed_version:
-                    forked.update_available = True  # type: ignore[attr-defined]
-                continue
-            result.append(_project_catalog_item(item))
+            if item.id not in forked_by_item:
+                result.append(_project_catalog_item(item))
         return result
 
     async def get_with_catalog(self, id: UUID) -> Agent | None:
@@ -224,6 +226,26 @@ class AgentService(BaseCrudService[Agent]):
         await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
         return agent
 
+    async def install_catalog_agent(self, id: UUID) -> Agent | None:
+        """Materialize a catalog agent into the workspace ("Add to workspace").
+
+        Idempotent: if this workspace already forked the catalog item, the
+        existing tenant copy is returned instead of creating a duplicate. Once
+        forked, the catalog slug resolves to the tenant copy, so ``id`` may
+        already be a real agent — that is treated as a no-op. Returns ``None``
+        if ``id`` is neither a tenant agent nor a known catalog item.
+        """
+        existing = await self.get(id)
+        if existing is not None:
+            return existing
+        item = await self._get_catalog_repository().get_item(str(id))
+        if item is None:
+            return None
+        forked = await self._get_agent_repository().get_by_registry_item_id(item.id)
+        if forked is not None:
+            return forked
+        return await self._fork_catalog_agent(item)
+
     @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(self, id: UUID, payload: AgentUpdate) -> Agent | None:
         agent = await self.get(id)
@@ -291,6 +313,19 @@ class AgentService(BaseCrudService[Agent]):
         """Get an agent by workspace-scoped slug."""
         repo = self._get_agent_repository()
         return await repo.get_by_slug(slug)
+
+    async def get_catalog_by_slug(self, slug: str) -> Agent | None:
+        """Resolve a built-in catalog agent by its projected slug.
+
+        Catalog agents are not materialized in the tenant ``agents`` table, so
+        ``get_by_slug`` misses them. Their public slug is ``generate_slug(name)``
+        (see :func:`_project_catalog_item`); match catalog items on that.
+        """
+        catalog_repo = self._get_catalog_repository()
+        for item in await catalog_repo.list_items():
+            if generate_slug(item.name) == slug:
+                return _project_catalog_item(item)
+        return None
 
     async def get_with_skills(self, id: UUID) -> Agent | None:
         """Get an agent with its skills loaded."""

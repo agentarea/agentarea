@@ -14,6 +14,7 @@ every tenant reads the same built-in skill definitions with no workspace filter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from agentarea_common.auth.context import UserContext
@@ -32,6 +33,8 @@ class CatalogSkillItem:
     spec: dict[str, Any]
     installed_entity_id: str | None
     installed_version: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class CatalogSkillRepository:
@@ -45,7 +48,8 @@ class CatalogSkillRepository:
         """List all catalog skill items (global catalog, no workspace filter)."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "ri.installed_entity_id, ri.installed_version "
+            "ri.installed_entity_id, ri.installed_version, "
+            "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'skills' "
@@ -58,7 +62,8 @@ class CatalogSkillRepository:
         """Get a single catalog skill item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "ri.installed_entity_id, ri.installed_version "
+            "ri.installed_entity_id, ri.installed_version, "
+            "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "WHERE r.registry_type = 'skills' "
@@ -83,6 +88,7 @@ class CatalogSkillRepository:
     @staticmethod
     def _row_to_item(row: Any) -> CatalogSkillItem:
         spec = row.spec if isinstance(row.spec, dict) else {}
+        created_at = row.created_at or row.updated_at or datetime.utcnow()
         return CatalogSkillItem(
             id=str(row.id),
             name=row.name,
@@ -91,4 +97,6 @@ class CatalogSkillRepository:
             spec=spec,
             installed_entity_id=str(row.installed_entity_id) if row.installed_entity_id else None,
             installed_version=row.installed_version,
+            created_at=created_at,
+            updated_at=row.updated_at or created_at,
         )

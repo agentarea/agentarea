@@ -25,6 +25,9 @@ class TestValidTypes:
     def test_includes_agents(self):
         assert "agents" in VALID_REGISTRY_TYPES
 
+    def test_includes_bundles(self):
+        assert "bundles" in VALID_REGISTRY_TYPES
+
 
 class TestDetectType:
     @pytest.mark.parametrize(("key", "expected"), list(TYPE_BY_TOPLEVEL_KEY.items()))
@@ -236,6 +239,55 @@ class TestParseDefaultAgents:
         assert tools[0]["type"] == "mcp"
 
 
+class TestParseBundles:
+    def _bundle(self, **over):
+        base = {
+            "schema_version": "0.1.0",
+            "name": "productivity-lite",
+            "display_name": "Productivity Lite",
+            "description": "A lightweight assistant.",
+            "metadata": {"category": "productivity", "capabilities": ["interactive"]},
+            "skills": [{"key": "s", "name": "S", "source_type": "content", "content": "# S"}],
+            "agents": [{"key": "a", "name": "A", "model": "gpt-4o", "skills": ["s"]}],
+        }
+        base.update(over)
+        return base
+
+    def test_basic_bundle(self):
+        items = RegistryService._parse_bundles({"bundles": [self._bundle()]})
+        assert len(items) == 1
+        item = items[0]
+        # external_id is the stable bundle name (idempotency key), not display_name.
+        assert item["external_id"] == "productivity-lite"
+        assert item["name"] == "Productivity Lite"
+        assert item["version"] == "0.1.0"
+        # The whole canonical Bundle is preserved as spec so install runs unchanged.
+        assert item["spec"]["agents"][0]["model"] == "gpt-4o"
+        assert item["spec"]["skills"][0]["content"] == "# S"
+
+    def test_name_used_when_no_display_name(self):
+        items = RegistryService._parse_bundles({"bundles": [self._bundle(display_name=None)]})
+        assert items[0]["name"] == "productivity-lite"
+
+    def test_tags_fall_back_to_capabilities(self):
+        items = RegistryService._parse_bundles({"bundles": [self._bundle()]})
+        assert items[0]["tags"] == ["interactive"]
+
+    def test_explicit_tags_win_over_capabilities(self):
+        items = RegistryService._parse_bundles({"bundles": [self._bundle(tags=["ops"])]})
+        assert items[0]["tags"] == ["ops"]
+
+    def test_skips_bundles_without_name(self):
+        data = {"bundles": [{"schema_version": "0.1.0"}, self._bundle()]}
+        items = RegistryService._parse_bundles(data)
+        assert len(items) == 1
+        assert items[0]["external_id"] == "productivity-lite"
+
+    def test_empty_when_no_bundles_key(self):
+        assert RegistryService._parse_bundles({}) == []
+        assert RegistryService._parse_bundles({"bundles": []}) == []
+
+
 class TestParseSourceDispatch:
     def test_dispatches_llm_providers(self):
         result = RegistryService._parse_source(
@@ -252,6 +304,12 @@ class TestParseSourceDispatch:
     def test_dispatches_agents(self):
         result = RegistryService._parse_source("agents", {"agents": [{"name": "A"}]})
         assert result[0]["name"] == "A"
+
+    def test_dispatches_bundles(self):
+        result = RegistryService._parse_source(
+            "bundles", {"bundles": [{"name": "b", "schema_version": "0.1.0"}]}
+        )
+        assert result[0]["external_id"] == "b"
 
     def test_unknown_type_raises(self):
         import pytest

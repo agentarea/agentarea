@@ -3,14 +3,13 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
+from agentarea_common.testing.flows import MainFlow
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
 )
-
 
 SAMPLE_SPEC = {
     "openapi": "3.0.0",
@@ -33,6 +32,7 @@ class TestDiscoverTools:
         mock_factory.create_repository.return_value = AsyncMock()
         return OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
 
+    @pytest.mark.flow(MainFlow.OPENAPI_CONNECTIONS)
     @pytest.mark.asyncio
     async def test_discover_from_spec_content(self, service):
         """If connection has spec_content, parse it directly."""

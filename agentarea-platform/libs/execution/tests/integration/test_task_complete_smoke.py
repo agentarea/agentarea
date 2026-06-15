@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from agentarea_common.testing.flows import MainFlow
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -25,7 +26,6 @@ from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
-
 
 # Capture what the LLM actually receives
 captured_llm_requests: list[dict] = []
@@ -147,6 +147,7 @@ ALL_ACTIVITIES = [
 ]
 
 
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
 class TestTaskCompleteSmokeTest:
     @pytest.mark.asyncio
     async def test_simple_hello_completes(self):
@@ -211,7 +212,7 @@ class TestTaskCompleteSmokeTest:
                         f"completion MUST be in tools sent to LLM. Got: {tool_names}"
                     )
 
-                    print(f"\n Workflow completed successfully")
+                    print("\n Workflow completed successfully")
                     print(f"   Response: {result.final_response}")
                     print(f"   Iterations: {result.reasoning_iterations_used}")
                     print(f"   Tools available to LLM: {tool_names}")

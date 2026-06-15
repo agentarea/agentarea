@@ -63,6 +63,13 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    installAgent: async (agentId: string) => {
+      const result = await client.POST("/v1/agents/{agent_id}/install", {
+        params: { path: { agent_id: agentId } },
+      });
+      return withStatus(result);
+    },
+
     updateAgent: async (
       agentId: string,
       agent: components["schemas"]["AgentUpdate"]
@@ -805,25 +812,33 @@ export function createApiClient(client: Client) {
     },
 
     // Skills API
-    listSkills: async (options: {
-      page?: number;
-      page_size?: number;
-      search?: string;
-      source_type?: string;
-      has_files?: boolean;
-      network_scope?: string;
-      from_registry?: boolean;
-      paginated?: boolean;
-    } = {}) => {
+    listSkills: async (
+      options: {
+        page?: number;
+        page_size?: number;
+        search?: string;
+        source_type?: string;
+        has_files?: boolean;
+        network_scope?: string;
+        from_registry?: boolean;
+        paginated?: boolean;
+      } = {}
+    ) => {
       const pageSize = options.page_size || (options.paginated ? 50 : 100);
       const query = (page: number) => ({
         page,
         page_size: pageSize,
         ...(options.search ? { search: options.search } : {}),
         ...(options.source_type ? { source_type: options.source_type } : {}),
-        ...(options.has_files !== undefined ? { has_files: options.has_files } : {}),
-        ...(options.network_scope ? { network_scope: options.network_scope } : {}),
-        ...(options.from_registry !== undefined ? { from_registry: options.from_registry } : {}),
+        ...(options.has_files !== undefined
+          ? { has_files: options.has_files }
+          : {}),
+        ...(options.network_scope
+          ? { network_scope: options.network_scope }
+          : {}),
+        ...(options.from_registry !== undefined
+          ? { from_registry: options.from_registry }
+          : {}),
       });
 
       const { data, error } = await client.GET("/v1/skills" as any, {
@@ -852,7 +867,9 @@ export function createApiClient(client: Client) {
         }
 
         const nextData = next.data as any;
-        const nextItems = Array.isArray(nextData) ? nextData : nextData?.items || [];
+        const nextItems = Array.isArray(nextData)
+          ? nextData
+          : nextData?.items || [];
         allItems.push(...nextItems);
         hasNext = !Array.isArray(nextData) && Boolean(nextData?.has_next);
       }
@@ -929,6 +946,14 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.PUT(`/v1/skills/${skillId}` as any, {
         body: skill,
       });
+      return { data, error };
+    },
+
+    installSkill: async (skillId: string) => {
+      const { data, error } = await client.POST(
+        `/v1/skills/${skillId}/install` as any,
+        {}
+      );
       return { data, error };
     },
 
@@ -1588,9 +1613,12 @@ export function createApiClient(client: Client) {
     },
 
     workspaceFileHistory: async (filePath: string) => {
-      const { data, error } = await client.GET("/v1/files/history" as any, {
-        params: { query: { path: filePath } },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/files/history" as any,
+        {
+          params: { query: { path: filePath } },
+        } as any
+      );
       return { data, error };
     },
 
@@ -1714,9 +1742,12 @@ export function createApiClient(client: Client) {
       target?: string;
       enabled?: boolean;
     }) => {
-      const { data, error } = await client.GET("/v1/policies" as any, {
-        params: { query: params },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/policies" as any,
+        {
+          params: { query: params },
+        } as any
+      );
       return { data, error };
     },
 
@@ -1730,9 +1761,12 @@ export function createApiClient(client: Client) {
       enabled?: boolean;
       priority?: number;
     }) => {
-      const { data, error } = await client.POST("/v1/policies" as any, {
-        body: body as any,
-      } as any);
+      const { data, error } = await client.POST(
+        "/v1/policies" as any,
+        {
+          body: body as any,
+        } as any
+      );
       return { data, error };
     },
 
@@ -1784,7 +1818,10 @@ export function createApiClient(client: Client) {
 
     // ReBAC Access Explorer API
     getRebacGraph: async () => {
-      const { data, error } = await client.GET("/v1/rebac/graph" as any, {} as any);
+      const { data, error } = await client.GET(
+        "/v1/rebac/graph" as any,
+        {} as any
+      );
       return { data, error };
     },
 
@@ -1793,9 +1830,12 @@ export function createApiClient(client: Client) {
       relation?: string;
       subject?: string;
     }) => {
-      const { data, error } = await client.GET("/v1/rebac/tuples" as any, {
-        params: { query: params },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/rebac/tuples" as any,
+        {
+          params: { query: params },
+        } as any
+      );
       return { data, error };
     },
 

@@ -16,13 +16,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -145,23 +138,24 @@ export default function MembersClient({
   };
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="space-y-8">
       {/* Members */}
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1">
-            <CardTitle className="text-base">
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-medium">
               {t("membersTitle")} ({members.length})
-            </CardTitle>
-            <CardDescription>{t("membersDescription")}</CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t("membersDescription")}
+            </p>
           </div>
           <Button size="sm" className="gap-1.5" onClick={openInvite}>
             <UserPlus className="h-4 w-4" />
             {t("invitePeople")}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {members.length === 0 ? (
+        </div>
+        {members.length === 0 ? (
             <div className="flex justify-center py-6">
               <EmptyState
                 icons={[Users]}
@@ -219,19 +213,19 @@ export default function MembersClient({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
       {/* Pending invitations */}
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-base">
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-medium">
             {t("invitationsTitle")} ({invitations.length})
-          </CardTitle>
-          <CardDescription>{t("invitationsDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {invitations.length === 0 ? (
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("invitationsDescription")}
+          </p>
+        </div>
+        {invitations.length === 0 ? (
             <p className="py-4 text-sm text-muted-foreground">
               {t("noInvitations")}
             </p>
@@ -288,8 +282,7 @@ export default function MembersClient({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
       {/* Invite dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

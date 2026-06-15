@@ -19,6 +19,9 @@ export default async function AgentLayout({ params, children }: Props) {
   // Keep all in-page navigation on the slug when available, so opening by slug
   // doesn't bounce back to the id once a tab/breadcrumb is clicked.
   const agentRef = agent.slug || agent.id;
+  // Catalog (built-in, not-yet-forked) agents have no tasks/settings/payments to
+  // operate on — only the read-only preview. Hide the operational tabs.
+  const isCatalog = Boolean((agent as { is_catalog?: boolean }).is_catalog);
 
   return (
     <ChatProvider>
@@ -31,7 +34,9 @@ export default async function AgentLayout({ params, children }: Props) {
           controls: <AgentHeaderControls />,
         }}
         className="p-0 h-full"
-        subheader={<AgentHeaderTabs agentId={agentRef} />}
+        subheader={
+          isCatalog ? undefined : <AgentHeaderTabs agentId={agentRef} />
+        }
       >
         {children}
       </ContentBlock>

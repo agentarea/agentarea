@@ -113,6 +113,7 @@
     "build": "Сборка",
     "govern": "Управление",
     "connections": "Соединения",
+    "explore": "Каталог",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
     "apiKeys": "API Ключи",
@@ -356,6 +357,8 @@
   },
   "AgentsPage": {
     "createAgent": "Создать агента",
+    "yourAgents": "Ваши агенты",
+    "catalogAgents": "Каталог",
     "noToolsConf": "Нет настроенных инструментов",
     "name": "Имя",
     "status": "Статус",
@@ -466,7 +469,8 @@
       "noConfigurationsYet": "Нет конфигураций",
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
       "createConfiguration": "Создать конфигурацию"
-    }
+    },
+    "browseCatalog": "Открыть каталог"
   },
   "MCPServersPage": {
     "title": "MCP серверы",
@@ -874,11 +878,13 @@
       "skillNotFound": "Навык не найден",
       "loadFileContent": "Не удалось загрузить контент файла",
       "updateSkill": "Не удалось обновить навык",
-      "deleteSkill": "Не удалось удалить навык"
+      "deleteSkill": "Не удалось удалить навык",
+      "installSkill": "Не удалось добавить навык в воркспейс"
     },
     "success": {
       "skillUpdated": "Навык успешно обновлен",
-      "skillDeleted": "Навык успешно удален"
+      "skillDeleted": "Навык успешно удален",
+      "skillInstalled": "Навык добавлен в воркспейс"
     },
     "confirm": {
       "deleteSkillTitle": "Удалить навык",
@@ -909,7 +915,10 @@
       "sourceCode": "Исходный код",
       "configuration": "Конфигурация",
       "skillConfiguration": "Конфигурация навыка",
-      "editable": "Редактируемый"
+      "editable": "Редактируемый",
+      "catalogTemplate": "Шаблон из каталога",
+      "customize": "Настроить",
+      "installing": "Добавляю..."
     },
     "source": {
       "github": "GitHub",
@@ -1027,7 +1036,8 @@
       "created": "Создано"
     },
     "emptyHere": "Здесь нет навыков",
-    "emptyHereDescription": "Под этот вид пока ничего не подходит."
+    "emptyHereDescription": "Под этот вид пока ничего не подходит.",
+    "browseCatalog": "Открыть каталог"
   },
   "TaskInfoPanel": {
     "agentTask": "Задача агента",

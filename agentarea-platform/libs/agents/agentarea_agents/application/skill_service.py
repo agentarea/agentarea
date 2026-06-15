@@ -67,6 +67,8 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         s3_path=spec.get("s3_path"),
         network_scope=spec.get("network_scope") or "private",
         registry_item_id=item.id,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
     # Read-only catalog projection markers consumed by the API DTO.
     skill.is_catalog = True  # type: ignore[attr-defined]
@@ -592,6 +594,26 @@ class SkillService:
             skill.id,
         )
         return skill
+
+    async def install_catalog_skill(self, skill_id: UUID | str) -> Skill | None:
+        """Materialize a catalog skill into the workspace.
+
+        Idempotent: if the id is already a tenant skill, returns it. If this
+        workspace has already forked the catalog item, returns that copy.
+        """
+        existing = await self.get(skill_id)
+        if existing is not None:
+            return existing
+
+        item = await self._get_catalog_repository().get_item(str(skill_id))
+        if item is None:
+            return None
+
+        forked = await self._get_repository().get_by_registry_item_id(item.id)
+        if forked is not None:
+            return forked
+
+        return await self._fork_catalog_skill(item)
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.

@@ -106,12 +106,38 @@ export default function AgentsList({
     );
   }
 
-  // Render grid view (default)
-  return (
+  // Render grid view (default). Owned agents and not-yet-installed catalog
+  // templates are shown inline but in separate, clearly labelled sections.
+  const ownedAgents = initialAgents.filter((a) => !a.is_catalog);
+  const catalogAgents = initialAgents.filter((a) => a.is_catalog);
+
+  const grid = (agents: AgentWithToolIcons[]) => (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-      {initialAgents.map((agent) => (
+      {agents.map((agent) => (
         <AgentCard key={agent.id} agent={agent} />
       ))}
+    </div>
+  );
+
+  // Nothing to separate — keep the flat grid.
+  if (catalogAgents.length === 0 || ownedAgents.length === 0) {
+    return grid(initialAgents);
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("yourAgents") || "Your agents"}
+        </h2>
+        {grid(ownedAgents)}
+      </section>
+      <section>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("catalogAgents") || "Catalog"}
+        </h2>
+        {grid(catalogAgents)}
+      </section>
     </div>
   );
 }

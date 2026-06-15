@@ -42,6 +42,7 @@ import {
   getSkillContentAction as getSkillContent,
   getSkillFileAction as getSkillFile,
   getSkillFilesAction as getSkillFiles,
+  installSkillAction as installSkill,
   listSkillMembersAction as listSkillMembers,
   listSkillsAction as listSkills,
   removeSkillMemberAction as removeSkillMember,
@@ -87,6 +88,7 @@ export default function SkillDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -221,7 +223,7 @@ export default function SkillDetailPage() {
         updateData.content = editContent;
       }
 
-      const { error } = await updateSkill(skillId, updateData);
+      const { data, error } = await updateSkill(skillId, updateData);
 
       if (error) {
         toast({
@@ -229,6 +231,17 @@ export default function SkillDetailPage() {
           description: t("error.updateSkill"),
           variant: "destructive",
         });
+        return;
+      }
+
+      const updatedSkill = data as Skill | undefined;
+      if (updatedSkill?.id && updatedSkill.id !== skillId) {
+        toast({
+          title: t("success.skillUpdated"),
+          description: t("success.skillUpdated"),
+        });
+        router.replace(`/skills/${updatedSkill.id}`);
+        router.refresh();
         return;
       }
 
@@ -252,6 +265,34 @@ export default function SkillDetailPage() {
       setIsEditing(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleInstallCatalogSkill = async () => {
+    if (!skill) return;
+
+    setInstalling(true);
+    try {
+      const { data, error } = await installSkill(skillId);
+      const installed = data as Skill | undefined;
+
+      if (error || !installed?.id) {
+        toast({
+          title: t("error.installSkill"),
+          description: t("error.installSkill"),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: t("success.skillInstalled"),
+        description: t("success.skillInstalled"),
+      });
+      router.replace(`/skills/${installed.id}`);
+      router.refresh();
+    } finally {
+      setInstalling(false);
     }
   };
 
@@ -341,8 +382,10 @@ export default function SkillDetailPage() {
     );
   }
 
+  const isCatalog = Boolean(skill.is_catalog);
   const isContentEditable = skill.source_type === "content";
-  const canEditFile = isContentEditable && selectedFile === "SKILL.md";
+  const canEditFile =
+    !isCatalog && isContentEditable && selectedFile === "SKILL.md";
   const editModeTab = isEditing ? "edit" : "view";
 
   // Parse frontmatter for display
@@ -359,29 +402,48 @@ export default function SkillDetailPage() {
         ],
         controls: (
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-            >
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {tDetail("save")}
-            </Button>
-            <DeleteButton
-              size="xs"
-              itemId={skillId}
-              itemName={skill.name}
-              onDelete={deleteSkill}
-              redirectPath="/skills"
-              title={t("confirm.deleteSkillTitle") || tDetail("delete")}
-              description={t("confirm.deleteSkill", { skillName: skill.name })}
-              successMessage={t("success.skillDeleted")}
-            />
+            {isCatalog ? (
+              <Button
+                size="xs"
+                onClick={handleInstallCatalogSkill}
+                disabled={installing}
+              >
+                {installing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {installing ? tDetail("installing") : tDetail("customize")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={handleSave}
+                  disabled={!hasChanges || saving}
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  {tDetail("save")}
+                </Button>
+                <DeleteButton
+                  size="xs"
+                  itemId={skillId}
+                  itemName={skill.name}
+                  onDelete={deleteSkill}
+                  redirectPath="/skills"
+                  title={t("confirm.deleteSkillTitle") || tDetail("delete")}
+                  description={t("confirm.deleteSkill", {
+                    skillName: skill.name,
+                  })}
+                  successMessage={t("success.skillDeleted")}
+                />
+              </>
+            )}
           </div>
         ),
       }}
@@ -396,7 +458,7 @@ export default function SkillDetailPage() {
                   {selectedFile || tDetail("selectFile")}
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  {hasChanges && (
+                  {hasChanges && !isCatalog && (
                     <Button
                       variant="outline"
                       size="xs"
@@ -410,6 +472,25 @@ export default function SkillDetailPage() {
                         <Save className="mr-2 h-4 w-4" />
                       )}
                       {tDetail("save")}
+                    </Button>
+                  )}
+
+                  {isCatalog && (
+                    <Button
+                      size="xs"
+                      className="border-border/70 bg-background/60 shadow-none hover:bg-muted/70"
+                      variant="outline"
+                      onClick={handleInstallCatalogSkill}
+                      disabled={installing}
+                    >
+                      {installing ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="mr-2 h-4 w-4" />
+                      )}
+                      {installing
+                        ? tDetail("installing")
+                        : tDetail("customize")}
                     </Button>
                   )}
 
@@ -508,47 +589,51 @@ export default function SkillDetailPage() {
       </div>
 
       {/* Child Skills Section */}
-      <div className="border-t px-6 py-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">
-            Child Skills ({childSkills.length})
-          </h3>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => setShowAddChildDialog(true)}
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add Child Skill
-          </Button>
-        </div>
-        {childSkills.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No child skills yet.</p>
-        ) : (
-          <ul className="space-y-1">
-            {childSkills.map((child: any) => (
-              <li
-                key={child.id}
-                className="flex items-center justify-between rounded border px-3 py-2 text-sm"
-              >
-                <span>{child.name}</span>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => handleRemoveChildSkill(child.id)}
-                  disabled={removingChildId === child.id}
+      {!isCatalog && (
+        <div className="border-t px-6 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">
+              Child Skills ({childSkills.length})
+            </h3>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => setShowAddChildDialog(true)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add Child Skill
+            </Button>
+          </div>
+          {childSkills.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No child skills yet.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {childSkills.map((child: any) => (
+                <li
+                  key={child.id}
+                  className="flex items-center justify-between rounded border px-3 py-2 text-sm"
                 >
-                  {removingChildId === child.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  )}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                  <span>{child.name}</span>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => handleRemoveChildSkill(child.id)}
+                    disabled={removingChildId === child.id}
+                  >
+                    {removingChildId === child.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    )}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Add Child Skill Dialog */}
       <Dialog open={showAddChildDialog} onOpenChange={setShowAddChildDialog}>
@@ -595,7 +680,6 @@ export default function SkillDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </ContentBlock>
   );
 }

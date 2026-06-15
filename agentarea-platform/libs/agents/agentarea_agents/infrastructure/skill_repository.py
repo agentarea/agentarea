@@ -54,6 +54,16 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_by_registry_item_id(self, registry_item_id: str) -> Skill | None:
+        """Get the workspace's tenant copy forked from a catalog item, if any."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.registry_item_id == registry_item_id)
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.
 

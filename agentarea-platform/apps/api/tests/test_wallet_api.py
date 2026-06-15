@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.wallet import ensure_agent_exists, get_wallet_service, router
+from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -70,6 +71,7 @@ AGENT_ID = str(uuid4())
 # ------------------------------------------------------------------
 
 
+@pytest.mark.flow(MainFlow.WALLET_PAYMENTS)
 class TestCreateWallet:
     def test_create_201(self, client, mock_service):
         mock_service.create_wallet.return_value = _mock_wallet()

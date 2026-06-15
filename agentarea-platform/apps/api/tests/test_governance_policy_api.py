@@ -16,6 +16,7 @@ from agentarea_api.api.v1.policies import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.base.models import BaseModel
+from agentarea_common.testing.flows import MainFlow
 from agentarea_governance.domain.policies import EffectivePolicy
 from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
 from agentarea_governance.infrastructure.orm import (
@@ -94,6 +95,7 @@ def _cap_request(amount: str = "25.00") -> PolicyRuleCreateRequest:
     )
 
 
+@pytest.mark.flow(MainFlow.GOVERNANCE_POLICIES)
 def test_create_request_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         PolicyRuleCreateRequest.model_validate(

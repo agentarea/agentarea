@@ -3,22 +3,17 @@ import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
-import { MCPSpecsSection } from "./MCPSpecsSection";
 import { MyMCPsSection } from "./MyMCPsSection";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 
 interface MCPServersContentProps {
   searchQuery?: string;
   viewMode?: string;
-  typeFilter?: string;
-  categoryFilter?: string;
 }
 
 export default async function MCPServersContent({
   searchQuery = "",
   viewMode = "grid",
-  typeFilter = "",
-  categoryFilter = "",
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
@@ -38,38 +33,27 @@ export default async function MCPServersContent({
   const serversData = serversResponse.data as any;
   const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
 
-  // Render both sections
+  // Only your configured connections live here — discovery is in Explore.
   return (
-    <div className="space-y-8">
-      {/* My Connections Section — MCP instances + OpenAPI connections */}
-      <div id="my-connections">
-        <Suspense
-          fallback={
-            <div className="py-1">
-              <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-                {t("myConnections")}
-              </h4>
-              <div className="flex h-32 items-center justify-center">
-                <LoadingSpinner />
-              </div>
+    <div id="my-connections">
+      <Suspense
+        fallback={
+          <div className="py-1">
+            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+              {t("myConnections")}
+            </h4>
+            <div className="flex h-32 items-center justify-center">
+              <LoadingSpinner />
             </div>
-          }
-        >
-          <MyConnectionsSectionServer
-            searchQuery={searchQuery}
-            viewMode={viewMode}
-            mcpServers={mcpServers}
-          />
-        </Suspense>
-      </div>
-
-      {/* Browse MCP Specifications Section — client-side with infinite scroll */}
-      <div id="specs-section">
-        <MCPSpecsSection
-          searchParams={{ search: searchQuery, type: typeFilter, category: categoryFilter }}
+          </div>
+        }
+      >
+        <MyConnectionsSectionServer
+          searchQuery={searchQuery}
           viewMode={viewMode}
+          mcpServers={mcpServers}
         />
-      </div>
+      </Suspense>
     </div>
   );
 }

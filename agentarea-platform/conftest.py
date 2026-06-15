@@ -186,3 +186,17 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "asyncio: mark test as async")
     config.addinivalue_line("markers", "integration: mark test as integration test")
     config.addinivalue_line("markers", "unit: mark test as unit test")
+    config.addinivalue_line(
+        "markers", "flow(name): canonical main-flow test (agentarea_common.testing.flows)"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Record which main flows are exercised, for the flow-registry guard."""
+    from agentarea_common.testing.flows import COVERED_FLOWS
+
+    for item in items:
+        for marker in item.iter_markers(name="flow"):
+            if marker.args:
+                flow = marker.args[0]
+                COVERED_FLOWS.add(getattr(flow, "value", flow))

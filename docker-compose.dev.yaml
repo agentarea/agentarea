@@ -189,6 +189,9 @@ services:
 
   db:
     image: postgres:18
+    # One Postgres is shared by the app, Temporal, and the Ory stack — each keeps
+    # a warm idle pool, so the default max_connections=100 is exhausted. Raise it.
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

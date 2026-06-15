@@ -1,8 +1,11 @@
 from types import SimpleNamespace
 
+import pytest
 from agentarea_api.api.v1.mcp_oauth_connect import _resolve_instance_remote_url
+from agentarea_common.testing.flows import MainFlow
 
 
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
 def test_resolve_instance_remote_url_uses_instance_legacy_endpoint_url():
     instance = SimpleNamespace(json_spec={"endpoint_url": "https://instance.example/mcp"})
     server_spec = SimpleNamespace(remote_url="https://server.example/mcp", json_spec={})
