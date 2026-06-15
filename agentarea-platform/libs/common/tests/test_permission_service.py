@@ -1,6 +1,6 @@
 import pytest
 from agentarea_common.auth.permission import PermissionService, require_permission
-from agentarea_common.auth.simple_permission import SimplePermissionService
+from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
 from agentarea_common.di.container import get_container
 
 
@@ -12,15 +12,15 @@ def clean_container():
 
 
 @pytest.mark.asyncio
-async def test_simple_permission_always_allows():
-    svc = SimplePermissionService()
+async def test_workspace_permission_always_allows():
+    svc = WorkspaceScopedPermissionService()
     result = await svc.check("user-1", "edit", "agent", "agent-123")
     assert result is True
 
 
 @pytest.mark.asyncio
-async def test_simple_permission_allows_system_entity_mutation():
-    svc = SimplePermissionService()
+async def test_workspace_permission_allows_system_entity_mutation():
+    svc = WorkspaceScopedPermissionService()
     result = await svc.check("user-1", "delete", "mcp_server", "system-mcp-123")
     assert result is True
 
@@ -28,7 +28,7 @@ async def test_simple_permission_allows_system_entity_mutation():
 @pytest.mark.asyncio
 async def test_require_permission_passes_when_allowed():
     container = get_container()
-    container.register_singleton(PermissionService, SimplePermissionService())
+    container.register_singleton(PermissionService, WorkspaceScopedPermissionService())
     # Should not raise
     await require_permission("edit", "agent", "agent-123", "user-1")
 
@@ -36,6 +36,7 @@ async def test_require_permission_passes_when_allowed():
 @pytest.mark.asyncio
 async def test_require_permission_raises_403_when_denied():
     from unittest.mock import AsyncMock
+
     from fastapi import HTTPException
 
     mock_svc = AsyncMock(spec=PermissionService)

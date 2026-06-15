@@ -8,7 +8,7 @@ class KetoSettings(BaseAppSettings):
 
     Powers the access explorer's relationship graph, tuple management and
     permission checks. When ``KETO_ENABLED`` is false the OSS default
-    ``SimplePermissionService`` (allow-all) stays in place and the rebac API
+    ``WorkspaceScopedPermissionService`` (allow-all) stays in place and the rebac API
     surfaces an empty/disabled graph.
     """
 

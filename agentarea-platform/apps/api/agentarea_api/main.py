@@ -35,10 +35,10 @@ async def initialize_services():
         # Discover extensions and wire DI
         from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.auth.simple_permission import SimplePermissionService
         from agentarea_common.auth.workspace_authorization import (
             WorkspaceScopedAuthorizationService,
         )
+        from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
         from agentarea_common.config.app import get_app_settings
         from agentarea_common.extensions import discover_extensions
         from agentarea_common.extensions.registry import ExtensionRegistry
@@ -74,7 +74,7 @@ async def initialize_services():
 
             register_singleton(PermissionService, KetoPermissionService(keto_client))
         else:
-            register_singleton(PermissionService, SimplePermissionService())
+            register_singleton(PermissionService, WorkspaceScopedPermissionService())
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:

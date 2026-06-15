@@ -392,8 +392,6 @@
   },
   "AgentsPage": {
     "createAgent": "Create agent",
-    "yourAgents": "Your agents",
-    "catalogAgents": "Catalog",
     "noToolsConf": "No tools configured",
     "name": "Name",
     "status": "Status",

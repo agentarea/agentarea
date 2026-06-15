@@ -1,7 +1,7 @@
 # tests/unit/test_extension_wiring.py
 import pytest
 from agentarea_common.auth.permission import PermissionService
-from agentarea_common.auth.simple_permission import SimplePermissionService
+from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
 from agentarea_common.di.container import get_container
 from agentarea_common.extensions.registry import ExtensionRegistry
 from agentarea_common.features.service import DeploymentMode, FeatureService
@@ -34,14 +34,14 @@ def wire_di(deployment_mode: str = "oss"):
     if perm_factory:
         container.register_factory(PermissionService, perm_factory)
     else:
-        container.register_singleton(PermissionService, SimplePermissionService())
+        container.register_singleton(PermissionService, WorkspaceScopedPermissionService())
 
 
-def test_oss_wiring_uses_simple_permission():
+def test_oss_wiring_uses_workspace_permission():
     wire_di("oss")
     container = get_container()
     perm = container.get(PermissionService)
-    assert isinstance(perm, SimplePermissionService)
+    assert isinstance(perm, WorkspaceScopedPermissionService)
 
 
 def test_oss_wiring_registers_feature_service():

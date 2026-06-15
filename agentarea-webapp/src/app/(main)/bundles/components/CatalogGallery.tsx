@@ -742,6 +742,24 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
     }
   }
 
+  async function installAgent() {
+    setState({ phase: "loading" });
+    try {
+      // entry.id is the registry_item id; the endpoint forks a tenant copy
+      // (copy-on-write) and is idempotent if already installed.
+      const iRes = await fetch(`/api/proxy/v1/agents/${entry.id}/install`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await iRes.json();
+      if (!iRes.ok)
+        throw new Error(result?.detail?.message ?? result?.detail ?? "Install failed");
+      setState({ phase: "done", created: 1 });
+    } catch (e) {
+      setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
+    }
+  }
+
   return (
     <div className="space-y-6">
       <button
@@ -830,10 +848,9 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             <Inside icon={Bot} label="Model" rows={entry.meta} />
           )}
           {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
-          {(entry.type === "agents" || entry.type === "skills") && (
+          {entry.type === "skills" && (
             <p className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-xs text-muted-foreground">
-              Adding {entry.type === "agents" ? "a catalog agent" : "a skill"} to your workspace is
-              coming next.
+              Adding a skill to your workspace is coming next.
             </p>
           )}
 
@@ -855,7 +872,9 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
           {state.phase === "done" && (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Installed — {state.created} entities created.
+              {entry.type === "agents"
+                ? "Added to your workspace — it's now an editable copy you own."
+                : `Installed — ${state.created} entities created.`}
             </div>
           )}
           <div className="flex flex-wrap gap-2 pt-2">
@@ -881,6 +900,21 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
                   Connect
                 </Link>
               </Button>
+            ) : entry.type === "agents" ? (
+              state.phase === "done" ? (
+                <Button asChild>
+                  <Link href="/agents">Go to Agents</Link>
+                </Button>
+              ) : (
+                <Button onClick={installAgent} isLoading={state.phase === "loading"}>
+                  {state.phase !== "loading" && (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Add to workspace
+                    </>
+                  )}
+                </Button>
+              )
             ) : (
               <Button variant="outline" disabled>
                 Add to workspace (soon)

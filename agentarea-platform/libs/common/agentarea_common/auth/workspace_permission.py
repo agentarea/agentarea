@@ -3,7 +3,7 @@
 from .permission import PermissionService
 
 
-class SimplePermissionService(PermissionService):
+class WorkspaceScopedPermissionService(PermissionService):
     """Workspace-scoped permission checks. No external dependencies.
 
     In OSS mode, all operations are allowed. Workspace isolation

@@ -114,7 +114,7 @@ class DataToolset(Toolset):
         )
 
 
-class SimpleToolset(Toolset):
+class EchoToolset(Toolset):
     """A simple tool with a single method to demonstrate single-method tools."""
 
     @tool_method
@@ -154,10 +154,10 @@ async def main():
     result = await data_toolset.execute(action="get_details", item_id="123")
     print(f"Item details: {result['result']}")
 
-    print("\n=== SimpleToolset Example ===")
-    simple_toolset = SimpleToolset()
+    print("\n=== EchoToolset Example ===")
+    echo_toolset = EchoToolset()
 
-    result = await simple_toolset.execute(action="echo", message="Hello, World!", repeat=1)
+    result = await echo_toolset.execute(action="echo", message="Hello, World!", repeat=1)
     print(f"Echo result: {result['result']}")
 
     print("\n=== FileToolset Example ===")

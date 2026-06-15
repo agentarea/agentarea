@@ -69,11 +69,6 @@ export default function AgentCard({ agent }: AgentCardProps) {
                         A2UI
                       </span>
                     )}
-                    {agent.is_catalog && (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                        Catalog
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

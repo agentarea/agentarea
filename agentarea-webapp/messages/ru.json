@@ -357,8 +357,6 @@
   },
   "AgentsPage": {
     "createAgent": "Создать агента",
-    "yourAgents": "Ваши агенты",
-    "catalogAgents": "Каталог",
     "noToolsConf": "Нет настроенных инструментов",
     "name": "Имя",
     "status": "Статус",
