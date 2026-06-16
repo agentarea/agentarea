@@ -76,20 +76,27 @@ class Project(BaseModel, WorkspaceScopedMixin):
     )
 
     # Relationships
-    skills: Mapped[list] = relationship(
+    # NOTE: keep ``uselist=True`` explicit. ``Mapped[list]`` without an element
+    # type makes SQLAlchemy 2.0 infer ``uselist=False`` (a scalar), which makes
+    # these relationships load a single object instead of a collection and breaks
+    # response serialization once an association exists.
+    skills: Mapped[list["Skill"]] = relationship(  # noqa: F821
         "Skill",
         secondary=project_skills,
         lazy="selectin",
+        uselist=True,
     )
-    mcp_instances: Mapped[list] = relationship(
+    mcp_instances: Mapped[list["MCPServerInstance"]] = relationship(  # noqa: F821
         "MCPServerInstance",
         secondary=project_mcp_instances,
         lazy="selectin",
+        uselist=True,
     )
-    agents: Mapped[list] = relationship(
+    agents: Mapped[list["Agent"]] = relationship(  # noqa: F821
         "Agent",
         secondary=project_agents,
         lazy="selectin",
+        uselist=True,
     )
     children: Mapped[list["Project"]] = relationship(
         "Project",

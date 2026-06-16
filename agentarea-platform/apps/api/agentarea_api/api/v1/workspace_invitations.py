@@ -105,6 +105,8 @@ class MemberResponse(BaseModel):
     id: UUID
     workspace_id: str
     user_id: str
+    email: str | None = None
+    display_name: str | None = None
     joined_at: datetime
     invitation_id: UUID | None
 
@@ -125,14 +127,43 @@ def _invitation_to_response(invitation: WorkspaceInvitation) -> InvitationRespon
     )
 
 
-def _membership_to_response(membership: WorkspaceMembership) -> MemberResponse:
+def _membership_to_response(
+    membership: WorkspaceMembership,
+    invitation: WorkspaceInvitation | None = None,
+) -> MemberResponse:
+    email = invitation.email if invitation else None
     return MemberResponse(
         id=membership.id,
         workspace_id=membership.workspace_id,
         user_id=membership.user_id,
+        email=email,
+        display_name=email,
         joined_at=membership.created_at,
         invitation_id=UUID(str(membership.invitation_id)) if membership.invitation_id else None,
     )
+
+
+async def _members_to_response(
+    session: AsyncSession,
+    memberships: list[WorkspaceMembership],
+) -> list[MemberResponse]:
+    invitation_repo = WorkspaceInvitationRepository(session)
+    invitation_by_id: dict[str, WorkspaceInvitation] = {}
+
+    for membership in memberships:
+        if not membership.invitation_id:
+            continue
+        invitation = await invitation_repo.get_by_id(membership.invitation_id)
+        if invitation is not None:
+            invitation_by_id[str(invitation.id)] = invitation
+
+    return [
+        _membership_to_response(
+            membership,
+            invitation_by_id.get(str(membership.invitation_id)),
+        )
+        for membership in memberships
+    ]
 
 
 def _ensure_workspace_access(user: UserContextDep, workspace_id: str) -> None:
@@ -264,11 +295,12 @@ async def accept_invitation(
 async def list_members(
     workspace_id: str,
     user: UserContextDep,
+    session: SessionDep,
     service: MembershipServiceDep,
 ):
     _ensure_workspace_access(user, workspace_id)
     members = await service.list_members(workspace_id)
-    return [_membership_to_response(m) for m in members]
+    return await _members_to_response(session, members)
 
 
 @router.delete(

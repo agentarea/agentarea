@@ -57,6 +57,9 @@ public_v1_router.include_router(mcp_oauth_connect.public_router)
 # Trigger execute endpoint (public — called by internal Go event-service)
 public_v1_router.include_router(triggers.public_router)
 
+# A2A Agent Card discovery is public by protocol; execution RPC remains protected below.
+public_v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
+
 # Webhook receiver is mounted directly on app (not under /v1) to avoid auth conflicts
 # See main.py: app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 
@@ -78,7 +81,6 @@ protected_v1_router.include_router(agents_tasks.global_tasks_router)
 # A2A protocol routers - Have their own auth system
 # These are protected by A2A-specific dependencies (see a2a_auth.py)
 protected_v1_router.include_router(agents_a2a.router, prefix="/agents/{agent_id}")
-protected_v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
 
 # MCP server management - PROTECTED
 protected_v1_router.include_router(mcp_servers_specifications.router)
