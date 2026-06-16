@@ -52,7 +52,6 @@ export function CreateProjectForm() {
 
       const projectId = (data as any)?.id;
       router.push(projectId ? `/projects/${projectId}` : "/projects");
-      router.refresh();
     } catch {
       toast({
         title: "Failed to create project",

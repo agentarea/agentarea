@@ -22,16 +22,44 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
+import {
+  ALL,
+  FEATURED_TAG,
+  PAGE,
+  TYPE_KEYS,
+  arr,
+  normalize,
+  str,
+  type CatalogEntry,
+  type CatalogType,
+  type RawSpec,
+  type Registry,
+  type RegistryItem,
+} from "./catalog-data";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
-// just a tab. Each raw registry_item is normalized to a single CatalogEntry so
-// every card renders through the same component regardless of type.
+// just a tab. Each raw registry_item is normalized to a single CatalogEntry
+// (see catalog-data.ts, shared with the SSR page) so every card renders through
+// the same component regardless of type.
 
-type CatalogType = "bundles" | "agents" | "skills" | "mcp_servers";
+type LucideIcon = React.ComponentType<{ className?: string }>;
 
 const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
   { key: "bundles", label: "Bundles", icon: Blocks },
@@ -40,48 +68,13 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
   { key: "mcp_servers", label: "Connections", icon: Plug },
 ];
 
-const PAGE = 96;
-const ALL = "__all__";
-
-const TYPE_KEYS = ["bundles", "agents", "skills", "mcp_servers"] as const satisfies readonly CatalogType[];
 const VIEW_KEYS = ["grid", "table"] as const;
 
 type ViewMode = (typeof VIEW_KEYS)[number];
 
-type LucideIcon = React.ComponentType<{ className?: string }>;
-
-type RawSpec = Record<string, unknown>;
-type RegistryItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  version: string | null;
-  tags: string[];
-  spec: RawSpec;
-  installed_entity_id?: string | null;
-};
-type Registry = { id: string; name: string; registry_type: string };
-
-// Normalized shape every card/drawer renders from.
-type CatalogEntry = {
-  id: string;
-  type: CatalogType;
-  title: string;
-  description: string;
-  tags: string[];
-  category: string | null;
-  integrations: string[]; // brand monograms on the card (bundles: their MCPs)
-  meta: string[]; // small type-specific facts ("gpt-4o", "url", "3 agents")
-  iconUrl: string | null; // brand logo when the source provides one
-  featured: boolean; // hand-curated well-known entry (sorts first server-side)
-  verified: boolean; // official vendor connection with confirmed OAuth
-  installEntityId: string | null; // linked MCP spec id → existing create-from-spec page
-  spec: RawSpec;
-};
-
-const FEATURED_TAG = "featured";
-
-// ── Data ──
+// ── Data (client-side, for infinite-scroll "load more" only) ──
+// The first page is server-rendered (see explore/page.tsx); these helpers only
+// run for offset > 0 appends, so they can never race the initial paint.
 
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(`/api/proxy/${path}`, { headers: { Accept: "application/json" } });
@@ -100,100 +93,6 @@ async function fetchPage(type: CatalogType, offset: number): Promise<RegistryIte
   return lists.flat();
 }
 
-// ── Normalization (per type → CatalogEntry) ──
-
-function str(v: unknown): string | null {
-  return typeof v === "string" && v ? v : null;
-}
-function arr(v: unknown): Record<string, unknown>[] {
-  return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
-}
-
-// Best-effort logo URL from whatever the source preserved. MCP registry items
-// keep the full upstream server object under spec.raw_spec, whose `icons` is a
-// list of {src, mimeType}. Other types may carry a flat icon/metadata.icon.
-function extractIcon(spec: RawSpec): string | null {
-  const raw = (spec.raw_spec as RawSpec | undefined) ?? spec;
-  const icons = arr(raw.icons);
-  if (icons.length > 0) {
-    const src = str(icons[0].src);
-    if (src) return src;
-  }
-  const meta = spec.metadata as RawSpec | undefined;
-  return str(spec.icon) ?? str(spec.icon_url) ?? (meta ? str(meta.icon) : null);
-}
-
-function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
-  const spec = item.spec || {};
-  const tags = item.tags || [];
-  const base = {
-    id: item.id,
-    type,
-    description: item.description || "",
-    tags,
-    iconUrl: extractIcon(spec),
-    featured: tags.includes(FEATURED_TAG),
-    verified: false,
-    installEntityId: item.installed_entity_id ?? null,
-    spec,
-  };
-
-  if (type === "bundles") {
-    const meta = spec.metadata as RawSpec | undefined;
-    const counts: string[] = [];
-    const n = (k: string, label: string) => {
-      const c = arr(spec[k]).length;
-      if (c) counts.push(`${c} ${label}${c > 1 ? "s" : ""}`);
-    };
-    n("agents", "agent");
-    n("skills", "skill");
-    n("mcps", "connection");
-    n("automations", "automation");
-    return {
-      ...base,
-      title: str(spec.display_name) || str(spec.name) || item.name,
-      category: str(meta?.category),
-      integrations: arr(spec.mcps).map((m) => String(m.name ?? "")).filter(Boolean),
-      meta: counts,
-    };
-  }
-  if (type === "agents") {
-    return {
-      ...base,
-      title: item.name,
-      // Catalog agents carry domain tags (support, engineering, data…); the
-      // first one is a sensible category.
-      category: str(item.tags?.[0]),
-      integrations: [],
-      meta: [str(spec.model_id) ?? "model not set"],
-    };
-  }
-  if (type === "skills") {
-    // Skills encode their category as a "category:<x>" tag.
-    const catTag = (item.tags ?? []).find((t) => t.startsWith("category:"));
-    return {
-      ...base,
-      title: item.name,
-      category: catTag ? catTag.slice("category:".length) : null,
-      integrations: [],
-      meta: [str(spec.source_type) ?? "content"],
-    };
-  }
-  // mcp_servers (connections). Category comes from curated metadata when the
-  // source provides it (agentarea:category); transport (streamable-http,
-  // command, sse…) is "how it connects", not a category, so we don't facet on it.
-  const conn = str(spec.connection_type) ?? str(spec.transport) ?? "url";
-  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
-  return {
-    ...base,
-    title: item.name,
-    category: str(rawMeta?.["agentarea:category"]),
-    verified: rawMeta?.["agentarea:oauth_status"] === "verified",
-    integrations: [],
-    meta: [conn],
-  };
-}
-
 const TYPE_ICON: Record<CatalogType, LucideIcon> = {
   bundles: Blocks,
   agents: Bot,
@@ -203,18 +102,37 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
 
 // ── Component ──
 
-export default function CatalogGallery() {
+type CatalogGalleryProps = {
+  initialType: CatalogType;
+  initialEntries: CatalogEntry[];
+  initialHasMore: boolean;
+  initialError?: string | null;
+};
+
+export default function CatalogGallery({
+  initialType,
+  initialEntries,
+  initialHasMore,
+  initialError = null,
+}: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
+  // `type` uses shallow:false so switching tabs re-runs the Server Component
+  // (explore/page.tsx) and re-fetches the first page server-side. Combined with
+  // `key={type}` on this component, every type view starts from fresh SSR data —
+  // there is no client fetch on mount and no stale-response race across types.
   const [type, setType] = useQueryState(
     "type",
-    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
+    parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
+      shallow: false,
+    })
   );
-  const [entries, setEntries] = useState<CatalogEntry[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Seeded from the server-rendered first page (no initial client fetch / flash).
+  const [entries, setEntries] = useState<CatalogEntry[]>(initialEntries);
+  const [offset, setOffset] = useState(initialEntries.length);
+  const [loading, setLoading] = useState(false);
   const [more, setMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [error, setError] = useState<string | null>(initialError);
 
   const [query, setQuery] = useQueryState("q", parseAsString.withDefault(""));
   const [category, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
@@ -249,12 +167,6 @@ export default function CatalogGallery() {
     },
     []
   );
-
-  useEffect(() => {
-    setEntries([]);
-    setOffset(0);
-    void load(type, 0, false);
-  }, [type, load]);
 
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -697,6 +609,12 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   const tier = (str(rawMeta?.["agentarea:setup_tier"]) ?? "unverified") as SetupTier;
   const TypeIcon = TYPE_ICON[entry.type];
 
+  // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
+  // topical labels — keep them out of the chip row (surfaced elsewhere instead).
+  const topicalTags = entry.tags.filter(
+    (t) => !t.includes(":") && t !== FEATURED_TAG
+  );
+
   // Setup reuses the existing "create instance from spec" page — the catalog
   // never configures inline. Each catalog connection links to an MCP spec.
   const connectHref = entry.installEntityId
@@ -760,8 +678,18 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
     }
   }
 
+  const installing = state.phase === "loading";
+  // Skills use the dedicated <AddSkillToAgent> control (agent picker + install),
+  // so they're handled outside this generic install map.
+  const installable: Record<CatalogEntry["type"], (() => void) | null> = {
+    bundles: installBundle,
+    agents: installAgent,
+    skills: null,
+    mcp_servers: null,
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl space-y-8">
       <button
         onClick={onBack}
         className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -770,17 +698,18 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
         Back to catalog
       </button>
 
+      {/* header — icon, title/badges, description, primary action */}
       <div className="flex items-start gap-4">
         {entry.iconUrl ? (
           <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
         ) : (
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
             <TypeIcon className="h-5 w-5 text-zinc-400" />
           </span>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold">{entry.title}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
             {entry.verified && (
               <Badge variant="blue" size="sm" className="gap-1">
                 <BadgeCheck className="h-3 w-3" />
@@ -794,134 +723,116 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             )}
           </div>
           {entry.description && (
-            <p className="mt-1 text-sm text-muted-foreground">{entry.description}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {entry.description}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0">
+          {entry.type === "skills" ? (
+            <AddSkillToAgent skillId={entry.id} />
+          ) : state.phase === "done" ? (
+            <Button asChild variant="outline">
+              <Link href="/agents">Go to Agents</Link>
+            </Button>
+          ) : entry.type === "mcp_servers" ? (
+            <Button asChild>
+              <Link href={connectHref}>
+                <Plug className="h-4 w-4" />
+                Connect
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              onClick={() => installable[entry.type]?.()}
+              isLoading={installing}
+            >
+              {!installing && (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>
 
-      <div className="max-w-2xl space-y-5">
-          {entry.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {entry.tags.slice(0, 12).map((t) => (
-                <Badge key={t} variant="light" size="sm">
-                  {t}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {entry.type === "bundles" && (
-            <>
-              <Inside icon={Bot} label="Agents" rows={arr(spec.agents).map((a) => String(a.name ?? a.key))} />
-              <Inside icon={Puzzle} label="Skills" rows={arr(spec.skills).map((s) => String(s.name ?? s.key))} />
-              <Inside
-                icon={Plug}
-                label="Connections"
-                rows={arr(spec.mcps).map((m) => String(m.name ?? m.key))}
-                hint="Connected via OAuth after install"
-              />
-              <Inside
-                icon={Clock}
-                label="Automations"
-                rows={arr(spec.automations).map((a) => {
-                  const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.schedule);
-                  const name = String(a.name ?? a.key ?? "automation");
-                  return kind ? `${name} · ${kind}` : name;
-                })}
-                hint="Imported disabled — enable when ready"
-              />
-              <Inside
-                icon={ShieldCheck}
-                label="Policies"
-                rows={arr(spec.policies).map((p) => {
-                  const msg = str(p.message);
-                  if (msg) return msg;
-                  const effect = str(p.effect);
-                  const target = str(p.target);
-                  return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
-                })}
-                hint="Govern this bundle at runtime"
-              />
-            </>
-          )}
-          {entry.type === "agents" && (
-            <Inside icon={Bot} label="Model" rows={entry.meta} />
-          )}
-          {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
-          {entry.type === "skills" && (
-            <p className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-xs text-muted-foreground">
-              Adding a skill to your workspace is coming next.
-            </p>
-          )}
-
-          {state.phase === "needs_config" && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30">
-              Needs configuration — open it in the{" "}
-              <Link href="/bundles/import" className="underline">
-                importer
-              </Link>
-              .
-            </div>
-          )}
-          {state.phase === "error" && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              {state.message}
-            </div>
-          )}
-          {state.phase === "done" && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              {entry.type === "agents"
-                ? "Added to your workspace — it's now an editable copy you own."
-                : `Installed — ${state.created} entities created.`}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {entry.type === "bundles" ? (
-              state.phase === "done" ? (
-                <Button asChild>
-                  <Link href="/agents">Go to Agents</Link>
-                </Button>
-              ) : (
-                <Button onClick={installBundle} isLoading={state.phase === "loading"}>
-                  {state.phase !== "loading" && (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Use this bundle
-                    </>
-                  )}
-                </Button>
-              )
-            ) : entry.type === "mcp_servers" ? (
-              <Button asChild>
-                <Link href={connectHref}>
-                  <Plug className="h-4 w-4" />
-                  Connect
-                </Link>
-              </Button>
-            ) : entry.type === "agents" ? (
-              state.phase === "done" ? (
-                <Button asChild>
-                  <Link href="/agents">Go to Agents</Link>
-                </Button>
-              ) : (
-                <Button onClick={installAgent} isLoading={state.phase === "loading"}>
-                  {state.phase !== "loading" && (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Add to workspace
-                    </>
-                  )}
-                </Button>
-              )
-            ) : (
-              <Button variant="outline" disabled>
-                Add to workspace (soon)
-              </Button>
-            )}
-          </div>
+      {/* install feedback */}
+      {state.phase === "needs_config" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30">
+          Needs configuration — open it in the{" "}
+          <Link href="/bundles/import" className="underline">
+            importer
+          </Link>
+          .
         </div>
+      )}
+      {state.phase === "error" && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          {state.message}
+        </div>
+      )}
+      {state.phase === "done" && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {entry.type === "agents"
+            ? "Added to your workspace — it's now an editable copy you own."
+            : `Installed — ${state.created} entities created.`}
+        </div>
+      )}
+
+      {topicalTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {topicalTags.slice(0, 12).map((t) => (
+            <Badge key={t} variant="light" size="sm">
+              {t}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* details */}
+      <div className="space-y-5 border-t border-border/60 pt-6">
+        {entry.type === "bundles" && (
+          <>
+            <Inside icon={Bot} label="Agents" rows={arr(spec.agents).map((a) => String(a.name ?? a.key))} />
+            <Inside icon={Puzzle} label="Skills" rows={arr(spec.skills).map((s) => String(s.name ?? s.key))} />
+            <Inside
+              icon={Plug}
+              label="Connections"
+              rows={arr(spec.mcps).map((m) => String(m.name ?? m.key))}
+              hint="Connected via OAuth after install"
+            />
+            <Inside
+              icon={Clock}
+              label="Automations"
+              rows={arr(spec.automations).map((a) => {
+                const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.schedule);
+                const name = String(a.name ?? a.key ?? "automation");
+                return kind ? `${name} · ${kind}` : name;
+              })}
+              hint="Imported disabled — enable when ready"
+            />
+            <Inside
+              icon={ShieldCheck}
+              label="Policies"
+              rows={arr(spec.policies).map((p) => {
+                const msg = str(p.message);
+                if (msg) return msg;
+                const effect = str(p.effect);
+                const target = str(p.target);
+                return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
+              })}
+              hint="Govern this bundle at runtime"
+            />
+          </>
+        )}
+        {entry.type === "agents" && <Inside icon={Bot} label="Model" rows={entry.meta} />}
+        {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
+        {entry.type === "skills" && <SkillFacts entry={entry} />}
+      </div>
     </div>
   );
 }
@@ -997,6 +908,199 @@ function Inside({
         ))}
       </ul>
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+type AgentLite = { id: string; name: string };
+
+// Primary action for a catalog skill: attach it to an agent. A workspace skill
+// that isn't attached to any agent does nothing, so the high-intent path is
+// "add to agent" — fork the catalog skill into the workspace (copy-on-write,
+// idempotent) and merge it into the chosen agent's skill set. "Add to
+// workspace" stays as a quiet secondary for the library case.
+function AddSkillToAgent({ skillId }: { skillId: string }) {
+  const [open, setOpen] = useState(false);
+  const [agents, setAgents] = useState<AgentLite[] | null>(null);
+  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<{ label: string; href: string } | null>(null);
+
+  // Lazy-load the workspace agents the first time the picker opens.
+  useEffect(() => {
+    if (!open || agents !== null) return;
+    let active = true;
+    fetch("/api/proxy/v1/agents", { headers: { Accept: "application/json" } })
+      .then((r) => r.json())
+      .then(
+        (d) =>
+          active &&
+          setAgents(
+            Array.isArray(d) ? d.map((a) => ({ id: String(a.id), name: String(a.name) })) : []
+          )
+      )
+      .catch(() => active && setAgents([]));
+    return () => {
+      active = false;
+    };
+  }, [open, agents]);
+
+  // Materialize the catalog skill into the workspace; returns the tenant id.
+  async function fork(): Promise<string> {
+    const r = await fetch(`/api/proxy/v1/skills/${skillId}/install`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.detail?.message ?? d?.detail ?? "Install failed");
+    return String(d.id);
+  }
+
+  async function addToWorkspace() {
+    setPhase("loading");
+    try {
+      await fork();
+      setResult({ label: "Go to Skills", href: "/skills" });
+      setPhase("done");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Install failed");
+      setPhase("error");
+    }
+  }
+
+  async function addToAgent(agent: AgentLite) {
+    setOpen(false);
+    setPhase("loading");
+    try {
+      const tenantId = await fork();
+      // set_skills replaces the whole set, so merge with the agent's current ones.
+      const aRes = await fetch(`/api/proxy/v1/agents/${agent.id}`, {
+        headers: { Accept: "application/json" },
+      });
+      const a = await aRes.json();
+      if (!aRes.ok) throw new Error(a?.detail ?? "Could not load agent");
+      const current = arr(a.skills)
+        .map((s) => str(s.id))
+        .filter((id): id is string => Boolean(id));
+      const skill_ids = Array.from(new Set([...current, tenantId]));
+      const pRes = await fetch(`/api/proxy/v1/agents/${agent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skill_ids }),
+      });
+      const p = await pRes.json();
+      if (!pRes.ok) throw new Error(p?.detail?.message ?? p?.detail ?? "Could not attach skill");
+      setResult({ label: `Open ${agent.name}`, href: `/agents/${agent.id}` });
+      setPhase("done");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not attach skill");
+      setPhase("error");
+    }
+  }
+
+  if (phase === "done" && result) {
+    return (
+      <div className="flex flex-col items-end gap-1.5">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
+          Added
+        </span>
+        <Button asChild variant="outline" size="sm">
+          <Link href={result.href}>{result.label}</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const loading = phase === "loading";
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button isLoading={loading}>
+            {!loading && (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Add to agent
+              </>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-0">
+          <Command>
+            <CommandInput placeholder="Search agents…" />
+            <CommandList>
+              {agents === null ? (
+                <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <>
+                  <CommandEmpty>
+                    <div className="space-y-1.5 py-3 text-center text-sm text-muted-foreground">
+                      <p>No agents yet.</p>
+                      <Link href="/agents/create" className="block underline">
+                        Create an agent
+                      </Link>
+                    </div>
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {agents.map((a) => (
+                      <CommandItem key={a.id} value={a.name} onSelect={() => addToAgent(a)}>
+                        <Bot className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span className="truncate">{a.name}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <button
+        type="button"
+        onClick={addToWorkspace}
+        disabled={loading}
+        className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+      >
+        or add to workspace
+      </button>
+      {phase === "error" && (
+        <span className="max-w-[15rem] text-right text-xs text-red-600 dark:text-red-400">
+          {message}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Provenance facts for a catalog skill — source, repo, license, distribution.
+// These come in as machine "key:value" tags; rendered here as a clean key/value
+// list instead of loud chips. Hidden entirely when nothing useful is present.
+function SkillFacts({ entry }: { entry: CatalogEntry }) {
+  const tagVal = (prefix: string) =>
+    entry.tags.find((t) => t.startsWith(prefix))?.slice(prefix.length) || null;
+  const license = tagVal("license:");
+  const facts: [string, string | null][] = [
+    ["Source", entry.meta[0] ?? null],
+    ["Repository", tagVal("repo:")],
+    ["License", license === "NOASSERTION" ? "Not specified" : license],
+    ["Distribution", tagVal("distribution:")],
+  ];
+  const shown = facts.filter(([, v]) => v);
+  if (shown.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <dl className="divide-y divide-border/60">
+        {shown.map(([k, v]) => (
+          <div key={k} className="flex gap-4 px-4 py-2.5 text-sm">
+            <dt className="w-28 shrink-0 text-muted-foreground">{k}</dt>
+            <dd className="min-w-0 truncate font-medium">{v}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

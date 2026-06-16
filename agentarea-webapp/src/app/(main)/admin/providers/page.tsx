@@ -21,9 +21,19 @@ export default async function ProviderSpecsPage({
   const t = await getTranslations("Common");
   const tProviders = await getTranslations("ProvidersPage");
 
-  // Fetch provider specs with models
-  const providersResponse = await listProviderSpecsWithModels();
-  const providerSpecs = providersResponse.data || [];
+  let providerSpecs: any[] = [];
+  let loadError: string | null = null;
+
+  try {
+    const providersResponse = await listProviderSpecsWithModels();
+    providerSpecs = (providersResponse.data as any[]) || [];
+    if (providersResponse.error) {
+      loadError = "Failed to load provider specifications";
+    }
+  } catch (error) {
+    console.error("Failed to load provider specifications:", error);
+    loadError = "Failed to load provider specifications";
+  }
 
   const columns = [
     {
@@ -98,15 +108,16 @@ export default async function ProviderSpecsPage({
         title: tProviders("title"),
         description: tProviders("description"),
         controls: (
-          <Link href="/admin/providers/create" passHref legacyBehavior>
-            <Button
-              className="shrink-0 gap-2 shadow-sm"
-              data-test="new-provider-button"
-            >
+          <Button
+            asChild
+            className="shrink-0 gap-2 shadow-sm"
+            data-test="new-provider-button"
+          >
+            <Link href="/admin/provider-configs">
               <PlusCircleIcon className="mr-2 h-4 w-4" />
               {tProviders("addProvider")}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         ),
       }}
     >
@@ -116,12 +127,16 @@ export default async function ProviderSpecsPage({
         columns={columns}
         emptyState={
           <EmptyState
-            title={tProviders("noProviders")}
-            description={tProviders("emptyDescription")}
+            title={loadError || tProviders("noProviders")}
+            description={
+              loadError
+                ? "Provider specifications could not be loaded."
+                : tProviders("emptyDescription")
+            }
             iconsType="llm"
             action={{
               label: tProviders("addProvider"),
-              href: "/admin/providers/create",
+              href: "/admin/provider-configs",
             }}
           />
         }

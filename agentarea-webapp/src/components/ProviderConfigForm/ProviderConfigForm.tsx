@@ -454,7 +454,13 @@ export default function ProviderConfigForm({
         await onAfterSubmit(providerConfig);
       }
 
-      // Reset form only if creating and no custom handler
+      // Redirect if autoRedirect is enabled and no custom handler
+      if (autoRedirect && !onAfterSubmit) {
+        router.push("/admin/provider-configs");
+        return;
+      }
+
+      // Reset form only if creating and staying on the current page.
       if (!isEdit && !onAfterSubmit) {
         reset({
           provider_spec_id: "",
@@ -464,12 +470,6 @@ export default function ProviderConfigForm({
           is_public: false,
         });
         setSelectedModels([]);
-      }
-
-      // Redirect if autoRedirect is enabled and no custom handler
-      if (autoRedirect && !onAfterSubmit) {
-        router.push("/admin/provider-configs");
-        router.refresh();
       }
     } catch (err) {
       const errorMessage =

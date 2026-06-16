@@ -13,12 +13,10 @@ import {
   removeSkillFromProjectAction,
   addMcpInstanceToProjectAction,
   removeMcpInstanceFromProjectAction,
+  listAgentsAction,
+  listSkillsAction,
+  listMCPServerInstancesAction,
 } from "@/lib/server-actions";
-import {
-  listAgents,
-  listSkills,
-  listMCPServerInstances,
-} from "@/lib/api";
 
 export default function ProjectOverviewPage() {
   const params = useParams();
@@ -42,9 +40,9 @@ export default function ProjectOverviewPage() {
       try {
         const [projectRes, agentsRes, skillsRes, mcpRes] = await Promise.all([
           getProjectAction(projectId),
-          listAgents(),
-          listSkills(),
-          listMCPServerInstances(),
+          listAgentsAction(),
+          listSkillsAction(),
+          listMCPServerInstancesAction(),
         ]);
         if (projectRes.data) setProject(projectRes.data);
         setAllAgents((agentsRes.data as any[]) || []);

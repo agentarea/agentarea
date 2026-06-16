@@ -323,18 +323,17 @@ export default function MCPInstanceDetail({
       <div className="flex-1">
         <div className="relative h-full overflow-auto px-4 py-5">
           <div className="mx-auto w-full max-w-5xl space-y-6">
-            {/* Connect bar — single-line proxy URL for outbound MCP clients.
-                Kept compact so it doesn't compete with the inbound config below. */}
-            <div className="flex items-center gap-2">
-              <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {/* Connect bar — proxy URL for outbound MCP clients. Rendered as
+                plain wrapping text (not an input) so the full URL stays visible
+                and never overflows the column. */}
+            <div className="flex items-start gap-2">
+              <div className="mt-1 flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                 <LinkIcon className="h-3.5 w-3.5" />
                 <span>Connect URL</span>
               </div>
-              <Input
-                value={agentareaProxyUrl}
-                readOnly
-                className="h-8 font-mono text-xs"
-              />
+              <code className="min-w-0 flex-1 break-all rounded bg-muted/40 px-2 py-1 font-mono text-xs">
+                {agentareaProxyUrl}
+              </code>
               <CopyButton text={agentareaProxyUrl} label="Connect URL" />
             </div>
 
