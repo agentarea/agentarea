@@ -39,6 +39,7 @@ import {
   fundAgentWallet,
   getAgent,
   getAgentTaskStatus,
+  getTaskPolicySnapshot,
   getAgentWallet,
   getAgentWalletBalance,
   getAgentWalletPayments,
@@ -182,6 +183,10 @@ export async function getAgentTaskStatusAction(
   return await getAgentTaskStatus(agentId, taskId);
 }
 
+export async function getTaskPolicySnapshotAction(taskId: string) {
+  return await getTaskPolicySnapshot(taskId);
+}
+
 export async function createSkillAction(skill: {
   content?: string | null;
   github_url?: string | null;
@@ -235,7 +240,6 @@ export async function listSkillsAction(params?: {
   page_size?: number;
   search?: string;
   source_type?: string;
-  has_files?: boolean;
   network_scope?: string;
   from_registry?: boolean;
   paginated?: boolean;

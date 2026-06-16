@@ -81,6 +81,30 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    // Registry / Catalog API
+    listRegistries: async (params?: {
+      registry_type?: string;
+      active_only?: boolean;
+    }) => {
+      const { data, error } = await client.GET("/v1/registries/", {
+        params: { query: params },
+      });
+      return { data, error };
+    },
+
+    listRegistryItems: async (
+      registryId: string,
+      params?: { limit?: number; offset?: number }
+    ) => {
+      const { data, error } = await client.GET(
+        "/v1/registries/{registry_id}/items",
+        {
+          params: { path: { registry_id: registryId }, query: params },
+        }
+      );
+      return { data, error };
+    },
+
     // Agent Task API
     listAgentTasks: async (agentId: string) => {
       const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/", {
@@ -93,8 +117,13 @@ export function createApiClient(client: Client) {
       agentId: string,
       task: components["schemas"]["TaskCreate"]
     ) => {
+      // Use the synchronous (non-streaming) endpoint: it returns the created
+      // task as JSON (including its id) right after the workflow is started,
+      // so callers can redirect to /tasks/{id}. The bare POST /tasks/ returns
+      // an SSE stream, which a JSON client cannot parse — the task gets created
+      // but no id is ever returned.
       const { data, error } = await client.POST(
-        "/v1/agents/{agent_id}/tasks/",
+        "/v1/agents/{agent_id}/tasks/sync",
         {
           params: { path: { agent_id: agentId } },
           body: task,
@@ -818,7 +847,6 @@ export function createApiClient(client: Client) {
         page_size?: number;
         search?: string;
         source_type?: string;
-        has_files?: boolean;
         network_scope?: string;
         from_registry?: boolean;
         paginated?: boolean;
@@ -830,9 +858,6 @@ export function createApiClient(client: Client) {
         page_size: pageSize,
         ...(options.search ? { search: options.search } : {}),
         ...(options.source_type ? { source_type: options.source_type } : {}),
-        ...(options.has_files !== undefined
-          ? { has_files: options.has_files }
-          : {}),
         ...(options.network_scope
           ? { network_scope: options.network_scope }
           : {}),
@@ -1483,7 +1508,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/skills" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { skill_id: skillId },
+          body: { id: skillId },
         }
       );
       return { data, error };
@@ -1504,7 +1529,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/agents" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { agent_id: agentId },
+          body: { id: agentId },
         }
       );
       return { data, error };
@@ -1528,7 +1553,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/mcp-instances" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { mcp_instance_id: mcpInstanceId },
+          body: { id: mcpInstanceId },
         }
       );
       return { data, error };
@@ -1812,6 +1837,18 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.POST(
         "/v1/governance/effective-policy/preview" as any,
         { body: (body ?? {}) as any }
+      );
+      return { data, error };
+    },
+
+    // Read the immutable effective-policy snapshot persisted for a task at
+    // creation time. 404 when no snapshot exists (e.g. legacy tasks).
+    getTaskPolicySnapshot: async (taskId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/governance/task-policy-snapshots/{task_id}" as any,
+        {
+          params: { path: { task_id: taskId } },
+        } as any
       );
       return { data, error };
     },

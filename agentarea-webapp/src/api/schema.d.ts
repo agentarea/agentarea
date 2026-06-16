@@ -7226,8 +7226,6 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
-            /** Has Files */
-            has_files: boolean;
             /** Id */
             id: string;
             /**
@@ -14110,8 +14108,6 @@ export interface operations {
             query?: {
                 /** @description Filter by source type */
                 source_type?: string | null;
-                /** @description Filter by package-backed skills */
-                has_files?: boolean | null;
                 /** @description Filter by network scope */
                 network_scope?: string | null;
                 /** @description Filter registry-created skills */

@@ -5744,10 +5744,6 @@
             ],
             "title": "Description"
           },
-          "has_files": {
-            "title": "Has Files",
-            "type": "boolean"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5786,7 +5782,6 @@
           "description",
           "source_type",
           "source_url",
-          "has_files",
           "workspace_id",
           "created_at",
           "updated_at"

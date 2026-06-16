@@ -15,6 +15,7 @@ dependencies = [
     "agentarea-execution",
     "agentarea-governance",
     "agentarea-triggers",
+    "agentarea-api",
     "temporalio[opentelemetry]>=1.0.0",
     "python-dotenv>=1.0.0",
     "watchfiles>=0.21.0",
@@ -28,6 +29,7 @@ agentarea-tasks = { workspace = true }
 agentarea-execution = { workspace = true }
 agentarea-governance = { workspace = true }
 agentarea-triggers = { workspace = true }
+agentarea-api = { workspace = true }
 
 [project.scripts]
 agentarea-worker = "agentarea_worker.cli:cli"
