@@ -121,6 +121,25 @@ def _activity_output_id(prefix: str) -> str:
     return f"{prefix}_{safe}"
 
 
+def _server_icon_from_instance(instance: Any) -> str | None:
+    """Best-effort icon URL for an MCP server instance.
+
+    Returns the first ``src`` from ``instance.json_spec["icons"]`` when it is a
+    non-empty list of dicts, else None. Guards a missing/None json_spec.
+    """
+    json_spec = getattr(instance, "json_spec", None)
+    if not isinstance(json_spec, dict):
+        return None
+    icons = json_spec.get("icons")
+    if not isinstance(icons, list) or not icons:
+        return None
+    first = icons[0]
+    if isinstance(first, dict):
+        src = first.get("src")
+        return src if isinstance(src, str) else None
+    return None
+
+
 async def _offload_large_activity_output(
     *,
     workspace_id: str | None,
@@ -475,7 +494,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         from datetime import UTC
         from uuid import UUID as _UUID
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_system_context(request.workspace_id, request.user_id)
         async with ActivityContext(container, user_context) as ctx:
             model_instance_service = await ctx.get_model_instance_service()
             model_instance = await model_instance_service.get(_UUID(request.model_id))
@@ -857,6 +876,91 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     else:
                         logger.warning(f"Unknown code tool requested: {tool_name}")
 
+            payment_handler = None
+            if request.agent_id:
+
+                async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
+                    try:
+                        wallet_service = await ctx.get_wallet_service()
+                        wallet = await wallet_service.get_wallet(request.agent_id)
+                    except Exception as e:
+                        logger.debug("No active wallet for payment handling: %s", e)
+                        return None
+
+                    if getattr(wallet, "status", None) != "active":
+                        return None
+
+                    credentials = await wallet_service.get_wallet_credentials(wallet)
+                    wallet_config = {
+                        "wallet_type": wallet.wallet_type,
+                        "x402_config": wallet.x402_config,
+                        "mpp_config": wallet.mpp_config,
+                        "x402_private_key": credentials.get("x402_private_key"),
+                        "mpp_tempo_key": credentials.get("mpp_tempo_key"),
+                    }
+                    execution_id = request.execution_id or request.task_id or ""
+                    budget_remaining = await wallet_service.get_service_budget_remaining(
+                        request.agent_id, execution_id
+                    )
+                    return wallet_service, wallet, wallet_config, execution_id, budget_remaining
+
+                async def record_payment_result(
+                    payment_context: tuple[Any, Any, dict[str, Any], str, float] | None,
+                    result: dict[str, Any] | None,
+                    *,
+                    tool_name: str,
+                ) -> None:
+                    if not payment_context or not result:
+                        return
+                    if result.get("protocol") not in {"x402", "mpp"}:
+                        return
+                    amount = float(result.get("amount_usd") or 0.0)
+                    if amount <= 0:
+                        return
+                    wallet_service, wallet, _, execution_id, _ = payment_context
+                    await wallet_service.record_payment(
+                        wallet_id=wallet.id,
+                        agent_id=str(request.agent_id),
+                        execution_id=execution_id,
+                        protocol=str(result.get("protocol")),
+                        amount_usd=amount,
+                        recipient=str(result.get("recipient") or ""),
+                        tx_hash=result.get("tx_hash"),
+                        tool_name=tool_name,
+                        tool_call_id=request.tool_call_id or "",
+                        status="completed" if result.get("success") else "failed",
+                        error_message=result.get("error"),
+                        protocol_metadata=result.get("protocol_metadata"),
+                    )
+
+                async def payment_handler(**payment_kwargs: Any) -> dict[str, Any] | None:
+                    """Handle HTTP 402 for paid HTTP-backed tools using the calling agent wallet."""
+                    payment_context = await get_payment_context()
+                    if not payment_context:
+                        return None
+                    _, _, wallet_config, _, budget_remaining = payment_context
+
+                    from .payment_handler import handle_402_payment
+
+                    result = await handle_402_payment(
+                        url=payment_kwargs["url"],
+                        method=payment_kwargs["method"],
+                        request_headers=payment_kwargs.get("request_headers") or {},
+                        request_body=payment_kwargs.get("request_body"),
+                        response_status=payment_kwargs["response_status"],
+                        response_headers=payment_kwargs.get("response_headers") or {},
+                        response_body=payment_kwargs.get("response_body") or "",
+                        wallet_config=wallet_config,
+                        budget_remaining=budget_remaining,
+                    )
+
+                    await record_payment_result(
+                        payment_context,
+                        result,
+                        tool_name=str(payment_kwargs.get("tool_name") or request.tool_name),
+                    )
+                    return result
+
             # Register agent tools from configuration
             if request.tools and isinstance(request.tools, list):
                 agent_configs = [
@@ -898,6 +1002,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             task_service=delegation_task_service,
                             workspace_id=request.workspace_id,
                             user_id=user_context.user_id,
+                            payment_handler=payment_handler,
                         )
                         if delegation_tool:
                             tool_executor.register_tool(delegation_tool)
@@ -934,6 +1039,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             connection_name_or_id=connection_ref,
                             allowed_tools=allowed_names,
                             openapi_connection_service=openapi_connection_service,
+                            payment_handler=payment_handler,
                         )
                         for openapi_tool_instance in openapi_tools:
                             tool_executor.register_tool(openapi_tool_instance)
@@ -970,9 +1076,41 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if not any(t.get("name") == request.tool_name for t in available):
                         continue
 
+                    payment_httpx_client_factory = None
+                    mcp_payments: list[dict[str, Any]] = []
+                    if request.agent_id:
+                        payment_context = await get_payment_context()
+                        if payment_context:
+                            from .mcp_payment_httpx import create_payment_httpx_client_factory
+
+                            _, _, wallet_config, _, budget_remaining = payment_context
+
+                            async def on_mcp_payment(
+                                result: dict[str, Any],
+                                *,
+                                payment_context=payment_context,
+                                mcp_payments=mcp_payments,
+                                tool_name=request.tool_name,
+                            ) -> None:
+                                mcp_payments.append(result)
+                                await record_payment_result(
+                                    payment_context,
+                                    result,
+                                    tool_name=tool_name,
+                                )
+
+                            payment_httpx_client_factory = create_payment_httpx_client_factory(
+                                wallet_config=wallet_config,
+                                budget_remaining=budget_remaining,
+                                on_payment=on_mcp_payment,
+                            )
+
                     try:
                         mcp_result = await mcp_server_instance_service.execute_tool(
-                            UUID(str(instance.id)), request.tool_name, request.tool_args
+                            UUID(str(instance.id)),
+                            request.tool_name,
+                            request.tool_args,
+                            httpx_client_factory=payment_httpx_client_factory,
                         )
                     except Exception as e:
                         logger.error("MCP tool execution failed: %s", e, exc_info=True)
@@ -982,6 +1120,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             result=f"MCP tool error: {type(e).__name__}: {e}",
                             execution_time="",
                             error=str(e),
+                            source="mcp",
+                            server_instance_id=str(instance.id),
+                            server_name=getattr(instance, "name", None),
+                            server_icon=_server_icon_from_instance(instance),
                         )
 
                     result_text = await _offload_large_activity_output(
@@ -995,15 +1137,32 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         result=result_text,
                         execution_time="",
                         error=mcp_result.get("error"),
+                        service_cost=sum(
+                            float(p.get("amount_usd") or 0.0)
+                            for p in mcp_payments
+                            if p.get("success")
+                        ),
+                        payment=(
+                            {"payments": mcp_payments}
+                            if len(mcp_payments) > 1
+                            else (mcp_payments[0] if mcp_payments else None)
+                        ),
+                        source="mcp",
+                        server_instance_id=str(instance.id),
+                        server_name=getattr(instance, "name", None),
+                        server_icon=_server_icon_from_instance(instance),
                     )
 
             try:
-                result = await tool_executor.execute_tool(
-                    tool_name=request.tool_name,
-                    tool_args=request.tool_args,
-                    server_instance_id=request.server_instance_id,
-                    mcp_server_instance_service=mcp_server_instance_service,
-                )
+                from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+
+                with use_mcp_user_context(user_context):
+                    result = await tool_executor.execute_tool(
+                        tool_name=request.tool_name,
+                        tool_args=request.tool_args,
+                        server_instance_id=request.server_instance_id,
+                        mcp_server_instance_service=mcp_server_instance_service,
+                    )
 
                 result_text = await _offload_large_activity_output(
                     workspace_id=request.workspace_id,
@@ -1011,11 +1170,23 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     output_id=_activity_output_id("tool"),
                     content=str(result.get("result") or ""),
                 )
+                server_instance_id = result.get("server_instance_id")
+                # OpenAPI tools may self-declare source; otherwise infer from
+                # whether the tool resolved against an MCP server instance.
+                source = result.get("source") or (
+                    "mcp" if server_instance_id else "builtin"
+                )
                 return MCPToolResult(
                     success=result.get("success", False),
                     result=result_text,
                     execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
+                    service_cost=float(result.get("service_cost") or 0.0),
+                    payment=result.get("payment") if isinstance(result.get("payment"), dict) else None,
+                    source=source,
+                    server_instance_id=str(server_instance_id) if server_instance_id else None,
+                    server_name=result.get("server_name"),
+                    server_icon=result.get("server_icon"),
                 )
 
             except Exception as e:
@@ -1026,6 +1197,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     result=f"MCP tool error: {type(e).__name__}: {e}",
                     execution_time="",
                     error=str(e),
+                    source="builtin",
                 )
 
     @activity.defn

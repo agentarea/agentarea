@@ -19,6 +19,8 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_tasks.application.task_event_service import TaskEventService
+from agentarea_wallet.application.wallet_service import WalletService
+from agentarea_wallet.infrastructure.repository import PaymentRecordRepository, WalletRepository
 
 from ..interfaces import ActivityDependencies
 
@@ -117,6 +119,19 @@ class ActivityServiceContainer:
         repository_factory = RepositoryFactory(session, user_context)
         service = TaskEventService(
             repository_factory=repository_factory, event_broker=self.dependencies.event_broker
+        )
+        return service, session
+
+    async def get_wallet_service(self, user_context: UserContext) -> tuple[WalletService, Any]:
+        """Get WalletService with proper session and context."""
+        session = self._database.async_session_factory()
+        secret_manager = self.dependencies.secret_manager_factory.create(
+            session=session, user_context=user_context
+        )
+        service = WalletService(
+            wallet_repository=WalletRepository(session, user_context),
+            payment_repository=PaymentRecordRepository(session, user_context),
+            secret_manager=secret_manager,
         )
         return service, session
 
@@ -255,6 +270,12 @@ class ActivityContext:
     async def get_openapi_connection_service(self) -> OpenAPIConnectionService:
         """Get OpenAPIConnectionService for this context."""
         service, session = await self.container.get_openapi_connection_service(self.user_context)
+        self._sessions.append(session)
+        return service
+
+    async def get_wallet_service(self) -> WalletService:
+        """Get WalletService for this context."""
+        service, session = await self.container.get_wallet_service(self.user_context)
         self._sessions.append(session)
         return service
 

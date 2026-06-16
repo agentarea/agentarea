@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
@@ -14,6 +15,7 @@ from .base_tool import BaseTool
 logger = logging.getLogger(__name__)
 
 _RESULT_MAX_BYTES = 64 * 1024  # 64 KB cap
+PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
 
 
 def _slugify_name(name: str) -> str:
@@ -37,11 +39,13 @@ class OpenAPITool(BaseTool):
         connection_id: UUID,
         connection_name: str,
         openapi_connection_service: Any,
+        payment_handler: PaymentHandler | None = None,
     ):
         self._operation = operation
         self._connection_id = connection_id
         self._connection_name = connection_name
         self._service = openapi_connection_service
+        self._payment_handler = payment_handler
         self._name = _slugify_name(operation["name"])
         raw_desc = operation.get("description") or ""
         self._description = raw_desc or f"{operation['method']} {operation['path']}"
@@ -222,31 +226,62 @@ class OpenAPITool(BaseTool):
 
         status_code = response.status_code
 
+        payment_result: dict[str, Any] | None = None
+        if status_code == 402 and self._payment_handler is not None:
+            try:
+                payment_result = await self._payment_handler(
+                    url=url,
+                    method=method,
+                    request_headers=resolved_headers,
+                    request_body=json_body if json_body is not None else content_body,
+                    response_status=response.status_code,
+                    response_headers=dict(response.headers),
+                    response_body=response.text,
+                    tool_name=self.name,
+                )
+            except Exception as e:
+                logger.error("Payment handler failed for %s: %s", self.name, e, exc_info=True)
+                payment_result = {
+                    "success": False,
+                    "protocol": "unknown",
+                    "amount_usd": 0,
+                    "error": str(e),
+                }
+
+            if payment_result and payment_result.get("success"):
+                status_code = int(payment_result.get("response_status") or 200)
+                paid_body = payment_result.get("response_body")
+                result_str = paid_body if isinstance(paid_body, str) else json.dumps(paid_body)
+                return self._success_result(
+                    result_str=result_str,
+                    status_code=status_code,
+                    payment_result=payment_result,
+                )
+
         # Non-2xx response
         if not (200 <= status_code < 300):
             try:
                 body_snippet = response.text[:500]
             except Exception:
                 body_snippet = "<unreadable>"
+            payment_error = ""
+            if payment_result:
+                payment_error = f"; payment error: {payment_result.get('error')}"
             return {
                 "success": False,
-                "error": f"HTTP {status_code}: {body_snippet}",
+                "error": f"HTTP {status_code}: {body_snippet}{payment_error}",
                 "result": None,
                 "tool_name": self.name,
                 "status_code": status_code,
+                "payment": payment_result,
+                "service_cost": 0.0,
             }
 
         # Coerce successful response to string
         # 204 No Content or empty body — legitimate empty success, don't fall
         # into the JSON decoder (which would raise and flip to success=False).
         if status_code == 204 or not response.content:
-            return {
-                "success": True,
-                "result": "",
-                "error": None,
-                "tool_name": self.name,
-                "status_code": status_code,
-            }
+            return self._success_result(result_str="", status_code=status_code)
 
         try:
             ct = response.headers.get("content-type", "")
@@ -267,20 +302,34 @@ class OpenAPITool(BaseTool):
                 "status_code": status_code,
             }
 
-        # Apply 64 KB cap
+        return self._success_result(result_str=result_str, status_code=status_code)
+
+    def _success_result(
+        self,
+        *,
+        result_str: str,
+        status_code: int,
+        payment_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build a successful OpenAPI tool result with optional payment metadata."""
         encoded = result_str.encode("utf-8", errors="replace")
         if len(encoded) > _RESULT_MAX_BYTES:
             original_len = len(encoded)
             truncated = encoded[:_RESULT_MAX_BYTES].decode("utf-8", errors="replace")
             result_str = truncated + f"...[truncated, original {original_len} bytes]"
 
-        return {
+        result = {
             "success": True,
             "result": result_str,
             "error": None,
             "tool_name": self.name,
             "status_code": status_code,
+            "service_cost": 0.0,
         }
+        if payment_result:
+            result["payment"] = payment_result
+            result["service_cost"] = float(payment_result.get("amount_usd") or 0.0)
+        return result
 
 
 class OpenAPIToolFactory:
@@ -291,6 +340,7 @@ class OpenAPIToolFactory:
         connection_name_or_id: str | UUID,
         allowed_tools: list[str] | None,
         openapi_connection_service: Any,
+        payment_handler: PaymentHandler | None = None,
     ) -> list[OpenAPITool]:
         """Create OpenAPITool instances for each operation in the connection's spec.
 
@@ -363,7 +413,13 @@ class OpenAPIToolFactory:
             operations = [op for op in operations if op["name"] in allowed_set]
 
         tools = [
-            OpenAPITool(op, connection.id, connection.name, openapi_connection_service)
+            OpenAPITool(
+                op,
+                connection.id,
+                connection.name,
+                openapi_connection_service,
+                payment_handler=payment_handler,
+            )
             for op in operations
         ]
 

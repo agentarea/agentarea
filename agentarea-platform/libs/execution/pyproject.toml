@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "prometheus-client>=0.23.0",
     "agentarea-agents-sdk",
+    "agentarea-wallet",
+    "agentarea-payment",
 ]
 
 [project.optional-dependencies]

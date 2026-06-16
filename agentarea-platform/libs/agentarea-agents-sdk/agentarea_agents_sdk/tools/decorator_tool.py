@@ -154,10 +154,14 @@ class Toolset(ABC):
             return self._generate_method_schema(method)
         else:
             # Multiple methods - create action parameter
+            action_lines = ["Action to perform. Available actions:"]
+            for method_name, method in self._tool_methods.items():
+                description = getattr(method, "_tool_description", "") or f"Method: {method_name}"
+                action_lines.append(f"- {method_name}: {description}")
             properties = {
                 "action": {
                     "type": "string",
-                    "description": "Action to perform",
+                    "description": "\n".join(action_lines),
                     "enum": list(self._tool_methods.keys()),
                 }
             }
@@ -224,18 +228,35 @@ class Toolset(ABC):
         elif type_hint is list or origin is list:
             schema["type"] = "array"
             item_type = args[0] if args else str
+            item_origin = get_origin(item_type)
             if item_type is int:
                 schema["items"] = {"type": "integer"}
             elif item_type is float:
                 schema["items"] = {"type": "number"}
             elif item_type is bool:
                 schema["items"] = {"type": "boolean"}
-            elif item_type is dict:
+            elif item_type is dict or item_origin is dict:
                 schema["items"] = {"type": "object"}
             else:
                 schema["items"] = {"type": "string"}
-        elif type_hint is dict:
+        elif type_hint is dict or origin is dict:
             schema["type"] = "object"
+            value_type = args[1] if len(args) == 2 else Any
+            value_origin = get_origin(value_type)
+            if value_type is str:
+                schema["additionalProperties"] = {"type": "string"}
+            elif value_type is int:
+                schema["additionalProperties"] = {"type": "integer"}
+            elif value_type is float:
+                schema["additionalProperties"] = {"type": "number"}
+            elif value_type is bool:
+                schema["additionalProperties"] = {"type": "boolean"}
+            elif value_type is dict or value_origin is dict:
+                schema["additionalProperties"] = {"type": "object"}
+            elif value_type is list or value_origin is list:
+                schema["additionalProperties"] = {"type": "array"}
+            elif value_type is Any:
+                schema["additionalProperties"] = True
         else:
             schema["type"] = "string"  # Default fallback
 
@@ -250,7 +271,7 @@ class Toolset(ABC):
                 result = await self._execute_method(method, kwargs)
             else:
                 # Multiple methods - use action parameter
-                action = kwargs.get("action")
+                action = kwargs.get("action") or self._infer_action_from_kwargs(kwargs)
                 if not action or action not in self._tool_methods:
                     return {
                         "success": False,
@@ -275,6 +296,17 @@ class Toolset(ABC):
                 "tool_name": self.name,
                 "error": str(e),
             }
+
+    def _infer_action_from_kwargs(self, kwargs: dict) -> str | None:
+        """Infer omitted action when kwargs contain one unambiguous method prefix."""
+        matches = [
+            method_name
+            for method_name in self._tool_methods
+            if any(key.startswith(f"{method_name}_") for key in kwargs)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
     def _filter_kwargs_for_method(self, method_name: str, kwargs: dict) -> dict:
         """Filter kwargs to only include parameters for the specific method."""

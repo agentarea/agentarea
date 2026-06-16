@@ -38,7 +38,10 @@ def _patched_client_factory(transport: httpx.MockTransport):
 
 @pytest.mark.asyncio
 async def test_text_response_is_returned_inline(monkeypatch) -> None:
-    body = "<html><head><title>T</title></head><body><p>hi</p></body></html>"
+    body = (
+        "<html><head><title>T</title></head>"
+        "<body><p>hi</p><a href='/docs'>Docs</a></body></html>"
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text=body, headers={"content-type": "text/html"})
@@ -57,6 +60,8 @@ async def test_text_response_is_returned_inline(monkeypatch) -> None:
     assert payload["kind"] == "text"
     assert payload["status"] == 200
     assert "<p>hi</p>" in payload["text"]
+    assert "hi" in payload["extracted_text"]
+    assert {"href": "https://example.test/docs", "text": "Docs"} in payload["links"]
     # No artifact written for text responses.
     assert await storage.list("ws-1") == []
 

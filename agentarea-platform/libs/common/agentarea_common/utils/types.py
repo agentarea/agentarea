@@ -275,6 +275,7 @@ class AgentCapabilities(BaseModel):
     streaming: bool = False
     push_notifications: bool = Field(False, alias="pushNotifications")
     state_transition_history: bool = Field(False, alias="stateTransitionHistory")
+    extended_agent_card: bool = Field(False, alias="extendedAgentCard")
     extensions: list[dict[str, Any]] | None = None
 
 
@@ -294,11 +295,20 @@ class AgentSkill(BaseModel):
     output_modes: list[str] | None = Field(None, alias="outputModes")
 
 
+class AgentInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    url: str
+    protocol_binding: str = Field(alias="protocolBinding")
+    protocol_version: str | None = Field(None, alias="protocolVersion")
+    tenant: str | None = None
+
+
 class AgentCard(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     name: str
     description: str | None = None
     url: str
+    supported_interfaces: list[AgentInterface] | None = Field(None, alias="supportedInterfaces")
     protocol_version: str = Field("0.3.0", alias="protocolVersion")
     version: str = "1.0.0"
     provider: AgentProvider | None = None

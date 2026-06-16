@@ -320,7 +320,10 @@ class MCPToolRequest(BaseModel):
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
     workspace_id: str  # Required - must be provided explicitly
+    user_id: str | None = None  # Authenticated task owner for workspace-scoped code tools
     task_id: str | None = None  # Scopes artifact-style tools to a task
+    execution_id: str | None = None
+    tool_call_id: str | None = None
     agent_id: UUID | None = None  # Calling agent — used by self-referential tools (e.g. triggers)
     tools: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -338,6 +341,13 @@ class MCPToolResult(BaseModel):
     result: str = ""
     execution_time: str = ""
     error: str | None = None
+    service_cost: float = 0.0
+    payment: dict[str, Any] | None = None
+    # Tool-call attribution surfaced to the UI.
+    source: str | None = None  # "mcp" | "builtin" | "openapi"
+    server_instance_id: str | None = None
+    server_name: str | None = None
+    server_icon: str | None = None
 
 
 class ExecutionPlanRequest(BaseModel):

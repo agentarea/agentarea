@@ -24,7 +24,7 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
-    from agentarea_common.money import ZERO, serialize_money
+    from agentarea_common.money import ZERO, serialize_money, to_money
 
     from .context_manager import (
         ContextWindowManager,
@@ -2192,7 +2192,10 @@ class AgentExecutionWorkflow:
                 tool_args=tool_args,
                 server_instance_id=None,
                 workspace_id=workspace_id,
+                user_id=self.state.user_context_data.get("user_id"),
                 task_id=str(self.state.task_id),
+                execution_id=self.state.execution_id,
+                tool_call_id=tool_call.id,
                 agent_id=UUID(self.state.agent_id) if self.state.agent_id else None,
                 tools=self.state.agent_config.get("tools"),
                 metadata=self._workflow_metadata or {},
@@ -2237,6 +2240,9 @@ class AgentExecutionWorkflow:
             ) or result_dict.get(
                 "execution_time_seconds", getattr(result_obj, "execution_time_seconds", None)
             )
+            service_cost = float(
+                result_dict.get("service_cost", getattr(result_obj, "service_cost", 0.0)) or 0.0
+            )
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed
             # so the UI renders an actual error instead of "(no result data)".
@@ -2260,10 +2266,17 @@ class AgentExecutionWorkflow:
                         "arguments": tool_args,
                         "execution_time": execution_time,
                         "iteration": self.state.current_iteration,
+                        "source": result_dict.get("source"),
+                        "server_instance_id": result_dict.get("server_instance_id"),
+                        "server_name": result_dict.get("server_name"),
+                        "server_icon": result_dict.get("server_icon"),
                     },
                 )
                 await self._publish_events_immediately()
                 return
+
+            if service_cost > 0:
+                self.state.service_cost_used += to_money(service_cost)
 
             # Offload large outputs to MinIO (hybrid/dynamic strategy)
             result_text = await self._maybe_offload_output(result_text, tool_call.id)
@@ -2289,6 +2302,12 @@ class AgentExecutionWorkflow:
                     "result": result_text,
                     "arguments": tool_args,
                     "execution_time": execution_time,
+                    "service_cost": service_cost,
+                    "payment": result_dict.get("payment"),
+                    "source": result_dict.get("source"),
+                    "server_instance_id": result_dict.get("server_instance_id"),
+                    "server_name": result_dict.get("server_name"),
+                    "server_icon": result_dict.get("server_icon"),
                 },
             )
             await self._publish_events_immediately()

@@ -7,6 +7,7 @@ targets — not the umbrella. This factory picks the binding by config:
 """
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .a2a_agent_tool import A2AAgentTool
@@ -14,6 +15,8 @@ from .agent_delegation_tool import AgentDelegationTool
 from .base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
+
+PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
 
 
 class AgentToolFactory:
@@ -40,6 +43,7 @@ class AgentToolFactory:
         task_service=None,
         workspace_id: str | None = None,
         user_id: str | None = None,
+        payment_handler: PaymentHandler | None = None,
     ) -> BaseTool | None:
         """Create a delegation tool for a given agent.
 
@@ -53,6 +57,7 @@ class AgentToolFactory:
             task_service: TaskService for internal delegation
             workspace_id: Workspace context for internal delegation
             user_id: User context for internal delegation
+            payment_handler: Optional HTTP 402 handler for external A2A calls
 
         Returns:
             BaseTool instance (AgentDelegationTool or A2AAgentTool), or None if agent not found
@@ -73,6 +78,7 @@ class AgentToolFactory:
                     agent_description=description,
                     a2a_url=a2a_url_override,
                     auth_token=auth_token,
+                    payment_handler=payment_handler,
                 )
 
             # Internal agent: use task service directly (no HTTP)
@@ -98,6 +104,7 @@ class AgentToolFactory:
                 agent_description=description,
                 a2a_url=a2a_url,
                 auth_token=auth_token,
+                payment_handler=payment_handler,
             )
 
         except Exception as e:
@@ -113,6 +120,7 @@ class AgentToolFactory:
         task_service=None,
         workspace_id: str | None = None,
         user_id: str | None = None,
+        payment_handler: PaymentHandler | None = None,
     ) -> list[BaseTool]:
         """Create delegation tools from agent tool configs."""
         tools: list[BaseTool] = []
@@ -135,6 +143,7 @@ class AgentToolFactory:
                 task_service=task_service,
                 workspace_id=workspace_id,
                 user_id=user_id,
+                payment_handler=payment_handler,
             )
             if tool:
                 tools.append(tool)
