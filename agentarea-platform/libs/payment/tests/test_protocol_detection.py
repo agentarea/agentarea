@@ -1,7 +1,6 @@
 """Tests for payment protocol detection and unified client."""
 
 import pytest
-
 from agentarea_payment.detector import PaymentProtocolDetector
 from agentarea_payment.models import PaymentResult
 
@@ -17,6 +16,18 @@ class TestPaymentProtocolDetector:
 
     def test_detect_mpp_from_www_authenticate(self):
         result = PaymentProtocolDetector.detect(402, {"WWW-Authenticate": "MPP realm=test"})
+        assert result == "mpp"
+
+    def test_detect_mpp_from_payment_www_authenticate(self):
+        result = PaymentProtocolDetector.detect(
+            402,
+            {
+                "WWW-Authenticate": (
+                    'Payment id="chal_1", method="tempo", intent="charge", '
+                    'request="eyJhbW91bnQiOiIwLjAxIn0"'
+                )
+            },
+        )
         assert result == "mpp"
 
     def test_detect_mpp_case_insensitive(self):
@@ -114,3 +125,64 @@ class TestUnifiedPaymentClient:
         )
         assert result.success is False
         assert "Unknown" in result.error
+
+
+class TestX402PaymentClient:
+    @pytest.mark.asyncio
+    async def test_budget_check_reads_accepts_requirement_without_sdk(self):
+        import base64
+        import json
+
+        from agentarea_payment.x402_client import X402PaymentClient
+
+        challenge = {
+            "accepts": [
+                {
+                    "scheme": "exact",
+                    "network": "eip155:84532",
+                    "maxAmountRequired": "25000",
+                    "payTo": "0xrecipient",
+                }
+            ]
+        }
+        header = base64.b64encode(json.dumps(challenge).encode()).decode()
+        client = X402PaymentClient(private_key="0x" + "11" * 32, network="eip155:84532")
+
+        result = await client.handle_402(
+            url="https://api.example.com/paid",
+            method="GET",
+            headers={},
+            body=None,
+            response_headers={"PAYMENT-REQUIRED": header},
+            budget_remaining=0.01,
+        )
+
+        assert result.success is False
+        assert result.protocol == "x402"
+        assert result.amount_usd == 0.025
+        assert result.recipient == "0xrecipient"
+        assert "exceeds remaining budget" in result.error
+
+
+class TestMPPPaymentClient:
+    @pytest.mark.asyncio
+    async def test_budget_check_reads_json_body_without_sdk(self):
+        from agentarea_payment.mpp_client import MPPPaymentClient
+
+        client = MPPPaymentClient(tempo_key="0xkey")
+
+        result = await client.handle_402(
+            url="https://api.example.com/paid",
+            method="GET",
+            headers={},
+            body=None,
+            response_headers={"WWW-Authenticate": "Payment"},
+            response_body='{"amount": "250000", "recipient": "merchant"}',
+            budget_remaining=0.10,
+        )
+
+        assert result.success is False
+        assert result.protocol == "mpp"
+        assert result.amount_usd == 0.25
+        assert result.recipient == "merchant"
+        assert "exceeds remaining budget" in result.error

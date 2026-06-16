@@ -106,6 +106,20 @@ class WalletService:
             raise WalletNotFoundError(f"No wallet found for agent {agent_id}")
         return wallet
 
+    async def get_wallet_credentials(self, wallet: AgentWallet) -> dict:
+        """Return decrypted wallet credentials for runtime payment execution."""
+        if not wallet.credentials_secret_id:
+            return {}
+        raw = await self._secrets.get_secret(wallet.credentials_secret_id)
+        if not raw:
+            return {}
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("Wallet credentials secret %s is not JSON", wallet.credentials_secret_id)
+            return {}
+        return value if isinstance(value, dict) else {}
+
     async def update_wallet(
         self,
         agent_id: UUID | str,

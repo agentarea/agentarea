@@ -15,9 +15,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-x402 = ["x402[httpx,evm]"]
-mpp = ["pympp"]
-all = ["x402[httpx,evm]", "pympp"]
+x402 = ["x402[httpx,evm]", "eth-account"]
+mpp = ["pympp[tempo]"]
+all = ["x402[httpx,evm]", "eth-account", "pympp[tempo]"]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }

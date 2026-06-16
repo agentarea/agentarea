@@ -27,9 +27,10 @@ class PaymentProtocolDetector:
             logger.debug("Detected x402 protocol from PAYMENT-REQUIRED header")
             return "x402"
 
-        # MPP: look for WWW-Authenticate: MPP header
+        # MPP: current spec uses WWW-Authenticate: Payment ...
         www_auth = lower_headers.get("www-authenticate", "")
-        if "mpp" in www_auth.lower():
+        www_auth_lower = www_auth.lower()
+        if "mpp" in www_auth_lower or www_auth_lower.startswith("payment"):
             logger.debug("Detected MPP protocol from WWW-Authenticate header")
             return "mpp"
 

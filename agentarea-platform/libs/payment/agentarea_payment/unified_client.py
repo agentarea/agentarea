@@ -49,6 +49,11 @@ class UnifiedPaymentClient:
                 tempo_key=mpp_tempo_key,
                 session_budget_usd=self._mpp_config.get("session_budget_usd", 10.0),
                 payment_method_types=self._mpp_config.get("payment_method_types"),
+                chain_id=self._mpp_config.get("chain_id"),
+                rpc_url=self._mpp_config.get("rpc_url"),
+                currency=self._mpp_config.get("currency"),
+                recipient=self._mpp_config.get("recipient"),
+                decimals=self._mpp_config.get("decimals", 6),
             )
 
     async def handle_402(

@@ -1,7 +1,6 @@
 """Tests for wallet domain models, validation, and service logic."""
 
 import pytest
-
 from agentarea_wallet.domain.enums import (
     BudgetPeriod,
     PaymentProtocol,
