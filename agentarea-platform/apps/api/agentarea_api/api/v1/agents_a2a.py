@@ -36,6 +36,7 @@ from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.utils.types import (
     AgentCapabilities,
     AgentCard,
+    AgentInterface,
     AgentSkill,
     Artifact,
     CancelTaskResponse,
@@ -1299,6 +1300,7 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
             streaming=True,  # All agents support streaming through A2A
             pushNotifications=False,  # Not currently supported
             stateTransitionHistory=True,  # Supported through Temporal workflows
+            extendedAgentCard=True,
         )
 
         # Build skills based on agent configuration and tools
@@ -1374,10 +1376,18 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         if agent.status and agent.status != "active":
             enhanced_description += f" (Status: {agent.status})"
 
+        rpc_url = f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc"
         agent_card = AgentCard(
             name=agent.name,
             description=enhanced_description,
-            url=f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
+            url=rpc_url,
+            supportedInterfaces=[
+                AgentInterface(
+                    url=rpc_url,
+                    protocolBinding="JSONRPC",
+                    protocolVersion="1.0",
+                )
+            ],
             version="1.0.0",
             protocolVersion="0.3.0",
             provider=AgentProvider(
@@ -1526,11 +1536,13 @@ async def handle_agent_jsonrpc(
 
         # Check A2A-Version header
         a2a_version = request.headers.get("a2a-version")
-        if a2a_version and not a2a_version.startswith("0.3"):
+        if a2a_version and not (
+            a2a_version.startswith("0.3") or a2a_version.startswith("1.")
+        ):
             return create_error_response(
                 request_data.get("id"),
                 -32007,
-                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x",
+                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x, 1.x",
             )
 
         # Validate JSON-RPC request structure
@@ -1690,6 +1702,7 @@ async def get_agent_well_known(
             streaming=True,  # All agents support streaming through A2A
             pushNotifications=False,  # Not currently supported
             stateTransitionHistory=True,  # Supported through Temporal workflows
+            extendedAgentCard=True,
         )
 
         # Build skills based on current agent configuration and tools
@@ -1763,10 +1776,18 @@ async def get_agent_well_known(
         if agent.status and agent.status != "active":
             enhanced_description += f" (Status: {agent.status})"
 
+        rpc_url = f"/api/v1/agents/{agent_id}/a2a/rpc"
         agent_card = AgentCard(
             name=agent.name,
             description=enhanced_description,
-            url=f"/api/v1/agents/{agent_id}/a2a/rpc",
+            url=rpc_url,
+            supportedInterfaces=[
+                AgentInterface(
+                    url=rpc_url,
+                    protocolBinding="JSONRPC",
+                    protocolVersion="1.0",
+                )
+            ],
             version="1.0.0",
             protocolVersion="0.3.0",
             provider=AgentProvider(organization="AgentArea", url=f"/api/v1/agents/{agent_id}"),

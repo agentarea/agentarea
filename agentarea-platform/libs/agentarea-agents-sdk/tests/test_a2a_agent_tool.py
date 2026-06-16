@@ -181,6 +181,94 @@ class TestA2AAgentToolExecute:
                 await self.tool.execute(message="hello")
 
     @pytest.mark.asyncio
+    async def test_execute_paid_a2a_retries_via_payment_handler(self):
+        paid_rpc_response = {
+            "jsonrpc": "2.0",
+            "id": "abc",
+            "result": {
+                "id": "paid-task",
+                "status": {"state": "completed"},
+                "artifacts": [{"parts": [{"kind": "text", "text": "paid result"}]}],
+            },
+        }
+        payment_calls = []
+
+        async def payment_handler(**kwargs):
+            payment_calls.append(kwargs)
+            return {
+                "success": True,
+                "protocol": "mpp",
+                "amount_usd": 0.25,
+                "recipient": "merchant",
+                "response_status": 200,
+                "response_body": json.dumps(paid_rpc_response),
+                "protocol_metadata": {"payment_method": "charge"},
+            }
+
+        tool = A2AAgentTool(
+            agent_name="researcher",
+            agent_description="Searches the web.",
+            a2a_url="http://localhost:9000/a2a/rpc",
+            auth_token="test-token",
+            payment_handler=payment_handler,
+        )
+        mock_response = httpx.Response(
+            402,
+            headers={"WWW-Authenticate": "Payment test-challenge"},
+            text="payment required",
+        )
+
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = await tool.execute(message="hello")
+
+        assert result["success"] is True
+        assert result["result"] == "paid result"
+        assert result["payment"]["protocol"] == "mpp"
+        assert result["payment"]["amount_usd"] == 0.25
+        assert payment_calls[0]["response_status"] == 402
+        assert payment_calls[0]["tool_name"] == "delegate_to_researcher"
+        assert payment_calls[0]["request_body"]["method"] == "message/send"
+
+    @pytest.mark.asyncio
+    async def test_execute_paid_a2a_surfaces_payment_failure(self):
+        async def payment_handler(**kwargs):
+            return {
+                "success": False,
+                "protocol": "x402",
+                "amount_usd": 10.0,
+                "recipient": "merchant",
+                "error": "Payment exceeds budget",
+            }
+
+        tool = A2AAgentTool(
+            agent_name="researcher",
+            agent_description="Searches the web.",
+            a2a_url="http://localhost:9000/a2a/rpc",
+            payment_handler=payment_handler,
+        )
+        mock_response = httpx.Response(402, headers={"PAYMENT-REQUIRED": "{}"})
+
+        with patch(
+            "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"
+        ) as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ToolExecutionError, match="Payment exceeds budget"):
+                await tool.execute(message="hello")
+
+    @pytest.mark.asyncio
     async def test_execute_timeout(self):
         with patch(
             "agentarea_agents_sdk.tools.a2a_agent_tool.httpx.AsyncClient"

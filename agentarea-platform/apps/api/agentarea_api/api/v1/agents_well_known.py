@@ -12,10 +12,18 @@ individually, and later can be proxied to subdomains
 import logging
 from uuid import UUID
 
-from agentarea_agents.application.agent_service import AgentService
-from agentarea_api.api.deps.services import get_agent_service
-from agentarea_common.utils.types import AgentCapabilities, AgentCard, AgentProvider, AgentSkill
+from agentarea_agents.domain.models import Agent
+from agentarea_common.infrastructure.database import get_read_db_session
+from agentarea_common.utils.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentInterface,
+    AgentProvider,
+    AgentSkill,
+)
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +34,12 @@ router = APIRouter()
 def get_base_url(request: Request) -> str:
     """Get base URL from request."""
     return f"{request.url.scheme}://{request.url.netloc}"
+
+
+async def get_public_agent(agent_id: UUID, session: AsyncSession) -> Agent | None:
+    """Read an agent for public discovery without requiring workspace auth."""
+    result = await session.execute(select(Agent).where(Agent.id == agent_id))
+    return result.scalar_one_or_none()
 
 
 async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> AgentCard:
@@ -44,10 +58,18 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
             }
         ]
 
+    rpc_url = f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
     return AgentCard(
         name=agent.name,
         description=agent.description,
-        url=f"{base_url}/v1/agents/{agent_id}/a2a/rpc",
+        url=rpc_url,
+        supportedInterfaces=[
+            AgentInterface(
+                url=rpc_url,
+                protocolBinding="JSONRPC",
+                protocolVersion="1.0",
+            )
+        ],
         version="1.0.0",
         protocolVersion="0.3.0",
         documentationUrl=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
@@ -55,6 +77,7 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
             streaming=True,
             pushNotifications=False,
             stateTransitionHistory=True,
+            extendedAgentCard=True,
             extensions=extensions,
         ),
         provider=AgentProvider(organization="AgentArea"),
@@ -81,15 +104,18 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
 
 
 @router.get("/.well-known/agent.json")
+@router.get("/.well-known/agent-card.json")
 async def get_agent_well_known_card(
     agent_id: UUID,
     request: Request,
-    agent_service: AgentService = Depends(get_agent_service),
+    db_session: AsyncSession = Depends(get_read_db_session),
 ) -> AgentCard:
     """Agent-specific well-known discovery endpoint.
 
     Returns the agent card for this specific agent.
-    This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
+    This endpoint can be accessed at:
+    - /v1/agents/{agent_id}/.well-known/agent-card.json
+    - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
 
     This allows each agent to have its own well-known endpoint, which is A2A compliant.
     Later, this can be proxied to subdomains:
@@ -97,7 +123,7 @@ async def get_agent_well_known_card(
     """
     try:
         # Get the specific agent
-        agent = await agent_service.get(agent_id)
+        agent = await get_public_agent(agent_id, db_session)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
@@ -120,7 +146,7 @@ async def get_agent_well_known_card(
 async def get_agent_a2a_info(
     agent_id: UUID,
     request: Request,
-    agent_service: AgentService = Depends(get_agent_service),
+    db_session: AsyncSession = Depends(get_read_db_session),
 ) -> dict:
     """Agent-specific A2A protocol information.
 
@@ -128,7 +154,7 @@ async def get_agent_a2a_info(
     """
     try:
         # Verify agent exists
-        agent = await agent_service.get(agent_id)
+        agent = await get_public_agent(agent_id, db_session)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
@@ -150,7 +176,8 @@ async def get_agent_a2a_info(
                 "json_rpc": "https://www.jsonrpc.org/specification/v2",
             },
             "endpoints": {
-                "agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
+                "agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent-card.json",
+                "legacy_agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
                 "rpc": f"{base_url}/v1/agents/{agent_id}/rpc",
                 "stream": f"{base_url}/v1/agents/{agent_id}/stream",
                 "tasks": f"{base_url}/v1/agents/{agent_id}/tasks/",
@@ -189,12 +216,12 @@ async def get_agent_a2a_info(
 async def get_agent_well_known_index(
     agent_id: UUID,
     request: Request,
-    agent_service: AgentService = Depends(get_agent_service),
+    db_session: AsyncSession = Depends(get_read_db_session),
 ) -> dict:
     """Agent-specific well-known endpoints index."""
     try:
         # Verify agent exists
-        agent = await agent_service.get(agent_id)
+        agent = await get_public_agent(agent_id, db_session)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
@@ -204,6 +231,7 @@ async def get_agent_well_known_index(
             "message": f"A2A Protocol Well-Known Endpoints for {agent.name}",
             "agent": {"id": str(agent_id), "name": agent.name, "description": agent.description},
             "endpoints": {
+                "agent-card.json": f"{base_url}/v1/agents/{agent_id}/.well-known/agent-card.json",
                 "agent.json": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
                 "a2a-info.json": f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
             },

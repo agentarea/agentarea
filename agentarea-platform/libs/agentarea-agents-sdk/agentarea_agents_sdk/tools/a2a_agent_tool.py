@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
@@ -13,6 +14,8 @@ from .base_tool import BaseTool, ToolExecutionError
 logger = logging.getLogger(__name__)
 
 A2A_CALL_TIMEOUT = 120.0
+
+PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
 
 
 def _sanitize_tool_name(agent_name: str) -> str:
@@ -37,11 +40,13 @@ class A2AAgentTool(BaseTool):
         agent_description: str,
         a2a_url: str,
         auth_token: str | None = None,
+        payment_handler: PaymentHandler | None = None,
     ):
         self._agent_name = agent_name
         self._agent_description = agent_description
         self._a2a_url = a2a_url
         self._auth_token = auth_token
+        self._payment_handler = payment_handler
 
     @property
     def name(self) -> str:
@@ -91,20 +96,46 @@ class A2AAgentTool(BaseTool):
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
         try:
+            request_body = json.dumps(rpc_request)
             async with httpx.AsyncClient(timeout=A2A_CALL_TIMEOUT) as client:
                 response = await client.post(
                     self._a2a_url,
-                    content=json.dumps(rpc_request),
+                    content=request_body,
                     headers=headers,
                 )
+                response_body = response.text
+
+            payment_result: dict[str, Any] | None = None
+            if response.status_code == 402 and self._payment_handler:
+                payment_result = await self._payment_handler(
+                    url=self._a2a_url,
+                    method="POST",
+                    request_headers=headers,
+                    request_body=rpc_request,
+                    response_status=response.status_code,
+                    response_headers=dict(response.headers),
+                    response_body=response_body,
+                    tool_name=self.name,
+                )
+                if payment_result and payment_result.get("success"):
+                    paid_status = int(payment_result.get("response_status") or 0)
+                    if 200 <= paid_status < 300:
+                        response_body = str(payment_result.get("response_body") or "")
+                        response = httpx.Response(paid_status, content=response_body)
 
             if response.status_code != 200:
+                if response.status_code == 402 and payment_result:
+                    payment_error = payment_result.get("error") or "payment failed"
+                    raise ToolExecutionError(
+                        self.name,
+                        f"A2A payment failed: {payment_error}",
+                    )
                 raise ToolExecutionError(
                     self.name,
                     f"A2A request failed with HTTP {response.status_code}",
                 )
 
-            rpc_response = response.json()
+            rpc_response = json.loads(response_body) if response_body else response.json()
 
             if "error" in rpc_response and rpc_response["error"]:
                 error_msg = rpc_response["error"].get("message", "Unknown A2A error")
@@ -125,6 +156,7 @@ class A2AAgentTool(BaseTool):
                 "tool_name": self.name,
                 "task_id": task.get("id"),
                 "task_state": task.get("status", {}).get("state"),
+                "payment": payment_result,
             }
 
         except httpx.TimeoutException as e:
