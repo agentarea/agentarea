@@ -223,6 +223,8 @@ function groupToolMessages(messages: MessageComponentType[]): MessageComponentTy
           arguments: d.arguments,
           execution_time: d.execution_time,
           pending: false,
+          server_name: d.server_name,
+          server_icon: d.server_icon,
         });
       } else {
         // tool_call_started
@@ -234,6 +236,8 @@ function groupToolMessages(messages: MessageComponentType[]): MessageComponentTy
           success: true,
           arguments: d.arguments,
           pending: true,
+          server_name: d.server_name,
+          server_icon: d.server_icon,
         });
       }
       j++;

@@ -35,7 +35,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
       <BaseMessage
         isUser={true}
         headerLeft={"User"}
-        headerRight={formatTimestamp(new Date().toISOString())}
+        headerRight={formatTimestamp(timestamp)}
       >
         <div className="space-y-3">
           {content && (

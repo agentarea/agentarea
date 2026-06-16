@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import ContentBlock from "@/components/ContentBlock";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
 import {
   listWorkspaceFilesAction,
@@ -53,21 +54,18 @@ export default function WorkspaceFilesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
-      <div className="border-b px-6 py-3">
-        <h1 className="text-lg font-semibold">Files</h1>
-        <p className="text-sm text-muted-foreground">
-          All files stored in your workspace, including ones produced by agents.
-        </p>
-      </div>
+    <ContentBlock
+      header={{ breadcrumb: [{ label: "Files" }] }}
+      className="p-0 overflow-hidden"
+    >
       <FileBrowser
         files={files}
         directories={directories}
         fetchUrl={fetchUrl}
         fetchHistory={fetchHistory}
         emptyMessage="No files in this workspace yet."
-        className="flex-1"
+        className="h-full"
       />
-    </div>
+    </ContentBlock>
   );
 }

@@ -13,6 +13,7 @@ import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
+import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,7 +33,7 @@ import { resolveEscalationAction } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
-  const { task, taskStatus, loading, error, refresh } = useTaskContext();
+  const { task, taskStatus, policy, loading, error, refresh } = useTaskContext();
   const router = useRouter();
 
   const [, setRefreshing] = useState(false);
@@ -89,6 +90,12 @@ export default function TaskDetailsPage() {
 
     return [...processed, ...pendingOptimistic];
   }, [task, taskEvents, optimisticMessages]);
+
+  // Side-panel activity summary (tools/skills used, failures, LLM calls)
+  const activitySummary = useMemo(
+    () => buildActivitySummary(executionMessages, taskEvents.length, taskEvents),
+    [executionMessages, taskEvents]
+  );
 
   // Auto-scroll to bottom when new messages arrive
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -259,6 +266,20 @@ export default function TaskDetailsPage() {
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
 
+  // Budget display: spent cost lives in the task result, the limit in its parameters.
+  const rawCost =
+    (taskStatus?.result as Record<string, unknown> | undefined)?.total_cost ??
+    task.result?.total_cost;
+  const totalCost =
+    rawCost != null && !Number.isNaN(Number(rawCost)) ? Number(rawCost) : null;
+  // Prefer the resolved policy's run budget; fall back to the creation param.
+  const rawBudget =
+    policy?.budget?.run_budget_usd ?? task.parameters?.budget_usd;
+  const budgetLimit =
+    rawBudget != null && !Number.isNaN(Number(rawBudget))
+      ? Number(rawBudget)
+      : null;
+
   return (
     <>
       <div className="flex h-full w-full">
@@ -304,33 +325,35 @@ export default function TaskDetailsPage() {
             </div>
           </div>
 
-          {/* Chat input */}
+          {/* Chat input — matches the workplace composer (borderless textarea
+              inside a soft rounded card) so both surfaces look identical. */}
           <div className="border-t bg-background px-3 py-3">
-            <ChatInputArea
-              input={chatInput}
-              onInputChange={handleInputChange}
-              onSubmit={handleSendMessage}
-              isLoading={sendingMessage}
-              placeholder={
-                isActive
-                  ? `Message ${task.agent_name || "agent"}...`
-                  : `Send a follow-up to ${task.agent_name || "agent"}...`
-              }
-              selectedFiles={[]}
-              onRemoveFile={() => {}}
-              onOpenFileDialog={() => {}}
-              fileInputRef={fileInputRef}
-              textareaRef={textareaRef}
-              variant="default"
-              sendButtonIcon="send"
-              rows={1}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e);
+            <div className="rounded-2xl border bg-white px-2 pb-2 pt-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-500 ease-out hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
+              <ChatInputArea
+                input={chatInput}
+                onInputChange={handleInputChange}
+                onSubmit={handleSendMessage}
+                isLoading={sendingMessage}
+                placeholder={
+                  isActive
+                    ? `Message ${task.agent_name || "agent"}...`
+                    : `Send a follow-up to ${task.agent_name || "agent"}...`
                 }
-              }}
-            />
+                selectedFiles={[]}
+                onRemoveFile={() => {}}
+                onOpenFileDialog={() => {}}
+                fileInputRef={fileInputRef}
+                textareaRef={textareaRef}
+                variant="centered"
+                rows={1}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -353,6 +376,11 @@ export default function TaskDetailsPage() {
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}
+              activitySummary={activitySummary}
+              artifacts={taskStatus?.artifacts}
+              totalCost={totalCost}
+              budgetLimit={budgetLimit}
+              policy={policy}
             />
           }
         />

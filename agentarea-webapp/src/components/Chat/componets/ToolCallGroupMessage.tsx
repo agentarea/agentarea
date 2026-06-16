@@ -3,6 +3,8 @@ import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MessageWrapper from "./MessageWrapper";
+import { ToolIcon } from "../utils/toolIcon";
+import { describeToolCall } from "../utils/describeToolCall";
 import { ToolCallGroupData } from "../types";
 
 interface ToolCallGroupMessageProps {
@@ -39,9 +41,15 @@ const ToolCallGroupMessage: React.FC<ToolCallGroupMessageProps> = ({ data }) => 
     ? t("toolCallGroupRunning", { count: totalCount })
     : t("toolCallGroup", { count: totalCount });
 
+  const allCallIds = tools.map((tl) => tl.tool_call_id).filter(Boolean);
+
   return (
     <MessageWrapper type="tool-result">
-      <div className="w-full max-w-full lg:max-w-[80%]">
+      <div
+        id={allCallIds[0] ? `tc-${allCallIds[0]}` : undefined}
+        data-aa-tc={allCallIds.join(" ")}
+        className="w-full max-w-full scroll-mt-20 lg:max-w-[80%]"
+      >
         <div
           className={cn(
             "w-full rounded-lg border dark:border-zinc-700",
@@ -100,9 +108,14 @@ const ToolCallGroupMessage: React.FC<ToolCallGroupMessageProps> = ({ data }) => 
                 const hasResult = !tool.pending && tool.result != null;
                 const hasArgs =
                   tool.arguments && Object.keys(tool.arguments).length > 0;
+                const desc = describeToolCall(tool.tool_name, tool.arguments);
 
                 return (
-                  <div key={tool.tool_call_id} className="px-3 py-1.5">
+                  <div
+                    key={tool.tool_call_id}
+                    id={tool.tool_call_id ? `tc-${tool.tool_call_id}` : undefined}
+                    className="scroll-mt-20 px-3 py-1.5"
+                  >
                     {/* Tool row */}
                     <button
                       type="button"
@@ -116,17 +129,41 @@ const ToolCallGroupMessage: React.FC<ToolCallGroupMessageProps> = ({ data }) => 
                           : "cursor-default"
                       )}
                     >
+                      {tool.server_icon ? (
+                        <img
+                          src={tool.server_icon}
+                          alt=""
+                          className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain"
+                        />
+                      ) : (
+                        <ToolIcon
+                          name={tool.tool_name}
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0",
+                            tool.pending
+                              ? "text-blue-500"
+                              : !tool.success
+                                ? "text-red-500"
+                                : "text-zinc-500 dark:text-zinc-400"
+                          )}
+                        />
+                      )}
                       <span
                         className={cn(
-                          "flex-1 text-left font-mono",
+                          "flex flex-1 items-center gap-1.5 text-left",
                           tool.pending
                             ? "text-blue-600 dark:text-blue-400"
                             : !tool.success
                               ? "text-red-600 dark:text-red-400"
-                              : "text-green-700 dark:text-green-300"
+                              : "text-foreground"
                         )}
                       >
-                        {tool.tool_name}
+                        <span className="font-medium">{desc.text}</span>
+                        {desc.code && (
+                          <code className="truncate rounded bg-black/5 px-1 py-0.5 font-mono text-[11px] text-muted-foreground dark:bg-white/10">
+                            {desc.code}
+                          </code>
+                        )}
                       </span>
                       {tool.execution_time && (
                         <span className="text-gray-400 text-xs shrink-0">

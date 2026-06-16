@@ -19,6 +19,10 @@ interface MessageWrapperProps {
   iconUrl?: string;
   // FIXME: iconUrl is passed through but the lookup from server_instance_id → icon is not yet
   // implemented. See EventParser.ts ToolCallCompleted case where server_instance_id is available.
+  /** Optional custom icon node (e.g. a per-tool lucide icon). Takes precedence over the default. */
+  icon?: React.ReactNode;
+  /** DOM id for deep-linking (e.g. scroll-to from the side panel). */
+  id?: string;
 }
 
 export const MessageWrapper: React.FC<MessageWrapperProps> = ({
@@ -26,10 +30,14 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
   className = "",
   type = "assistant",
   iconUrl,
+  icon,
+  id,
 }) => {
   return (
     <div
+      id={id}
       className={cn(
+        "scroll-mt-20",
         `relative flex items-stretch justify-start gap-3 duration-300 animate-in slide-in-from-bottom-2`,
         type === "user" ? "aa-user-message" : "aa-message-wrapper",
         className
@@ -53,11 +61,17 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
       >
         <AvatarFallback
           className={cn(
-            type === "tool-call" ? "bg-zinc-900 dark:bg-zinc-300" : "bg-white"
+            icon
+              ? "bg-white dark:bg-zinc-800"
+              : type === "tool-call"
+                ? "bg-zinc-900 dark:bg-zinc-300"
+                : "bg-white"
           )}
         >
           {iconUrl && (type === "tool-call" || type === "tool-result") ? (
             <img src={iconUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
+          ) : icon ? (
+            icon
           ) : type === "error" ? (
             <span className="inline-block h-3 w-3 rounded-full bg-red-700" />
           ) : type === "user" ? (

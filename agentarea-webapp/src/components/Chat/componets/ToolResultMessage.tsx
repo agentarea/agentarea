@@ -1,36 +1,33 @@
 import React from "react";
-import { useTranslations } from "next-intl";
 import { Streamdown } from "streamdown";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
+import { ToolIcon } from "../utils/toolIcon";
+import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
+import { describeToolCall } from "../utils/describeToolCall";
 
 interface ToolResultData {
   tool_name: string;
+  tool_call_id?: string;
   result: any;
   success: boolean;
   execution_time?: string;
   arguments?: Record<string, any>;
+  server_icon?: string;
 }
 
 const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
-  const t = useTranslations("Chat.Messages");
+  const desc = describeToolCall(data.tool_name, data.arguments);
 
   const formatResult = (result: any) => {
     if (typeof result === "string") {
       return (
         <Streamdown
           className="prose prose-sm dark:prose-invert max-w-none"
-          components={
-            {
-              think: ({ children }: any) => (
-                <div className="text-xs text-gray-400 dark:text-gray-300">
-                  {children}
-                </div>
-              ),
-            } as any
-          }
+          components={fileAwareMarkdownComponents as any}
+          linkSafety={{ enabled: false }}
         >
-          {result}
+          {preprocessFileLinks(result)}
         </Streamdown>
       );
     }
@@ -59,9 +56,23 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   const colors = getStatusColor();
 
   return (
-    <MessageWrapper type="tool-result">
+    <MessageWrapper
+      type="tool-result"
+      id={data.tool_call_id ? `tc-${data.tool_call_id}` : undefined}
+      iconUrl={data.server_icon}
+      icon={<ToolIcon name={data.tool_name} className="text-zinc-700 dark:text-zinc-200" />}
+    >
       <BaseMessage
-        headerLeft={<span>{`${t("toolCall")}: ${data.tool_name}`}</span>}
+        headerLeft={
+          <span className="flex items-center gap-1.5">
+            <span className="font-medium text-foreground">{desc.text}</span>
+            {desc.code && (
+              <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs text-muted-foreground dark:bg-white/10">
+                {desc.code}
+              </code>
+            )}
+          </span>
+        }
         collapsed={true}
       >
         <div className={`text-sm leading-relaxed ${colors.content}`}>

@@ -48,27 +48,82 @@ import {
   revokeInvitationAction,
 } from "./actions";
 
+type DisplayMember = WorkspaceMember & {
+  email?: string | null;
+  display_name?: string | null;
+  name?: string | null;
+  username?: string | null;
+};
+
 interface MembersClientProps {
-  members: WorkspaceMember[];
+  members: DisplayMember[];
   invitations: WorkspaceInvitation[];
   currentUserId: string | null;
+  currentUserEmail: string | null;
+  currentUserName: string | null;
+  currentUsername: string | null;
 }
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
 }
 
+function getMemberLabel(
+  member: DisplayMember,
+  currentUser: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+    username: string | null;
+  }
+): string {
+  const isSelf = member.user_id === currentUser.id;
+  return (
+    member.display_name ||
+    member.email ||
+    member.name ||
+    member.username ||
+    (isSelf && (currentUser.name || currentUser.email || currentUser.username)) ||
+    member.user_id
+  );
+}
+
+function getMemberSecondaryLabel(
+  member: DisplayMember,
+  currentUser: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+    username: string | null;
+  }
+): string | null {
+  const label = getMemberLabel(member, currentUser);
+  const isSelf = member.user_id === currentUser.id;
+  if (member.email && member.email !== label) return member.email;
+  if (member.username && member.username !== label) return member.username;
+  if (isSelf && currentUser.email && currentUser.email !== label) {
+    return currentUser.email;
+  }
+  if (isSelf && currentUser.username && currentUser.username !== label) {
+    return currentUser.username;
+  }
+  return null;
+}
+
 export default function MembersClient({
   members,
   invitations,
   currentUserId,
+  currentUserEmail,
+  currentUserName,
+  currentUsername,
 }: MembersClientProps) {
   const t = useTranslations("MembersPage");
   const router = useRouter();
@@ -176,13 +231,30 @@ export default function MembersClient({
               <TableBody>
                 {members.map((m) => {
                   const isSelf = m.user_id === currentUserId;
+                  const currentUser = {
+                    id: currentUserId,
+                    email: currentUserEmail,
+                    name: currentUserName,
+                    username: currentUsername,
+                  };
+                  const label = getMemberLabel(m, currentUser);
+                  const secondaryLabel = getMemberSecondaryLabel(m, currentUser);
                   return (
                     <TableRow key={m.id}>
-                      <TableCell className="font-mono text-xs">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate">{m.user_id}</span>
-                          {isSelf && (
-                            <Badge variant="secondary">{t("you")}</Badge>
+                      <TableCell>
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium">
+                              {label}
+                            </span>
+                            {isSelf && (
+                              <Badge variant="secondary">{t("you")}</Badge>
+                            )}
+                          </span>
+                          {secondaryLabel && (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {secondaryLabel}
+                            </span>
                           )}
                         </span>
                       </TableCell>
