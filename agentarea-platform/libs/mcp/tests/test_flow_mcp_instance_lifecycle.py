@@ -55,6 +55,8 @@ def _make_service(
     repo.user_context = MagicMock()
     repo.user_context.user_id = "user-" + str(uuid.uuid4())
     repo.user_context.workspace_id = "ws-" + str(uuid.uuid4())
+    # Workspace-owned spec → no copy-on-write on connect.
+    server_spec.workspace_id = repo.user_context.workspace_id
     repo.session = MagicMock()
 
     def _session_add(obj):
@@ -77,6 +79,8 @@ def _make_service(
 
     mcp_server_repo = MagicMock()
     mcp_server_repo.get_by_id = AsyncMock(return_value=server_spec)
+    # Spec resolution is catalog-aware (ADR-003): code resolves via get_server_by_id.
+    mcp_server_repo.get_server_by_id = AsyncMock(return_value=server_spec)
 
     repo_factory = MagicMock()
     # First call → MCPServerInstanceRepository, second → MCPServerRepository

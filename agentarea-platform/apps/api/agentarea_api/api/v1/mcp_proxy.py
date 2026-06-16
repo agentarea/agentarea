@@ -174,7 +174,7 @@ async def proxy_instance(
     server_spec = None
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
-        server_spec = await server_repo.get_by_id(instance.server_spec_id)
+        server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
 
     upstream_url, instance_type = await _resolve_upstream_url(instance, server_spec)
     if not upstream_url:

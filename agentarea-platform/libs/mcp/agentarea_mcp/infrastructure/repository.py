@@ -264,8 +264,25 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         if server is not None:
             return server
 
-        # Fall back to a read-only catalog projection: built-in specs live in
-        # the registry catalog only (ADR-003) and are not in mcp_servers.
+        # Built-in catalog specs are globally readable by id, not workspace-scoped
+        # (ADR-003). Reconcile mirrors them into mcp_servers under the platform
+        # workspace with a registry_item_id; resolve those across workspaces, but
+        # only catalog mirrors (registry_item_id IS NOT NULL) backed by an active
+        # registry — never another tenant's private custom spec.
+        catalog_mirror = select(self.model_class).where(
+            self.model_class.id == server_id,
+            text(
+                "EXISTS (SELECT 1 FROM registry_items ri "
+                "JOIN registries r ON r.id = ri.registry_id "
+                "WHERE ri.id = mcp_servers.registry_item_id AND r.is_active)"
+            ),
+        )
+        server = (await self.session.execute(catalog_mirror)).scalar_one_or_none()
+        if server is not None:
+            return server
+
+        # Fall back to a read-only catalog projection: built-in specs may live in
+        # the registry catalog only (ADR-003), addressed by their registry-item id.
         item = await self._get_catalog_repository().get_item(str(server_id))
         return _project_catalog_mcp_server(item) if item else None
 

@@ -194,7 +194,7 @@ async def create_mcp_server_connection(
         if not instance:
             raise HTTPException(status_code=500, detail="Failed to create MCP instance")
 
-        server_spec = await service.mcp_server_repository.get_by_id(instance.server_spec_id)
+        server_spec = await service.mcp_server_repository.get_server_by_id(instance.server_spec_id)
         instance_type = "docker"
         if server_spec:
             if server_spec.remote_url:
@@ -470,7 +470,7 @@ async def probe_instance_auth(
                     service.repository.session,
                     service.repository.user_context,
                 )
-                spec = await server_repo.get_by_id(instance.server_spec_id)
+                spec = await server_repo.get_server_by_id(instance.server_spec_id)
                 if spec:
                     new_json_spec = dict(spec.json_spec or {})
                     new_json_spec["auth_methods"] = result["methods"]
