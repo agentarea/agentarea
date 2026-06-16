@@ -85,7 +85,6 @@ class SkillResponse(BaseModel):
     description: str | None
     source_type: str
     source_url: str | None
-    has_files: bool
     network_scope: str
     workspace_id: str
     created_at: str
@@ -111,7 +110,6 @@ class SkillResponse(BaseModel):
             description=skill.description,
             source_type=skill.source_type,
             source_url=skill.source_url,
-            has_files=skill.s3_path is not None,
             network_scope=network_scope,
             workspace_id=getattr(skill, "workspace_id", "") or "",
             created_at=skill.created_at.isoformat() if skill.created_at else "",
@@ -251,7 +249,6 @@ async def list_skills(
     skill_service: SkillServiceDep,
     pagination: PaginationParams = Depends(),
     source_type: str | None = Query(None, description="Filter by source type"),
-    has_files: bool | None = Query(None, description="Filter by package-backed skills"),
     network_scope: str | None = Query(None, description="Filter by network scope"),
     from_registry: bool | None = Query(None, description="Filter registry-created skills"),
 ):
@@ -261,7 +258,6 @@ async def list_skills(
         offset=pagination.offset,
         search=pagination.search,
         source_type=source_type,
-        has_files=has_files,
         network_scope=network_scope,
         from_registry=from_registry,
     )

@@ -7,7 +7,6 @@ export interface Skill {
   description: string | null;
   source_type: SkillSourceType;
   source_url: string | null;
-  has_files: boolean;
   network_scope: SkillNetworkScope;
   workspace_id: string;
   created_at: string;

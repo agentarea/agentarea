@@ -101,7 +101,7 @@ class SkillCreateFromArchive(BaseModel):
 
 
 class SkillImportFromGithub(BaseModel):
-    """Import a skill package from a public GitHub repository URL."""
+    """Import skill package(s) from a public GitHub repository URL."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -118,6 +118,18 @@ class SkillImportFromGithub(BaseModel):
         default=None,
         max_length=1000,
         description="Override skill description (defaults to repo's SKILL.md frontmatter).",
+    )
+    skill_name: str | None = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "Optional selector for repositories containing multiple SKILL.md files. "
+            "Matches frontmatter name or package path."
+        ),
+    )
+    import_all: bool = Field(
+        default=False,
+        description="Import every SKILL.md candidate found in the repository or tree path.",
     )
 
     @field_validator("github_url")
@@ -176,4 +188,3 @@ class SkillSummary(BaseModel):
     name: str
     description: str | None = None
     source_type: str
-    has_files: bool

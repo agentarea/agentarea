@@ -476,7 +476,6 @@ class SkillService:
         offset: int = 0,
         search: str | None = None,
         source_type: str | None = None,
-        has_files: bool | None = None,
         network_scope: str | None = None,
         from_registry: bool | None = None,
     ) -> tuple[list[Skill], int]:
@@ -498,7 +497,6 @@ class SkillService:
             merged,
             search=search,
             source_type=source_type,
-            has_files=has_files,
             network_scope=network_scope,
             from_registry=from_registry,
         )
@@ -512,7 +510,6 @@ class SkillService:
         *,
         search: str | None,
         source_type: str | None,
-        has_files: bool | None,
         network_scope: str | None,
         from_registry: bool | None,
     ) -> list[Skill]:
@@ -529,10 +526,6 @@ class SkillService:
             ]
         if source_type:
             result = [s for s in result if s.source_type == source_type]
-        if has_files is True:
-            result = [s for s in result if s.s3_path is not None]
-        elif has_files is False:
-            result = [s for s in result if s.s3_path is None]
         if network_scope:
             result = [s for s in result if s.network_scope == network_scope]
         if from_registry is True:

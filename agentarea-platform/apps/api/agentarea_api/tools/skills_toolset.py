@@ -21,6 +21,8 @@ This toolset is distinct from the SDK-side ``SkillActivationTool`` (in
 import base64
 import io
 import json
+import posixpath
+import re
 import zipfile
 from typing import Any
 from uuid import UUID
@@ -40,6 +42,13 @@ from .base import platform_context, platform_read_context
 MAX_FILES = 200
 MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
+FRONTMATTER_NAME_RE = re.compile(
+    r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE
+)
+FRONTMATTER_DESCRIPTION_RE = re.compile(
+    r"^description:\s*['\"]?(?P<description>[^'\"\n]+?)['\"]?\s*$",
+    re.MULTILINE,
+)
 
 
 def _validate_files_payload(files: Any) -> str | None:
@@ -78,8 +87,161 @@ def _skill_summary(skill: Any) -> dict[str, Any]:
         "name": skill.name,
         "description": skill.description,
         "source_type": skill.source_type,
-        "has_files": skill.s3_path is not None,
     }
+
+
+def _frontmatter_name(content: str) -> str | None:
+    match = FRONTMATTER_NAME_RE.search(content)
+    return match.group("name").strip() if match else None
+
+
+def _frontmatter_description(content: str) -> str | None:
+    match = FRONTMATTER_DESCRIPTION_RE.search(content)
+    return match.group("description").strip() if match else None
+
+
+async def _fetch_text(url: str) -> str:
+    import httpx
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+
+def _raw_github_url(owner: str, repo: str, branch: str, path: str) -> str:
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path.lstrip('/')}"
+
+
+def _candidate_package_path(skill_md_path: str) -> str:
+    package_path = posixpath.dirname(skill_md_path)
+    return "" if package_path == "." else package_path
+
+
+async def _list_github_skill_candidates(
+    github_url: str,
+) -> tuple[Any, str, list[dict[str, str | None]]]:
+    """Return candidate skill packages found in a GitHub URL scope."""
+    from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
+
+    importer = GitHubSkillImporter()
+    repo_info = importer.parse_github_url(github_url)
+    branch = repo_info.branch or await importer._get_default_branch(  # noqa: SLF001
+        repo_info.owner, repo_info.repo
+    )
+
+    tree_url = (
+        f"https://api.github.com/repos/{repo_info.owner}/{repo_info.repo}/git/trees/"
+        f"{branch}?recursive=1"
+    )
+    tree = json.loads(await _fetch_text(tree_url))
+
+    scope = (repo_info.path or "").strip("/")
+
+    all_paths = [
+        str(item.get("path"))
+        for item in tree.get("tree", [])
+        if isinstance(item, dict)
+        and item.get("type") == "blob"
+        and str(item.get("path", "")).lower().endswith("skill.md")
+    ]
+    if scope and scope.lower().endswith("skill.md"):
+        paths = [path for path in all_paths if path == scope]
+    elif scope:
+        exact = f"{scope.rstrip('/')}/SKILL.md"
+        if exact in all_paths:
+            paths = [exact]
+        else:
+            prefix = f"{scope.rstrip('/')}/"
+            paths = [path for path in all_paths if path.startswith(prefix)]
+    else:
+        paths = all_paths
+
+    if not paths:
+        raise ValueError(f"No SKILL.md found in GitHub repository: {github_url}")
+
+    def sort_key(path: str) -> tuple[int, str]:
+        return (0 if path.lower() == "skill.md" else 1, path)
+
+    candidates: list[dict[str, str | None]] = []
+    for path in sorted(paths, key=sort_key):
+        raw_url = _raw_github_url(repo_info.owner, repo_info.repo, branch, path)
+        content = await _fetch_text(raw_url)
+        candidates.append(
+            {
+                "name": _frontmatter_name(content),
+                "description": _frontmatter_description(content),
+                "skill_path": path,
+                "package_path": _candidate_package_path(path),
+                "raw_url": raw_url,
+            }
+        )
+
+    return repo_info, branch, candidates
+
+
+def _select_github_candidates(
+    candidates: list[dict[str, str | None]],
+    *,
+    selector: str | None,
+    import_all: bool,
+) -> list[dict[str, str | None]]:
+    if import_all:
+        return candidates
+
+    if selector:
+        wanted = selector.strip().lower()
+        matches = [
+            candidate
+            for candidate in candidates
+            if (candidate.get("name") or "").lower() == wanted
+            or (candidate.get("package_path") or "").lower().endswith(f"/{wanted}")
+            or (candidate.get("package_path") or "").lower() == wanted
+        ]
+        if not matches:
+            raise ValueError(f"No SKILL.md with name or path {selector!r} found")
+        if len(matches) > 1:
+            raise ValueError(f"Multiple skills match {selector!r}; use a more specific path")
+        return matches
+
+    if len(candidates) == 1:
+        return candidates
+
+    raise ValueError("Multiple skills found")
+
+
+async def _github_skill_package_zip(
+    github_url: str,
+    *,
+    package_path: str | None,
+) -> bytes:
+    """Download a GitHub repo and re-root one skill package into a ZIP."""
+    from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
+
+    importer = GitHubSkillImporter()
+    zip_data = await importer.download_repo(github_url)
+    package_prefix = f"{package_path.strip('/')}/" if package_path else ""
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(zip_data)) as source, zipfile.ZipFile(
+        out, "w", zipfile.ZIP_DEFLATED
+    ) as target:
+        for info in source.infolist():
+            if info.is_dir():
+                continue
+            parts = info.filename.split("/", 1)
+            if len(parts) != 2:
+                continue
+            relative = parts[1]
+            if package_prefix:
+                if not relative.startswith(package_prefix):
+                    continue
+                relative = relative[len(package_prefix) :]
+            if not relative or relative.startswith("__MACOSX/"):
+                continue
+            target.writestr(relative, source.read(info.filename))
+
+    return out.getvalue()
 
 
 @toolset(
@@ -124,11 +286,13 @@ class SkillsToolset(Toolset):
         name: str = "",
         description: str = "",
     ) -> str:
-        """Create a skill from a file map (path -> text). Must include SKILL.md.
+        """Create a manually authored skill from inline files; do not use for URL/GitHub installs.
 
-        Limits: 200 files, 5 MB total. For larger or binary packages use
-        create_from_archive. name/description default to YAML frontmatter
-        parsed from SKILL.md.
+        Must include SKILL.md. Limits: 200 files, 5 MB total. For larger or
+        binary packages use create_from_archive. For public GitHub repositories
+        or repository package URLs, prefer import_from_github so the original
+        package files and source traceability are preserved. name/description
+        default to YAML frontmatter parsed from SKILL.md.
         """
         err = _validate_files_payload(files)
         if err:
@@ -211,8 +375,15 @@ class SkillsToolset(Toolset):
         github_url: str,
         name: str = "",
         description: str = "",
+        skill_name: str = "",
+        import_all: bool = False,
     ) -> str:
-        """Import a skill package from a public GitHub repository URL."""
+        """Import skill package(s) from a public GitHub repository URL.
+
+        If the repository or tree contains multiple SKILL.md files, pass
+        skill_name to choose one or import_all=true to import every candidate.
+        Without either, the tool returns candidates instead of guessing.
+        """
         try:
             payload = SkillImportFromGithub(
                 github_url=github_url,
@@ -222,14 +393,79 @@ class SkillsToolset(Toolset):
         except ValueError as exc:
             return json.dumps({"error": str(exc)})
 
-        async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
+        return await self._import_github_packages(
+            github_url=payload.github_url,
+            source_url=payload.github_url,
+            name=payload.name or "",
+            description=payload.description or "",
+            skill_name=skill_name,
+            import_all=import_all,
+        )
+
+    async def _import_github_packages(
+        self,
+        *,
+        github_url: str,
+        source_url: str,
+        name: str = "",
+        description: str = "",
+        skill_name: str = "",
+        import_all: bool = False,
+    ) -> str:
+        try:
+            _repo_info, _branch, candidates = await _list_github_skill_candidates(github_url)
+            selected = _select_github_candidates(
+                candidates,
+                selector=skill_name or name or None,
+                import_all=import_all,
+            )
+        except ValueError as exc:
+            payload = {"error": str(exc)}
+            if str(exc) == "Multiple skills found":
+                payload.update(
+                    {
+                        "code": "multiple_skills_found",
+                        "candidates": candidates,
+                        "hint": "Call import_from_github again with skill_name, "
+                        "a more specific GitHub tree URL, or import_all=true.",
+                    }
+                )
+            return json.dumps(payload)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
+        created: list[dict[str, Any]] = []
+        async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
 
-            service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            skill = await service.create_from_github(payload)
-            summary = _skill_summary(skill)
-            summary["source_url"] = skill.source_url
-            return json.dumps(summary, default=str)
+            service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
+            repo = service._get_repository()  # noqa: SLF001
+            for candidate in selected:
+                zip_data = await _github_skill_package_zip(
+                    github_url,
+                    package_path=candidate.get("package_path") or "",
+                )
+                skill = await service.create_from_zip(
+                    zip_data=zip_data,
+                    name=(name or None) if len(selected) == 1 else None,
+                    description=(description or None) if len(selected) == 1 else None,
+                )
+                updated = await repo.update(str(skill.id), source_url=source_url)
+                if updated is not None:
+                    skill = updated
+                summary = _skill_summary(skill)
+                summary.update(
+                    {
+                        "source_url": source_url,
+                        "resolved_source_url": candidate.get("raw_url"),
+                        "package_path": candidate.get("package_path"),
+                    }
+                )
+                created.append(summary)
+
+        if len(created) == 1:
+            return json.dumps(created[0], default=str)
+        return json.dumps({"created": created, "count": len(created)}, default=str)
 
     @tool_method
     async def edit_metadata(

@@ -99,7 +99,6 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     assert first["description"] == "Test Description"
     assert first["source_type"] == "github"
     assert first["source_url"] == "https://github.com/owner/repo"
-    assert first["has_files"] is True
     assert first["network_scope"] == "private"
     assert first["workspace_id"] == "test_workspace"
     assert "content" not in first
@@ -108,7 +107,6 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     assert second["description"] == "Second Description"
     assert second["source_type"] == "zip"
     assert second["source_url"] is None
-    assert second["has_files"] is True
     assert second["network_scope"] == "egress"
     assert second["workspace_id"] == "test_workspace"
     assert "content" not in second
@@ -117,7 +115,6 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
         offset=0,
         search=None,
         source_type=None,
-        has_files=None,
         network_scope=None,
         from_registry=None,
     )
@@ -129,7 +126,7 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
 
     response = await async_client.get(
         "/v1/skills?page=2&page_size=10&search=github"
-        "&source_type=github&has_files=true&network_scope=egress&from_registry=false"
+        "&source_type=github&network_scope=egress&from_registry=false"
     )
 
     assert response.status_code == 200
@@ -146,7 +143,6 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
         offset=10,
         search="github",
         source_type="github",
-        has_files=True,
         network_scope="egress",
         from_registry=False,
     )
