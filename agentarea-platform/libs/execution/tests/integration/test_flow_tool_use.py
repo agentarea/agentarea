@@ -215,6 +215,9 @@ class TestAgentToolUseFlow:
                         timeout_seconds=30,
                         max_reasoning_iterations=5,
                         budget_usd=1.0,
+                        # Tool authorization is zero-trust/default-deny: the task
+                        # policy must explicitly grant tools for this round-trip.
+                        effective_policy={"tools": {"allowed": ["*"]}},
                     )
 
                     handle = await env.client.start_workflow(
