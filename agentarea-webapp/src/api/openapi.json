@@ -7811,6 +7811,135 @@
         "title": "RegistryUpdate",
         "type": "object"
       },
+      "RelationshipItem": {
+        "properties": {
+          "direct": {
+            "title": "Direct",
+            "type": "boolean"
+          },
+          "fanout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fanout"
+          },
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "object_name": {
+            "title": "Object Name",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "subject_kind": {
+            "enum": [
+              "agent",
+              "user",
+              "workspace"
+            ],
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "subject_name": {
+            "title": "Subject Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace",
+          "object",
+          "object_name",
+          "relation",
+          "subject",
+          "subject_kind",
+          "subject_name",
+          "direct"
+        ],
+        "title": "RelationshipItem",
+        "type": "object"
+      },
+      "RelationshipWriteRequest": {
+        "properties": {
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubjectSetBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "namespace",
+          "object",
+          "relation"
+        ],
+        "title": "RelationshipWriteRequest",
+        "type": "object"
+      },
+      "RelationshipsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "relationships": {
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            },
+            "title": "Relationships",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relationships",
+          "count"
+        ],
+        "title": "RelationshipsResponse",
+        "type": "object"
+      },
       "ResolveHop": {
         "properties": {
           "color": {
@@ -9200,6 +9329,170 @@
         "title": "TokenPolicy",
         "type": "object"
       },
+      "ToolAccessCheckRequest": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional exact argument set. Omit to check the whole-tool grant.",
+            "title": "Arguments"
+          },
+          "tool_name": {
+            "minLength": 1,
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "User UUID or User:<uuid> subject.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "tool_name"
+        ],
+        "title": "ToolAccessCheckRequest",
+        "type": "object"
+      },
+      "ToolAccessCheckResponse": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/ToolAccessGrant"
+          }
+        },
+        "required": [
+          "allowed",
+          "grant"
+        ],
+        "title": "ToolAccessCheckResponse",
+        "type": "object"
+      },
+      "ToolAccessGrant": {
+        "properties": {
+          "arguments_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments Hash"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "tool",
+              "arguments"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "user_id",
+          "tool_name",
+          "object_id"
+        ],
+        "title": "ToolAccessGrant",
+        "type": "object"
+      },
+      "ToolAccessGrantListResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/ToolAccessGrant"
+            },
+            "title": "Grants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "grants",
+          "count"
+        ],
+        "title": "ToolAccessGrantListResponse",
+        "type": "object"
+      },
+      "ToolAccessGrantRequest": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional exact argument set. Omit for a whole-tool grant.",
+            "title": "Arguments"
+          },
+          "tool_name": {
+            "minLength": 1,
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "User UUID or User:<uuid> subject.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "tool_name"
+        ],
+        "title": "ToolAccessGrantRequest",
+        "type": "object"
+      },
+      "ToolAccessGrantResponse": {
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/ToolAccessGrant"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "grant"
+        ],
+        "title": "ToolAccessGrantResponse",
+        "type": "object"
+      },
       "ToolResponse": {
         "description": "Unified tool response format.",
         "properties": {
@@ -10001,135 +10294,6 @@
         "title": "TriggerUpdate",
         "type": "object"
       },
-      "TupleItem": {
-        "properties": {
-          "direct": {
-            "title": "Direct",
-            "type": "boolean"
-          },
-          "fanout": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fanout"
-          },
-          "namespace": {
-            "title": "Namespace",
-            "type": "string"
-          },
-          "object": {
-            "title": "Object",
-            "type": "string"
-          },
-          "object_name": {
-            "title": "Object Name",
-            "type": "string"
-          },
-          "relation": {
-            "title": "Relation",
-            "type": "string"
-          },
-          "subject": {
-            "title": "Subject",
-            "type": "string"
-          },
-          "subject_kind": {
-            "enum": [
-              "agent",
-              "user",
-              "workspace"
-            ],
-            "title": "Subject Kind",
-            "type": "string"
-          },
-          "subject_name": {
-            "title": "Subject Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "namespace",
-          "object",
-          "object_name",
-          "relation",
-          "subject",
-          "subject_kind",
-          "subject_name",
-          "direct"
-        ],
-        "title": "TupleItem",
-        "type": "object"
-      },
-      "TupleWriteRequest": {
-        "properties": {
-          "namespace": {
-            "title": "Namespace",
-            "type": "string"
-          },
-          "object": {
-            "title": "Object",
-            "type": "string"
-          },
-          "relation": {
-            "title": "Relation",
-            "type": "string"
-          },
-          "subject_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject Id"
-          },
-          "subject_set": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SubjectSetBody"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "namespace",
-          "object",
-          "relation"
-        ],
-        "title": "TupleWriteRequest",
-        "type": "object"
-      },
-      "TuplesResponse": {
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "tuples": {
-            "items": {
-              "$ref": "#/components/schemas/TupleItem"
-            },
-            "title": "Tuples",
-            "type": "array"
-          }
-        },
-        "required": [
-          "tuples",
-          "count"
-        ],
-        "title": "TuplesResponse",
-        "type": "object"
-      },
       "UpcomingItem": {
         "properties": {
           "cron_expression": {
@@ -10723,6 +10887,24 @@
         "title": "X402ConfigSchema",
         "type": "object"
       },
+      "agentarea_api__api__v1__access_control__SyncResponse": {
+        "properties": {
+          "collections": {
+            "title": "Collections",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "collections"
+        ],
+        "title": "SyncResponse",
+        "type": "object"
+      },
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
         "properties": {
           "context_window": {
@@ -11023,24 +11205,6 @@
           "updated_at"
         ],
         "title": "ModelSpecResponse",
-        "type": "object"
-      },
-      "agentarea_api__api__v1__rebac__SyncResponse": {
-        "properties": {
-          "collections": {
-            "title": "Collections",
-            "type": "integer"
-          },
-          "written": {
-            "title": "Written",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "written",
-          "collections"
-        ],
-        "title": "SyncResponse",
         "type": "object"
       },
       "agentarea_api__api__v1__registries__SyncResponse": {
@@ -11461,9 +11625,311 @@
         ]
       }
     },
+    "/v1/access-control/check": {
+      "post": {
+        "description": "Check whether a subject has a relation on an object.",
+        "operationId": "check_permission_v1_access_control_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Permission",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/graph": {
+      "get": {
+        "description": "Return the full authorization graph for the current workspace.",
+        "operationId": "get_graph_v1_access_control_graph_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Graph",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/relationships": {
+      "delete": {
+        "description": "Delete an authorization relationship from the configured graph backend.",
+        "operationId": "delete_relationship_v1_access_control_relationships_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Relationship",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      },
+      "get": {
+        "description": "List authorization relationships enriched with display names.",
+        "operationId": "list_relationships_v1_access_control_relationships_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "namespace",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Namespace"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Relationships",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      },
+      "post": {
+        "description": "Write an authorization relationship to the configured graph backend.",
+        "operationId": "create_relationship_v1_access_control_relationships_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Relationship V1 Access Control Relationships Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Relationship",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/resolve": {
+      "post": {
+        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing workspace relationships directly so the UI can render the derivation.",
+        "operationId": "resolve_access_v1_access_control_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resolve Access",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/sync": {
+      "post": {
+        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  2. Mirror each collection membership relationship.\n  3. Mirror each direct agent-to-skill grant.",
+        "operationId": "sync_grants_v1_access_control_sync_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/agentarea_api__api__v1__access_control__SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Grants",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
     "/v1/agents": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future ReBAC) rather than query parameters.",
+        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
         "operationId": "list_agents_v1_agents_get",
         "responses": {
           "200": {
@@ -11496,7 +11962,7 @@
     },
     "/v1/agents/": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future ReBAC) rather than query parameters.",
+        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
         "operationId": "list_agents_v1_agents__get",
         "responses": {
           "200": {
@@ -19804,308 +20270,6 @@
         ]
       }
     },
-    "/v1/rebac/check": {
-      "post": {
-        "description": "Check whether a subject has a relation on an object.",
-        "operationId": "check_permission_v1_rebac_check_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CheckRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Check Permission",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      }
-    },
-    "/v1/rebac/graph": {
-      "get": {
-        "description": "Return the full authorization graph for the current workspace.",
-        "operationId": "get_graph_v1_rebac_graph_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GraphResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Graph",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      }
-    },
-    "/v1/rebac/resolve": {
-      "post": {
-        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing the workspace tuples directly so the UI can render the derivation.",
-        "operationId": "resolve_access_v1_rebac_resolve_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResolveResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Resolve Access",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      }
-    },
-    "/v1/rebac/sync": {
-      "post": {
-        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.\n  2. For each collection_skills row, write\n     ``Skill:<sid>#collections@SkillCollection:<cid>``.\n  3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.",
-        "operationId": "sync_grants_v1_rebac_sync_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/agentarea_api__api__v1__rebac__SyncResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Sync Grants",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      }
-    },
-    "/v1/rebac/tuples": {
-      "delete": {
-        "description": "Delete a relation tuple from the configured graph backend.",
-        "operationId": "delete_tuple_v1_rebac_tuples_delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TupleWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Tuple",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      },
-      "get": {
-        "description": "List relation tuples, enriched with object/subject display names.",
-        "operationId": "list_tuples_v1_rebac_tuples_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "namespace",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Namespace"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TuplesResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Tuples",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      },
-      "post": {
-        "description": "Write a relation tuple to the configured graph backend.",
-        "operationId": "create_tuple_v1_rebac_tuples_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TupleWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Tuple V1 Rebac Tuples Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Tuple",
-        "tags": [
-          "v1",
-          "protected",
-          "rebac"
-        ]
-      }
-    },
     "/v1/registries/": {
       "get": {
         "operationId": "list_registries_v1_registries__get",
@@ -21006,7 +21170,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills": {
       "post": {
-        "description": "Add a skill to a collection and mirror the membership into ReBAC.",
+        "description": "Add a skill to a collection and mirror the membership into the graph.",
         "operationId": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
         "parameters": [
           {
@@ -21060,7 +21224,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
       "delete": {
-        "description": "Remove a skill from a collection and delete the ReBAC membership tuple.",
+        "description": "Remove a skill from a collection and delete the graph membership.",
         "operationId": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
         "parameters": [
           {
@@ -22130,6 +22294,171 @@
           "v1",
           "protected",
           "tasks"
+        ]
+      }
+    },
+    "/v1/tool-access/checks": {
+      "post": {
+        "description": "Check whether a user can call a tool.\n\nOmitting ``arguments`` checks a whole-tool grant. Passing ``arguments``\nchecks the concrete invocation path used by runtime tool execution.",
+        "operationId": "check_tool_access_v1_tool_access_checks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      }
+    },
+    "/v1/tool-access/grants": {
+      "delete": {
+        "description": "Revoke a whole-tool or exact-arguments grant.",
+        "operationId": "revoke_tool_access_v1_tool_access_grants_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      },
+      "get": {
+        "description": "List tool access grants in the configured graph backend.",
+        "operationId": "list_tool_access_grants_v1_tool_access_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessGrantListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tool Access Grants",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      },
+      "post": {
+        "description": "Grant a user access to a whole tool, or to an exact argument set.",
+        "operationId": "grant_tool_access_v1_tool_access_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
         ]
       }
     },

@@ -461,6 +461,7 @@ class AgentExecutionWorkflow:
                 resolve_model_request = ResolveModelRequest(
                     model_id=model_id,
                     workspace_id=self.state.workspace_id,
+                    user_id=self.state.user_id,
                 )
                 self.state.resolved_model = await workflow.execute_activity(
                     Activities.RESOLVE_MODEL,

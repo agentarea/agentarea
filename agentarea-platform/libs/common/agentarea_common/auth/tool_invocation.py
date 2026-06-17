@@ -29,7 +29,7 @@ def canonical_tool_args(tool_args: dict[str, Any] | None) -> str:
 def tool_resource_object_id(tool_name: str, tool_args: dict[str, Any] | None) -> str:
     """Return the OpenFGA object id for this exact tool invocation."""
     args_hash = hashlib.sha256(canonical_tool_args(tool_args).encode()).hexdigest()
-    return f"{tool_object_id(tool_name)}:args:{args_hash}"
+    return f"{tool_object_id(tool_name)}~args~{args_hash}"
 
 
 def tool_resource_link_tuple(tool_name: str, tool_args: dict[str, Any] | None) -> RelationTuple:
@@ -53,7 +53,7 @@ async def is_tool_invocation_allowed(
 
     Grants supported by the model:
     - Broad: ``Tool:<tool>#callers@User:<user>``.
-    - Exact args: ``ToolResource:<tool>:args:<sha256>#callers@User:<user>``.
+    - Exact args: ``ToolResource:<tool>~args~<sha256>#callers@User:<user>``.
 
     No user id, OpenFGA errors, and false checks all deny.
     """

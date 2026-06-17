@@ -120,12 +120,12 @@ class UpdateAllResponse(BaseModel):
 
 
 async def require_platform_catalog_write(user_context: UserContextDep) -> None:
-    """ReBAC guard for mutating the global registry catalog.
+    """access-control guard for mutating the global registry catalog.
 
     Registries/registry_items are global, platform-owned catalog infrastructure
     (ADR-003) — they have no per-workspace owner. Writing them therefore requires
     write access to the platform scope, decided by the AuthorizationService (the
-    ReBAC abstraction: own-workspace rule in OSS, Keto relations in enterprise).
+    access-control abstraction: own-workspace rule in OSS, Keto relations in enterprise).
     No RBAC roles are involved. Reads stay open so every workspace sees built-ins.
     """
     from agentarea_common.auth.authorization import AuthorizationService

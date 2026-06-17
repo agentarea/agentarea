@@ -158,12 +158,12 @@ export const {
   previewEffectivePolicy,
   getTaskPolicySnapshot,
 
-  // ReBAC Access Explorer API
-  getRebacGraph,
-  listRebacTuples,
-  resolveRebac,
-  createRebacTuple,
-  deleteRebacTuple,
+  // Access-control graph explorer API
+  getAccessControlGraph,
+  listAccessControlRelationships,
+  resolveAccessControl,
+  createAccessControlRelationship,
+  deleteAccessControlRelationship,
   listSkillCollections,
 
   // Audit Logs API

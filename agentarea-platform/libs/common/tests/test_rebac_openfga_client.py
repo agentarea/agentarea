@@ -65,13 +65,13 @@ async def test_check_posts_contextual_tuples():
     client = _client(handler)
     await client.check(
         namespace="ToolResource",
-        object="github_create_issue:args:abc",
+        object="github_create_issue~args~abc",
         relation="can_call",
         subject_id="User:u1",
         contextual_tuples=[
             RelationTuple(
                 namespace="ToolResource",
-                object="github_create_issue:args:abc",
+                object="github_create_issue~args~abc",
                 relation="tool",
                 subject_id="Tool:github_create_issue",
             )
@@ -83,7 +83,7 @@ async def test_check_posts_contextual_tuples():
             {
                 "user": "Tool:github_create_issue",
                 "relation": "tool",
-                "object": "ToolResource:github_create_issue:args:abc",
+                "object": "ToolResource:github_create_issue~args~abc",
             }
         ]
     }

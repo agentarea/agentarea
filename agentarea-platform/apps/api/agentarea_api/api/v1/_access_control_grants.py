@@ -30,7 +30,7 @@ async def grant_user_relation(
     """Grant an initial direct relation to the creator when graph auth is enabled.
 
     Resource create endpoints are still workspace-scoped by the database layer,
-    but update/delete endpoints also consult ReBAC. Without this bootstrap tuple,
+    but update/delete endpoints also consult access-control. Without this bootstrap relationship,
     a user can create a resource and then immediately get 403 on their own row.
     """
     settings = get_settings()
@@ -49,13 +49,13 @@ async def grant_user_relation(
         logger.warning("%s is enabled but client is not registered; skipping grant", backend)
         return
 
-    tuple_ = RelationTuple(
+    relationship = RelationTuple(
         namespace=namespace,
         object=str(object_id),
         relation=relation,
         subject_id=f"User:{user_id}",
     )
     try:
-        await client.write_tuple(tuple_)
+        await client.write_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-        logger.exception("Failed to grant creator relation in %s: %s", backend, tuple_)
+        logger.exception("Failed to grant creator relation in %s: %s", backend, relationship)

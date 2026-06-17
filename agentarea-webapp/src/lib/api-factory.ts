@@ -1853,22 +1853,22 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    // ReBAC Access Explorer API
-    getRebacGraph: async () => {
+    // Access-control graph explorer API
+    getAccessControlGraph: async () => {
       const { data, error } = await client.GET(
-        "/v1/rebac/graph" as any,
+        "/v1/access-control/graph" as any,
         {} as any
       );
       return { data, error };
     },
 
-    listRebacTuples: async (params?: {
+    listAccessControlRelationships: async (params?: {
       object?: string;
       relation?: string;
       subject?: string;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/rebac/tuples" as any,
+        "/v1/access-control/relationships" as any,
         {
           params: { query: params },
         } as any
@@ -1876,40 +1876,49 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    resolveRebac: async (body: {
+    resolveAccessControl: async (body: {
       subject_id: string;
       resource_kind: "skill" | "mcp" | "agent";
       resource_id: string;
     }) => {
-      const { data, error } = await client.POST("/v1/rebac/resolve" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.POST(
+        "/v1/access-control/resolve" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 
-    createRebacTuple: async (body: {
+    createAccessControlRelationship: async (body: {
       namespace: string;
       object: string;
       relation: string;
       subject_id?: string;
       subject_set?: string;
     }) => {
-      const { data, error } = await client.POST("/v1/rebac/tuples" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.POST(
+        "/v1/access-control/relationships" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 
-    deleteRebacTuple: async (body: {
+    deleteAccessControlRelationship: async (body: {
       namespace: string;
       object: string;
       relation: string;
       subject_id?: string;
       subject_set?: string;
     }) => {
-      const { data, error } = await client.DELETE("/v1/rebac/tuples" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.DELETE(
+        "/v1/access-control/relationships" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 

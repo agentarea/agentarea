@@ -34,6 +34,7 @@ class ResolveModelRequest(BaseModel):
 
     model_id: str
     workspace_id: str
+    user_id: str | None = None
 
 
 class WorkflowCommand(BaseModel):

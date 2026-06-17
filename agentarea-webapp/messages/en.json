@@ -806,6 +806,13 @@
   },
   "Chat": {
     "writeNewTaskFor": "Write new task for {agentName}...",
+    "inputControls": {
+      "agent": "Agent",
+      "project": "Project",
+      "taskPolicy": "Task policy",
+      "noProject": "No project",
+      "defaultPolicy": "Default policy"
+    },
     "Messages": {
       "toolCall": "Tool Call",
       "toolCallGroup": "{count, plural, =1 {1 tool call} other {# tool calls}}",

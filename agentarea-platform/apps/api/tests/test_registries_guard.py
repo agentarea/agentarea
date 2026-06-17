@@ -1,7 +1,7 @@
-"""ReBAC guard for global registry-catalog writes.
+"""access-control guard for global registry-catalog writes.
 
 The registry catalog is global, platform-owned infrastructure (ADR-003). Writes
-must be gated by the AuthorizationService (ReBAC), not by a role. A regular
+must be gated by the AuthorizationService (access-control), not by a role. A regular
 workspace user must be rejected; the platform principal is allowed.
 """
 

@@ -4,21 +4,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Activity,
-  BarChart3,
-  Brain,
-  LayoutDashboard,
-  Package,
-} from "lucide-react";
+import { Activity, LayoutDashboard, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { key: "", icon: LayoutDashboard, labelKey: "overview" },
   { key: "events", icon: Activity, labelKey: "events" },
   { key: "artifacts", icon: Package, labelKey: "artifacts" },
-  { key: "memory", icon: Brain, labelKey: "memory" },
-  { key: "metrics", icon: BarChart3, labelKey: "metrics" },
 ];
 
 export default function TaskSubheader({ taskId }: { taskId: string }) {

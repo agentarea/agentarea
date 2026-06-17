@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RebacNode, RebacResolveResponse } from "@/types/rebac";
+import type { AccessControlNode, AccessControlResolveResponse } from "@/types/access-control";
 import styles from "./access-control.module.css";
 
 interface ResolveOption {
@@ -11,13 +11,13 @@ interface ResolveOption {
 }
 
 interface ResolveAccessCardProps {
-  agents: RebacNode[];
+  agents: AccessControlNode[];
   objects: ResolveOption[];
   subjectId: string;
   objectId: string;
   onSubjectChange: (id: string) => void;
   onObjectChange: (id: string) => void;
-  result: RebacResolveResponse | null;
+  result: AccessControlResolveResponse | null;
   loading: boolean;
   error: string | null;
 }
@@ -93,7 +93,7 @@ export default function ResolveAccessCard({
             </select>
             <ChevronDown
               className="h-4 w-4 shrink-0"
-              style={{ color: "var(--rebac-muted2)" }}
+              style={{ color: "var(--access-muted2)" }}
             />
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function ResolveAccessCard({
             </select>
             <ChevronDown
               className="h-4 w-4 shrink-0"
-              style={{ color: "var(--rebac-muted2)" }}
+              style={{ color: "var(--access-muted2)" }}
             />
           </div>
         </div>

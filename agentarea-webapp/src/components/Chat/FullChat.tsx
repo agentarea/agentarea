@@ -3,11 +3,12 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import type { components } from "@/api/schema";
 import { useMentions } from "@/hooks/useMentions";
 import {
   pauseAgentTaskAction as pauseAgentTask,
-  resumeAgentTaskAction as resumeAgentTask,
   resolveEscalationAction as resolveEscalation,
+  resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import {
@@ -22,6 +23,7 @@ import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { createSSEEventHandler } from "./handlers/eventHandlers";
 import { parseSSEStream } from "./handlers/sseParser";
+import { useA2UIActions } from "./hooks/useA2UIActions";
 import {
   useChatMessages,
   type ChatMessage,
@@ -31,7 +33,6 @@ import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
-import { useA2UIActions } from "./hooks/useA2UIActions";
 import { MessageRenderer } from "./MessageComponents";
 
 export interface Agent {
@@ -40,10 +41,115 @@ export interface Agent {
   description?: string | null;
 }
 
+export interface ProjectOption {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface TaskPolicyRule {
+  id: string;
+  target: string;
+  effect: string;
+  params: Record<string, unknown>;
+}
+
+export interface TaskPolicyOption {
+  id: string;
+  name: string;
+  description?: string | null;
+  policy?: TaskPolicyRule;
+}
+
+type TaskPolicyDocument = components["schemas"]["PolicyDocument"];
+
+function buildTaskPolicyDocument(
+  rule: TaskPolicyRule | undefined
+): TaskPolicyDocument | undefined {
+  if (!rule) return undefined;
+
+  const params = rule.params ?? {};
+  const document: TaskPolicyDocument = {};
+
+  if (rule.effect === "cap" && rule.target === "tokens") {
+    document.tokens = {
+      max_tokens: toNullableNumber(params.max_tokens),
+      max_tokens_per_call: toNullableNumber(params.max_tokens_per_call),
+    };
+  }
+
+  if (rule.effect === "cap" && rule.target === "spend") {
+    const amount = toNullableMoney(params.amount_usd);
+    document.budget =
+      params.period === "run"
+        ? { run_budget_usd: amount }
+        : { monthly_spend_cap_usd: amount };
+  }
+
+  if (rule.effect === "cap" && rule.target === "service") {
+    document.budget = {
+      service_budget_usd: toNullableMoney(params.amount_usd),
+    };
+  }
+
+  if (rule.target.startsWith("tool:")) {
+    const toolName = rule.target.slice("tool:".length);
+    if (rule.effect === "deny") {
+      document.tools = { denied: [toolName] };
+    }
+    if (rule.effect === "allow") {
+      document.tools = { allowed: [toolName] };
+    }
+    if (rule.effect === "approval") {
+      document.approval = {
+        requires_human_approval: true,
+        approvers: toStringArray(params.approvers),
+      };
+    }
+  }
+
+  if (rule.effect === "approval" && rule.target === "*") {
+    document.approval = {
+      requires_human_approval: true,
+      approvers: toStringArray(params.approvers),
+    };
+  }
+
+  if (rule.effect === "safety" && rule.target === "content") {
+    document.content_safety = {
+      prompt_injection_detection_enabled: Boolean(params.prompt_injection),
+      output_sanitizer_enabled: Boolean(params.output_sanitizer),
+    };
+  }
+
+  return Object.keys(document).length > 0 ? document : undefined;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toNullableMoney(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") return value;
+  return null;
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
 interface FullChatProps {
   agent: Agent;
   availableAgents?: Agent[];
   onAgentChange?: (agent: Agent) => void;
+  availableProjects?: ProjectOption[];
+  availableTaskPolicies?: TaskPolicyOption[];
   startCentered?: boolean;
   taskId?: string;
   initialMessages?: ChatMessage[];
@@ -70,6 +176,8 @@ export default function FullChat({
   onTaskFinished,
   className,
   badgeSuggestions,
+  availableProjects = [],
+  availableTaskPolicies = [],
 }: FullChatProps) {
   const t = useTranslations("Chat");
 
@@ -99,7 +207,10 @@ export default function FullChat({
     }
   );
 
-  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(agent.id, currentTaskId);
+  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(
+    agent.id,
+    currentTaskId
+  );
 
   const {
     messagesContainerRef,
@@ -134,9 +245,17 @@ export default function FullChat({
   const [isLoading, setIsLoading] = React.useState(false);
   const [isPausing, setIsPausing] = React.useState(false);
   const [isResuming, setIsResuming] = React.useState(false);
-  const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<string | null>(null);
+  const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<
+    string | null
+  >(null);
   const [input, setInput] = React.useState(""); // Stores @[agentId:agentName] format
   const [inputDisplay, setInputDisplay] = React.useState(""); // Stores @agentName for display
+  const [selectedProjectId, setSelectedProjectId] = React.useState<
+    string | null
+  >(null);
+  const [selectedTaskPolicyId, setSelectedTaskPolicyId] = React.useState<
+    string | null
+  >(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -250,6 +369,10 @@ export default function FullChat({
 
     const plainContent = extractPlainText(input);
     const finalContent = restoreMentionIds(input, mentionAgents);
+    const selectedTaskPolicy = availableTaskPolicies.find(
+      (policy) => policy.id === selectedTaskPolicyId
+    );
+    const taskPolicy = buildTaskPolicyDocument(selectedTaskPolicy?.policy);
 
     const userMessage: UserChatMessage = {
       id: Date.now().toString(),
@@ -278,8 +401,14 @@ export default function FullChat({
         },
         body: JSON.stringify({
           description: plainContent,
+          project_id: selectedProjectId,
+          task_policy: taskPolicy,
           parameters: {
-            context: {},
+            context: {
+              project_id: selectedProjectId,
+              task_policy_rule_id: selectedTaskPolicy?.id,
+              task_policy_rule_name: selectedTaskPolicy?.name,
+            },
             task_type: "chat",
             session_id: `chat-${Date.now()}`,
           },
@@ -525,11 +654,20 @@ export default function FullChat({
             currentAgent={agent}
             availableAgents={availableAgents}
             onAgentChange={onAgentChange}
+            currentProjectId={selectedProjectId}
+            availableProjects={availableProjects}
+            onProjectChange={setSelectedProjectId}
+            currentTaskPolicyId={selectedTaskPolicyId}
+            availableTaskPolicies={availableTaskPolicies}
+            onTaskPolicyChange={setSelectedTaskPolicyId}
             onStop={isLoading && currentTaskId ? handlePause : undefined}
             isStopping={isPausing}
             onResume={currentTaskId ? handleResume : undefined}
             isResuming={isResuming}
-            canResume={taskLifecycleStatus === "paused" || taskLifecycleStatus === "blocked"}
+            canResume={
+              taskLifecycleStatus === "paused" ||
+              taskLifecycleStatus === "blocked"
+            }
           />
         </div>
       </div>

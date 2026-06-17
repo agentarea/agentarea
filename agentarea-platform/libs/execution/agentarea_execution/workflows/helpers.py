@@ -1,10 +1,13 @@
 """Helper classes and utilities for agent execution workflows."""
 
-import fnmatch
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
 
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    decide_tool_policy,
+)
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -66,41 +69,13 @@ class ToolAction(StrEnum):
 
 
 def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) -> ToolAction:
-    """Single policy decision point applied to EVERY capability tool call.
-
-    Consolidates ``ToolsPolicy`` (allow/deny) and ``ApprovalPolicy`` from the
-    resolved governance snapshot into one verdict, with precedence:
-
-    1. no explicit ``tools.allowed``           -> DENY  (zero-trust default)
-    2. tool in ``tools.denied``                -> DENY
-    3. tool not in ``tools.allowed``           -> DENY
-    3. approval required (global flag or tool in escalation_rules)
-       -> REQUIRE_APPROVAL
-    4. otherwise                                -> ALLOW
-
-    Deny wins over allow wins over approval. Pure and deterministic so it is
-    safe to call inside the Temporal workflow.
-    """
-    tools = (effective_policy or {}).get("tools") or {}
-    allowed = tools.get("allowed")
-    if not allowed:
-        return ToolAction.DENY
-
-    denied = tools.get("denied") or []
-    if _matches_any(tool_name, denied):
-        return ToolAction.DENY
-
-    if not _matches_any(tool_name, allowed):
-        return ToolAction.DENY
-
-    if policy_requires_approval(effective_policy, tool_name):
+    """Deterministic workflow preflight view of the tool authorization PDP."""
+    decision = decide_tool_policy(effective_policy, tool_name)
+    if decision.action is ToolAuthorizationAction.ALLOW:
+        return ToolAction.ALLOW
+    if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
         return ToolAction.REQUIRE_APPROVAL
-
-    return ToolAction.ALLOW
-
-
-def _matches_any(name: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
+    return ToolAction.DENY
 
 
 def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:

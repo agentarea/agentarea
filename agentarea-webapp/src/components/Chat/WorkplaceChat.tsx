@@ -5,11 +5,17 @@ import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatWelcome } from "./componets/ChatWelcome";
-import FullChat, { type Agent } from "./FullChat";
+import FullChat, {
+  type Agent,
+  type ProjectOption,
+  type TaskPolicyOption,
+} from "./FullChat";
 
 interface WorkplaceChatProps {
   initialAgent: Agent;
   availableAgents: Agent[];
+  availableProjects?: ProjectOption[];
+  availableTaskPolicies?: TaskPolicyOption[];
   badgeSuggestions?: BadgeSuggestion[];
 }
 
@@ -20,6 +26,8 @@ interface WorkplaceChatProps {
 export function WorkplaceChat({
   initialAgent,
   availableAgents,
+  availableProjects,
+  availableTaskPolicies,
   badgeSuggestions,
 }: WorkplaceChatProps) {
   const t = useTranslations("Workplace.hero");
@@ -30,6 +38,8 @@ export function WorkplaceChat({
       agent={selectedAgent}
       availableAgents={availableAgents}
       onAgentChange={setSelectedAgent}
+      availableProjects={availableProjects}
+      availableTaskPolicies={availableTaskPolicies}
       startCentered
       badgeSuggestions={badgeSuggestions}
       welcomeComponent={<ChatWelcome icon={Sparkles} title={t("title")} />}

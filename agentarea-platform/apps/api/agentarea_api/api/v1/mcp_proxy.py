@@ -7,7 +7,7 @@ Each MCP instance gets a stable governed endpoint:
 The proxy resolves the instance, determines the upstream URL, injects
 outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
 streams the request/response transparently. AgentArea owns access control
-(workspace scoping today; ReBAC next) and audit centrally; downstream MCP
+(workspace scoping today; access-control next) and audit centrally; downstream MCP
 servers see only governed traffic.
 
 Dispatch by instance type:
@@ -26,10 +26,11 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.tool_invocation import is_tool_invocation_allowed
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationRequest,
+    authorize_tool_invocation,
+)
 from agentarea_common.config import get_settings
-from agentarea_common.di.container import get_container
-from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -105,7 +106,7 @@ def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
 
 
 async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
-    """Deny JSON-RPC tool calls unless OpenFGA explicitly allows them."""
+    """Deny JSON-RPC tool calls unless the tool authorization PDP allows them."""
     if not body:
         return
     try:
@@ -116,33 +117,20 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
     if not tool_calls:
         return
 
-    settings = get_settings()
-    if not settings.openfga.OPENFGA_ENABLED:
-        raise HTTPException(status_code=403, detail="Tool authorization graph is disabled")
-
-    try:
-        try:
-            openfga = get_container().get(OpenFGAClient)
-        except ValueError:
-            openfga = OpenFGAClient(
-                api_url=settings.openfga.OPENFGA_API_URL,
-                store_id=settings.openfga.OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
-            )
-    except Exception as exc:
-        logger.exception("OpenFGA MCP proxy authorization client unavailable")
-        raise HTTPException(status_code=403, detail="Tool authorization unavailable") from exc
-
     for tool_name, tool_args in tool_calls:
-        allowed = await is_tool_invocation_allowed(
-            openfga,
-            user_id=user_context.user_id,
-            tool_name=tool_name,
-            tool_args=tool_args,
+        decision = await authorize_tool_invocation(
+            ToolAuthorizationRequest(
+                tool_name=tool_name,
+                tool_args=tool_args,
+                user_id=user_context.user_id,
+                policy_required=False,
+            )
         )
-        if not allowed:
-            raise HTTPException(status_code=403, detail=f"Tool call denied: {tool_name}")
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Tool call denied: {tool_name}: {decision.reason}",
+            )
 
 
 async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:

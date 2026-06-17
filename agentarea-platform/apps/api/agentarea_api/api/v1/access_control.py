@@ -1,9 +1,10 @@
-"""ReBAC access explorer API.
+"""Access-control relationship explorer API.
 
 Surfaces the authorization relationship graph that the frontend access explorer
-renders: nodes (agents, skill collections, MCP servers), edges (grant tuples),
+renders: nodes (agents, skill collections, MCP servers), access relationships,
 permission checks, path resolution, and a one-shot sync that mirrors existing
-grants into the configured graph backend and seeds a starter "All skills" collection.
+grants into the configured graph backend and seeds a starter "All skills"
+collection.
 
 When no graph backend is enabled, read endpoints respond with ``enabled: false``
 and still list the DB-backed nodes; write endpoints return HTTP 503. OpenFGA is
@@ -46,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/rebac", tags=["rebac"])
+router = APIRouter(tags=["access-control"])
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -71,8 +72,7 @@ GraphClient = KetoClient | OpenFGAClient
 def get_graph_client() -> GraphClient | None:
     """Resolve the shared graph client, or None when graph auth is disabled.
 
-    OpenFGA is preferred over Keto. This keeps the API stable during the
-    migration while the frontend and endpoint names still say "rebac".
+    OpenFGA is preferred over Keto during the migration.
     """
     settings = get_settings()
     if settings.openfga.OPENFGA_ENABLED:
@@ -95,11 +95,6 @@ def get_graph_client() -> GraphClient | None:
             write_url=settings.keto.KETO_WRITE_URL,
             timeout_seconds=settings.keto.KETO_TIMEOUT_SECONDS,
         )
-
-
-def get_keto() -> GraphClient | None:
-    """Backward-compatible alias for tests and older API modules."""
-    return get_graph_client()
 
 
 def _color(kind: str, index: int) -> str:
@@ -145,7 +140,7 @@ class GraphResponse(BaseModel):
     stats: GraphStats
 
 
-class TupleItem(BaseModel):
+class RelationshipItem(BaseModel):
     namespace: str
     object: str
     object_name: str
@@ -157,8 +152,8 @@ class TupleItem(BaseModel):
     direct: bool
 
 
-class TuplesResponse(BaseModel):
-    tuples: list[TupleItem]
+class RelationshipsResponse(BaseModel):
+    relationships: list[RelationshipItem]
     count: int
 
 
@@ -168,7 +163,7 @@ class SubjectSetBody(BaseModel):
     relation: str
 
 
-class TupleWriteRequest(BaseModel):
+class RelationshipWriteRequest(BaseModel):
     namespace: str
     object: str
     relation: str
@@ -223,7 +218,7 @@ class SyncResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _to_relation_tuple(payload: TupleWriteRequest) -> RelationTuple:
+def _to_graph_relationship(payload: RelationshipWriteRequest) -> RelationTuple:
     if (payload.subject_id is None) == (payload.subject_set is None):
         raise HTTPException(
             status_code=422,
@@ -247,12 +242,12 @@ def _to_relation_tuple(payload: TupleWriteRequest) -> RelationTuple:
     )
 
 
-async def _workspace_tuples(client: GraphClient, namespace: str) -> list[RelationTuple]:
-    """Query all tuples for a namespace, tolerating graph backend outages."""
+async def _workspace_relationships(client: GraphClient, namespace: str) -> list[RelationTuple]:
+    """Query relationships for a namespace, tolerating graph backend outages."""
     try:
         return await client.query_all_tuples(RelationQuery(namespace=namespace))
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-        logger.exception("Failed to query graph tuples for namespace=%s", namespace)
+        logger.exception("Failed to query graph relationships for namespace=%s", namespace)
         return []
 
 
@@ -262,6 +257,7 @@ _NAMESPACE_REPOS: dict[str, type] = {
     "Skill": SkillRepository,
     "SkillCollection": SkillCollectionRepository,
 }
+_VIRTUAL_NAMESPACES = {"Tool", "ToolResource"}
 
 
 async def _assert_object_in_workspace(
@@ -273,6 +269,8 @@ async def _assert_object_in_workspace(
     """Raise 403/422 if namespace:object_id does not belong to the caller's workspace."""
     repo_cls = _NAMESPACE_REPOS.get(namespace)
     if repo_cls is None:
+        if namespace in _VIRTUAL_NAMESPACES:
+            return
         raise HTTPException(status_code=422, detail=f"Unsupported namespace: {namespace!r}")
     try:
         obj_uuid = UUID(object_id)
@@ -294,7 +292,7 @@ async def _assert_object_in_workspace(
 async def _assert_workspace_admin(user_context: UserContext) -> None:
     """Only a workspace owner/admin may mutate the authorization graph.
 
-    Writing/deleting relation tuples grants or revokes access across the
+    Writing/deleting relationships grants or revokes access across the
     workspace, so it must not be available to every member.
     """
     from agentarea_common.auth.authorization import AuthorizationService
@@ -376,14 +374,14 @@ async def get_graph(
         )
         mcp_ids.add(str(server.id))
 
-    keto = get_keto()
+    graph_client = get_graph_client()
     edges: list[dict] = []
     rule_count = 0
     direct_exception_count = 0
 
-    if keto is not None:
-        collection_tuples = await _workspace_tuples(keto, "SkillCollection")
-        for t in collection_tuples:
+    if graph_client is not None:
+        collection_relationships = await _workspace_relationships(graph_client, "SkillCollection")
+        for t in collection_relationships:
             if str(t.object) not in collection_ids:
                 continue
             if t.relation not in _RELATION_LABEL:
@@ -400,8 +398,8 @@ async def get_graph(
                         ).model_dump()
                     )
 
-        mcp_tuples = await _workspace_tuples(keto, "MCPServer")
-        for t in mcp_tuples:
+        mcp_relationships = await _workspace_relationships(graph_client, "MCPServer")
+        for t in mcp_relationships:
             if str(t.object) not in mcp_ids:
                 continue
             if t.relation != "connectors":
@@ -418,8 +416,8 @@ async def get_graph(
                         ).model_dump()
                     )
 
-        skill_tuples = await _workspace_tuples(keto, "Skill")
-        for t in skill_tuples:
+        skill_relationships = await _workspace_relationships(graph_client, "Skill")
+        for t in skill_relationships:
             if t.relation in _RELATION_LABEL and t.subject_id and t.subject_id.startswith("Agent:"):
                 direct_exception_count += 1
 
@@ -429,23 +427,23 @@ async def get_graph(
         direct_exception_count=direct_exception_count,
     )
     return GraphResponse(
-        enabled=keto is not None,
+        enabled=graph_client is not None,
         nodes=nodes,
         edges=edges,
         stats=stats,
     )
 
 
-@router.get("/tuples", response_model=TuplesResponse)
-async def list_tuples(
+@router.get("/relationships", response_model=RelationshipsResponse)
+async def list_relationships(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
     namespace: str | None = None,
-) -> TuplesResponse:
-    """List relation tuples, enriched with object/subject display names."""
-    keto = get_keto()
-    if keto is None:
-        return TuplesResponse(tuples=[], count=0)
+) -> RelationshipsResponse:
+    """List authorization relationships enriched with display names."""
+    graph_client = get_graph_client()
+    if graph_client is None:
+        return RelationshipsResponse(relationships=[], count=0)
 
     factory = RepositoryFactory(db_session, user_context)
     agent_repo = factory.create_repository(AgentRepository)
@@ -464,10 +462,14 @@ async def list_tuples(
         str(row.id): row.name for row in (await db_session.execute(skill_names_query)).all()
     }
 
-    namespaces = [namespace] if namespace else ["SkillCollection", "Skill", "MCPServer", "Agent"]
-    items: list[TupleItem] = []
+    namespaces = (
+        [namespace]
+        if namespace
+        else ["SkillCollection", "Skill", "MCPServer", "Agent", "Tool", "ToolResource"]
+    )
+    items: list[RelationshipItem] = []
     for ns in namespaces:
-        for t in await _workspace_tuples(keto, ns):
+        for t in await _workspace_relationships(graph_client, ns):
             object_id = str(t.object)
             object_name = (
                 collection_names.get(object_id)
@@ -502,7 +504,7 @@ async def list_tuples(
             direct = ns == "Skill" and t.relation in _RELATION_LABEL
 
             items.append(
-                TupleItem(
+                RelationshipItem(
                     namespace=ns,
                     object=object_id,
                     object_name=object_name,
@@ -515,18 +517,18 @@ async def list_tuples(
                 )
             )
 
-    return TuplesResponse(tuples=items, count=len(items))
+    return RelationshipsResponse(relationships=items, count=len(items))
 
 
-@router.post("/tuples", status_code=201)
-async def create_tuple(
-    payload: TupleWriteRequest,
+@router.post("/relationships", status_code=201)
+async def create_relationship(
+    payload: RelationshipWriteRequest,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> dict:
-    """Write a relation tuple to the configured graph backend."""
-    keto = get_keto()
-    if keto is None:
+    """Write an authorization relationship to the configured graph backend."""
+    graph_client = get_graph_client()
+    if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
@@ -540,32 +542,32 @@ async def create_tuple(
             user_context,
             db_session,
         )
-    tuple_ = _to_relation_tuple(payload)
+    relationship = _to_graph_relationship(payload)
     try:
-        await keto.write_tuple(tuple_)
+        await graph_client.write_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-        logger.exception("Failed to write graph tuple %s", tuple_)
+        logger.exception("Failed to write graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
     return {"ok": True}
 
 
-@router.delete("/tuples", status_code=204)
-async def delete_tuple(
-    payload: TupleWriteRequest,
+@router.delete("/relationships", status_code=204)
+async def delete_relationship(
+    payload: RelationshipWriteRequest,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Delete a relation tuple from the configured graph backend."""
-    keto = get_keto()
-    if keto is None:
+    """Delete an authorization relationship from the configured graph backend."""
+    graph_client = get_graph_client()
+    if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
-    tuple_ = _to_relation_tuple(payload)
+    relationship = _to_graph_relationship(payload)
     try:
-        await keto.delete_tuple(tuple_)
+        await graph_client.delete_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-        logger.exception("Failed to delete graph tuple %s", tuple_)
+        logger.exception("Failed to delete graph relationship %s", relationship)
         raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
 
 
@@ -575,11 +577,11 @@ async def check_permission(
     user_context: UserContextDep,
 ) -> CheckResponse:
     """Check whether a subject has a relation on an object."""
-    keto = get_keto()
-    if keto is None:
+    graph_client = get_graph_client()
+    if graph_client is None:
         return CheckResponse(allowed=False)
     try:
-        result = await keto.check(
+        result = await graph_client.check(
             namespace=payload.namespace,
             object=payload.object,
             relation=payload.relation,
@@ -606,16 +608,16 @@ async def resolve_access(
     """Resolve why (and how) a subject can access a resource.
 
     ``allowed`` is computed via the graph backend; ``paths`` are derived by
-    traversing the workspace tuples directly so the UI can render the derivation.
+    traversing workspace relationships directly so the UI can render the derivation.
     """
     verb = _VERB_BY_KIND[payload.resource_kind]
     namespace = _NAMESPACE_BY_KIND[payload.resource_kind]
 
-    keto = get_keto()
+    graph_client = get_graph_client()
     allowed = False
-    if keto is not None:
+    if graph_client is not None:
         try:
-            result = await keto.check(
+            result = await graph_client.check(
                 namespace=namespace,
                 object=payload.resource_id,
                 relation=verb,
@@ -654,7 +656,7 @@ async def resolve_access(
     best_rank = 0
     effective_relation: str | None = None
 
-    if payload.resource_kind == "skill" and keto is not None:
+    if payload.resource_kind == "skill" and graph_client is not None:
         # Collections that contain this skill.
         try:
             skill_uuid = UUID(payload.resource_id)
@@ -668,8 +670,8 @@ async def resolve_access(
         }
         member_collections &= collection_ids
 
-        collection_tuples = await _workspace_tuples(keto, "SkillCollection")
-        for t in collection_tuples:
+        collection_relationships = await _workspace_relationships(graph_client, "SkillCollection")
+        for t in collection_relationships:
             if str(t.object) not in member_collections:
                 continue
             if t.relation not in _RELATION_LABEL:
@@ -699,8 +701,8 @@ async def resolve_access(
                 effective_relation = label
 
         # Direct skill grants (exceptions).
-        skill_tuples = await _workspace_tuples(keto, "Skill")
-        for t in skill_tuples:
+        skill_relationships = await _workspace_relationships(graph_client, "Skill")
+        for t in skill_relationships:
             if str(t.object) != payload.resource_id:
                 continue
             if t.relation not in _RELATION_LABEL:
@@ -745,13 +747,12 @@ async def sync_grants(
 
     Idempotent: safe to call repeatedly. Steps:
       1. If no collections exist, create "All skills" containing every workspace
-         skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.
-      2. For each collection_skills row, write
-         ``Skill:<sid>#collections@SkillCollection:<cid>``.
-      3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.
+         skill and grant workspace-member access to the collection.
+      2. Mirror each collection membership relationship.
+      3. Mirror each direct agent-to-skill grant.
     """
-    keto = get_keto()
-    if keto is None:
+    graph_client = get_graph_client()
+    if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
 
     factory = RepositoryFactory(db_session, user_context)
@@ -777,7 +778,7 @@ async def sync_grants(
         for sid in skill_ids:
             await collection_repo.add_skill(all_skills.id, UUID(sid))
         try:
-            await keto.write_tuple(
+            await graph_client.write_tuple(
                 RelationTuple(
                     namespace="SkillCollection",
                     object=str(all_skills.id),
@@ -791,7 +792,7 @@ async def sync_grants(
             )
             written += 1
         except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-            logger.exception("Failed to seed graph default-viewer tuple")
+            logger.exception("Failed to seed graph default-viewer relationship")
             raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
 
     # Step 2: mirror collection memberships (scoped to workspace collections).
@@ -803,7 +804,7 @@ async def sync_grants(
     for row in (await db_session.execute(membership_query)).all():
         cid = str(row.collection_id)
         try:
-            await keto.write_tuple(
+            await graph_client.write_tuple(
                 RelationTuple(
                     namespace="Skill",
                     object=str(row.skill_id),
@@ -824,7 +825,7 @@ async def sync_grants(
     ).where(agent_skills_table.c.skill_id.in_(workspace_skill_uuids))
     for row in (await db_session.execute(agent_skill_query)).all():
         try:
-            await keto.write_tuple(
+            await graph_client.write_tuple(
                 RelationTuple(
                     namespace="Skill",
                     object=str(row.skill_id),

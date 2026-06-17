@@ -1,28 +1,28 @@
-/* Scoped styles for the ReBAC access explorer.
+/* Scoped styles for the access-control explorer.
    The prototype's accent maps to the app's --primary token; relation colors
    reuse the prototype's semantic palette for parity with the design. */
 
 .explorer {
-  --rebac-accent: hsl(var(--primary));
-  --rebac-accent-soft: #eaf0fb;
-  --rebac-green: #1f9d6b;
-  --rebac-green-soft: #e7f6ee;
-  --rebac-green-text: #137a4f;
-  --rebac-amber: #c98a00;
-  --rebac-amber-soft: #fbf2dd;
-  --rebac-red: #d6453d;
-  --rebac-red-soft: #fcebea;
-  --rebac-red-text: #a8332c;
-  --rebac-blue: #2252b3;
-  --rebac-sky: #2f8fbd;
-  --rebac-muted: #8a8f98;
-  --rebac-muted2: #a4a8b0;
-  --rebac-border: hsl(var(--border));
-  --rebac-border-soft: #f2f2f3;
-  --rebac-hover: #f5f5f6;
-  --rebac-hover2: #f0f0f1;
-  --rebac-text2: #42454c;
-  --rebac-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --access-accent: hsl(var(--primary));
+  --access-accent-soft: #eaf0fb;
+  --access-green: #1f9d6b;
+  --access-green-soft: #e7f6ee;
+  --access-green-text: #137a4f;
+  --access-amber: #c98a00;
+  --access-amber-soft: #fbf2dd;
+  --access-red: #d6453d;
+  --access-red-soft: #fcebea;
+  --access-red-text: #a8332c;
+  --access-blue: #2252b3;
+  --access-sky: #2f8fbd;
+  --access-muted: #8a8f98;
+  --access-muted2: #a4a8b0;
+  --access-border: hsl(var(--border));
+  --access-border-soft: #f2f2f3;
+  --access-hover: #f5f5f6;
+  --access-hover2: #f0f0f1;
+  --access-text2: #42454c;
+  --access-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 
   display: flex;
   flex-direction: column;
@@ -40,7 +40,7 @@
 }
 .seg {
   display: inline-flex;
-  background: var(--rebac-hover2);
+  background: var(--access-hover2);
   border-radius: 8px;
   padding: 3px;
 }
@@ -51,7 +51,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   font-size: 12.5px;
   font-weight: 500;
   border: none;
@@ -68,7 +68,7 @@
 }
 .headline {
   font-size: 12.5px;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
 }
 .headline b {
   color: hsl(var(--foreground));
@@ -82,7 +82,7 @@
   grid-template-columns: 1fr 392px;
   overflow: hidden;
   min-height: 0;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 12px;
 }
 @media (max-width: 980px) {
@@ -109,7 +109,7 @@
   top: 10px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--rebac-muted2);
+  color: var(--access-muted2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -150,24 +150,24 @@
   opacity: 1;
 }
 .edgeOn.edgePermUser {
-  stroke: var(--rebac-accent);
+  stroke: var(--access-accent);
 }
 .edgeOn.edgePermEditor {
-  stroke: var(--rebac-blue);
+  stroke: var(--access-blue);
 }
 .edgeOn.edgePermOwner {
-  stroke: var(--rebac-sky);
+  stroke: var(--access-sky);
 }
 .edgeOn.edgePermConnect {
-  stroke: var(--rebac-accent);
+  stroke: var(--access-accent);
 }
 .edgeOn.edgeMember {
-  stroke: var(--rebac-text2);
+  stroke: var(--access-text2);
 }
 
 .node {
   position: absolute;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   background: #fff;
   border-radius: 9px;
   padding: 7px 10px;
@@ -187,8 +187,8 @@
   opacity: 0.32;
 }
 .nodeOn {
-  border-color: var(--rebac-accent);
-  box-shadow: 0 0 0 3px var(--rebac-accent-soft);
+  border-color: var(--access-accent);
+  box-shadow: 0 0 0 3px var(--access-accent-soft);
 }
 .nIc {
   width: 24px;
@@ -215,14 +215,14 @@
 }
 .nSub {
   font-size: 10.5px;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   white-space: nowrap;
 }
 .cnt {
   font-size: 11px;
   font-weight: 700;
-  color: var(--rebac-text2);
-  background: var(--rebac-hover2);
+  color: var(--access-text2);
+  background: var(--access-hover2);
   border-radius: 20px;
   padding: 1px 7px;
   margin-left: auto;
@@ -234,24 +234,24 @@
   font-size: 10px;
   font-weight: 600;
   background: #fff;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 5px;
   padding: 1px 6px;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   white-space: nowrap;
   pointer-events: none;
 }
 .elabelUser {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
 }
 .elabelEditor {
-  color: var(--rebac-blue);
+  color: var(--access-blue);
 }
 .elabelOwner {
-  color: var(--rebac-sky);
+  color: var(--access-sky);
 }
 .elabelConnect {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
 }
 .elabelDim {
   opacity: 0.2;
@@ -259,7 +259,7 @@
 
 /* inspector */
 .inspector {
-  border-left: 1px solid var(--rebac-border);
+  border-left: 1px solid var(--access-border);
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -267,13 +267,13 @@
   gap: 18px;
 }
 .card {
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 11px;
   overflow: hidden;
 }
 .cardH {
   padding: 11px 13px;
-  border-bottom: 1px solid var(--rebac-border-soft);
+  border-bottom: 1px solid var(--access-border-soft);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -283,7 +283,7 @@
   font-size: 13px;
 }
 .cardHIc {
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   display: flex;
 }
 .cardB {
@@ -293,8 +293,8 @@
   margin-left: auto;
   font-size: 11px;
   font-weight: 700;
-  color: var(--rebac-text2);
-  background: var(--rebac-hover2);
+  color: var(--access-text2);
+  background: var(--access-hover2);
   border-radius: 20px;
   padding: 1px 8px;
 }
@@ -309,7 +309,7 @@
 .sel {
   flex: 1;
   height: 32px;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 7px;
   padding: 0 9px;
   font-size: 12.5px;
@@ -320,7 +320,7 @@
   gap: 7px;
 }
 .sel:hover {
-  background: var(--rebac-hover);
+  background: var(--access-hover);
 }
 .selAv {
   width: 18px;
@@ -345,7 +345,7 @@
 }
 .relWord {
   font-size: 12px;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   padding: 0 2px;
   white-space: nowrap;
 }
@@ -359,40 +359,40 @@
   gap: 10px;
 }
 .verdictAllow {
-  background: var(--rebac-green-soft);
+  background: var(--access-green-soft);
 }
 .verdictDeny {
-  background: var(--rebac-red-soft);
+  background: var(--access-red-soft);
 }
 .verdictIcon {
   flex-shrink: 0;
   margin-top: 1px;
 }
 .verdictAllow .verdictIcon {
-  color: var(--rebac-green);
+  color: var(--access-green);
 }
 .verdictDeny .verdictIcon {
-  color: var(--rebac-red);
+  color: var(--access-red);
 }
 .verdictTitle {
   font-weight: 600;
   font-size: 13px;
 }
 .verdictAllow .verdictTitle {
-  color: var(--rebac-green-text);
+  color: var(--access-green-text);
 }
 .verdictDeny .verdictTitle {
-  color: var(--rebac-red-text);
+  color: var(--access-red-text);
 }
 .verdictSub {
   font-size: 11.5px;
-  color: var(--rebac-text2);
+  color: var(--access-text2);
   margin-top: 2px;
 }
 
 .pathsCap {
   font-size: 10.5px;
-  color: var(--rebac-muted2);
+  color: var(--access-muted2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -404,7 +404,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px 9px;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 8px;
   margin-bottom: 6px;
   background: hsl(var(--sidebar));
@@ -416,7 +416,7 @@
   font-size: 11.5px;
   font-weight: 500;
   background: #fff;
-  border: 1px solid var(--rebac-border);
+  border: 1px solid var(--access-border);
   border-radius: 6px;
   padding: 2px 7px;
 }
@@ -429,7 +429,7 @@
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  color: var(--rebac-muted2);
+  color: var(--access-muted2);
   padding: 0 1px;
 }
 .prel {
@@ -437,72 +437,162 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
 }
 .prelUser {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
 }
 .prelEditor {
-  color: var(--rebac-blue);
+  color: var(--access-blue);
 }
 .prelOwner {
-  color: var(--rebac-sky);
+  color: var(--access-sky);
 }
 .prelConnect {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
 }
 
-/* tuples */
-.tuple {
-  font-family: var(--rebac-mono);
+.modeRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--access-hover2);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 12px;
+}
+.modeBtn {
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--access-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modeBtnOn {
+  background: #fff;
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
+}
+.fieldLabel {
+  display: block;
+  margin: 10px 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--access-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.textInput,
+.textArea {
+  width: 100%;
+  border: 1px solid var(--access-border);
+  border-radius: 7px;
+  background: #fff;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.textInput {
+  height: 32px;
+  padding: 0 9px;
+}
+.textArea {
+  min-height: 92px;
+  padding: 8px 9px;
+  resize: vertical;
+  font-family: var(--access-mono);
+  line-height: 1.45;
+}
+.textInput:focus,
+.textArea:focus {
+  border-color: var(--access-accent);
+  box-shadow: 0 0 0 3px var(--access-accent-soft);
+}
+.actionRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.primaryAction,
+.secondaryAction {
+  height: 31px;
+  border-radius: 7px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primaryAction {
+  border: 1px solid var(--access-accent);
+  background: var(--access-accent);
+  color: hsl(var(--primary-foreground));
+}
+.secondaryAction {
+  border: 1px solid var(--access-border);
+  background: #fff;
+  color: var(--access-text2);
+}
+.primaryAction:disabled,
+.secondaryAction:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* relationships */
+.relationship {
+  font-family: var(--access-mono);
   font-size: 11px;
   padding: 8px 11px;
-  border-bottom: 1px solid var(--rebac-border-soft);
+  border-bottom: 1px solid var(--access-border-soft);
   display: flex;
   align-items: center;
   gap: 8px;
   line-height: 1.4;
 }
-.tuple:last-child {
+.relationship:last-child {
   border-bottom: none;
 }
-.tuple:hover {
-  background: var(--rebac-hover);
+.relationship:hover {
+  background: var(--access-hover);
 }
 .tk {
-  color: var(--rebac-text2);
+  color: var(--access-text2);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tkObj {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
 }
 .tkRel {
-  color: var(--rebac-blue);
+  color: var(--access-blue);
   font-weight: 600;
 }
 .tkSub {
-  color: var(--rebac-sky);
+  color: var(--access-sky);
 }
 .tkAt {
-  color: var(--rebac-muted2);
+  color: var(--access-muted2);
 }
 .fan {
   margin-left: auto;
   font-size: 10.5px;
   font-family: var(--font-sans, Inter, sans-serif);
-  color: var(--rebac-muted);
-  background: var(--rebac-hover2);
+  color: var(--access-muted);
+  background: var(--access-hover2);
   border-radius: 20px;
   padding: 1px 8px;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.tupleDirect .fan {
-  color: var(--rebac-amber);
-  background: var(--rebac-amber-soft);
+.relationshipDirect .fan {
+  color: var(--access-amber);
+  background: var(--access-amber-soft);
 }
 
 .addrule {
@@ -510,9 +600,9 @@
   align-items: center;
   gap: 7px;
   padding: 9px 13px;
-  border-top: 1px solid var(--rebac-border-soft);
+  border-top: 1px solid var(--access-border-soft);
   font-size: 12px;
-  color: var(--rebac-text2);
+  color: var(--access-text2);
   font-weight: 500;
   width: 100%;
   background: none;
@@ -523,25 +613,25 @@
   font-family: inherit;
 }
 .addrule:hover {
-  background: var(--rebac-hover);
+  background: var(--access-hover);
 }
 
 .scaleNote {
   display: flex;
   gap: 9px;
   align-items: flex-start;
-  background: var(--rebac-accent-soft);
+  background: var(--access-accent-soft);
   border-radius: 9px;
   padding: 10px 12px;
   font-size: 11.5px;
-  color: var(--rebac-text2);
+  color: var(--access-text2);
   line-height: 1.5;
 }
 .scaleNote b {
   color: hsl(var(--foreground));
 }
 .scaleNoteIcon {
-  color: var(--rebac-accent);
+  color: var(--access-accent);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -554,6 +644,6 @@
   min-height: 360px;
   padding: 40px;
   text-align: center;
-  color: var(--rebac-muted);
+  color: var(--access-muted);
   font-size: 13px;
 }

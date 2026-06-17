@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ._rebac_grants import grant_user_relation
+from ._access_control_grants import grant_user_relation
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 

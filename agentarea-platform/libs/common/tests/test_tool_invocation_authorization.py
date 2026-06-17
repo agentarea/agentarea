@@ -20,7 +20,7 @@ def test_tool_resource_id_is_stable_for_canonical_args():
 
     assert first == second
     assert first != different
-    assert first.startswith("github.create_issue:args:")
+    assert first.startswith("github.create_issue~args~")
 
 
 def test_tool_names_are_url_safe_object_ids():

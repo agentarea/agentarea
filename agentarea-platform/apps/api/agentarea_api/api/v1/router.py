@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 
 # Import core API modules
 from . import (
+    access_control,
     agent_overview,
     agents,
     agents_a2a,
@@ -35,10 +36,10 @@ from . import (
     projects,
     provider_configs,
     provider_specs,
-    rebac,
     registries,
     skill_collections,
     skills,
+    tool_access,
     triggers,
     wallet,
     workspace_config,
@@ -110,11 +111,14 @@ protected_v1_router.include_router(skills.router)
 # Bundle import (analyze + install) - PROTECTED
 protected_v1_router.include_router(bundles.router)
 
-# Skill collections (grouping for ReBAC fan-out) - PROTECTED
+# Skill collections (grouping for access-control fan-out) - PROTECTED
 protected_v1_router.include_router(skill_collections.router)
 
-# ReBAC access explorer (Keto-backed graph, tuples, check, resolve, sync) - PROTECTED
-protected_v1_router.include_router(rebac.router)
+protected_v1_router.include_router(access_control.router, prefix="/access-control")
+
+# Tool invocation grants/checks. This is the public product API; callers should
+# not write graph relationships directly for tool access.
+protected_v1_router.include_router(tool_access.router)
 
 # MCP Auth Configs - PROTECTED
 protected_v1_router.include_router(mcp_auth_configs.router)

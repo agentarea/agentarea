@@ -4,28 +4,31 @@ import { useEffect, useMemo, useState } from "react";
 import { Grid2x2, Plus, Share2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
-  RebacGraph,
-  RebacResolveResponse,
-  RebacTuplesResponse,
+  AccessControlGraph,
+  AccessControlResolveResponse,
+  AccessControlRelationshipsResponse,
   SkillCollection,
-} from "@/types/rebac";
+} from "@/types/access-control";
 import GraphPane from "./GraphPane";
 import ResolveAccessCard from "./ResolveAccessCard";
+import ToolGrantCard from "./ToolGrantCard";
 import { layoutGraph } from "./graph-layout";
 import styles from "./access-control.module.css";
 
 type ViewMode = "matrix" | "relationships";
 
 interface AccessControlExplorerProps {
-  graph: RebacGraph;
-  tuples: RebacTuplesResponse;
+  graph: AccessControlGraph;
+  relationships: AccessControlRelationshipsResponse;
   collections: SkillCollection[];
+  currentUserId: string | null;
 }
 
 export default function AccessControlExplorer({
   graph,
-  tuples,
+  relationships,
   collections,
+  currentUserId,
 }: AccessControlExplorerProps) {
   const [view, setView] = useState<ViewMode>("relationships");
 
@@ -46,7 +49,7 @@ export default function AccessControlExplorer({
 
   const [subjectId, setSubjectId] = useState<string>(agents[0]?.id ?? "");
   const [objectId, setObjectId] = useState<string>(objects[0]?.id ?? "");
-  const [result, setResult] = useState<RebacResolveResponse | null>(null);
+  const [result, setResult] = useState<AccessControlResolveResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +69,7 @@ export default function AccessControlExplorer({
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/proxy/v1/rebac/resolve", {
+        const response = await fetch("/api/proxy/v1/access-control/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -79,7 +82,7 @@ export default function AccessControlExplorer({
         if (!response.ok) {
           throw new Error(`Resolve failed (${response.status})`);
         }
-        const data = (await response.json()) as RebacResolveResponse;
+        const data = (await response.json()) as AccessControlResolveResponse;
         if (!cancelled) {
           setResult(data);
         }
@@ -147,7 +150,7 @@ export default function AccessControlExplorer({
             <div style={{ maxWidth: 420 }}>
               <Share2
                 className="mx-auto mb-3 h-8 w-8"
-                style={{ color: "var(--rebac-muted2)" }}
+                style={{ color: "var(--access-muted2)" }}
               />
               <div
                 style={{
@@ -213,7 +216,7 @@ export default function AccessControlExplorer({
             <div>
               <Grid2x2
                 className="mx-auto mb-3 h-8 w-8"
-                style={{ color: "var(--rebac-muted2)" }}
+                style={{ color: "var(--access-muted2)" }}
               />
               <div style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>
                 Matrix view coming soon
@@ -244,37 +247,37 @@ export default function AccessControlExplorer({
               error={error}
             />
 
-            <div className={styles.card} id="rebac-add-rule">
+            <div className={styles.card} id="access-control-add-relationship">
               <div className={styles.cardH}>
                 <span className={styles.cardHIc}>
                   <Share2 className="h-4 w-4" />
                 </span>
                 <span className={styles.cardT}>Relationship rules</span>
-                <span className={styles.countBadge}>{tuples.count}</span>
+                <span className={styles.countBadge}>{relationships.count}</span>
               </div>
               <div>
-                {tuples.tuples.map((tuple, index) => (
+                {relationships.relationships.map((relationship, index) => (
                   <div
-                    key={`${tuple.object}-${tuple.relation}-${tuple.subject}-${index}`}
-                    className={cn(styles.tuple, tuple.direct && styles.tupleDirect)}
+                    key={`${relationship.object}-${relationship.relation}-${relationship.subject}-${index}`}
+                    className={cn(styles.relationship, relationship.direct && styles.relationshipDirect)}
                   >
                     <span className={styles.tk}>
-                      <span className={styles.tkObj}>{tuple.object}</span>#
-                      <span className={styles.tkRel}>{tuple.relation}</span>
+                      <span className={styles.tkObj}>{relationship.object}</span>#
+                      <span className={styles.tkRel}>{relationship.relation}</span>
                       <span className={styles.tkAt}>@</span>
-                      <span className={styles.tkSub}>{tuple.subject}</span>
+                      <span className={styles.tkSub}>{relationship.subject}</span>
                     </span>
                     <span className={styles.fan}>
                       →{" "}
-                      {tuple.direct
+                      {relationship.direct
                         ? "direct"
-                        : tuple.fanout != null
-                          ? `${tuple.fanout.toLocaleString()} skills`
+                        : relationship.fanout != null
+                          ? `${relationship.fanout.toLocaleString()} skills`
                           : "—"}
                     </span>
                   </div>
                 ))}
-                {tuples.tuples.length === 0 && (
+                {relationships.relationships.length === 0 && (
                   <div
                     className={styles.verdictSub}
                     style={{ padding: 13 }}
@@ -288,6 +291,11 @@ export default function AccessControlExplorer({
                 Add relationship
               </button>
             </div>
+
+            <ToolGrantCard
+              currentUserId={currentUserId}
+              initialRelationships={relationships.relationships}
+            />
 
             <div className={styles.scaleNote}>
               <span className={styles.scaleNoteIcon}>

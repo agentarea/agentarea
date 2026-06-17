@@ -14,6 +14,7 @@ This module provides Temporal activities for agent execution:
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -29,6 +30,11 @@ from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 
 # Local imports
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    ToolAuthorizationRequest,
+    authorize_tool_invocation,
+)
 from agentarea_common.money import to_money
 from prometheus_client import Counter
 
@@ -99,20 +105,6 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
-def _tool_policy_denial_reason(
-    effective_policy: dict[str, Any] | None, tool_name: str
-) -> str | None:
-    """Return a denial reason when the static tool policy rejects the call."""
-    from ..workflows.helpers import ToolAction, decide_tool_action
-
-    decision = decide_tool_action(effective_policy, tool_name)
-    if decision is ToolAction.ALLOW:
-        return None
-    if decision is ToolAction.REQUIRE_APPROVAL:
-        return f"tool '{tool_name}' requires approval and cannot be executed directly"
-    return f"tool '{tool_name}' is not explicitly allowed by policy"
-
-
 def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
     return MCPToolResult(
         success=False,
@@ -120,44 +112,6 @@ def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
         execution_time="",
         error=reason,
     )
-
-
-async def _openfga_tool_denial_reason(request: MCPToolRequest) -> str | None:
-    """Return a denial reason when OpenFGA rejects this concrete invocation."""
-    from agentarea_common.auth.tool_invocation import is_tool_invocation_allowed
-    from agentarea_common.config import get_settings
-    from agentarea_common.di.container import get_container
-    from agentarea_common.rebac.openfga_client import OpenFGAClient
-
-    settings = get_settings()
-    if not settings.openfga.OPENFGA_ENABLED:
-        return None
-    if not request.user_id:
-        return "missing user_id for OpenFGA tool authorization"
-
-    try:
-        try:
-            openfga = get_container().get(OpenFGAClient)
-        except ValueError:
-            openfga = OpenFGAClient(
-                api_url=settings.openfga.OPENFGA_API_URL,
-                store_id=settings.openfga.OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
-            )
-    except Exception as exc:
-        logger.exception("OpenFGA tool authorization client unavailable")
-        return f"OpenFGA tool authorization unavailable: {exc}"
-
-    allowed = await is_tool_invocation_allowed(
-        openfga,
-        user_id=request.user_id,
-        tool_name=request.tool_name,
-        tool_args=request.tool_args,
-    )
-    if not allowed:
-        return "OpenFGA denied this tool invocation"
-    return None
 
 
 # Prometheus counters for MCP dispatch telemetry
@@ -817,13 +771,21 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request: MCPToolRequest,
     ) -> MCPToolResult:
         """Execute an MCP tool or built-in tool."""
-        policy_denial = _tool_policy_denial_reason(request.effective_policy, request.tool_name)
-        if policy_denial:
-            return _deny_tool_result(request.tool_name, policy_denial)
-
-        openfga_denial = await _openfga_tool_denial_reason(request)
-        if openfga_denial:
-            return _deny_tool_result(request.tool_name, openfga_denial)
+        decision = await authorize_tool_invocation(
+            ToolAuthorizationRequest(
+                tool_name=request.tool_name,
+                tool_args=request.tool_args,
+                user_id=request.user_id,
+                effective_policy=request.effective_policy,
+            )
+        )
+        if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
+            return _deny_tool_result(
+                request.tool_name,
+                f"{decision.reason}; approval must be resolved before activity execution",
+            )
+        if not decision.allowed:
+            return _deny_tool_result(request.tool_name, decision.reason)
 
         user_context = create_system_context(request.workspace_id)
         async with ActivityContext(container, user_context) as ctx:
@@ -945,15 +907,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     else:
                         logger.warning(f"Unknown code tool requested: {tool_name}")
 
-            payment_handler = None
+            payment_handler: Callable[..., Awaitable[dict[str, Any] | None]] | None = None
             if request.agent_id:
+                agent_id = request.agent_id
 
                 async def get_payment_context() -> (
                     tuple[Any, Any, dict[str, Any], str, float] | None
                 ):
                     try:
                         wallet_service = await ctx.get_wallet_service()
-                        wallet = await wallet_service.get_wallet(request.agent_id)
+                        wallet = await wallet_service.get_wallet(agent_id)
                     except Exception as e:
                         logger.debug("No active wallet for payment handling: %s", e)
                         return None
@@ -971,7 +934,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     }
                     execution_id = request.execution_id or request.task_id or ""
                     budget_remaining = await wallet_service.get_service_budget_remaining(
-                        request.agent_id, execution_id
+                        agent_id, execution_id
                     )
                     return wallet_service, wallet, wallet_config, execution_id, budget_remaining
 
@@ -1004,7 +967,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         protocol_metadata=result.get("protocol_metadata"),
                     )
 
-                async def payment_handler(**payment_kwargs: Any) -> dict[str, Any] | None:
+                async def _payment_handler(**payment_kwargs: Any) -> dict[str, Any] | None:
                     """Handle HTTP 402 for paid HTTP-backed tools using the calling agent wallet."""
                     payment_context = await get_payment_context()
                     if not payment_context:
@@ -1031,6 +994,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         tool_name=str(payment_kwargs.get("tool_name") or request.tool_name),
                     )
                     return result
+
+                payment_handler = _payment_handler
 
             # Register agent tools from configuration
             if request.tools and isinstance(request.tools, list):

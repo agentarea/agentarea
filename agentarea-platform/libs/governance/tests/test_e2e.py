@@ -89,7 +89,11 @@ class TestE2EFullPipeline:
             action_type="tool_call",
             action_name="sql_query",
             action_params={"query": "DROP TABLE users"},
-            execution_state={"budget_usd": 10.0, "cost_used": 1.0},
+            execution_state={
+                "budget_usd": 10.0,
+                "cost_used": 1.0,
+                "tools_config": {"allowed": ["sql_query"]},
+            },
         )
         result = await pipeline.run(Phase.PRE_TOOL_CALL, ctx)
         assert result.action == InterceptorAction.DENY
@@ -111,6 +115,7 @@ class TestE2EFullPipeline:
             execution_state={
                 "budget_usd": 10.0,
                 "cost_used": 1.0,
+                "tools_config": {"allowed": ["payment_*"]},
                 "escalation_rules": ["payment_*"],
             },
         )

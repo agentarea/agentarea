@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
 
 from . import agents_a2a, agents_well_known
-from ._rebac_grants import grant_user_relation
+from ._access_control_grants import grant_user_relation
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ async def _grant_agent_owner(agent_id: UUID | str, user_id: str) -> None:
     Called on every path that materializes an agent the caller now owns —
     create, catalog install (copy-on-write fork), and edit (which forks an
     un-owned catalog agent) — so a freshly-minted agent never ends up without
-    its ``owners`` tuple (which would 403 the creator on their own row). The
+    its ``owners`` relationship (which would 403 the creator on their own row). The
     Keto write is an idempotent upsert, so re-asserting on update is harmless.
     """
     await grant_user_relation(
@@ -377,7 +377,7 @@ async def list_agents(
         All users in the same workspace can see all workspace agents.
 
         Note: User-level access control should be implemented via authorization
-        layer (future ReBAC) rather than query parameters.
+        layer (future access-control) rather than query parameters.
     """
     agents = await agent_service.list()
     return [AgentResponse.from_domain(agent) for agent in agents]

@@ -807,6 +807,13 @@
   },
   "Chat": {
     "writeNewTaskFor": "Напишите новую задачу для {agentName}...",
+    "inputControls": {
+      "agent": "Агент",
+      "project": "Проект",
+      "taskPolicy": "Политика задачи",
+      "noProject": "Без проекта",
+      "defaultPolicy": "Политика по умолчанию"
+    },
     "Messages": {
       "toolCall": "Использую инструмент",
       "toolCallGroup": "{count, plural, =1 {1 вызов инструмента} other {# вызовов инструментов}}",

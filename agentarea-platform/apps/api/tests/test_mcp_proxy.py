@@ -4,12 +4,18 @@ from types import SimpleNamespace
 
 import pytest
 from agentarea_api.api.v1.mcp_proxy import (
+    _authorize_mcp_tool_calls,
     _filter_inbound_headers,
     _filter_outbound_headers,
     _iter_jsonrpc_tool_calls,
     _resolve_upstream_url,
 )
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    ToolAuthorizationDecision,
+)
 from agentarea_common.testing.flows import MainFlow
+from fastapi import HTTPException
 
 # ----- _resolve_upstream_url -----
 
@@ -169,3 +175,42 @@ def test_iter_jsonrpc_tool_calls_extracts_batch_calls_only():
 
 def test_iter_jsonrpc_tool_calls_ignores_non_calls():
     assert _iter_jsonrpc_tool_calls({"jsonrpc": "2.0", "method": "tools/list"}) == []
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_uses_single_pdp(monkeypatch):
+    seen = []
+
+    async def fake_authorize(request):
+        seen.append(request)
+        return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "ok")
+
+    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+
+    await _authorize_mcp_tool_calls(
+        b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}',
+        SimpleNamespace(user_id="u1"),
+    )
+
+    assert len(seen) == 1
+    assert seen[0].tool_name == "github.create_issue"
+    assert seen[0].tool_args == {"repo": "acme/app"}
+    assert seen[0].user_id == "u1"
+    assert seen[0].policy_required is False
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_denies_pdp_denial(monkeypatch):
+    async def fake_authorize(_request):
+        return ToolAuthorizationDecision(ToolAuthorizationAction.DENY, "missing grant")
+
+    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{}}}',
+            SimpleNamespace(user_id="u1"),
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Tool call denied: github.create_issue: missing grant"
