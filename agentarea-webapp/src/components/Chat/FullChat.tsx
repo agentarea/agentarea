@@ -483,7 +483,7 @@ export default function FullChat({
         {startCentered && !hasUserMessages && (
           <>
             <div className="absolute -left-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-            <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+            <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-sky-500/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
           </>
         )}
 

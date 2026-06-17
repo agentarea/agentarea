@@ -1191,6 +1191,12 @@
     "title": "Automation",
     "description": "Configure triggers to automate agent task execution",
     "createTrigger": "Create Trigger",
+    "searchPlaceholder": "Search triggers & agents…",
+    "filter": {
+      "all": "All",
+      "cron": "Cron",
+      "webhook": "Webhook"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
@@ -1211,6 +1217,7 @@
     "status": {
       "active": "Active",
       "inactive": "Inactive",
+      "paused": "Paused",
       "error": "Error"
     },
     "create": {
@@ -1286,6 +1293,7 @@
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
+    "accessGraph": "Access Graph",
     "dataFlow": "Data Flow",
     "organization": "Organization"
   },

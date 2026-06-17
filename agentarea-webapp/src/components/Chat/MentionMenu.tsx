@@ -9,6 +9,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { AgentAvatar } from "@/components/AgentAvatar";
 
 export interface Agent {
   id: string;
@@ -72,9 +73,7 @@ export function MentionMenu({
                     className="h-6 w-6 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary flex-shrink-0">
-                    {agent.name.charAt(0).toUpperCase()}
-                  </div>
+                  <AgentAvatar agent={agent} size="sm" />
                 )}
                 <span className="text-xs font-medium truncate">{agent.name}</span>
               </CommandItem>

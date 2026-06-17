@@ -9,12 +9,19 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_database
 from agentarea_common.workspaces import (
+    Workspace,
     WorkspaceMembershipRepository,
     WorkspaceRepository,
     WorkspaceService,
+)
+from agentarea_governance.application import (
+    GovernancePolicyService,
+    provision_default_policies,
 )
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -31,10 +38,30 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-def get_workspace_service(session: SessionDep) -> WorkspaceService:
+def get_workspace_service(session: SessionDep, user: UserContextDep) -> WorkspaceService:
+    async def seed_default_policies(workspace: Workspace) -> None:
+        """Seed baseline governance policies when a workspace is first created.
+
+        Scoped to the new workspace (not the caller's current one) so the rows
+        land in the right place. Never propagates failures — a workspace must
+        still be created even if policy seeding hiccups — but logs loudly.
+        """
+        try:
+            ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
+            governance = GovernancePolicyService(RepositoryFactory(session, ctx))
+            created = await provision_default_policies(governance, workspace.id)
+            if created:
+                await session.commit()
+        except Exception:
+            logger.exception(
+                "failed to seed default policies for workspace %s", workspace.id
+            )
+            await session.rollback()
+
     return WorkspaceService(
         WorkspaceRepository(session),
         WorkspaceMembershipRepository(session),
+        on_created=seed_default_policies,
     )
 
 
@@ -59,7 +86,8 @@ async def list_workspaces(
     """List every workspace the current user can reach (personal + joined).
 
     Provisions the caller's personal workspace on first call, so a brand
-    new user always gets at least one entry.
+    new user always gets at least one entry. Baseline governance policies are
+    seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
     workspaces = await service.list_for_user(user.user_id, email=user.email)
     return [WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces]

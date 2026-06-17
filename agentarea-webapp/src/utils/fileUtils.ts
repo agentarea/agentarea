@@ -36,7 +36,7 @@ export function getFileTypeInfo(file: File): FileTypeInfo {
   if (["mp4", "avi", "mov", "wmv", "flv", "webm", "mkv"].includes(extension)) {
     return {
       icon: Video,
-      color: "text-purple-600",
+      color: "text-sky-600",
       type: "Video",
     };
   }

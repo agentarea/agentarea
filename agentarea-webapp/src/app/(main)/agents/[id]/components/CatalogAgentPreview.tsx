@@ -5,6 +5,7 @@ import {
   getAgentIconComponent,
   resolveAgentIdentity,
 } from "@/lib/agent-identity";
+import { ProviderIcon } from "@/components/ui/provider-icon";
 import type { Agent } from "@/types/agent";
 import { InstallAgentButton } from "./InstallAgentButton";
 
@@ -29,6 +30,8 @@ export function CatalogAgentPreview({
     agent.model_info?.model_display_name ||
     agent.model_id ||
     null;
+  const providerName = agent.model_info?.provider_name || null;
+  const providerIconUrl = agent.model_info?.provider_icon_url || null;
 
   const skills = agent.skills ?? [];
   const mcpConfigs = agent.tools_config?.mcp_server_configs ?? [];
@@ -67,7 +70,15 @@ export function CatalogAgentPreview({
           {modelLabel && (
             <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
               <span className="inline-flex items-center gap-1.5 [&>svg]:text-muted-foreground/70">
-                <Boxes className="h-3.5 w-3.5" />
+                {providerIconUrl ? (
+                  <ProviderIcon
+                    iconUrl={providerIconUrl}
+                    name={providerName || modelLabel}
+                    size="sm"
+                  />
+                ) : (
+                  <Boxes className="h-3.5 w-3.5" />
+                )}
                 <span className="font-medium text-foreground/80">
                   {modelLabel}
                 </span>

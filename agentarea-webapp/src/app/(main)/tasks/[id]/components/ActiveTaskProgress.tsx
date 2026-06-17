@@ -22,7 +22,7 @@ export default function ActiveTaskProgress({
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20">
+    <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-sky-900/20">
       <div className="flex items-center gap-3">
         <div className="flex-shrink-0">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
@@ -90,4 +90,3 @@ export default function ActiveTaskProgress({
     </div>
   );
 }
-

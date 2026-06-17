@@ -16,7 +16,7 @@ interface NetworkToolbarProps {
 const FILTER_CONFIG = [
   { key: "agent", label: "Agents", icon: Bot, color: "text-blue-500" },
   { key: "mcp_instance", label: "MCPs", icon: Plug, color: "text-green-500" },
-  { key: "skill", label: "Skills", icon: Sparkles, color: "text-purple-500" },
+  { key: "skill", label: "Skills", icon: Sparkles, color: "text-sky-500" },
   { key: "trigger", label: "Triggers", icon: Zap, color: "text-amber-500" },
 ];
 

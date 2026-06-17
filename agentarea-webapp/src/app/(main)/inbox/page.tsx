@@ -6,18 +6,7 @@ export const metadata: Metadata = {
   title: "Inbox",
 };
 
-type FilterValue = "all" | "pending" | "completed" | "failed";
-
-export default async function InboxPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ filter?: string }>;
-}) {
-  const { filter } = await searchParams;
-  const initialFilter = (
-    ["all", "pending", "completed", "failed"].includes(filter ?? "") ? filter : "pending"
-  ) as FilterValue;
-
+export default async function InboxPage() {
   let items: TaskWithAgent[] = [];
   let error: string | null = null;
 
@@ -32,5 +21,5 @@ export default async function InboxPage({
     error = "Failed to load inbox";
   }
 
-  return <InboxClient items={items} error={error} initialFilter={initialFilter} />;
+  return <InboxClient items={items} error={error} />;
 }

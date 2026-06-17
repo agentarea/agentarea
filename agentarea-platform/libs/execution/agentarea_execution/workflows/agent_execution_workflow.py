@@ -3522,6 +3522,7 @@ class AgentExecutionWorkflow:
             "status": self.state.status,
             "current_iteration": self.state.current_iteration,
             "success": self.state.success,
+            "effective_policy": self.state.effective_policy,
             "cost": serialize_money(self.budget_tracker.cost) if self.budget_tracker else "0",
             "budget_remaining": (
                 serialize_money(self.budget_tracker.get_remaining()) if self.budget_tracker else "0"

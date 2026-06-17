@@ -18,7 +18,6 @@ except ImportError:
 try:
     from agentarea_governance.infrastructure.orm import (  # noqa: F401
         PolicyRuleORM,
-        TaskPolicySnapshotORM,
     )
 except ImportError:
     # Governance library not yet installed - skip for now

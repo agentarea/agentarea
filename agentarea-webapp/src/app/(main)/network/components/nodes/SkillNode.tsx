@@ -14,7 +14,7 @@ export default function SkillNode({ data }: NodeProps) {
       icon={<Sparkles className="h-6 w-6" />}
       label={d.label}
       subtitle={subtitle}
-      color="purple"
+      color="sky"
       dimmed={d._dimmed}
       highlighted={d._highlighted}
     />

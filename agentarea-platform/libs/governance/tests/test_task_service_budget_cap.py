@@ -14,10 +14,7 @@ from agentarea_governance.domain.rules import (
     PolicyRule,
     PolicySubjectType,
 )
-from agentarea_governance.infrastructure.repository import (
-    PolicyRuleRepository,
-    TaskPolicySnapshotRepository,
-)
+from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -26,7 +23,6 @@ from agentarea_tasks.task_service import TaskService
 def _make_service(
     *,
     governance_policy_repository=None,
-    task_policy_snapshot_repository=None,
     task_repository=None,
 ):
     """Build a TaskService with all external dependencies mocked."""
@@ -43,15 +39,12 @@ def _make_service(
     mock_policy_repo = governance_policy_repository or AsyncMock()
     if governance_policy_repository is None:
         mock_policy_repo.list_rules.return_value = []
-    mock_snapshot_repo = task_policy_snapshot_repository or AsyncMock()
 
     def create_repository(repo_cls):
         if repo_cls is TaskRepository:
             return mock_task_repo
         if repo_cls is PolicyRuleRepository:
             return mock_policy_repo
-        if repo_cls is TaskPolicySnapshotRepository:
-            return mock_snapshot_repo
         return mock_agent_repo
 
     mock_factory.create_repository.side_effect = create_repository
@@ -268,45 +261,6 @@ class TestCreationEntryPointsInvokeBudgetCap:
             )
 
         service.agent_repository.get.assert_not_called()
-
-    async def test_snapshot_failure_blocks_workflow_dispatch(
-        self, workspace_id, mock_task_repo
-    ):
-        snapshot_repo = AsyncMock()
-        snapshot_repo.create_snapshot.side_effect = RuntimeError("snapshot write failed")
-        service = _make_service(
-            task_repository=mock_task_repo,
-            task_policy_snapshot_repository=snapshot_repo,
-        )
-
-        agent_id = uuid4()
-        mock_agent = MagicMock()
-        mock_agent.name = "test-agent"
-        service.agent_repository = AsyncMock()
-        service.agent_repository.get.return_value = mock_agent
-
-        with patch.object(
-            service, "create_task", new_callable=AsyncMock
-        ) as mock_create, patch.object(
-            service, "_try_route_to_active_workflow", new_callable=AsyncMock
-        ) as mock_route, patch.object(
-            service.task_manager, "submit_task", new_callable=AsyncMock
-        ) as mock_submit:
-            mock_created = MagicMock()
-            mock_created.id = uuid4()
-            mock_created.status = "pending"
-            mock_create.return_value = mock_created
-            mock_route.return_value = None
-
-            with pytest.raises(RuntimeError, match="snapshot write failed"):
-                await service.create_and_execute_task_with_workflow(
-                    agent_id=agent_id,
-                    description="run a workflow",
-                    workspace_id=workspace_id,
-                    user_id="user-123",
-                )
-
-        mock_submit.assert_not_awaited()
 
     async def test_loosening_task_policy_blocks_workflow_start(
         self, workspace_id, mock_task_repo

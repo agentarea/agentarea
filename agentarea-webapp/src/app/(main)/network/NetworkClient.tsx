@@ -10,6 +10,7 @@ import NetworkLegend from "./components/NetworkLegend";
 import NetworkMetricsPanel from "./components/NetworkMetricsPanel";
 import NodeDetailDrawer from "./components/NodeDetailDrawer";
 import { useNetwork } from "./NetworkProvider";
+import AccessGraphView from "./views/AccessGraphView";
 import DataFlowView from "./views/DataFlowView";
 import OrgChartView from "./views/OrgChartView";
 
@@ -39,6 +40,7 @@ export function NetworkHeaderTabs() {
     <div className="inline-flex items-center gap-3 py-2">
       <AnimatedTabs
         tabs={[
+          { value: "access", label: t("accessGraph") },
           { value: "dataflow", label: t("dataFlow") },
           { value: "org", label: t("organization") },
         ]}
@@ -94,7 +96,14 @@ export default function NetworkClient() {
 
   return (
     <div className="relative h-full w-full">
-      {view === "dataflow" ? (
+      {view === "access" ? (
+        <AccessGraphView
+          topology={topology}
+          onNodeClick={handleSelect}
+          highlightId={highlightId}
+          onPaneClick={() => handleSelect(null)}
+        />
+      ) : view === "dataflow" ? (
         <DataFlowView
           topology={topology}
           onNodeClick={handleSelect}
@@ -110,8 +119,12 @@ export default function NetworkClient() {
         />
       )}
 
-      <NetworkLegend />
-      <NetworkMetricsPanel topology={topology} />
+      {view !== "access" && (
+        <>
+          <NetworkLegend />
+          <NetworkMetricsPanel topology={topology} />
+        </>
+      )}
 
       {selectedNode && topology && (
         <NodeDetailDrawer

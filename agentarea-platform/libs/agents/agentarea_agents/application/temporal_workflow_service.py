@@ -63,6 +63,13 @@ class TemporalWorkflowService:
                 "error": str(e),
             }
 
+    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
+        try:
+            return await self._execution_service.get_effective_policy(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to get effective policy: {e}")
+            return None
+
     async def cancel_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.cancel_execution(execution_id)

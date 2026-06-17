@@ -21,7 +21,7 @@ export default function AgentNode({ data }: NodeProps) {
       highlighted={d._highlighted}
       badge={
         embeddedSkills > 0 ? (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0 text-[9px] font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-1.5 py-0 text-[9px] font-medium text-blue-700 ring-1 ring-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900/60">
             <Sparkles className="h-2.5 w-2.5" />
             {embeddedSkills}
           </span>

@@ -24,9 +24,9 @@ export interface MetaEntry {
 
 export const SOURCE_META: Record<SkillSourceType, MetaEntry> = {
   content: { label: "Content", color: "#27a08c", icon: FileText },
-  github: { label: "GitHub", color: "#5e6ad2", icon: Github },
+  github: { label: "GitHub", color: "#2252b3", icon: Github },
   zip: { label: "Uploaded", color: "#d99a00", icon: Upload },
-  path: { label: "Local", color: "#d4519e", icon: FolderGit2 },
+  path: { label: "Local", color: "#0f8c8c", icon: FolderGit2 },
 };
 
 export const SCOPE_META: Record<SkillNetworkScope, MetaEntry> = {

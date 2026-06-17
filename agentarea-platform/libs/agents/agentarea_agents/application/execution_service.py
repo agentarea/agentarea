@@ -68,6 +68,14 @@ class ExecutionService(ExecutionServiceInterface):
                 "error": str(e),
             }
 
+    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
+        """Get the effective governance policy from the workflow orchestrator."""
+        try:
+            return await self._workflow_orchestrator.get_workflow_effective_policy(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to get effective policy: {e}")
+            return None
+
     async def cancel_execution(self, execution_id: str) -> bool:
         """Cancel execution via workflow orchestrator."""
         try:
@@ -145,6 +153,11 @@ class WorkflowOrchestratorInterface(ABC):
     @abstractmethod
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
         """Get workflow status."""
+        pass
+
+    @abstractmethod
+    async def get_workflow_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
+        """Get the effective governance policy from the workflow."""
         pass
 
     @abstractmethod

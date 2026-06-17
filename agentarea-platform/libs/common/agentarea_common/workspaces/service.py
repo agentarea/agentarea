@@ -175,9 +175,15 @@ class WorkspaceService:
         self,
         workspace_repo: WorkspaceRepository,
         membership_repo: WorkspaceMembershipRepository,
+        on_created: Callable[[Workspace], Awaitable[None]] | None = None,
     ) -> None:
         self.workspace_repo = workspace_repo
         self.membership_repo = membership_repo
+        # Fired exactly once when a workspace row is genuinely inserted (not on
+        # idempotent re-reads). The composition layer wires cross-domain
+        # provisioning here (e.g. baseline governance policies) without this
+        # base library depending on those domains.
+        self._on_created = on_created
 
     async def ensure_personal(self, user_id: str, *, email: str | None = None) -> Workspace:
         """Idempotently provision the user's personal workspace (id == user_id).
@@ -266,7 +272,10 @@ class WorkspaceService:
         for _ in range(5):
             workspace = build(await self._next_free_slug(slug_base))
             try:
-                return await self.workspace_repo.add(workspace)
+                created = await self.workspace_repo.add(workspace)
+                if self._on_created is not None:
+                    await self._on_created(created)
+                return created
             except IntegrityError:
                 await self.workspace_repo.session.rollback()
                 if on_conflict_get is not None:

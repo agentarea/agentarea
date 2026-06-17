@@ -128,3 +128,78 @@ export function describeToolCall(
   // Fallback: titleized tool name (much friendlier than the raw snake_case).
   return { text: titleize(toolName) };
 }
+
+/**
+ * Coarse action bucket for a tool, used to build a Codex-style group summary
+ * ("Read 5 files, ran 11 commands, edited 2 files"). Mirrors the branching in
+ * describeToolCall but collapses everything to a single verb category.
+ */
+type ToolCategory =
+  | "read"
+  | "edited"
+  | "wrote"
+  | "ran"
+  | "searched"
+  | "fetched"
+  | "queried"
+  | "listed"
+  | "sent"
+  | "skill"
+  | "delegated"
+  | "other";
+
+function toolCategory(toolName: string): ToolCategory {
+  const n = (toolName || "").toLowerCase();
+  if (n === "activate_skill" || n.includes("skill")) return "skill";
+  if (/(shell|bash|terminal|command|cmd|execute|exec|run_)/.test(n)) return "ran";
+  if (n.startsWith("delegate") || n.includes("call_agent") || n.includes("sub_agent")) return "delegated";
+  if (n.includes("edit_file") || n.includes("apply_patch") || n.includes("patch")) return "edited";
+  if (n.includes("write_file") || n.includes("create_file") || n === "write") return "wrote";
+  if (/^(read_file|read|cat|open_file)$/.test(n) || n.includes("read_file")) return "read";
+  if (n.includes("web_search") || n.includes("google_search") || n === "search" || n.endsWith("_search")) return "searched";
+  if (n.includes("fetch") || n.includes("http") || n.includes("url") || n.includes("browse") || n.includes("curl")) return "fetched";
+  if (n.includes("postgres") || n.includes("sql") || n.includes("query") || n.includes("database")) return "queried";
+  if (n.includes("slack") || n.includes("discord") || n.includes("telegram") || n.includes("post_message") || n.includes("notify")) return "sent";
+  if (n.includes("list") || n.includes("glob") || n.includes("ls")) return "listed";
+  return "other";
+}
+
+const CATEGORY_WORDS: Record<ToolCategory, [verb: string, noun: string]> = {
+  read: ["read", "file"],
+  edited: ["edited", "file"],
+  wrote: ["wrote", "file"],
+  ran: ["ran", "command"],
+  searched: ["searched", "search"],
+  fetched: ["fetched", "page"],
+  queried: ["ran", "query"],
+  listed: ["listed", "directory"],
+  sent: ["sent", "message"],
+  skill: ["used", "skill"],
+  delegated: ["delegated to", "agent"],
+  other: ["ran", "tool"],
+};
+
+function pluralize(noun: string, n: number): string {
+  if (n === 1) return noun;
+  if (/(s|sh|ch|x|z)$/.test(noun)) return `${noun}es`;
+  if (/[^aeiou]y$/.test(noun)) return `${noun.slice(0, -1)}ies`;
+  return `${noun}s`;
+}
+
+/**
+ * Build a single-line summary of a tool group, e.g. "Read 5 files, ran 11
+ * commands, edited 2 files". Categories appear in order of first occurrence.
+ */
+export function summarizeToolGroup(toolNames: string[]): string {
+  const counts = new Map<ToolCategory, number>();
+  for (const name of toolNames) {
+    const cat = toolCategory(name);
+    counts.set(cat, (counts.get(cat) || 0) + 1);
+  }
+  const parts = [...counts].map(([cat, n]) => {
+    const [verb, noun] = CATEGORY_WORDS[cat];
+    return `${verb} ${n} ${pluralize(noun, n)}`;
+  });
+  if (parts.length) parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  return parts.join(", ");
+}

@@ -15,7 +15,7 @@ export default async function OrySettingsPage(props: OryPageParams) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-700 via-sky-700 to-slate-800">
       <div className="w-full max-w-md rounded-xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-gray-700/20 dark:bg-gray-800/95">
         <SessionProvider>
           <Settings

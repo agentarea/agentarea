@@ -99,15 +99,6 @@ class TaskService(BaseTaskService):
             task_policy=task_policy,
         )
 
-    async def _snapshot_effective_policy(
-        self,
-        *,
-        task_id: UUID,
-        effective_policy: EffectivePolicy,
-    ) -> None:
-        """Persist the immutable policy snapshot via the injected port."""
-        await self.policy_resolver.snapshot(task_id=task_id, effective_policy=effective_policy)
-
     async def _enforce_budget_cap(
         self,
         workspace_id: str | None,
@@ -172,7 +163,7 @@ class TaskService(BaseTaskService):
         status: str = "submitted",
         task_policy: PolicyDocument | None = None,
     ) -> AgentTask:
-        """Persist a task with governance snapshot. Does not dispatch to Temporal.
+        """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
         Canonical persist-only entrypoint used by delegation activities, trigger
         prepare-only activities, and as the internal building block for
@@ -210,12 +201,9 @@ class TaskService(BaseTaskService):
             metadata=metadata,
         )
         stored_task = await self.create_task(task)
-        await self._snapshot_effective_policy(
-            task_id=stored_task.id,
-            effective_policy=effective_policy,
-        )
-        # Hand the just-resolved snapshot to TemporalTaskManager via the
-        # transient field. task_policy_snapshots remains the canonical source.
+        # Hand the just-resolved effective policy to TemporalTaskManager via the
+        # transient field. The workflow carries it in its state and is the
+        # canonical source served on demand by the governance API.
         stored_task.effective_policy = effective_policy.to_json_dict()
         return stored_task
 
@@ -633,7 +621,7 @@ class TaskService(BaseTaskService):
 
         # Try routing to an active workflow first — if a follow-up matches an
         # existing channel session, we never persist a new task or resolve a
-        # new policy snapshot. Routing only needs identity/message fields.
+        # new effective policy. Routing only needs identity/message fields.
         channel_origin = (parameters or {}).get("channel_origin", {})
         chat_id = channel_origin.get("chat_id") if channel_origin else None
         if chat_id:
@@ -652,7 +640,7 @@ class TaskService(BaseTaskService):
             if routed:
                 return routed
 
-        # Persist + governance snapshot via the canonical persist-only path.
+        # Persist + resolve governance policy via the canonical persist-only path.
         stored_task = await self.create_task_with_policy(
             agent_id=agent_id,
             description=description,

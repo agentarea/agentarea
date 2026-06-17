@@ -1,6 +1,5 @@
 import EmptyState from "@/components/EmptyState";
 import { listMCPServerInstances } from "@/lib/api";
-import { ExternalBackends } from "./ExternalBackends";
 import { SecretsTable } from "./SecretsTable";
 
 type MCPInstance = {
@@ -48,7 +47,6 @@ export async function SecretsData() {
         <SecretsTable instances={instances} />
       )}
 
-      <ExternalBackends />
     </div>
   );
 }

@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_governance.domain.policies import EffectivePolicy
 from agentarea_tasks.domain.models import AgentTask
@@ -55,7 +54,6 @@ def _make_service(temporal_executor=None):
 
     policy_resolver = MagicMock()
     policy_resolver.resolve = AsyncMock(return_value=EffectivePolicy())
-    policy_resolver.snapshot = AsyncMock()
 
     service = TaskService(
         repository_factory=repo_factory,

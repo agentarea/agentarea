@@ -63,7 +63,7 @@ const TYPE_CONFIG = {
   skill: {
     icon: Sparkles,
     label: "Skill",
-    color: "text-purple-500",
+    color: "text-sky-500",
     href: (id: string) => `/skills/${id}`,
   },
   trigger: {

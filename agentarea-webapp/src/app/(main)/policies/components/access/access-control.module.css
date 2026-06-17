@@ -13,8 +13,8 @@
   --rebac-red: #d6453d;
   --rebac-red-soft: #fcebea;
   --rebac-red-text: #a8332c;
-  --rebac-violet: #5e6ad2;
-  --rebac-purple: #8a4fd0;
+  --rebac-blue: #2252b3;
+  --rebac-sky: #2f8fbd;
   --rebac-muted: #8a8f98;
   --rebac-muted2: #a4a8b0;
   --rebac-border: hsl(var(--border));
@@ -131,10 +131,10 @@
   stroke: #9fb4e0;
 }
 .edgePermEditor {
-  stroke: #b7aee6;
+  stroke: #9fc8e8;
 }
 .edgePermOwner {
-  stroke: #c9b0ec;
+  stroke: #8fc7b4;
 }
 .edgePermConnect {
   stroke: #9fb4e0;
@@ -153,10 +153,10 @@
   stroke: var(--rebac-accent);
 }
 .edgeOn.edgePermEditor {
-  stroke: var(--rebac-violet);
+  stroke: var(--rebac-blue);
 }
 .edgeOn.edgePermOwner {
-  stroke: var(--rebac-purple);
+  stroke: var(--rebac-sky);
 }
 .edgeOn.edgePermConnect {
   stroke: var(--rebac-accent);
@@ -245,10 +245,10 @@
   color: var(--rebac-accent);
 }
 .elabelEditor {
-  color: var(--rebac-violet);
+  color: var(--rebac-blue);
 }
 .elabelOwner {
-  color: var(--rebac-purple);
+  color: var(--rebac-sky);
 }
 .elabelConnect {
   color: var(--rebac-accent);
@@ -443,10 +443,10 @@
   color: var(--rebac-accent);
 }
 .prelEditor {
-  color: var(--rebac-violet);
+  color: var(--rebac-blue);
 }
 .prelOwner {
-  color: var(--rebac-purple);
+  color: var(--rebac-sky);
 }
 .prelConnect {
   color: var(--rebac-accent);
@@ -480,11 +480,11 @@
   color: var(--rebac-accent);
 }
 .tkRel {
-  color: var(--rebac-violet);
+  color: var(--rebac-blue);
   font-weight: 600;
 }
 .tkSub {
-  color: var(--rebac-purple);
+  color: var(--rebac-sky);
 }
 .tkAt {
   color: var(--rebac-muted2);

@@ -46,14 +46,14 @@ const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({
           <div className="flex items-center gap-2">
             {showCalling && (
               <Settings
-                className="h-4 w-4 text-blue-500"
+                className="h-4 w-4 text-muted-foreground"
                 style={{
                   animation: "spin 2.5s linear infinite",
                   transformOrigin: "center",
                 }}
               />
             )}
-            <span className={showCalling ? "animate-pulse text-blue-600" : ""}>
+            <span className={showCalling ? "animate-pulse text-muted-foreground" : ""}>
               {showCalling ? `${t("calling")}...` : `${t("processing")}...`}
             </span>
           </div>
@@ -61,12 +61,12 @@ const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({
         collapsed={true}
       >
         {Object.keys(data.arguments).length > 0 && (
-          <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+          <div className="mt-2 text-xs text-muted-foreground">
             <details className="cursor-pointer">
-              <summary className="hover:text-blue-700 dark:hover:text-blue-300">
+              <summary className="hover:opacity-80">
                 Arguments
               </summary>
-              <pre className="mt-1 overflow-x-auto rounded bg-blue-100 p-2 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">
+              <pre className="mt-1 overflow-x-auto rounded bg-black/5 p-2 text-foreground/80 dark:bg-white/5">
                 {JSON.stringify(data.arguments, null, 2)}
               </pre>
             </details>

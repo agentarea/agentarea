@@ -3,11 +3,11 @@
 import { getBezierPath, type EdgeProps } from "@xyflow/react";
 
 const RELATION_COLORS: Record<string, string> = {
-  has_trigger: "#60a5fa",
-  uses_mcp: "#fb7185",
-  uses_openapi: "#fb7185",
-  has_skill: "#fb7185",
-  delegates_to: "#a78bfa",
+  has_trigger: "#2563eb",
+  uses_mcp: "#64748b",
+  uses_openapi: "#64748b",
+  has_skill: "#7c3aed",
+  delegates_to: "#0ea5e9",
 };
 
 export default function DataFlowEdge({
@@ -38,23 +38,33 @@ export default function DataFlowEdge({
   const baseColor = RELATION_COLORS[relation] ?? "#94a3b8";
 
   let stroke = baseColor;
-  let strokeWidth = 1.75;
-  let opacity = 0.75;
+  let strokeWidth = 1.4;
+  let opacity = 0.68;
 
   if (highlighted) {
     stroke = "#2563eb";
-    strokeWidth = 2.25;
+    strokeWidth = 2;
     opacity = 1;
   } else if (dimmed) {
-    stroke = "#d4d4d8";
+    stroke = "#cbd5e1";
     strokeWidth = 1;
-    opacity = 0.18;
+    opacity = 0.2;
   }
 
-  const strokeDasharray = isInactive ? "5,5" : undefined;
+  const strokeDasharray =
+    isInactive || relation === "uses_openapi" || relation === "has_skill"
+      ? "5,5"
+      : undefined;
 
   return (
     <>
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth={strokeWidth + 4}
+        strokeOpacity={dimmed ? 0.08 : 0.55}
+      />
       <defs>
         <marker
           id={`arrow-${id}`}

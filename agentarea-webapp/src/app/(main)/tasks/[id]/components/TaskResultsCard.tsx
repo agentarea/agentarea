@@ -78,11 +78,11 @@ export default function TaskResultsCard({
         )}
 
         {taskStatus?.session_id && (
-          <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
-            <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
+          <div className="mt-3 rounded border border-sky-200 bg-sky-50 p-2 dark:border-sky-800 dark:bg-sky-900/20">
+            <p className="mb-0.5 text-xs text-sky-600 dark:text-sky-400">
               {t("sessionId")}
             </p>
-            <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
+            <code className="break-all font-mono text-xs text-sky-900 dark:text-sky-100">
               {taskStatus.session_id}
             </code>
           </div>

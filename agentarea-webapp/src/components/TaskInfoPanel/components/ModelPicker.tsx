@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ModelBadge from "@/components/ui/model-badge";
 import {
   Select,
   SelectContent,
@@ -82,7 +83,15 @@ export default function ModelPicker({
             <SelectContent>
               {models.map((model: any) => (
                 <SelectItem key={model.id} value={model.id} className="text-xs">
-                  {model.model_display_name || model.name || model.id}
+                  <ModelBadge
+                    size="sm"
+                    className="bg-transparent px-0 py-0"
+                    providerName={model.provider_name ?? undefined}
+                    iconUrl={model.provider_icon_url ?? undefined}
+                    modelDisplayName={
+                      model.model_display_name || model.name || model.id
+                    }
+                  />
                 </SelectItem>
               ))}
             </SelectContent>

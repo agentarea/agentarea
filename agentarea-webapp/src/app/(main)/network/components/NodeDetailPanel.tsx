@@ -24,7 +24,7 @@ const TYPE_CONFIG = {
     color: "text-rose-500",
     href: (id: string) => `/mcp-servers/openapi/${id}`,
   },
-  skill: { icon: Sparkles, color: "text-purple-500", href: (id: string) => `/skills/${id}` },
+  skill: { icon: Sparkles, color: "text-sky-500", href: (id: string) => `/skills/${id}` },
   trigger: { icon: Zap, color: "text-amber-500", href: (id: string) => `/triggers/${id}` },
 };
 

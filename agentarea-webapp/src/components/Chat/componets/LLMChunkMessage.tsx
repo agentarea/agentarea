@@ -21,10 +21,10 @@ const ThinkingBlock: React.FC<{ content: string; isStreaming?: boolean }> = ({
   const [isExpanded, setIsExpanded] = useState(true);
 
   return (
-    <div className="mb-2 rounded-lg border border-violet-100 bg-violet-50/40 dark:border-violet-900/60 dark:bg-violet-950/20">
+    <div className="mb-2 rounded-lg border border-sky-100 bg-sky-50/40 dark:border-sky-900/60 dark:bg-sky-950/20">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-violet-600 dark:text-violet-300"
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-sky-600 dark:text-sky-300"
       >
         <ChevronRight
           className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")}
@@ -33,7 +33,7 @@ const ThinkingBlock: React.FC<{ content: string; isStreaming?: boolean }> = ({
         <span className="font-medium">{isStreaming ? "Reasoning…" : "Reasoning"}</span>
       </button>
       {isExpanded && (
-        <div className="whitespace-pre-wrap px-3 pb-2 text-xs text-violet-700/90 dark:text-violet-200/80">
+        <div className="whitespace-pre-wrap px-3 pb-2 text-xs text-sky-700/90 dark:text-sky-200/80">
           {content}
         </div>
       )}

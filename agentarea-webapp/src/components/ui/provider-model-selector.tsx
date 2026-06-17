@@ -338,6 +338,9 @@ export function ProviderModelSelector({
                                 className="relative overflow-hidden"
                               >
                                 <div className="flex w-full items-center gap-3 overflow-hidden">
+                                  <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                                    {renderModelIcon(model)}
+                                  </div>
                                   <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
                                     <span className="w-full truncate text-xs font-medium">
                                       {model.name}

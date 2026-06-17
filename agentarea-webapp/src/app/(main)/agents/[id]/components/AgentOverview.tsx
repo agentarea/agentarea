@@ -14,15 +14,27 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
+import { ProviderIcon } from "@/components/ui/provider-icon";
 import {
   agentColorVar,
   getAgentIconComponent,
   resolveAgentIdentity,
 } from "@/lib/agent-identity";
-import { getAgent, listAgentTasks } from "@/lib/api";
+import {
+  getAgent,
+  listAgentTasks,
+  listMCPServerInstances,
+  listMCPServers,
+  listPolicies,
+} from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
+import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
+import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
+import type { Policy } from "@/types/policies";
 import type { Agent } from "@/types/agent";
 import { cn } from "@/lib/utils";
+import { AgentToolPills } from "../../components/AgentToolIcons";
 import { CatalogAgentPreview } from "./CatalogAgentPreview";
 
 const fmtUsd = (v: number) =>
@@ -101,11 +113,17 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
   const realId: string = agent.id;
 
-  const [overview, tasksRes, settings] = await Promise.all([
-    getAgentOverview(realId).catch(() => null),
-    listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
-    getWorkspaceSettings().catch(() => null),
-  ]);
+  const [overview, tasksRes, settings, mcpInstancesRes, mcpServersRes, policiesRes] =
+    await Promise.all([
+      getAgentOverview(realId).catch(() => null),
+      listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
+      getWorkspaceSettings().catch(() => null),
+      listMCPServerInstances().catch(() => ({ data: [] })),
+      listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
+      listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
+        data: [],
+      })),
+    ]);
   const tasks = (tasksRes?.data as any[]) || [];
 
   const runningTasks = tasks.filter((t) =>
@@ -179,15 +197,29 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     agent.model_info?.model_display_name !== modelLabel
       ? agent.model_info.model_display_name
       : agent.model_info?.provider_name || null;
+  const providerName = agent.model_info?.provider_name || null;
+  const providerIconUrl = agent.model_info?.provider_icon_url || null;
 
   const triggers = (overview?.upcoming ?? []).filter(
     (u) => u.kind === "trigger"
   );
 
   const skills = agent.skills ?? [];
-  const mcpConfigs = agent.tools_config?.mcp_server_configs ?? [];
-  const openapiConfigs = agent.tools_config?.openapi_configs ?? [];
-  const connectionsCount = mcpConfigs.length + openapiConfigs.length;
+
+  // Resolve the agent's tools into render-ready icon+label chips, using the live
+  // MCP registry so refs map to real names/icons (same as the /agents list).
+  const mcpServersData = mcpServersRes?.data;
+  const mcpServers: McpServer[] = Array.isArray(mcpServersData)
+    ? (mcpServersData as McpServer[])
+    : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
+      []);
+  const mcpInstanceList = (mcpInstancesRes?.data as McpInstance[]) ?? [];
+  const toolIcons = resolveAgentToolIcons(agent, mcpInstanceList, mcpServers);
+
+  // Agent-scoped governance rules, decomposed for compact display.
+  const policyRules = ((policiesRes?.data as Policy[]) ?? [])
+    .filter((p) => p.enabled !== false)
+    .map(policyToRule);
 
   return (
     <div className="mx-auto w-full max-w-[1180px]">
@@ -233,7 +265,15 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
             {modelLabel && (
               <HeroMeta>
-                <Boxes className="h-3.5 w-3.5" />
+                {providerIconUrl ? (
+                  <ProviderIcon
+                    iconUrl={providerIconUrl}
+                    name={providerName || modelLabel}
+                    size="sm"
+                  />
+                ) : (
+                  <Boxes className="h-3.5 w-3.5" />
+                )}
                 <span className="font-medium text-foreground/80">
                   {modelLabel}
                 </span>
@@ -319,7 +359,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       {/* ===== two-column body ===== */}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.7fr_1fr]">
         {/* left */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardHead
               icon={<Play className="h-3.5 w-3.5" />}
@@ -360,12 +400,12 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
         </div>
 
         {/* right rail */}
-        <div className="flex flex-col gap-4">
-          {/* at a glance */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* configuration: model · skills · tools */}
           <Card>
             <CardHead
               icon={<Boxes className="h-3.5 w-3.5" />}
-              title="At a glance"
+              title="Configuration"
               link={{
                 label: "Configure",
                 href: `/agents/${agentRef}/settings`,
@@ -374,43 +414,82 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
             <GlanceRow
               href={`/agents/${agentRef}/settings`}
               tile={
-                <span
-                  className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-bold text-white"
-                  style={{ background: agentColorVar(colorToken) }}
-                >
-                  {(agent.model_info?.provider_name?.[0] ?? "M").toUpperCase()}
-                </span>
+                providerIconUrl ? (
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted">
+                    <ProviderIcon
+                      iconUrl={providerIconUrl}
+                      name={providerName || modelLabel || "Model"}
+                      size="md"
+                    />
+                  </span>
+                ) : (
+                  <span
+                    className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-bold text-white"
+                    style={{ background: agentColorVar(colorToken) }}
+                  >
+                    {(agent.model_info?.provider_name?.[0] ?? "M").toUpperCase()}
+                  </span>
+                )
               }
               title={modelLabel || "No model set"}
               sub={modelSub || "Model"}
             />
-            <GlanceRow
-              href={`/agents/${agentRef}/settings`}
-              tile={<GlanceTile icon={<Sparkles className="h-3.5 w-3.5" />} />}
-              title="Skills"
-              sub={
-                skills.length > 0
-                  ? skills
-                      .slice(0, 3)
-                      .map((s: any) => s.name)
-                      .join(", ") + (skills.length > 3 ? " +" + (skills.length - 3) : "")
-                  : "None granted"
-              }
-              value={skills.length}
-            />
-            <GlanceRow
-              href={`/agents/${agentRef}/settings`}
-              tile={<GlanceTile icon={<Plug className="h-3.5 w-3.5" />} />}
-              title="Connections"
-              sub={
-                connectionsCount > 0
-                  ? `${mcpConfigs.length} MCP · ${openapiConfigs.length} API`
-                  : "None connected"
-              }
-              value={connectionsCount}
-              last
-            />
+            <ConfigSection icon={<Sparkles className="h-3.5 w-3.5" />} title="Skills" count={skills.length}>
+              {skills.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {skills.map((s: any) => (
+                    <span
+                      key={s.id}
+                      title={s.description ?? s.name}
+                      className="inline-flex min-w-0 items-center rounded-full bg-muted px-2 py-0.5 text-[11.5px] text-foreground/80"
+                    >
+                      <span className="max-w-[150px] truncate">{s.name}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11.5px] text-muted-foreground">None granted</p>
+              )}
+            </ConfigSection>
+            <ConfigSection icon={<Plug className="h-3.5 w-3.5" />} title="Tools" count={toolIcons.length} last>
+              {toolIcons.length > 0 ? (
+                <AgentToolPills tools={toolIcons} />
+              ) : (
+                <p className="text-[11.5px] text-muted-foreground">None connected</p>
+              )}
+            </ConfigSection>
           </Card>
+
+          {/* policies (agent-scoped governance rules) */}
+          {policyRules.length > 0 && (
+            <Card>
+              <CardHead
+                icon={<Shield className="h-3.5 w-3.5" />}
+                title="Policies"
+                badge={`${policyRules.length}`}
+                link={{ label: "Manage", href: "/policies" }}
+              />
+              <div className="flex flex-col gap-2 px-[15px] py-3">
+                {policyRules.map((r) => (
+                  <div key={r.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-foreground/90">
+                        {r.label}
+                      </div>
+                      {r.value && (
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {r.value}
+                        </div>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {r.category}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* guardrails */}
           <Card>
@@ -666,6 +745,37 @@ function GlanceTile({ icon }: { icon: React.ReactNode }) {
     <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-foreground/70">
       {icon}
     </span>
+  );
+}
+
+function ConfigSection({
+  icon,
+  title,
+  count,
+  last,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  count?: number;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn("px-[15px] py-3", !last && "border-b border-border/60")}
+    >
+      <div className="mb-2 flex items-center gap-2.5">
+        <GlanceTile icon={icon} />
+        <span className="flex-1 text-[12.5px] font-medium">{title}</span>
+        {count != null && (
+          <b className="font-mono text-[12px] font-semibold text-foreground/80 tabular-nums">
+            {count}
+          </b>
+        )}
+      </div>
+      {children}
+    </div>
   );
 }
 

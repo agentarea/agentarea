@@ -36,11 +36,11 @@ register(["pdf"], { Icon: FileText, className: "text-red-600 dark:text-red-400" 
 register(["json"], { Icon: FileJson, className: "text-amber-600 dark:text-amber-400" });
 register(
   ["yaml", "yml", "xml", "toml", "ini", "env", "js", "ts", "tsx", "jsx", "py", "go", "rs", "rb", "java", "c", "cpp", "sh", "sql", "html", "css"],
-  { Icon: FileCode, className: "text-violet-600 dark:text-violet-400" }
+  { Icon: FileCode, className: "text-sky-600 dark:text-sky-400" }
 );
 register(["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico"], {
   Icon: FileImage,
-  className: "text-purple-600 dark:text-purple-400",
+  className: "text-sky-600 dark:text-sky-400",
 });
 register(["zip", "tar", "gz", "tgz", "rar", "7z"], {
   Icon: FileArchive,

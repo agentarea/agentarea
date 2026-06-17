@@ -29,7 +29,7 @@ export default function Participants({ agentName, delegatedAgents }: Participant
       name,
       role: t("roleDelegated"),
       icon: GitFork,
-      iconClass: "text-violet-600 dark:text-violet-400",
+      iconClass: "text-sky-600 dark:text-sky-400",
     })),
   ];
 

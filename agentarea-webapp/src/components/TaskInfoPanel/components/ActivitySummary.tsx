@@ -170,7 +170,7 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
       {summary.learnedSkills.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+            <Sparkles className="h-3 w-3" />
             {t("learnedSkills")}
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -180,7 +180,7 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
                 type="button"
                 onClick={() => scrollToToolCall(skill.callId)}
                 title={t("jumpToUsage")}
-                className="inline-flex h-auto items-center rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-normal text-purple-700 transition-colors hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+                className="inline-flex h-auto items-center rounded-md bg-muted px-2 py-0.5 text-[10px] font-normal text-foreground/80 transition-colors hover:bg-muted/70"
               >
                 {skill.name}
               </button>

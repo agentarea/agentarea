@@ -5,12 +5,8 @@ from uuid import UUID
 from agentarea_common.audit import audited
 from agentarea_common.base.repository_factory import RepositoryFactory
 
-from ..domain.policies import EffectivePolicy
 from ..domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
-from ..infrastructure.repository import (
-    PolicyRuleRepository,
-    TaskPolicySnapshotRepository,
-)
+from ..infrastructure.repository import PolicyRuleRepository
 
 
 class GovernancePolicyService:
@@ -19,9 +15,6 @@ class GovernancePolicyService:
     def __init__(self, repository_factory: RepositoryFactory):
         self.repository_factory = repository_factory
         self._rule_repository = repository_factory.create_repository(PolicyRuleRepository)
-        self._snapshot_repository = repository_factory.create_repository(
-            TaskPolicySnapshotRepository
-        )
 
     async def list_rules(
         self,
@@ -80,11 +73,3 @@ class GovernancePolicyService:
     async def delete_rule(self, *, rule_id: UUID | str) -> bool:
         """Delete a policy rule."""
         return await self._rule_repository.delete(rule_id)
-
-    async def get_task_policy_snapshot(
-        self,
-        *,
-        task_id: UUID,
-    ) -> EffectivePolicy | None:
-        """Read an immutable effective policy snapshot for a task."""
-        return await self._snapshot_repository.get_snapshot(task_id=task_id)

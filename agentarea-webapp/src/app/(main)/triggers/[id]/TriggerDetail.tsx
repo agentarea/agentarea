@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Bot, Check, Clock, Copy, Hash, Link as LinkIcon } from "lucide-react";
+import { Check, Clock, Copy, Hash, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   InfoPanelBody,
@@ -12,6 +12,7 @@ import {
   InfoPanelShell,
   InfoPanelValueBox,
 } from "@/components/InfoPanel";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,7 @@ function TriggerInfoPanel({
               Agent
             </div>
             <div className="flex items-center gap-1.5 text-sm text-foreground">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              <AgentAvatar agent={{ id: trigger.agent_id || agentName, name: agentName }} size="xs" />
               {agentName}
             </div>
           </div>
@@ -288,7 +289,7 @@ export default function TriggerDetail({
                   Agent
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <AgentAvatar agent={{ id: trigger.agent_id || agentName, name: agentName }} size="sm" />
                   <span>{agentName}</span>
                 </div>
               </div>

@@ -1,10 +1,9 @@
 "use client";
 
-import { Bot, Calendar, Clock, GitFork } from "lucide-react";
+import { Calendar, Clock, GitFork } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
-import { TaskStatusIcon } from "@/components/ui/task-status-icon";
-import { TaskWithAgent } from "@/lib/api";
 
 export interface TaskItemData {
   id: string;
@@ -24,35 +23,35 @@ interface TaskItemProps {
 
 const statusConfig = {
   running: {
-    badgeVariant: "default" as const,
+    color: "text-amber-600 border-amber-300",
     label: "Running",
   },
   completed: {
-    badgeVariant: "success" as const,
+    color: "text-green-600 border-green-300",
     label: "Completed",
   },
   success: {
-    badgeVariant: "success" as const,
+    color: "text-green-600 border-green-300",
     label: "Success",
   },
   failed: {
-    badgeVariant: "destructive" as const,
+    color: "text-red-600 border-red-300",
     label: "Failed",
   },
   blocked: {
-    badgeVariant: "secondary" as const,
+    color: "text-gray-500 border-gray-300",
     label: "Blocked",
   },
   error: {
-    badgeVariant: "destructive" as const,
+    color: "text-red-600 border-red-300",
     label: "Error",
   },
   paused: {
-    badgeVariant: "secondary" as const,
+    color: "text-gray-500 border-gray-300",
     label: "Paused",
   },
   pending: {
-    badgeVariant: "secondary" as const,
+    color: "text-gray-500 border-gray-300",
     label: "Pending",
   },
 };
@@ -73,13 +72,10 @@ export default function TaskItem({
       type="view"
       topRight={
         <Badge
-          variant={status.badgeVariant}
-          className="whitespace-nowrap h-5 px-1.5 text-[10px] gap-1 bg-opacity-30 dark:bg-opacity-20 uppercase"
+          size="sm"
+          variant="outline"
+          className={`whitespace-nowrap h-5 px-1.5 font-normal ${status.color}`}
         >
-          <TaskStatusIcon
-            status={task.status as TaskWithAgent["status"]}
-            className="h-3 w-3"
-          />
           {status.label}
         </Badge>
       }
@@ -93,7 +89,13 @@ export default function TaskItem({
         )}
         {showAgentName && (
           <div className="flex items-center gap-1.5">
-            <Bot className="h-3 w-3" />
+            <AgentAvatar
+              agent={{
+                id: task.agent_id || task.agent_name || "agent",
+                name: task.agent_name,
+              }}
+              size="xs"
+            />
             <span className="truncate">
               {task.agent_name || "Unknown Agent"}
             </span>

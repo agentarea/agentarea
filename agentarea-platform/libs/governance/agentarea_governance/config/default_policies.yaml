@@ -1,0 +1,44 @@
+# Baseline governance policies applied to every workspace.
+#
+# This is DATA, not code: edit the rows below (or point
+# GOVERNANCE_DEFAULT_POLICIES_PATH at another file) to change the defaults a
+# new workspace starts with — no code change or redeploy of logic required.
+#
+# Each entry becomes one row in the `policies` table bound to the workspace
+# (subject_type=workspace, subject_id=<workspace id>). subject_type/subject_id
+# are stamped at provisioning time, so they are intentionally absent here.
+#
+# Provisioning is idempotent: a workspace that already has any workspace-scoped
+# policy is left untouched, so editing this file never overwrites a user's edits.
+version: 1
+policies:
+  # Spend ceiling per calendar month.
+  - target: spend
+    effect: cap
+    params:
+      amount_usd: "500.00"
+      period: month
+
+  # Spend ceiling per single agent run.
+  - target: spend
+    effect: cap
+    params:
+      amount_usd: "50.00"
+      period: run
+
+  # Token ceilings (total and per LLM call).
+  - target: tokens
+    effect: cap
+    params:
+      max_tokens: 20000000
+      max_tokens_per_call: 100000
+
+  # Content safety filters on by default.
+  - target: content
+    effect: safety
+    params:
+      prompt_injection: true
+      output_sanitizer: true
+
+  # No approval policy by default — workspaces opt into human-in-the-loop
+  # explicitly via the Approval column.

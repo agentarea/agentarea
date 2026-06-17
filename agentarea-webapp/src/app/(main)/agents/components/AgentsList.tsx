@@ -3,6 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
@@ -32,6 +33,7 @@ export default function AgentsList({
       header: t("name") || "Name",
       render: (value: string, item: Agent) => (
         <div className="flex items-center gap-2">
+          <AgentAvatar agent={item} size="xs" />
           <span className="truncate font-medium">{value}</span>
         </div>
       ),
