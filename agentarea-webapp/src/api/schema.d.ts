@@ -2559,8 +2559,8 @@ export interface paths {
          * Resolve Access
          * @description Resolve why (and how) a subject can access a resource.
          *
-         *     ``allowed`` is computed via a Keto check; ``paths`` are derived by traversing
-         *     the workspace tuples directly so the UI can render the derivation.
+         *     ``allowed`` is computed via the graph backend; ``paths`` are derived by
+         *     traversing the workspace tuples directly so the UI can render the derivation.
          */
         post: operations["resolve_access_v1_rebac_resolve_post"];
         delete?: never;
@@ -2580,7 +2580,7 @@ export interface paths {
         put?: never;
         /**
          * Sync Grants
-         * @description Mirror existing grants into Keto and seed a starter collection.
+         * @description Mirror existing grants into the graph backend and seed a starter collection.
          *
          *     Idempotent: safe to call repeatedly. Steps:
          *       1. If no collections exist, create "All skills" containing every workspace
@@ -2611,12 +2611,12 @@ export interface paths {
         put?: never;
         /**
          * Create Tuple
-         * @description Write a relation tuple to Keto.
+         * @description Write a relation tuple to the configured graph backend.
          */
         post: operations["create_tuple_v1_rebac_tuples_post"];
         /**
          * Delete Tuple
-         * @description Delete a relation tuple from Keto.
+         * @description Delete a relation tuple from the configured graph backend.
          */
         delete: operations["delete_tuple_v1_rebac_tuples_delete"];
         options?: never;
@@ -2838,7 +2838,7 @@ export interface paths {
         put?: never;
         /**
          * Add Skill To Collection
-         * @description Add a skill to a collection and mirror the membership into Keto.
+         * @description Add a skill to a collection and mirror the membership into ReBAC.
          */
         post: operations["add_skill_to_collection_v1_skill_collections__collection_id__skills_post"];
         delete?: never;
@@ -2859,7 +2859,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Skill From Collection
-         * @description Remove a skill from a collection and delete the Keto membership tuple.
+         * @description Remove a skill from a collection and delete the ReBAC membership tuple.
          */
         delete: operations["remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete"];
         options?: never;

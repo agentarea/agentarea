@@ -19884,7 +19884,7 @@
     },
     "/v1/rebac/resolve": {
       "post": {
-        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via a Keto check; ``paths`` are derived by traversing\nthe workspace tuples directly so the UI can render the derivation.",
+        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing the workspace tuples directly so the UI can render the derivation.",
         "operationId": "resolve_access_v1_rebac_resolve_post",
         "requestBody": {
           "content": {
@@ -19933,7 +19933,7 @@
     },
     "/v1/rebac/sync": {
       "post": {
-        "description": "Mirror existing grants into Keto and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.\n  2. For each collection_skills row, write\n     ``Skill:<sid>#collections@SkillCollection:<cid>``.\n  3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.",
+        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.\n  2. For each collection_skills row, write\n     ``Skill:<sid>#collections@SkillCollection:<cid>``.\n  3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.",
         "operationId": "sync_grants_v1_rebac_sync_post",
         "responses": {
           "200": {
@@ -19962,7 +19962,7 @@
     },
     "/v1/rebac/tuples": {
       "delete": {
-        "description": "Delete a relation tuple from Keto.",
+        "description": "Delete a relation tuple from the configured graph backend.",
         "operationId": "delete_tuple_v1_rebac_tuples_delete",
         "requestBody": {
           "content": {
@@ -20057,7 +20057,7 @@
         ]
       },
       "post": {
-        "description": "Write a relation tuple to Keto.",
+        "description": "Write a relation tuple to the configured graph backend.",
         "operationId": "create_tuple_v1_rebac_tuples_post",
         "requestBody": {
           "content": {
@@ -21006,7 +21006,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills": {
       "post": {
-        "description": "Add a skill to a collection and mirror the membership into Keto.",
+        "description": "Add a skill to a collection and mirror the membership into ReBAC.",
         "operationId": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
         "parameters": [
           {
@@ -21060,7 +21060,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
       "delete": {
-        "description": "Remove a skill from a collection and delete the Keto membership tuple.",
+        "description": "Remove a skill from a collection and delete the ReBAC membership tuple.",
         "operationId": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
         "parameters": [
           {

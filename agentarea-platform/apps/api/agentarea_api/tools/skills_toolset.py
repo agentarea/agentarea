@@ -409,6 +409,7 @@ class SkillsToolset(Toolset):
         skill_name: str = "",
         import_all: bool = False,
     ) -> str:
+        candidates: list[dict[str, str | None]] = []
         try:
             _repo_info, _branch, candidates = await _list_github_skill_candidates(github_url)
             selected = _select_github_candidates(
@@ -417,7 +418,7 @@ class SkillsToolset(Toolset):
                 import_all=import_all,
             )
         except ValueError as exc:
-            payload = {"error": str(exc)}
+            payload: dict[str, Any] = {"error": str(exc)}
             if str(exc) == "Multiple skills found":
                 payload.update(
                     {
