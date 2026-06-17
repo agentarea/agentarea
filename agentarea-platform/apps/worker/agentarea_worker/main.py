@@ -153,9 +153,40 @@ class AgentAreaWorker:
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
+        openfga_client = None
+        if settings.openfga.OPENFGA_ENABLED:
+            from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+            openfga_client = OpenFGAClient(
+                api_url=settings.openfga.OPENFGA_API_URL,
+                store_id=settings.openfga.OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+            )
+            register_singleton(OpenFGAClient, openfga_client)
+
+        keto_client = None
+        if openfga_client is None and settings.keto.KETO_ENABLED:
+            from agentarea_common.rebac.keto_client import KetoClient
+
+            keto_client = KetoClient(
+                read_url=settings.keto.KETO_READ_URL,
+                write_url=settings.keto.KETO_WRITE_URL,
+                timeout_seconds=settings.keto.KETO_TIMEOUT_SECONDS,
+            )
+            register_singleton(KetoClient, keto_client)
+
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if perm_factory:
             register_factory(PermissionService, perm_factory)
+        elif openfga_client is not None:
+            from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
+
+            register_singleton(PermissionService, OpenFGAPermissionService(openfga_client))
+        elif keto_client is not None:
+            from agentarea_common.auth.keto_permission import KetoPermissionService
+
+            register_singleton(PermissionService, KetoPermissionService(keto_client))
         else:
             register_singleton(PermissionService, WorkspaceScopedPermissionService())
 

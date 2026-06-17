@@ -13,11 +13,11 @@ class CapabilityGuard:
     """Gate interceptor that enforces tool allow/deny lists per agent.
 
     Config is read from execution_state["tools_config"] which should contain:
-        {"allowed": ["tool_a", "tool_b"]} — whitelist (only these allowed)
-        {"denied": ["tool_x"]}            — blacklist (all except these)
+        {"allowed": ["tool_a", "tool_b"]} — allowlist (only these allowed)
+        {"denied": ["tool_x"]}            — explicit blocklist
 
     Supports glob patterns: "web_*" matches "web_search", "web_fetch", etc.
-    If no config is present, defaults to ALLOW (open by default).
+    If no explicit allowlist is present, defaults to DENY.
     """
 
     @property
@@ -33,9 +33,9 @@ class CapabilityGuard:
 
         if not tools_config:
             return InterceptorResult(
-                action=InterceptorAction.ALLOW,
+                action=InterceptorAction.DENY,
                 interceptor_name=self.name,
-                reason="no capability config — open by default",
+                reason="no capability allowlist configured",
             )
 
         action_name = context.action_name
@@ -49,7 +49,13 @@ class CapabilityGuard:
             )
 
         allowed = tools_config.get("allowed", [])
-        if allowed and not _matches_any(action_name, allowed):
+        if not allowed:
+            return InterceptorResult(
+                action=InterceptorAction.DENY,
+                interceptor_name=self.name,
+                reason="no allowed tools configured",
+            )
+        if not _matches_any(action_name, allowed):
             return InterceptorResult(
                 action=InterceptorAction.DENY,
                 interceptor_name=self.name,

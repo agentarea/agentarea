@@ -79,8 +79,9 @@ export const ToolIcon: React.FC<{ name?: string | null; className?: string }> = 
   name,
   className,
 }) => {
-  const Icon = resolveToolIcon(name);
-  return <Icon className={cn("h-4 w-4", className)} />;
+  return React.createElement(resolveToolIcon(name), {
+    className: cn("h-4 w-4", className),
+  });
 };
 
 export default ToolIcon;

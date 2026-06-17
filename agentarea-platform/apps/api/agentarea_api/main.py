@@ -54,9 +54,21 @@ async def initialize_services():
 
         settings = get_settings()
 
-        # Shared Keto client (used by the rebac API + KetoPermissionService).
+        # Shared graph clients (used by the rebac API + PermissionService).
+        openfga_client = None
+        if settings.openfga.OPENFGA_ENABLED:
+            from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+            openfga_client = OpenFGAClient(
+                api_url=settings.openfga.OPENFGA_API_URL,
+                store_id=settings.openfga.OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+            )
+            register_singleton(OpenFGAClient, openfga_client)
+
         keto_client = None
-        if settings.keto.KETO_ENABLED:
+        if openfga_client is None and settings.keto.KETO_ENABLED:
             from agentarea_common.rebac.keto_client import KetoClient
 
             keto_client = KetoClient(
@@ -69,6 +81,10 @@ async def initialize_services():
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if perm_factory:
             register_factory(PermissionService, perm_factory)
+        elif openfga_client is not None:
+            from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
+
+            register_singleton(PermissionService, OpenFGAPermissionService(openfga_client))
         elif keto_client is not None:
             from agentarea_common.auth.keto_permission import KetoPermissionService
 

@@ -71,9 +71,7 @@ async def get_task_policy_snapshot(
     task_id: UUID,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
-    workflow_service: Annotated[
-        TemporalWorkflowService, Depends(get_temporal_workflow_service)
-    ],
+    workflow_service: Annotated[TemporalWorkflowService, Depends(get_temporal_workflow_service)],
 ) -> EffectivePolicyResponse:
     """Read the effective governance policy for a task.
 
@@ -89,6 +87,4 @@ async def get_task_policy_snapshot(
     if effective_policy is None:
         raise HTTPException(status_code=404, detail="Task policy snapshot not found")
 
-    return EffectivePolicyResponse(
-        effective_policy=effective_policy_from_json(effective_policy)
-    )
+    return EffectivePolicyResponse(effective_policy=effective_policy_from_json(effective_policy))

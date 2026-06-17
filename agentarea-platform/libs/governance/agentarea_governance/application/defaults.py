@@ -72,7 +72,8 @@ def default_policy_rules(workspace_id: str, path: Path | None = None) -> list[Po
 
 def _dimension_key(target: str, effect: PolicyEffect | str, params: dict[str, Any]) -> tuple:
     """Identity of a baseline dimension, fine enough to tell apart the two spend
-    caps (month vs run) which share ``(target, effect)`` but differ by period."""
+    caps (month vs run) which share ``(target, effect)`` but differ by period.
+    """
     return (target, str(effect), params.get("period"))
 
 

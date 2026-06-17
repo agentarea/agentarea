@@ -1,8 +1,8 @@
 """Skill collection CRUD + membership API endpoints.
 
 Collections group skills so that a single ReBAC grant fans out to every
-contained skill. Membership changes are mirrored into Ory Keto as
-``Skill:<sid>#collections@SkillCollection:<cid>`` tuples when Keto is enabled.
+contained skill. Membership changes are mirrored into the configured graph
+backend as ``Skill:<sid>#collections@SkillCollection:<cid>`` tuples.
 """
 
 import logging
@@ -15,7 +15,13 @@ from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.infrastructure.database import get_db_session
-from agentarea_common.rebac import KetoError, KetoUnavailableError, RelationTuple
+from agentarea_common.rebac import (
+    KetoError,
+    KetoUnavailableError,
+    OpenFGAError,
+    OpenFGAUnavailableError,
+    RelationTuple,
+)
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,7 +169,7 @@ async def add_skill_to_collection(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Add a skill to a collection and mirror the membership into Keto."""
+    """Add a skill to a collection and mirror the membership into ReBAC."""
     factory = RepositoryFactory(db_session, user_context)
     service = SkillCollectionService(factory)
     if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
@@ -171,7 +177,7 @@ async def add_skill_to_collection(
     if await factory.create_repository(SkillRepository).get_by_id(payload.skill_id) is None:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    # Write Keto first — if Keto is down the DB is not mutated (consistent state).
+    # Write graph tuple first — if authz is down the DB is not mutated.
     keto = get_keto()
     if keto is not None:
         try:
@@ -183,14 +189,14 @@ async def add_skill_to_collection(
                     subject_id=f"SkillCollection:{collection_id}",
                 )
             )
-        except (KetoError, KetoUnavailableError):
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
             logger.exception(
-                "Failed to write Keto membership tuple for skill=%s collection=%s",
+                "Failed to write graph membership tuple for skill=%s collection=%s",
                 payload.skill_id,
                 collection_id,
             )
             raise HTTPException(
-                status_code=503, detail="Keto unavailable; membership tuple not written"
+                status_code=503, detail="Graph auth unavailable; membership tuple not written"
             ) from None
     await service.add_skill(collection_id, payload.skill_id)
 
@@ -202,13 +208,13 @@ async def remove_skill_from_collection(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Remove a skill from a collection and delete the Keto membership tuple."""
+    """Remove a skill from a collection and delete the ReBAC membership tuple."""
     factory = RepositoryFactory(db_session, user_context)
     service = SkillCollectionService(factory)
     if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    # Delete Keto tuple first — if Keto is down the DB is not mutated (grant stays consistent).
+    # Delete graph tuple first — if authz is down the DB is not mutated.
     keto = get_keto()
     if keto is not None:
         try:
@@ -220,13 +226,13 @@ async def remove_skill_from_collection(
                     subject_id=f"SkillCollection:{collection_id}",
                 )
             )
-        except (KetoError, KetoUnavailableError):
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
             logger.exception(
-                "Failed to delete Keto membership tuple for skill=%s collection=%s",
+                "Failed to delete graph membership tuple for skill=%s collection=%s",
                 skill_id,
                 collection_id,
             )
             raise HTTPException(
-                status_code=503, detail="Keto unavailable; membership tuple not deleted"
+                status_code=503, detail="Graph auth unavailable; membership tuple not deleted"
             ) from None
     await service.remove_skill(collection_id, skill_id)

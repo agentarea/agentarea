@@ -31,13 +31,13 @@ func DefaultSecurityConfig() *SecurityConfig {
 			"public.ecr.aws",
 		},
 		BlockedPatterns: []string{
-			"..",           // Path traversal
-			"${",           // Shell interpolation
-			"`",            // Command substitution
-			"|",            // Pipe
-			";",            // Command separator
-			"&&",           // Command chaining
-			"||",           // Command chaining
+			"..", // Path traversal
+			"${", // Shell interpolation
+			"`",  // Command substitution
+			"|",  // Pipe
+			";",  // Command separator
+			"&&", // Command chaining
+			"||", // Command chaining
 		},
 		MaxImageNameLength: 256,
 	}
@@ -278,4 +278,3 @@ func ValidateHealthCheckPath(path string) error {
 
 	return nil
 }
-

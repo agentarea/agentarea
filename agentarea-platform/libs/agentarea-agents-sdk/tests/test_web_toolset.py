@@ -39,8 +39,7 @@ def _patched_client_factory(transport: httpx.MockTransport):
 @pytest.mark.asyncio
 async def test_text_response_is_returned_inline(monkeypatch) -> None:
     body = (
-        "<html><head><title>T</title></head>"
-        "<body><p>hi</p><a href='/docs'>Docs</a></body></html>"
+        "<html><head><title>T</title></head><body><p>hi</p><a href='/docs'>Docs</a></body></html>"
     )
 
     def handler(request: httpx.Request) -> httpx.Response:

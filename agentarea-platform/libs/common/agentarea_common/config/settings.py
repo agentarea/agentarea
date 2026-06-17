@@ -13,6 +13,7 @@ from .database import DatabaseSettings
 from .keto import KetoSettings
 from .mcp import MCPManagerSettings, MCPSettings
 from .observability import ObservabilitySettings
+from .openfga import OpenFGASettings
 from .secrets import SecretManagerSettings
 from .triggers import TriggerSettings
 from .workflow import TaskExecutionSettings, WorkflowSettings
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     triggers: TriggerSettings = Field(default_factory=TriggerSettings)
     channel_delivery: ChannelDeliverySettings = Field(default_factory=ChannelDeliverySettings)
     keto: KetoSettings = Field(default_factory=KetoSettings)
+    openfga: OpenFGASettings = Field(default_factory=OpenFGASettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -58,4 +60,5 @@ def get_settings() -> Settings:
         triggers=TriggerSettings(),
         channel_delivery=ChannelDeliverySettings(),
         keto=KetoSettings(),
+        openfga=OpenFGASettings(),
     )

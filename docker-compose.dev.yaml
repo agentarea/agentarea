@@ -47,6 +47,11 @@ services:
       - KETO_ENABLED=${KETO_ENABLED:-true}
       - KETO_READ_URL=${KETO_READ_URL:-http://keto:4466}
       - KETO_WRITE_URL=${KETO_WRITE_URL:-http://keto:4467}
+      # OpenFGA ReBAC (preferred graph backend for new agent/task auth)
+      - OPENFGA_ENABLED=${OPENFGA_ENABLED:-false}
+      - OPENFGA_API_URL=${OPENFGA_API_URL:-http://openfga:8080}
+      - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-}
+      - OPENFGA_AUTHORIZATION_MODEL_ID=${OPENFGA_AUTHORIZATION_MODEL_ID:-}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -122,7 +127,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}" "${KETO_DB:-keto}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${HYDRA_DB:-hydra}" "${INFISICAL_DB:-infisical}" "${KETO_DB:-keto}" "${OPENFGA_DB:-openfga}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -420,6 +425,14 @@ services:
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
+      # Authorization graph
+      - KETO_ENABLED=${KETO_ENABLED:-true}
+      - KETO_READ_URL=${KETO_READ_URL:-http://keto:4466}
+      - KETO_WRITE_URL=${KETO_WRITE_URL:-http://keto:4467}
+      - OPENFGA_ENABLED=${OPENFGA_ENABLED:-false}
+      - OPENFGA_API_URL=${OPENFGA_API_URL:-http://openfga:8080}
+      - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-}
+      - OPENFGA_AUTHORIZATION_MODEL_ID=${OPENFGA_AUTHORIZATION_MODEL_ID:-}
 
       # Development
       # - DEBUG=true
@@ -555,6 +568,43 @@ services:
       db:
         condition: service_healthy
       keto-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # OpenFGA migration (preferred ReBAC backend for agent/task authorization)
+  openfga-migrate:
+    image: ${OPENFGA_IMAGE:-openfga/openfga:latest}
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+    networks:
+      - auth-network
+    depends_on:
+      db:
+        condition: service_healthy
+      postgres_init:
+        condition: service_completed_successfully
+
+  # OpenFGA ReBAC permission server
+  openfga:
+    image: ${OPENFGA_IMAGE:-openfga/openfga:latest}
+    command: run
+    ports:
+      - "8088:8080" # HTTP API
+      - "8089:8081" # gRPC API
+      - "3001:3000" # Playground
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+      OPENFGA_LOG_FORMAT: json
+    networks:
+      - auth-network
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+      openfga-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
 

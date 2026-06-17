@@ -63,7 +63,7 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 				}
 
 				// Merge resolved secrets into environment
-				envInterface, _ := resolvedSpec["environment"]
+				envInterface := resolvedSpec["environment"]
 				envMap, _ := envInterface.(map[string]interface{})
 				if envMap == nil {
 					envMap = make(map[string]interface{})

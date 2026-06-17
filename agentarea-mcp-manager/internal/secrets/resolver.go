@@ -189,7 +189,7 @@ func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secret
 
 	// If client is not initialized (fallback mode), return error
 	if sr.client == nil {
-		return "", fmt.Errorf("Infisical client not initialized - secret resolution not available for: %s", infisicalSecretKey)
+		return "", fmt.Errorf("infisical client not initialized - secret resolution not available for: %s", infisicalSecretKey)
 	}
 
 	// Retrieve secret from Infisical

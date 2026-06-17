@@ -53,9 +53,7 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
             if created:
                 await session.commit()
         except Exception:
-            logger.exception(
-                "failed to seed default policies for workspace %s", workspace.id
-            )
+            logger.exception("failed to seed default policies for workspace %s", workspace.id)
             await session.rollback()
 
     return WorkspaceService(

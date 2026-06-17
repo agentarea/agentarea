@@ -1,12 +1,13 @@
-"""ReBAC (Ory Keto) access explorer API.
+"""ReBAC access explorer API.
 
 Surfaces the authorization relationship graph that the frontend access explorer
 renders: nodes (agents, skill collections, MCP servers), edges (grant tuples),
 permission checks, path resolution, and a one-shot sync that mirrors existing
-grants into Keto and seeds a starter "All skills" collection.
+grants into the configured graph backend and seeds a starter "All skills" collection.
 
-When ``KETO_ENABLED`` is false, read endpoints respond with ``enabled: false``
-and still list the DB-backed nodes; write endpoints return HTTP 503.
+When no graph backend is enabled, read endpoints respond with ``enabled: false``
+and still list the DB-backed nodes; write endpoints return HTTP 503. OpenFGA is
+preferred when enabled; Keto remains supported as a migration fallback.
 """
 
 import logging
@@ -29,6 +30,9 @@ from agentarea_common.rebac import (
     KetoClient,
     KetoError,
     KetoUnavailableError,
+    OpenFGAClient,
+    OpenFGAError,
+    OpenFGAUnavailableError,
     RelationQuery,
     RelationTuple,
     SubjectSet,
@@ -61,13 +65,26 @@ _VERB_BY_KIND = {"skill": "use", "mcp": "connect", "agent": "operate"}
 _NAMESPACE_BY_KIND = {"skill": "Skill", "mcp": "MCPServer", "agent": "Agent"}
 
 
-def get_keto() -> KetoClient | None:
-    """Resolve the shared KetoClient, or None when Keto is disabled.
+GraphClient = KetoClient | OpenFGAClient
 
-    Prefers the singleton registered in the DI container at startup; falls back
-    to building one ad-hoc from settings if enabled but not yet registered.
+
+def get_graph_client() -> GraphClient | None:
+    """Resolve the shared graph client, or None when graph auth is disabled.
+
+    OpenFGA is preferred over Keto. This keeps the API stable during the
+    migration while the frontend and endpoint names still say "rebac".
     """
     settings = get_settings()
+    if settings.openfga.OPENFGA_ENABLED:
+        try:
+            return get_container().get(OpenFGAClient)
+        except ValueError:
+            return OpenFGAClient(
+                api_url=settings.openfga.OPENFGA_API_URL,
+                store_id=settings.openfga.OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+            )
     if not settings.keto.KETO_ENABLED:
         return None
     try:
@@ -78,6 +95,11 @@ def get_keto() -> KetoClient | None:
             write_url=settings.keto.KETO_WRITE_URL,
             timeout_seconds=settings.keto.KETO_TIMEOUT_SECONDS,
         )
+
+
+def get_keto() -> GraphClient | None:
+    """Backward-compatible alias for tests and older API modules."""
+    return get_graph_client()
 
 
 def _color(kind: str, index: int) -> str:
@@ -225,12 +247,12 @@ def _to_relation_tuple(payload: TupleWriteRequest) -> RelationTuple:
     )
 
 
-async def _workspace_tuples(keto: KetoClient, namespace: str) -> list[RelationTuple]:
-    """Query all tuples for a namespace, tolerating Keto outages with a warning."""
+async def _workspace_tuples(client: GraphClient, namespace: str) -> list[RelationTuple]:
+    """Query all tuples for a namespace, tolerating graph backend outages."""
     try:
-        return await keto.query_all_tuples(RelationQuery(namespace=namespace))
-    except (KetoError, KetoUnavailableError):
-        logger.exception("Failed to query Keto tuples for namespace=%s", namespace)
+        return await client.query_all_tuples(RelationQuery(namespace=namespace))
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
+        logger.exception("Failed to query graph tuples for namespace=%s", namespace)
         return []
 
 
@@ -502,10 +524,10 @@ async def create_tuple(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> dict:
-    """Write a relation tuple to Keto."""
+    """Write a relation tuple to the configured graph backend."""
     keto = get_keto()
     if keto is None:
-        raise HTTPException(status_code=503, detail="Keto is disabled")
+        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     # Validate the subject too: a subject_set pointing at one of our entity
@@ -521,9 +543,9 @@ async def create_tuple(
     tuple_ = _to_relation_tuple(payload)
     try:
         await keto.write_tuple(tuple_)
-    except (KetoError, KetoUnavailableError) as exc:
-        logger.exception("Failed to write Keto tuple %s", tuple_)
-        raise HTTPException(status_code=503, detail="Keto write failed") from exc
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        logger.exception("Failed to write graph tuple %s", tuple_)
+        raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
     return {"ok": True}
 
 
@@ -533,18 +555,18 @@ async def delete_tuple(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Delete a relation tuple from Keto."""
+    """Delete a relation tuple from the configured graph backend."""
     keto = get_keto()
     if keto is None:
-        raise HTTPException(status_code=503, detail="Keto is disabled")
+        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     tuple_ = _to_relation_tuple(payload)
     try:
         await keto.delete_tuple(tuple_)
-    except (KetoError, KetoUnavailableError) as exc:
-        logger.exception("Failed to delete Keto tuple %s", tuple_)
-        raise HTTPException(status_code=503, detail="Keto delete failed") from exc
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        logger.exception("Failed to delete graph tuple %s", tuple_)
+        raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
 
 
 @router.post("/check", response_model=CheckResponse)
@@ -563,15 +585,15 @@ async def check_permission(
             relation=payload.relation,
             subject_id=payload.subject_id,
         )
-    except (KetoError, KetoUnavailableError) as exc:
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
         logger.exception(
-            "Keto check failed (subject=%s %s:%s#%s)",
+            "Graph authorization check failed (subject=%s %s:%s#%s)",
             payload.subject_id,
             payload.namespace,
             payload.object,
             payload.relation,
         )
-        raise HTTPException(status_code=503, detail="Keto check failed") from exc
+        raise HTTPException(status_code=503, detail="Graph authorization check failed") from exc
     return CheckResponse(allowed=result.allowed)
 
 
@@ -583,8 +605,8 @@ async def resolve_access(
 ) -> ResolveResponse:
     """Resolve why (and how) a subject can access a resource.
 
-    ``allowed`` is computed via a Keto check; ``paths`` are derived by traversing
-    the workspace tuples directly so the UI can render the derivation.
+    ``allowed`` is computed via the graph backend; ``paths`` are derived by
+    traversing the workspace tuples directly so the UI can render the derivation.
     """
     verb = _VERB_BY_KIND[payload.resource_kind]
     namespace = _NAMESPACE_BY_KIND[payload.resource_kind]
@@ -600,9 +622,9 @@ async def resolve_access(
                 subject_id=payload.subject_id,
             )
             allowed = result.allowed
-        except (KetoError, KetoUnavailableError):
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
             logger.exception(
-                "Keto check failed during resolve (subject=%s %s:%s#%s)",
+                "Graph authorization check failed during resolve (subject=%s %s:%s#%s)",
                 payload.subject_id,
                 namespace,
                 payload.resource_id,
@@ -719,7 +741,7 @@ async def sync_grants(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> SyncResponse:
-    """Mirror existing grants into Keto and seed a starter collection.
+    """Mirror existing grants into the graph backend and seed a starter collection.
 
     Idempotent: safe to call repeatedly. Steps:
       1. If no collections exist, create "All skills" containing every workspace
@@ -730,7 +752,7 @@ async def sync_grants(
     """
     keto = get_keto()
     if keto is None:
-        raise HTTPException(status_code=503, detail="Keto is disabled")
+        raise HTTPException(status_code=503, detail="Graph authorization is disabled")
 
     factory = RepositoryFactory(db_session, user_context)
     collection_repo = factory.create_repository(SkillCollectionRepository)
@@ -768,9 +790,9 @@ async def sync_grants(
                 )
             )
             written += 1
-        except (KetoError, KetoUnavailableError) as exc:
-            logger.exception("Failed to seed Keto default-viewer tuple")
-            raise HTTPException(status_code=503, detail="Keto write failed") from exc
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+            logger.exception("Failed to seed graph default-viewer tuple")
+            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
 
     # Step 2: mirror collection memberships (scoped to workspace collections).
     workspace_cid_uuids = [c.id for c in existing_collections]
@@ -790,9 +812,9 @@ async def sync_grants(
                 )
             )
             written += 1
-        except (KetoError, KetoUnavailableError) as exc:
-            logger.exception("Failed to mirror collection membership into Keto")
-            raise HTTPException(status_code=503, detail="Keto write failed") from exc
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+            logger.exception("Failed to mirror collection membership into graph backend")
+            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
 
     # Step 3: mirror direct agent_skills grants (scoped to workspace skills).
     workspace_skill_uuids = [UUID(s) for s in skill_ids]
@@ -811,8 +833,8 @@ async def sync_grants(
                 )
             )
             written += 1
-        except (KetoError, KetoUnavailableError) as exc:
-            logger.exception("Failed to mirror agent_skill grant into Keto")
-            raise HTTPException(status_code=503, detail="Keto write failed") from exc
+        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+            logger.exception("Failed to mirror agent_skill grant into graph backend")
+            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
 
     return SyncResponse(written=written, collections=collections_created)

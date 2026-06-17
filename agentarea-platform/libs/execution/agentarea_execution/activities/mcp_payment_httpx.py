@@ -121,7 +121,9 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             payment_required = http_client.get_payment_required_response(
                 lambda name: response.headers.get(name), body
             )
-            requirement = self._select_x402_requirement(payment_required, x402_config.get("network"))
+            requirement = self._select_x402_requirement(
+                payment_required, x402_config.get("network")
+            )
             amount = self._x402_amount_usd(requirement)
             recipient = str(getattr(requirement, "pay_to", "") or "")
             if amount > self._budget_remaining:
@@ -144,9 +146,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             payment_headers = http_client.encode_payment_signature_header(payment_payload)
             retry_headers = dict(request.headers)
             retry_headers.update(payment_headers)
-            retry_headers["Access-Control-Expose-Headers"] = (
-                "PAYMENT-RESPONSE,X-PAYMENT-RESPONSE"
-            )
+            retry_headers["Access-Control-Expose-Headers"] = "PAYMENT-RESPONSE,X-PAYMENT-RESPONSE"
             retry_response = await self._inner.handle_async_request(
                 self._retry_request(request, retry_headers)
             )
@@ -166,7 +166,9 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
                         "network": str(getattr(requirement, "network", "") or ""),
                         "scheme": str(getattr(requirement, "scheme", "") or "exact"),
                     },
-                    error=None if success else f"Payment retry failed: {retry_response.status_code}",
+                    error=None
+                    if success
+                    else f"Payment retry failed: {retry_response.status_code}",
                 )
             )
             return retry_response
@@ -184,9 +186,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
             )
             return response
 
-    async def _handle_mpp(
-        self, request: httpx.Request, response: httpx.Response
-    ) -> httpx.Response:
+    async def _handle_mpp(self, request: httpx.Request, response: httpx.Response) -> httpx.Response:
         if self._wallet_config.get("wallet_type") not in {"mpp", "dual"}:
             return response
         tempo_key = self._wallet_config.get("mpp_tempo_key")
@@ -323,7 +323,9 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         return float(raw_amount or 0) / (10**decimals)
 
     @staticmethod
-    def _retry_request(request: httpx.Request, headers: httpx.Headers | dict[str, str]) -> httpx.Request:
+    def _retry_request(
+        request: httpx.Request, headers: httpx.Headers | dict[str, str]
+    ) -> httpx.Request:
         extensions = dict(request.extensions)
         extensions[AgentAreaPaymentTransport.RETRY_KEY] = True
         kwargs: dict[str, Any] = {
@@ -340,9 +342,7 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
 
     @staticmethod
     def _x402_tx_hash(response: httpx.Response) -> str | None:
-        raw = response.headers.get("PAYMENT-RESPONSE") or response.headers.get(
-            "X-PAYMENT-RESPONSE"
-        )
+        raw = response.headers.get("PAYMENT-RESPONSE") or response.headers.get("X-PAYMENT-RESPONSE")
         if not raw:
             return None
         try:
@@ -359,7 +359,9 @@ class AgentAreaPaymentTransport(httpx.AsyncBaseTransport):
         try:
             parse_payment_receipt = import_module("mpp").parse_payment_receipt
             receipt_data = parse_payment_receipt(receipt)
-            return getattr(receipt_data, "external_id", None) or getattr(receipt_data, "reference", None)
+            return getattr(receipt_data, "external_id", None) or getattr(
+                receipt_data, "reference", None
+            )
         except Exception:
             try:
                 data = json.loads(receipt)

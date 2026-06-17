@@ -42,7 +42,7 @@ func main() {
 		logger.Error("failed to initialize kubernetes backend resources", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer backend.Shutdown(context.Background())
+	defer func() { _ = backend.Shutdown(context.Background()) }()
 
 	runner := sandboxrunner.New(sandboxrunner.ConfigFromEnv(), store, backend, logger)
 	if err := runner.Run(ctx); err != nil && err != context.Canceled {

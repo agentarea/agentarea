@@ -42,9 +42,7 @@ from .base import platform_context, platform_read_context
 MAX_FILES = 200
 MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
-FRONTMATTER_NAME_RE = re.compile(
-    r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE
-)
+FRONTMATTER_NAME_RE = re.compile(r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
 FRONTMATTER_DESCRIPTION_RE = re.compile(
     r"^description:\s*['\"]?(?P<description>[^'\"\n]+?)['\"]?\s*$",
     re.MULTILINE,
@@ -126,9 +124,7 @@ async def _list_github_skill_candidates(
 
     importer = GitHubSkillImporter()
     repo_info = importer.parse_github_url(github_url)
-    branch = repo_info.branch or await importer._get_default_branch(  # noqa: SLF001
-        repo_info.owner, repo_info.repo
-    )
+    branch = repo_info.branch or await importer._get_default_branch(repo_info.owner, repo_info.repo)
 
     tree_url = (
         f"https://api.github.com/repos/{repo_info.owner}/{repo_info.repo}/git/trees/"
@@ -223,9 +219,10 @@ async def _github_skill_package_zip(
     package_prefix = f"{package_path.strip('/')}/" if package_path else ""
 
     out = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(zip_data)) as source, zipfile.ZipFile(
-        out, "w", zipfile.ZIP_DEFLATED
-    ) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(zip_data)) as source,
+        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target,
+    ):
         for info in source.infolist():
             if info.is_dir():
                 continue
@@ -439,7 +436,7 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
-            repo = service._get_repository()  # noqa: SLF001
+            repo = service._get_repository()
             for candidate in selected:
                 zip_data = await _github_skill_package_zip(
                     github_url,

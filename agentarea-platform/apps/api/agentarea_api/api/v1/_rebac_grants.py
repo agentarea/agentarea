@@ -1,4 +1,4 @@
-"""Small helpers for keeping resource CRUD aligned with Keto permissions."""
+"""Small helpers for keeping resource CRUD aligned with graph permissions."""
 
 from __future__ import annotations
 
@@ -7,7 +7,15 @@ from uuid import UUID
 
 from agentarea_common.config import get_settings
 from agentarea_common.di.container import get_container
-from agentarea_common.rebac import KetoClient, KetoError, KetoUnavailableError, RelationTuple
+from agentarea_common.rebac import (
+    KetoClient,
+    KetoError,
+    KetoUnavailableError,
+    OpenFGAClient,
+    OpenFGAError,
+    OpenFGAUnavailableError,
+    RelationTuple,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +27,26 @@ async def grant_user_relation(
     relation: str,
     user_id: str,
 ) -> None:
-    """Grant an initial direct relation to the creator when Keto is enabled.
+    """Grant an initial direct relation to the creator when graph auth is enabled.
 
     Resource create endpoints are still workspace-scoped by the database layer,
-    but update/delete endpoints also consult Keto. Without this bootstrap tuple,
+    but update/delete endpoints also consult ReBAC. Without this bootstrap tuple,
     a user can create a resource and then immediately get 403 on their own row.
     """
-    if not get_settings().keto.KETO_ENABLED:
+    settings = get_settings()
+    if settings.openfga.OPENFGA_ENABLED:
+        client_type = OpenFGAClient
+        backend = "OpenFGA"
+    elif settings.keto.KETO_ENABLED:
+        client_type = KetoClient
+        backend = "Keto"
+    else:
         return
 
     try:
-        keto = get_container().get(KetoClient)
+        client = get_container().get(client_type)
     except ValueError:
-        logger.warning("Keto is enabled but KetoClient is not registered; skipping grant")
+        logger.warning("%s is enabled but client is not registered; skipping grant", backend)
         return
 
     tuple_ = RelationTuple(
@@ -41,6 +56,6 @@ async def grant_user_relation(
         subject_id=f"User:{user_id}",
     )
     try:
-        await keto.write_tuple(tuple_)
-    except (KetoError, KetoUnavailableError):
-        logger.exception("Failed to grant creator relation in Keto: %s", tuple_)
+        await client.write_tuple(tuple_)
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
+        logger.exception("Failed to grant creator relation in %s: %s", backend, tuple_)

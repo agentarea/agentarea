@@ -164,9 +164,7 @@ class MPPPaymentClient:
                 except Exception:
                     try:
                         receipt_data = json.loads(receipt)
-                        tx_hash = receipt_data.get("txHash") or receipt_data.get(
-                            "transactionHash"
-                        )
+                        tx_hash = receipt_data.get("txHash") or receipt_data.get("transactionHash")
                     except Exception:
                         logger.debug("Failed to parse MPP receipt header")
 

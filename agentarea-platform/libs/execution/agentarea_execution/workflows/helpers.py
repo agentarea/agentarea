@@ -1,5 +1,6 @@
 """Helper classes and utilities for agent execution workflows."""
 
+import fnmatch
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
@@ -70,9 +71,9 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     Consolidates ``ToolsPolicy`` (allow/deny) and ``ApprovalPolicy`` from the
     resolved governance snapshot into one verdict, with precedence:
 
-    1. tool in ``tools.denied``                -> DENY
-    2. ``tools.allowed`` set and tool not in it -> DENY  (allow-list mode;
-       ``allowed=None`` means "no allow-list", ``allowed=[]`` denies all)
+    1. no explicit ``tools.allowed``           -> DENY  (zero-trust default)
+    2. tool in ``tools.denied``                -> DENY
+    3. tool not in ``tools.allowed``           -> DENY
     3. approval required (global flag or tool in escalation_rules)
        -> REQUIRE_APPROVAL
     4. otherwise                                -> ALLOW
@@ -81,19 +82,25 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     safe to call inside the Temporal workflow.
     """
     tools = (effective_policy or {}).get("tools") or {}
-
-    denied = tools.get("denied") or []
-    if tool_name in denied:
+    allowed = tools.get("allowed")
+    if not allowed:
         return ToolAction.DENY
 
-    allowed = tools.get("allowed")
-    if allowed is not None and tool_name not in allowed:
+    denied = tools.get("denied") or []
+    if _matches_any(tool_name, denied):
+        return ToolAction.DENY
+
+    if not _matches_any(tool_name, allowed):
         return ToolAction.DENY
 
     if policy_requires_approval(effective_policy, tool_name):
         return ToolAction.REQUIRE_APPROVAL
 
     return ToolAction.ALLOW
+
+
+def _matches_any(name: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
 
 
 def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:

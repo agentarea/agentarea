@@ -12,6 +12,7 @@ from .broker import BrokerSettings, KafkaSettings, RedisSettings
 from .database import Database, DatabaseSettings, get_database, get_db, get_db_settings, get_sync_db
 from .mcp import MCPManagerSettings, MCPSettings
 from .observability import ObservabilitySettings
+from .openfga import OpenFGASettings
 from .secrets import SecretManagerSettings, get_secret_manager_settings
 from .settings import Settings, get_settings
 from .triggers import TriggerSettings
@@ -29,6 +30,7 @@ __all__ = [
     "MCPManagerSettings",
     "MCPSettings",
     "ObservabilitySettings",
+    "OpenFGASettings",
     "RedisSettings",
     "SecretManagerSettings",
     "Settings",

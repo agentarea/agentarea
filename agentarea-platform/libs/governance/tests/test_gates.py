@@ -1,8 +1,8 @@
 """Tests for gate interceptors."""
 
-import pytest
 from uuid import uuid4
 
+import pytest
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
 from agentarea_governance.interceptors.gates.capability_guard import CapabilityGuard
@@ -25,10 +25,11 @@ def _ctx(action_name: str = "web_search", execution_state: dict | None = None) -
 
 class TestCapabilityGuard:
     @pytest.mark.asyncio
-    async def test_no_config_allows(self):
+    async def test_no_config_denies(self):
         guard = CapabilityGuard()
         result = await guard.execute(_ctx())
-        assert result.action == InterceptorAction.ALLOW
+        assert result.action == InterceptorAction.DENY
+        assert "allowlist" in result.reason
 
     @pytest.mark.asyncio
     async def test_allowed_tool(self):
@@ -72,6 +73,14 @@ class TestCapabilityGuard:
         ctx = _ctx("payment_process", {"tools_config": {"denied": ["payment_*"]}})
         result = await guard.execute(ctx)
         assert result.action == InterceptorAction.DENY
+
+    @pytest.mark.asyncio
+    async def test_deny_list_without_allowlist_does_not_open_other_tools(self):
+        guard = CapabilityGuard()
+        ctx = _ctx("web_search", {"tools_config": {"denied": ["payment_*"]}})
+        result = await guard.execute(ctx)
+        assert result.action == InterceptorAction.DENY
+        assert "allowed tools" in result.reason
 
 
 class TestCostBudgetGuard:

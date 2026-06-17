@@ -99,6 +99,67 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _tool_policy_denial_reason(
+    effective_policy: dict[str, Any] | None, tool_name: str
+) -> str | None:
+    """Return a denial reason when the static tool policy rejects the call."""
+    from ..workflows.helpers import ToolAction, decide_tool_action
+
+    decision = decide_tool_action(effective_policy, tool_name)
+    if decision is ToolAction.ALLOW:
+        return None
+    if decision is ToolAction.REQUIRE_APPROVAL:
+        return f"tool '{tool_name}' requires approval and cannot be executed directly"
+    return f"tool '{tool_name}' is not explicitly allowed by policy"
+
+
+def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
+    return MCPToolResult(
+        success=False,
+        result=f"Tool call denied by policy: {reason}",
+        execution_time="",
+        error=reason,
+    )
+
+
+async def _openfga_tool_denial_reason(request: MCPToolRequest) -> str | None:
+    """Return a denial reason when OpenFGA rejects this concrete invocation."""
+    from agentarea_common.auth.tool_invocation import is_tool_invocation_allowed
+    from agentarea_common.config import get_settings
+    from agentarea_common.di.container import get_container
+    from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+    settings = get_settings()
+    if not settings.openfga.OPENFGA_ENABLED:
+        return None
+    if not request.user_id:
+        return "missing user_id for OpenFGA tool authorization"
+
+    try:
+        try:
+            openfga = get_container().get(OpenFGAClient)
+        except ValueError:
+            openfga = OpenFGAClient(
+                api_url=settings.openfga.OPENFGA_API_URL,
+                store_id=settings.openfga.OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+            )
+    except Exception as exc:
+        logger.exception("OpenFGA tool authorization client unavailable")
+        return f"OpenFGA tool authorization unavailable: {exc}"
+
+    allowed = await is_tool_invocation_allowed(
+        openfga,
+        user_id=request.user_id,
+        tool_name=request.tool_name,
+        tool_args=request.tool_args,
+    )
+    if not allowed:
+        return "OpenFGA denied this tool invocation"
+    return None
+
+
 # Prometheus counters for MCP dispatch telemetry
 _mcp_last_dispatch_dropped_total = _make_counter(
     "mcp_last_dispatch_dropped_total",
@@ -756,6 +817,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request: MCPToolRequest,
     ) -> MCPToolResult:
         """Execute an MCP tool or built-in tool."""
+        policy_denial = _tool_policy_denial_reason(request.effective_policy, request.tool_name)
+        if policy_denial:
+            return _deny_tool_result(request.tool_name, policy_denial)
+
+        openfga_denial = await _openfga_tool_denial_reason(request)
+        if openfga_denial:
+            return _deny_tool_result(request.tool_name, openfga_denial)
+
         user_context = create_system_context(request.workspace_id)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -879,7 +948,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             payment_handler = None
             if request.agent_id:
 
-                async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
+                async def get_payment_context() -> (
+                    tuple[Any, Any, dict[str, Any], str, float] | None
+                ):
                     try:
                         wallet_service = await ctx.get_wallet_service()
                         wallet = await wallet_service.get_wallet(request.agent_id)
@@ -1173,16 +1244,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 server_instance_id = result.get("server_instance_id")
                 # OpenAPI tools may self-declare source; otherwise infer from
                 # whether the tool resolved against an MCP server instance.
-                source = result.get("source") or (
-                    "mcp" if server_instance_id else "builtin"
-                )
+                source = result.get("source") or ("mcp" if server_instance_id else "builtin")
                 return MCPToolResult(
                     success=result.get("success", False),
                     result=result_text,
                     execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
                     service_cost=float(result.get("service_cost") or 0.0),
-                    payment=result.get("payment") if isinstance(result.get("payment"), dict) else None,
+                    payment=result.get("payment")
+                    if isinstance(result.get("payment"), dict)
+                    else None,
                     source=source,
                     server_instance_id=str(server_instance_id) if server_instance_id else None,
                     server_name=result.get("server_name"),

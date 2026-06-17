@@ -67,7 +67,7 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 	}
 
 	if err := k.createSecret(ctx, instanceName, spec); err != nil {
-		k.cleanupResources(ctx, instanceName)
+		_ = k.cleanupResources(ctx, instanceName)
 		return nil, fmt.Errorf("failed to create secret: %w", err)
 	}
 
@@ -107,8 +107,8 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 
 	if err := warmPoolClient.ActivatePod(ctx, pod, activationReq); err != nil {
 		// Return pod to pool and fallback
-		warmPoolClient.ReturnToPool(ctx, pod)
-		k.cleanupResources(ctx, instanceName)
+		_ = warmPoolClient.ReturnToPool(ctx, pod)
+		_ = k.cleanupResources(ctx, instanceName)
 		k.logger.Error("Warm pool activation failed, falling back",
 			slog.String("error", err.Error()))
 		return k.CreateInstance(ctx, spec)
@@ -122,15 +122,15 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 
 	// Create Service pointing to this pod
 	if err := k.createServiceForPod(ctx, instanceName, spec, pod); err != nil {
-		warmPoolClient.ReturnToPool(ctx, pod)
-		k.cleanupResources(ctx, instanceName)
+		_ = warmPoolClient.ReturnToPool(ctx, pod)
+		_ = k.cleanupResources(ctx, instanceName)
 		return nil, fmt.Errorf("failed to create service: %w", err)
 	}
 
 	// Create route for external access
 	// Try Gateway API HTTPRoute first, fall back to Ingress if needed
 	if err := k.createRoute(ctx, instanceName, spec); err != nil {
-		k.cleanupResources(ctx, instanceName)
+		_ = k.cleanupResources(ctx, instanceName)
 		return nil, fmt.Errorf("failed to create route: %w", err)
 	}
 

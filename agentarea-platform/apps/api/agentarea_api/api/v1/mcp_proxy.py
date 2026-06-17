@@ -18,6 +18,7 @@ Dispatch by instance type:
 * ``compound``-> not yet implemented here; see compound proxy
 """
 
+import json
 import logging
 from typing import Any
 from uuid import UUID
@@ -25,7 +26,10 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.tool_invocation import is_tool_invocation_allowed
 from agentarea_common.config import get_settings
+from agentarea_common.di.container import get_container
+from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -80,6 +84,65 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
             continue
         out[k] = v
     return out
+
+
+def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Extract MCP JSON-RPC tool calls from a request payload."""
+    messages = payload if isinstance(payload, list) else [payload]
+    calls: list[tuple[str, dict[str, Any]]] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        if message.get("method") != "tools/call":
+            continue
+        params = message.get("params") if isinstance(message.get("params"), dict) else {}
+        tool_name = params.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            continue
+        arguments = params.get("arguments")
+        calls.append((tool_name, arguments if isinstance(arguments, dict) else {}))
+    return calls
+
+
+async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
+    """Deny JSON-RPC tool calls unless OpenFGA explicitly allows them."""
+    if not body:
+        return
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return
+    tool_calls = _iter_jsonrpc_tool_calls(payload)
+    if not tool_calls:
+        return
+
+    settings = get_settings()
+    if not settings.openfga.OPENFGA_ENABLED:
+        raise HTTPException(status_code=403, detail="Tool authorization graph is disabled")
+
+    try:
+        try:
+            openfga = get_container().get(OpenFGAClient)
+        except ValueError:
+            openfga = OpenFGAClient(
+                api_url=settings.openfga.OPENFGA_API_URL,
+                store_id=settings.openfga.OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+            )
+    except Exception as exc:
+        logger.exception("OpenFGA MCP proxy authorization client unavailable")
+        raise HTTPException(status_code=403, detail="Tool authorization unavailable") from exc
+
+    for tool_name, tool_args in tool_calls:
+        allowed = await is_tool_invocation_allowed(
+            openfga,
+            user_id=user_context.user_id,
+            tool_name=tool_name,
+            tool_args=tool_args,
+        )
+        if not allowed:
+            raise HTTPException(status_code=403, detail=f"Tool call denied: {tool_name}")
 
 
 async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
@@ -217,6 +280,8 @@ async def proxy_instance(
                 raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
+    if request.method == "POST" and body is not None:
+        await _authorize_mcp_tool_calls(body, user_context)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

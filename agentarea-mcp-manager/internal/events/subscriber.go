@@ -213,12 +213,12 @@ func (s *EventSubscriber) handleLegacyInstanceDeleted(ctx context.Context, paylo
 	dockerProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
 		JSONSpec: map[string]any{"type": "docker"},
 	})
-	dockerProvider.DeleteInstance(ctx, instanceID, name)
+	_ = dockerProvider.DeleteInstance(ctx, instanceID, name)
 
 	urlProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
 		JSONSpec: map[string]any{"type": "url"},
 	})
-	urlProvider.DeleteInstance(ctx, instanceID, name)
+	_ = urlProvider.DeleteInstance(ctx, instanceID, name)
 }
 
 // Close closes the Redis connection

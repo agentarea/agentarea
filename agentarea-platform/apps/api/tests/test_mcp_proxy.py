@@ -6,6 +6,7 @@ import pytest
 from agentarea_api.api.v1.mcp_proxy import (
     _filter_inbound_headers,
     _filter_outbound_headers,
+    _iter_jsonrpc_tool_calls,
     _resolve_upstream_url,
 )
 from agentarea_common.testing.flows import MainFlow
@@ -135,3 +136,36 @@ def test_filter_outbound_drops_content_length_and_transfer_encoding():
     assert "Transfer-Encoding" not in out
     assert out["Content-Type"] == "text/event-stream"
     assert out["Mcp-Session-Id"] == "abc"
+
+
+def test_iter_jsonrpc_tool_calls_extracts_single_call():
+    calls = _iter_jsonrpc_tool_calls(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "github.create_issue", "arguments": {"repo": "acme/app"}},
+        }
+    )
+
+    assert calls == [("github.create_issue", {"repo": "acme/app"})]
+
+
+def test_iter_jsonrpc_tool_calls_extracts_batch_calls_only():
+    calls = _iter_jsonrpc_tool_calls(
+        [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "slack.post_message", "arguments": {"channel": "eng"}},
+            },
+        ]
+    )
+
+    assert calls == [("slack.post_message", {"channel": "eng"})]
+
+
+def test_iter_jsonrpc_tool_calls_ignores_non_calls():
+    assert _iter_jsonrpc_tool_calls({"jsonrpc": "2.0", "method": "tools/list"}) == []

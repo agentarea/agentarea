@@ -37,7 +37,8 @@ def _to_rule(row: PolicyRuleORM) -> PolicyRule:
 def _safe_to_rule(row: PolicyRuleORM) -> PolicyRule | None:
     """Map a row to a rule, tolerating rows with an effect/subject the current
     schema doesn't know (e.g. stale or externally-seeded data). One unknown row
-    must never 500 the whole list — read paths stay generic-render."""
+    must never 500 the whole list — read paths stay generic-render.
+    """
     if row.effect not in _VALID_EFFECTS or row.subject_type not in _VALID_SUBJECT_TYPES:
         logger.warning(
             "skipping policy %s: unsupported effect/subject_type (%r/%r)",
@@ -86,11 +87,7 @@ class PolicyRuleRepository:
                 PolicyRuleORM.priority,
             )
         )
-        return [
-            rule
-            for row in result.scalars().all()
-            if (rule := _safe_to_rule(row)) is not None
-        ]
+        return [rule for row in result.scalars().all() if (rule := _safe_to_rule(row)) is not None]
 
     async def get(self, rule_id: UUID | str) -> PolicyRule | None:
         row = await self._get_row(rule_id)

@@ -1536,9 +1536,7 @@ async def handle_agent_jsonrpc(
 
         # Check A2A-Version header
         a2a_version = request.headers.get("a2a-version")
-        if a2a_version and not (
-            a2a_version.startswith("0.3") or a2a_version.startswith("1.")
-        ):
+        if a2a_version and not (a2a_version.startswith("0.3") or a2a_version.startswith("1.")):
             return create_error_response(
                 request_data.get("id"),
                 -32007,
