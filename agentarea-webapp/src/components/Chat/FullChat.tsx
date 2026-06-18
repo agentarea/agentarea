@@ -39,6 +39,8 @@ export interface Agent {
   id: string;
   name: string;
   description?: string | null;
+  icon?: string | null;
+  color_token?: string | null;
 }
 
 export interface ProjectOption {

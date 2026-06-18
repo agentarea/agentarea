@@ -7,7 +7,6 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import {
   ArrowUp,
-  Bot,
   FolderKanban,
   Paperclip,
   Pause,
@@ -15,10 +14,12 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { getAgentIconComponent, resolveAgentIdentity } from "@/lib/agent-identity";
 import { cn } from "@/lib/utils";
 import { ContextSelect } from "./ContextSelect";
 import { MentionMenu } from "../MentionMenu";
@@ -156,6 +157,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   };
 
   /**
@@ -165,6 +168,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   }>;
 
   /**
@@ -174,6 +179,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   }) => void;
 
   /**
@@ -362,7 +369,7 @@ export function ChatInputArea({
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
                   <ContextSelect
-                    icon={Bot}
+                    icon={FolderKanban}
                     label={t("agent")}
                     value={currentAgent.id}
                     disabled={isLoading}
@@ -373,6 +380,23 @@ export function ChatInputArea({
                       if (nextAgent) onAgentChange(nextAgent);
                     }}
                     options={availableAgents}
+                    renderTriggerIcon={(option) => {
+                      const { iconKey } = resolveAgentIdentity(option);
+                      const Icon = getAgentIconComponent(iconKey);
+
+                      return (
+                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
+                          <Icon className="h-3 w-3" strokeWidth={2} />
+                        </span>
+                      );
+                    }}
+                    renderOptionIcon={(option) => (
+                      <AgentAvatar
+                        agent={option}
+                        size="xs"
+                        className="mt-0.5 shrink-0"
+                      />
+                    )}
                   />
                 ) : null}
 
