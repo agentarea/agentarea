@@ -22,6 +22,7 @@ interface Status {
 
 interface ToolAccessGrant {
   scope: "tool" | "arguments";
+  workspace_id: string;
   user_id: string;
   tool_name: string;
   object_id: string;
@@ -31,7 +32,19 @@ interface ToolAccessGrant {
 function formatGrant(grant: ToolAccessGrant): string {
   const scope = grant.scope === "tool" ? "whole tool" : "exact arguments";
   const hash = grant.arguments_hash ? ` · ${grant.arguments_hash.slice(0, 12)}` : "";
-  return `${grant.tool_name} · ${scope}${hash} · User:${grant.user_id}`;
+  return `${grant.tool_name} · ${scope}${hash} · Workspace:${grant.workspace_id} · User:${grant.user_id}`;
+}
+
+async function readErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+  } catch {
+    // Keep the fallback when the server returns an empty or non-JSON error body.
+  }
+  return fallback;
 }
 
 export default function ToolGrantCard({
@@ -77,7 +90,7 @@ export default function ToolGrantCard({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`Grant failed (${response.status})`);
+        throw new Error(await readErrorDetail(response, `Grant failed (${response.status})`));
       }
       const result = (await response.json()) as { grant: ToolAccessGrant };
       setStatus({
@@ -107,7 +120,7 @@ export default function ToolGrantCard({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`Check failed (${response.status})`);
+        throw new Error(await readErrorDetail(response, `Check failed (${response.status})`));
       }
       const result = (await response.json()) as {
         allowed: boolean;

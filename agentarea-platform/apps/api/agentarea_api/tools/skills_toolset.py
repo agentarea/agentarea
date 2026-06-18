@@ -42,6 +42,11 @@ from .base import platform_context, platform_read_context
 MAX_FILES = 200
 MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
+MAX_GITHUB_SKILL_CANDIDATES = 50
+MAX_GITHUB_IMPORTS = 10
+MAX_GITHUB_REPO_ZIP_BYTES = 25 * 1024 * 1024
+MAX_GITHUB_PACKAGE_FILES = 200
+MAX_GITHUB_PACKAGE_BYTES = 10 * 1024 * 1024
 FRONTMATTER_NAME_RE = re.compile(r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
 FRONTMATTER_DESCRIPTION_RE = re.compile(
     r"^description:\s*['\"]?(?P<description>[^'\"\n]+?)['\"]?\s*$",
@@ -155,6 +160,11 @@ async def _list_github_skill_candidates(
 
     if not paths:
         raise ValueError(f"No SKILL.md found in GitHub repository: {github_url}")
+    if len(paths) > MAX_GITHUB_SKILL_CANDIDATES:
+        raise ValueError(
+            f"Repository contains {len(paths)} SKILL.md candidates; "
+            f"limit is {MAX_GITHUB_SKILL_CANDIDATES}. Use a more specific tree URL."
+        )
 
     def sort_key(path: str) -> tuple[int, str]:
         return (0 if path.lower() == "skill.md" else 1, path)
@@ -207,22 +217,20 @@ def _select_github_candidates(
 
 
 async def _github_skill_package_zip(
-    github_url: str,
+    repo_zip_data: bytes,
     *,
     package_path: str | None,
 ) -> bytes:
-    """Download a GitHub repo and re-root one skill package into a ZIP."""
-    from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
-
-    importer = GitHubSkillImporter()
-    zip_data = await importer.download_repo(github_url)
+    """Re-root one skill package from a GitHub repository ZIP."""
     package_prefix = f"{package_path.strip('/')}/" if package_path else ""
 
     out = io.BytesIO()
     with (
-        zipfile.ZipFile(io.BytesIO(zip_data)) as source,
+        zipfile.ZipFile(io.BytesIO(repo_zip_data)) as source,
         zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target,
     ):
+        selected: list[zipfile.ZipInfo] = []
+        total_size = 0
         for info in source.infolist():
             if info.is_dir():
                 continue
@@ -236,6 +244,20 @@ async def _github_skill_package_zip(
                 relative = relative[len(package_prefix) :]
             if not relative or relative.startswith("__MACOSX/"):
                 continue
+            selected.append(info)
+            total_size += info.file_size
+            if len(selected) > MAX_GITHUB_PACKAGE_FILES:
+                raise ValueError(
+                    f"GitHub skill package contains more than {MAX_GITHUB_PACKAGE_FILES} files"
+                )
+            if total_size > MAX_GITHUB_PACKAGE_BYTES:
+                mb = MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)
+                raise ValueError(f"GitHub skill package exceeds {mb} MB uncompressed limit")
+
+        for info in selected:
+            relative = info.filename.split("/", 1)[1]
+            if package_prefix:
+                relative = relative[len(package_prefix) :]
             target.writestr(relative, source.read(info.filename))
 
     return out.getvalue()
@@ -432,6 +454,26 @@ class SkillsToolset(Toolset):
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 
+        if len(selected) > MAX_GITHUB_IMPORTS:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Refusing to import {len(selected)} GitHub skill packages; "
+                        f"limit is {MAX_GITHUB_IMPORTS}. Use a more specific tree URL."
+                    )
+                }
+            )
+
+        try:
+            from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
+
+            repo_zip_data = await GitHubSkillImporter().download_repo(github_url)
+            if len(repo_zip_data) > MAX_GITHUB_REPO_ZIP_BYTES:
+                mb = MAX_GITHUB_REPO_ZIP_BYTES // (1024 * 1024)
+                return json.dumps({"error": f"GitHub repository ZIP exceeds {mb} MB limit"})
+        except Exception as exc:
+            return json.dumps({"error": str(exc)})
+
         created: list[dict[str, Any]] = []
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -439,10 +481,13 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
             repo = service._get_repository()
             for candidate in selected:
-                zip_data = await _github_skill_package_zip(
-                    github_url,
-                    package_path=candidate.get("package_path") or "",
-                )
+                try:
+                    zip_data = await _github_skill_package_zip(
+                        repo_zip_data,
+                        package_path=candidate.get("package_path") or "",
+                    )
+                except ValueError as exc:
+                    return json.dumps({"error": str(exc)})
                 skill = await service.create_from_zip(
                     zip_data=zip_data,
                     name=(name or None) if len(selected) == 1 else None,

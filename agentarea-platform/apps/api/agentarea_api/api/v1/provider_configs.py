@@ -11,6 +11,7 @@ from agentarea_api.api.deps.services import (  # type: ignore
 )
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.config import get_settings
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import ProviderConfig  # type: ignore
@@ -223,7 +224,7 @@ async def list_provider_configs_with_instances(
 # Discover preview endpoint (no saved config required)
 class DiscoverPreviewRequest(BaseModel):
     provider_key: str
-    api_key: str
+    api_key: str | None = None
     endpoint_url: str | None = None
 
 
@@ -262,7 +263,9 @@ async def discover_models_preview(
 
     provider_spec_id = str(provider_spec.id)
 
-    discovery_service = ModelDiscoveryService()
+    discovery_service = ModelDiscoveryService(
+        allow_private_endpoints=get_settings().mcp.ALLOW_PRIVATE_URLS,
+    )
     discovered = await discovery_service.discover(
         provider_key=data.provider_key,
         api_key=data.api_key,
@@ -425,11 +428,9 @@ async def discover_models(
     if not config:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
 
-    # Get API key from secret manager
-    secret_name = f"provider_config_{config.id}"
-    api_key = await provider_service.secret_manager.get_secret(secret_name)
-    if not api_key:
-        raise HTTPException(status_code=400, detail="No API key found for this configuration")
+    api_key = None
+    if config.api_key:
+        api_key = await provider_service.secret_manager.get_secret(config.api_key)
 
     provider_key = config.provider_spec.provider_key
     provider_spec_id = str(config.provider_spec_id)

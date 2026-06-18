@@ -402,6 +402,24 @@ The following table lists configurable parameters of the chart and their default
 | keto.configMapOverrideName | string | `""` |  |
 | keto.config | string | `"version: v0.12.0\ndsn: ${DSN}\nnamespaces:\n  location: file:///etc/config/keto/namespaces.keto.ts\nserve:\n  read:\n    host: 0.0.0.0\n    port: 4466\n  write:\n    host: 0.0.0.0\n    port: 4467\n  metrics:\n    host: 0.0.0.0\n    port: 4468\nlog:\n  level: info\n  format: json\n"` |  |
 | keto.namespaces | string | `"import { Namespace, Context, SubjectSet } from \"@ory/keto-namespace-types\"\n\nclass User implements Namespace {}\n\nclass Workspace implements Namespace {\n  related: {\n    members: (User | Agent)[]\n  }\n}\n\nclass SkillCollection implements Namespace {\n  related: {\n    parents: Workspace[]\n    viewers: (User | Agent | SubjectSet<Workspace, \"members\">)[]\n    editors: (User | Agent | SubjectSet<Workspace, \"members\">)[]\n    owners: (User | Agent)[]\n  }\n  permits = {\n    use: (ctx: Context): boolean =>\n      this.related.viewers.includes(ctx.subject) ||\n      this.related.editors.includes(ctx.subject) ||\n      this.related.owners.includes(ctx.subject),\n    configure: (ctx: Context): boolean =>\n      this.related.editors.includes(ctx.subject) ||\n      this.related.owners.includes(ctx.subject),\n    manage: (ctx: Context): boolean =>\n      this.related.owners.includes(ctx.subject),\n  }\n}\n\nclass Skill implements Namespace {\n  related: {\n    collections: SkillCollection[]\n    viewers: (User | Agent)[]\n    editors: (User | Agent)[]\n    owners: (User | Agent)[]\n  }\n  permits = {\n    use: (ctx: Context): boolean =>\n      this.related.viewers.includes(ctx.subject) ||\n      this.related.editors.includes(ctx.subject) ||\n      this.related.owners.includes(ctx.subject) ||\n      this.related.collections.traverse((c) => c.permits.use(ctx)),\n    configure: (ctx: Context): boolean =>\n      this.related.editors.includes(ctx.subject) ||\n      this.related.owners.includes(ctx.subject) ||\n      this.related.collections.traverse((c) => c.permits.configure(ctx)),\n    manage: (ctx: Context): boolean =>\n      this.related.owners.includes(ctx.subject) ||\n      this.related.collections.traverse((c) => c.permits.manage(ctx)),\n  }\n}\n\nclass MCPServer implements Namespace {\n  related: {\n    connectors: (User | Agent | SubjectSet<Workspace, \"members\">)[]\n    operators: (User | Agent)[]\n  }\n  permits = {\n    connect: (ctx: Context): boolean =>\n      this.related.connectors.includes(ctx.subject) ||\n      this.related.operators.includes(ctx.subject),\n    manage: (ctx: Context): boolean =>\n      this.related.operators.includes(ctx.subject),\n  }\n}\n\nclass Agent implements Namespace {\n  related: {\n    operators: (User | Agent | SubjectSet<Workspace, \"members\">)[]\n    owners: User[]\n  }\n  permits = {\n    operate: (ctx: Context): boolean =>\n      this.related.operators.includes(ctx.subject) ||\n      this.related.owners.includes(ctx.subject),\n    own: (ctx: Context): boolean => this.related.owners.includes(ctx.subject),\n  }\n}\n"` |  |
+| openfga.enabled | bool | `true` |  |
+| openfga.replicaCount | int | `1` |  |
+| openfga.image.repository | string | `"openfga/openfga"` |  |
+| openfga.image.tag | string | `"v1.18.0"` |  |
+| openfga.database.name | string | `"openfga"` |  |
+| openfga.database.createJob.enabled | bool | `true` |  |
+| openfga.log.level | string | `"info"` |  |
+| openfga.log.format | string | `"json"` |  |
+| openfga.service.httpPort | int | `8080` |  |
+| openfga.service.grpcPort | int | `8081` |  |
+| openfga.service.metricsPort | int | `2112` |  |
+| openfga.service.playgroundPort | int | `3000` |  |
+| openfga.playground.enabled | bool | `false` |  |
+| openfga.accessControl.storeId | string | `""` |  |
+| openfga.accessControl.authorizationModelId | string | `""` |  |
+| openfga.accessControl.storeName | string | `"agentarea"` |  |
+| openfga.accessControl.autoBootstrap | bool | `true` |  |
+| openfga.accessControl.autoApplyModel | bool | `true` |  |
 | kratos.enabled | bool | `true` |  |
 | kratos.replicaCount | int | `1` |  |
 | kratos.image.repository | string | `"oryd/kratos"` |  |
@@ -414,13 +432,15 @@ The following table lists configurable parameters of the chart and their default
 | kratos.configMapOverrideName | string | `""` |  |
 | kratos.files | object | `{}` |  |
 | kratos.secretName | string | `""` |  |
-| kratos.generateJwks | bool | `false` |  |
+| kratos.generateJwks | bool | `true` |  |
+| kratos.runtimeSecretName | string | `""` |  |
 | kratos.smtp.connection_uri | string | `""` |  |
 | kratos.smtp.from_address | string | `"noreply@example.com"` |  |
 | kratos.smtp.from_name | string | `"AgentArea"` |  |
 | kratos.session.cookieDomain | string | `"localhost"` |  |
 | kratos.jwt.kid | string | `"agentarea-jwt-key-1"` |  |
-| kratos.jwt.jwks_b64 | string | `"ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJhZ2VudGFyZWEtand0LWtleS0xIiwKICAgICAgInVzZSI6ICJzaWciLAogICAgICAiYWxnIjogIkVTMjU2IiwKICAgICAgImNydiI6ICJQLTI1NiIsCiAgICAgICJ4IjogIk1LQkNUTkljS1VTRGlpMTF5U3MzNTI2aURaOEFpVG83VHU2S1BBcXY3RDQiLAogICAgICAieSI6ICI0RXRsNlNSVzJZaUxVck41dmZ2Vkh1aHA3eDhQeGx0bVdXbGJiTTRJRnlNIiwKICAgICAgImQiOiAiODcwTUI2Z2Z1VEo0SHRVblV2WU15SnByNWVVWk5QNEJrNDNiVmRqM2VBRSIKICAgIH0KICBdCn0="` |  |
+| kratos.jwt.jwks_b64 | string | `""` |  |
+| kratos.jwt.jwks_public_b64 | string | `""` |  |
 | kratos.jwt.claims_mapper_b64 | string | `"bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg=="` |  |
 | kratos.jwt.issuer | string | `"https://agentarea.dev"` |  |
 | kratos.jwt.audience | string | `"agentarea-api"` |  |
@@ -441,8 +461,8 @@ The following table lists configurable parameters of the chart and their default
 | kratos.config.serve.public.cors.exposed_headers[0] | string | `"Content-Type"` |  |
 | kratos.config.serve.public.cors.exposed_headers[1] | string | `"Set-Cookie"` |  |
 | kratos.config.dsn | string | `"${DSN}"` |  |
-| kratos.config.secrets.cookie[0] | string | `"PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only"` |  |
-| kratos.config.secrets.cipher[0] | string | `"SECRET-KEY-FOR-DEV-32-CHARACTERS"` |  |
+| kratos.config.secrets.cookie[0] | string | `"${KRATOS_SECRETS_COOKIE}"` |  |
+| kratos.config.secrets.cipher[0] | string | `"${KRATOS_SECRETS_CIPHER}"` |  |
 | kratos.config.ciphers.algorithm | string | `"xchacha20-poly1305"` |  |
 | kratos.config.hashers.algorithm | string | `"bcrypt"` |  |
 | kratos.config.hashers.bcrypt.cost | int | `8` |  |

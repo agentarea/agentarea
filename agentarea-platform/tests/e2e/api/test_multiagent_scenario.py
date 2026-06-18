@@ -28,6 +28,8 @@ import pytest
 
 from tests.e2e.api.conftest import create_agent, wait_for_workflow
 
+ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
+
 # Stable, tiny public test PDF used by W3C accessibility test suite.
 PDF_URL = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
 # example.com is the canonical "always available, no UA gating" page.
@@ -120,7 +122,10 @@ def test_coordinator_fans_out_to_three_specialists(
     )
     task_id = alice_client.post(
         f"/v1/agents/{coord_id}/tasks/sync",
-        json={"description": prompt},
+        json={
+            "description": prompt,
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -179,7 +184,7 @@ def test_coordinator_fans_out_to_three_specialists(
         f"file-writer didn't produce greeting.txt; got {fw_names}"
     )
     greeting = next(a for a in fw_artifacts if a["path"].endswith("greeting.txt"))
-    body = httpx.get(greeting["download_url"], timeout=10.0).text
+    body = alice_client.get(greeting["download_url"]).raise_for_status().text
     assert "hello from coordinator" in body, body[:200]
 
     # PDF-fetcher: downloaded a real PDF into downloads/ via agentarea/web.
@@ -194,7 +199,7 @@ def test_coordinator_fans_out_to_three_specialists(
         f"{[(a['path'], a['content_type']) for a in pf_artifacts]}"
     )
     assert pdfs[0]["size"] > 1024, f"PDF too small: {pdfs[0]['size']} bytes"
-    pdf_bytes = httpx.get(pdfs[0]["download_url"], timeout=10.0).content
+    pdf_bytes = alice_client.get(pdfs[0]["download_url"]).raise_for_status().content
     assert pdf_bytes.startswith(b"%PDF-"), (
         f"downloaded artifact is not a real PDF (no %PDF- magic); "
         f"first bytes: {pdf_bytes[:32]!r}"
@@ -210,7 +215,7 @@ def test_coordinator_fans_out_to_three_specialists(
         f"md-summarizer didn't write summary.md; got "
         f"{[a['path'] for a in ms_artifacts]}"
     )
-    md_body = httpx.get(summaries[0]["download_url"], timeout=10.0).text
+    md_body = alice_client.get(summaries[0]["download_url"]).raise_for_status().text
     # 5 bullets per the instruction. Markdown bullets are '- ' or '* ' lines.
     bullet_lines = [
         ln for ln in md_body.splitlines() if ln.strip().startswith(("-", "*"))
@@ -269,7 +274,10 @@ def test_specialist_writes_artifact_via_delegation(
     )
     task_id = alice_client.post(
         f"/v1/agents/{coord_id}/tasks/sync",
-        json={"description": "Tell the writer to save note.txt now."},
+        json={
+            "description": "Tell the writer to save note.txt now.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -293,7 +301,7 @@ def test_specialist_writes_artifact_via_delegation(
     ).raise_for_status().json()
     notes = [a for a in artifacts if a["path"].endswith("note.txt")]
     assert notes, f"note.txt missing from child artifacts; got {[a['path'] for a in artifacts]}"
-    body = httpx.get(notes[0]["download_url"], timeout=10.0).text
+    body = alice_client.get(notes[0]["download_url"]).raise_for_status().text
     assert "delegated payload" in body, body[:200]
 
     alice_client.delete(f"/v1/agents/{coord_id}/tasks/{task_id}")
@@ -324,7 +332,10 @@ def test_task_summary_endpoint_reflects_event_log(
     )
     task_id = alice_client.post(
         f"/v1/agents/{writer_id}/tasks/sync",
-        json={"description": "Save fixture.txt now."},
+        json={
+            "description": "Save fixture.txt now.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -433,7 +444,10 @@ def test_fanout_partial_failure_completes_siblings(
     )
     task_id = alice_client.post(
         f"/v1/agents/{coord_id}/tasks/sync",
-        json={"description": "Run both agents in parallel."},
+        json={
+            "description": "Run both agents in parallel.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -485,7 +499,10 @@ def test_agent_can_read_back_file_it_wrote(
     )
     task_id = alice_client.post(
         f"/v1/agents/{agent_id}/tasks/sync",
-        json={"description": "Run the file round-trip steps."},
+        json={
+            "description": "Run the file round-trip steps.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -513,7 +530,7 @@ def test_agent_can_read_back_file_it_wrote(
     ).raise_for_status().json()
     notes = [a for a in artifacts if a["path"].endswith("note.txt")]
     assert notes, f"note.txt missing from storage; got {[a['path'] for a in artifacts]}"
-    body = httpx.get(notes[0]["download_url"], timeout=10.0).text
+    body = alice_client.get(notes[0]["download_url"]).raise_for_status().text
     assert body == "alpha-bravo-charlie", body[:200]
 
     alice_client.delete(f"/v1/agents/{agent_id}/tasks/{task_id}")
@@ -548,7 +565,10 @@ def test_summary_reflects_delegation_counts(
     )
     task_id = alice_client.post(
         f"/v1/agents/{coord_id}/tasks/sync",
-        json={"description": "Delegate once."},
+        json={
+            "description": "Delegate once.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 

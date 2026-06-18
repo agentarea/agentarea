@@ -33,6 +33,7 @@ func main() {
 	cfg := config.Load()
 
 	slog.Info("event-service starting",
+		"version", version,
 		"worker_id", cfg.WorkerID,
 		"inbound_stream", cfg.InboundStream,
 		"enable_telegram_polling", cfg.EnableTelegramPolling,

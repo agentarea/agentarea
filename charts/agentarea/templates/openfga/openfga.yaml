@@ -1,0 +1,164 @@
+{{- if .Values.openfga.enabled }}
+{{- $openfgaImage := printf "%s%s%s:%s" (default "" .Values.global.image.registry) (ternary "/" "" (ne (default "" .Values.global.image.registry) "")) (default "openfga/openfga" .Values.openfga.image.repository) (default "v1.18.0" .Values.openfga.image.tag) -}}
+{{- $datastoreUri := printf "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@%s:%v/%s?sslmode=disable&max_conns=20&max_idle_conns=4" (include "agentarea.database.host" .) .Values.global.database.port (.Values.openfga.database.name | default "openfga") -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-openfga
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: openfga
+spec:
+  replicas: {{ default 1 .Values.openfga.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: openfga
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: openfga
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: openfga
+          image: "{{ $openfgaImage }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: 2112
+              protocol: TCP
+            {{- if .Values.openfga.playground.enabled }}
+            - name: playground
+              containerPort: 3000
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+            - name: OPENFGA_DATASTORE_URI
+              value: "{{ $datastoreUri }}"
+          command: ["/openfga"]
+          args:
+            - run
+            - --datastore-engine=postgres
+            - --datastore-uri=$(OPENFGA_DATASTORE_URI)
+            - --http-addr=0.0.0.0:8080
+            - --grpc-addr=0.0.0.0:8081
+            - --metrics-addr=0.0.0.0:2112
+            - --log-level={{ .Values.openfga.log.level | default "info" }}
+            - --log-format={{ .Values.openfga.log.format | default "json" }}
+            {{- if .Values.openfga.playground.enabled }}
+            - --playground-enabled
+            - --playground-addr=0.0.0.0:3000
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-openfga
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: openfga
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.openfga.service.httpPort | default 8080 }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.openfga.service.grpcPort | default 8081 }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+    - port: {{ .Values.openfga.service.metricsPort | default 2112 }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    {{- if .Values.openfga.playground.enabled }}
+    - port: {{ .Values.openfga.service.playgroundPort | default 3000 }}
+      targetPort: playground
+      protocol: TCP
+      name: playground
+    {{- end }}
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: openfga
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-openfga-migrate
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: openfga-migrate
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: openfga-migrate
+    spec:
+      restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: openfga-migrate
+          image: "{{ $openfgaImage }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["/openfga"]
+          args:
+            - migrate
+            - --datastore-engine=postgres
+            - --datastore-uri=$(OPENFGA_DATASTORE_URI)
+            - --log-level={{ .Values.openfga.log.level | default "info" }}
+            - --log-format={{ .Values.openfga.log.format | default "json" }}
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+            - name: OPENFGA_DATASTORE_URI
+              value: "{{ $datastoreUri }}"
+{{- end }}

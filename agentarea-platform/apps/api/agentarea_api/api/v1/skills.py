@@ -383,7 +383,7 @@ async def update_skill(
         raise HTTPException(status_code=404, detail="Skill not found")
 
     if request.content is not None:
-        skill = await skill_service.set_content(skill_id, request.content)
+        skill = await skill_service.set_content(skill.id, request.content)
         if not skill:
             raise HTTPException(status_code=404, detail="Skill not found")
 

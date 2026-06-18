@@ -200,6 +200,44 @@ async def test_install_skill_materializes_catalog_skill(async_client, mock_skill
 
 
 @pytest.mark.asyncio
+async def test_update_catalog_skill_content_uses_forked_skill_id(
+    async_client, mock_skill_service, monkeypatch
+):
+    original_catalog_id = uuid4()
+    forked_skill_id = uuid4()
+    now = datetime.utcnow()
+
+    forked_skill = MagicMock()
+    forked_skill.id = forked_skill_id
+    forked_skill.name = "Forked Skill"
+    forked_skill.slug = "forked-skill"
+    forked_skill.description = "Updated description"
+    forked_skill.source_type = "content"
+    forked_skill.source_url = None
+    forked_skill.s3_path = None
+    forked_skill.network_scope = "private"
+    forked_skill.workspace_id = "test_workspace"
+    forked_skill.created_at = now
+    forked_skill.updated_at = now
+    forked_skill.registry_item_id = original_catalog_id
+    forked_skill.is_catalog = False
+    forked_skill.update_available = False
+
+    mock_skill_service.update.return_value = forked_skill
+    mock_skill_service.set_content.return_value = forked_skill
+    monkeypatch.setattr("agentarea_api.api.v1.skills.require_permission", AsyncMock())
+
+    response = await async_client.put(
+        f"/v1/skills/{original_catalog_id}",
+        json={"description": "Updated description", "content": "# New content"},
+    )
+
+    assert response.status_code == 200
+    mock_skill_service.update.assert_awaited_once()
+    mock_skill_service.set_content.assert_awaited_once_with(forked_skill_id, "# New content")
+
+
+@pytest.mark.asyncio
 async def test_list_skill_files_returns_manifest(async_client, mock_skill_service):
     skill_id = uuid4()
     files = [

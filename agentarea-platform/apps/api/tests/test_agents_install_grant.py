@@ -89,6 +89,7 @@ async def test_install_agent_grants_owner_tuple(
 
     assert resp.status_code == 200
     mock_agent_service.install_catalog_agent.assert_awaited_once()
+    mock_agent_service.get_with_skills.assert_awaited_once_with(forked_agent.id)
     captured_grant.assert_awaited_once_with(
         namespace="Agent",
         object_id=forked_agent.id,
@@ -100,7 +101,7 @@ async def test_install_agent_grants_owner_tuple(
 @pytest.mark.flow(MainFlow.AUTH_WORKSPACE_SCOPING)
 @pytest.mark.asyncio
 async def test_update_agent_grants_owner_tuple(
-    async_client, forked_agent, captured_grant, monkeypatch
+    async_client, mock_agent_service, forked_agent, captured_grant, monkeypatch
 ):
     # Editing an un-installed catalog agent forks a tenant copy; ownership of the
     # resulting row must be asserted (idempotent for plain edits). The edit-permission
@@ -109,6 +110,7 @@ async def test_update_agent_grants_owner_tuple(
     resp = await async_client.patch(f"/v1/agents/{uuid4()}", json={"name": "Renamed"})
 
     assert resp.status_code == 200
+    mock_agent_service.get_with_skills.assert_awaited_once_with(forked_agent.id)
     captured_grant.assert_awaited_once_with(
         namespace="Agent",
         object_id=forked_agent.id,

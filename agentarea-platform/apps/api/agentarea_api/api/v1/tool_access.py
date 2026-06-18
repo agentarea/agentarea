@@ -7,14 +7,19 @@ consumers should not have to construct graph object keys or know namespaces.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
+from urllib.parse import unquote
 
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.tool_invocation import (
     is_tool_invocation_allowed,
     tool_object_id,
     tool_resource_object_id,
+    tool_workspace_tuple,
+    workspace_member_tuple,
 )
+from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.rebac import (
     KetoError,
     KetoUnavailableError,
@@ -24,12 +29,16 @@ from agentarea_common.rebac import (
     RelationQuery,
     RelationTuple,
 )
-from fastapi import APIRouter, HTTPException
+from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .access_control import _assert_workspace_admin, get_graph_client
 
 router = APIRouter(prefix="/tool-access", tags=["tool-access"])
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 
 class ToolAccessGrantRequest(BaseModel):
@@ -52,6 +61,7 @@ class ToolAccessCheckRequest(BaseModel):
 
 class ToolAccessGrant(BaseModel):
     scope: Literal["tool", "arguments"]
+    workspace_id: str
     user_id: str
     tool_name: str
     object_id: str
@@ -81,21 +91,46 @@ def _user_id_from_subject(subject: str) -> str:
     return subject.split(":", 1)[1] if subject.startswith("User:") else subject
 
 
+async def _assert_user_in_workspace(
+    user_id: str,
+    user_context: UserContext,
+    db_session: AsyncSession,
+) -> None:
+    normalized_user_id = _user_id_from_subject(_user_subject(user_id))
+    if normalized_user_id == user_context.user_id:
+        return
+
+    owner_query = select(Workspace.owner_user_id).where(Workspace.id == user_context.workspace_id)
+    owner_user_id = (await db_session.execute(owner_query)).scalar_one_or_none()
+    if owner_user_id and str(owner_user_id) == normalized_user_id:
+        return
+
+    member_query = select(WorkspaceMembership.id).where(
+        WorkspaceMembership.workspace_id == user_context.workspace_id,
+        WorkspaceMembership.user_id == normalized_user_id,
+    )
+    if (await db_session.execute(member_query)).scalar_one_or_none() is not None:
+        return
+    raise HTTPException(status_code=403, detail="Target user is not in your workspace")
+
+
 def _grant_for_payload(
-    user_id: str, tool_name: str, arguments: dict[str, Any] | None
+    workspace_id: str, user_id: str, tool_name: str, arguments: dict[str, Any] | None
 ) -> ToolAccessGrant:
     if arguments is None:
         return ToolAccessGrant(
             scope="tool",
+            workspace_id=workspace_id,
             user_id=_user_id_from_subject(_user_subject(user_id)),
             tool_name=tool_name,
-            object_id=tool_object_id(tool_name),
+            object_id=tool_object_id(tool_name, workspace_id),
         )
 
-    object_id = tool_resource_object_id(tool_name, arguments)
+    object_id = tool_resource_object_id(tool_name, arguments, workspace_id)
     arguments_hash = object_id.rsplit("~args~", 1)[1] if "~args~" in object_id else None
     return ToolAccessGrant(
         scope="arguments",
+        workspace_id=workspace_id,
         user_id=_user_id_from_subject(_user_subject(user_id)),
         tool_name=tool_name,
         object_id=object_id,
@@ -112,25 +147,42 @@ def _graph_relationship_for_grant(grant: ToolAccessGrant) -> RelationTuple:
     )
 
 
+def _split_scoped_tool_object(object_id: str) -> tuple[str, str] | None:
+    workspace_id, separator, encoded_tool = object_id.partition("/")
+    if not separator or not workspace_id or not encoded_tool:
+        return None
+    return unquote(workspace_id), unquote(encoded_tool)
+
+
 def _grant_from_graph_relationship(relationship: RelationTuple) -> ToolAccessGrant | None:
     if relationship.relation != "callers" or not relationship.subject_id:
         return None
     if not relationship.subject_id.startswith("User:"):
         return None
     if relationship.namespace == "Tool":
+        scoped = _split_scoped_tool_object(relationship.object)
+        if scoped is None:
+            return None
+        workspace_id, tool_name = scoped
         return ToolAccessGrant(
             scope="tool",
+            workspace_id=workspace_id,
             user_id=_user_id_from_subject(relationship.subject_id),
-            tool_name=relationship.object,
+            tool_name=tool_name,
             object_id=relationship.object,
         )
     if relationship.namespace == "ToolResource":
-        tool_name = relationship.object.split("~args~", 1)[0]
+        scoped_object = relationship.object.split("~args~", 1)[0]
+        scoped = _split_scoped_tool_object(scoped_object)
+        if scoped is None:
+            return None
+        workspace_id, tool_name = scoped
         arguments_hash = (
             relationship.object.rsplit("~args~", 1)[1] if "~args~" in relationship.object else None
         )
         return ToolAccessGrant(
             scope="arguments",
+            workspace_id=workspace_id,
             user_id=_user_id_from_subject(relationship.subject_id),
             tool_name=tool_name,
             object_id=relationship.object,
@@ -147,9 +199,10 @@ def _openfga_graph():
 @router.get("/grants", response_model=ToolAccessGrantListResponse)
 async def list_tool_access_grants(
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> ToolAccessGrantListResponse:
     """List tool access grants in the configured graph backend."""
-    del user_context
+    await _assert_workspace_admin(user_context)
     graph = _openfga_graph()
     if graph is None:
         return ToolAccessGrantListResponse(grants=[], count=0)
@@ -160,7 +213,7 @@ async def list_tool_access_grants(
             relationships = await graph.query_all_tuples(RelationQuery(namespace=namespace))
             for relationship in relationships:
                 grant = _grant_from_graph_relationship(relationship)
-                if grant is not None:
+                if grant is not None and grant.workspace_id == user_context.workspace_id:
                     grants.append(grant)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
         raise HTTPException(status_code=503, detail="Tool access grants unavailable") from exc
@@ -172,6 +225,7 @@ async def list_tool_access_grants(
 async def grant_tool_access(
     payload: ToolAccessGrantRequest,
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> ToolAccessGrantResponse:
     """Grant a user access to a whole tool, or to an exact argument set."""
     graph = _openfga_graph()
@@ -179,7 +233,10 @@ async def grant_tool_access(
         raise HTTPException(status_code=503, detail="Tool access graph is disabled")
 
     await _assert_workspace_admin(user_context)
-    grant = _grant_for_payload(payload.user_id, payload.tool_name, payload.arguments)
+    await _assert_user_in_workspace(payload.user_id, user_context, db_session)
+    grant = _grant_for_payload(
+        user_context.workspace_id, payload.user_id, payload.tool_name, payload.arguments
+    )
     try:
         await graph.write_tuple(_graph_relationship_for_grant(grant))
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
@@ -191,6 +248,7 @@ async def grant_tool_access(
 async def revoke_tool_access(
     payload: ToolAccessGrantRequest,
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> None:
     """Revoke a whole-tool or exact-arguments grant."""
     graph = _openfga_graph()
@@ -198,7 +256,10 @@ async def revoke_tool_access(
         raise HTTPException(status_code=503, detail="Tool access graph is disabled")
 
     await _assert_workspace_admin(user_context)
-    grant = _grant_for_payload(payload.user_id, payload.tool_name, payload.arguments)
+    await _assert_user_in_workspace(payload.user_id, user_context, db_session)
+    grant = _grant_for_payload(
+        user_context.workspace_id, payload.user_id, payload.tool_name, payload.arguments
+    )
     try:
         await graph.delete_tuple(_graph_relationship_for_grant(grant))
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
@@ -209,31 +270,53 @@ async def revoke_tool_access(
 async def check_tool_access(
     payload: ToolAccessCheckRequest,
     user_context: UserContextDep,
+    db_session: DatabaseSessionDep,
 ) -> ToolAccessCheckResponse:
     """Check whether a user can call a tool.
 
     Omitting ``arguments`` checks a whole-tool grant. Passing ``arguments``
     checks the concrete invocation path used by runtime tool execution.
     """
-    del user_context
+    await _assert_workspace_admin(user_context)
+    await _assert_user_in_workspace(payload.user_id, user_context, db_session)
     graph = _openfga_graph()
-    grant = _grant_for_payload(payload.user_id, payload.tool_name, payload.arguments)
+    grant = _grant_for_payload(
+        user_context.workspace_id, payload.user_id, payload.tool_name, payload.arguments
+    )
     if graph is None:
         return ToolAccessCheckResponse(allowed=False, grant=grant)
 
     try:
         if payload.arguments is None:
-            result = await graph.check(
-                namespace="Tool",
-                object=tool_object_id(payload.tool_name),
-                relation="can_call",
-                subject_id=_user_subject(payload.user_id),
-            )
+            try:
+                result = await graph.check(
+                    namespace="Tool",
+                    object=tool_object_id(payload.tool_name, user_context.workspace_id),
+                    relation="can_call",
+                    subject_id=_user_subject(payload.user_id),
+                    contextual_tuples=[
+                        workspace_member_tuple(
+                            user_context.workspace_id,
+                            _user_id_from_subject(_user_subject(payload.user_id)),
+                        ),
+                        tool_workspace_tuple(payload.tool_name, user_context.workspace_id),
+                    ],
+                )
+            except OpenFGAError as exc:
+                if "workspace" not in str(exc):
+                    raise
+                result = await graph.check(
+                    namespace="Tool",
+                    object=tool_object_id(payload.tool_name, user_context.workspace_id),
+                    relation="can_call",
+                    subject_id=_user_subject(payload.user_id),
+                )
             allowed = result.allowed
         else:
             allowed = await is_tool_invocation_allowed(
                 graph,
                 user_id=_user_id_from_subject(_user_subject(payload.user_id)),
+                workspace_id=user_context.workspace_id,
                 tool_name=payload.tool_name,
                 tool_args=payload.arguments,
             )

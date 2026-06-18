@@ -51,11 +51,14 @@ type Task
 
 type Tool
   relations
+    define workspace: [Workspace]
     define callers: [User, Task, Session#tasks, Agent#tasks]
-    define can_call: callers
+    define can_call: callers and members from workspace
 
 type ToolResource
   relations
+    define workspace: [Workspace]
     define tool: [Tool]
     define callers: [User, Task, Session#tasks, Agent#tasks]
-    define can_call: callers or can_call from tool
+    define direct_call: callers and members from workspace
+    define can_call: direct_call or can_call from tool

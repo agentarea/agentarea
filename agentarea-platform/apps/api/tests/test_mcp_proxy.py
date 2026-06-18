@@ -189,13 +189,14 @@ async def test_authorize_mcp_tool_calls_uses_single_pdp(monkeypatch):
 
     await _authorize_mcp_tool_calls(
         b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}',
-        SimpleNamespace(user_id="u1"),
+        SimpleNamespace(user_id="u1", workspace_id="ws1"),
     )
 
     assert len(seen) == 1
     assert seen[0].tool_name == "github.create_issue"
     assert seen[0].tool_args == {"repo": "acme/app"}
     assert seen[0].user_id == "u1"
+    assert seen[0].workspace_id == "ws1"
     assert seen[0].policy_required is False
 
 
@@ -209,7 +210,7 @@ async def test_authorize_mcp_tool_calls_denies_pdp_denial(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await _authorize_mcp_tool_calls(
             b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{}}}',
-            SimpleNamespace(user_id="u1"),
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
         )
 
     assert exc.value.status_code == 403

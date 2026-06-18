@@ -72,7 +72,7 @@ export interface AccessControlResolvePath {
 
 export interface AccessControlResolveRequest {
   subject_id: string;
-  resource_kind: "skill" | "mcp" | "agent";
+  resource_kind: "skill" | "collection" | "mcp" | "agent";
   resource_id: string;
 }
 

@@ -117,9 +117,10 @@ class ProviderService:
             created_by=created_by,
             is_public=payload.is_public,
         )
-        secret_name = f"provider_config_{config_id}"
-        config.api_key = secret_name
-        await self.secret_manager.set_secret(secret_name, payload.api_key)
+        if payload.api_key:
+            secret_name = f"provider_config_{config_id}"
+            config.api_key = secret_name
+            await self.secret_manager.set_secret(secret_name, payload.api_key)
 
         return await self.provider_config_repo.create_config(config)
 
@@ -188,11 +189,18 @@ class ProviderService:
             config.is_active = patch["is_active"]
         if "is_public" in patch:
             config.is_public = patch["is_public"]
-        if "api_key" in patch and patch["api_key"] is not None:
+        if "api_key" in patch:
             secret_name = f"provider_config_{config.id}"
-            await self.secret_manager.set_secret(secret_name, patch["api_key"])
-            # Domain field stores the secret name, not the raw key.
-            config.api_key = secret_name
+            if patch["api_key"]:
+                await self.secret_manager.set_secret(secret_name, patch["api_key"])
+                # Domain field stores the secret name, not the raw key.
+                config.api_key = secret_name
+            else:
+                try:
+                    await self.secret_manager.delete_secret(secret_name)
+                except Exception:  # noqa: S110
+                    pass
+                config.api_key = None
 
         return await self.provider_config_repo.update_config(config)
 
@@ -328,8 +336,9 @@ class ProviderService:
         if not instance:
             return None
 
-        secret_name = f"provider_config_{instance.provider_config.id}"
-        api_key = await self.secret_manager.get_secret(secret_name)
+        api_key = None
+        if instance.provider_config.api_key:
+            api_key = await self.secret_manager.get_secret(instance.provider_config.api_key)
 
         return {
             "instance": instance,

@@ -11,7 +11,6 @@ import (
 // Poller implements channels.ChannelPoller for Telegram Bot API.
 type Poller struct {
 	client *Client
-	chatID int64 // filled from first message if not set
 }
 
 // NewPoller creates a Telegram poller from trigger config.

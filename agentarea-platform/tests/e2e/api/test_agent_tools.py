@@ -23,6 +23,8 @@ import pytest
 
 from tests.e2e.api.conftest import _psql, create_agent, wait_for_workflow
 
+ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
+
 
 def _rustfs_env_defaults() -> None:
     """Point ArtifactService at the local RustFS the backend also uses.
@@ -72,11 +74,14 @@ def test_agent_uses_calculator_tool(
             "Use the calculator tool for arithmetic. "
             "After you have the result, call completion with just the number."
         ),
-        tools=[{"type": "code", "name": "agentarea/calculator"}],
+        tools=[{"type": "code", "name": "agentarea/math"}],
     )
     task_id = alice_client.post(
         f"/v1/agents/{agent_id}/tasks/sync",
-        json={"description": "What is 17 * 23? Use the calculator."},
+        json={
+            "description": "What is 17 * 23? Use the math tool.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -85,8 +90,8 @@ def test_agent_uses_calculator_tool(
         f"expected WorkflowCompleted; got {[e['event_type'] for e in events]}"
     )
 
-    calc_completed = _tool_events(events, "ToolCallCompleted", "calculate")
-    assert calc_completed, "calculator tool was never invoked"
+    calc_completed = _tool_events(events, "ToolCallCompleted", "math")
+    assert calc_completed, "math tool was never invoked"
     result_text = str(calc_completed[-1]["metadata"].get("result") or "")
     assert "391" in result_text, f"calculator produced wrong result: {result_text!r}"
 
@@ -175,7 +180,8 @@ def test_agent_file_tool_writes_persist_in_workspace_sandbox(
             "description": (
                 f"Create a file named {file_name} with the exact content: "
                 f"{content}. Do not create any other files."
-            )
+            ),
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
         },
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -259,7 +265,8 @@ def test_agent_file_tool_round_trip_read_after_write(
             "description": (
                 f"Create file {file_name} with exact content: {sentinel}. "
                 f"Then read it and return what you read."
-            )
+            ),
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
         },
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -347,7 +354,8 @@ def test_agent_file_tool_lists_its_own_writes(
             "description": (
                 f"Create two files: {names[0]} with content 'A' and "
                 f"{names[1]} with content 'B'. Then list all files."
-            )
+            ),
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
         },
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -424,7 +432,10 @@ def test_agent_web_tool_persists_binary_fetch_as_artifact(
     )
     task_id = alice_client.post(
         f"/v1/agents/{agent_id}/tasks/sync",
-        json={"description": f"fetch_webpage on {fetch_url} and return the result."},
+        json={
+            "description": f"fetch_webpage on {fetch_url} and return the result.",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
@@ -470,7 +481,7 @@ def test_file_tool_sandbox_isolated_across_workspaces(
     The sandbox must be scoped by workspace_id — same file_name in a
     different workspace is a distinct empty directory.
     """
-    file_name = "alice-secret.txt"
+    file_name = "alice-note.txt"
     alice_agent = create_agent(
         alice_client,
         llm_model,
@@ -482,8 +493,9 @@ def test_file_tool_sandbox_isolated_across_workspaces(
         f"/v1/agents/{alice_agent}/tasks/sync",
         json={
             "description": (
-                f"Create file {file_name} with content: classified-alice-note."
-            )
+                f"Create file {file_name} with content: workspace-alpha-note."
+            ),
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
         },
         timeout=30.0,
     ).raise_for_status().json()["id"]
@@ -550,7 +562,10 @@ def test_file_tool_sandbox_isolated_across_workspaces(
         )
         eve_task = eve_client.post(
             f"/v1/agents/{eve_agent}/tasks/sync",
-            json={"description": "List all files you can see."},
+            json={
+                "description": "List all files you can see.",
+                "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+            },
             timeout=30.0,
         ).raise_for_status().json()["id"]
         eve_events = wait_for_workflow(
@@ -586,7 +601,7 @@ def test_tool_events_are_workspace_scoped(
         llm_model,
         name="iso-tool-agent",
         instruction="Call calculator then completion.",
-        tools=[{"type": "code", "name": "agentarea/calculator"}],
+        tools=[{"type": "code", "name": "agentarea/math"}],
     )
     task_id = alice_client.post(
         f"/v1/agents/{agent_id}/tasks/sync",

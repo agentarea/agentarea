@@ -7,15 +7,14 @@ The endpoints we exercise here:
 
   POST   /v1/projects/{id}/files          (multipart upload)
   GET    /v1/projects/{id}/files          (list)
-  GET    /v1/projects/{id}/files/{path}   (presigned download URL)
+  GET    /v1/projects/{id}/files/{path}   (authenticated download URL)
   DELETE /v1/projects/{id}/files/{path}
 
 Load-bearing invariants:
 
-  * The presigned URL host is reachable from outside the cluster
-    (PUBLIC_S3_ENDPOINT, falling back to AWS_ENDPOINT_URL). A regression
-    where the API hands out an internal-only host (``rustfs:9000``) is
-    silent in unit tests but fatal in the browser.
+  * The download URL host is reachable from outside the cluster. A regression
+    where the API hands out an internal-only host (``rustfs:9000``) is silent
+    in unit tests but fatal in the browser.
   * Workspace isolation: Bob can never list/upload/delete files in
     Alice's project.
 """
@@ -64,9 +63,8 @@ def test_project_file_upload_list_download_delete_roundtrip(
     url = payload["url"]
     assert url.startswith("http"), url
 
-    # Presigned URL must point at the public S3 host (or the fallback
-    # AWS_ENDPOINT_URL) — never bare ``rustfs`` / ``minio`` cluster names
-    # that browsers can't resolve.
+    # Download URL must point at a public AgentArea host, never bare
+    # ``rustfs`` / ``minio`` cluster names that browsers can't resolve.
     host = urlparse(url).hostname or ""
     assert host not in ("rustfs", "minio"), (
         f"presigned URL host {host!r} is internal-only — would 404 in browser"
@@ -78,8 +76,8 @@ def test_project_file_upload_list_download_delete_roundtrip(
             f"{urlparse(public).hostname!r}"
         )
 
-    # And the URL actually serves the bytes back.
-    with httpx.Client(timeout=10.0) as http:
+    # And the URL actually serves the bytes back with the caller's auth.
+    with httpx.Client(headers=alice_client.headers, timeout=10.0) as http:
         served = http.get(url)
     served.raise_for_status()
     assert served.content == body

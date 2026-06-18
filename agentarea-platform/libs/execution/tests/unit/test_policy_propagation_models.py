@@ -15,6 +15,7 @@ from agentarea_execution.workflows.models import (
     AgentGoal,
     ContinueAsNewState,
 )
+from agentarea_common.workflow.temporal_executor import TemporalWorkflowExecutor
 
 
 def _effective_policy() -> dict:
@@ -99,6 +100,12 @@ def test_workflow_initialization_stores_effective_policy_from_request():
     source = inspect.getsource(AgentExecutionWorkflow._initialize_workflow)
 
     assert "self.state.effective_policy = request.effective_policy" in source
+
+
+def test_temporal_executor_passes_effective_policy_to_agent_execution_request():
+    source = inspect.getsource(TemporalWorkflowExecutor.start_workflow)
+
+    assert 'effective_policy=args.get("effective_policy")' in source
 
 
 def test_workflow_goal_uses_request_max_reasoning_iterations_by_default():

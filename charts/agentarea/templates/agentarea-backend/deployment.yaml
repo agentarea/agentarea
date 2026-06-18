@@ -85,12 +85,30 @@ spec:
             {{- include "agentarea.backend.envs" . | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
             {{- if .Values.keto.enabled }}
-            - name: KETO_ENABLED
-              value: "true"
-            - name: KETO_READ_URL
+            - name: ACCESS_CONTROL_BACKEND
+              value: "keto"
+            - name: ACCESS_CONTROL_KETO_READ_URL
               value: "http://{{ include "agentarea.fullname" . }}-keto-read:4466"
-            - name: KETO_WRITE_URL
+            - name: ACCESS_CONTROL_KETO_WRITE_URL
               value: "http://{{ include "agentarea.fullname" . }}-keto-write:4467"
+            {{- end }}
+            {{- if .Values.openfga.enabled }}
+            - name: ACCESS_CONTROL_BACKEND
+              value: "openfga"
+            - name: ACCESS_CONTROL_OPENFGA_API_URL
+              value: "http://{{ include "agentarea.fullname" . }}-openfga:{{ .Values.openfga.service.httpPort | default 8080 }}"
+            - name: ACCESS_CONTROL_OPENFGA_STORE_ID
+              value: {{ .Values.openfga.accessControl.storeId | quote }}
+            - name: ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID
+              value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
+            - name: ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP
+              value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
+            - name: ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL
+              value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
+            - name: ACCESS_CONTROL_OPENFGA_STORE_NAME
+              value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
+            - name: ACCESS_CONTROL_OPENFGA_MODEL_PATH
+              value: "/etc/agentarea/openfga/authorization-model.json"
             {{- end }}
             {{- if or .Values.backend.envVars .Values.global.envVars }}
             {{- $backendEnv := default dict .Values.backend.envVars -}}
@@ -153,13 +171,27 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- with .Values.backend.extraVolumeMounts }}
+          {{- if or .Values.openfga.enabled .Values.backend.extraVolumeMounts }}
           volumeMounts:
+            {{- if .Values.openfga.enabled }}
+            - name: openfga-authorization-model
+              mountPath: /etc/agentarea/openfga
+              readOnly: true
+            {{- end }}
+            {{- with .Values.backend.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- with .Values.backend.extraVolumes }}
+      {{- if or .Values.openfga.enabled .Values.backend.extraVolumes }}
       volumes:
+        {{- if .Values.openfga.enabled }}
+        - name: openfga-authorization-model
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-openfga-authorization-model
+        {{- end }}
+        {{- with .Values.backend.extraVolumes }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- with .Values.backend.extraContainers }}
       {{- toYaml . | nindent 6 }}

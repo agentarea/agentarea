@@ -43,15 +43,17 @@ services:
       - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
       - KRATOS_ISSUER=${KRATOS_ISSUER:-https://agentarea.dev}
       - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
-      # Keto ReBAC (access explorer)
-      - KETO_ENABLED=${KETO_ENABLED:-true}
-      - KETO_READ_URL=${KETO_READ_URL:-http://keto:4466}
-      - KETO_WRITE_URL=${KETO_WRITE_URL:-http://keto:4467}
-      # OpenFGA ReBAC (preferred graph backend for new agent/task auth)
-      - OPENFGA_ENABLED=${OPENFGA_ENABLED:-false}
-      - OPENFGA_API_URL=${OPENFGA_API_URL:-http://openfga:8080}
-      - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-}
-      - OPENFGA_AUTHORIZATION_MODEL_ID=${OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      # Access-control backend
+      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
+      - ACCESS_CONTROL_KETO_READ_URL=${ACCESS_CONTROL_KETO_READ_URL:-http://keto:4466}
+      - ACCESS_CONTROL_KETO_WRITE_URL=${ACCESS_CONTROL_KETO_WRITE_URL:-http://keto:4467}
+      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
+      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
+      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
+      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
+      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -65,6 +67,7 @@ services:
       - ./agentarea-platform/apps/api/agentarea_api:/app/apps/api/agentarea_api
       - ./agentarea-platform/libs:/app/libs
       - ./agentarea-platform/apps/api/alembic:/app/apps/api/alembic
+      - ./config/auth/openfga:/app/config/auth/openfga:ro
     depends_on:
       db:
         condition: service_healthy
@@ -425,14 +428,17 @@ services:
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      # Authorization graph
-      - KETO_ENABLED=${KETO_ENABLED:-true}
-      - KETO_READ_URL=${KETO_READ_URL:-http://keto:4466}
-      - KETO_WRITE_URL=${KETO_WRITE_URL:-http://keto:4467}
-      - OPENFGA_ENABLED=${OPENFGA_ENABLED:-false}
-      - OPENFGA_API_URL=${OPENFGA_API_URL:-http://openfga:8080}
-      - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-}
-      - OPENFGA_AUTHORIZATION_MODEL_ID=${OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      # Access-control backend
+      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
+      - ACCESS_CONTROL_KETO_READ_URL=${ACCESS_CONTROL_KETO_READ_URL:-http://keto:4466}
+      - ACCESS_CONTROL_KETO_WRITE_URL=${ACCESS_CONTROL_KETO_WRITE_URL:-http://keto:4467}
+      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
+      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
+      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
+      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
+      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
 
       # Development
       # - DEBUG=true
@@ -444,6 +450,7 @@ services:
     volumes:
       - ./agentarea-platform/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
       - ./agentarea-platform/libs:/app/libs
+      - ./config/auth/openfga:/app/config/auth/openfga:ro
     restart: unless-stopped
     command: ["agentarea-worker", "dev"]
 

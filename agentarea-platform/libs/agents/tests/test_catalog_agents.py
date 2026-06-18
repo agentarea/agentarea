@@ -10,7 +10,10 @@ from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService, _project_catalog_item
 from agentarea_agents.domain.models import Agent
-from agentarea_agents.infrastructure.catalog_agent_repository import CatalogAgentItem
+from agentarea_agents.infrastructure.catalog_agent_repository import (
+    CatalogAgentItem,
+    CatalogAgentRepository,
+)
 from agentarea_common.auth.context import UserContext
 
 
@@ -89,6 +92,14 @@ class FakeAuthz:
 
     async def get_accessible_workspaces(self, user_context):
         return [user_context.workspace_id]
+
+
+class CapturingSession:
+    def __init__(self):
+        self.executions = []
+
+    async def execute(self, query, params=None):
+        self.executions.append((str(query), params or {}))
 
 
 def _service(repo, catalog):
@@ -237,3 +248,15 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert kw["tools"] == [{"x": 1}]
     # The install is recorded on the catalog item with the new agent id + version.
     assert catalog.installed == [(item.id, str(agent.id), "3")]
+
+
+async def test_catalog_agent_install_state_is_workspace_scoped():
+    session = CapturingSession()
+    repo = CatalogAgentRepository(session, UserContext(user_id="u1", workspace_id="w1"))
+
+    await repo.mark_installed(str(uuid4()), str(uuid4()), "3")
+
+    query, params = session.executions[0]
+    assert "registry_item_installs" in query
+    assert "UPDATE registry_items" not in query
+    assert params["workspace_id"] == "w1"

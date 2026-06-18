@@ -235,6 +235,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     max_reasoning_iterations=args.get("max_reasoning_iterations", 10),
                     requires_human_approval=args.get("requires_human_approval", False),
                     workflow_metadata=args.get("workflow_metadata", {}),
+                    effective_policy=args.get("effective_policy"),
                 )
                 workflow_args = [execution_request]
             else:

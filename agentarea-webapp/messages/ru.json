@@ -760,6 +760,7 @@
     "configurationName": "Имя конфигурации",
     "configurationNamePlaceholder": "e.g., Production OpenAI Config",
     "apiKeyPlaceholder": "Введите ваш ключ API",
+    "apiKeyOptionalForCustomEndpoint": "Оставьте пустым для custom endpoint без ключа. Заголовок Authorization отправляться не будет.",
     "customEndpointUrl": "URL-адрес конечной точки",
     "customEndpointUrlPlaceholder": "https://api.example.com/v1",
     "updateConfiguration": "Обновить конфигурацию",
