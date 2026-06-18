@@ -295,7 +295,7 @@ function buildRuleBodies(
       const maxTokens = parseInt2(form.maxTokens);
       const perCall = parseInt2(form.maxTokensPerCall);
       if (maxTokens === null && perCall === null)
-        return { error: "Enter a token cap." };
+        return { error: "Enter a token budget." };
       const params: Record<string, unknown> = {};
       if (maxTokens !== null) params.max_tokens = maxTokens;
       if (perCall !== null) params.max_tokens_per_call = perCall;
@@ -967,7 +967,7 @@ export default function PolicyEditor({
           ? "workspace"
           : `${selectedAgentIds.length} agent${selectedAgentIds.length === 1 ? "" : "s"}`,
     },
-    { label: "effect", value: effect },
+    { label: "effect", value: EFFECT_STYLES[effect].label.toLowerCase() },
     { label: "target", value: previewTarget(effect, form) },
     { label: "params", value: previewParams(effect, form) },
     {
@@ -1146,7 +1146,7 @@ export default function PolicyEditor({
             <BlueprintSection code={detailsCode} title="Limits">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="cap-kind">Cap type</Label>
+                  <Label htmlFor="cap-kind">Budget type</Label>
                   <Select
                     value={form.capKind}
                     onValueChange={(v) => update("capKind", v as CapKind)}
@@ -1159,7 +1159,7 @@ export default function PolicyEditor({
                       <SelectItem value="service">
                         Per-service budget
                       </SelectItem>
-                      <SelectItem value="tokens">Token cap</SelectItem>
+                      <SelectItem value="tokens">Token budget</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

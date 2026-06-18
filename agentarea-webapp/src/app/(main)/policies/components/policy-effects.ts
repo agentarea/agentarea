@@ -20,7 +20,7 @@ export const EFFECT_STYLES: Record<
     chip: "bg-muted text-foreground/70",
   },
   cap: {
-    label: "Cap",
+    label: "Budget",
     icon: Wallet,
     chip: "bg-muted text-foreground/70",
   },
