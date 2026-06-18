@@ -1,0 +1,61 @@
+name: AgentArea OpenFGA model tests
+model_file: ./model.fga
+
+tuples:
+  - user: User:u1
+    relation: members
+    object: Workspace:ws1
+  - user: User:u3
+    relation: members
+    object: Workspace:ws1
+  - user: Workspace:ws1
+    relation: workspace
+    object: Tool:ws1/github.create_issue
+  - user: User:u1
+    relation: callers
+    object: Tool:ws1/github.create_issue
+  - user: User:u2
+    relation: callers
+    object: Tool:ws1/github.create_issue
+  - user: Workspace:ws1
+    relation: workspace
+    object: ToolResource:ws1/github.create_issue~args~abc
+  - user: Tool:ws1/github.create_issue
+    relation: tool
+    object: ToolResource:ws1/github.create_issue~args~abc
+  - user: User:u3
+    relation: callers
+    object: ToolResource:ws1/github.create_issue~args~abc
+  - user: User:u4
+    relation: callers
+    object: ToolResource:ws1/github.create_issue~args~abc
+
+tests:
+  - name: tool grant requires workspace membership
+    check:
+      - user: User:u1
+        object: Tool:ws1/github.create_issue
+        assertions:
+          can_call: true
+      - user: User:u2
+        object: Tool:ws1/github.create_issue
+        assertions:
+          can_call: false
+
+  - name: exact argument grant requires workspace membership
+    check:
+      - user: User:u3
+        object: ToolResource:ws1/github.create_issue~args~abc
+        assertions:
+          can_call: true
+      - user: User:u4
+        object: ToolResource:ws1/github.create_issue~args~abc
+        assertions:
+          can_call: false
+
+  - name: broad tool grant applies to exact resource in same workspace
+    check:
+      - user: User:u1
+        object: ToolResource:ws1/github.create_issue~args~abc
+        assertions:
+          can_call: true

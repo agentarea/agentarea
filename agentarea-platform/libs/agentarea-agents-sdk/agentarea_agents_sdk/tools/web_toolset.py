@@ -17,7 +17,7 @@ import json
 import re
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -64,11 +64,51 @@ class _TextExtractor(HTMLParser):
         return re.sub(r"\s+", " ", "".join(self._chunks)).strip()
 
 
+class _HTMLSummaryExtractor(_TextExtractor):
+    """Extract visible text plus a compact list of links from HTML."""
+
+    def __init__(self, base_url: str) -> None:
+        super().__init__()
+        self._base_url = base_url
+        self._current_href: str | None = None
+        self._current_text: list[str] = []
+        self.links: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: Any) -> None:
+        super().handle_starttag(tag, attrs)
+        if tag != "a" or self._skip_depth != 0:
+            return
+        href = next((value for name, value in attrs if name == "href"), None)
+        if href:
+            self._current_href = urljoin(self._base_url, href)
+            self._current_text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._current_href:
+            link_text = re.sub(r"\s+", " ", "".join(self._current_text)).strip()
+            self.links.append({"href": self._current_href, "text": link_text})
+            self._current_href = None
+            self._current_text = []
+        super().handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        super().handle_data(data)
+        if self._skip_depth == 0 and self._current_href:
+            self._current_text.append(data)
+
+
 def _is_text_content_type(content_type: str | None) -> bool:
     if not content_type:
         return False
     ct = content_type.lower().split(";", 1)[0].strip()
     return any(ct.startswith(p) for p in _TEXT_CONTENT_TYPES)
+
+
+def _is_html_content_type(content_type: str | None) -> bool:
+    if not content_type:
+        return False
+    ct = content_type.lower().split(";", 1)[0].strip()
+    return ct in ("text/html", "application/xhtml+xml")
 
 
 def _filename_from_url(url: str, content_type: str | None) -> str:
@@ -173,16 +213,24 @@ class WebToolset(Toolset):
                 text = resp.text
             except Exception as e:  # encoding fail: fall back to raw bytes
                 return f"Error decoding text body from {url}: {e}"
-            return json.dumps(
-                {
-                    "url": str(resp.url),
-                    "status": resp.status_code,
-                    "content_type": content_type,
-                    "kind": "text",
-                    "truncated": len(text) > _INLINE_TEXT_CHAR_LIMIT,
-                    "text": text[:_INLINE_TEXT_CHAR_LIMIT],
-                }
-            )
+            payload: dict[str, Any] = {
+                "url": str(resp.url),
+                "status": resp.status_code,
+                "content_type": content_type,
+                "kind": "text",
+                "truncated": len(text) > _INLINE_TEXT_CHAR_LIMIT,
+            }
+            if _is_html_content_type(content_type):
+                extractor = _HTMLSummaryExtractor(str(resp.url))
+                try:
+                    extractor.feed(text)
+                    payload["extracted_text"] = extractor.text()[:_INLINE_TEXT_CHAR_LIMIT]
+                    payload["links"] = extractor.links[:100]
+                except Exception:
+                    payload["extracted_text"] = ""
+                    payload["links"] = []
+            payload["text"] = text[:_INLINE_TEXT_CHAR_LIMIT]
+            return json.dumps(payload)
 
         # Binary: must persist to an artifact.
         if self.storage is None:

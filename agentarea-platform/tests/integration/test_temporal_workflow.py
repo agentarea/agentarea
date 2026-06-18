@@ -6,7 +6,7 @@ import logging
 from uuid import uuid4
 
 from agentarea_common.infrastructure.database import get_db_session
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
@@ -19,7 +19,7 @@ async def test_temporal_workflow():
     """Test that we can submit a task and it gets processed by Temporal."""
 
     # Create a simple task
-    task = SimpleTask(
+    task = AgentTask(
         id=uuid4(),
         title="Test Task",
         description="A simple test task",

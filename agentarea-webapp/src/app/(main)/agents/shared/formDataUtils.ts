@@ -9,6 +9,7 @@ export function createAgentFormData(data: AgentFormValues): FormData {
   formData.append("instruction", data.instruction);
   formData.append("model_id", data.model_id);
   formData.append("planning", data.planning.toString());
+  formData.append("a2ui_enabled", (data.a2ui_enabled ?? false).toString());
 
   // Add tools config
   data.tools_config.mcp_server_configs.forEach((config: any, index: number) => {

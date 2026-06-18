@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ._rebac_grants import grant_user_relation
+from ._access_control_grants import grant_user_relation
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -85,7 +85,6 @@ class SkillResponse(BaseModel):
     description: str | None
     source_type: str
     source_url: str | None
-    has_files: bool
     network_scope: str
     workspace_id: str
     created_at: str
@@ -111,7 +110,6 @@ class SkillResponse(BaseModel):
             description=skill.description,
             source_type=skill.source_type,
             source_url=skill.source_url,
-            has_files=skill.s3_path is not None,
             network_scope=network_scope,
             workspace_id=getattr(skill, "workspace_id", "") or "",
             created_at=skill.created_at.isoformat() if skill.created_at else "",
@@ -251,7 +249,6 @@ async def list_skills(
     skill_service: SkillServiceDep,
     pagination: PaginationParams = Depends(),
     source_type: str | None = Query(None, description="Filter by source type"),
-    has_files: bool | None = Query(None, description="Filter by package-backed skills"),
     network_scope: str | None = Query(None, description="Filter by network scope"),
     from_registry: bool | None = Query(None, description="Filter registry-created skills"),
 ):
@@ -261,7 +258,6 @@ async def list_skills(
         offset=pagination.offset,
         search=pagination.search,
         source_type=source_type,
-        has_files=has_files,
         network_scope=network_scope,
         from_registry=from_registry,
     )
@@ -283,6 +279,25 @@ async def get_skill(
     skill = await skill_service.get_with_catalog(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    return SkillResponse.from_skill(skill)
+
+
+@router.post("/{skill_id}/install", response_model=SkillResponse)
+async def install_skill(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+):
+    """Add a built-in catalog skill to the workspace."""
+    skill = await skill_service.install_catalog_skill(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    await grant_user_relation(
+        namespace="Skill",
+        object_id=skill.id,
+        relation="owners",
+        user_id=skill_service.user_context.user_id,
+    )
     return SkillResponse.from_skill(skill)
 
 
@@ -368,7 +383,7 @@ async def update_skill(
         raise HTTPException(status_code=404, detail="Skill not found")
 
     if request.content is not None:
-        skill = await skill_service.set_content(skill_id, request.content)
+        skill = await skill_service.set_content(skill.id, request.content)
         if not skill:
             raise HTTPException(status_code=404, detail="Skill not found")
 

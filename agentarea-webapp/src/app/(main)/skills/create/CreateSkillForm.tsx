@@ -246,7 +246,6 @@ export function CreateSkillForm() {
 
       toast({ title: tCreate("success.skillCreated"), variant: "success" });
       router.push("/skills");
-      router.refresh();
     } catch {
       toast({
         title: tCreate("error.createFailed"),
@@ -300,7 +299,6 @@ export function CreateSkillForm() {
 
       toast({ title: tCreate("success.skillImported"), variant: "success" });
       router.push("/skills");
-      router.refresh();
     } catch {
       toast({
         title: tCreate("error.githubImportFailed"),
@@ -339,7 +337,6 @@ export function CreateSkillForm() {
 
       toast({ title: tCreate("success.skillUploaded"), variant: "success" });
       router.push("/skills");
-      router.refresh();
     } catch {
       toast({
         title: tCreate("error.uploadFailed"),

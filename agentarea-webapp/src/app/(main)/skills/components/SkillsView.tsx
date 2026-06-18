@@ -15,6 +15,7 @@ import {
   Tag,
   X,
 } from "lucide-react";
+import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -34,6 +35,7 @@ import { listSkillsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
 import { setCookie } from "@/utils/cookies";
+import { getValidTimestamp } from "@/utils/dateUtils";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import {
@@ -54,7 +56,6 @@ interface InitialState {
   order: OrderKey;
   sourceTab: string; // "all" | content | github | zip | path
   scope: string; // "" | private | ingress | egress
-  files: string; // all | with_files | without_files
   search: string;
 }
 
@@ -66,6 +67,11 @@ const SOURCE_TABS: { value: string; label: string }[] = [
   { value: "path", label: "Local" },
 ];
 
+// Source tabs duplicate the Filters + Display grouping already on this page and
+// stay mostly empty in practice, so they're hidden for now. Flip to re-enable —
+// all the backing state/logic is kept intact below.
+const SHOW_SOURCE_TABS = false;
+
 async function fetchAllSkills(): Promise<Skill[]> {
   const all: Skill[] = [];
   let page = 1;
@@ -75,6 +81,8 @@ async function fetchAllSkills(): Promise<Skill[]> {
       page,
       page_size: 100,
       paginated: true,
+      // Only your own skills here — the registry/catalog lives in Explore.
+      from_registry: false,
     });
     const res = data as PaginatedSkills | null;
     if (!res?.items?.length) break;
@@ -100,14 +108,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const [order, setOrder] = useState<OrderKey>(initial.order);
   const [sourceTab, setSourceTab] = useState(initial.sourceTab);
   const [scope, setScope] = useState(initial.scope);
-  const [files, setFiles] = useState(initial.files);
   const [search, setSearch] = useState(initial.search);
 
   // local-only UI state
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(initial.scope) || initial.files !== "all"
+    Boolean(initial.scope)
   );
 
   useEffect(() => {
@@ -132,7 +139,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         order,
         sourceTab,
         scope,
-        files,
         search,
         ...next,
       };
@@ -146,7 +152,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       set("order", merged.order, "name");
       set("source_type", merged.sourceTab, "all");
       set("network_scope", merged.scope, "");
-      set("files", merged.files, "all");
       set("search", merged.search, "");
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, {
@@ -159,7 +164,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       order,
       sourceTab,
       scope,
-      files,
       search,
       searchParams,
       router,
@@ -180,20 +184,18 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // Apply the non-tab filters (scope / files / search) — drives tab counts too.
+  // Apply the non-tab filters (scope / search) — drives tab counts too.
   const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return skills.filter((s) => {
       if (scope && s.network_scope !== scope) return false;
-      if (files === "with_files" && !s.has_files) return false;
-      if (files === "without_files" && s.has_files) return false;
       if (q) {
         const hay = `${s.name} ${s.description ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [skills, scope, files, search]);
+  }, [skills, scope, search]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = { all: baseFiltered.length };
@@ -219,7 +221,8 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       } else {
         out.sort(
           (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            (getValidTimestamp(b.created_at) ?? 0) -
+            (getValidTimestamp(a.created_at) ?? 0)
         );
       }
       return out;
@@ -245,7 +248,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   }, [group, visible, sortItems]);
 
   const hasActiveFilters =
-    Boolean(scope) || files !== "all" || Boolean(search) || sourceTab !== "all";
+    Boolean(scope) || Boolean(search) || sourceTab !== "all";
 
   // ---- toolbar control helpers ----
   const onTab = (value: string) => {
@@ -270,20 +273,15 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     setScope(v);
     syncUrl({ scope: v });
   };
-  const onFiles = (value: string) => {
-    setFiles(value);
-    syncUrl({ files: value });
-  };
   const onSearch = (value: string) => {
     setSearch(value);
     syncUrl({ search: value });
   };
   const clearFilters = () => {
     setScope("");
-    setFiles("all");
     setSearch("");
     setSourceTab("all");
-    syncUrl({ scope: "", files: "all", search: "", sourceTab: "all" });
+    syncUrl({ scope: "", search: "", sourceTab: "all" });
   };
 
   return (
@@ -292,28 +290,34 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       <div className="flex h-[42px] shrink-0 items-center gap-1.5 border-b border-zinc-200 px-4 dark:border-zinc-700">
         {/* source tabs — scroll horizontally when the panel is narrow so the
             right-hand controls always stay visible */}
-        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          {SOURCE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onTab(tab.value)}
-              className={cn(
-                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
-                sourceTab === tab.value
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              )}
-            >
-              {tab.label}
-              <span className="text-[11px] text-muted-foreground/70">
-                {tabCounts[tab.value] ?? 0}
-              </span>
-            </button>
-          ))}
-        </div>
+        {SHOW_SOURCE_TABS ? (
+          <>
+            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+              {SOURCE_TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => onTab(tab.value)}
+                  className={cn(
+                    "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium transition-colors",
+                    sourceTab === tab.value
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  {tab.label}
+                  <span className="text-[11px] text-muted-foreground/70">
+                    {tabCounts[tab.value] ?? 0}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-        <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+            <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+          </>
+        ) : (
+          <div className="min-w-0 flex-1" />
+        )}
 
         {/* Filter toggle */}
         <button
@@ -410,18 +414,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               </SelectItem>
             ))}
           </FilterSelect>
-          <FilterSelect
-            value={files}
-            placeholder={t("filters.files")}
-            active={files !== "all"}
-            onValueChange={onFiles}
-          >
-            <SelectItem value="all">{t("filters.allFiles")}</SelectItem>
-            <SelectItem value="with_files">{t("filters.withFiles")}</SelectItem>
-            <SelectItem value="without_files">
-              {t("filters.withoutFiles")}
-            </SelectItem>
-          </FilterSelect>
           <div className="relative">
             <input
               value={search}
@@ -454,7 +446,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             {t("error.loadSkills")}
           </div>
         ) : skills.length === 0 ? (
-          <div className="p-4">
+          <div className="space-y-4 p-4">
             <EmptyState
               title={t("noSkills")}
               description={t("noSkillsDescription")}
@@ -464,6 +456,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
                 onClick: () => router.push("/skills/create"),
               }}
             />
+            <CatalogSuggestions type="skills" />
           </div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-1.5 py-24 text-muted-foreground">

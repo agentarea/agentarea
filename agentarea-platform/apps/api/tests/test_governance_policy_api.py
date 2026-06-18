@@ -1,9 +1,11 @@
 """Unit/HTTP tests for the unified policy rule API and governance preview/snapshot."""
 
+from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
 import pytest
+from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_api.api.v1 import governance, policies
 from agentarea_api.api.v1.policies import (
     PolicyRuleCreateRequest,
@@ -16,13 +18,12 @@ from agentarea_api.api.v1.policies import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.base.models import BaseModel
-from agentarea_governance.domain.policies import EffectivePolicy
+from agentarea_common.testing.flows import MainFlow
 from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
-from agentarea_governance.infrastructure.orm import (
-    PolicyRuleORM,
-    TaskPolicySnapshotORM,
-)
-from agentarea_governance.infrastructure.repository import TaskPolicySnapshotRepository
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_tasks.domain.models import Task
+from agentarea_tasks.infrastructure.orm import TaskORM
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -47,7 +48,7 @@ async def session_factory():
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
-                tables=[PolicyRuleORM.__table__, TaskPolicySnapshotORM.__table__],
+                tables=[PolicyRuleORM.__table__, TaskORM.__table__],
             )
         )
     try:
@@ -94,6 +95,7 @@ def _cap_request(amount: str = "25.00") -> PolicyRuleCreateRequest:
     )
 
 
+@pytest.mark.flow(MainFlow.GOVERNANCE_POLICIES)
 def test_create_request_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         PolicyRuleCreateRequest.model_validate(
@@ -323,17 +325,37 @@ async def test_preview_rejects_loosening_task_policy(session_factory):
         assert "monthly_spend_cap_usd" in preview.json()["detail"]
 
 
-async def test_reads_task_policy_snapshot(session_factory):
+async def test_reads_task_policy_from_workflow(session_factory):
     task_id = uuid4()
+    execution_id = f"task-{task_id}"
     context = _context()
-    effective = EffectivePolicy.model_validate({"budget": {"run_budget_usd": "1.25"}})
+
+    class _FakeWorkflowService:
+        async def get_effective_policy(self, exec_id: str):
+            if exec_id == execution_id:
+                return {"budget": {"run_budget_usd": "1.25"}}
+            return None
 
     async with session_factory() as session:
-        await TaskPolicySnapshotRepository(session, context).create_snapshot(
-            task_id=task_id,
-            effective_policy=effective,
+        # Seed a task carrying an execution_id; the effective policy lives in the
+        # workflow, served on demand by the (faked) workflow service.
+        now = datetime.now(UTC)
+        await TaskRepository(session, context).create_task(
+            Task(
+                id=task_id,
+                agent_id=uuid4(),
+                description="d",
+                parameters={},
+                status="submitted",
+                created_at=now,
+                updated_at=now,
+                user_id=context.user_id,
+                workspace_id=context.workspace_id,
+                execution_id=execution_id,
+            )
         )
         app = _app_for(session, context)
+        app.dependency_overrides[get_temporal_workflow_service] = lambda: _FakeWorkflowService()
         transport = ASGITransport(app=app)
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:

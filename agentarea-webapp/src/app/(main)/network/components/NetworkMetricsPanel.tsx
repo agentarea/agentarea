@@ -7,8 +7,8 @@ import {
   CircleDot,
   DollarSign,
   GitBranch,
-  type LucideIcon,
   Plug,
+  type LucideIcon,
 } from "lucide-react";
 import { getAllTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,7 @@ function MetricTile({
   tone?: "neutral" | "good" | "warn" | "blue";
 }) {
   return (
-    <div className="min-w-[126px] rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className="min-w-[132px] rounded-lg border border-zinc-200/80 bg-white/[0.88] px-3 py-2 shadow-sm backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/80">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
           {label}
@@ -154,7 +154,9 @@ export default function NetworkMetricsPanel({
         n.type === "openapi_connection" ||
         n.type === "skill"
     ).length;
-    const triggerCount = topology.nodes.filter((n) => n.type === "trigger").length;
+    const triggerCount = topology.nodes.filter(
+      (n) => n.type === "trigger"
+    ).length;
     const problemNodes = topology.nodes.filter((n) =>
       PROBLEM_STATUSES.has(String(n.status ?? "").toLowerCase())
     ).length;
@@ -187,53 +189,79 @@ export default function NetworkMetricsPanel({
       : `${metrics.triggerCount} triggers`;
 
   return (
-    <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap gap-2">
-      <MetricTile
-        label="Agents"
-        value={fmtNumber(metrics.agentCount)}
-        hint={healthHint}
-        icon={Bot}
-        tone={metrics.problemNodes > 0 ? "warn" : "good"}
-      />
-      <MetricTile
-        label="Active tasks"
-        value={fmtNumber(metrics.activeTasks)}
-        hint={`${fmtNumber(metrics.taskCount)} total tasks`}
-        icon={CircleDot}
-        tone={metrics.activeTasks > 0 ? "blue" : "neutral"}
-      />
-      <MetricTile
-        label="Spent"
-        value={fmtCost(metrics.totalCost)}
-        hint={tasks === null && !tasksUnavailable ? "Loading usage..." : "LLM cost"}
-        icon={DollarSign}
-        tone="neutral"
-      />
-      <MetricTile
-        label="Integrations"
-        value={fmtNumber(metrics.externalCount)}
-        hint={`${fmtNumber(topology.edges.length)} links`}
-        icon={Plug}
-        tone="neutral"
-      />
-      {metrics.problemNodes > 0 && (
+    <div className="absolute bottom-4 left-4 z-10 max-w-[calc(100%-2rem)] rounded-lg border border-blue-100/80 bg-white/90 p-2 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-blue-900/50 dark:bg-zinc-950/85">
+      <div className="mb-2 flex items-center justify-between gap-5 px-1">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+            Network health
+          </p>
+          <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+            Live topology, work, and integration surface
+          </p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
+            metrics.problemNodes > 0
+              ? "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/60"
+              : "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/60"
+          )}
+        >
+          {metrics.problemNodes > 0 ? "attention" : "nominal"}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
         <MetricTile
-          label="Attention"
-          value={fmtNumber(metrics.problemNodes)}
-          hint="Failed or inactive"
-          icon={AlertTriangle}
-          tone="warn"
+          label="Agents"
+          value={fmtNumber(metrics.agentCount)}
+          hint={healthHint}
+          icon={Bot}
+          tone={metrics.problemNodes > 0 ? "warn" : "good"}
         />
-      )}
-      {tasksUnavailable && (
         <MetricTile
-          label="Tasks"
-          value="-"
-          hint="Usage unavailable"
-          icon={GitBranch}
-          tone="warn"
+          label="Active tasks"
+          value={fmtNumber(metrics.activeTasks)}
+          hint={`${fmtNumber(metrics.taskCount)} total tasks`}
+          icon={CircleDot}
+          tone={metrics.activeTasks > 0 ? "blue" : "neutral"}
         />
-      )}
+        <MetricTile
+          label="Spent"
+          value={fmtCost(metrics.totalCost)}
+          hint={
+            tasks === null && !tasksUnavailable
+              ? "Loading usage..."
+              : "LLM cost"
+          }
+          icon={DollarSign}
+          tone="neutral"
+        />
+        <MetricTile
+          label="Integrations"
+          value={fmtNumber(metrics.externalCount)}
+          hint={`${fmtNumber(topology.edges.length)} links`}
+          icon={Plug}
+          tone="neutral"
+        />
+        {metrics.problemNodes > 0 && (
+          <MetricTile
+            label="Attention"
+            value={fmtNumber(metrics.problemNodes)}
+            hint="Failed or inactive"
+            icon={AlertTriangle}
+            tone="warn"
+          />
+        )}
+        {tasksUnavailable && (
+          <MetricTile
+            label="Tasks"
+            value="-"
+            hint="Usage unavailable"
+            icon={GitBranch}
+            tone="warn"
+          />
+        )}
+      </div>
     </div>
   );
 }

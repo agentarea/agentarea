@@ -3,6 +3,7 @@ import inspect
 import logging
 import os
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -314,7 +315,10 @@ class MCPServerService(BaseCrudService[MCPServer]):
         )
 
     async def get(self, id: UUID) -> MCPServer | None:
-        return await self.repository.get_by_id(id)
+        # Catalog-aware: built-in specs live only in the registry catalog
+        # (ADR-003) and are not in mcp_servers. get_server_by_id falls back to
+        # a read-only catalog projection so opening a catalog item resolves.
+        return await self.repository.get_server_by_id(str(id))
 
 
 class MCPServerInstanceService:
@@ -408,7 +412,7 @@ class MCPServerInstanceService:
         return server
 
     async def _get_transport_spec_for_instance(self, instance: MCPServerInstance) -> dict[str, Any]:
-        server_spec = await self.mcp_server_repository.get_by_id(instance.server_spec_id)
+        server_spec = await self.mcp_server_repository.get_server_by_id(instance.server_spec_id)
         if not server_spec:
             raise ValueError(f"MCP server spec {instance.server_spec_id} not found")
         return {**_server_transport_spec(server_spec), **(instance.json_spec or {})}
@@ -432,7 +436,7 @@ class MCPServerInstanceService:
     ) -> tuple[dict[str, Any], dict[str, str]]:
         secret_env_vars: dict[str, str] = {}
 
-        server_spec = await self.mcp_server_repository.get_by_id(server_spec_id)
+        server_spec = await self.mcp_server_repository.get_server_by_id(server_spec_id)
         if not server_spec:
             return spec, secret_env_vars
 
@@ -470,6 +474,34 @@ class MCPServerInstanceService:
 
         return spec, secret_env_vars
 
+    async def _materialize_workspace_spec_copy(self, source: MCPServer) -> MCPServer:
+        """Copy-on-write a catalog/platform spec into the caller's workspace.
+
+        Connecting a built-in catalog MCP must leave the tenant owning a real
+        spec row (ADR-003 copy-on-write, like catalog agents). Only then is the
+        connection visible in the workspace spec list (so its icon resolves),
+        editable, and decoupled from the global platform mirror.
+        """
+        copy = MCPServer(
+            name=source.name,
+            description=source.description or source.name,
+            docker_image_url=source.docker_image_url,
+            version=source.version or "1.0.0",
+            tags=list(source.tags or []),
+            is_public=False,
+            env_schema=list(source.env_schema or []),
+            cmd=source.cmd,
+            remote_url=source.remote_url,
+            registry_item_id=getattr(source, "registry_item_id", None),
+            json_spec=source.json_spec,
+            registry_url=getattr(source, "registry_url", None),
+        )
+        copy.created_by = self.repository.user_context.user_id
+        copy.workspace_id = self.repository.user_context.workspace_id
+        self.repository.session.add(copy)
+        await self.repository.session.flush()
+        return copy
+
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
         name = payload.name
@@ -481,9 +513,17 @@ class MCPServerInstanceService:
 
         try:
             if server_spec_id:
-                server_spec = await self.mcp_server_repository.get_by_id(server_spec_id)
+                server_spec = await self.mcp_server_repository.get_server_by_id(server_spec_id)
                 if not server_spec:
                     raise MCPValidationError([f"server_spec_id '{server_spec_id}' was not found"])
+                # Copy-on-write: connecting a built-in catalog/platform spec (not
+                # owned by this workspace) materializes a workspace copy so the
+                # connection is visible, editable, and self-contained (ADR-003).
+                if str(getattr(server_spec, "workspace_id", "") or "") != str(
+                    self.repository.user_context.workspace_id
+                ):
+                    server_spec = await self._materialize_workspace_spec_copy(server_spec)
+                server_spec_id = str(server_spec.id)
             else:
                 server_spec = await self._auto_create_spec_for_instance(payload)
                 server_spec_id = str(server_spec.id)
@@ -501,6 +541,10 @@ class MCPServerInstanceService:
             spec, secret_env_vars = await self._extract_secrets_from_spec(
                 instance_spec, server_spec_id
             )
+            # Persist the resolved transport type so the UI derives health/status
+            # correctly (a missing type defaults to docker and mis-runs container
+            # health checks against a url-type connection).
+            spec.setdefault("type", instance_type)
 
             create_kwargs: dict[str, Any] = {
                 "name": name,
@@ -774,6 +818,7 @@ class MCPServerInstanceService:
         server_instance_id: UUID,
         tool_name: str,
         tool_args: dict[str, Any],
+        httpx_client_factory: Callable[..., Any] | None = None,
     ) -> dict[str, Any]:
         """Execute a tool on an MCP server instance.
 
@@ -856,7 +901,12 @@ class MCPServerInstanceService:
                     f"Bundle member '{member.name}' verification status: {member_v.get('status')}",
                 )
 
-            return await self.execute_tool(UUID(member_instance_id), original_tool_name, tool_args)
+            return await self.execute_tool(
+                UUID(member_instance_id),
+                original_tool_name,
+                tool_args,
+                httpx_client_factory=httpx_client_factory,
+            )
 
         # Non-bundle: check verification status
         verification = instance.verification or {}
@@ -914,7 +964,13 @@ class MCPServerInstanceService:
         )
 
         try:
-            call_result = await self._call_tool_via_mcp(mcp_url, headers, tool_name, tool_args)
+            call_result = await self._call_tool_via_mcp(
+                mcp_url,
+                headers,
+                tool_name,
+                tool_args,
+                httpx_client_factory=httpx_client_factory,
+            )
         except Exception as e:
             logger.error(
                 "MCP tool call failed for %s (%s): %s",
@@ -1006,8 +1062,10 @@ class MCPServerInstanceService:
         headers: dict[str, str],
         tool_name: str,
         tool_args: dict[str, Any],
+        httpx_client_factory: Callable[..., Any] | None = None,
     ):
         from mcp import ClientSession
+        from mcp.shared._httpx_utils import create_mcp_http_client
 
         streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
 
@@ -1015,7 +1073,10 @@ class MCPServerInstanceService:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                streamable_url, timeout=timedelta(seconds=30), headers=headers or None
+                streamable_url,
+                timeout=timedelta(seconds=30),
+                headers=headers or None,
+                httpx_client_factory=httpx_client_factory or create_mcp_http_client,
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
@@ -1030,7 +1091,12 @@ class MCPServerInstanceService:
 
         from mcp.client.sse import sse_client
 
-        async with sse_client(sse_url, timeout=30, headers=headers or None) as (
+        async with sse_client(
+            sse_url,
+            timeout=30,
+            headers=headers or None,
+            httpx_client_factory=httpx_client_factory or create_mcp_http_client,
+        ) as (
             read_stream,
             write_stream,
         ):
@@ -1169,7 +1235,7 @@ class MCPServerInstanceService:
                             server_repo = MCPServerRepository(
                                 self.repository.session, self.repository.user_context
                             )
-                            spec = await server_repo.get_by_id(instance.server_spec_id)
+                            spec = await server_repo.get_server_by_id(instance.server_spec_id)
                             if spec and spec.env_schema:
                                 for env_var in spec.env_schema:
                                     if isinstance(env_var, dict) and env_var.get(

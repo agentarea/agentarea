@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class TestEventBroker(EventBroker):
-    """Simple event broker for testing.
+    """Event broker for testing.
 
-    Consolidates all the SimpleEventBroker/TestEventBroker implementations
-    from various test files into a single shared implementation.
+    Consolidates the various test event-broker implementations from across the
+    test suite into a single shared implementation.
     """
 
     def __init__(self):
@@ -48,10 +48,10 @@ class TestEventBroker(EventBroker):
 
 
 class TestSecretManager(BaseSecretManager):
-    """Simple secret manager for testing.
+    """Secret manager for testing.
 
-    Consolidates all the MockSecretManager/SimpleSecretManager/TestSecretManager
-    implementations from various files into a single shared implementation.
+    Consolidates the various test secret-manager implementations from across the
+    test suite into a single shared implementation.
     """
 
     def __init__(self):
@@ -79,7 +79,5 @@ class TestSecretManager(BaseSecretManager):
         self._secrets.clear()
 
 
-# Backward compatibility aliases for existing code
-SimpleEventBroker = TestEventBroker
+# Backward compatibility alias for existing code
 MockSecretManager = TestSecretManager
-SimpleSecretManager = TestSecretManager

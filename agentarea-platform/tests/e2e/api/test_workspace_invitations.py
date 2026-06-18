@@ -41,7 +41,7 @@ def test_invitation_happy_path(
     """Alice creates invite for her workspace; Bob accepts; Bob is now a member."""
     workspace = alice.identity_id
 
-    invitation = _create_invitation(alice_client, workspace)
+    invitation = _create_invitation(alice_client, workspace, email="bob@example.com")
     token = invitation["token"]
     assert invitation["status"] == "pending"
     assert invitation["workspace_id"] == workspace
@@ -65,6 +65,9 @@ def test_invitation_happy_path(
     members = _members(bob_client, workspace)
     user_ids = {m["user_id"] for m in members}
     assert bob.identity_id in user_ids
+    bob_member = next(m for m in members if m["user_id"] == bob.identity_id)
+    assert bob_member["email"] == "bob@example.com"
+    assert bob_member["display_name"] == "bob@example.com"
 
     # Invitation has flipped to accepted
     pending = alice_client.get(

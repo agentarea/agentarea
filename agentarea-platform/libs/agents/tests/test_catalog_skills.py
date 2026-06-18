@@ -7,6 +7,7 @@ exercise that wiring with light fakes, no database — mirroring
 ``test_catalog_agents.py``.
 """
 
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.skill_service import (
@@ -14,11 +15,15 @@ from agentarea_agents.application.skill_service import (
     _project_catalog_skill,
 )
 from agentarea_agents.domain.skill_models import Skill
-from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillItem
+from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogSkillItem,
+    CatalogSkillRepository,
+)
 from agentarea_common.auth.context import UserContext
 
 
 def _item(item_id=None, name="Built-in", version="1", installed_version=None, spec=None):
+    now = datetime.now()
     return CatalogSkillItem(
         id=item_id or str(uuid4()),
         name=name,
@@ -27,6 +32,8 @@ def _item(item_id=None, name="Built-in", version="1", installed_version=None, sp
         spec=spec or {"source_type": "content", "content": "# Built-in"},
         installed_entity_id=None,
         installed_version=installed_version,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -43,6 +50,16 @@ class FakeSkillRepo:
 
     async def get_by_slug(self, _slug):
         return None
+
+    async def get_by_registry_item_id(self, registry_item_id):
+        return next(
+            (
+                s
+                for s in self._skills
+                if str(getattr(s, "registry_item_id", "")) == str(registry_item_id)
+            ),
+            None,
+        )
 
     async def create(self, **kwargs):
         self.created_kwargs.append(kwargs)
@@ -72,6 +89,14 @@ class FakeCatalogRepo:
 
     async def mark_installed(self, item_id, entity_id, installed_version):
         self.installed.append((item_id, entity_id, installed_version))
+
+
+class CapturingSession:
+    def __init__(self):
+        self.executions = []
+
+    async def execute(self, query, params=None):
+        self.executions.append((str(query), params or {}))
 
 
 class FakeFactory:
@@ -109,6 +134,8 @@ def test_project_catalog_skill_marks_read_only_with_provenance():
     assert skill.content == "# Hello"
     assert skill.source_type == "content"
     assert skill.source_url == "https://example.com"
+    assert skill.created_at == item.created_at
+    assert skill.updated_at == item.updated_at
 
 
 async def test_get_with_catalog_falls_back_to_projection():
@@ -177,6 +204,34 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert kw["source_url"] == "https://x"
     # The install is recorded on the catalog item with the new skill id + version.
     assert catalog.installed == [(item.id, str(skill.id), "3")]
+
+
+async def test_catalog_skill_install_state_is_workspace_scoped():
+    session = CapturingSession()
+    repo = CatalogSkillRepository(session, UserContext(user_id="u1", workspace_id="w1"))
+
+    await repo.mark_installed(str(uuid4()), str(uuid4()), "3")
+
+    query, params = session.executions[0]
+    assert "registry_item_installs" in query
+    assert "UPDATE registry_items" not in query
+    assert params["workspace_id"] == "w1"
+
+
+async def test_install_catalog_skill_is_idempotent():
+    item = _item(name="Builtin Install", version="4")
+    repo = FakeSkillRepo()
+    catalog = FakeCatalogRepo([item])
+    svc = _service(repo, catalog)
+
+    first = await svc.install_catalog_skill(UUID(item.id))
+    second = await svc.install_catalog_skill(UUID(item.id))
+
+    assert first is not None
+    assert second is not None
+    assert first.id == second.id
+    assert len(repo.created_kwargs) == 1
+    assert repo.created_kwargs[0]["registry_item_id"] == item.id
 
 
 async def test_update_on_catalog_id_forks_tenant_copy():

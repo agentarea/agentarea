@@ -85,7 +85,7 @@ const BasicInformation = ({
             id="name"
             {...register("name", { required: "Agent name is required" })}
             placeholder={t("agentNamePlaceholder")}
-            // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
+            // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors"
             aria-invalid={!!getNestedErrorMessage(errors, "name")}
           />
           {getNestedErrorMessage(errors, "name") && (
@@ -144,7 +144,7 @@ const BasicInformation = ({
             {...register("description")}
             placeholder={t("descriptionPlaceholder")}
             className="h-[100px] resize-none"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors h-32"
             aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
           {getNestedErrorMessage(errors, "description") && (

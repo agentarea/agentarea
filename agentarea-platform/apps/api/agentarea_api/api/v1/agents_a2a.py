@@ -36,6 +36,7 @@ from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.utils.types import (
     AgentCapabilities,
     AgentCard,
+    AgentInterface,
     AgentSkill,
     Artifact,
     CancelTaskResponse,
@@ -59,7 +60,7 @@ from agentarea_common.utils.types import (
 from agentarea_common.utils.types import (
     MessageSendResponse as SendMessageResponse,
 )
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
@@ -300,8 +301,8 @@ def convert_a2a_message_to_task(
     a2a_method: str,
     request_id: str,
     task_id: str | None = None,
-) -> SimpleTask:
-    """Convert A2A message to SimpleTask with proper authentication context and user metadata."""
+) -> AgentTask:
+    """Convert A2A message to AgentTask with proper authentication context and user metadata."""
     message_content = ""
     if message_params.message and message_params.message.parts:
         for part in message_params.message.parts:
@@ -373,7 +374,7 @@ def convert_a2a_message_to_task(
         if client_metadata:
             a2a_metadata["client_metadata"] = client_metadata
 
-    return SimpleTask(
+    return AgentTask(
         id=UUID(task_id) if task_id else uuid4(),
         title="A2A Message Task",
         description="Task created from A2A message",
@@ -387,9 +388,9 @@ def convert_a2a_message_to_task(
     )
 
 
-def convert_simple_task_to_a2a_task(task: SimpleTask):
-    """Convert SimpleTask to A2A protocol Task format with current workflow status."""
-    # Map SimpleTask status to TaskState enum
+def convert_agent_task_to_a2a_task(task: AgentTask):
+    """Convert AgentTask to A2A protocol Task format with current workflow status."""
+    # Map AgentTask status to TaskState enum
     task_state_mapping = {
         "submitted": TaskState.SUBMITTED,
         "pending": TaskState.SUBMITTED,
@@ -1007,8 +1008,8 @@ async def handle_task_get(request_id, params, task_service, agent_id, auth_conte
             },
         )
 
-        # Convert SimpleTask to A2A protocol Task format
-        a2a_task = convert_simple_task_to_a2a_task(task)
+        # Convert AgentTask to A2A protocol Task format
+        a2a_task = convert_agent_task_to_a2a_task(task)
 
         return GetTaskResponse(jsonrpc="2.0", id=request_id, result=a2a_task)
     except A2AValidationError as e:
@@ -1110,7 +1111,7 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
             )
 
             # Convert to A2A protocol Task format
-            a2a_task = convert_simple_task_to_a2a_task(updated_task)
+            a2a_task = convert_agent_task_to_a2a_task(updated_task)
 
             return CancelTaskResponse(jsonrpc="2.0", id=request_id, result=a2a_task)
         else:
@@ -1170,7 +1171,7 @@ async def handle_task_resubscribe(
 
         # If task already terminal, return final status
         if task.status in ("completed", "failed", "cancelled", "canceled", "rejected"):
-            a2a_task = convert_simple_task_to_a2a_task(task)
+            a2a_task = convert_agent_task_to_a2a_task(task)
 
             async def done_stream():
                 final = JSONRPCResponse(
@@ -1270,7 +1271,7 @@ async def handle_task_list(request_id, params, task_service, agent_id, auth_cont
     offset = params.get("offset", 0)
 
     tasks = await task_service.get_agent_tasks(agent_id, limit=limit, offset=offset)
-    a2a_tasks = [convert_simple_task_to_a2a_task(t).model_dump(by_alias=True) for t in tasks]
+    a2a_tasks = [convert_agent_task_to_a2a_task(t).model_dump(by_alias=True) for t in tasks]
 
     return JSONRPCResponse(jsonrpc="2.0", id=request_id, result=a2a_tasks)
 
@@ -1299,6 +1300,7 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
             streaming=True,  # All agents support streaming through A2A
             pushNotifications=False,  # Not currently supported
             stateTransitionHistory=True,  # Supported through Temporal workflows
+            extendedAgentCard=True,
         )
 
         # Build skills based on agent configuration and tools
@@ -1374,10 +1376,18 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         if agent.status and agent.status != "active":
             enhanced_description += f" (Status: {agent.status})"
 
+        rpc_url = f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc"
         agent_card = AgentCard(
             name=agent.name,
             description=enhanced_description,
-            url=f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
+            url=rpc_url,
+            supportedInterfaces=[
+                AgentInterface(
+                    url=rpc_url,
+                    protocolBinding="JSONRPC",
+                    protocolVersion="1.0",
+                )
+            ],
             version="1.0.0",
             protocolVersion="0.3.0",
             provider=AgentProvider(
@@ -1526,11 +1536,11 @@ async def handle_agent_jsonrpc(
 
         # Check A2A-Version header
         a2a_version = request.headers.get("a2a-version")
-        if a2a_version and not a2a_version.startswith("0.3"):
+        if a2a_version and not (a2a_version.startswith("0.3") or a2a_version.startswith("1.")):
             return create_error_response(
                 request_data.get("id"),
                 -32007,
-                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x",
+                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x, 1.x",
             )
 
         # Validate JSON-RPC request structure
@@ -1690,6 +1700,7 @@ async def get_agent_well_known(
             streaming=True,  # All agents support streaming through A2A
             pushNotifications=False,  # Not currently supported
             stateTransitionHistory=True,  # Supported through Temporal workflows
+            extendedAgentCard=True,
         )
 
         # Build skills based on current agent configuration and tools
@@ -1763,10 +1774,18 @@ async def get_agent_well_known(
         if agent.status and agent.status != "active":
             enhanced_description += f" (Status: {agent.status})"
 
+        rpc_url = f"/api/v1/agents/{agent_id}/a2a/rpc"
         agent_card = AgentCard(
             name=agent.name,
             description=enhanced_description,
-            url=f"/api/v1/agents/{agent_id}/a2a/rpc",
+            url=rpc_url,
+            supportedInterfaces=[
+                AgentInterface(
+                    url=rpc_url,
+                    protocolBinding="JSONRPC",
+                    protocolVersion="1.0",
+                )
+            ],
             version="1.0.0",
             protocolVersion="0.3.0",
             provider=AgentProvider(organization="AgentArea", url=f"/api/v1/agents/{agent_id}"),

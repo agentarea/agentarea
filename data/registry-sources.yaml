@@ -13,17 +13,23 @@
 #   the type from the payload shape (servers/providers/models/skills), parses
 #   it, and upserts catalog items. Idempotent — re-run any time to resync.
 #
-# NOTE: llm_providers / llm_models / agents require an API image built from
-# current main (the published :latest still only supports mcp_servers + skills).
-# Skills are metadata stubs (catalog entries without full SKILL.md bodies).
-# The agents catalog is an empty placeholder for now — real agent definitions
-# still live at ../landing/data/agents.json (display-only shape, needs
-# conversion before publishing).
+# NOTE: llm_providers / llm_models / agents / bundles require an API image built
+# from current main (the published :latest still only supports mcp_servers +
+# skills). Skills are metadata stubs (catalog entries without full SKILL.md
+# bodies). agents.json and bundles.json are catalog-format documents published
+# under registry/system/ (see scripts/registry/ for how they are generated).
 # ─────────────────────────────────────────────────────────────────────────────
 
-- name: mcp-servers-catalog
-  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json
-  description: Built-in MCP server catalog (mirror of registry.modelcontextprotocol.io)
+# TEMP: the full mirror is overwhelmingly community stdio/command/docker servers.
+# Disabled while we polish the vendor-hosted remote/OAuth experience below.
+# Re-enable (and reactivate the registry) once the remote connections flow is solid.
+# - name: mcp-servers-catalog
+#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json
+#   description: Built-in MCP server catalog (mirror of registry.modelcontextprotocol.io)
+
+- name: mcp-remote-oauth-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-remote-oauth-registry.json
+  description: Curated official vendor-hosted remote MCP servers with OAuth (GitHub, Notion, Slack, Linear, Canva, Figma, ...)
 
 - name: llm-providers-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
@@ -39,16 +45,14 @@
 
 - name: agents-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
-  description: Built-in agent catalog (empty placeholder — populate when agents are published)
+  description: Built-in agent catalog (catalog-format agent definitions)
+
+- name: bundles-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json
+  description: Built-in bundle catalog — installable agentic setups (skills + agents + MCPs)
 
 # Extended skill catalog (full scrape, metadata stubs; large file, slow sync).
 # Uncomment to install everything:
 # - name: skills-catalog-full
 #   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-full.json
 #   description: Full skill catalog (metadata stubs from scraped public collections)
-
-# Bundles — not a reconcile-able registry type yet. Placeholder published so the
-# URL is stable; uncomment once the registry learns the 'bundles' type:
-# - name: bundles-catalog
-#   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/bundles.json
-#   description: Built-in bundle catalog

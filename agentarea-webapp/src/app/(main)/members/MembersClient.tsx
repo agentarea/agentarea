@@ -16,13 +16,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -55,27 +48,82 @@ import {
   revokeInvitationAction,
 } from "./actions";
 
+type DisplayMember = WorkspaceMember & {
+  email?: string | null;
+  display_name?: string | null;
+  name?: string | null;
+  username?: string | null;
+};
+
 interface MembersClientProps {
-  members: WorkspaceMember[];
+  members: DisplayMember[];
   invitations: WorkspaceInvitation[];
   currentUserId: string | null;
+  currentUserEmail: string | null;
+  currentUserName: string | null;
+  currentUsername: string | null;
 }
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
 }
 
+function getMemberLabel(
+  member: DisplayMember,
+  currentUser: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+    username: string | null;
+  }
+): string {
+  const isSelf = member.user_id === currentUser.id;
+  return (
+    member.display_name ||
+    member.email ||
+    member.name ||
+    member.username ||
+    (isSelf && (currentUser.name || currentUser.email || currentUser.username)) ||
+    member.user_id
+  );
+}
+
+function getMemberSecondaryLabel(
+  member: DisplayMember,
+  currentUser: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+    username: string | null;
+  }
+): string | null {
+  const label = getMemberLabel(member, currentUser);
+  const isSelf = member.user_id === currentUser.id;
+  if (member.email && member.email !== label) return member.email;
+  if (member.username && member.username !== label) return member.username;
+  if (isSelf && currentUser.email && currentUser.email !== label) {
+    return currentUser.email;
+  }
+  if (isSelf && currentUser.username && currentUser.username !== label) {
+    return currentUser.username;
+  }
+  return null;
+}
+
 export default function MembersClient({
   members,
   invitations,
   currentUserId,
+  currentUserEmail,
+  currentUserName,
+  currentUsername,
 }: MembersClientProps) {
   const t = useTranslations("MembersPage");
   const router = useRouter();
@@ -145,23 +193,24 @@ export default function MembersClient({
   };
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="space-y-8">
       {/* Members */}
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1">
-            <CardTitle className="text-base">
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-medium">
               {t("membersTitle")} ({members.length})
-            </CardTitle>
-            <CardDescription>{t("membersDescription")}</CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t("membersDescription")}
+            </p>
           </div>
           <Button size="sm" className="gap-1.5" onClick={openInvite}>
             <UserPlus className="h-4 w-4" />
             {t("invitePeople")}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {members.length === 0 ? (
+        </div>
+        {members.length === 0 ? (
             <div className="flex justify-center py-6">
               <EmptyState
                 icons={[Users]}
@@ -182,13 +231,30 @@ export default function MembersClient({
               <TableBody>
                 {members.map((m) => {
                   const isSelf = m.user_id === currentUserId;
+                  const currentUser = {
+                    id: currentUserId,
+                    email: currentUserEmail,
+                    name: currentUserName,
+                    username: currentUsername,
+                  };
+                  const label = getMemberLabel(m, currentUser);
+                  const secondaryLabel = getMemberSecondaryLabel(m, currentUser);
                   return (
                     <TableRow key={m.id}>
-                      <TableCell className="font-mono text-xs">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate">{m.user_id}</span>
-                          {isSelf && (
-                            <Badge variant="secondary">{t("you")}</Badge>
+                      <TableCell>
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium">
+                              {label}
+                            </span>
+                            {isSelf && (
+                              <Badge variant="secondary">{t("you")}</Badge>
+                            )}
+                          </span>
+                          {secondaryLabel && (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {secondaryLabel}
+                            </span>
                           )}
                         </span>
                       </TableCell>
@@ -219,19 +285,19 @@ export default function MembersClient({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
       {/* Pending invitations */}
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-base">
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-medium">
             {t("invitationsTitle")} ({invitations.length})
-          </CardTitle>
-          <CardDescription>{t("invitationsDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {invitations.length === 0 ? (
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("invitationsDescription")}
+          </p>
+        </div>
+        {invitations.length === 0 ? (
             <p className="py-4 text-sm text-muted-foreground">
               {t("noInvitations")}
             </p>
@@ -288,8 +354,7 @@ export default function MembersClient({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
       {/* Invite dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

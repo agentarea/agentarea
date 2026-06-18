@@ -1,4 +1,5 @@
 """Wallet service tests with mocked repositories and secret manager."""
+# ruff: noqa: S106
 
 import json
 from datetime import datetime
@@ -6,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from agentarea_wallet.application.wallet_service import WalletService
 from agentarea_wallet.domain.exceptions import WalletAlreadyExistsError, WalletNotFoundError
 
@@ -158,6 +158,25 @@ class TestGetWallet:
 
         with pytest.raises(WalletNotFoundError):
             await service.get_wallet("agent_1")
+
+    @pytest.mark.asyncio
+    async def test_get_wallet_credentials_returns_decrypted_json(self, service, secret_manager):
+        wallet = _make_wallet(credentials_secret_id="wallet_creds_agent_1")
+        secret_manager.get_secret.return_value = json.dumps(
+            {"x402_private_key": "0xsecret", "mpp_tempo_key": "0xtempo"}
+        )
+
+        result = await service.get_wallet_credentials(wallet)
+
+        assert result == {"x402_private_key": "0xsecret", "mpp_tempo_key": "0xtempo"}
+        secret_manager.get_secret.assert_called_once_with("wallet_creds_agent_1")
+
+    @pytest.mark.asyncio
+    async def test_get_wallet_credentials_handles_missing_secret(self, service, secret_manager):
+        wallet = _make_wallet(credentials_secret_id="wallet_creds_agent_1")
+        secret_manager.get_secret.return_value = None
+
+        assert await service.get_wallet_credentials(wallet) == {}
 
 
 # ------------------------------------------------------------------

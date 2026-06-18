@@ -55,6 +55,66 @@ function ToolChip({ tool }: { tool: AgentToolIcon }) {
   );
 }
 
+// Just the glyph (no circle), for inline icon+label chips.
+function ToolGlyph({ tool }: { tool: AgentToolIcon }) {
+  if (tool.kind === "builtin") {
+    const icon = getBuiltinToolIcon(tool.toolName);
+    return createElement(icon, {
+      className: "h-3.5 w-3.5 shrink-0 text-muted-foreground",
+    });
+  }
+  if (tool.src) {
+    return (
+      <img
+        src={tool.src}
+        alt={tool.label}
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain"
+      />
+    );
+  }
+  const unresolved = tool.kind === "mcp" && !tool.resolved;
+  const fallbackIcon = tool.kind === "openapi" ? Globe : Plug;
+  return createElement(fallbackIcon, {
+    className: cn(
+      "h-3.5 w-3.5 shrink-0 text-muted-foreground",
+      unresolved && "opacity-40"
+    ),
+  });
+}
+
+/** Icon + label chips — for detail views where tool names should be visible. */
+export function AgentToolPills({
+  tools,
+  className,
+}: {
+  tools: AgentToolIcon[];
+  className?: string;
+}) {
+  if (!tools.length) return null;
+  return (
+    <div className={cn("flex flex-wrap gap-1.5", className)}>
+      {tools.map((tool, index) => {
+        const unresolved = tool.kind === "mcp" && !tool.resolved;
+        return (
+          <span
+            key={index}
+            title={unresolved ? `${tool.label} (not connected)` : tool.label}
+            className={cn(
+              "inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11.5px] text-foreground/80",
+              unresolved && "border-dashed opacity-60"
+            )}
+          >
+            <ToolGlyph tool={tool} />
+            <span className="max-w-[150px] truncate">{tool.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AgentToolIcons({
   tools,
   maxDisplay = 5,

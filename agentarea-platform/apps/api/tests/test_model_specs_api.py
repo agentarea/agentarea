@@ -15,6 +15,7 @@ import pytest
 from agentarea_api.api.deps.services import get_model_spec_repository
 from agentarea_api.api.v1.model_specs import router
 from agentarea_common.auth import UserContext, get_user_context
+from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
@@ -67,6 +68,7 @@ def _payload(provider_spec_id):
     }
 
 
+@pytest.mark.flow(MainFlow.PROVIDER_MODEL_CONFIG)
 def test_create_returns_200_when_no_duplicate(client, repo):
     provider_spec_id = uuid4()
     spec = _spec(provider_spec_id)

@@ -4,6 +4,7 @@ This module provides centralized configuration management with clean separation
 of concerns across different settings domains.
 """
 
+from .access_control import AccessControlSettings
 from .app import AppSettings, get_app_settings
 from .auth import AuthSettings, get_auth_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
@@ -12,6 +13,7 @@ from .broker import BrokerSettings, KafkaSettings, RedisSettings
 from .database import Database, DatabaseSettings, get_database, get_db, get_db_settings, get_sync_db
 from .mcp import MCPManagerSettings, MCPSettings
 from .observability import ObservabilitySettings
+from .openfga import OpenFGASettings
 from .secrets import SecretManagerSettings, get_secret_manager_settings
 from .settings import Settings, get_settings
 from .triggers import TriggerSettings
@@ -19,6 +21,7 @@ from .workflow import TaskExecutionSettings, WorkflowSettings
 
 __all__ = [
     "AWSSettings",
+    "AccessControlSettings",
     "AppSettings",
     "AuthSettings",
     "BaseAppSettings",
@@ -29,6 +32,7 @@ __all__ = [
     "MCPManagerSettings",
     "MCPSettings",
     "ObservabilitySettings",
+    "OpenFGASettings",
     "RedisSettings",
     "SecretManagerSettings",
     "Settings",

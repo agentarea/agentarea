@@ -289,6 +289,8 @@ version = "0.0.12"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
+    { name = "agentarea-payment" },
+    { name = "agentarea-wallet" },
     { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "temporalio" },
@@ -304,6 +306,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
+    { name = "agentarea-payment", editable = "libs/payment" },
+    { name = "agentarea-wallet", editable = "libs/wallet" },
     { name = "prometheus-client", specifier = ">=0.23.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
@@ -404,23 +408,27 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "pympp" },
+    { name = "eth-account" },
+    { name = "pympp", extra = ["tempo"] },
     { name = "x402", extra = ["evm", "httpx"] },
 ]
 mpp = [
-    { name = "pympp" },
+    { name = "pympp", extra = ["tempo"] },
 ]
 x402 = [
+    { name = "eth-account" },
     { name = "x402", extra = ["evm", "httpx"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "eth-account", marker = "extra == 'all'" },
+    { name = "eth-account", marker = "extra == 'x402'" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
-    { name = "pympp", marker = "extra == 'all'" },
-    { name = "pympp", marker = "extra == 'mpp'" },
+    { name = "pympp", extras = ["tempo"], marker = "extra == 'all'" },
+    { name = "pympp", extras = ["tempo"], marker = "extra == 'mpp'" },
     { name = "x402", extras = ["httpx", "evm"], marker = "extra == 'all'" },
     { name = "x402", extras = ["httpx", "evm"], marker = "extra == 'x402'" },
 ]
@@ -538,6 +546,7 @@ version = "0.0.12"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "agentarea-agents" },
+    { name = "agentarea-api" },
     { name = "agentarea-common" },
     { name = "agentarea-execution" },
     { name = "agentarea-governance" },
@@ -552,6 +561,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
+    { name = "agentarea-api", editable = "apps/api" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-execution", editable = "libs/execution" },
     { name = "agentarea-governance", editable = "libs/governance" },
@@ -3868,6 +3878,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/a4/5b4523faa7895473433aafc3b431d8f64a7337cd06c335bfb319c90f8744/pympp-0.4.2-py3-none-any.whl", hash = "sha256:7db59604b74a11cb0c2cca5b5c5b6af65b06129c6108de4b1abdabd100860764", size = 61377 },
 ]
 
+[package.optional-dependencies]
+tempo = [
+    { name = "pydantic" },
+    { name = "pytempo" },
+]
+
 [[package]]
 name = "pyperclip"
 version = "1.11.0"
@@ -3897,6 +3913,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/74/b2/5db700e52554b8f025faa9c3c624c59f1f6c8841ba81ab97641b54322f16/pyright-1.1.408.tar.gz", hash = "sha256:f28f2321f96852fa50b5829ea492f6adb0e6954568d1caa3f3af3a5f555eb684", size = 4400578 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0c/82/a2c93e32800940d9573fb28c346772a14778b84ba7524e691b324620ab89/pyright-1.1.408-py3-none-any.whl", hash = "sha256:090b32865f4fdb1e0e6cd82bf5618480d48eecd2eb2e70f960982a3d9a4c17c1", size = 6399144 },
+]
+
+[[package]]
+name = "pytempo"
+version = "0.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "eth-account" },
+    { name = "eth-utils" },
+    { name = "rlp" },
+    { name = "web3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/5b/2a31105f61a75413a8a61274443d610a7813142c1638956c76d963228896/pytempo-0.5.1.tar.gz", hash = "sha256:3f70c0bb8b3111b7eb56a334e22df0eeb715b8f35d77fced11358e8d487a6bad", size = 267288 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/51/85d4f411c8768b3308b2ef40365f98b7d64ef33655b6bc67f612cdce9416/pytempo-0.5.1-py3-none-any.whl", hash = "sha256:3e912ad4e81455e54523d93dd27cf06921c624b56ec622a4d16e7726640cb04c", size = 38436 },
 ]
 
 [[package]]

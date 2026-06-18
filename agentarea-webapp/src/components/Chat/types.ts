@@ -34,6 +34,9 @@ export interface ToolCallStartedData extends BaseMessageData {
   tool_name: string;
   tool_call_id: string;
   arguments: Record<string, any>;
+  /** MCP server that owns this tool (absent for built-in/sandbox tools). */
+  server_name?: string;
+  server_icon?: string;
 }
 
 // Tool Result Message
@@ -44,6 +47,9 @@ export interface ToolResultData extends BaseMessageData {
   success: boolean;
   execution_time?: string;
   arguments?: Record<string, any>;
+  /** MCP server that owns this tool (absent for built-in/sandbox tools). */
+  server_name?: string;
+  server_icon?: string;
 }
 
 // LLM Chunk Message (for streaming)
@@ -183,6 +189,8 @@ export interface ToolCallGroupData extends BaseMessageData {
     arguments?: Record<string, any>;
     execution_time?: string;
     pending?: boolean; // true if still in "calling..." state
+    server_name?: string;
+    server_icon?: string;
   }>;
 }
 

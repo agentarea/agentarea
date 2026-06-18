@@ -19,23 +19,17 @@ from ..domain.policies import (
     PolicyResolver,
 )
 from ..domain.rules import PolicyRule, PolicySubjectType, rules_to_document
-from ..infrastructure.repository import (
-    PolicyRuleRepository,
-    TaskPolicySnapshotRepository,
-)
+from ..infrastructure.repository import PolicyRuleRepository
 
 
 class GovernancePolicyResolver:
-    """Resolve and persist governance policy through governance repositories.
+    """Resolve governance policy through governance repositories.
 
     Satisfies ``agentarea_common.ports.policy_resolver.PolicyResolverPort``.
     """
 
     def __init__(self, repository_factory: RepositoryFactory):
         self._rule_repository = repository_factory.create_repository(PolicyRuleRepository)
-        self._snapshot_repository = repository_factory.create_repository(
-            TaskPolicySnapshotRepository
-        )
 
     async def resolve(
         self,
@@ -74,16 +68,6 @@ class GovernancePolicyResolver:
             layers.append(task_policy)
 
         return PolicyResolver().resolve(layers, source_policy_ids=source_ids)
-
-    async def snapshot(
-        self,
-        *,
-        task_id: UUID,
-        effective_policy: EffectivePolicy,
-    ) -> None:
-        await self._snapshot_repository.create_snapshot(
-            task_id=task_id, effective_policy=effective_policy
-        )
 
 
 def _rule_ids(rules: list[PolicyRule]) -> list[str]:

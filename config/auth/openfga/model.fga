@@ -1,0 +1,64 @@
+model
+  schema 1.1
+
+type User
+
+type Workspace
+  relations
+    define members: [User, Agent]
+
+type SkillCollection
+  relations
+    define parents: [Workspace]
+    define viewers: [User, Agent, Workspace#members]
+    define editors: [User, Agent, Workspace#members]
+    define owners: [User, Agent]
+    define use: viewers or editors or owners
+    define configure: editors or owners
+    define manage: owners
+
+type Skill
+  relations
+    define collections: [SkillCollection]
+    define viewers: [User, Agent]
+    define editors: [User, Agent]
+    define owners: [User, Agent]
+    define use: viewers or editors or owners or use from collections
+    define configure: editors or owners or configure from collections
+    define manage: owners or manage from collections
+
+type MCPServer
+  relations
+    define connectors: [User, Agent, Workspace#members]
+    define operators: [User, Agent]
+    define connect: connectors or operators
+    define manage: operators
+
+type Agent
+  relations
+    define tasks: [Task]
+    define operators: [User, Agent, Workspace#members]
+    define owners: [User]
+    define operate: operators or owners
+    define own: owners
+    define run_task: tasks
+
+type Session
+  relations
+    define tasks: [Task]
+
+type Task
+
+type Tool
+  relations
+    define workspace: [Workspace]
+    define callers: [User, Task, Session#tasks, Agent#tasks]
+    define can_call: callers and members from workspace
+
+type ToolResource
+  relations
+    define workspace: [Workspace]
+    define tool: [Tool]
+    define callers: [User, Task, Session#tasks, Agent#tasks]
+    define direct_call: callers and members from workspace
+    define can_call: direct_call or can_call from tool

@@ -54,7 +54,7 @@ async def import_workspace_config(
         instruction: "You are a helpful AI assistant"
         tools:
           - type: code
-            name: agentarea/calculator
+            name: agentarea/math
           - type: mcp
             name: my-filesystem
             settings:

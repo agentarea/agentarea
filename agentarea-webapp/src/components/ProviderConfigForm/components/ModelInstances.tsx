@@ -4,6 +4,7 @@ import { Brain, Check, Eye, RefreshCw, Search, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
+import { ProviderIcon } from "@/components/ui/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -290,7 +291,16 @@ export default function ModelInstances({
                     </div>
                   </div>
 
-                  <div className="text-sm font-medium">{model.display_name}</div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium">
+                    {selectedProvider?.icon_url && (
+                      <ProviderIcon
+                        iconUrl={selectedProvider.icon_url}
+                        name={selectedProvider?.name || model.display_name}
+                        size="sm"
+                      />
+                    )}
+                    <span className="truncate">{model.display_name}</span>
+                  </div>
                   <div className="text-right text-xs text-muted-foreground">
                     {formatTokens(model.context_window)}
                   </div>

@@ -36,6 +36,7 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 # Copy project files with correct ownership
 COPY --chown=appuser:appuser libs ./libs
+COPY --chown=appuser:appuser apps/api ./apps/api
 COPY --chown=appuser:appuser apps/worker ./apps/worker
 COPY --chown=appuser:appuser apps/worker/docker-entrypoint.sh ./docker-entrypoint.sh
 COPY --chown=appuser:appuser pyproject.toml ./

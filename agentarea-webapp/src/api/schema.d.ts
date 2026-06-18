@@ -177,6 +177,124 @@ export interface paths {
         patch: operations["hydra_oauth2_proxy_oauth2__path__patch"];
         trace?: never;
     };
+    "/v1/access-control/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Permission
+         * @description Check whether a subject has a relation on an object.
+         */
+        post: operations["check_permission_v1_access_control_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-control/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Graph
+         * @description Return the full authorization graph for the current workspace.
+         */
+        get: operations["get_graph_v1_access_control_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-control/relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Relationships
+         * @description List authorization relationships enriched with display names.
+         */
+        get: operations["list_relationships_v1_access_control_relationships_get"];
+        put?: never;
+        /**
+         * Create Relationship
+         * @description Write an authorization relationship to the configured graph backend.
+         */
+        post: operations["create_relationship_v1_access_control_relationships_post"];
+        /**
+         * Delete Relationship
+         * @description Delete an authorization relationship from the configured graph backend.
+         */
+        delete: operations["delete_relationship_v1_access_control_relationships_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-control/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Access
+         * @description Resolve why (and how) a subject can access a resource.
+         *
+         *     ``allowed`` is computed via the graph backend; ``paths`` are derived by
+         *     traversing workspace relationships directly so the UI can render the derivation.
+         */
+        post: operations["resolve_access_v1_access_control_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-control/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Grants
+         * @description Mirror existing grants into the graph backend and seed a starter collection.
+         *
+         *     Idempotent: safe to call repeatedly. Steps:
+         *       1. Mirror workspace members into the graph.
+         *       2. If no collections exist, create "All skills" containing every workspace
+         *          skill and grant workspace-member access to the collection.
+         *       3. Mirror each collection membership relationship.
+         *       4. Mirror each direct agent-to-skill grant.
+         */
+        post: operations["sync_grants_v1_access_control_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents": {
         parameters: {
             query?: never;
@@ -193,7 +311,7 @@ export interface paths {
          *         All users in the same workspace can see all workspace agents.
          *
          *         Note: User-level access control should be implemented via authorization
-         *         layer (future ReBAC) rather than query parameters.
+         *         layer (future access-control) rather than query parameters.
          */
         get: operations["list_agents_v1_agents_get"];
         put?: never;
@@ -220,7 +338,7 @@ export interface paths {
          *         All users in the same workspace can see all workspace agents.
          *
          *         Note: User-level access control should be implemented via authorization
-         *         layer (future ReBAC) rather than query parameters.
+         *         layer (future access-control) rather than query parameters.
          */
         get: operations["list_agents_v1_agents__get"];
         put?: never;
@@ -338,6 +456,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/.well-known/agent-card.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Well Known Card
+         * @description Agent-specific well-known discovery endpoint.
+         *
+         *     Returns the agent card for this specific agent.
+         *     This endpoint can be accessed at:
+         *     - /v1/agents/{agent_id}/.well-known/agent-card.json
+         *     - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+         *
+         *     This allows each agent to have its own well-known endpoint, which is A2A compliant.
+         *     Later, this can be proxied to subdomains:
+         *     - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+         */
+        get: operations["get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agent_id}/.well-known/agent.json": {
         parameters: {
             query?: never;
@@ -350,7 +497,9 @@ export interface paths {
          * @description Agent-specific well-known discovery endpoint.
          *
          *     Returns the agent card for this specific agent.
-         *     This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
+         *     This endpoint can be accessed at:
+         *     - /v1/agents/{agent_id}/.well-known/agent-card.json
+         *     - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
          *
          *     This allows each agent to have its own well-known endpoint, which is A2A compliant.
          *     Later, this can be proxied to subdomains:
@@ -399,6 +548,29 @@ export interface paths {
         get: operations["get_agent_well_known_v1_agents__agent_id__a2a_well_known_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Agent
+         * @description Add a built-in catalog agent to the workspace (copy-on-write fork).
+         *
+         *     Resolves a catalog agent by UUID or slug and materializes a tenant copy.
+         *     Idempotent: returns the existing workspace copy if already installed.
+         */
+        post: operations["install_agent_v1_agents__agent_id__install_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -482,7 +654,7 @@ export interface paths {
         };
         /**
          * Get Agent Task
-         * @description Get a specific task for the specified agent using workflow status.
+         * @description Get a specific task for the specified agent.
          */
         get: operations["get_agent_task_v1_agents__agent_id__tasks__task_id__get"];
         put?: never;
@@ -1055,7 +1227,10 @@ export interface paths {
         };
         /**
          * Get Task Policy Snapshot
-         * @description Read an immutable effective policy snapshot for a task.
+         * @description Read the effective governance policy for a task.
+         *
+         *     The effective policy is no longer persisted; it is served on demand by
+         *     querying the task's Temporal workflow, where it lives in workflow state.
          */
         get: operations["get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get"];
         put?: never;
@@ -2449,124 +2624,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/rebac/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Check Permission
-         * @description Check whether a subject has a relation on an object.
-         */
-        post: operations["check_permission_v1_rebac_check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rebac/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Graph
-         * @description Return the full authorization graph for the current workspace.
-         */
-        get: operations["get_graph_v1_rebac_graph_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rebac/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resolve Access
-         * @description Resolve why (and how) a subject can access a resource.
-         *
-         *     ``allowed`` is computed via a Keto check; ``paths`` are derived by traversing
-         *     the workspace tuples directly so the UI can render the derivation.
-         */
-        post: operations["resolve_access_v1_rebac_resolve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rebac/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sync Grants
-         * @description Mirror existing grants into Keto and seed a starter collection.
-         *
-         *     Idempotent: safe to call repeatedly. Steps:
-         *       1. If no collections exist, create "All skills" containing every workspace
-         *          skill and grant ``SkillCollection:<id>#viewers@Workspace:<wid>#members``.
-         *       2. For each collection_skills row, write
-         *          ``Skill:<sid>#collections@SkillCollection:<cid>``.
-         *       3. For each agent_skills row, write ``Skill:<sid>#viewers@Agent:<aid>``.
-         */
-        post: operations["sync_grants_v1_rebac_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rebac/tuples": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Tuples
-         * @description List relation tuples, enriched with object/subject display names.
-         */
-        get: operations["list_tuples_v1_rebac_tuples_get"];
-        put?: never;
-        /**
-         * Create Tuple
-         * @description Write a relation tuple to Keto.
-         */
-        post: operations["create_tuple_v1_rebac_tuples_post"];
-        /**
-         * Delete Tuple
-         * @description Delete a relation tuple from Keto.
-         */
-        delete: operations["delete_tuple_v1_rebac_tuples_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/registries/": {
         parameters: {
             query?: never;
@@ -2781,7 +2838,7 @@ export interface paths {
         put?: never;
         /**
          * Add Skill To Collection
-         * @description Add a skill to a collection and mirror the membership into Keto.
+         * @description Add a skill to a collection and mirror the membership into the graph.
          */
         post: operations["add_skill_to_collection_v1_skill_collections__collection_id__skills_post"];
         delete?: never;
@@ -2802,7 +2859,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Skill From Collection
-         * @description Remove a skill from a collection and delete the Keto membership tuple.
+         * @description Remove a skill from a collection and delete the graph membership.
          */
         delete: operations["remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete"];
         options?: never;
@@ -2965,6 +3022,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/skills/{skill_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Skill
+         * @description Add a built-in catalog skill to the workspace.
+         */
+        post: operations["install_skill_v1_skills__skill_id__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/skills/{skill_id}/members": {
         parameters: {
             query?: never;
@@ -3048,6 +3125,57 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tool-access/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Tool Access
+         * @description Check whether a user can call a tool.
+         *
+         *     Omitting ``arguments`` checks a whole-tool grant. Passing ``arguments``
+         *     checks the concrete invocation path used by runtime tool execution.
+         */
+        post: operations["check_tool_access_v1_tool_access_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tool-access/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tool Access Grants
+         * @description List tool access grants in the configured graph backend.
+         */
+        get: operations["list_tool_access_grants_v1_tool_access_grants_get"];
+        put?: never;
+        /**
+         * Grant Tool Access
+         * @description Grant a user access to a whole tool, or to an exact argument set.
+         */
+        post: operations["grant_tool_access_v1_tool_access_grants_post"];
+        /**
+         * Revoke Tool Access
+         * @description Revoke a whole-tool or exact-arguments grant.
+         */
+        delete: operations["revoke_tool_access_v1_tool_access_grants_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3619,7 +3747,7 @@ export interface paths {
          *         instruction: "You are a helpful AI assistant"
          *         tools:
          *           - type: code
-         *             name: agentarea/calculator
+         *             name: agentarea/math
          *           - type: mcp
          *             name: my-filesystem
          *             settings:
@@ -3704,7 +3832,8 @@ export interface paths {
          * @description List every workspace the current user can reach (personal + joined).
          *
          *     Provisions the caller's personal workspace on first call, so a brand
-         *     new user always gets at least one entry.
+         *     new user always gets at least one entry. Baseline governance policies are
+         *     seeded by the workspace-creation hook (see ``get_workspace_service``).
          */
         get: operations["list_workspaces_v1_workspaces_get"];
         put?: never;
@@ -3993,6 +4122,11 @@ export interface components {
         };
         /** AgentCapabilities */
         AgentCapabilities: {
+            /**
+             * Extendedagentcard
+             * @default false
+             */
+            extendedAgentCard: boolean;
             /** Extensions */
             extensions?: {
                 [key: string]: unknown;
@@ -4055,6 +4189,8 @@ export interface components {
             } | null;
             /** Skills */
             skills: components["schemas"]["AgentSkill"][];
+            /** Supportedinterfaces */
+            supportedInterfaces?: components["schemas"]["AgentInterface"][] | null;
             /**
              * Supportsauthenticatedextendedcard
              * @default true
@@ -4128,6 +4264,17 @@ export interface components {
              * @description Tools attached to the agent (code/mcp/agent/openapi).
              */
             tools?: (components["schemas"]["CodeToolConfig"] | components["schemas"]["McpToolConfig-Input"] | components["schemas"]["AgentToolConfig"] | components["schemas"]["OpenApiToolConfig"])[] | null;
+        };
+        /** AgentInterface */
+        AgentInterface: {
+            /** Protocolbinding */
+            protocolBinding: string;
+            /** Protocolversion */
+            protocolVersion?: string | null;
+            /** Tenant */
+            tenant?: string | null;
+            /** Url */
+            url: string;
         };
         /** AgentOverviewResponse */
         AgentOverviewResponse: {
@@ -4301,14 +4448,23 @@ export interface components {
         };
         /**
          * AnalyzeRequest
-         * @description Analyze raw bundle source (YAML or JSON) into an import preview.
+         * @description Analyze a bundle into an import preview.
+         *
+         *     Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
+         *     server fetches behind the SSRF guard). ``source_url`` is what a landing-page
+         *     deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
          */
         AnalyzeRequest: {
             /**
              * Source
              * @description Raw bundle source text (YAML or JSON).
              */
-            source: string;
+            source?: string | null;
+            /**
+             * Source Url
+             * @description URL to fetch raw bundle source from (YAML or JSON).
+             */
+            source_url?: string | null;
         };
         /**
          * ApprovalPolicy
@@ -4926,7 +5082,7 @@ export interface components {
         /** DiscoverPreviewRequest */
         DiscoverPreviewRequest: {
             /** Api Key */
-            api_key: string;
+            api_key?: string | null;
             /** Endpoint Url */
             endpoint_url?: string | null;
             /** Provider Key */
@@ -5852,8 +6008,21 @@ export interface components {
         };
         /** MPPConfigSchema */
         MPPConfigSchema: {
+            /** Chain Id */
+            chain_id?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /**
+             * Decimals
+             * @default 6
+             */
+            decimals: number;
             /** Payment Method Types */
             payment_method_types?: string[];
+            /** Recipient */
+            recipient?: string | null;
+            /** Rpc Url */
+            rpc_url?: string | null;
             /**
              * Session Budget Usd
              * @default 10
@@ -5911,6 +6080,10 @@ export interface components {
         };
         /** MemberResponse */
         MemberResponse: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email?: string | null;
             /**
              * Id
              * Format: uuid
@@ -6668,7 +6841,7 @@ export interface components {
              * Api Key
              * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.
              */
-            api_key: string;
+            api_key?: string | null;
             /**
              * Description
              * @description Optional human-readable description of this configuration.
@@ -6742,7 +6915,7 @@ export interface components {
         ProviderConfigUpdate: {
             /**
              * Api Key
-             * @description New API key. Replaces the previously stored secret.
+             * @description New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.
              */
             api_key?: string | null;
             /**
@@ -6956,6 +7129,49 @@ export interface components {
             /** Sync Mode */
             sync_mode?: string | null;
         };
+        /** RelationshipItem */
+        RelationshipItem: {
+            /** Direct */
+            direct: boolean;
+            /** Fanout */
+            fanout?: number | null;
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Object Name */
+            object_name: string;
+            /** Relation */
+            relation: string;
+            /** Subject */
+            subject: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "agent" | "user" | "workspace";
+            /** Subject Name */
+            subject_name: string;
+        };
+        /** RelationshipWriteRequest */
+        RelationshipWriteRequest: {
+            /** Namespace */
+            namespace: string;
+            /** Object */
+            object: string;
+            /** Relation */
+            relation: string;
+            /** Subject Id */
+            subject_id?: string | null;
+            subject_set?: components["schemas"]["SubjectSetBody"] | null;
+        };
+        /** RelationshipsResponse */
+        RelationshipsResponse: {
+            /** Count */
+            count: number;
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipItem"][];
+        };
         /** ResolveHop */
         ResolveHop: {
             /** Color */
@@ -6984,7 +7200,7 @@ export interface components {
              * Resource Kind
              * @enum {string}
              */
-            resource_kind: "skill" | "mcp" | "agent";
+            resource_kind: "skill" | "collection" | "mcp" | "agent";
             /** Subject Id */
             subject_id: string;
         };
@@ -7174,8 +7390,6 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
-            /** Has Files */
-            has_files: boolean;
             /** Id */
             id: string;
             /**
@@ -7559,6 +7773,77 @@ export interface components {
             /** Max Tokens Per Call */
             max_tokens_per_call?: number | null;
         };
+        /** ToolAccessCheckRequest */
+        ToolAccessCheckRequest: {
+            /**
+             * Arguments
+             * @description Optional exact argument set. Omit to check the whole-tool grant.
+             */
+            arguments?: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name: string;
+            /**
+             * User Id
+             * @description User UUID or User:<uuid> subject.
+             */
+            user_id: string;
+        };
+        /** ToolAccessCheckResponse */
+        ToolAccessCheckResponse: {
+            /** Allowed */
+            allowed: boolean;
+            grant: components["schemas"]["ToolAccessGrant"];
+        };
+        /** ToolAccessGrant */
+        ToolAccessGrant: {
+            /** Arguments Hash */
+            arguments_hash?: string | null;
+            /** Object Id */
+            object_id: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "tool" | "arguments";
+            /** Tool Name */
+            tool_name: string;
+            /** User Id */
+            user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** ToolAccessGrantListResponse */
+        ToolAccessGrantListResponse: {
+            /** Count */
+            count: number;
+            /** Grants */
+            grants: components["schemas"]["ToolAccessGrant"][];
+        };
+        /** ToolAccessGrantRequest */
+        ToolAccessGrantRequest: {
+            /**
+             * Arguments
+             * @description Optional exact argument set. Omit for a whole-tool grant.
+             */
+            arguments?: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name: string;
+            /**
+             * User Id
+             * @description User UUID or User:<uuid> subject.
+             */
+            user_id: string;
+        };
+        /** ToolAccessGrantResponse */
+        ToolAccessGrantResponse: {
+            grant: components["schemas"]["ToolAccessGrant"];
+            /** Ok */
+            ok: boolean;
+        };
         /**
          * ToolResponse
          * @description Unified tool response format.
@@ -7918,49 +8203,6 @@ export interface components {
             /** Webhook Type */
             webhook_type?: string | null;
         };
-        /** TupleItem */
-        TupleItem: {
-            /** Direct */
-            direct: boolean;
-            /** Fanout */
-            fanout?: number | null;
-            /** Namespace */
-            namespace: string;
-            /** Object */
-            object: string;
-            /** Object Name */
-            object_name: string;
-            /** Relation */
-            relation: string;
-            /** Subject */
-            subject: string;
-            /**
-             * Subject Kind
-             * @enum {string}
-             */
-            subject_kind: "agent" | "user" | "workspace";
-            /** Subject Name */
-            subject_name: string;
-        };
-        /** TupleWriteRequest */
-        TupleWriteRequest: {
-            /** Namespace */
-            namespace: string;
-            /** Object */
-            object: string;
-            /** Relation */
-            relation: string;
-            /** Subject Id */
-            subject_id?: string | null;
-            subject_set?: components["schemas"]["SubjectSetBody"] | null;
-        };
-        /** TuplesResponse */
-        TuplesResponse: {
-            /** Count */
-            count: number;
-            /** Tuples */
-            tuples: components["schemas"]["TupleItem"][];
-        };
         /** UpcomingItem */
         UpcomingItem: {
             /** Cron Expression */
@@ -8168,6 +8410,13 @@ export interface components {
              */
             signer_type: string;
         };
+        /** SyncResponse */
+        agentarea_api__api__v1__access_control__SyncResponse: {
+            /** Collections */
+            collections: number;
+            /** Written */
+            written: number;
+        };
         /** ModelSpecResponse */
         agentarea_api__api__v1__model_specs__ModelSpecResponse: {
             /** Context Window */
@@ -8287,13 +8536,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-        };
-        /** SyncResponse */
-        agentarea_api__api__v1__rebac__SyncResponse: {
-            /** Collections */
-            collections: number;
-            /** Written */
-            written: number;
         };
         /** SyncResponse */
         agentarea_api__api__v1__registries__SyncResponse: {
@@ -8590,6 +8832,209 @@ export interface operations {
             };
         };
     };
+    check_permission_v1_access_control_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_graph_v1_access_control_graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphResponse"];
+                };
+            };
+        };
+    };
+    list_relationships_v1_access_control_relationships_get: {
+        parameters: {
+            query?: {
+                namespace?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationshipsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_relationship_v1_access_control_relationships_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelationshipWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_relationship_v1_access_control_relationships_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelationshipWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_access_v1_access_control_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_grants_v1_access_control_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["agentarea_api__api__v1__access_control__SyncResponse"];
+                };
+            };
+        };
+    };
     list_agents_v1_agents_get: {
         parameters: {
             query?: never;
@@ -8860,6 +9305,37 @@ export interface operations {
             };
         };
     };
+    get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get: {
         parameters: {
             query?: never;
@@ -8940,6 +9416,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_agent_v1_agents__agent_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -13252,209 +13759,6 @@ export interface operations {
             };
         };
     };
-    check_permission_v1_rebac_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CheckRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_graph_v1_rebac_graph_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GraphResponse"];
-                };
-            };
-        };
-    };
-    resolve_access_v1_rebac_resolve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResolveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResolveResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_grants_v1_rebac_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__rebac__SyncResponse"];
-                };
-            };
-        };
-    };
-    list_tuples_v1_rebac_tuples_get: {
-        parameters: {
-            query?: {
-                namespace?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TuplesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_tuple_v1_rebac_tuples_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TupleWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_tuple_v1_rebac_tuples_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TupleWriteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_registries_v1_registries__get: {
         parameters: {
             query?: {
@@ -14027,8 +14331,6 @@ export interface operations {
             query?: {
                 /** @description Filter by source type */
                 source_type?: string | null;
-                /** @description Filter by package-backed skills */
-                has_files?: boolean | null;
                 /** @description Filter by network scope */
                 network_scope?: string | null;
                 /** @description Filter registry-created skills */
@@ -14358,6 +14660,37 @@ export interface operations {
             };
         };
     };
+    install_skill_v1_skills__skill_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_skill_members_v1_skills__skill_id__members_get: {
         parameters: {
             query?: never;
@@ -14511,6 +14844,123 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaskWithAgent"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_tool_access_v1_tool_access_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAccessCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolAccessCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tool_access_grants_v1_tool_access_grants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolAccessGrantListResponse"];
+                };
+            };
+        };
+    };
+    grant_tool_access_v1_tool_access_grants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAccessGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolAccessGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_tool_access_v1_tool_access_grants_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAccessGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

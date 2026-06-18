@@ -5,7 +5,7 @@ Pure-function tests — no DB, no K8s, no network.
 
 import pytest
 
-from registry_sync import _upsert_mcp_server, parse_source, VALID_TYPES
+from registry_sync import _parse_bundles, _upsert_mcp_server, parse_source, VALID_TYPES
 
 
 class TestValidTypes:
@@ -16,7 +16,37 @@ class TestValidTypes:
             "llm_providers",
             "llm_models",
             "agents",
+            "bundles",
         }
+
+
+class TestBundleParser:
+    def test_basic(self):
+        items = parse_source(
+            "bundles",
+            {
+                "bundles": [
+                    {
+                        "schema_version": "0.1.0",
+                        "name": "productivity-lite",
+                        "display_name": "Productivity Lite",
+                        "description": "Plan your day.",
+                        "metadata": {"capabilities": ["interactive"]},
+                        "agents": [{"key": "a", "name": "A", "model": "gpt-4o"}],
+                    }
+                ]
+            },
+        )
+        assert len(items) == 1
+        assert items[0]["external_id"] == "productivity-lite"
+        assert items[0]["name"] == "Productivity Lite"
+        assert items[0]["version"] == "0.1.0"
+        assert items[0]["spec"]["agents"][0]["model"] == "gpt-4o"
+        assert items[0]["tags"] == ["interactive"]
+
+    def test_skips_without_name(self):
+        items = _parse_bundles({"bundles": [{"schema_version": "0.1.0"}]})
+        assert items == []
 
 
 class TestLLMProviderParser:

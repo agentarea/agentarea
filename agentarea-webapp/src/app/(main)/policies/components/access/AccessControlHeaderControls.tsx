@@ -7,7 +7,7 @@ export default function AccessControlHeaderControls() {
   // Rule creation flow is handled by the relationship rules card; this primary
   // action scrolls the inspector to the add-relationship affordance.
   const handleClick = () => {
-    const target = document.getElementById("rebac-add-rule");
+    const target = document.getElementById("access-control-add-relationship");
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     }

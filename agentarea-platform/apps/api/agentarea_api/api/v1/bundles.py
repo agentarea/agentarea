@@ -1,7 +1,9 @@
 """Bundle import endpoints: analyze a source and install a bundle."""
 
+import logging
 from typing import Annotated, Any
 
+import httpx
 from agentarea_api.api.deps.services import (
     AgentServiceDep,
     MCPServerInstanceServiceDep,
@@ -16,10 +18,82 @@ from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
 from agentarea_common.base import RepositoryFactoryDep
+from agentarea_common.config import get_settings
+from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bundles", tags=["bundles"])
+
+# A bundle is a small YAML/JSON document; cap the fetched body to the same 5MB
+# ceiling the OpenAPI spec fetcher uses so a hostile URL can't exhaust memory.
+_MAX_BUNDLE_BYTES = 5 * 1024 * 1024
+_FETCH_TIMEOUT_SECONDS = 10.0
+
+
+async def fetch_bundle_source(
+    url: str,
+    *,
+    allow_private: bool,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> str:
+    """Fetch raw bundle text from a URL behind the shared SSRF guard.
+
+    Mirrors the outbound-fetch discipline of the OpenAPI/MCP endpoints:
+    `validate_url` vets the scheme and rejects private/internal targets before
+    any request is made, redirects are not followed (a redirect could bounce to
+    an internal IP that bypasses the up-front check), and the body is size-capped.
+
+    Raises:
+        ValueError: URL is unsafe (bad scheme / private IP) or body too large.
+        httpx.HTTPStatusError: the URL returned a non-2xx (including redirects).
+        httpx.RequestError: the request could not be completed.
+    """
+    resolved_ips = validate_url(url, allow_private=allow_private)
+
+    # SSRF defenses mirror the OpenAPI fetcher: validate_url confirms the scheme
+    # and rejects private targets, then build_pinned_target pins the request to
+    # the already-vetted IP (anti-DNS-rebinding) and keeps the destination
+    # identifiers (scheme/host/port) separate from the user-controlled path/query
+    # so the HTTP sink never receives a single string that mixes the two.
+    target = build_pinned_target(url, resolved_ips[0] if resolved_ips else None)
+
+    request_headers: dict[str, str] = {}
+    if target.original_host:
+        request_headers["Host"] = target.original_host
+
+    fetch_url = httpx.URL(
+        scheme=target.scheme,
+        host=target.host,
+        port=target.port,
+        path=target.path,
+        query=target.raw_query,
+    )
+    # Connect to the pinned IP, but validate the TLS cert against the original
+    # hostname via SNI.
+    extensions = {"sni_hostname": target.original_host} if target.original_host else None
+
+    async with httpx.AsyncClient(
+        timeout=_FETCH_TIMEOUT_SECONDS,
+        headers=request_headers,
+        follow_redirects=False,
+        verify=True,
+        transport=transport,
+    ) as client:
+        async with client.stream("GET", fetch_url, extensions=extensions) as response:
+            response.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+                total += len(chunk)
+                if total > _MAX_BUNDLE_BYTES:
+                    raise ValueError("bundle source exceeds 5MB limit")
+                chunks.append(chunk)
+
+    content = b"".join(chunks)
+    return content.decode(response.encoding or "utf-8", errors="replace")
 
 
 # ============================================================================
@@ -55,9 +129,24 @@ BundleServiceDep = Annotated[BundleService, Depends(get_bundle_service)]
 
 
 class AnalyzeRequest(BaseModel):
-    """Analyze raw bundle source (YAML or JSON) into an import preview."""
+    """Analyze a bundle into an import preview.
 
-    source: str = Field(min_length=1, description="Raw bundle source text (YAML or JSON).")
+    Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
+    server fetches behind the SSRF guard). ``source_url`` is what a landing-page
+    deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
+    """
+
+    source: str | None = Field(default=None, description="Raw bundle source text (YAML or JSON).")
+    source_url: str | None = Field(
+        default=None, description="URL to fetch raw bundle source from (YAML or JSON)."
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> "AnalyzeRequest":
+        provided = [s for s in (self.source, self.source_url) if s and s.strip()]
+        if len(provided) != 1:
+            raise ValueError("provide exactly one of 'source' or 'source_url'")
+        return self
 
 
 class InstallRequest(BaseModel):
@@ -81,8 +170,29 @@ async def analyze_bundle(
     service: BundleServiceDep,
 ) -> ImportPreview:
     """Parse and analyze a bundle source, returning a non-destructive preview."""
+    source = body.source
+    if body.source_url:
+        allow_private = get_settings().mcp.ALLOW_PRIVATE_URLS
+        try:
+            source = await fetch_bundle_source(body.source_url, allow_private=allow_private)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"bundle URL returned HTTP {exc.response.status_code}",
+            ) from exc
+        except httpx.RequestError as exc:
+            # Strip CR/LF from the user-provided URL before logging to prevent
+            # log-forging via injected newlines.
+            safe_url = body.source_url.replace("\r", "").replace("\n", "")
+            logger.error("Failed to fetch bundle from %s", safe_url, exc_info=exc)
+            raise HTTPException(
+                status_code=400, detail="failed to fetch bundle from the provided URL"
+            ) from exc
+
     try:
-        return await service.analyze_text(body.source)
+        return await service.analyze_text(source or "")
     except BundleParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

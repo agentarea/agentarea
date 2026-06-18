@@ -105,6 +105,18 @@ func (r *Runner) Run(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			if isNoGroupError(err) {
+				r.logger.Warn("sandbox runner consumer group missing; recreating",
+					slog.String("stream", r.cfg.RequestStream),
+					slog.String("group", r.cfg.Group),
+					slog.String("error", err.Error()))
+				if groupErr := r.ensureConsumerGroup(ctx); groupErr != nil {
+					r.logger.Error("sandbox runner consumer group recreate failed",
+						slog.String("error", groupErr.Error()))
+					time.Sleep(time.Second)
+				}
+				continue
+			}
 			r.logger.Error("sandbox runner read failed", slog.String("error", err.Error()))
 			time.Sleep(time.Second)
 			continue
@@ -128,6 +140,10 @@ func (r *Runner) ensureConsumerGroup(ctx context.Context) error {
 		return nil
 	}
 	return fmt.Errorf("create sandbox runner consumer group: %w", err)
+}
+
+func isNoGroupError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "NOGROUP")
 }
 
 func (r *Runner) handleMessage(ctx context.Context, message redis.XMessage) error {

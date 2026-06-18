@@ -57,7 +57,7 @@ export default function ServerList({
             variant="outline"
             className={
               isExternalServer
-                ? "border-purple-200 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                ? "border-sky-200 bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
                 : "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
             }
           >

@@ -235,6 +235,27 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             logger.error(f"Failed to get workflow status: {e}")
             raise RuntimeError(f"Failed to get workflow status: {e}") from e
 
+    async def get_workflow_effective_policy(self, execution_id: str) -> dict | None:
+        """Read the effective governance policy from a running/closed workflow.
+
+        Best-effort: returns ``None`` when the workflow is not found, has no
+        queryable state, or carries no effective policy. Mirrors the
+        not-found handling of :meth:`get_workflow_status`.
+        """
+        client = await self._get_client()
+
+        try:
+            handle = client.get_workflow_handle(execution_id)
+            state = await handle.query("get_current_state")
+            if not isinstance(state, dict):
+                return None
+            return state.get("effective_policy")
+        except Exception as e:
+            if "not found" in str(e).lower() or "no execution" in str(e).lower():
+                return None
+            logger.error(f"Failed to get workflow effective policy: {e}")
+            return None
+
     async def cancel_workflow(self, execution_id: str) -> bool:
         """Cancel Temporal workflow."""
         client = await self._get_client()

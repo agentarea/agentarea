@@ -70,7 +70,9 @@ class ModelDiscoveryService:
             return f"{base}/models"
         return f"{base}/v1/models"
 
-    def _build_headers(self, provider_key: str, api_key: str) -> dict[str, str]:
+    def _build_headers(self, provider_key: str, api_key: str | None) -> dict[str, str]:
+        if not api_key:
+            return {}
         if provider_key == "anthropic":
             return {
                 "x-api-key": api_key,
@@ -110,7 +112,7 @@ class ModelDiscoveryService:
     async def discover(
         self,
         provider_key: str,
-        api_key: str,
+        api_key: str | None,
         endpoint_url: str | None = None,
     ) -> list[DiscoveredModel]:
         url = self._build_url(provider_key, endpoint_url)

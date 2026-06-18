@@ -1,27 +1,15 @@
-"""Tests for governance policy rule and snapshot repositories."""
-
-from uuid import uuid4
+"""Tests for the governance policy rule repository."""
 
 import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
-from agentarea_governance.domain.policies import (
-    BudgetPolicy,
-    EffectivePolicy,
-)
 from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
     PolicySubjectType,
 )
-from agentarea_governance.infrastructure.orm import (
-    PolicyRuleORM,
-    TaskPolicySnapshotORM,
-)
-from agentarea_governance.infrastructure.repository import (
-    PolicyRuleRepository,
-    TaskPolicySnapshotRepository,
-)
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -32,7 +20,7 @@ async def session_factory():
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
-                tables=[PolicyRuleORM.__table__, TaskPolicySnapshotORM.__table__],
+                tables=[PolicyRuleORM.__table__],
             )
         )
     try:
@@ -104,6 +92,35 @@ async def test_get_update_set_enabled_delete(session_factory):
         assert await repo.delete(created.id) is False
 
 
+async def test_list_skips_rows_with_unknown_effect(session_factory):
+    """A row whose effect isn't in the current enum (e.g. stale/externally
+    seeded 'warn') must not 500 the list — it's skipped, valid rows still load."""
+    async with session_factory() as session:
+        repo = PolicyRuleRepository(session, _context("workspace-a"))
+        await repo.create(
+            _rule("workspace-a", "spend", PolicyEffect.CAP, amount_usd="10.00")
+        )
+        # Insert a row the enum can't represent, straight through the ORM.
+        session.add(
+            PolicyRuleORM(
+                workspace_id="workspace-a",
+                created_by="seed",
+                subject_type="agent",
+                subject_id="agent-1",
+                target="delegation:*",
+                effect="warn",
+                params={"limit": 130},
+                enabled=True,
+                priority=0,
+            )
+        )
+        await session.flush()
+
+        rules = await repo.list_rules()
+        assert len(rules) == 1
+        assert rules[0].effect == PolicyEffect.CAP
+
+
 async def test_get_other_workspace_returns_none(session_factory):
     async with session_factory() as session:
         repo_a = PolicyRuleRepository(session, _context("workspace-a"))
@@ -113,23 +130,3 @@ async def test_get_other_workspace_returns_none(session_factory):
         assert await repo_b.get(created.id) is None
         assert await repo_b.update(created.id, priority=9) is None
         assert await repo_b.delete(created.id) is False
-
-
-async def test_task_policy_snapshot_is_immutable_per_task_kind(session_factory):
-    task_id = uuid4()
-    effective = EffectivePolicy(
-        budget=BudgetPolicy(run_budget_usd="1.00"),
-        source_policy_ids=["policy-1"],
-    )
-
-    async with session_factory() as session:
-        repo = TaskPolicySnapshotRepository(session, _context("workspace-a"))
-        await repo.create_snapshot(task_id=task_id, effective_policy=effective)
-
-        loaded = await repo.get_snapshot(task_id=task_id)
-        assert loaded is not None
-        assert loaded.source_policy_ids == ["policy-1"]
-        assert str(loaded.budget.run_budget_usd) == "1.00"
-
-        with pytest.raises(ValueError, match="already exists"):
-            await repo.create_snapshot(task_id=task_id, effective_policy=effective)

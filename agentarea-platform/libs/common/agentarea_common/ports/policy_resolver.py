@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class PolicyResolverPort(Protocol):
-    """Resolve and persist governance policy for a single task."""
+    """Resolve governance policy for a single task."""
 
     async def resolve(
         self,
@@ -32,13 +32,4 @@ class PolicyResolverPort(Protocol):
         Implementations must apply lower-scope-only-tightens validation and
         return an immutable EffectivePolicy snapshot.
         """
-        raise NotImplementedError
-
-    async def snapshot(
-        self,
-        *,
-        task_id: UUID,
-        effective_policy: EffectivePolicy,
-    ) -> None:
-        """Persist the immutable policy snapshot before workflow dispatch."""
         raise NotImplementedError

@@ -7,11 +7,10 @@ HTTP surface the frontend and external clients rely on:
   GET /v1/agents/{agent_id}/tasks/{task_id}/artifacts
     -> list of {path, size, content_type, last_modified, download_url}
 
-  (download is via presigned URL on the item; no bytes proxy through the
-  API so large blobs don't eat worker memory.)
+  (download is via an authenticated API URL on the item.)
 
 Tests drive a real agent, it writes files via ``agentarea/files``, then
-we hit the list endpoint and follow the presigned URL to verify the
+we hit the list endpoint and follow the download URL to verify the
 bytes match. Cross-workspace access returns an empty list (never leaks
 another workspace's artifacts) — that's the load-bearing invariant.
 """
@@ -22,6 +21,8 @@ import httpx
 import pytest
 
 from tests.e2e.api.conftest import create_agent, wait_for_workflow
+
+ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
 
 
 def _run_file_task(
@@ -39,7 +40,10 @@ def _run_file_task(
     )
     task_id = client.post(
         f"/v1/agents/{agent_id}/tasks/sync",
-        json={"description": description},
+        json={
+            "description": description,
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
     wait_for_workflow(client, agent_id, task_id, timeout=180.0)
@@ -76,14 +80,13 @@ def test_list_task_artifacts_endpoint(
     item = matched[0]
     assert item["size"] > 0
     assert item["content_type"]
-    assert item["download_url"].startswith("http")
+    assert item["download_url"].startswith("/v1/")
 
-    # Presigned URL must serve the actual bytes.
-    with httpx.Client(timeout=10.0) as http:
-        bytes_resp = http.get(item["download_url"])
+    # Download URL must serve the actual bytes with the caller's auth.
+    bytes_resp = alice_client.get(item["download_url"])
     bytes_resp.raise_for_status()
     assert body in bytes_resp.text, (
-        f"presigned URL served wrong bytes; expected {body!r} in {bytes_resp.text!r}"
+        f"download URL served wrong bytes; expected {body!r} in {bytes_resp.text!r}"
     )
 
 
@@ -96,7 +99,7 @@ def test_task_artifacts_are_workspace_scoped(
     ids = _run_file_task(
         alice_client,
         llm_model,
-        description="Create file alice-only.txt with exact content: classified.",
+        description="Create file alice-only.txt with exact content: alice-only-body.",
         agent_name="alice-art-agent",
     )
     agent_id, task_id = ids.split("::")

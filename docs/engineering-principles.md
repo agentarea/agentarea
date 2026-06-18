@@ -36,7 +36,7 @@ For list endpoints:
 - Include a total count that matches the active filters.
 - Keep filters URL-addressable in the UI when they affect page content.
 - Reset `page` when filters or search change.
-- Prefer explicit query parameters such as `status`, `source_type`, `has_files`,
+- Prefer explicit query parameters such as `status`, `source_type`,
   or `network_scope` over overloaded free-form filters.
 - Preserve backward compatibility for existing consumers when feasible, but make
   new paginated use cases opt into pagination metadata clearly.

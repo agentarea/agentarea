@@ -329,11 +329,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
     def _domain_to_orm(self, task) -> TaskORM:
         """Convert domain model to ORM model.
 
-        Handles both Task and SimpleTask domain models.
+        Handles both Task and AgentTask domain models.
         """
         # Handle different domain model types
         if hasattr(task, "task_parameters"):
-            # SimpleTask model
+            # AgentTask model
             parameters = task.task_parameters
             error = task.error_message
         else:

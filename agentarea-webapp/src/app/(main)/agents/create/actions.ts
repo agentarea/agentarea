@@ -80,17 +80,17 @@ export interface AddAgentFormState {
         load_mode?: "explicit" | "searchable";
       }> | null;
     } | null;
-    events_config?: {
-      events?: Array<{
-        event_type: string;
-        config?: Record<string, unknown> | null;
-        enabled?: boolean;
+  events_config?: {
+    events?: Array<{
+      event_type: string;
+      config?: Record<string, unknown> | null;
+      enabled?: boolean;
       }> | null;
-    } | null;
-    planning?: boolean;
-    a2ui_enabled?: boolean;
-    skill_ids?: string[] | null;
-    id?: string;
+  } | null;
+  planning?: boolean;
+  a2ui_enabled?: boolean;
+  skill_ids?: string[] | null;
+  id?: string;
   };
   // Field-specific errors
   name?: string[];
@@ -124,7 +124,64 @@ const AgentSchema = z.object({
     .optional()
     .nullable(),
   planning: z.boolean().optional(),
+  a2ui_enabled: z.boolean().optional(),
 });
+
+function buildToolsPayload(
+  toolsConfig: z.infer<typeof AgentSchema>["tools_config"]
+) {
+  const tools: any[] = [];
+
+  for (const mcpConfig of toolsConfig?.mcp_server_configs || []) {
+    const allowedTools = (mcpConfig.allowed_tools || []).map((tool) => ({
+      tool_name: tool.tool_name,
+      requires_user_confirmation: tool.requires_user_confirmation || false,
+    }));
+
+    tools.push({
+      type: "mcp",
+      name: mcpConfig.mcp_server_id,
+      settings: {
+        allowed_tools: allowedTools.length > 0 ? allowedTools : null,
+      },
+    });
+  }
+
+  for (const openapiConfig of toolsConfig?.openapi_configs || []) {
+    tools.push({
+      type: "openapi",
+      name: openapiConfig.openapi_connection_id,
+      settings: {
+        openapi_connection_id: openapiConfig.openapi_connection_id,
+        allowed_tools:
+          openapiConfig.allowed_tools && openapiConfig.allowed_tools.length > 0
+            ? openapiConfig.allowed_tools
+            : null,
+        load_mode: openapiConfig.load_mode,
+      },
+    });
+  }
+
+  for (const builtinTool of toolsConfig?.builtin_tools || []) {
+    const disabledMethods = builtinTool.disabled_methods
+      ? Object.entries(builtinTool.disabled_methods)
+          .filter(([, enabled]) => enabled === false)
+          .map(([method]) => method)
+      : null;
+
+    tools.push({
+      type: "code",
+      name: builtinTool.tool_name,
+      settings: {
+        disabled_methods: disabledMethods?.length ? disabledMethods : null,
+        requires_user_confirmation:
+          builtinTool.requires_user_confirmation ?? null,
+      },
+    });
+  }
+
+  return tools.length > 0 ? tools : null;
+}
 
 export async function addAgent(
   prevState: AddAgentFormState,
@@ -375,6 +432,9 @@ export async function addAgent(
   const instruction = formData.get("instruction") as string;
   const model_id = formData.get("model_id") as string;
 
+  const planningValue = formData.get("planning");
+  const a2uiValue = formData.get("a2ui_enabled");
+
   const rawFormData = {
     name,
     description,
@@ -386,7 +446,8 @@ export async function addAgent(
       openapi_configs: openapiConfigsArray,
     },
     events_config: { events: eventConfigsArray },
-    planning: formData.get("planning") === "on",
+    planning: planningValue === "on" || planningValue === "true",
+    a2ui_enabled: a2uiValue === "on" || a2uiValue === "true",
     skill_ids: skillIds,
   };
 
@@ -416,13 +477,14 @@ export async function addAgent(
       description: validatedFields.data.description || "",
       instruction: validatedFields.data.instruction,
       model_id: validatedFields.data.model_id,
-      tools_config: validatedFields.data.tools_config || null,
+      tools: buildToolsPayload(validatedFields.data.tools_config),
       events_config: validatedFields.data.events_config
         ? {
             events: validatedFields.data.events_config.events || null,
           }
         : null,
       planning: validatedFields.data.planning || null,
+      a2ui_enabled: validatedFields.data.a2ui_enabled || null,
       skill_ids: skillIds.length > 0 ? skillIds : null,
     } as any);
 

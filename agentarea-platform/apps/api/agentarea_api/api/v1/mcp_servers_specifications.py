@@ -13,7 +13,7 @@ from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ._rebac_grants import grant_user_relation
+from ._access_control_grants import grant_user_relation
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 

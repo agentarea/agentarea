@@ -213,16 +213,17 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	}
 
 	// Volume mounts for writable directories (since we use read-only root filesystem)
-	volumeMounts := []corev1.VolumeMount{
-		{
+	volumeMounts := make([]corev1.VolumeMount, 0, 2+len(spec.WritablePaths))
+	volumeMounts = append(volumeMounts,
+		corev1.VolumeMount{
 			Name:      "tmp",
 			MountPath: "/tmp",
 		},
-		{
+		corev1.VolumeMount{
 			Name:      "var-run",
 			MountPath: "/var/run",
 		},
-	}
+	)
 
 	// Add user-specified writable paths
 	for i, path := range spec.WritablePaths {
@@ -315,7 +316,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		"agentarea.io/instance-id":  spec.InstanceID,
 		"agentarea.io/workspace-id": spec.WorkspaceID,
 	})
-	deployment.Spec.Template.ObjectMeta.Annotations = annotations
+	deployment.Spec.Template.Annotations = annotations
 
 	if err := k.client.Create(ctx, deployment); err != nil {
 		return fmt.Errorf("failed to create deployment: %w", err)
@@ -327,20 +328,21 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 // createVolumes creates the volume specifications for writable directories
 func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
 	// Default volumes (always needed for security)
-	volumes := []corev1.Volume{
-		{
+	volumes := make([]corev1.Volume, 0, 2+len(spec.WritablePaths))
+	volumes = append(volumes,
+		corev1.Volume{
 			Name: "tmp",
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
-		{
+		corev1.Volume{
 			Name: "var-run",
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
-	}
+	)
 
 	// Add user-specified writable paths as EmptyDir volumes
 	for i := range spec.WritablePaths {
@@ -510,7 +512,7 @@ func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName st
 									Group: (*gatewayv1.Group)(strPtr("")),
 									Kind:  (*gatewayv1.Kind)(strPtr("Service")),
 									Name:  gatewayv1.ObjectName(fmt.Sprintf("mcp-%s", instanceName)),
-									Port:  (*gatewayv1.PortNumber)(intPtr(80)),
+									Port:  intPtr(80),
 								},
 							},
 						},
@@ -767,10 +769,10 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 	}
 
 	// Update annotations to trigger rolling update
-	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
-		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
 	}
-	deployment.Spec.Template.ObjectMeta.Annotations["agentarea.io/updated-at"] = time.Now().Format(time.RFC3339)
+	deployment.Spec.Template.Annotations["agentarea.io/updated-at"] = time.Now().Format(time.RFC3339)
 
 	if err := k.client.Update(ctx, deployment); err != nil {
 		return fmt.Errorf("failed to update deployment: %w", err)
@@ -797,7 +799,7 @@ func (k *KubernetesBackend) findInstanceNameByID(ctx context.Context, instanceID
 		}
 
 		// Check if instance ID matches from annotations
-		if annotations := deployment.Spec.Template.ObjectMeta.Annotations; annotations != nil {
+		if annotations := deployment.Spec.Template.Annotations; annotations != nil {
 			if mcpInstanceID, exists := annotations["agentarea.io/instance-id"]; exists {
 				if mcpInstanceID == instanceID {
 					return strings.TrimPrefix(deployment.Name, "mcp-"), nil

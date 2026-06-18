@@ -78,9 +78,9 @@ class AgentDelegationTool(BaseTool):
             raise ToolExecutionError(self.name, "message is required")
 
         try:
-            from agentarea_tasks.domain.models import SimpleTask
+            from agentarea_tasks.domain.models import AgentTask
 
-            task = SimpleTask(
+            task = AgentTask(
                 id=uuid4(),
                 title=f"Delegated: {message_text[:80]}",
                 description=f"Delegated from another agent to '{self._agent_name}'",

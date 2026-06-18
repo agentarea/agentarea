@@ -63,6 +63,11 @@ class ExecutionServiceInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:
+        """Get the effective governance policy from the workflow."""
+        pass
+
+    @abstractmethod
     async def cancel_execution(self, execution_id: str) -> bool:
         """Cancel execution."""
         pass

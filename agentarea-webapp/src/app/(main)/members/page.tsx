@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function MembersPage() {
   const t = await getTranslations("MembersPage");
-  const { workspaceId, userId } = await getAuthContext();
+  const { workspaceId, userId, email, name, username } = await getAuthContext();
 
   let members: WorkspaceMember[] = [];
   let invitations: WorkspaceInvitation[] = [];
@@ -37,11 +37,16 @@ export default async function MembersPage() {
         description: t("description"),
       }}
     >
-      <MembersClient
-        members={members}
-        invitations={invitations}
-        currentUserId={userId}
-      />
+      <div className="main-content">
+        <MembersClient
+          members={members}
+          invitations={invitations}
+          currentUserId={userId}
+          currentUserEmail={email}
+          currentUserName={name}
+          currentUsername={username}
+        />
+      </div>
     </ContentBlock>
   );
 }

@@ -13,6 +13,7 @@ from agentarea_common.auth.jwt_handler import JWTTokenHandler
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.exceptions.workspace import InvalidJWTToken, MissingWorkspaceContext
+from agentarea_common.testing.flows import MainFlow
 from fastapi import HTTPException, Request
 from sqlalchemy.exc import NoResultFound
 
@@ -29,6 +30,7 @@ class MockErrorModel(BaseModel, WorkspaceScopedMixin):
         self.name = kwargs.get("name", "test")
 
 
+@pytest.mark.flow(MainFlow.AUTH_WORKSPACE_SCOPING)
 class TestWorkspaceErrorHandling:
     """Test suite for workspace error handling."""
 

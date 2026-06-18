@@ -4,10 +4,18 @@ from types import SimpleNamespace
 
 import pytest
 from agentarea_api.api.v1.mcp_proxy import (
+    _authorize_mcp_tool_calls,
     _filter_inbound_headers,
     _filter_outbound_headers,
+    _iter_jsonrpc_tool_calls,
     _resolve_upstream_url,
 )
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    ToolAuthorizationDecision,
+)
+from agentarea_common.testing.flows import MainFlow
+from fastapi import HTTPException
 
 # ----- _resolve_upstream_url -----
 
@@ -21,7 +29,10 @@ async def test_resolve_upstream_url_url_type_from_server_remote_url():
         json_spec={},
     )
 
-    assert await _resolve_upstream_url(instance, server_spec) == "https://mcp.clickup.com/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "https://mcp.clickup.com/mcp",
+        "url",
+    )
 
 
 @pytest.mark.asyncio
@@ -32,7 +43,10 @@ async def test_resolve_upstream_url_legacy_endpoint_url_on_instance():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "https://legacy.example/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "https://legacy.example/mcp",
+        "url",
+    )
 
 
 @pytest.mark.asyncio
@@ -44,7 +58,10 @@ async def test_resolve_upstream_url_docker_appends_mcp_path():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "http://mcp-abc:8000/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "http://mcp-abc:8000/mcp",
+        "docker",
+    )
 
 
 @pytest.mark.asyncio
@@ -56,7 +73,10 @@ async def test_resolve_upstream_url_docker_strips_trailing_slash():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == "http://mcp-abc:8000/mcp"
+    assert await _resolve_upstream_url(instance, server_spec) == (
+        "http://mcp-abc:8000/mcp",
+        "docker",
+    )
 
 
 @pytest.mark.asyncio
@@ -67,12 +87,13 @@ async def test_resolve_upstream_url_url_type_returns_empty_without_remote_url():
     )
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
-    assert await _resolve_upstream_url(instance, server_spec) == ""
+    assert await _resolve_upstream_url(instance, server_spec) == ("", "url")
 
 
 # ----- header filters -----
 
 
+@pytest.mark.flow(MainFlow.MCP_PROXY)
 def test_filter_inbound_drops_authorization_and_host():
     headers = {
         "Authorization": "Bearer user-token",
@@ -121,3 +142,76 @@ def test_filter_outbound_drops_content_length_and_transfer_encoding():
     assert "Transfer-Encoding" not in out
     assert out["Content-Type"] == "text/event-stream"
     assert out["Mcp-Session-Id"] == "abc"
+
+
+def test_iter_jsonrpc_tool_calls_extracts_single_call():
+    calls = _iter_jsonrpc_tool_calls(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "github.create_issue", "arguments": {"repo": "acme/app"}},
+        }
+    )
+
+    assert calls == [("github.create_issue", {"repo": "acme/app"})]
+
+
+def test_iter_jsonrpc_tool_calls_extracts_batch_calls_only():
+    calls = _iter_jsonrpc_tool_calls(
+        [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "slack.post_message", "arguments": {"channel": "eng"}},
+            },
+        ]
+    )
+
+    assert calls == [("slack.post_message", {"channel": "eng"})]
+
+
+def test_iter_jsonrpc_tool_calls_ignores_non_calls():
+    assert _iter_jsonrpc_tool_calls({"jsonrpc": "2.0", "method": "tools/list"}) == []
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_uses_single_pdp(monkeypatch):
+    seen = []
+
+    async def fake_authorize(request):
+        seen.append(request)
+        return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "ok")
+
+    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+
+    await _authorize_mcp_tool_calls(
+        b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}',
+        SimpleNamespace(user_id="u1", workspace_id="ws1"),
+    )
+
+    assert len(seen) == 1
+    assert seen[0].tool_name == "github.create_issue"
+    assert seen[0].tool_args == {"repo": "acme/app"}
+    assert seen[0].user_id == "u1"
+    assert seen[0].workspace_id == "ws1"
+    assert seen[0].policy_required is False
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_denies_pdp_denial(monkeypatch):
+    async def fake_authorize(_request):
+        return ToolAuthorizationDecision(ToolAuthorizationAction.DENY, "missing grant")
+
+    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{}}}',
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Tool call denied: github.create_issue: missing grant"

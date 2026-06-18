@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Bot,
   Check,
@@ -10,18 +11,22 @@ import {
   Clock,
   ExternalLink,
   Inbox as InboxIcon,
+  ScrollText,
+  ShieldCheck,
   Wallet,
   X,
   XCircle,
   Zap,
 } from "lucide-react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { parseAsStringLiteral, useQueryState } from "nuqs";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { resolveEscalationAction } from "@/lib/server-actions";
 import type { TaskWithAgent } from "@/lib/api";
+import { resolveEscalationAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
-type FilterValue = "all" | "pending" | "completed" | "failed";
+const FILTER_KEYS = ["all", "pending", "completed", "failed"] as const;
+type FilterValue = (typeof FILTER_KEYS)[number];
 
 const FILTERS: { key: FilterValue; label: string }[] = [
   { key: "all", label: "All" },
@@ -48,22 +53,6 @@ function normalizeStatus(status: string): "pending" | "completed" | "failed" {
   return "failed";
 }
 
-// Deterministic agent chip color so the same agent reads the same across rows.
-const AGENT_COLORS = [
-  "#d99a00",
-  "#5e6ad2",
-  "#27a08c",
-  "#d4519e",
-  "#2252b3",
-  "#c2683c",
-  "#7c7ae6",
-];
-function agentColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
-}
-
 function formatRelative(dateStr?: string | null): string {
   if (!dateStr) return "";
   try {
@@ -83,23 +72,21 @@ function StatusIcon({ status, size = 18 }: { status: string; size?: number }) {
     case "pending":
       return <Clock size={size} className={cn(cls, "text-amber-500")} />;
     case "completed":
-      return <CheckCircle2 size={size} className={cn(cls, "text-emerald-500")} />;
+      return (
+        <CheckCircle2 size={size} className={cn(cls, "text-emerald-500")} />
+      );
     default:
       return <XCircle size={size} className={cn(cls, "text-red-500")} />;
   }
 }
 
-function AgentChip({ name }: { name: string }) {
-  const color = agentColor(name);
+function AgentChip({ id, name }: { id?: string | null; name: string }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <span
-        className="grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[4px] text-[8px] font-bold text-white"
-        style={{ background: color }}
-      >
-        {name.charAt(0).toUpperCase()}
+      <AgentAvatar agent={{ id: id || name, name }} size="xs" />
+      <span className="truncate font-mono text-[11px] text-foreground/80">
+        {name}
       </span>
-      <span className="truncate font-mono text-[11px] text-foreground/80">{name}</span>
     </span>
   );
 }
@@ -107,16 +94,20 @@ function AgentChip({ name }: { name: string }) {
 interface InboxClientProps {
   items: TaskWithAgent[];
   error: string | null;
-  initialFilter: FilterValue;
 }
 
-export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
+export function InboxClient({ items, error }: InboxClientProps) {
   const router = useRouter();
-  const [filter, setFilter] = useState<FilterValue>(initialFilter);
+  const [filter, setFilter] = useQueryState(
+    "filter",
+    parseAsStringLiteral(FILTER_KEYS).withDefault("all")
+  );
   const [selId, setSelId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Optimistic resolutions keyed by task id so the queue updates instantly.
-  const [resolved, setResolved] = useState<Record<string, "completed" | "failed">>({});
+  const [resolved, setResolved] = useState<
+    Record<string, "completed" | "failed">
+  >({});
   const [, startTransition] = useTransition();
 
   // Fresh server data invalidates any optimistic state we were holding.
@@ -125,7 +116,8 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
     setChecked(new Set());
   }, [items]);
 
-  const effectiveStatus = (t: TaskWithAgent): string => resolved[String(t.id)] ?? t.status;
+  const effectiveStatus = (t: TaskWithAgent): string =>
+    resolved[String(t.id)] ?? t.status;
 
   const counts = useMemo(() => {
     const c = { all: items.length, pending: 0, completed: 0, failed: 0 };
@@ -140,15 +132,6 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, filter, resolved]);
-
-  const pendingSpend = useMemo(
-    () =>
-      items
-        .filter((t) => normalizeStatus(effectiveStatus(t)) === "pending")
-        .reduce((s, t) => s + (Number((t as any).total_cost) || 0), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, resolved]
-  );
 
   const selected = visible.find((t) => String(t.id) === selId) ?? null;
 
@@ -179,7 +162,10 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
       const next = visible.find((t) => String(t.id) !== id);
       setSelId(next ? String(next.id) : null);
     }
-    setResolved((prev) => ({ ...prev, [id]: approved ? "completed" : "failed" }));
+    setResolved((prev) => ({
+      ...prev,
+      [id]: approved ? "completed" : "failed",
+    }));
     setChecked((prev) => {
       const n = new Set(prev);
       n.delete(id);
@@ -207,11 +193,14 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
   }
 
   async function resolveMany(tasks: TaskWithAgent[], approved: boolean) {
-    const targets = tasks.filter((t) => isPending(effectiveStatus(t)) && t.escalation_id);
+    const targets = tasks.filter(
+      (t) => isPending(effectiveStatus(t)) && t.escalation_id
+    );
     if (!targets.length) return;
     setResolved((prev) => {
       const n = { ...prev };
-      for (const t of targets) n[String(t.id)] = approved ? "completed" : "failed";
+      for (const t of targets)
+        n[String(t.id)] = approved ? "completed" : "failed";
       return n;
     });
     setChecked(new Set());
@@ -219,7 +208,13 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
     try {
       await Promise.all(
         targets.map((t) =>
-          resolveEscalationAction(t.agent_id, String(t.id), t.escalation_id as string, approved, "")
+          resolveEscalationAction(
+            t.agent_id,
+            String(t.id),
+            t.escalation_id as string,
+            approved,
+            ""
+          )
         )
       );
       startTransition(() => router.refresh());
@@ -229,7 +224,9 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
     }
   }
 
-  const pendingTasks = items.filter((t) => isPending(effectiveStatus(t)) && t.escalation_id);
+  const pendingTasks = items.filter(
+    (t) => isPending(effectiveStatus(t)) && t.escalation_id
+  );
   const anyChecked = checked.size > 0;
 
   const toolbar = (
@@ -250,7 +247,9 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
             <span
               className={cn(
                 "text-[11px] font-semibold",
-                filter === f.key ? "text-muted-foreground" : "text-muted-foreground/70"
+                filter === f.key
+                  ? "text-muted-foreground"
+                  : "text-muted-foreground/70"
               )}
             >
               {counts[f.key]}
@@ -259,19 +258,21 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
         ))}
       </div>
       <div className="flex-1" />
-      <div className="text-[12.5px] text-muted-foreground">
-        {filter === "pending" ? (
-          <>
-            <b className="font-semibold text-foreground">{counts.pending}</b> awaiting approval ·{" "}
-            <b className="font-semibold text-foreground">${pendingSpend.toFixed(4)}</b> pending spend
-          </>
-        ) : (
-          <>
-            <b className="font-semibold text-foreground">{visible.length}</b>{" "}
-            {filter === "all" ? "tasks" : STATUS_LABEL[filter].toLowerCase()}
-          </>
-        )}
-      </div>
+      {filter !== "pending" || counts.pending > 0 ? (
+        <div className="text-[12.5px] text-muted-foreground">
+          {filter === "pending" ? (
+            <>
+              <b className="font-semibold text-foreground">{counts.pending}</b>{" "}
+              awaiting approval
+            </>
+          ) : (
+            <>
+              <b className="font-semibold text-foreground">{visible.length}</b>{" "}
+              {filter === "all" ? "tasks" : STATUS_LABEL[filter].toLowerCase()}
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -292,11 +293,23 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
       {error ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-red-500">{error}</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-red-500">
+          {error}
+        </div>
       ) : (
-        <div className={cn("grid min-h-0 flex-1 grid-cols-1 overflow-hidden", selected && "lg:grid-cols-[1fr_432px]")}>
+        <div
+          className={cn(
+            "grid min-h-0 flex-1 grid-cols-1 overflow-hidden",
+            selected && "lg:grid-cols-[1fr_432px]"
+          )}
+        >
           {/* ---- list pane ---- */}
-          <div className={cn("flex min-w-0 flex-col overflow-hidden", selected && "border-r border-border")}>
+          <div
+            className={cn(
+              "flex min-w-0 flex-col overflow-hidden",
+              selected && "border-r border-border"
+            )}
+          >
             {anyChecked && (
               <div className="flex shrink-0 items-center gap-3 border-b border-border bg-primary/10 px-4 py-2">
                 <span className="text-[12.5px] font-semibold text-primary">
@@ -336,9 +349,7 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {visible.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Nothing here.
-                </div>
+                <InboxEmptyState filter={filter} counts={counts} />
               ) : (
                 visible.map((t) => {
                   const id = String(t.id);
@@ -370,7 +381,9 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
                             isChecked
                               ? "border-primary bg-primary text-white opacity-100"
                               : "border-muted-foreground/50 text-transparent",
-                            !isChecked && !anyChecked && "opacity-0 group-hover:opacity-100"
+                            !isChecked &&
+                              !anyChecked &&
+                              "opacity-0 group-hover:opacity-100"
                           )}
                           aria-label="Select task"
                         >
@@ -385,9 +398,14 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
                           {t.description || "Untitled task"}
                         </p>
                         <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
-                          <AgentChip name={(t as any).agent_name || "Unknown agent"} />
+                          <AgentChip
+                            id={t.agent_id}
+                            name={(t as any).agent_name || "Unknown agent"}
+                          />
                           <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50" />
-                          <span className="whitespace-nowrap">{formatRelative(t.created_at)}</span>
+                          <span className="whitespace-nowrap">
+                            {formatRelative(t.created_at)}
+                          </span>
                         </div>
                       </div>
 
@@ -439,6 +457,103 @@ export function InboxClient({ items, error, initialFilter }: InboxClientProps) {
   );
 }
 
+function InboxEmptyState({
+  filter,
+  counts,
+}: {
+  filter: FilterValue;
+  counts: Record<FilterValue, number>;
+}) {
+  const copy: Record<
+    FilterValue,
+    { title: string; description: string; Icon: typeof InboxIcon }
+  > = {
+    all: {
+      title: "No inbox decisions yet",
+      description:
+        "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review.",
+      Icon: InboxIcon,
+    },
+    pending: {
+      title: "Approval queue is clear",
+      description:
+        "No agent is waiting on a human decision right now. New escalations will land here before they can continue.",
+      Icon: CheckCircle2,
+    },
+    completed: {
+      title: "No completed approvals",
+      description:
+        "Approved actions will appear here after operators release them, so you can audit what moved forward.",
+      Icon: CheckCircle2,
+    },
+    failed: {
+      title: "No rejected or failed approvals",
+      description:
+        "Rejected actions and failed escalations will appear here when a governed path is stopped.",
+      Icon: XCircle,
+    },
+  };
+  const { title, description, Icon } = copy[filter];
+
+  return (
+    <div className="flex h-full items-center justify-center px-6 py-10">
+      <div className="flex max-w-[560px] flex-col items-center text-center">
+        <InboxEmptyIllustration Icon={Icon} />
+        <h2 className="mt-4 text-[15px] font-semibold text-foreground">
+          {title}
+        </h2>
+        <p className="mt-1.5 max-w-[460px] text-[13px] leading-6 text-muted-foreground">
+          {description}
+        </p>
+
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          {filter !== "all" && counts.all > 0 && (
+            <Link
+              href="/inbox"
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
+            >
+              View all
+            </Link>
+          )}
+          <Link
+            href="/tasks"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
+          >
+            Open task history
+          </Link>
+          <Link
+            href="/triggers"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
+          >
+            Check triggers
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InboxEmptyIllustration({ Icon }: { Icon: typeof InboxIcon }) {
+  return (
+    <div className="relative flex h-[72px] w-[260px] items-center justify-center text-muted-foreground">
+      <div className="absolute left-[58px] right-[58px] top-1/2 h-px bg-border" />
+      <div className="relative z-10 grid h-11 w-11 place-items-center rounded-lg border border-border bg-background shadow-sm">
+        <Bot size={20} strokeWidth={1.8} />
+      </div>
+      <div className="relative z-10 mx-5 grid h-12 w-12 place-items-center rounded-lg border border-primary/25 bg-primary/5 text-primary shadow-sm">
+        <ShieldCheck size={22} strokeWidth={1.8} />
+      </div>
+      <div className="relative z-10 grid h-11 w-11 place-items-center rounded-lg border border-border bg-background shadow-sm">
+        {Icon === InboxIcon ? (
+          <ScrollText size={20} strokeWidth={1.8} />
+        ) : (
+          <Icon size={20} strokeWidth={1.8} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DetailPane({
   task,
   onResolve,
@@ -449,7 +564,11 @@ function DetailPane({
   if (!task) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-10 text-center text-sm text-muted-foreground">
-        <InboxIcon size={40} strokeWidth={1.4} className="mb-3 text-muted-foreground/60" />
+        <InboxIcon
+          size={40}
+          strokeWidth={1.4}
+          className="mb-3 text-muted-foreground/60"
+        />
         <div>
           Select a task to review its output
           <br />
@@ -463,7 +582,6 @@ function DetailPane({
   const pend = isPending(status);
   const norm = normalizeStatus(status);
   const agentName = (task as any).agent_name || "Unknown agent";
-  const color = agentColor(agentName);
   const result = task.result;
   const resultText =
     typeof result === "string"
@@ -507,25 +625,27 @@ function DetailPane({
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Bot size={15} /> Agent
           </div>
-          <div className="text-right font-medium">
-            <span
-              className="mr-1.5 inline-grid h-4 w-4 place-items-center rounded-[4px] align-[-3px] text-[8px] font-bold text-white"
-              style={{ background: color }}
-            >
-              {agentName.charAt(0).toUpperCase()}
-            </span>
+          <div className="inline-flex items-center justify-end gap-1.5 text-right font-medium">
+            <AgentAvatar
+              agent={{ id: task.agent_id || agentName, name: agentName }}
+              size="xs"
+            />
             {agentName}
           </div>
 
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Clock size={15} /> Requested
           </div>
-          <div className="text-right font-medium">{formatRelative(task.created_at)}</div>
+          <div className="text-right font-medium">
+            {formatRelative(task.created_at)}
+          </div>
 
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Wallet size={15} /> Cost
           </div>
-          <div className="text-right font-mono">{fmtCost((task as any).total_cost)}</div>
+          <div className="text-right font-mono">
+            {fmtCost((task as any).total_cost)}
+          </div>
         </div>
 
         {pend && (
@@ -548,7 +668,9 @@ function DetailPane({
           <div className="whitespace-pre-wrap px-3 py-3 font-mono text-[11.5px] leading-relaxed text-foreground/80">
             {resultText ?? (
               <span className="text-muted-foreground/60 italic">
-                {pend ? "Output will be available after the action runs." : "No output."}
+                {pend
+                  ? "Output will be available after the action runs."
+                  : "No output."}
               </span>
             )}
           </div>
@@ -573,8 +695,8 @@ function DetailPane({
           </div>
         ) : (
           <div className="flex items-center gap-2 py-1.5 text-[12.5px] text-muted-foreground">
-            <StatusIcon status={status} size={16} /> This task is {STATUS_LABEL[norm].toLowerCase()} —
-            no action needed.
+            <StatusIcon status={status} size={16} /> This task is{" "}
+            {STATUS_LABEL[norm].toLowerCase()} — no action needed.
           </div>
         )}
       </div>

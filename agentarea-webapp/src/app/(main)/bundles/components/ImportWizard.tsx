@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, PackagePlus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -166,7 +166,7 @@ async function callProxy<T>(
   }
 }
 
-export default function ImportWizard() {
+export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {}) {
   const [step, setStep] = useState<WizardStep>("source");
 
   // Source step
@@ -194,27 +194,43 @@ export default function ImportWizard() {
     setSetupValues(initial);
   }
 
-  async function handleAnalyze() {
+  const runAnalyze = useCallback(
+    async (body: { source: string } | { source_url: string }) => {
+      setAnalyzeLoading(true);
+      setAnalyzeError(null);
+
+      const { data, error } = await callProxy<ImportPreview>(
+        "v1/bundles/analyze",
+        body
+      );
+
+      setAnalyzeLoading(false);
+
+      if (error || !data) {
+        setAnalyzeError(error ?? "Failed to analyze package.");
+        return;
+      }
+
+      setPreview(data);
+      initSetupValues(data);
+      setStep("review");
+    },
+    []
+  );
+
+  function handleAnalyze() {
     if (!source.trim()) return;
-    setAnalyzeLoading(true);
-    setAnalyzeError(null);
-
-    const { data, error } = await callProxy<ImportPreview>(
-      "v1/bundles/analyze",
-      { source: source.trim() }
-    );
-
-    setAnalyzeLoading(false);
-
-    if (error || !data) {
-      setAnalyzeError(error ?? "Failed to analyze package.");
-      return;
-    }
-
-    setPreview(data);
-    initSetupValues(data);
-    setStep("review");
+    void runAnalyze({ source: source.trim() });
   }
+
+  // Deep-link entry: `/bundles/import?src=<url>` auto-fetches and analyzes the
+  // bundle server-side so the user lands straight on the review/Install screen.
+  const autoAnalyzedRef = useRef(false);
+  useEffect(() => {
+    if (!initialSrc || autoAnalyzedRef.current) return;
+    autoAnalyzedRef.current = true;
+    void runAnalyze({ source_url: initialSrc });
+  }, [initialSrc, runAnalyze]);
 
   function handleSetupChange(key: string, value: string | number | boolean) {
     setSetupValues((prev) => ({ ...prev, [key]: value }));
@@ -265,6 +281,20 @@ export default function ImportWizard() {
     hasRequiredEmpty(preview?.setup ?? [], setupValues);
 
   if (step === "source") {
+    // Deep-link in flight: show a loading panel instead of the paste box. If the
+    // fetch/analyze fails we fall through to the paste box (with the error) so
+    // the user can still install by pasting the bundle manually.
+    if (initialSrc && analyzeLoading) {
+      return (
+        <div className="mx-auto max-w-2xl">
+          <div className="flex items-center justify-center gap-3 rounded-lg border border-border/60 bg-white p-10 text-sm text-muted-foreground dark:border-zinc-700/60 dark:bg-zinc-900">
+            <PackagePlus className="h-4 w-4 animate-pulse" />
+            Loading bundle…
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-2xl">
         <div className="space-y-2 rounded-lg border border-border/60 bg-white p-6 dark:border-zinc-700/60 dark:bg-zinc-900">

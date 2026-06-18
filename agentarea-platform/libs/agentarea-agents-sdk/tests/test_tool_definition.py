@@ -128,6 +128,27 @@ class TestSchemaGeneration:
         assert schema["properties"]["limit"]["default"] == 50
         assert schema.get("required", []) == []
 
+    def test_action_router_preserves_parameterized_dict_schema(self):
+        class Files(Toolset):
+            @tool_method
+            async def create(self, files: dict[str, str]) -> str:
+                """Create files."""
+                return "{}"
+
+            @tool_method
+            async def list(self) -> str:
+                """List files."""
+                return "[]"
+
+        schema = Files().get_schema()["parameters"]
+        files_schema = schema["properties"]["create_files"]
+
+        assert files_schema["type"] == "object"
+        assert files_schema["additionalProperties"] == {"type": "string"}
+        assert schema["properties"]["action"]["enum"] == ["create", "list"]
+        assert "- create: Create files." in schema["properties"]["action"]["description"]
+        assert "- list: List files." in schema["properties"]["action"]["description"]
+
     def test_literal_type_renders_as_enum(self):
         ts = _AgentsTestToolset()
         schema = build_method_schema(ts._tool_methods["create"])
@@ -220,6 +241,45 @@ class TestBackwardCompat:
         result = await ts.execute(action="echo", text="hi")
         assert result["success"] is True
         assert result["result"] == "hi"
+
+    @pytest.mark.asyncio
+    async def test_execute_infers_missing_action_from_prefixed_kwargs(self):
+        class Files(Toolset):
+            @tool_method
+            async def create(self, files: dict[str, str]) -> dict[str, str]:
+                """Create files."""
+                return files
+
+            @tool_method
+            async def list(self) -> list[str]:
+                """List files."""
+                return []
+
+        result = await Files().execute(create_files={"SKILL.md": "# Skill"})
+
+        assert result["success"] is True
+        assert result["result"] == {"SKILL.md": "# Skill"}
+
+    @pytest.mark.asyncio
+    async def test_execute_does_not_infer_ambiguous_action(self):
+        class Files(Toolset):
+            @tool_method
+            async def create(self, files: dict[str, str]) -> dict[str, str]:
+                """Create files."""
+                return files
+
+            @tool_method
+            async def edit(self, files: dict[str, str]) -> dict[str, str]:
+                """Edit files."""
+                return files
+
+        result = await Files().execute(
+            create_files={"SKILL.md": "# Skill"},
+            edit_files={"README.md": "# Readme"},
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "Invalid action"
 
     def test_old_get_schema_still_returns_dict(self):
         ts = _AgentsTestToolset()

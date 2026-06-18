@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
+import { ToolIcon } from "../utils/toolIcon";
+import { describeToolCall } from "../utils/describeToolCall";
 
 interface ApprovalRequestData {
   escalation_id: string;
@@ -51,16 +53,24 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
 
   const isResolved = data.resolved || localResolved !== null;
   const wasApproved = data.approved ?? localResolved?.approved;
+  const desc = describeToolCall(data.tool_name, data.arguments);
 
   return (
-    <MessageWrapper type={isResolved ? "tool-result" : "tool-call"}>
+    <MessageWrapper
+      type={isResolved ? "tool-result" : "tool-call"}
+      id={data.tool_call_id ? `tc-${data.tool_call_id}` : undefined}
+      icon={<ToolIcon name={data.tool_name} className="text-zinc-700 dark:text-zinc-200" />}
+    >
       <BaseMessage
         headerLeft={
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-amber-500" />
-            <span>
-              {t("approvalRequired")} {data.tool_name}
-            </span>
+          <div className="flex items-center gap-1.5">
+            <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span className="font-medium text-foreground">{desc.text}</span>
+            {desc.code && (
+              <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs text-muted-foreground dark:bg-white/10">
+                {desc.code}
+              </code>
+            )}
           </div>
         }
         headerRight={
@@ -69,7 +79,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
               {wasApproved ? t("approved") : t("denied")}
             </span>
           ) : (
-            <span className="animate-pulse text-amber-600">{t("waiting")}</span>
+            <span className="animate-pulse text-amber-600">{t("approvalRequired")}</span>
           )
         }
         collapsed={isResolved}

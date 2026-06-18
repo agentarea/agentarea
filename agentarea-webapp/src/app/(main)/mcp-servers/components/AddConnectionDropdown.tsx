@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, LayoutGrid, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { OpenAPIConnectionMark } from "./MCPCard";
 
 interface ConnectionOption {
-  id: "mcp" | "openapi";
+  id: "catalog" | "mcp" | "openapi";
   title: string;
   description: string;
   href: string;
@@ -25,6 +25,15 @@ interface ConnectionOption {
 }
 
 const OPTIONS: ConnectionOption[] = [
+  {
+    id: "catalog",
+    title: "Browse Catalog",
+    description:
+      "Connect a ready-made integration (Asana, GitHub, …) from the catalog.",
+    href: "/explore?type=mcp_servers",
+    iconClass: "bg-primary/5",
+    icon: <LayoutGrid className="h-5 w-5 text-primary" />,
+  },
   {
     id: "mcp",
     title: "Connect MCP Server",

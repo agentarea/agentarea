@@ -13,6 +13,11 @@ export const {
   getAgent,
   deleteAgent,
   updateAgent,
+  installAgent,
+
+  // Registry / Catalog API
+  listRegistries,
+  listRegistryItems,
 
   // Agent Task API
   listAgentTasks,
@@ -117,6 +122,7 @@ export const {
   createSkill,
   uploadSkill,
   updateSkill,
+  installSkill,
   deleteSkill,
 
   // MCP Auth Config API
@@ -150,13 +156,14 @@ export const {
   updatePolicy,
   deletePolicy,
   previewEffectivePolicy,
+  getTaskPolicySnapshot,
 
-  // ReBAC Access Explorer API
-  getRebacGraph,
-  listRebacTuples,
-  resolveRebac,
-  createRebacTuple,
-  deleteRebacTuple,
+  // Access-control graph explorer API
+  getAccessControlGraph,
+  listAccessControlRelationships,
+  resolveAccessControl,
+  createAccessControlRelationship,
+  deleteAccessControlRelationship,
   listSkillCollections,
 
   // Audit Logs API
@@ -302,8 +309,33 @@ export const listProviderConfigsWithModelInstances = async (params?: {
 
   return {
     configs: { data: configsWithModels, error: null },
-    specs: providersResponse
+    specs: providersResponse,
   };
+};
+
+// Catalog page fetch (server-side, SSR for /explore). Sums one page across the
+// active registries of a type, so the gallery's first paint is server-rendered
+// instead of racing client `useState`. Returns raw items + a `hasMore` hint;
+// the caller normalizes (see catalog-data.normalize).
+export const fetchCatalogPage = async (
+  registryType: string,
+  offset: number,
+  limit: number
+) => {
+  const { data: registries, error } = await listRegistries({
+    registry_type: registryType,
+    active_only: true,
+  });
+  if (error) return { items: [], hasMore: false, error };
+  const lists = await Promise.all(
+    (registries ?? []).map((r) =>
+      listRegistryItems(r.id, { limit, offset })
+    )
+  );
+  const items = lists.flatMap((l) => l.data ?? []);
+  // A short page (relative to the requested limit) means the server has no more.
+  const hasMore = items.length >= limit;
+  return { items, hasMore, error: null };
 };
 
 export const getProvidersAndConfigs = async () => {
@@ -344,7 +376,13 @@ export type TaskWithAgent = TaskResponse & {
 };
 
 // Re-export skill types for convenience
-export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";
+export type {
+  Skill,
+  SkillContent,
+  SkillFile,
+  SkillCreateRequest,
+  SkillUpdateRequest,
+} from "@/types/skill";
 
 export type Project = components["schemas"]["ProjectResponse"];
 

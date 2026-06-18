@@ -113,6 +113,7 @@
     "build": "Сборка",
     "govern": "Управление",
     "connections": "Соединения",
+    "explore": "Каталог",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
     "apiKeys": "API Ключи",
@@ -466,7 +467,8 @@
       "noConfigurationsYet": "Нет конфигураций",
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
       "createConfiguration": "Создать конфигурацию"
-    }
+    },
+    "browseCatalog": "Открыть каталог"
   },
   "MCPServersPage": {
     "title": "MCP серверы",
@@ -758,6 +760,7 @@
     "configurationName": "Имя конфигурации",
     "configurationNamePlaceholder": "e.g., Production OpenAI Config",
     "apiKeyPlaceholder": "Введите ваш ключ API",
+    "apiKeyOptionalForCustomEndpoint": "Оставьте пустым для custom endpoint без ключа. Заголовок Authorization отправляться не будет.",
     "customEndpointUrl": "URL-адрес конечной точки",
     "customEndpointUrlPlaceholder": "https://api.example.com/v1",
     "updateConfiguration": "Обновить конфигурацию",
@@ -805,6 +808,13 @@
   },
   "Chat": {
     "writeNewTaskFor": "Напишите новую задачу для {agentName}...",
+    "inputControls": {
+      "agent": "Агент",
+      "project": "Проект",
+      "taskPolicy": "Политика задачи",
+      "noProject": "Без проекта",
+      "defaultPolicy": "Политика по умолчанию"
+    },
     "Messages": {
       "toolCall": "Использую инструмент",
       "toolCallGroup": "{count, plural, =1 {1 вызов инструмента} other {# вызовов инструментов}}",
@@ -874,11 +884,13 @@
       "skillNotFound": "Навык не найден",
       "loadFileContent": "Не удалось загрузить контент файла",
       "updateSkill": "Не удалось обновить навык",
-      "deleteSkill": "Не удалось удалить навык"
+      "deleteSkill": "Не удалось удалить навык",
+      "installSkill": "Не удалось добавить навык в воркспейс"
     },
     "success": {
       "skillUpdated": "Навык успешно обновлен",
-      "skillDeleted": "Навык успешно удален"
+      "skillDeleted": "Навык успешно удален",
+      "skillInstalled": "Навык добавлен в воркспейс"
     },
     "confirm": {
       "deleteSkillTitle": "Удалить навык",
@@ -909,7 +921,10 @@
       "sourceCode": "Исходный код",
       "configuration": "Конфигурация",
       "skillConfiguration": "Конфигурация навыка",
-      "editable": "Редактируемый"
+      "editable": "Редактируемый",
+      "catalogTemplate": "Шаблон из каталога",
+      "customize": "Настроить",
+      "installing": "Добавляю..."
     },
     "source": {
       "github": "GitHub",
@@ -921,10 +936,6 @@
     "filters": {
       "source": "Источник",
       "allSources": "Все источники",
-      "files": "Файлы",
-      "allFiles": "Все файлы",
-      "withFiles": "С файлами",
-      "withoutFiles": "Только контент",
       "scope": "Область",
       "allScopes": "Все области",
       "clear": "Сбросить",
@@ -1027,7 +1038,8 @@
       "created": "Создано"
     },
     "emptyHere": "Здесь нет навыков",
-    "emptyHereDescription": "Под этот вид пока ничего не подходит."
+    "emptyHereDescription": "Под этот вид пока ничего не подходит.",
+    "browseCatalog": "Открыть каталог"
   },
   "TaskInfoPanel": {
     "agentTask": "Задача агента",
@@ -1035,6 +1047,8 @@
     "overview": "Обзор",
     "modelInfo": "Инфо об агенте",
     "keyMetrics": "Ключевые метрики",
+    "budget": "Бюджет",
+    "cost": "Стоимость",
     "status": "Статус",
     "taskActive": "Задача сейчас активна",
     "taskNotRunning": "Задача не запущена",
@@ -1048,7 +1062,18 @@
     "modelCalls": "Модель",
     "events": "События",
     "calledTools": "Вызванные инструменты",
+    "servicesUsed": "Использованные сервисы",
+    "jumpToUsage": "Перейти к месту использования",
+    "usage": "Расход",
+    "tokensShort": "токенов",
+    "files": "Файлы",
     "learnedSkills": "Изученные навыки",
+    "documents": "Документы",
+    "participants": "Участники",
+    "you": "Вы",
+    "roleRequester": "Поставил задачу",
+    "rolePrimaryAgent": "Основной агент",
+    "roleDelegated": "Делегированный агент",
     "quickActions": "Быстрые действия",
     "viewTaskEvents": "Смотреть события задачи",
     "openAgentDetails": "Открыть детали агента",
@@ -1071,7 +1096,26 @@
     "showMore": "Показать больше",
     "showLess": "Свернуть",
     "openPanel": "Показать панель",
-    "closePanel": "Скрыть панель"
+    "closePanel": "Скрыть панель",
+    "policy": "Политика",
+    "policyTools": "Инструменты",
+    "policyAllowed": "Разрешены",
+    "policyDenied": "Запрещены",
+    "policyAllTools": "Все инструменты разрешены",
+    "policyApproval": "Подтверждение человеком",
+    "policyTokens": "Лимит токенов",
+    "policyPerCall": "за вызов",
+    "policyContentSafety": "Безопасность контента",
+    "policyPromptInjection": "Детект prompt-injection",
+    "policyOutputSanitizer": "Санитайзер вывода",
+    "policyMonthlyCap": "Месячный лимит",
+    "policyServiceBudget": "Сервисный бюджет",
+    "policyApprovers": "Кто подтверждает",
+    "policyOn": "Вкл",
+    "policyOff": "Выкл",
+    "policyRequired": "Требуется",
+    "policyNotRequired": "Не требуется",
+    "policyNone": "Нет ограничений политики"
   },
   "Workplace": {
     "hero": {
@@ -1156,6 +1200,12 @@
     "title": "Автоматизация",
     "description": "Настройте триггеры для автоматического выполнения задач агентов",
     "createTrigger": "Создать триггер",
+    "searchPlaceholder": "Поиск триггеров и агентов…",
+    "filter": {
+      "all": "Все",
+      "cron": "Cron",
+      "webhook": "Webhook"
+    },
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Создайте триггер для автоматизации рабочих процессов агентов.",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
@@ -1176,6 +1226,7 @@
     "status": {
       "active": "Активен",
       "inactive": "Неактивен",
+      "paused": "Приостановлен",
       "error": "Ошибка"
     },
     "create": {
@@ -1206,7 +1257,7 @@
       },
       "allowedMethods": "Разрешённые методы",
       "taskParameters": "Параметры задачи",
-      "taskParametersPlaceholder": "{}",
+      "taskParametersPlaceholder": "'{}'",
       "failureThreshold": "Порог ошибок",
       "failureThresholdPlaceholder": "напр., 3",
       "createButton": "Создать триггер"
@@ -1251,6 +1302,7 @@
   "NetworkPage": {
     "title": "Сеть",
     "description": "Визуальный обзор топологии рабочего пространства",
+    "accessGraph": "Граф доступа",
     "dataFlow": "Поток данных",
     "organization": "Организация"
   },

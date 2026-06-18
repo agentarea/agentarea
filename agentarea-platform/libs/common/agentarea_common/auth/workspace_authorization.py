@@ -1,11 +1,11 @@
-"""OSS authorization service — pure policy, no infrastructure access."""
+"""Workspace-scoped authorization service — pure policy, no infrastructure access."""
 
 from .authorization import AuthorizationService
 from .context import UserContext
 
 
-class SimpleAuthorizationService(AuthorizationService):
-    """OSS implementation of workspace access control.
+class WorkspaceScopedAuthorizationService(AuthorizationService):
+    """Workspace-scoped access control (the open-core default).
 
     Pure policy: own workspace only. Built-in/official content is no longer made
     visible by injecting a magic 'platform' workspace here — it lives in the

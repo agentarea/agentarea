@@ -240,6 +240,54 @@ class TestOpenAPIToolExecuteHappyPath:
         assert call_kwargs.kwargs.get("params") == {"page": 2}
 
     @pytest.mark.asyncio
+    async def test_402_uses_payment_handler_and_returns_service_cost(self):
+        conn = _make_connection()
+        svc = _make_service(connection=conn, headers={"Authorization": "Bearer tok"})
+
+        first_response = httpx.Response(
+            402,
+            text="payment required",
+            headers={"PAYMENT-REQUIRED": "challenge"},
+        )
+        mock_client = _build_mock_client(first_response)
+
+        async def payment_handler(**kwargs):
+            assert kwargs["url"] == "https://api.example.com/items"
+            assert kwargs["method"] == "GET"
+            assert kwargs["response_status"] == 402
+            assert kwargs["request_headers"] == {"Authorization": "Bearer tok"}
+            return {
+                "success": True,
+                "protocol": "x402",
+                "amount_usd": 0.01,
+                "recipient": "0xmerchant",
+                "tx_hash": "0xtx",
+                "response_body": '{"paid": true}',
+                "response_status": 200,
+                "protocol_metadata": {"network": "eip155:84532"},
+            }
+
+        with (
+            _patch_validate_url(),
+            patch.object(mod.httpx, "AsyncClient", return_value=mock_client),
+        ):
+            op = _make_operation(method="GET", path="/items")
+            tool = mod.OpenAPITool(
+                op,
+                _CONNECTION_ID,
+                _CONNECTION_NAME,
+                svc,
+                payment_handler=payment_handler,
+            )
+            result = await tool.execute()
+
+        assert result["success"] is True
+        assert result["status_code"] == 200
+        assert result["result"] == '{"paid": true}'
+        assert result["service_cost"] == 0.01
+        assert result["payment"]["protocol"] == "x402"
+
+    @pytest.mark.asyncio
     async def test_header_params_merged_with_connection_headers(self):
         conn = _make_connection()
         svc = _make_service(connection=conn, headers={"Authorization": "Bearer tok"})

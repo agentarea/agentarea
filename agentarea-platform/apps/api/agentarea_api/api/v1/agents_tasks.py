@@ -645,16 +645,33 @@ async def get_agent_task(
     task_id: UUID,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
-    """Get a specific task for the specified agent using workflow status."""
+    """Get a specific task for the specified agent."""
     # Verify agent exists
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        # Get workflow status using the execution ID pattern
+        task = await task_service.get_task_with_workflow_status(task_id)
+        if task:
+            if task.agent_id != agent_id:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            return TaskResponse(
+                id=task.id,
+                agent_id=task.agent_id,
+                description=task.description,
+                parameters=task.task_parameters or {},
+                status=task.status,
+                result=task.result,
+                created_at=task.created_at,
+                execution_id=task.execution_id,
+            )
+
+        # Fall back to workflow status for legacy workflow-only tasks.
         execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 

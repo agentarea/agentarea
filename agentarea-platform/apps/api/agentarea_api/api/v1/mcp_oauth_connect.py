@@ -181,7 +181,7 @@ async def oauth_authorize(
     server_spec = None
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
-        server_spec = await server_repo.get_by_id(instance.server_spec_id)
+        server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
 
     mcp_url = _resolve_instance_remote_url(instance, server_spec)
     if not mcp_url:

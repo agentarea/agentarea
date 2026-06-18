@@ -13,7 +13,7 @@ from agentarea_api.api.v1.agents_a2a import (
     validate_agent_exists,
 )
 from agentarea_common.utils.types import AgentCard
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 
 @pytest.mark.asyncio
@@ -47,12 +47,10 @@ class TestA2AAgentDiscovery:
             description="A test agent for A2A discovery",
             status="active",
             model_id="gpt-4",
-            tools_config={
-                "tools": [
-                    {"name": "calculator", "type": "function"},
-                    {"name": "web_search", "type": "function"},
-                ]
-            },
+            tools=[
+                {"name": "calculator", "type": "function"},
+                {"name": "web_search", "type": "function"},
+            ],
             planning=True,
         )
 
@@ -65,7 +63,7 @@ class TestA2AAgentDiscovery:
             description="",
             status="active",
             model_id=None,
-            tools_config=None,
+            tools=None,
             planning=False,
         )
 
@@ -78,7 +76,7 @@ class TestA2AAgentDiscovery:
             description="An inactive agent",
             status="inactive",
             model_id="gpt-3.5-turbo",
-            tools_config=None,
+            tools=None,
             planning=False,
         )
 
@@ -151,11 +149,15 @@ class TestA2AAgentDiscovery:
         assert agent_card.description == "A test agent for A2A discovery"
         assert agent_card.url == f"https://api.example.com/api/v1/agents/{sample_agent.id}/a2a/rpc"
         assert agent_card.version == "1.0.0"
+        assert agent_card.supported_interfaces is not None
+        assert agent_card.supported_interfaces[0].protocol_binding == "JSONRPC"
+        assert agent_card.supported_interfaces[0].protocol_version == "1.0"
 
         # Verify capabilities
         assert agent_card.capabilities.streaming is True
         assert agent_card.capabilities.push_notifications is False
         assert agent_card.capabilities.state_transition_history is True
+        assert agent_card.capabilities.extended_agent_card is True
 
         # Verify skills - should have 3 skills for full-featured agent
         assert len(agent_card.skills) == 3
@@ -239,6 +241,8 @@ class TestA2AAgentDiscovery:
         assert agent_card.name == "Test Agent"
         assert agent_card.description == "A test agent for A2A discovery"
         assert agent_card.url == f"/api/v1/agents/{sample_agent.id}/a2a/rpc"
+        assert agent_card.supported_interfaces is not None
+        assert agent_card.supported_interfaces[0].url == agent_card.url
 
         # Verify current agent data is included in description and skills
         assert "A test agent for A2A discovery" in agent_card.description
@@ -262,7 +266,7 @@ class TestA2AAgentDiscovery:
         mock_request.client.host = "127.0.0.1"
         mock_request.headers.get.return_value = "test-user-agent"
 
-        with pytest.raises(Exception) as exc_info:  # Should raise HTTPException
+        with pytest.raises(HTTPException) as exc_info:
             await get_agent_well_known(
                 agent_id=agent_id,
                 request=mock_request,
@@ -295,7 +299,7 @@ class TestA2AAgentDiscovery:
                 description=f"Agent with {status} status",
                 status=status,
                 model_id="gpt-4",
-                tools_config=None,
+                tools=None,
                 planning=False,
             )
 

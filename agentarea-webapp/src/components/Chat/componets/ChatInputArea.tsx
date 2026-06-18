@@ -4,20 +4,47 @@
  */
 
 import React from "react";
-import { Paperclip, ArrowUp, Send, Pause, Play } from "lucide-react";
+import { useTranslations } from "next-intl";
+import {
+  ArrowUp,
+  Bot,
+  FolderKanban,
+  Paperclip,
+  Pause,
+  Play,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
+
+const NO_PROJECT_VALUE = "__no_project__";
+const DEFAULT_TASK_POLICY_VALUE = "__default_task_policy__";
 
 export interface MentionMenuProps {
   show: boolean;
   agents: Array<{ id: string; name: string; description?: string | null }>;
-  position: { top: number; left: number; width: number; side: "top" | "bottom" };
+  position: {
+    top: number;
+    left: number;
+    width: number;
+    side: "top" | "bottom";
+  };
   selectedIndex: number;
-  menuRef: React.RefObject<HTMLDivElement> | React.RefObject<HTMLDivElement | null>;
+  menuRef:
+    | React.RefObject<HTMLDivElement>
+    | React.RefObject<HTMLDivElement | null>;
   onAgentSelect: (agent: { id: string; name: string }) => void;
 }
 
@@ -70,12 +97,16 @@ export interface ChatInputAreaProps {
   /**
    * File input ref
    */
-  fileInputRef: React.RefObject<HTMLInputElement> | React.RefObject<HTMLInputElement | null>;
+  fileInputRef:
+    | React.RefObject<HTMLInputElement>
+    | React.RefObject<HTMLInputElement | null>;
 
   /**
    * Textarea ref
    */
-  textareaRef: React.RefObject<HTMLTextAreaElement> | React.RefObject<HTMLTextAreaElement | null>;
+  textareaRef:
+    | React.RefObject<HTMLTextAreaElement>
+    | React.RefObject<HTMLTextAreaElement | null>;
 
   /**
    * Keydown handler (for mentions, submit)
@@ -90,7 +121,9 @@ export interface ChatInputAreaProps {
   /**
    * Container ref (for mention menu positioning)
    */
-  containerRef?: React.RefObject<HTMLDivElement> | React.RefObject<HTMLDivElement | null>;
+  containerRef?:
+    | React.RefObject<HTMLDivElement>
+    | React.RefObject<HTMLDivElement | null>;
 
   /**
    * Variant style
@@ -148,6 +181,44 @@ export interface ChatInputAreaProps {
     name: string;
     description?: string | null;
   }) => void;
+
+  /**
+   * Current project id
+   */
+  currentProjectId?: string | null;
+
+  /**
+   * Available projects
+   */
+  availableProjects?: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+  }>;
+
+  /**
+   * Project change handler
+   */
+  onProjectChange?: (projectId: string | null) => void;
+
+  /**
+   * Current task policy id
+   */
+  currentTaskPolicyId?: string | null;
+
+  /**
+   * Available task policies
+   */
+  availableTaskPolicies?: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+  }>;
+
+  /**
+   * Task policy change handler
+   */
+  onTaskPolicyChange?: (policyId: string | null) => void;
 
   /**
    * Stop/Pause handler
@@ -227,13 +298,24 @@ export function ChatInputArea({
   currentAgent,
   availableAgents,
   onAgentChange,
+  currentProjectId,
+  availableProjects,
+  onProjectChange,
+  currentTaskPolicyId,
+  availableTaskPolicies,
+  onTaskPolicyChange,
   onStop,
   onResume,
   isStopping = false,
   isResuming = false,
   canResume = false,
 }: ChatInputAreaProps) {
+  const t = useTranslations("Chat.inputControls");
   const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
+  const showContextControls =
+    Boolean(currentAgent && availableAgents?.length && onAgentChange) ||
+    Boolean(availableProjects?.length && onProjectChange) ||
+    Boolean(availableTaskPolicies?.length && onTaskPolicyChange);
 
   return (
     <div
@@ -267,7 +349,7 @@ export function ChatInputArea({
           onKeyDown={onKeyDown}
         />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-2">
           {/* Selected Files Display */}
           <div className="flex flex-row flex-wrap gap-2">
             {selectedFiles.length > 0 &&
@@ -281,69 +363,133 @@ export function ChatInputArea({
               ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onOpenFileDialog}
-              disabled={isLoading}
-              className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {showContextControls ? (
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                {currentAgent && availableAgents?.length && onAgentChange ? (
+                  <ContextSelect
+                    icon={Bot}
+                    label={t("agent")}
+                    value={currentAgent.id}
+                    disabled={isLoading}
+                    onValueChange={(agentId) => {
+                      const nextAgent = availableAgents.find(
+                        (agent) => agent.id === agentId
+                      );
+                      if (nextAgent) onAgentChange(nextAgent);
+                    }}
+                    options={availableAgents}
+                  />
+                ) : null}
 
-            {showSendButton && (
-              <>
-                {canResume && onResume ? (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    onClick={onResume}
-                    disabled={isResuming}
-                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
-                  >
-                    {isResuming ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
-                ) : isLoading && onStop ? (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="destructive"
-                    onClick={onStop}
-                    disabled={isStopping}
-                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
-                  >
-                    {isStopping ? (
-                      <LoadingSpinner variant="light" size="sm" />
-                    ) : (
-                      <Pause className="h-4 w-4" />
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={
-                      isLoading || (!input.trim() && selectedFiles.length === 0)
+                {availableProjects?.length && onProjectChange ? (
+                  <ContextSelect
+                    icon={FolderKanban}
+                    label={t("project")}
+                    value={currentProjectId ?? NO_PROJECT_VALUE}
+                    disabled={isLoading}
+                    onValueChange={(projectId) =>
+                      onProjectChange(
+                        projectId === NO_PROJECT_VALUE ? null : projectId
+                      )
                     }
-                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
-                  >
-                    {isLoading ? (
-                      <LoadingSpinner variant="light" size="sm" />
-                    ) : (
-                      <SendIcon className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-              </>
+                    options={[
+                      { id: NO_PROJECT_VALUE, name: t("noProject") },
+                      ...availableProjects,
+                    ]}
+                  />
+                ) : null}
+
+                {availableTaskPolicies?.length && onTaskPolicyChange ? (
+                  <ContextSelect
+                    icon={ShieldCheck}
+                    label={t("taskPolicy")}
+                    value={currentTaskPolicyId ?? DEFAULT_TASK_POLICY_VALUE}
+                    disabled={isLoading}
+                    onValueChange={(policyId) =>
+                      onTaskPolicyChange(
+                        policyId === DEFAULT_TASK_POLICY_VALUE ? null : policyId
+                      )
+                    }
+                    options={[
+                      {
+                        id: DEFAULT_TASK_POLICY_VALUE,
+                        name: t("defaultPolicy"),
+                      },
+                      ...availableTaskPolicies,
+                    ]}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <div />
             )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onOpenFileDialog}
+                disabled={isLoading}
+                className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+
+              {showSendButton && (
+                <>
+                  {canResume && onResume ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={onResume}
+                      disabled={isResuming}
+                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                    >
+                      {isResuming ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : isLoading && onStop ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      onClick={onStop}
+                      disabled={isStopping}
+                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                    >
+                      {isStopping ? (
+                        <LoadingSpinner variant="light" size="sm" />
+                      ) : (
+                        <Pause className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={
+                        isLoading ||
+                        (!input.trim() && selectedFiles.length === 0)
+                      }
+                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                    >
+                      {isLoading ? (
+                        <LoadingSpinner variant="light" size="sm" />
+                      ) : (
+                        <SendIcon className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </form>
@@ -373,5 +519,55 @@ export function ChatInputArea({
         accept="*/*"
       />
     </div>
+  );
+}
+
+interface ContextSelectOption {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+function ContextSelect({
+  icon: Icon,
+  label,
+  value,
+  disabled,
+  options,
+  onValueChange,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  disabled?: boolean;
+  options: ContextSelectOption[];
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger
+        aria-label={label}
+        className="h-8 min-w-0 rounded-full border-border/70 bg-muted/40 px-2 text-xs shadow-none"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <SelectValue placeholder={label} />
+        </span>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.id} value={option.id}>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate">{option.name}</span>
+              {option.description ? (
+                <span className="truncate text-xs text-muted-foreground">
+                  {option.description}
+                </span>
+              ) : null}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

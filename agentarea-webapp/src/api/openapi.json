@@ -236,6 +236,20 @@
         "title": "AcceptInvitationResponse",
         "type": "object"
       },
+      "AddSkillRequest": {
+        "properties": {
+          "skill_id": {
+            "format": "uuid",
+            "title": "Skill Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_id"
+        ],
+        "title": "AddSkillRequest",
+        "type": "object"
+      },
       "AgentAuthentication": {
         "properties": {
           "credentials": {
@@ -265,6 +279,11 @@
       },
       "AgentCapabilities": {
         "properties": {
+          "extendedAgentCard": {
+            "default": false,
+            "title": "Extendedagentcard",
+            "type": "boolean"
+          },
           "extensions": {
             "anyOf": [
               {
@@ -416,6 +435,20 @@
             "title": "Skills",
             "type": "array"
           },
+          "supportedInterfaces": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AgentInterface"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supportedinterfaces"
+          },
           "supportsAuthenticatedExtendedCard": {
             "default": true,
             "title": "Supportsauthenticatedextendedcard",
@@ -535,7 +568,29 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/ToolConfigYAML"
+                  "discriminator": {
+                    "mapping": {
+                      "agent": "#/components/schemas/AgentToolConfig",
+                      "code": "#/components/schemas/CodeToolConfig",
+                      "mcp": "#/components/schemas/McpToolConfig-Input",
+                      "openapi": "#/components/schemas/OpenApiToolConfig"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CodeToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/McpToolConfig-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AgentToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OpenApiToolConfig"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -552,6 +607,46 @@
           "model_id"
         ],
         "title": "AgentCreate",
+        "type": "object"
+      },
+      "AgentInterface": {
+        "properties": {
+          "protocolBinding": {
+            "title": "Protocolbinding",
+            "type": "string"
+          },
+          "protocolVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocolversion"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "protocolBinding"
+        ],
+        "title": "AgentInterface",
         "type": "object"
       },
       "AgentOverviewResponse": {
@@ -700,6 +795,11 @@
             ],
             "title": "Instruction"
           },
+          "is_catalog": {
+            "default": false,
+            "title": "Is Catalog",
+            "type": "boolean"
+          },
           "model_id": {
             "anyOf": [
               {
@@ -726,6 +826,17 @@
             ],
             "title": "Planning"
           },
+          "registry_item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Item Id"
+          },
           "skills": {
             "anyOf": [
               {
@@ -741,6 +852,10 @@
             ],
             "title": "Skills"
           },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -749,7 +864,29 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/ToolConfigYAML"
+                  "discriminator": {
+                    "mapping": {
+                      "agent": "#/components/schemas/AgentToolConfig",
+                      "code": "#/components/schemas/CodeToolConfig",
+                      "mcp": "#/components/schemas/McpToolConfig-Output",
+                      "openapi": "#/components/schemas/OpenApiToolConfig"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CodeToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/McpToolConfig-Output"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AgentToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OpenApiToolConfig"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -758,10 +895,16 @@
               }
             ],
             "title": "Tools"
+          },
+          "update_available": {
+            "default": false,
+            "title": "Update Available",
+            "type": "boolean"
           }
         },
         "required": [
           "id",
+          "slug",
           "name",
           "status"
         ],
@@ -913,6 +1056,75 @@
         "title": "AgentSkill",
         "type": "object"
       },
+      "AgentToolConfig": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentToolSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "agent",
+            "default": "agent",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AgentToolConfig",
+        "type": "object"
+      },
+      "AgentToolSettings": {
+        "description": "Settings for an agent-to-agent (delegation) tool.\n\n``a2a_url`` selects the *remote* transport binding; absent \u2192 same-platform\ndirect delegation. Lives here only \u2014 A2A is a per-edge binding, not a\nproperty every tool type carries.",
+        "properties": {
+          "a2a_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A2A Url"
+          },
+          "description_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Override"
+          },
+          "requires_user_confirmation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
+          }
+        },
+        "title": "AgentToolSettings",
+        "type": "object"
+      },
       "AgentUpdate": {
         "additionalProperties": false,
         "description": "Patch payload for an agent. All fields optional \u2014 unset = unchanged.",
@@ -1045,7 +1257,29 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/ToolConfigYAML"
+                  "discriminator": {
+                    "mapping": {
+                      "agent": "#/components/schemas/AgentToolConfig",
+                      "code": "#/components/schemas/CodeToolConfig",
+                      "mcp": "#/components/schemas/McpToolConfig-Input",
+                      "openapi": "#/components/schemas/OpenApiToolConfig"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CodeToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/McpToolConfig-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AgentToolConfig"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OpenApiToolConfig"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -1057,6 +1291,141 @@
           }
         },
         "title": "AgentUpdate",
+        "type": "object"
+      },
+      "AnalyzeRequest": {
+        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the\nserver fetches behind the SSRF guard). ``source_url`` is what a landing-page\ndeep-link (`/bundles/import?src=<url>`) uses for one-click installs.",
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw bundle source text (YAML or JSON).",
+            "title": "Source"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL to fetch raw bundle source from (YAML or JSON).",
+            "title": "Source Url"
+          }
+        },
+        "title": "AnalyzeRequest",
+        "type": "object"
+      },
+      "ApprovalPolicy": {
+        "additionalProperties": false,
+        "description": "Human approval and escalation requirements.",
+        "properties": {
+          "approvers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Approvers",
+            "type": "array"
+          },
+          "escalation_rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Escalation Rules",
+            "type": "array"
+          },
+          "requires_human_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Human Approval"
+          }
+        },
+        "title": "ApprovalPolicy",
+        "type": "object"
+      },
+      "ArtifactEventResponse": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_type": {
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          }
+        },
+        "required": [
+          "action",
+          "actor_type",
+          "created_by",
+          "created_at"
+        ],
+        "title": "ArtifactEventResponse",
+        "type": "object"
+      },
+      "ArtifactHistoryResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "events"
+        ],
+        "title": "ArtifactHistoryResponse",
         "type": "object"
       },
       "AssociationBody": {
@@ -1291,6 +1660,890 @@
           "file"
         ],
         "title": "Body_upload_skill_v1_skills_upload_post",
+        "type": "object"
+      },
+      "BudgetPolicy-Input": {
+        "additionalProperties": false,
+        "description": "Budget-related ceilings.",
+        "properties": {
+          "monthly_spend_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Spend Cap Usd"
+          },
+          "run_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Budget Usd"
+          },
+          "service_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Budget Usd"
+          }
+        },
+        "title": "BudgetPolicy",
+        "type": "object"
+      },
+      "BudgetPolicy-Output": {
+        "additionalProperties": false,
+        "description": "Budget-related ceilings.",
+        "properties": {
+          "monthly_spend_cap_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Spend Cap Usd"
+          },
+          "run_budget_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Budget Usd"
+          },
+          "service_budget_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Budget Usd"
+          }
+        },
+        "title": "BudgetPolicy",
+        "type": "object"
+      },
+      "Bundle-Input": {
+        "additionalProperties": false,
+        "description": "The canonical, fully-inlined package object.",
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/BundleAgent"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "automations": {
+            "items": {
+              "$ref": "#/components/schemas/BundleAutomation"
+            },
+            "title": "Automations",
+            "type": "array"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "mcps": {
+            "items": {
+              "$ref": "#/components/schemas/BundleMcp"
+            },
+            "title": "Mcps",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BundleMetadata"
+          },
+          "name": {
+            "description": "Stable package identifier (idempotency key).",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BundlePolicy"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "0.1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "setup": {
+            "items": {
+              "$ref": "#/components/schemas/SetupField"
+            },
+            "title": "Setup",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/BundleSkill"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Bundle",
+        "type": "object"
+      },
+      "Bundle-Output": {
+        "additionalProperties": false,
+        "description": "The canonical, fully-inlined package object.",
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/BundleAgent"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "automations": {
+            "items": {
+              "$ref": "#/components/schemas/BundleAutomation"
+            },
+            "title": "Automations",
+            "type": "array"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "mcps": {
+            "items": {
+              "$ref": "#/components/schemas/BundleMcp"
+            },
+            "title": "Mcps",
+            "type": "array"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BundleMetadata"
+          },
+          "name": {
+            "description": "Stable package identifier (idempotency key).",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BundlePolicy"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "0.1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "setup": {
+            "items": {
+              "$ref": "#/components/schemas/SetupField"
+            },
+            "title": "Setup",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/BundleSkill"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Bundle",
+        "type": "object"
+      },
+      "BundleAgent": {
+        "additionalProperties": false,
+        "description": "An agent to create for the package.",
+        "properties": {
+          "instruction": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Instruction",
+            "type": "string"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "mcps": {
+            "description": "BundleMcp keys to attach as tools.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Mcps",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "description": "BundleSkill keys to attach.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "BundleAgent",
+        "type": "object"
+      },
+      "BundleAutomation": {
+        "additionalProperties": false,
+        "description": "A scheduled run of one of the package's agents (maps to a CronTrigger).\n\nAutomations are imported disabled by default; the user enables them after\nverifying connections, mirroring the Zapier/Make \"connect then activate\"\nflow.",
+        "properties": {
+          "agent": {
+            "description": "BundleAgent key to invoke.",
+            "minLength": 1,
+            "title": "Agent",
+            "type": "string"
+          },
+          "cron": {
+            "description": "5- or 6-field cron expression.",
+            "minLength": 1,
+            "title": "Cron",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "Task query passed to the agent on each run.",
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "UTC",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "type": {
+            "const": "cron",
+            "default": "cron",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "cron",
+          "agent",
+          "prompt"
+        ],
+        "title": "BundleAutomation",
+        "type": "object"
+      },
+      "BundleMcp": {
+        "additionalProperties": false,
+        "description": "An MCP server to provision for the package.",
+        "properties": {
+          "bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Maps an env var / header name the server needs to a ${setup.x} reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}.",
+            "title": "Bindings",
+            "type": "object"
+          },
+          "json_spec": {
+            "additionalProperties": true,
+            "description": "Native MCP runtime spec. Must include 'type' (command|docker|url).",
+            "title": "Json Spec",
+            "type": "object"
+          },
+          "key": {
+            "description": "In-package reference key (agents point at this).",
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "description": "Instance display name created in the workspace.",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "json_spec"
+        ],
+        "title": "BundleMcp",
+        "type": "object"
+      },
+      "BundleMetadata": {
+        "additionalProperties": false,
+        "description": "Marketplace presentation metadata (parity with plugin/app listings).",
+        "properties": {
+          "capabilities": {
+            "description": "e.g. [\"interactive\", \"write\"].",
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "developer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publisher name.",
+            "title": "Developer"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Icon URL or asset reference.",
+            "title": "Icon"
+          },
+          "privacy_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privacy Url"
+          },
+          "terms_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terms Url"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          }
+        },
+        "title": "BundleMetadata",
+        "type": "object"
+      },
+      "BundlePolicy": {
+        "additionalProperties": false,
+        "description": "A governance rule the package installs (maps to a PolicyRule).\n\nPortable like everything else: ``subject`` is the literal \"workspace\" or a\nBundleAgent ``key`` (never a DB id); the installer resolves it to a real\nsubject id. ``target``/``effect``/``params`` mirror the unified governance\nrule model, so this is \"our policy format\" \u2014 not a new one.",
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional CEL condition.",
+            "title": "Condition"
+          },
+          "effect": {
+            "enum": [
+              "allow",
+              "deny",
+              "cap",
+              "approval",
+              "safety"
+            ],
+            "title": "Effect",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Human-readable reason.",
+            "title": "Message"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Effect-specific params, e.g. {amount_usd, period} for cap.",
+            "title": "Params",
+            "type": "object"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "subject": {
+            "default": "workspace",
+            "description": "\"workspace\" or a BundleAgent key the rule binds to.",
+            "title": "Subject",
+            "type": "string"
+          },
+          "target": {
+            "description": "Selector, e.g. \"tool:send_email\", \"spend\", \"content\", \"*\".",
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "target",
+          "effect"
+        ],
+        "title": "BundlePolicy",
+        "type": "object"
+      },
+      "BundleSkill": {
+        "additionalProperties": false,
+        "description": "A skill to create for the package.",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SKILL.md markdown for source_type=content.",
+            "title": "Content"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_type": {
+            "default": "content",
+            "enum": [
+              "content",
+              "github"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Repo URL for source_type=github.",
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "BundleSkill",
+        "type": "object"
+      },
+      "CheckRequest": {
+        "properties": {
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace",
+          "object",
+          "relation",
+          "subject_id"
+        ],
+        "title": "CheckRequest",
+        "type": "object"
+      },
+      "CheckResponse": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allowed"
+        ],
+        "title": "CheckResponse",
+        "type": "object"
+      },
+      "CodeToolConfig": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodeToolSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "code",
+            "default": "code",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CodeToolConfig",
+        "type": "object"
+      },
+      "CodeToolSettings": {
+        "description": "Settings for a built-in code toolset.",
+        "properties": {
+          "disabled_methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Methods"
+          },
+          "requires_user_confirmation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
+          }
+        },
+        "title": "CodeToolSettings",
+        "type": "object"
+      },
+      "CollectionCreateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CollectionCreateRequest",
+        "type": "object"
+      },
+      "CollectionDetailResponse": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/SkillRef"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "skills"
+        ],
+        "title": "CollectionDetailResponse",
+        "type": "object"
+      },
+      "CollectionSummaryResponse": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skill_count": {
+            "title": "Skill Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "skill_count"
+        ],
+        "title": "CollectionSummaryResponse",
+        "type": "object"
+      },
+      "CollectionUpdateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "CollectionUpdateRequest",
+        "type": "object"
+      },
+      "ContentSafetyPolicy": {
+        "additionalProperties": false,
+        "description": "Content-safety governance controls.",
+        "properties": {
+          "output_sanitizer_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Sanitizer Enabled"
+          },
+          "prompt_injection_detection_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Injection Detection Enabled"
+          }
+        },
+        "title": "ContentSafetyPolicy",
         "type": "object"
       },
       "CreateInvitationBody": {
@@ -1537,8 +2790,15 @@
       "DiscoverPreviewRequest": {
         "properties": {
           "api_key": {
-            "title": "Api Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
           },
           "endpoint_url": {
             "anyOf": [
@@ -1557,8 +2817,7 @@
           }
         },
         "required": [
-          "provider_key",
-          "api_key"
+          "provider_key"
         ],
         "title": "DiscoverPreviewRequest",
         "type": "object"
@@ -1683,6 +2942,138 @@
         ],
         "title": "DiscoveryResponse",
         "type": "object"
+      },
+      "EffectivePolicy": {
+        "additionalProperties": false,
+        "description": "Resolved immutable policy snapshot.",
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetPolicy-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content_safety": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolver_version": {
+            "default": "policy-resolver-v1",
+            "title": "Resolver Version",
+            "type": "string"
+          },
+          "source_policy_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Policy Ids",
+            "type": "array"
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolsPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "EffectivePolicy",
+        "type": "object"
+      },
+      "EffectivePolicyPreviewRequest": {
+        "additionalProperties": false,
+        "description": "Body for dry-run effective-policy resolution.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "task_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "EffectivePolicyPreviewRequest",
+        "type": "object"
+      },
+      "EffectivePolicyResponse": {
+        "properties": {
+          "effective_policy": {
+            "$ref": "#/components/schemas/EffectivePolicy"
+          }
+        },
+        "required": [
+          "effective_policy"
+        ],
+        "title": "EffectivePolicyResponse",
+        "type": "object"
+      },
+      "EntityKind": {
+        "enum": [
+          "mcp",
+          "skill",
+          "agent",
+          "automation",
+          "policy"
+        ],
+        "title": "EntityKind",
+        "type": "string"
+      },
+      "EntityStatus": {
+        "enum": [
+          "will_create",
+          "already_exists",
+          "unsupported"
+        ],
+        "title": "EntityStatus",
+        "type": "string"
       },
       "EscalationResolution": {
         "properties": {
@@ -2013,6 +3404,112 @@
         "title": "GovernanceOverlay",
         "type": "object"
       },
+      "GraphNode": {
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "agent",
+              "collection",
+              "mcp"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subtitle": {
+            "title": "Subtitle",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "subtitle",
+          "color"
+        ],
+        "title": "GraphNode",
+        "type": "object"
+      },
+      "GraphResponse": {
+        "properties": {
+          "edges": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/GraphStats"
+          }
+        },
+        "required": [
+          "enabled",
+          "nodes",
+          "edges",
+          "stats"
+        ],
+        "title": "GraphResponse",
+        "type": "object"
+      },
+      "GraphStats": {
+        "properties": {
+          "direct_exception_count": {
+            "title": "Direct Exception Count",
+            "type": "integer"
+          },
+          "governed_skill_count": {
+            "title": "Governed Skill Count",
+            "type": "integer"
+          },
+          "rule_count": {
+            "title": "Rule Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "governed_skill_count",
+          "rule_count",
+          "direct_exception_count"
+        ],
+        "title": "GraphStats",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2114,6 +3611,47 @@
           "created_at"
         ],
         "title": "HitlBlocker",
+        "type": "object"
+      },
+      "ImportPreview": {
+        "additionalProperties": false,
+        "description": "What the wizard renders before the user commits to installing.",
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/Bundle-Output"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewEntity"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "installable": {
+            "description": "True when there are no blocking issues (setup may still be required).",
+            "title": "Installable",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "setup": {
+            "items": {
+              "$ref": "#/components/schemas/SetupField"
+            },
+            "title": "Setup",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundle",
+          "installable"
+        ],
+        "title": "ImportPreview",
         "type": "object"
       },
       "ImportRequest": {
@@ -2220,6 +3758,144 @@
           "page_size"
         ],
         "title": "InboxResponse",
+        "type": "object"
+      },
+      "InputSecretValue": {
+        "additionalProperties": false,
+        "description": "Secret value submitted through the protected input endpoint.",
+        "properties": {
+          "secret_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Name"
+          },
+          "value": {
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "InputSecretValue",
+        "type": "object"
+      },
+      "InstallAction": {
+        "enum": [
+          "created",
+          "reused",
+          "skipped"
+        ],
+        "title": "InstallAction",
+        "type": "string"
+      },
+      "InstallRequest": {
+        "description": "Install a (previously analyzed, possibly edited) canonical bundle.",
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/Bundle-Input"
+          },
+          "setup_values": {
+            "additionalProperties": true,
+            "description": "Values for the bundle's setup fields, keyed by setup field key.",
+            "title": "Setup Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "bundle"
+        ],
+        "title": "InstallRequest",
+        "type": "object"
+      },
+      "InstallResult": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_name": {
+            "title": "Bundle Name",
+            "type": "string"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/InstalledEntity"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "installed_bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installed Bundle Id"
+          }
+        },
+        "required": [
+          "bundle_name"
+        ],
+        "title": "InstallResult",
+        "type": "object"
+      },
+      "InstalledEntity": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/InstallAction"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Created/reused entity id, when applicable.",
+            "title": "Id"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EntityKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "name",
+          "action"
+        ],
+        "title": "InstalledEntity",
         "type": "object"
       },
       "InvitationCreatedResponse": {
@@ -2384,77 +4060,13 @@
         "title": "InvitationResponse",
         "type": "object"
       },
-      "JSONRPCError": {
-        "properties": {
-          "code": {
-            "title": "Code",
-            "type": "integer"
-          },
-          "data": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "message"
+      "IssueSeverity": {
+        "enum": [
+          "block",
+          "warn"
         ],
-        "title": "JSONRPCError",
-        "type": "object"
-      },
-      "JSONRPCResponse": {
-        "properties": {
-          "error": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JSONRPCError"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "jsonrpc": {
-            "const": "2.0",
-            "default": "2.0",
-            "title": "Jsonrpc",
-            "type": "string"
-          },
-          "result": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result"
-          }
-        },
-        "title": "JSONRPCResponse",
-        "type": "object"
+        "title": "IssueSeverity",
+        "type": "string"
       },
       "MCPAuthConfigCreateRequest": {
         "properties": {
@@ -3012,8 +4624,15 @@
             "type": "string"
           },
           "docker_image_url": {
-            "title": "Docker Image Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docker Image Url"
           },
           "env_schema": {
             "items": {
@@ -3070,6 +4689,10 @@
             ],
             "title": "Remote Url"
           },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -3093,9 +4716,9 @@
         },
         "required": [
           "id",
+          "slug",
           "name",
           "description",
-          "docker_image_url",
           "version",
           "tags",
           "is_public",
@@ -3264,12 +4887,61 @@
       },
       "MPPConfigSchema": {
         "properties": {
+          "chain_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decimals": {
+            "default": 6,
+            "title": "Decimals",
+            "type": "integer"
+          },
           "payment_method_types": {
             "items": {
               "type": "string"
             },
             "title": "Payment Method Types",
             "type": "array"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "rpc_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rpc Url"
           },
           "session_budget_usd": {
             "default": 10.0,
@@ -3291,8 +4963,139 @@
         "title": "MPPConfigSchema",
         "type": "object"
       },
+      "McpToolConfig-Input": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McpToolSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "mcp",
+            "default": "mcp",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "McpToolConfig",
+        "type": "object"
+      },
+      "McpToolConfig-Output": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McpToolSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "mcp",
+            "default": "mcp",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "McpToolConfig",
+        "type": "object"
+      },
+      "McpToolPermission": {
+        "description": "A single MCP tool the agent may call, with its per-call approval gate.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).",
+        "properties": {
+          "requires_user_confirmation": {
+            "default": false,
+            "title": "Requires User Confirmation",
+            "type": "boolean"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_name"
+        ],
+        "title": "McpToolPermission",
+        "type": "object"
+      },
+      "McpToolSettings": {
+        "description": "Settings for an MCP server tool (a subset of the server's tools).",
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/McpToolPermission"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "requires_user_confirmation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
+          }
+        },
+        "title": "McpToolSettings",
+        "type": "object"
+      },
       "MemberResponse": {
         "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3524,6 +5327,17 @@
           "provider_config_id": {
             "title": "Provider Config Id",
             "type": "string"
+          },
+          "provider_icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Icon Url"
           },
           "provider_key": {
             "anyOf": [
@@ -4300,6 +6114,93 @@
         "title": "OpenAPIConnectionUpdate",
         "type": "object"
       },
+      "OpenApiToolConfig": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenApiToolSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "openapi",
+            "default": "openapi",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OpenApiToolConfig",
+        "type": "object"
+      },
+      "OpenApiToolSettings": {
+        "description": "Settings for an OpenAPI connection tool.\n\n``load_mode`` picks schema disclosure: \"explicit\" inlines every operation's\nschema into each LLM call (legacy); \"searchable\" defers them behind a\n``load_tools`` meta-tool. Honored only for openapi tools \u2014 which is exactly\nwhy it lives here and nowhere else.",
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "load_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "explicit",
+                  "searchable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Mode"
+          },
+          "openapi_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Connection Id"
+          },
+          "requires_user_confirmation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
+          }
+        },
+        "title": "OpenApiToolSettings",
+        "type": "object"
+      },
       "PaginatedPaymentsResponse": {
         "properties": {
           "items": {
@@ -4365,6 +6266,42 @@
           "has_next"
         ],
         "title": "PaginatedResponse[MCPServerResponse]",
+        "type": "object"
+      },
+      "PaginatedResponse_SkillResponse_": {
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SkillResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "has_next"
+        ],
+        "title": "PaginatedResponse[SkillResponse]",
         "type": "object"
       },
       "PaymentRecordResponse": {
@@ -4464,6 +6401,364 @@
           "status"
         ],
         "title": "PaymentRecordResponse",
+        "type": "object"
+      },
+      "PolicyDocument": {
+        "additionalProperties": false,
+        "description": "Source policy document stored per scope.",
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetPolicy-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content_safety": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolsPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PolicyDocument",
+        "type": "object"
+      },
+      "PolicyEffect": {
+        "description": "What a rule does when it applies.",
+        "enum": [
+          "allow",
+          "deny",
+          "cap",
+          "approval",
+          "safety"
+        ],
+        "title": "PolicyEffect",
+        "type": "string"
+      },
+      "PolicyRuleCreateRequest": {
+        "additionalProperties": false,
+        "description": "Request body for creating a policy rule.",
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/PolicyEffect"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "$ref": "#/components/schemas/PolicySubjectType"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_type",
+          "subject_id",
+          "target",
+          "effect"
+        ],
+        "title": "PolicyRuleCreateRequest",
+        "type": "object"
+      },
+      "PolicyRuleResponse": {
+        "description": "Serialized policy rule returned to clients.",
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/PolicyEffect"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "$ref": "#/components/schemas/PolicySubjectType"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "enabled",
+          "priority",
+          "subject_type",
+          "subject_id",
+          "target",
+          "effect",
+          "params"
+        ],
+        "title": "PolicyRuleResponse",
+        "type": "object"
+      },
+      "PolicyRuleUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Request body for partially updating a policy rule.",
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyEffect"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicySubjectType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "title": "PolicyRuleUpdateRequest",
+        "type": "object"
+      },
+      "PolicySubjectType": {
+        "description": "The kind of subject a rule binds to.",
+        "enum": [
+          "workspace",
+          "agent",
+          "user",
+          "group"
+        ],
+        "title": "PolicySubjectType",
+        "type": "string"
+      },
+      "PreviewEntity": {
+        "additionalProperties": false,
+        "description": "One thing the package will (or won't) create.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EntityKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EntityStatus"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "name",
+          "status"
+        ],
+        "title": "PreviewEntity",
+        "type": "object"
+      },
+      "PreviewIssue": {
+        "additionalProperties": false,
+        "description": "A problem found while analyzing the package.",
+        "properties": {
+          "entity_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Key"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/IssueSeverity"
+          }
+        },
+        "required": [
+          "severity",
+          "message"
+        ],
+        "title": "PreviewIssue",
         "type": "object"
       },
       "ProjectAgentRef": {
@@ -4796,9 +7091,16 @@
         "description": "Payload for creating an LLM provider configuration.",
         "properties": {
           "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
-            "title": "Api Key",
-            "type": "string"
+            "title": "Api Key"
           },
           "description": {
             "anyOf": [
@@ -4847,8 +7149,7 @@
         },
         "required": [
           "provider_spec_id",
-          "name",
-          "api_key"
+          "name"
         ],
         "title": "ProviderConfigCreate",
         "type": "object"
@@ -4957,14 +7258,13 @@
           "api_key": {
             "anyOf": [
               {
-                "minLength": 1,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "New API key. Replaces the previously stored secret.",
+            "description": "New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.",
             "title": "Api Key"
           },
           "description": {
@@ -5522,6 +7822,364 @@
         "title": "RegistryUpdate",
         "type": "object"
       },
+      "RelationshipItem": {
+        "properties": {
+          "direct": {
+            "title": "Direct",
+            "type": "boolean"
+          },
+          "fanout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fanout"
+          },
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "object_name": {
+            "title": "Object Name",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "subject_kind": {
+            "enum": [
+              "agent",
+              "user",
+              "workspace"
+            ],
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "subject_name": {
+            "title": "Subject Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace",
+          "object",
+          "object_name",
+          "relation",
+          "subject",
+          "subject_kind",
+          "subject_name",
+          "direct"
+        ],
+        "title": "RelationshipItem",
+        "type": "object"
+      },
+      "RelationshipWriteRequest": {
+        "properties": {
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubjectSetBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "namespace",
+          "object",
+          "relation"
+        ],
+        "title": "RelationshipWriteRequest",
+        "type": "object"
+      },
+      "RelationshipsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "relationships": {
+            "items": {
+              "$ref": "#/components/schemas/RelationshipItem"
+            },
+            "title": "Relationships",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relationships",
+          "count"
+        ],
+        "title": "RelationshipsResponse",
+        "type": "object"
+      },
+      "ResolveHop": {
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "color"
+        ],
+        "title": "ResolveHop",
+        "type": "object"
+      },
+      "ResolvePath": {
+        "properties": {
+          "hops": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveHop"
+            },
+            "title": "Hops",
+            "type": "array"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "rels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relation",
+          "hops",
+          "rels"
+        ],
+        "title": "ResolvePath",
+        "type": "object"
+      },
+      "ResolveRequest": {
+        "properties": {
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_kind": {
+            "enum": [
+              "skill",
+              "collection",
+              "mcp",
+              "agent"
+            ],
+            "title": "Resource Kind",
+            "type": "string"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_id",
+          "resource_kind",
+          "resource_id"
+        ],
+        "title": "ResolveRequest",
+        "type": "object"
+      },
+      "ResolveResponse": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "effective_relation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Relation"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvePath"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "verb": {
+            "title": "Verb",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed",
+          "effective_relation",
+          "verb",
+          "paths"
+        ],
+        "title": "ResolveResponse",
+        "type": "object"
+      },
+      "SetupField": {
+        "additionalProperties": false,
+        "description": "A single value the user must provide before the package can run.\n\nThis is the generalized analogue of a Claude plugin ``userConfig`` entry\nand mirrors the existing MCP ``env_schema`` (KeyValueInput) shape.",
+        "properties": {
+          "default": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
+          "help": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Help text shown beneath the field.",
+            "title": "Help"
+          },
+          "key": {
+            "description": "Stable identifier referenced via ${setup.key}.",
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "description": "Human-readable label rendered in the form.",
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upper bound for type='number'.",
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lower bound for type='number'.",
+            "title": "Min"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Choices for type='select'.",
+            "title": "Options"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SetupFieldType",
+            "default": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SetupField",
+        "type": "object"
+      },
+      "SetupFieldType": {
+        "description": "Input widget / storage hint for a setup field.",
+        "enum": [
+          "secret",
+          "string",
+          "number",
+          "boolean",
+          "select"
+        ],
+        "title": "SetupFieldType",
+        "type": "string"
+      },
       "SkillContentResponse": {
         "description": "Skill content response model.",
         "properties": {
@@ -5726,6 +8384,24 @@
         "title": "SkillMemberResponse",
         "type": "object"
       },
+      "SkillRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SkillRef",
+        "type": "object"
+      },
       "SkillResponse": {
         "description": "Skill response model.",
         "properties": {
@@ -5744,16 +8420,36 @@
             ],
             "title": "Description"
           },
-          "has_files": {
-            "title": "Has Files",
-            "type": "boolean"
-          },
           "id": {
             "title": "Id",
             "type": "string"
           },
+          "is_catalog": {
+            "default": false,
+            "title": "Is Catalog",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "network_scope": {
+            "title": "Network Scope",
+            "type": "string"
+          },
+          "registry_item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Item Id"
+          },
+          "slug": {
+            "title": "Slug",
             "type": "string"
           },
           "source_type": {
@@ -5771,6 +8467,11 @@
             ],
             "title": "Source Url"
           },
+          "update_available": {
+            "default": false,
+            "title": "Update Available",
+            "type": "boolean"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -5783,10 +8484,11 @@
         "required": [
           "id",
           "name",
+          "slug",
           "description",
           "source_type",
           "source_url",
-          "has_files",
+          "network_scope",
           "workspace_id",
           "created_at",
           "updated_at"
@@ -5986,32 +8688,27 @@
         "title": "SpendCard",
         "type": "object"
       },
-      "SyncResponse": {
+      "SubjectSetBody": {
         "properties": {
-          "new_specs": {
-            "title": "New Specs",
-            "type": "integer"
+          "namespace": {
+            "title": "Namespace",
+            "type": "string"
           },
-          "total": {
-            "title": "Total",
-            "type": "integer"
+          "object": {
+            "title": "Object",
+            "type": "string"
           },
-          "unchanged": {
-            "title": "Unchanged",
-            "type": "integer"
-          },
-          "updates_flagged": {
-            "title": "Updates Flagged",
-            "type": "integer"
+          "relation": {
+            "title": "Relation",
+            "type": "string"
           }
         },
         "required": [
-          "new_specs",
-          "updates_flagged",
-          "unchanged",
-          "total"
+          "namespace",
+          "object",
+          "relation"
         ],
-        "title": "SyncResponse",
+        "title": "SubjectSetBody",
         "type": "object"
       },
       "TaskArtifactItem": {
@@ -6153,6 +8850,16 @@
             ],
             "default": false,
             "title": "Requires Human Approval"
+          },
+          "task_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6247,6 +8954,42 @@
           "has_next"
         ],
         "title": "TaskEventResponse",
+        "type": "object"
+      },
+      "TaskInputSubmission": {
+        "additionalProperties": false,
+        "description": "Structured user input submission for a pending workflow input request.",
+        "properties": {
+          "answers": {
+            "additionalProperties": true,
+            "title": "Answers",
+            "type": "object"
+          },
+          "input_request_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Input Request Id",
+            "type": "string"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/InputSecretValue"
+                }
+              ]
+            },
+            "title": "Secrets",
+            "type": "object"
+          }
+        },
+        "required": [
+          "input_request_id"
+        ],
+        "title": "TaskInputSubmission",
         "type": "object"
       },
       "TaskResponse": {
@@ -6482,6 +9225,28 @@
             "title": "Description",
             "type": "string"
           },
+          "escalation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Id"
+          },
+          "escalation_tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Tool Name"
+          },
           "execution_id": {
             "anyOf": [
               {
@@ -6546,39 +9311,203 @@
         "title": "TaskWithAgent",
         "type": "object"
       },
-      "ToolConfigYAML": {
-        "description": "Tool configuration in YAML format.",
+      "TokenPolicy": {
+        "additionalProperties": false,
+        "description": "Token-related ceilings.",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "settings": {
+          "max_tokens": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ToolSettingsYAML"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
-            ]
-          },
-          "type": {
-            "enum": [
-              "code",
-              "mcp",
-              "agent",
-              "openapi"
             ],
-            "title": "Type",
+            "title": "Max Tokens"
+          },
+          "max_tokens_per_call": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens Per Call"
+          }
+        },
+        "title": "TokenPolicy",
+        "type": "object"
+      },
+      "ToolAccessCheckRequest": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional exact argument set. Omit to check the whole-tool grant.",
+            "title": "Arguments"
+          },
+          "tool_name": {
+            "minLength": 1,
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "User UUID or User:<uuid> subject.",
+            "title": "User Id",
             "type": "string"
           }
         },
         "required": [
-          "type",
-          "name"
+          "user_id",
+          "tool_name"
         ],
-        "title": "ToolConfigYAML",
+        "title": "ToolAccessCheckRequest",
+        "type": "object"
+      },
+      "ToolAccessCheckResponse": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/ToolAccessGrant"
+          }
+        },
+        "required": [
+          "allowed",
+          "grant"
+        ],
+        "title": "ToolAccessCheckResponse",
+        "type": "object"
+      },
+      "ToolAccessGrant": {
+        "properties": {
+          "arguments_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments Hash"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "tool",
+              "arguments"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "workspace_id",
+          "user_id",
+          "tool_name",
+          "object_id"
+        ],
+        "title": "ToolAccessGrant",
+        "type": "object"
+      },
+      "ToolAccessGrantListResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/ToolAccessGrant"
+            },
+            "title": "Grants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "grants",
+          "count"
+        ],
+        "title": "ToolAccessGrantListResponse",
+        "type": "object"
+      },
+      "ToolAccessGrantRequest": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional exact argument set. Omit for a whole-tool grant.",
+            "title": "Arguments"
+          },
+          "tool_name": {
+            "minLength": 1,
+            "title": "Tool Name",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "User UUID or User:<uuid> subject.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "tool_name"
+        ],
+        "title": "ToolAccessGrantRequest",
+        "type": "object"
+      },
+      "ToolAccessGrantResponse": {
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/ToolAccessGrant"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "grant"
+        ],
+        "title": "ToolAccessGrantResponse",
         "type": "object"
       },
       "ToolResponse": {
@@ -6638,44 +9567,11 @@
         "title": "ToolResponse",
         "type": "object"
       },
-      "ToolSettingsYAML": {
-        "description": "Tool settings configuration in YAML format.",
+      "ToolsPolicy": {
+        "additionalProperties": false,
+        "description": "MCP tool capability restrictions.",
         "properties": {
-          "a2a_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A2A Url"
-          },
-          "allowed_tools": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allowed Tools"
-          },
-          "description_override": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description Override"
-          },
-          "disabled_methods": {
+          "allowed": {
             "anyOf": [
               {
                 "items": {
@@ -6687,32 +9583,17 @@
                 "type": "null"
               }
             ],
-            "title": "Disabled Methods"
+            "title": "Allowed"
           },
-          "openapi_connection_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openapi Connection Id"
-          },
-          "requires_user_confirmation": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requires User Confirmation"
+          "denied": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Denied",
+            "type": "array"
           }
         },
-        "title": "ToolSettingsYAML",
+        "title": "ToolsPolicy",
         "type": "object"
       },
       "TriggerCreate": {
@@ -7929,6 +10810,34 @@
         "title": "WorkspaceFileListResponse",
         "type": "object"
       },
+      "WorkspaceResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "type"
+        ],
+        "title": "WorkspaceResponse",
+        "type": "object"
+      },
       "WorkspaceSettingsResponse": {
         "properties": {
           "monthly_cap_usd": {
@@ -7993,6 +10902,24 @@
           }
         },
         "title": "X402ConfigSchema",
+        "type": "object"
+      },
+      "agentarea_api__api__v1__access_control__SyncResponse": {
+        "properties": {
+          "collections": {
+            "title": "Collections",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "collections"
+        ],
+        "title": "SyncResponse",
         "type": "object"
       },
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
@@ -8295,6 +11222,34 @@
           "updated_at"
         ],
         "title": "ModelSpecResponse",
+        "type": "object"
+      },
+      "agentarea_api__api__v1__registries__SyncResponse": {
+        "properties": {
+          "new_specs": {
+            "title": "New Specs",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updates_flagged": {
+            "title": "Updates Flagged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new_specs",
+          "updates_flagged",
+          "unchanged",
+          "total"
+        ],
+        "title": "SyncResponse",
         "type": "object"
       }
     },
@@ -8687,9 +11642,311 @@
         ]
       }
     },
+    "/v1/access-control/check": {
+      "post": {
+        "description": "Check whether a subject has a relation on an object.",
+        "operationId": "check_permission_v1_access_control_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Permission",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/graph": {
+      "get": {
+        "description": "Return the full authorization graph for the current workspace.",
+        "operationId": "get_graph_v1_access_control_graph_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Graph",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/relationships": {
+      "delete": {
+        "description": "Delete an authorization relationship from the configured graph backend.",
+        "operationId": "delete_relationship_v1_access_control_relationships_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Relationship",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      },
+      "get": {
+        "description": "List authorization relationships enriched with display names.",
+        "operationId": "list_relationships_v1_access_control_relationships_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "namespace",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Namespace"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Relationships",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      },
+      "post": {
+        "description": "Write an authorization relationship to the configured graph backend.",
+        "operationId": "create_relationship_v1_access_control_relationships_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Relationship V1 Access Control Relationships Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Relationship",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/resolve": {
+      "post": {
+        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing workspace relationships directly so the UI can render the derivation.",
+        "operationId": "resolve_access_v1_access_control_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resolve Access",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
+    "/v1/access-control/sync": {
+      "post": {
+        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. Mirror workspace members into the graph.\n  2. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  3. Mirror each collection membership relationship.\n  4. Mirror each direct agent-to-skill grant.",
+        "operationId": "sync_grants_v1_access_control_sync_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/agentarea_api__api__v1__access_control__SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Grants",
+        "tags": [
+          "v1",
+          "protected",
+          "access-control"
+        ]
+      }
+    },
     "/v1/agents": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future ReBAC) rather than query parameters.",
+        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
         "operationId": "list_agents_v1_agents_get",
         "responses": {
           "200": {
@@ -8722,7 +11979,7 @@
     },
     "/v1/agents/": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future ReBAC) rather than query parameters.",
+        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
         "operationId": "list_agents_v1_agents__get",
         "responses": {
           "200": {
@@ -8878,7 +12135,7 @@
     },
     "/v1/agents/{agent_id}": {
       "delete": {
-        "description": "Delete an agent.",
+        "description": "Delete an agent (by UUID or workspace-scoped slug).",
         "operationId": "delete_agent_v1_agents__agent_id__delete",
         "parameters": [
           {
@@ -8886,7 +12143,6 @@
             "name": "agent_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Agent Id",
               "type": "string"
             }
@@ -8925,7 +12181,7 @@
         ]
       },
       "get": {
-        "description": "Get an agent by ID.",
+        "description": "Get an agent by UUID or workspace-scoped slug (tenant or catalog).",
         "operationId": "get_agent_v1_agents__agent_id__get",
         "parameters": [
           {
@@ -8933,7 +12189,6 @@
             "name": "agent_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Agent Id",
               "type": "string"
             }
@@ -8974,7 +12229,7 @@
         ]
       },
       "patch": {
-        "description": "Update an agent.",
+        "description": "Update an agent (by UUID or workspace-scoped slug).",
         "operationId": "update_agent_v1_agents__agent_id__patch",
         "parameters": [
           {
@@ -8982,7 +12237,6 @@
             "name": "agent_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Agent Id",
               "type": "string"
             }
@@ -9081,7 +12335,9 @@
         "summary": "Get Agent Well Known Index",
         "tags": [
           "v1",
-          "protected"
+          "protected",
+          "agents",
+          "agents-well-known"
         ]
       }
     },
@@ -9133,13 +12389,67 @@
         "summary": "Get Agent A2A Info",
         "tags": [
           "v1",
-          "protected"
+          "protected",
+          "agents",
+          "agents-well-known"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/.well-known/agent-card.json": {
+      "get": {
+        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
+        "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Agent Well Known Card",
+        "tags": [
+          "v1",
+          "protected",
+          "agents",
+          "agents-well-known"
         ]
       }
     },
     "/v1/agents/{agent_id}/.well-known/agent.json": {
       "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
+        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
         "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get",
         "parameters": [
           {
@@ -9183,7 +12493,9 @@
         "summary": "Get Agent Well Known Card",
         "tags": [
           "v1",
-          "protected"
+          "protected",
+          "agents",
+          "agents-well-known"
         ]
       }
     },
@@ -9207,9 +12519,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JSONRPCResponse"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -9284,6 +12594,56 @@
         "tags": [
           "v1",
           "protected"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/install": {
+      "post": {
+        "description": "Add a built-in catalog agent to the workspace (copy-on-write fork).\n\nResolves a catalog agent by UUID or slug and materializes a tenant copy.\nIdempotent: returns the existing workspace copy if already installed.",
+        "operationId": "install_agent_v1_agents__agent_id__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Install Agent",
+        "tags": [
+          "v1",
+          "protected",
+          "agents"
         ]
       }
     },
@@ -9615,7 +12975,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific task for the specified agent using workflow status.",
+        "description": "Get a specific task for the specified agent.",
         "operationId": "get_agent_task_v1_agents__agent_id__tasks__task_id__get",
         "parameters": [
           {
@@ -9745,7 +13105,7 @@
     },
     "/v1/agents/{agent_id}/tasks/{task_id}/artifacts": {
       "get": {
-        "description": "List artifacts the agent produced under ``tasks/{task_id}/``.\n\nWorkspace-scoped: the task must belong to the caller's workspace, or we\nreturn 404. Each item carries a presigned download URL valid for\n``expires_in`` seconds (default 1 hour, capped at 24h).",
+        "description": "List artifacts the agent produced under ``tasks/{task_id}/``.\n\nWorkspace-scoped: the task must belong to the caller's workspace, or we\nreturn 404. Each item carries an AgentArea API download URL, so access\nstays behind our auth, audit, and workspace checks instead of exposing\nobject-storage URLs directly.",
         "operationId": "list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get",
         "parameters": [
           {
@@ -9813,6 +13173,74 @@
           }
         ],
         "summary": "List Task Artifacts",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}": {
+      "get": {
+        "description": "Stream a task artifact through the AgentArea API.",
+        "operationId": "download_task_artifact_v1_agents__agent_id__tasks__task_id__artifacts_files__artifact_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_path",
+            "required": true,
+            "schema": {
+              "title": "Artifact Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Task Artifact",
         "tags": [
           "v1",
           "protected",
@@ -10047,6 +13475,75 @@
           }
         ],
         "summary": "Stream Task Events",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/input": {
+      "post": {
+        "description": "Submit structured user input to a workflow waiting on request_user_input.\n\nSecret values are written to the workspace secret manager at the API boundary.\nOnly secret refs are sent to Temporal/LLM context.",
+        "operationId": "submit_task_input_v1_agents__agent_id__tasks__task_id__input_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInputSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Task Input",
         "tags": [
           "v1",
           "protected",
@@ -11189,6 +14686,104 @@
         ]
       }
     },
+    "/v1/bundles/analyze": {
+      "post": {
+        "description": "Parse and analyze a bundle source, returning a non-destructive preview.",
+        "operationId": "analyze_bundle_v1_bundles_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Analyze Bundle",
+        "tags": [
+          "v1",
+          "protected",
+          "bundles"
+        ]
+      }
+    },
+    "/v1/bundles/install": {
+      "post": {
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.",
+        "operationId": "install_bundle_v1_bundles_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Install Bundle",
+        "tags": [
+          "v1",
+          "protected",
+          "bundles"
+        ]
+      }
+    },
     "/v1/files": {
       "get": {
         "operationId": "list_workspace_files_v1_files_get",
@@ -11210,6 +14805,104 @@
           }
         ],
         "summary": "List Workspace Files",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/files/download/{file_path}": {
+      "get": {
+        "description": "Stream a workspace file through the AgentArea API.",
+        "operationId": "stream_workspace_file_v1_files_download__file_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Workspace File",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/files/history": {
+      "get": {
+        "description": "Return the provenance trail for a workspace file, newest event first.",
+        "operationId": "workspace_file_history_v1_files_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Workspace File History",
         "tags": [
           "v1",
           "protected",
@@ -11263,6 +14956,106 @@
           "v1",
           "protected",
           "files"
+        ]
+      }
+    },
+    "/v1/governance/effective-policy/preview": {
+      "post": {
+        "description": "Compute effective policy from rules without persisting a snapshot.\n\nUseful for UIs that need to show the merged workspace/agent/task ceiling\nbefore the user commits a task creation.",
+        "operationId": "preview_effective_policy_v1_governance_effective_policy_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffectivePolicyPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectivePolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Effective Policy",
+        "tags": [
+          "v1",
+          "protected",
+          "governance"
+        ]
+      }
+    },
+    "/v1/governance/task-policy-snapshots/{task_id}": {
+      "get": {
+        "description": "Read the effective governance policy for a task.\n\nThe effective policy is no longer persisted; it is served on demand by\nquerying the task's Temporal workflow, where it lives in workflow state.",
+        "operationId": "get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectivePolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Task Policy Snapshot",
+        "tags": [
+          "v1",
+          "protected",
+          "governance"
         ]
       }
     },
@@ -12968,7 +16761,6 @@
             "name": "server_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Server Id",
               "type": "string"
             }
@@ -13014,7 +16806,6 @@
             "name": "server_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Server Id",
               "type": "string"
             }
@@ -13062,7 +16853,6 @@
             "name": "server_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Server Id",
               "type": "string"
             }
@@ -13122,7 +16912,6 @@
             "name": "server_id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "title": "Server Id",
               "type": "string"
             }
@@ -13158,6 +16947,149 @@
           "v1",
           "protected",
           "mcp-servers"
+        ]
+      }
+    },
+    "/v1/mcp/{instance_id}/mcp": {
+      "delete": {
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-proxy"
+        ]
+      },
+      "get": {
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-proxy"
+        ]
+      },
+      "post": {
+        "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
+        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-proxy"
         ]
       }
     },
@@ -14381,6 +18313,330 @@
         ]
       }
     },
+    "/v1/policies": {
+      "get": {
+        "description": "List policy rules in the current workspace.",
+        "operationId": "list_policy_rules_v1_policies_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PolicySubjectType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "effect",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PolicyEffect"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Effect"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enabled"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyRuleResponse"
+                  },
+                  "title": "Response List Policy Rules V1 Policies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Policy Rules",
+        "tags": [
+          "v1",
+          "protected",
+          "policies"
+        ]
+      },
+      "post": {
+        "description": "Create a policy rule in the current workspace.",
+        "operationId": "create_policy_rule_v1_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyRuleCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Policy Rule",
+        "tags": [
+          "v1",
+          "protected",
+          "policies"
+        ]
+      }
+    },
+    "/v1/policies/{rule_id}": {
+      "delete": {
+        "description": "Delete a policy rule.",
+        "operationId": "delete_policy_rule_v1_policies__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Policy Rule",
+        "tags": [
+          "v1",
+          "protected",
+          "policies"
+        ]
+      },
+      "get": {
+        "description": "Read one policy rule in the current workspace.",
+        "operationId": "get_policy_rule_v1_policies__rule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Policy Rule",
+        "tags": [
+          "v1",
+          "protected",
+          "policies"
+        ]
+      },
+      "patch": {
+        "description": "Partially update a policy rule.",
+        "operationId": "update_policy_rule_v1_policies__rule_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyRuleUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Policy Rule",
+        "tags": [
+          "v1",
+          "protected",
+          "policies"
+        ]
+      }
+    },
     "/v1/projects/": {
       "get": {
         "description": "List all projects in the current workspace.",
@@ -14856,6 +19112,64 @@
         ]
       }
     },
+    "/v1/projects/{project_id}/files/download/{file_path}": {
+      "get": {
+        "description": "Stream a project file through the AgentArea API.",
+        "operationId": "stream_project_file_v1_projects__project_id__files_download__file_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Project File",
+        "tags": [
+          "v1",
+          "protected",
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{project_id}/files/{file_path}": {
       "delete": {
         "description": "Delete a file from the project's prefix.",
@@ -14909,7 +19223,7 @@
         ]
       },
       "get": {
-        "description": "Generate a presigned URL for a project file.",
+        "description": "Return an AgentArea API URL for a project file.",
         "operationId": "download_project_file_v1_projects__project_id__files__file_path__get",
         "parameters": [
           {
@@ -16558,7 +20872,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncResponse"
+                  "$ref": "#/components/schemas/agentarea_api__api__v1__registries__SyncResponse"
                 }
               }
             },
@@ -16639,24 +20953,465 @@
         ]
       }
     },
-    "/v1/skills": {
+    "/v1/skill-collections/": {
       "get": {
-        "description": "List all skills in the workspace.",
-        "operationId": "list_skills_v1_skills_get",
+        "description": "List collections in the current workspace with skill counts.",
+        "operationId": "list_collections_v1_skill_collections__get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/SkillResponse"
+                    "$ref": "#/components/schemas/CollectionSummaryResponse"
                   },
-                  "title": "Response List Skills V1 Skills Get",
+                  "title": "Response List Collections V1 Skill Collections  Get",
                   "type": "array"
                 }
               }
             },
             "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Collections",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      },
+      "post": {
+        "description": "Create a new collection in the current workspace.",
+        "operationId": "create_collection_v1_skill_collections__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      }
+    },
+    "/v1/skill-collections/{collection_id}": {
+      "delete": {
+        "description": "Delete a collection from the current workspace.",
+        "operationId": "delete_collection_v1_skill_collections__collection_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      },
+      "get": {
+        "description": "Read one collection with its skills.",
+        "operationId": "get_collection_v1_skill_collections__collection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      },
+      "put": {
+        "description": "Update a collection's name and/or description.",
+        "operationId": "update_collection_v1_skill_collections__collection_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      }
+    },
+    "/v1/skill-collections/{collection_id}/skills": {
+      "post": {
+        "description": "Add a skill to a collection and mirror the membership into the graph.",
+        "operationId": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Skill To Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      }
+    },
+    "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
+      "delete": {
+        "description": "Remove a skill from a collection and delete the graph membership.",
+        "operationId": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Skill From Collection",
+        "tags": [
+          "v1",
+          "protected",
+          "skill-collections"
+        ]
+      }
+    },
+    "/v1/skills": {
+      "get": {
+        "description": "List skills in the workspace.",
+        "operationId": "list_skills_v1_skills_get",
+        "parameters": [
+          {
+            "description": "Filter by source type",
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source type",
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "Filter by network scope",
+            "in": "query",
+            "name": "network_scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by network scope",
+              "title": "Network Scope"
+            }
+          },
+          {
+            "description": "Filter registry-created skills",
+            "in": "query",
+            "name": "from_registry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter registry-created skills",
+              "title": "From Registry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_SkillResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -16851,7 +21606,7 @@
         ]
       },
       "get": {
-        "description": "Get a skill by ID.",
+        "description": "Get a skill by ID (tenant or catalog).",
         "operationId": "get_skill_v1_skills__skill_id__get",
         "parameters": [
           {
@@ -16961,7 +21716,7 @@
     },
     "/v1/skills/{skill_id}/content": {
       "get": {
-        "description": "Get the main markdown content of a skill.",
+        "description": "Get the main markdown content of a skill (tenant or catalog).",
         "operationId": "get_skill_content_v1_skills__skill_id__content_get",
         "parameters": [
           {
@@ -17187,6 +21942,57 @@
           }
         ],
         "summary": "Flatten Skill Members",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
+    "/v1/skills/{skill_id}/install": {
+      "post": {
+        "description": "Add a built-in catalog skill to the workspace.",
+        "operationId": "install_skill_v1_skills__skill_id__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Install Skill",
         "tags": [
           "v1",
           "protected",
@@ -17505,6 +22311,171 @@
           "v1",
           "protected",
           "tasks"
+        ]
+      }
+    },
+    "/v1/tool-access/checks": {
+      "post": {
+        "description": "Check whether a user can call a tool.\n\nOmitting ``arguments`` checks a whole-tool grant. Passing ``arguments``\nchecks the concrete invocation path used by runtime tool execution.",
+        "operationId": "check_tool_access_v1_tool_access_checks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      }
+    },
+    "/v1/tool-access/grants": {
+      "delete": {
+        "description": "Revoke a whole-tool or exact-arguments grant.",
+        "operationId": "revoke_tool_access_v1_tool_access_grants_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      },
+      "get": {
+        "description": "List tool access grants in the configured graph backend.",
+        "operationId": "list_tool_access_grants_v1_tool_access_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessGrantListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tool Access Grants",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
+        ]
+      },
+      "post": {
+        "description": "Grant a user access to a whole tool, or to an exact argument set.",
+        "operationId": "grant_tool_access_v1_tool_access_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolAccessGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAccessGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Tool Access",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-access"
         ]
       }
     },
@@ -18102,7 +23073,7 @@
     },
     "/v1/triggers/{trigger_id}/execute": {
       "post": {
-        "description": "Execute a trigger with the provided event data.\n\nCalled by the Go event service when a polling channel receives new messages.\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: Events and channel origin data\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
+        "description": "Execute a trigger with the provided event data.\n\nCalled by the Go event service when a polling channel receives new messages.\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: Events and channel origin data\n    http_request: Raw request, used to verify the internal service token\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
         "operationId": "execute_trigger_v1_triggers__trigger_id__execute_post",
         "parameters": [
           {
@@ -18523,7 +23494,7 @@
     },
     "/v1/workspace/export": {
       "get": {
-        "description": "Export current workspace configuration as YAML.\n\nThis endpoint exports all workspace-scoped resources:\n- Agents (excluding system default agent)\n- MCP server instances\n- Provider configurations\n\n**Important Notes:**\n- Secrets (API keys, passwords) are replaced with placeholders\n- System-level resources (workspace_id=\"system\") are excluded\n- Only resources in the current workspace are exported\n- References to specs are included (server_spec_id, provider_spec_id)\n\n**Returns:**\nYAML file content that can be saved and later imported",
+        "description": "Export current workspace configuration as YAML.\n\nThis endpoint exports all workspace-scoped resources:\n- Agents (excluding system default agent)\n- MCP server instances\n- Provider configurations\n\n**Important Notes:**\n- Secrets (API keys, passwords) are replaced with placeholders\n- Built-in/catalog resources (carrying registry_item_id) are excluded\n- Only resources in the current workspace are exported\n- References to specs are included (server_spec_id, provider_spec_id)\n\n**Returns:**\nYAML file content that can be saved and later imported",
         "operationId": "export_workspace_config_v1_workspace_export_get",
         "responses": {
           "200": {
@@ -18552,7 +23523,7 @@
     },
     "/v1/workspace/import": {
       "post": {
-        "description": "Import workspace configuration from YAML.\n\nThis endpoint creates agents, MCP instances, and provider configs\nin the current workspace based on the provided YAML configuration.\n\n**Important Notes:**\n- All resources are created in the current workspace\n- Secrets (API keys, passwords) must be provided as they cannot be exported\n- References to MCP servers and provider specs must exist in the system\n- Import is atomic - if any resource fails, all changes are rolled back\n\n**Example YAML:**\n```yaml\nagents:\n  - name: \"My Assistant\"\n    description: \"Helpful assistant\"\n    instruction: \"You are a helpful AI assistant\"\n    tools:\n      - type: code\n        name: agentarea/calculator\n      - type: mcp\n        name: my-filesystem\n        settings:\n          allowed_tools: [read_file, write_file]\n    planning: false\n\nmcp_instances:\n  - name: \"My Filesystem\"\n    description: \"Local file access\"\n    server_spec_id: \"a1b2c3d4-...\"\n    env_vars:\n      FILESYSTEM_ROOT: \"/workspace\"\n\nprovider_configs:\n  - name: \"My OpenAI\"\n    provider_spec_id: \"932f3839-...\"\n    api_key_placeholder: \"sk-...\"\n```",
+        "description": "Import workspace configuration from YAML.\n\nThis endpoint creates agents, MCP instances, and provider configs\nin the current workspace based on the provided YAML configuration.\n\n**Important Notes:**\n- All resources are created in the current workspace\n- Secrets (API keys, passwords) must be provided as they cannot be exported\n- References to MCP servers and provider specs must exist in the system\n- Import is atomic - if any resource fails, all changes are rolled back\n\n**Example YAML:**\n```yaml\nagents:\n  - name: \"My Assistant\"\n    description: \"Helpful assistant\"\n    instruction: \"You are a helpful AI assistant\"\n    tools:\n      - type: code\n        name: agentarea/math\n      - type: mcp\n        name: my-filesystem\n        settings:\n          allowed_tools: [read_file, write_file]\n    planning: false\n\nmcp_instances:\n  - name: \"My Filesystem\"\n    description: \"Local file access\"\n    server_spec_id: \"a1b2c3d4-...\"\n    env_vars:\n      FILESYSTEM_ROOT: \"/workspace\"\n\nprovider_configs:\n  - name: \"My OpenAI\"\n    provider_spec_id: \"932f3839-...\"\n    api_key_placeholder: \"sk-...\"\n```",
         "operationId": "import_workspace_config_v1_workspace_import_post",
         "requestBody": {
           "content": {
@@ -18703,7 +23674,7 @@
         ]
       },
       "put": {
-        "description": "Upsert the current workspace's settings.",
+        "description": "Upsert the current workspace's monthly spend cap as a policy rule.",
         "operationId": "update_workspace_settings_v1_workspace_settings_put",
         "requestBody": {
           "content": {
@@ -18747,6 +23718,39 @@
           "v1",
           "protected",
           "dashboard"
+        ]
+      }
+    },
+    "/v1/workspaces": {
+      "get": {
+        "description": "List every workspace the current user can reach (personal + joined).\n\nProvisions the caller's personal workspace on first call, so a brand\nnew user always gets at least one entry. Baseline governance policies are\nseeded by the workspace-creation hook (see ``get_workspace_service``).",
+        "operationId": "list_workspaces_v1_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceResponse"
+                  },
+                  "title": "Response List Workspaces V1 Workspaces Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Workspaces",
+        "tags": [
+          "v1",
+          "protected",
+          "workspaces"
         ]
       }
     },

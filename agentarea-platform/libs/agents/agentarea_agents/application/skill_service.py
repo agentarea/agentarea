@@ -67,6 +67,8 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         s3_path=spec.get("s3_path"),
         network_scope=spec.get("network_scope") or "private",
         registry_item_id=item.id,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
     # Read-only catalog projection markers consumed by the API DTO.
     skill.is_catalog = True  # type: ignore[attr-defined]
@@ -474,7 +476,6 @@ class SkillService:
         offset: int = 0,
         search: str | None = None,
         source_type: str | None = None,
-        has_files: bool | None = None,
         network_scope: str | None = None,
         from_registry: bool | None = None,
     ) -> tuple[list[Skill], int]:
@@ -496,7 +497,6 @@ class SkillService:
             merged,
             search=search,
             source_type=source_type,
-            has_files=has_files,
             network_scope=network_scope,
             from_registry=from_registry,
         )
@@ -510,7 +510,6 @@ class SkillService:
         *,
         search: str | None,
         source_type: str | None,
-        has_files: bool | None,
         network_scope: str | None,
         from_registry: bool | None,
     ) -> list[Skill]:
@@ -527,10 +526,6 @@ class SkillService:
             ]
         if source_type:
             result = [s for s in result if s.source_type == source_type]
-        if has_files is True:
-            result = [s for s in result if s.s3_path is not None]
-        elif has_files is False:
-            result = [s for s in result if s.s3_path is None]
         if network_scope:
             result = [s for s in result if s.network_scope == network_scope]
         if from_registry is True:
@@ -556,8 +551,8 @@ class SkillService:
 
         Creates a real, owned skill (workspace_id/created_by come from the
         repository's UserContext — never ``platform``), links it back to the
-        catalog item via ``registry_item_id``, and records the install on the
-        registry item (``installed_entity_id`` + ``installed_version``).
+        catalog item via ``registry_item_id``, and records workspace-scoped
+        install state for that catalog item.
 
         Copy-on-write semantics: the metadata/spec (name, description,
         source_type, content, s3_path reference) is copied into the tenant row,
@@ -592,6 +587,26 @@ class SkillService:
             skill.id,
         )
         return skill
+
+    async def install_catalog_skill(self, skill_id: UUID | str) -> Skill | None:
+        """Materialize a catalog skill into the workspace.
+
+        Idempotent: if the id is already a tenant skill, returns it. If this
+        workspace has already forked the catalog item, returns that copy.
+        """
+        existing = await self.get(skill_id)
+        if existing is not None:
+            return existing
+
+        item = await self._get_catalog_repository().get_item(str(skill_id))
+        if item is None:
+            return None
+
+        forked = await self._get_repository().get_by_registry_item_id(item.id)
+        if forked is not None:
+            return forked
+
+        return await self._fork_catalog_skill(item)
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.

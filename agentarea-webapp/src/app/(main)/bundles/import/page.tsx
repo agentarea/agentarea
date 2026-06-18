@@ -6,7 +6,14 @@ export const metadata: Metadata = {
   title: "Import Agent Package",
 };
 
-export default function ImportBundlePage() {
+export default async function ImportBundlePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ src?: string | string[] }>;
+}) {
+  const { src } = await searchParams;
+  const initialSrc = Array.isArray(src) ? src[0] : src;
+
   return (
     <ContentBlock
       header={{
@@ -17,7 +24,7 @@ export default function ImportBundlePage() {
         description: "Install a pre-built agent package into your workspace.",
       }}
     >
-      <ImportWizard />
+      <ImportWizard initialSrc={initialSrc} />
     </ContentBlock>
   );
 }

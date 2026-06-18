@@ -22,10 +22,7 @@ from agentarea_governance.domain.rules import (
     PolicyRule,
     PolicySubjectType,
 )
-from agentarea_governance.infrastructure.orm import (
-    PolicyRuleORM,
-    TaskPolicySnapshotORM,
-)
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -37,7 +34,7 @@ async def session_factory():
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(
                 sync_conn,
-                tables=[PolicyRuleORM.__table__, TaskPolicySnapshotORM.__table__],
+                tables=[PolicyRuleORM.__table__],
             )
         )
     try:

@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from uuid import UUID
 
-from .models import SimpleTask
+from .models import AgentTask
 
 
 class BaseTaskManager(ABC):
@@ -20,7 +20,7 @@ class BaseTaskManager(ABC):
     """
 
     @abstractmethod
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a task for execution.
 
         Args:
@@ -32,7 +32,7 @@ class BaseTaskManager(ABC):
         pass
 
     @abstractmethod
-    async def get_task(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task(self, task_id: UUID) -> AgentTask | None:
         """Get a task by its ID.
 
         Args:
@@ -63,7 +63,7 @@ class BaseTaskManager(ABC):
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[SimpleTask]:
+    ) -> list[AgentTask]:
         """List tasks with optional filtering.
 
         Args:

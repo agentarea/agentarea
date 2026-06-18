@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from agentarea_tasks.domain.models import SimpleTask, Task
+from agentarea_tasks.domain.models import AgentTask, Task
 
 
-def _make_simple_task(agent_id, chat_id, query="hello"):
-    """Create a SimpleTask with channel_origin."""
-    return SimpleTask(
+def _make_agent_task(agent_id, chat_id, query="hello"):
+    """Create a AgentTask with channel_origin."""
+    return AgentTask(
         title="Test",
         description=query,
         query=query,
@@ -94,7 +94,7 @@ class TestRouteOrSubmitTask:
 
         service, task_manager, _task_repo = _make_task_service(candidates=[active_task])
 
-        task = _make_simple_task(agent_id, chat_id, query="follow-up question")
+        task = _make_agent_task(agent_id, chat_id, query="follow-up question")
         result = await service.route_or_submit_task(task)
 
         assert result.status == "routed"
@@ -114,7 +114,7 @@ class TestRouteOrSubmitTask:
 
         service, task_manager, task_repo = _make_task_service(candidates=[])
 
-        task = _make_simple_task(agent_id, "99999", query="first message")
+        task = _make_agent_task(agent_id, "99999", query="first message")
         await service.route_or_submit_task(task)
 
         task_repo.find_active_by_agent_and_chat.assert_called_once()
@@ -132,7 +132,7 @@ class TestRouteOrSubmitTask:
             signal_side_effect=lambda *a, **kw: False,
         )
 
-        task = _make_simple_task(agent_id, chat_id, query="retry message")
+        task = _make_agent_task(agent_id, chat_id, query="retry message")
         await service.route_or_submit_task(task)
 
         # Signal was attempted
@@ -148,7 +148,7 @@ class TestRouteOrSubmitTask:
         # No candidates returned for chat 222
         service, task_manager, task_repo = _make_task_service(candidates=[])
 
-        task = _make_simple_task(agent_id, "222", query="hello")
+        task = _make_agent_task(agent_id, "222", query="hello")
         await service.route_or_submit_task(task)
 
         task_repo.find_active_by_agent_and_chat.assert_called_once_with(agent_id, "222")
@@ -162,7 +162,7 @@ class TestRouteOrSubmitTask:
 
         service, task_manager, task_repo = _make_task_service()
 
-        task = SimpleTask(
+        task = AgentTask(
             title="API task",
             description="do something",
             query="do something",
@@ -185,7 +185,7 @@ class TestRouteOrSubmitTask:
         service, task_manager, task_repo = _make_task_service()
         del task_manager.temporal_executor  # Simulate DirectTaskManager
 
-        task = _make_simple_task(agent_id, "12345", query="hello")
+        task = _make_agent_task(agent_id, "12345", query="hello")
         await service.route_or_submit_task(task)
 
         task_repo.find_active_by_agent_and_chat.assert_not_called()

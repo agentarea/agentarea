@@ -35,8 +35,10 @@ async def initialize_services():
         # Discover extensions and wire DI
         from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
-        from agentarea_common.auth.simple_permission import SimplePermissionService
+        from agentarea_common.auth.workspace_authorization import (
+            WorkspaceScopedAuthorizationService,
+        )
+        from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
         from agentarea_common.config.app import get_app_settings
         from agentarea_common.extensions import discover_extensions
         from agentarea_common.extensions.registry import ExtensionRegistry
@@ -52,33 +54,51 @@ async def initialize_services():
 
         settings = get_settings()
 
-        # Shared Keto client (used by the rebac API + KetoPermissionService).
+        # Shared graph clients (used by the rebac API + PermissionService).
+        openfga_client = None
+        if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+            from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
+            from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+            await bootstrap_openfga(settings.openfga)
+            openfga_client = OpenFGAClient(
+                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+            )
+            register_singleton(OpenFGAClient, openfga_client)
+
         keto_client = None
-        if settings.keto.KETO_ENABLED:
+        if openfga_client is None and settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
             from agentarea_common.rebac.keto_client import KetoClient
 
             keto_client = KetoClient(
-                read_url=settings.keto.KETO_READ_URL,
-                write_url=settings.keto.KETO_WRITE_URL,
-                timeout_seconds=settings.keto.KETO_TIMEOUT_SECONDS,
+                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
+                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
+                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
             )
             register_singleton(KetoClient, keto_client)
 
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if perm_factory:
             register_factory(PermissionService, perm_factory)
+        elif openfga_client is not None:
+            from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
+
+            register_singleton(PermissionService, OpenFGAPermissionService(openfga_client))
         elif keto_client is not None:
             from agentarea_common.auth.keto_permission import KetoPermissionService
 
             register_singleton(PermissionService, KetoPermissionService(keto_client))
         else:
-            register_singleton(PermissionService, SimplePermissionService())
+            register_singleton(PermissionService, WorkspaceScopedPermissionService())
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
             register_factory(AuthorizationService, authz_factory)
         else:
-            register_singleton(AuthorizationService, SimpleAuthorizationService())
+            register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
         from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 

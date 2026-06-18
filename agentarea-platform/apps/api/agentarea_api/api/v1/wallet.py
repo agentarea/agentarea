@@ -38,6 +38,11 @@ class MPPConfigSchema(BaseModel):
     payment_method_types: list[str] = Field(default_factory=lambda: ["charge"])
     session_budget_usd: float = 10.0
     stripe_profile_id: str | None = None
+    chain_id: int | None = None
+    rpc_url: str | None = None
+    currency: str | None = None
+    recipient: str | None = None
+    decimals: int = 6
 
 
 class WalletCredentialsSchema(BaseModel):

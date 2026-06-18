@@ -1,4 +1,4 @@
-import type { RebacGraph, RebacNode } from "@/types/rebac";
+import type { AccessControlGraph, AccessControlNode } from "@/types/access-control";
 
 // Layout constants tuned to match the design prototype's node/edge styling.
 export const NODE_WIDTH = 168;
@@ -8,7 +8,7 @@ const ROW_GAP = 30; // vertical gap between nodes in a column
 const TOP_PADDING = 36; // space for column labels
 const SIDE_PADDING = 12;
 
-export interface PositionedNode extends RebacNode {
+export interface PositionedNode extends AccessControlNode {
   x: number;
   y: number;
   w: number;
@@ -34,12 +34,12 @@ export interface GraphLayout {
 }
 
 // Column 1 = agents, column 2 = collections + mcp resources.
-function columnForKind(kind: RebacNode["kind"]): number {
+function columnForKind(kind: AccessControlNode["kind"]): number {
   return kind === "agent" ? 0 : 1;
 }
 
-export function layoutGraph(graph: RebacGraph): GraphLayout {
-  const columns: RebacNode[][] = [[], []];
+export function layoutGraph(graph: AccessControlGraph): GraphLayout {
+  const columns: AccessControlNode[][] = [[], []];
   for (const node of graph.nodes) {
     columns[columnForKind(node.kind)].push(node);
   }

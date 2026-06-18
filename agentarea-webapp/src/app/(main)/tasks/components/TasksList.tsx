@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Bot, Calendar, Clock, DollarSign, GitFork } from "lucide-react";
+import { Calendar, Clock, GitFork } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
 import { Badge } from "@/components/ui/badge";
@@ -13,16 +14,20 @@ interface TasksListProps {
   viewMode?: string;
 }
 
-const statusVariants = {
-  running: "default",
-  completed: "success",
-  success: "success",
-  failed: "destructive",
-  blocked: "secondary",
-  error: "destructive",
-  paused: "secondary",
-  pending: "secondary",
+const statusColors = {
+  running: "text-amber-600 border-amber-300",
+  completed: "text-green-600 border-green-300",
+  success: "text-green-600 border-green-300",
+  failed: "text-red-600 border-red-300",
+  blocked: "text-gray-500 border-gray-300",
+  error: "text-red-600 border-red-300",
+  paused: "text-gray-500 border-gray-300",
+  pending: "text-gray-500 border-gray-300",
 } as const;
+
+function formatUsdCost(value: number) {
+  return `$${value.toFixed(4)}`;
+}
 
 export default function TasksList({
   initialTasks,
@@ -38,7 +43,8 @@ export default function TasksList({
       accessor: "description",
       header: t("description"),
       render: (value: string, row: TaskWithAgent) => {
-        const isDelegation = (row as any).parameters?.source === "agent_delegation";
+        const isDelegation =
+          (row as any).parameters?.source === "agent_delegation";
         return (
           <div className="flex items-center gap-2 max-w-[300px]">
             {isDelegation && (
@@ -52,9 +58,12 @@ export default function TasksList({
     {
       accessor: "agent_name",
       header: t("agent"),
-      render: (value: string) => (
+      render: (value: string, row: TaskWithAgent) => (
         <div className="flex items-center gap-1.5 text-xs">
-          <Bot className="h-3 w-3" />
+          <AgentAvatar
+            agent={{ id: row.agent_id || value || "agent", name: value }}
+            size="xs"
+          />
           <span>{value || "Unknown Agent"}</span>
         </div>
       ),
@@ -63,15 +72,29 @@ export default function TasksList({
       accessor: "status",
       header: t("statusLabel"),
       render: (value: string) => {
-        const variant =
-          statusVariants[value as keyof typeof statusVariants] || "secondary";
+        const color =
+          statusColors[value as keyof typeof statusColors] ||
+          "text-gray-500 border-gray-300";
         // Check if translation exists, otherwise fallback to capitalized value
-        const label = ["running", "completed", "success", "failed", "blocked", "error", "paused", "pending"].includes(value)
+        const label = [
+          "running",
+          "completed",
+          "success",
+          "failed",
+          "blocked",
+          "error",
+          "paused",
+          "pending",
+        ].includes(value)
           ? tStatus(value)
           : value.charAt(0).toUpperCase() + value.slice(1);
-          
+
         return (
-          <Badge variant={variant} className="whitespace-nowrap">
+          <Badge
+            size="sm"
+            variant="outline"
+            className={`whitespace-nowrap h-5 px-1.5 font-normal ${color}`}
+          >
             {label}
           </Badge>
         );
@@ -85,10 +108,7 @@ export default function TasksList({
         return (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {num != null && !isNaN(num) ? (
-              <>
-                <DollarSign className="h-3 w-3" />
-                <span className="font-mono">{num.toFixed(4)}</span>
-              </>
+              <span className="font-mono">{formatUsdCost(num)}</span>
             ) : (
               <span>—</span>
             )}
@@ -125,8 +145,6 @@ export default function TasksList({
     },
   ];
 
-  const totalCost = initialTasks.reduce((sum, t) => sum + (Number((t as any).total_cost) || 0), 0);
-
   // Render table view
   if (viewMode === "table") {
     return (
@@ -138,15 +156,6 @@ export default function TasksList({
             router.push(`/tasks/${task.id}`);
           }}
         />
-        {totalCost > 0 && (
-          <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-sm">
-            <span className="text-muted-foreground">Total:</span>
-            <span className="flex items-center gap-1 font-mono font-semibold">
-              <DollarSign className="h-3.5 w-3.5" />
-              {totalCost.toFixed(4)}
-            </span>
-          </div>
-        )}
       </div>
     );
   }

@@ -167,7 +167,7 @@ export const CONNECTION_TYPE_CONFIG: Record<
   url: {
     label: "Remote",
     color:
-      "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800",
+      "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800",
   },
 };
 
@@ -254,7 +254,7 @@ export function getMCPServerCategory(tags: string[]): MCPServerCategory {
  */
 export function getCategoryColorClasses(category: MCPServerCategory): string {
   const colorMap: Record<MCPServerCategory, string> = {
-    AI: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800",
+    AI: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
     Data: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
     Dev: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800",
     Web: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800",

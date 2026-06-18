@@ -1,8 +1,13 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { getTaskAction as getTask, getAgentTaskStatusAction as getAgentTaskStatus } from "@/lib/server-actions";
+import {
+  getTaskAction as getTask,
+  getAgentTaskStatusAction as getAgentTaskStatus,
+  getTaskPolicySnapshotAction as getTaskPolicySnapshot,
+} from "@/lib/server-actions";
 import type { TaskWithAgent } from "@/lib/api";
+import type { EffectivePolicy, EffectivePolicyResponse } from "@/types/policies";
 
 interface TaskData {
   id: string;
@@ -14,6 +19,7 @@ interface TaskData {
   agent_name?: string;
   agent_description?: string;
   result?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }
 
 interface TaskStatus {
@@ -35,6 +41,7 @@ interface TaskStatus {
 interface TaskContextType {
   task: TaskData | null;
   taskStatus: TaskStatus | null;
+  policy: EffectivePolicy | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -54,6 +61,7 @@ function parseTaskData(raw: any): TaskData | null {
     agent_name: raw.agent_name,
     agent_description: raw.agent_description || undefined,
     result: typeof raw.result === "object" && raw.result !== null ? raw.result as Record<string, unknown> : undefined,
+    parameters: typeof raw.parameters === "object" && raw.parameters !== null ? raw.parameters as Record<string, unknown> : undefined,
   };
 }
 
@@ -67,6 +75,7 @@ interface TaskProviderProps {
 export function TaskProvider({ taskId, initialTask, initialError, children }: TaskProviderProps) {
   const [task, setTask] = useState<TaskData | null>(() => parseTaskData(initialTask));
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
   const [loading, setLoading] = useState(!initialTask && !initialError);
   const [error, setError] = useState<string | null>(initialError ?? null);
 
@@ -111,6 +120,25 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
     loadStatus();
   }, [task?.id]);
 
+  // Load the immutable governance policy snapshot for the task (best-effort:
+  // legacy tasks return 404, which we treat as "no policy").
+  useEffect(() => {
+    if (!task) return;
+    const loadPolicy = async () => {
+      try {
+        const res = await getTaskPolicySnapshot(task.id);
+        if (!res.error && res.data) {
+          setPolicy(
+            (res.data as EffectivePolicyResponse).effective_policy ?? null
+          );
+        }
+      } catch {
+        // Policy is optional — page works without it
+      }
+    };
+    loadPolicy();
+  }, [task?.id]);
+
   // Only fetch client-side if no server data was provided
   useEffect(() => {
     if (!initialTask && !initialError) {
@@ -120,7 +148,7 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
 
   return (
     <TaskContext.Provider
-      value={{ task, taskStatus, loading, error, refresh: loadTask }}
+      value={{ task, taskStatus, policy, loading, error, refresh: loadTask }}
     >
       {children}
     </TaskContext.Provider>

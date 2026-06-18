@@ -8,7 +8,7 @@ import logging
 from uuid import uuid4
 
 import pytest
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
 logger = logging.getLogger(__name__)
@@ -18,11 +18,11 @@ class TestWorkspaceIdPropagation:
     """Test workspace_id propagation through the task execution stack."""
 
     @pytest.mark.asyncio
-    async def test_simple_task_requires_workspace_id(self):
-        """Test that SimpleTask requires workspace_id (no fallback)."""
-        # Attempting to create SimpleTask without workspace_id should fail
+    async def test_agent_task_requires_workspace_id(self):
+        """Test that AgentTask requires workspace_id (no fallback)."""
+        # Attempting to create AgentTask without workspace_id should fail
         with pytest.raises(Exception):  # Pydantic validation error
-            SimpleTask(
+            AgentTask(
                 id=uuid4(),
                 title="Test Task",
                 description="Test Description",
@@ -34,10 +34,10 @@ class TestWorkspaceIdPropagation:
             )
 
     @pytest.mark.asyncio
-    async def test_simple_task_with_workspace_id(self):
-        """Test that SimpleTask works correctly with workspace_id."""
+    async def test_agent_task_with_workspace_id(self):
+        """Test that AgentTask works correctly with workspace_id."""
         workspace_id = "test-workspace-123"
-        task = SimpleTask(
+        task = AgentTask(
             id=uuid4(),
             title="Test Task",
             description="Test Description",
@@ -74,9 +74,9 @@ class TestWorkspaceIdPropagation:
 
         task_manager = TemporalTaskManager(task_repository)
 
-        # Should raise ValueError when trying to convert to SimpleTask
+        # Should raise ValueError when trying to convert to AgentTask
         with pytest.raises(ValueError, match="missing required workspace_id"):
-            task_manager._task_to_simple_task(task_without_workspace)
+            task_manager._task_to_agent_task(task_without_workspace)
 
     @pytest.mark.asyncio
     async def test_args_dict_contains_workspace_id(self, task_repository):
@@ -84,7 +84,7 @@ class TestWorkspaceIdPropagation:
         workspace_id = "test-workspace-456"
 
         # Create a valid task WITH workspace_id
-        task = SimpleTask(
+        task = AgentTask(
             id=uuid4(),
             title="Test Task",
             description="Test Description",

@@ -171,7 +171,7 @@ func (p *EventPublisher) PublishValidating(ctx context.Context, instanceID, name
 
 // PublishFailed publishes that a container failed to start
 func (p *EventPublisher) PublishFailed(ctx context.Context, instanceID, name, errorMsg string) error {
-	p.PublishError(ctx, instanceID, name, errorMsg)
+	_ = p.PublishError(ctx, instanceID, name, errorMsg)
 	return p.PublishStatusUpdate(ctx, instanceID, name, "failed", "", "")
 }
 

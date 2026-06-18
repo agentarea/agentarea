@@ -5,7 +5,6 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from agentarea_mcp.application.service import (
     MCPServerInstanceService,
     derive_bundle_verification,
@@ -13,7 +12,6 @@ from agentarea_mcp.application.service import (
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -107,12 +105,16 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
 
     server_spec = MagicMock()
     server_spec.id = "test-spec-id"
+    # Workspace-owned spec → no copy-on-write on connect.
+    server_spec.workspace_id = svc.repository.user_context.workspace_id
     server_spec.remote_url = None
     server_spec.cmd = None
     server_spec.docker_image_url = "test-image:latest"
     server_spec.json_spec = {"type": "docker", "image": "test-image:latest"}
     server_spec.env_schema = []
     svc.mcp_server_repository.get_by_id = AsyncMock(return_value=server_spec)
+    # Spec resolution is catalog-aware (ADR-003): code resolves via get_server_by_id.
+    svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=server_spec)
 
     return svc
 
@@ -183,12 +185,14 @@ class TestServiceCreateInstance:
         svc = _make_service()
         url_spec = MagicMock()
         url_spec.id = "test-spec-id"
+        url_spec.workspace_id = svc.repository.user_context.workspace_id
         url_spec.remote_url = "http://test.example.com/mcp"
         url_spec.cmd = None
         url_spec.docker_image_url = None
         url_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
         url_spec.env_schema = []
         svc.mcp_server_repository.get_by_id = AsyncMock(return_value=url_spec)
+        svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=url_spec)
 
         fake_verification = {
             "schema_version": 1,
@@ -209,6 +213,48 @@ class TestServiceCreateInstance:
 
         assert inst is not None
         assert inst.verification == fake_verification
+        # type is persisted onto the instance spec so the UI derives status.
+        assert inst.json_spec.get("type") == "url"
+
+    @pytest.mark.asyncio
+    async def test_catalog_spec_is_copied_into_workspace_on_connect(self):
+        """Connecting a spec owned by another workspace (platform catalog mirror)
+        materializes a workspace-owned copy and points the instance at it."""
+        svc = _make_service()
+        catalog_spec = MagicMock()
+        catalog_spec.id = "platform-spec-id"
+        catalog_spec.workspace_id = "platform"  # NOT the caller's workspace
+        catalog_spec.remote_url = "http://test.example.com/mcp"
+        catalog_spec.cmd = None
+        catalog_spec.docker_image_url = None
+        catalog_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
+        catalog_spec.env_schema = []
+        svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=catalog_spec)
+
+        owned_copy = MagicMock()
+        owned_copy.id = "workspace-copy-id"
+        owned_copy.workspace_id = svc.repository.user_context.workspace_id
+        owned_copy.remote_url = catalog_spec.remote_url
+        owned_copy.cmd = None
+        owned_copy.docker_image_url = None
+        owned_copy.json_spec = catalog_spec.json_spec
+        owned_copy.env_schema = []
+        svc._materialize_workspace_spec_copy = AsyncMock(return_value=owned_copy)
+
+        fake_verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="asana",
+                    server_spec_id="platform-spec-id",
+                    json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
+                )
+            )
+
+        svc._materialize_workspace_spec_copy.assert_awaited_once()
+        assert inst is not None
+        assert inst.server_spec_id == "workspace-copy-id"
 
     @pytest.mark.asyncio
     async def test_docker_type_async_verify(self):
@@ -386,6 +432,46 @@ class TestServiceExecuteTool:
         assert result["result"]
         assert "Image missing" in result["result"] or "bad-member" in result["result"]
 
+    @pytest.mark.asyncio
+    async def test_execute_tool_passes_httpx_client_factory_to_mcp_transport(self):
+        inst = _make_instance(
+            "url",
+            verification={"schema_version": 1, "status": "succeeded", "at": "x", "error": None},
+        )
+        inst.tools = [{"name": "paid_tool"}]
+        svc = _make_service({str(inst.id): inst})
+        factory = MagicMock(name="payment_httpx_client_factory")
+        captured = {}
+
+        async def fake_call_tool_via_mcp(
+            mcp_url,
+            headers,
+            tool_name,
+            tool_args,
+            httpx_client_factory=None,
+        ):
+            captured["factory"] = httpx_client_factory
+            return MagicMock(content=[MagicMock(type="text", text="ok")], isError=False)
+
+        svc._call_tool_via_mcp = fake_call_tool_via_mcp
+
+        import agentarea_execution.activities.agent_execution_activities as mod
+        orig = getattr(mod, "_enqueue_last_dispatch", None)
+        mod._enqueue_last_dispatch = lambda *a, **k: None
+        try:
+            result = await svc.execute_tool(
+                inst.id,
+                "paid_tool",
+                {},
+                httpx_client_factory=factory,
+            )
+        finally:
+            if orig is not None:
+                mod._enqueue_last_dispatch = orig
+
+        assert result["success"] is True
+        assert captured["factory"] is factory
+
 
 # ---------------------------------------------------------------------------
 # API endpoint presence tests (unit — no DB)
@@ -418,8 +504,9 @@ class TestAPIEndpoints:
 
     def test_create_returns_different_status_codes(self):
         """Verify the create endpoint sets 202 for docker/command types."""
-        from agentarea_api.api.v1.mcp_server_instances import create_mcp_server_instance
         import inspect
+
+        from agentarea_api.api.v1.mcp_server_instances import create_mcp_server_instance
         src = inspect.getsource(create_mcp_server_instance)
         assert "202" in src, "create endpoint must set 202 for docker/command"
 

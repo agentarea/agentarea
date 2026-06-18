@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "next-intl";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
 import TaskInfoHeader from "./components/TaskInfoHeader";
 import TaskInfoTabs from "./components/TaskInfoTabs";
@@ -8,7 +9,14 @@ import KeyMetrics from "./components/KeyMetrics";
 import QuickActions from "./components/QuickActions";
 import Metadata from "./components/Metadata";
 import ModelInfo from "./components/ModelInfo";
+import ActivitySummary, { TaskActivitySummary } from "./components/ActivitySummary";
+import Participants from "./components/Participants";
+import Files from "./components/Files";
+import Documents from "./components/Documents";
+import BudgetInfo from "./components/BudgetInfo";
+import PolicyInfo from "./components/PolicyInfo";
 import { Task } from "./types";
+import type { EffectivePolicy } from "@/types/policies";
 
 interface TaskInfoPanelProps {
   task?: Task | null;
@@ -18,6 +26,11 @@ interface TaskInfoPanelProps {
   startTime?: string;
   endTime?: string;
   executionTime?: string;
+  activitySummary?: TaskActivitySummary;
+  artifacts?: unknown[];
+  totalCost?: number | null;
+  budgetLimit?: number | null;
+  policy?: EffectivePolicy | null;
 }
 
 export default function TaskInfoPanel({
@@ -28,13 +41,19 @@ export default function TaskInfoPanel({
   startTime = "",
   endTime,
   executionTime = "N/A",
+  activitySummary,
+  artifacts,
+  totalCost,
+  budgetLimit,
+  policy,
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
+  const locale = useLocale();
 
   const formattedStart = startTime
-    ? new Date(startTime).toLocaleString()
+    ? new Date(startTime).toLocaleString(locale)
     : "N/A";
-  const formattedEnd = endTime ? new Date(endTime).toLocaleString() : "—";
+  const formattedEnd = endTime ? new Date(endTime).toLocaleString(locale) : "—";
 
   // If we have no task but have an agentId, we show ModelInfo directly (Agent Info mode)
   if (!task && agentId) {
@@ -66,6 +85,22 @@ export default function TaskInfoPanel({
               formattedEnd={formattedEnd}
             />
 
+            {(totalCost != null || budgetLimit != null) && (
+              <BudgetInfo
+                totalCost={totalCost ?? 0}
+                budgetLimit={budgetLimit ?? null}
+              />
+            )}
+
+            <PolicyInfo policy={policy} />
+
+            <ActivitySummary summary={activitySummary} />
+            <Participants
+              agentName={task.agent_name}
+              delegatedAgents={activitySummary?.delegatedAgents}
+            />
+            <Files files={activitySummary?.files} />
+            <Documents artifacts={artifacts} />
             <Metadata task={task} />
             <QuickActions task={task} />
           </>

@@ -112,6 +112,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "explore": "Explore",
     "providers": "Providers",
     "providerConfigs": "Models",
     "apiKeys": "API Keys",
@@ -501,7 +502,8 @@
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration"
-    }
+    },
+    "browseCatalog": "Browse the catalog"
   },
   "MCPServersPage": {
     "title": "Connections",
@@ -757,6 +759,7 @@
     "configurationName": "Configuration Name",
     "configurationNamePlaceholder": "e.g., Production OpenAI Config",
     "apiKeyPlaceholder": "Enter your API key",
+    "apiKeyOptionalForCustomEndpoint": "Leave blank for keyless custom endpoints. No Authorization header will be sent.",
     "customEndpointUrl": "Custom Endpoint URL",
     "customEndpointUrlPlaceholder": "https://api.example.com/v1",
     "updateConfiguration": "Update Configuration",
@@ -804,6 +807,13 @@
   },
   "Chat": {
     "writeNewTaskFor": "Write new task for {agentName}...",
+    "inputControls": {
+      "agent": "Agent",
+      "project": "Project",
+      "taskPolicy": "Task policy",
+      "noProject": "No project",
+      "defaultPolicy": "Default policy"
+    },
     "Messages": {
       "toolCall": "Tool Call",
       "toolCallGroup": "{count, plural, =1 {1 tool call} other {# tool calls}}",
@@ -872,11 +882,13 @@
       "skillNotFound": "Skill not found",
       "loadFileContent": "Failed to load file content",
       "updateSkill": "Failed to update skill",
-      "deleteSkill": "Failed to delete skill"
+      "deleteSkill": "Failed to delete skill",
+      "installSkill": "Failed to add skill to workspace"
     },
     "success": {
       "skillUpdated": "Skill updated successfully",
-      "skillDeleted": "Skill deleted successfully"
+      "skillDeleted": "Skill deleted successfully",
+      "skillInstalled": "Skill added to workspace"
     },
     "confirm": {
       "deleteSkillTitle": "Delete Skill",
@@ -890,10 +902,6 @@
     "filters": {
       "source": "Source",
       "allSources": "All sources",
-      "files": "Files",
-      "allFiles": "All files",
-      "withFiles": "With files",
-      "withoutFiles": "Content only",
       "scope": "Scope",
       "allScopes": "All scopes",
       "clear": "Clear",
@@ -925,7 +933,10 @@
       "source": "Source",
       "updated": "Updated",
       "skillConfiguration": "Skill Configuration",
-      "editable": "Editable"
+      "editable": "Editable",
+      "catalogTemplate": "Catalog template",
+      "customize": "Customize",
+      "installing": "Adding..."
     },
     "source": {
       "github": "GitHub",
@@ -1026,7 +1037,8 @@
       "created": "Created"
     },
     "emptyHere": "No skills here",
-    "emptyHereDescription": "Nothing matches this view yet."
+    "emptyHereDescription": "Nothing matches this view yet.",
+    "browseCatalog": "Browse the catalog"
   },
   "TaskInfoPanel": {
     "agentTask": "Agent Task",
@@ -1034,6 +1046,8 @@
     "overview": "Overview",
     "modelInfo": "Agent info",
     "keyMetrics": "Key metrics",
+    "budget": "Budget",
+    "cost": "Cost",
     "status": "Status",
     "taskActive": "Task is currently active",
     "taskNotRunning": "Task is not running",
@@ -1047,7 +1061,18 @@
     "modelCalls": "Model",
     "events": "Events",
     "calledTools": "Called tools",
+    "servicesUsed": "Services used",
+    "jumpToUsage": "Jump to where it was used",
+    "usage": "Usage",
+    "tokensShort": "tokens",
+    "files": "Files",
     "learnedSkills": "Learned skills",
+    "documents": "Documents",
+    "participants": "Participants",
+    "you": "You",
+    "roleRequester": "Requester",
+    "rolePrimaryAgent": "Primary agent",
+    "roleDelegated": "Delegated agent",
     "quickActions": "Quick actions",
     "viewTaskEvents": "View task events",
     "openAgentDetails": "Open agent details",
@@ -1070,7 +1095,26 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "openPanel": "Show details panel",
-    "closePanel": "Hide details panel"
+    "closePanel": "Hide details panel",
+    "policy": "Policy",
+    "policyTools": "Tools",
+    "policyAllowed": "Allowed",
+    "policyDenied": "Denied",
+    "policyAllTools": "All tools allowed",
+    "policyApproval": "Human approval",
+    "policyTokens": "Token limit",
+    "policyPerCall": "per call",
+    "policyContentSafety": "Content safety",
+    "policyPromptInjection": "Prompt-injection detection",
+    "policyOutputSanitizer": "Output sanitizer",
+    "policyMonthlyCap": "Monthly cap",
+    "policyServiceBudget": "Service budget",
+    "policyApprovers": "Approvers",
+    "policyOn": "On",
+    "policyOff": "Off",
+    "policyRequired": "Required",
+    "policyNotRequired": "Not required",
+    "policyNone": "No policy constraints"
   },
   "Workplace": {
     "hero": {
@@ -1155,6 +1199,12 @@
     "title": "Automation",
     "description": "Configure triggers to automate agent task execution",
     "createTrigger": "Create Trigger",
+    "searchPlaceholder": "Search triggers & agents…",
+    "filter": {
+      "all": "All",
+      "cron": "Cron",
+      "webhook": "Webhook"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
@@ -1175,6 +1225,7 @@
     "status": {
       "active": "Active",
       "inactive": "Inactive",
+      "paused": "Paused",
       "error": "Error"
     },
     "create": {
@@ -1205,7 +1256,7 @@
       },
       "allowedMethods": "Allowed Methods",
       "taskParameters": "Task Parameters",
-      "taskParametersPlaceholder": "{}",
+      "taskParametersPlaceholder": "'{}'",
       "failureThreshold": "Failure Threshold",
       "failureThresholdPlaceholder": "e.g., 3",
       "createButton": "Create Trigger"
@@ -1250,6 +1301,7 @@
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
+    "accessGraph": "Access Graph",
     "dataFlow": "Data Flow",
     "organization": "Organization"
   },

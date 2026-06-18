@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
@@ -325,11 +326,12 @@ export function MyMCPsSection({
           title={hasNoData ? "No connections" : "No matching connections"}
           description={
             hasNoData
-              ? "No MCP servers or OpenAPI connections configured yet"
+              ? "You haven't connected anything yet — add your first connection from the catalog."
               : `No connections match your search query: "${searchQuery}"`
           }
           iconsType="mcp"
         />
+        {hasNoData && <CatalogSuggestions type="mcp_servers" />}
       </div>
     );
   }

@@ -38,8 +38,8 @@ const kindStyle: Record<
 > = {
   telegram: { icon: TelegramIcon, variant: "blue" },
   email: { icon: GmailIcon, variant: "rose" },
-  slack: { icon: SlackIcon, variant: "purple" },
-  discord: { icon: DiscordIcon, variant: "indigo" },
+  slack: { icon: SlackIcon, variant: "sky" },
+  discord: { icon: DiscordIcon, variant: "blue" },
   channel: { icon: Cable, variant: "teal" },
   delegation: { icon: GitFork, variant: "default" },
   schedule: { icon: CalendarClock, variant: "amber" },

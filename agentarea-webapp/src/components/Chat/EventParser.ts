@@ -139,6 +139,8 @@ export const parseEventToMessage = (
           tool_name: displayToolName,
           tool_call_id: toolCallId || "unknown",
           arguments: toolArguments,
+          server_name: originalData.server_name || eventData.server_name,
+          server_icon: originalData.server_icon || eventData.server_icon,
         },
       };
 
@@ -171,6 +173,8 @@ export const parseEventToMessage = (
             execution_time:
               originalData.execution_time || eventData.execution_time,
             arguments: originalData.arguments || eventData.arguments,
+            server_name: originalData.server_name || eventData.server_name,
+            server_icon: originalData.server_icon || eventData.server_icon,
           },
         };
       }
@@ -186,6 +190,8 @@ export const parseEventToMessage = (
           execution_time:
             originalData.execution_time || eventData.execution_time,
           arguments: originalData.arguments || eventData.arguments,
+          server_name: originalData.server_name || eventData.server_name,
+          server_icon: originalData.server_icon || eventData.server_icon,
         },
       };
     }
@@ -212,6 +218,8 @@ export const parseEventToMessage = (
           execution_time:
             originalData.execution_time || eventData.execution_time,
           arguments: originalData.arguments || eventData.arguments,
+          server_name: originalData.server_name || eventData.server_name,
+          server_icon: originalData.server_icon || eventData.server_icon,
         },
       };
     }

@@ -501,13 +501,13 @@ func isValidEnvVarName(name string) bool {
 		return false
 	}
 	// Must start with letter or underscore
-	if !(name[0] >= 'A' && name[0] <= 'Z') && !(name[0] >= 'a' && name[0] <= 'z') && name[0] != '_' {
+	if (name[0] < 'A' || name[0] > 'Z') && (name[0] < 'a' || name[0] > 'z') && name[0] != '_' {
 		return false
 	}
 	// Can contain letters, digits, and underscores
 	for i := 1; i < len(name); i++ {
 		c := name[i]
-		if !(c >= 'A' && c <= 'Z') && !(c >= 'a' && c <= 'z') && !(c >= '0' && c <= '9') && c != '_' {
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {
 			return false
 		}
 	}
@@ -794,7 +794,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	// Run with timeout
 	if err := cmd.Start(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ExecuteResponse{
+		_ = json.NewEncoder(w).Encode(ExecuteResponse{
 			Stderr:          fmt.Sprintf("failed to start: %v", err),
 			ExitCode:        1,
 			ExecutionTimeMs: time.Since(start).Milliseconds(),
@@ -817,7 +817,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ExecuteResponse{
+		_ = json.NewEncoder(w).Encode(ExecuteResponse{
 			Stdout:          stdout.String(),
 			Stderr:          stderr.String(),
 			ExitCode:        exitCode,
@@ -828,7 +828,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	case <-time.After(time.Duration(timeout) * time.Second):
 		killProcessGroup(cmd.Process)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ExecuteResponse{
+		_ = json.NewEncoder(w).Encode(ExecuteResponse{
 			Stderr:          "execution timed out",
 			ExitCode:        137,
 			ExecutionTimeMs: time.Since(start).Milliseconds(),

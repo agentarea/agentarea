@@ -36,7 +36,7 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -422,7 +422,7 @@ class ModelFactory:
         return MCPServerInstance(**defaults)
 
     @staticmethod
-    def create_task(agent_id: UUID = None, **kwargs) -> SimpleTask:
+    def create_task(agent_id: UUID = None, **kwargs) -> AgentTask:
         """Create a test simple task."""
         if agent_id is None:
             agent_id = uuid4()
@@ -440,7 +440,7 @@ class ModelFactory:
             "error_message": None,
         }
         defaults.update(kwargs)
-        return SimpleTask(**defaults)
+        return AgentTask(**defaults)
 
 
 @pytest_asyncio.fixture

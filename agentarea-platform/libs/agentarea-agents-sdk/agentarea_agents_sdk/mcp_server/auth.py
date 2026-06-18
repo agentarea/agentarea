@@ -17,6 +17,8 @@ cached context automatically.
 
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
@@ -43,6 +45,22 @@ def get_mcp_user_context():
             "Authentication required. Provide a valid Bearer token in the Authorization header."
         )
     return ctx
+
+
+@contextmanager
+def use_mcp_user_context(user_context: Any) -> Iterator[None]:
+    """Temporarily bind a UserContext for non-HTTP internal tool execution.
+
+    Platform toolsets use the same ContextVar whether they are called through
+    the MCP HTTP server or from the Temporal worker's code-tool activity. The
+    worker path already has an authenticated task context, so it should bind
+    that context directly instead of asking the LLM to provide a Bearer token.
+    """
+    token = _mcp_user_context_var.set(user_context)
+    try:
+        yield
+    finally:
+        _mcp_user_context_var.reset(token)
 
 
 def _is_handshake_method(method: str) -> bool:

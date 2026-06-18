@@ -1,25 +1,28 @@
 import { getTranslations } from "next-intl/server";
-import { listTriggers, listAgents, listTriggerCatalog } from "@/lib/api";
+import { listAgents, listTriggerCatalog } from "@/lib/api";
+import { getTriggersCached } from "./triggersData";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
   viewMode: "grid" | "table";
   searchQuery: string;
+  typeFilter: string;
 }
 
 export default async function TriggersContent({
   viewMode,
   searchQuery,
+  typeFilter,
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
-  const [triggersResponse, agentsResponse, catalogResponse] = await Promise.all([
-    listTriggers(),
+  const [triggersResult, agentsResponse, catalogResponse] = await Promise.all([
+    getTriggersCached(),
     listAgents(),
     listTriggerCatalog(),
   ]);
 
-  if (triggersResponse.error) {
+  if (triggersResult.error) {
     return (
       <div className="flex h-64 items-center justify-center text-destructive">
         {t("error.loadFailed")}
@@ -27,7 +30,7 @@ export default async function TriggersContent({
     );
   }
 
-  const triggers = (triggersResponse.data as any[]) || [];
+  const triggers = triggersResult.triggers;
   const agents = (agentsResponse.data as any[]) || [];
   const catalog = (catalogResponse.data as any[]) || [];
 
@@ -35,17 +38,29 @@ export default async function TriggersContent({
   const agentMap = new Map(agents.map((a: any) => [a.id, a.name]));
 
   // Enrich triggers with agent names
-  const enrichedTriggers = triggers.map((trigger: any) => ({
+  let enrichedTriggers = triggers.map((trigger: any) => ({
     ...trigger,
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));
+
+  // Filter by trigger type (All / Cron / Webhook)
+  if (typeFilter === "cron") {
+    enrichedTriggers = enrichedTriggers.filter(
+      (trigger) => trigger.trigger_type === "cron"
+    );
+  } else if (typeFilter === "webhook") {
+    enrichedTriggers = enrichedTriggers.filter(
+      (trigger) => trigger.trigger_type === "webhook"
+    );
+  }
 
   // Filter triggers based on search query
   const filteredTriggers = searchQuery.trim()
     ? enrichedTriggers.filter(
         (trigger) =>
           trigger.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (trigger.agent_name && trigger.agent_name.toLowerCase().includes(searchQuery.toLowerCase()))
+          (trigger.agent_name &&
+            trigger.agent_name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : enrichedTriggers;
 

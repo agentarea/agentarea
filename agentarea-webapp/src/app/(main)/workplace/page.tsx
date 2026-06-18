@@ -5,7 +5,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getProvidersAndConfigs } from "@/lib/api";
+import { getProvidersAndConfigs, listPolicies, listProjects } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +32,43 @@ export default async function WorkplacePage() {
     },
   ];
 
-  const [{ data: agentsData, error }, { data: providersData }] =
-    await Promise.all([getAgents(), getProvidersAndConfigs()]);
+  const [
+    { data: agentsData, error },
+    { data: providersData },
+    { data: projectsData },
+    { data: policiesData },
+  ] = await Promise.all([
+    getAgents(),
+    getProvidersAndConfigs(),
+    listProjects(),
+    listPolicies({ enabled: true }),
+  ]);
 
   const agents =
     agentsData?.map((agent: any) => ({
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
+    })) || [];
+
+  const projects =
+    projectsData?.map((project: any) => ({
+      id: String(project.id),
+      name: project.name,
+      description: project.description,
+    })) || [];
+
+  const taskPolicies =
+    policiesData?.map((policy: any) => ({
+      id: String(policy.id),
+      name: formatPolicyName(policy),
+      description: formatPolicyDescription(policy),
+      policy: {
+        id: String(policy.id),
+        target: policy.target,
+        effect: policy.effect,
+        params: policy.params ?? {},
+      },
     })) || [];
 
   const defaultAgent = agents.length > 0 ? agents[0] : null;
@@ -65,6 +94,8 @@ export default async function WorkplacePage() {
                 <WorkplaceChat
                   initialAgent={defaultAgent}
                   availableAgents={agents}
+                  availableProjects={projects}
+                  availableTaskPolicies={taskPolicies}
                   badgeSuggestions={badgeSuggestions}
                 />
               ) : (
@@ -79,4 +110,16 @@ export default async function WorkplacePage() {
       </ContentBlock>
     </AuthGuard>
   );
+}
+
+function formatPolicyName(policy: any) {
+  const effect = String(policy.effect ?? "policy");
+  const target = String(policy.target ?? "*");
+  return `${effect} ${target}`;
+}
+
+function formatPolicyDescription(policy: any) {
+  const subjectType = String(policy.subject_type ?? "workspace");
+  const priority = Number.isFinite(policy.priority) ? policy.priority : 0;
+  return `${subjectType} - priority ${priority}`;
 }

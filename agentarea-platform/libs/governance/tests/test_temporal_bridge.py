@@ -1,14 +1,14 @@
 """Tests for the Temporal bridge adapter."""
 
-import pytest
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from agentarea_governance.bridges.temporal_bridge import (
+    _ACTIVITY_PHASE_MAP,
     GovernanceActivityInterceptor,
     GovernanceWorkerInterceptor,
-    _ACTIVITY_PHASE_MAP,
     _extract_context_from_input,
     _resolve_action_type,
     validate_activity_mapping,
@@ -254,6 +254,19 @@ class TestExecutionStateFromPolicy:
             tool_args={},
             effective_policy={"tools": {"allowed": ["web_*"], "denied": []}},
         )
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        with pytest.raises(GovernanceDenied):
+            await bridge.execute_activity(input)
+        assert not next_interceptor.called
+
+    @pytest.mark.asyncio
+    async def test_capability_policy_denies_missing_tool_policy(self):
+        registry = InterceptorRegistry()
+        registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
+        pipeline = InterceptorPipeline(registry)
+        next_interceptor = _FakeNextInterceptor()
+        bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
+        request = _FakeMCPToolRequest(tool_name="web_search", tool_args={})
         input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
         with pytest.raises(GovernanceDenied):
             await bridge.execute_activity(input)

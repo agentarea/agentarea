@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from agentarea_common.artifacts import (
     ACTION_CREATED,
     ACTION_DELETED,
@@ -12,6 +13,7 @@ from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
 )
+from agentarea_common.testing.flows import MainFlow
 from botocore.exceptions import ClientError
 
 
@@ -70,6 +72,7 @@ AGENT_ACTOR = ArtifactActor(
 )
 
 
+@pytest.mark.flow(MainFlow.FILES_ARTIFACTS)
 async def test_put_new_file_records_created():
     client = FakeS3Client(exists=False)
     recorder = RecordingRecorder()

@@ -137,7 +137,7 @@ agents:
     instruction: You have tools
     tools:
       - type: code
-        name: agentarea/calculator
+        name: agentarea/math
     planning: true
 mcp_instances: []
 provider_configs: []
@@ -153,7 +153,7 @@ provider_configs: []
         assert payload.tools is not None
         assert len(payload.tools) == 1
         assert payload.tools[0].type == "code"
-        assert payload.tools[0].name == "agentarea/calculator"
+        assert payload.tools[0].name == "agentarea/math"
 
     @pytest.mark.asyncio
     async def test_import_mcp_instance_success(
@@ -256,7 +256,7 @@ agents:
     instruction: You are helpful
     tools:
       - type: code
-        name: agentarea/calculator
+        name: agentarea/math
 
 mcp_instances:
   - name: Filesystem
@@ -326,7 +326,7 @@ class TestExportWorkspace:
         mock_agent.name = "Test Agent"
         mock_agent.description = "A test agent"
         mock_agent.instruction = "You are a test agent"
-        mock_agent.tools = [{"type": "code", "name": "agentarea/calculator"}]
+        mock_agent.tools = [{"type": "code", "name": "agentarea/math"}]
         mock_agent.planning = True
         mock_agent.a2ui_enabled = False
 
@@ -339,7 +339,7 @@ class TestExportWorkspace:
 
         assert len(exported["agents"]) == 1
         assert exported["agents"][0]["name"] == "Test Agent"
-        assert exported["agents"][0]["tools"] == [{"type": "code", "name": "agentarea/calculator"}]
+        assert exported["agents"][0]["tools"] == [{"type": "code", "name": "agentarea/math"}]
         assert exported["agents"][0]["planning"] is True
         assert "mcp_instances" not in exported
         assert "provider_configs" not in exported
@@ -503,7 +503,7 @@ agents:
     instruction: You are testing
     tools:
       - type: code
-        name: agentarea/calculator
+        name: agentarea/math
     planning: false
 mcp_instances:
   - name: Roundtrip MCP
@@ -521,7 +521,7 @@ provider_configs: []
         mock_agent.name = "Roundtrip Agent"
         mock_agent.description = "Testing roundtrip"
         mock_agent.instruction = "You are testing"
-        mock_agent.tools = [{"type": "code", "name": "agentarea/calculator"}]
+        mock_agent.tools = [{"type": "code", "name": "agentarea/math"}]
         mock_agent.planning = False
         mock_agent.a2ui_enabled = False
 
@@ -553,7 +553,7 @@ provider_configs: []
         # Verify
         assert len(exported["agents"]) == 1
         assert exported["agents"][0]["name"] == "Roundtrip Agent"
-        assert exported["agents"][0]["tools"][0]["name"] == "agentarea/calculator"
+        assert exported["agents"][0]["tools"][0]["name"] == "agentarea/math"
         assert len(exported["mcp_instances"]) == 1
         assert exported["mcp_instances"][0]["name"] == "Roundtrip MCP"
 
@@ -575,7 +575,7 @@ provider_configs: []
 """
         with patch(
             "agentarea_agents_sdk.tools.code_tools_loader.get_code_tools_metadata",
-            return_value={"agentarea/calculator": {}},
+            return_value={"agentarea/math": {}},
         ):
             result = await import_export_service.import_workspace(yaml_content)
 

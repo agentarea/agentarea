@@ -132,7 +132,7 @@ export default function TaskHeader({
 
             {task.execution_id && (
               <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                <Database className="h-3 w-3 text-purple-600" />
+                <Database className="h-3 w-3 text-sky-600" />
                 <span className="font-mono font-medium text-gray-900 dark:text-gray-100">
                   {task.execution_id.slice(-8)}
                 </span>

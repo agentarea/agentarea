@@ -219,6 +219,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "flow: canonical main-flow test (see agentarea_common.testing.flows); run with -m flow",
 ]
 asyncio_mode = "auto"
 

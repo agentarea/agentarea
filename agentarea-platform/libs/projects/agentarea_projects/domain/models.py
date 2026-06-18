@@ -1,10 +1,19 @@
 """Project domain models."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import sqlalchemy as sa
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import ForeignKey, String, Table, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from agentarea_agents.domain.models import Agent
+    from agentarea_agents.domain.skill_models import Skill
+    from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 # Junction table: project <-> skills
 project_skills = Table(
@@ -76,28 +85,35 @@ class Project(BaseModel, WorkspaceScopedMixin):
     )
 
     # Relationships
-    skills: Mapped[list] = relationship(
+    # NOTE: keep ``uselist=True`` explicit. ``Mapped[list]`` without an element
+    # type makes SQLAlchemy 2.0 infer ``uselist=False`` (a scalar), which makes
+    # these relationships load a single object instead of a collection and breaks
+    # response serialization once an association exists.
+    skills: Mapped[list[Skill]] = relationship(
         "Skill",
         secondary=project_skills,
         lazy="selectin",
+        uselist=True,
     )
-    mcp_instances: Mapped[list] = relationship(
+    mcp_instances: Mapped[list[MCPServerInstance]] = relationship(
         "MCPServerInstance",
         secondary=project_mcp_instances,
         lazy="selectin",
+        uselist=True,
     )
-    agents: Mapped[list] = relationship(
+    agents: Mapped[list[Agent]] = relationship(
         "Agent",
         secondary=project_agents,
         lazy="selectin",
+        uselist=True,
     )
-    children: Mapped[list["Project"]] = relationship(
+    children: Mapped[list[Project]] = relationship(
         "Project",
         back_populates="parent",
         foreign_keys=[parent_project_id],
         lazy="select",
     )
-    parent: Mapped["Project | None"] = relationship(
+    parent: Mapped[Project | None] = relationship(
         "Project",
         back_populates="children",
         foreign_keys=[parent_project_id],

@@ -15,7 +15,7 @@ export default async function TriggersHeaderTabs({
         { value: "grid", label: t("grid") },
       ]}
       paramName="tab"
-      defaultTab="grid"
+      defaultTab="table"
       currentTab={currentTab}
     />
   );

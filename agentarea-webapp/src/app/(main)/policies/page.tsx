@@ -23,7 +23,7 @@ export default async function PoliciesPage({
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Govern", href: "/dashboard" }, { label: "Policies" }],
+        breadcrumb: [{ label: "Policies" }],
         controls:
           view === "access" ? (
             <AccessControlHeaderControls />

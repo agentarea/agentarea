@@ -158,14 +158,14 @@ export function TasksFilters({
             </div>
           )}
           {statusFilter !== "all" && (
-            <div className="flex items-center gap-1 rounded-full bg-purple-50 px-3 py-1 text-sm text-purple-700 dark:bg-purple-900/20 dark:text-purple-300">
+            <div className="flex items-center gap-1 rounded-full bg-sky-50 px-3 py-1 text-sm text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">
               <Filter className="h-3 w-3" />
               <span>
                 {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
               </span>
               <button
                 onClick={() => handleStatusChange("all")}
-                className="ml-1 rounded-full p-0.5 hover:bg-purple-100 dark:hover:bg-purple-800"
+                className="ml-1 rounded-full p-0.5 hover:bg-sky-100 dark:hover:bg-sky-800"
               >
                 <X className="h-3 w-3" />
               </button>

@@ -200,13 +200,13 @@ export const EVENT_TYPE_CONFIG: Record<
     title: "LLM Call Started",
     level: "info",
     icon: "brain",
-    color: "purple",
+    color: "blue",
   },
   LLMCallCompleted: {
     title: "LLM Response Received",
     level: "success",
     icon: "message-circle",
-    color: "purple",
+    color: "blue",
   },
   LLMCallFailed: {
     title: "LLM Call Failed",
@@ -260,7 +260,7 @@ export const EVENT_TYPE_CONFIG: Record<
     title: "Human Approval Requested",
     level: "warning",
     icon: "user-check",
-    color: "indigo",
+    color: "blue",
   },
   HumanApprovalReceived: {
     title: "Human Approval Received",

@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import {
   listAgents,
@@ -8,6 +9,7 @@ import {
   getAllTasks,
 } from "@/lib/api";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import type { Agent } from "@/types";
 import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
 import AgentsList from "./AgentsList";
 
@@ -43,18 +45,28 @@ export default async function AgentsContent({
   const mcpInstanceList = (mcpInstances as McpInstance[]) ?? [];
 
   // Count active (running) tasks per agent
+  const taskList = (tasks ?? []) as Array<{ status?: string; agent_id?: string }>;
   const activeTaskCountByAgent: Record<string, number> = {};
-  for (const task of (tasks as any[])) {
-    if (task.status === "running") {
+  for (const task of taskList) {
+    if (task.status === "running" && task.agent_id) {
       const agentId = String(task.agent_id);
       activeTaskCountByAgent[agentId] = (activeTaskCountByAgent[agentId] ?? 0) + 1;
     }
   }
 
-  const enrichedAgents = (agents as any[]).map((agent) => {
-    const model = (modelInstances as any[]).find(
-      (m) => m.id === agent.model_id
-    );
+  // Bridge the API response to the domain Agent type once, at the boundary.
+  // (The /agents list returns only your own agents — catalog lives in Explore.)
+  const agentList = (agents ?? []) as unknown as Agent[];
+  const models = (modelInstances ?? []) as Array<{
+    id: string;
+    provider_name?: string | null;
+    provider_icon_url?: string | null;
+    model_display_name?: string | null;
+    config_name?: string | null;
+  }>;
+
+  const enrichedAgents = agentList.map((agent) => {
+    const model = models.find((m) => m.id === agent.model_id);
     const model_info = model
       ? {
           provider_name: model.provider_name || undefined,
@@ -85,11 +97,14 @@ export default async function AgentsContent({
   // Handle empty states
   if (enrichedAgents.length === 0) {
     return (
-      <EmptyState
-        title={t("noAgentsTitle")}
-        description={t("noAgentsDescription")}
-        iconsType="agent"
-      />
+      <div className="space-y-4">
+        <EmptyState
+          title={t("noAgentsTitle")}
+          description={t("noAgentsDescription")}
+          iconsType="agent"
+        />
+        <CatalogSuggestions type="agents" />
+      </div>
     );
   }
 
@@ -104,6 +119,6 @@ export default async function AgentsContent({
   }
 
   return (
-    <AgentsList initialAgents={filteredAgents as any} viewMode={viewMode} />
+    <AgentsList initialAgents={filteredAgents} viewMode={viewMode} />
   );
 }

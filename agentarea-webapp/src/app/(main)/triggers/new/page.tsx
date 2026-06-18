@@ -119,7 +119,7 @@ function SourcePicker({ onPick }: { onPick: (s: Source) => void }) {
                 "hover:border-primary/50 hover:bg-muted/40"
               )}
             >
-              <div className="rounded-md bg-gradient-to-br from-primary/10 to-[#966DFF]/10 p-2">
+              <div className="rounded-md bg-primary/10 p-2">
                 <Icon className="h-4 w-4 text-primary" strokeWidth={1.5} />
               </div>
               <div className="min-w-0 flex-1">

@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 import pytest
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_api.api.v1.agents_a2a import handle_message_stream_sse
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class RealTaskService:
         self.submitted_tasks = []
         self.task_events = {}
 
-    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+    async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit task and set up for streaming."""
         task.status = "running"
         task.execution_id = str(uuid4())

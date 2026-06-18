@@ -33,7 +33,7 @@ const AgentAreaLogo = ({
     //   <defs>
     //     <linearGradient id="paint0_linear_387_1615" x1="87.2081" y1="66.4033" x2="157.224" y2="162.669" gradientUnits="userSpaceOnUse">
     //       <stop stopColor="white"/>
-    //       <stop offset="1" stopColor="#AAB9E2"/>
+    //       <stop offset="1" stopColor="#E5E7EB"/>
     //     </linearGradient>
     //   </defs>
     // </svg>
@@ -102,7 +102,7 @@ const AgentAreaLogo = ({
           gradientUnits="userSpaceOnUse"
         >
           <stop stopColor="white" />
-          <stop offset="1" stopColor="#AAB9E2" />
+          <stop offset="1" stopColor="#E5E7EB" />
         </linearGradient>
       </defs>
     </svg>

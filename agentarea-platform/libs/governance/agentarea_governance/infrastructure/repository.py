@@ -1,7 +1,8 @@
-"""Repositories for governance policy rules and task policy snapshots."""
+"""Repositories for governance policy rules."""
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -9,13 +10,14 @@ from agentarea_common.auth.context import UserContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..domain.policies import (
-    RESOLVER_VERSION,
-    EffectivePolicy,
-    effective_policy_from_json,
-)
 from ..domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
-from .orm import PolicyRuleORM, TaskPolicySnapshotORM
+from .orm import PolicyRuleORM
+
+logger = logging.getLogger(__name__)
+
+
+_VALID_EFFECTS = {e.value for e in PolicyEffect}
+_VALID_SUBJECT_TYPES = {s.value for s in PolicySubjectType}
 
 
 def _to_rule(row: PolicyRuleORM) -> PolicyRule:
@@ -30,6 +32,22 @@ def _to_rule(row: PolicyRuleORM) -> PolicyRule:
         params=row.params or {},
         condition=row.condition,
     )
+
+
+def _safe_to_rule(row: PolicyRuleORM) -> PolicyRule | None:
+    """Map a row to a rule, tolerating rows with an effect/subject the current
+    schema doesn't know (e.g. stale or externally-seeded data). One unknown row
+    must never 500 the whole list — read paths stay generic-render.
+    """
+    if row.effect not in _VALID_EFFECTS or row.subject_type not in _VALID_SUBJECT_TYPES:
+        logger.warning(
+            "skipping policy %s: unsupported effect/subject_type (%r/%r)",
+            row.id,
+            row.effect,
+            row.subject_type,
+        )
+        return None
+    return _to_rule(row)
 
 
 class PolicyRuleRepository:
@@ -69,11 +87,11 @@ class PolicyRuleRepository:
                 PolicyRuleORM.priority,
             )
         )
-        return [_to_rule(row) for row in result.scalars().all()]
+        return [rule for row in result.scalars().all() if (rule := _safe_to_rule(row)) is not None]
 
     async def get(self, rule_id: UUID | str) -> PolicyRule | None:
         row = await self._get_row(rule_id)
-        return _to_rule(row) if row is not None else None
+        return _safe_to_rule(row) if row is not None else None
 
     async def create(self, rule: PolicyRule) -> PolicyRule:
         row = PolicyRuleORM(
@@ -145,49 +163,3 @@ class PolicyRuleRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-
-
-class TaskPolicySnapshotRepository:
-    """Workspace-scoped repository for immutable effective policy snapshots."""
-
-    def __init__(self, session: AsyncSession, user_context: UserContext):
-        self.session = session
-        self.user_context = user_context
-
-    async def create_snapshot(
-        self,
-        *,
-        task_id: UUID | str,
-        effective_policy: EffectivePolicy,
-    ) -> EffectivePolicy:
-        existing = await self.get_snapshot(task_id=task_id)
-        if existing is not None:
-            raise ValueError("task policy snapshot already exists")
-
-        row = TaskPolicySnapshotORM(
-            workspace_id=self.user_context.workspace_id,
-            created_by=self.user_context.user_id,
-            task_id=str(task_id),
-            effective_policy=effective_policy.to_json_dict(),
-            source_policy_ids=effective_policy.source_policy_ids,
-            resolver_version=effective_policy.resolver_version or RESOLVER_VERSION,
-            resolved_at=datetime.now(UTC).replace(tzinfo=None),
-        )
-        self.session.add(row)
-        await self.session.flush()
-        return effective_policy
-
-    async def get_snapshot(
-        self,
-        *,
-        task_id: UUID | str,
-    ) -> EffectivePolicy | None:
-        stmt = select(TaskPolicySnapshotORM).where(
-            TaskPolicySnapshotORM.workspace_id == self.user_context.workspace_id,
-            TaskPolicySnapshotORM.task_id == str(task_id),
-        )
-        result = await self.session.execute(stmt)
-        row = result.scalar_one_or_none()
-        if row is None:
-            return None
-        return effective_policy_from_json(row.effective_policy)

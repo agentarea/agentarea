@@ -6,6 +6,9 @@ import { getAuthToken } from "./getAuthToken";
 export interface AuthContext {
   userId: string | null;
   workspaceId: string | null;
+  email: string | null;
+  name: string | null;
+  username: string | null;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -24,15 +27,26 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 async function getAuthContextImpl(): Promise<AuthContext> {
   const token = await getAuthToken();
-  if (!token) return { userId: null, workspaceId: null };
+  if (!token) {
+    return {
+      userId: null,
+      workspaceId: null,
+      email: null,
+      name: null,
+      username: null,
+    };
+  }
 
   const payload = decodeJwtPayload(token);
   const userId = (payload?.sub as string) ?? null;
+  const email = (payload?.email as string) ?? null;
+  const name = (payload?.name as string) ?? null;
+  const username = (payload?.username as string) ?? null;
   // The backend falls back to user_id when the token has no workspace_id claim
   // (each user gets their own personal workspace by default).
   const workspaceId = (payload?.workspace_id as string) ?? userId;
 
-  return { userId, workspaceId };
+  return { userId, workspaceId, email, name, username };
 }
 
 export const getAuthContext = cache(getAuthContextImpl);

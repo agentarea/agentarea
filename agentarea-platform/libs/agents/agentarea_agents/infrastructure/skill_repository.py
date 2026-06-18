@@ -54,6 +54,16 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_by_registry_item_id(self, registry_item_id: str) -> Skill | None:
+        """Get the workspace's tenant copy forked from a catalog item, if any."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.registry_item_id == registry_item_id)
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.
 
@@ -91,7 +101,6 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         offset: int,
         search: str | None = None,
         source_type: str | None = None,
-        has_files: bool | None = None,
         network_scope: str | None = None,
         from_registry: bool | None = None,
     ) -> tuple[list[Skill], int]:
@@ -108,10 +117,6 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
             )
         if source_type:
             filters.append(self.model_class.source_type == source_type)
-        if has_files is True:
-            filters.append(self.model_class.s3_path.is_not(None))
-        elif has_files is False:
-            filters.append(self.model_class.s3_path.is_(None))
         if network_scope:
             filters.append(self.model_class.network_scope == network_scope)
         if from_registry is True:

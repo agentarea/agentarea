@@ -1071,9 +1071,9 @@ class TriggerService:
                     task_params["channel_origin"] = channel_origin
 
                 # Route to active workflow or create new task
-                from agentarea_tasks.domain.models import SimpleTask
+                from agentarea_tasks.domain.models import AgentTask
 
-                task = SimpleTask(
+                task = AgentTask(
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,

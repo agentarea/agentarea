@@ -7,7 +7,7 @@ Each MCP instance gets a stable governed endpoint:
 The proxy resolves the instance, determines the upstream URL, injects
 outbound auth headers (OAuth2 bearer with auto-refresh, API key, etc.), and
 streams the request/response transparently. AgentArea owns access control
-(workspace scoping today; ReBAC next) and audit centrally; downstream MCP
+(workspace scoping today; access-control next) and audit centrally; downstream MCP
 servers see only governed traffic.
 
 Dispatch by instance type:
@@ -18,6 +18,7 @@ Dispatch by instance type:
 * ``compound``-> not yet implemented here; see compound proxy
 """
 
+import json
 import logging
 from typing import Any
 from uuid import UUID
@@ -25,6 +26,10 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationRequest,
+    authorize_tool_invocation,
+)
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -80,6 +85,53 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
             continue
         out[k] = v
     return out
+
+
+def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Extract MCP JSON-RPC tool calls from a request payload."""
+    messages = payload if isinstance(payload, list) else [payload]
+    calls: list[tuple[str, dict[str, Any]]] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        if message.get("method") != "tools/call":
+            continue
+        params = message.get("params") if isinstance(message.get("params"), dict) else {}
+        tool_name = params.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            continue
+        arguments = params.get("arguments")
+        calls.append((tool_name, arguments if isinstance(arguments, dict) else {}))
+    return calls
+
+
+async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
+    """Deny JSON-RPC tool calls unless the tool authorization PDP allows them."""
+    if not body:
+        return
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return
+    tool_calls = _iter_jsonrpc_tool_calls(payload)
+    if not tool_calls:
+        return
+
+    for tool_name, tool_args in tool_calls:
+        decision = await authorize_tool_invocation(
+            ToolAuthorizationRequest(
+                tool_name=tool_name,
+                tool_args=tool_args,
+                user_id=user_context.user_id,
+                workspace_id=user_context.workspace_id,
+                policy_required=False,
+            )
+        )
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Tool call denied: {tool_name}: {decision.reason}",
+            )
 
 
 async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
@@ -174,7 +226,7 @@ async def proxy_instance(
     server_spec = None
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
-        server_spec = await server_repo.get_by_id(instance.server_spec_id)
+        server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
 
     upstream_url, instance_type = await _resolve_upstream_url(instance, server_spec)
     if not upstream_url:
@@ -217,6 +269,8 @@ async def proxy_instance(
                 raise HTTPException(status_code=502, detail="Upstream auth failed") from exc
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
+    if request.method == "POST" and body is not None:
+        await _authorize_mcp_tool_calls(body, user_context)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

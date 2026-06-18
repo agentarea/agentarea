@@ -6,6 +6,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
+import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
 export const metadata = {
@@ -26,28 +27,41 @@ export default async function TriggersPage({
   const viewMode =
     typeof resolvedSearchParams.tab === "string"
       ? (resolvedSearchParams.tab as "grid" | "table")
-      : (cookieTab as "grid" | "table") || "grid";
+      : (cookieTab as "grid" | "table") || "table";
 
   const searchQuery =
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
       : "";
 
+  const typeFilter =
+    typeof resolvedSearchParams.type === "string"
+      ? resolvedSearchParams.type
+      : "all";
+
   return (
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        description: t("description"),
         controls: <CreateTriggerButton />,
       }}
       subheader={
         <>
-          <SearchInput urlParamName="search" urlPath="/triggers" />
-          <TriggersHeaderTabs currentTab={viewMode} />
+          <Suspense fallback={<div className="h-7" />}>
+            <TriggersTypeFilterSection currentType={typeFilter} />
+          </Suspense>
+          <div className="flex flex-1 items-center justify-end gap-3">
+            <SearchInput
+              urlParamName="search"
+              urlPath="/triggers"
+              placeholder={t("searchPlaceholder")}
+            />
+            <TriggersHeaderTabs currentTab={viewMode} />
+          </div>
         </>
       }
     >
-      <Suspense key={`${viewMode}-${searchQuery}`} fallback={
+      <Suspense key={`${viewMode}-${searchQuery}-${typeFilter}`} fallback={
         <div className="flex h-64 items-center justify-center">
           <LoadingSpinner />
         </div>
@@ -55,6 +69,7 @@ export default async function TriggersPage({
         <TriggersContent
           viewMode={viewMode}
           searchQuery={searchQuery}
+          typeFilter={typeFilter}
         />
       </Suspense>
     </ContentBlock>

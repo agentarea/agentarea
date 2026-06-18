@@ -63,6 +63,13 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    installAgent: async (agentId: string) => {
+      const result = await client.POST("/v1/agents/{agent_id}/install", {
+        params: { path: { agent_id: agentId } },
+      });
+      return withStatus(result);
+    },
+
     updateAgent: async (
       agentId: string,
       agent: components["schemas"]["AgentUpdate"]
@@ -71,6 +78,30 @@ export function createApiClient(client: Client) {
         params: { path: { agent_id: agentId } },
         body: agent,
       });
+      return { data, error };
+    },
+
+    // Registry / Catalog API
+    listRegistries: async (params?: {
+      registry_type?: string;
+      active_only?: boolean;
+    }) => {
+      const { data, error } = await client.GET("/v1/registries/", {
+        params: { query: params },
+      });
+      return { data, error };
+    },
+
+    listRegistryItems: async (
+      registryId: string,
+      params?: { limit?: number; offset?: number }
+    ) => {
+      const { data, error } = await client.GET(
+        "/v1/registries/{registry_id}/items",
+        {
+          params: { path: { registry_id: registryId }, query: params },
+        }
+      );
       return { data, error };
     },
 
@@ -86,8 +117,13 @@ export function createApiClient(client: Client) {
       agentId: string,
       task: components["schemas"]["TaskCreate"]
     ) => {
+      // Use the synchronous (non-streaming) endpoint: it returns the created
+      // task as JSON (including its id) right after the workflow is started,
+      // so callers can redirect to /tasks/{id}. The bare POST /tasks/ returns
+      // an SSE stream, which a JSON client cannot parse — the task gets created
+      // but no id is ever returned.
       const { data, error } = await client.POST(
-        "/v1/agents/{agent_id}/tasks/",
+        "/v1/agents/{agent_id}/tasks/sync",
         {
           params: { path: { agent_id: agentId } },
           body: task,
@@ -532,7 +568,7 @@ export function createApiClient(client: Client) {
 
     discoverModelsPreview: async (body: {
       provider_key: string;
-      api_key: string;
+      api_key?: string | null;
       endpoint_url?: string | null;
     }) => {
       const { data, error } = await client.POST(
@@ -805,25 +841,29 @@ export function createApiClient(client: Client) {
     },
 
     // Skills API
-    listSkills: async (options: {
-      page?: number;
-      page_size?: number;
-      search?: string;
-      source_type?: string;
-      has_files?: boolean;
-      network_scope?: string;
-      from_registry?: boolean;
-      paginated?: boolean;
-    } = {}) => {
+    listSkills: async (
+      options: {
+        page?: number;
+        page_size?: number;
+        search?: string;
+        source_type?: string;
+        network_scope?: string;
+        from_registry?: boolean;
+        paginated?: boolean;
+      } = {}
+    ) => {
       const pageSize = options.page_size || (options.paginated ? 50 : 100);
       const query = (page: number) => ({
         page,
         page_size: pageSize,
         ...(options.search ? { search: options.search } : {}),
         ...(options.source_type ? { source_type: options.source_type } : {}),
-        ...(options.has_files !== undefined ? { has_files: options.has_files } : {}),
-        ...(options.network_scope ? { network_scope: options.network_scope } : {}),
-        ...(options.from_registry !== undefined ? { from_registry: options.from_registry } : {}),
+        ...(options.network_scope
+          ? { network_scope: options.network_scope }
+          : {}),
+        ...(options.from_registry !== undefined
+          ? { from_registry: options.from_registry }
+          : {}),
       });
 
       const { data, error } = await client.GET("/v1/skills" as any, {
@@ -852,7 +892,9 @@ export function createApiClient(client: Client) {
         }
 
         const nextData = next.data as any;
-        const nextItems = Array.isArray(nextData) ? nextData : nextData?.items || [];
+        const nextItems = Array.isArray(nextData)
+          ? nextData
+          : nextData?.items || [];
         allItems.push(...nextItems);
         hasNext = !Array.isArray(nextData) && Boolean(nextData?.has_next);
       }
@@ -929,6 +971,14 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.PUT(`/v1/skills/${skillId}` as any, {
         body: skill,
       });
+      return { data, error };
+    },
+
+    installSkill: async (skillId: string) => {
+      const { data, error } = await client.POST(
+        `/v1/skills/${skillId}/install` as any,
+        {}
+      );
       return { data, error };
     },
 
@@ -1458,7 +1508,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/skills" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { skill_id: skillId },
+          body: { id: skillId },
         }
       );
       return { data, error };
@@ -1479,7 +1529,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/agents" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { agent_id: agentId },
+          body: { id: agentId },
         }
       );
       return { data, error };
@@ -1503,7 +1553,7 @@ export function createApiClient(client: Client) {
         "/v1/projects/{project_id}/mcp-instances" as any,
         {
           params: { path: { project_id: projectId } },
-          body: { mcp_instance_id: mcpInstanceId },
+          body: { id: mcpInstanceId },
         }
       );
       return { data, error };
@@ -1588,9 +1638,12 @@ export function createApiClient(client: Client) {
     },
 
     workspaceFileHistory: async (filePath: string) => {
-      const { data, error } = await client.GET("/v1/files/history" as any, {
-        params: { query: { path: filePath } },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/files/history" as any,
+        {
+          params: { query: { path: filePath } },
+        } as any
+      );
       return { data, error };
     },
 
@@ -1714,9 +1767,12 @@ export function createApiClient(client: Client) {
       target?: string;
       enabled?: boolean;
     }) => {
-      const { data, error } = await client.GET("/v1/policies" as any, {
-        params: { query: params },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/policies" as any,
+        {
+          params: { query: params },
+        } as any
+      );
       return { data, error };
     },
 
@@ -1730,9 +1786,12 @@ export function createApiClient(client: Client) {
       enabled?: boolean;
       priority?: number;
     }) => {
-      const { data, error } = await client.POST("/v1/policies" as any, {
-        body: body as any,
-      } as any);
+      const { data, error } = await client.POST(
+        "/v1/policies" as any,
+        {
+          body: body as any,
+        } as any
+      );
       return { data, error };
     },
 
@@ -1782,57 +1841,84 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    // ReBAC Access Explorer API
-    getRebacGraph: async () => {
-      const { data, error } = await client.GET("/v1/rebac/graph" as any, {} as any);
+    // Read the immutable effective-policy snapshot persisted for a task at
+    // creation time. 404 when no snapshot exists (e.g. legacy tasks).
+    getTaskPolicySnapshot: async (taskId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/governance/task-policy-snapshots/{task_id}" as any,
+        {
+          params: { path: { task_id: taskId } },
+        } as any
+      );
       return { data, error };
     },
 
-    listRebacTuples: async (params?: {
+    // Access-control graph explorer API
+    getAccessControlGraph: async () => {
+      const { data, error } = await client.GET(
+        "/v1/access-control/graph" as any,
+        {} as any
+      );
+      return { data, error };
+    },
+
+    listAccessControlRelationships: async (params?: {
       object?: string;
       relation?: string;
       subject?: string;
     }) => {
-      const { data, error } = await client.GET("/v1/rebac/tuples" as any, {
-        params: { query: params },
-      } as any);
+      const { data, error } = await client.GET(
+        "/v1/access-control/relationships" as any,
+        {
+          params: { query: params },
+        } as any
+      );
       return { data, error };
     },
 
-    resolveRebac: async (body: {
+    resolveAccessControl: async (body: {
       subject_id: string;
-      resource_kind: "skill" | "mcp" | "agent";
+      resource_kind: "skill" | "collection" | "mcp" | "agent";
       resource_id: string;
     }) => {
-      const { data, error } = await client.POST("/v1/rebac/resolve" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.POST(
+        "/v1/access-control/resolve" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 
-    createRebacTuple: async (body: {
+    createAccessControlRelationship: async (body: {
       namespace: string;
       object: string;
       relation: string;
       subject_id?: string;
       subject_set?: string;
     }) => {
-      const { data, error } = await client.POST("/v1/rebac/tuples" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.POST(
+        "/v1/access-control/relationships" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 
-    deleteRebacTuple: async (body: {
+    deleteAccessControlRelationship: async (body: {
       namespace: string;
       object: string;
       relation: string;
       subject_id?: string;
       subject_set?: string;
     }) => {
-      const { data, error } = await client.DELETE("/v1/rebac/tuples" as any, {
-        body: body as any,
-      });
+      const { data, error } = await client.DELETE(
+        "/v1/access-control/relationships" as any,
+        {
+          body: body as any,
+        }
+      );
       return { data, error };
     },
 

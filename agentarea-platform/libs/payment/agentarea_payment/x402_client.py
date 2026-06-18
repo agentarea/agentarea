@@ -42,12 +42,13 @@ class X402PaymentClient:
 
         try:
             x402_client_cls = import_module("x402").x402Client
-            exact_evm_scheme_cls = import_module("x402.mechanisms.evm.exact").ExactEvmScheme
+            register_exact_evm_client = import_module(
+                "x402.mechanisms.evm.exact.register"
+            ).register_exact_evm_client
 
             client = x402_client_cls()
-            # Create signer from private key
             signer = self._create_signer()
-            client.register("eip155:*", exact_evm_scheme_cls(signer=signer))
+            register_exact_evm_client(client, signer, networks=self._network or None)
             self._client = client
             return client
         except ImportError:
@@ -58,12 +59,60 @@ class X402PaymentClient:
         """Create a signer from the private key."""
         try:
             account_cls = import_module("eth_account").Account
+            signer_cls = import_module("x402.mechanisms.evm").EthAccountSigner
 
-            return account_cls.from_key(self._private_key)
+            return signer_cls(account_cls.from_key(self._private_key))
         except ImportError:
-            # Fallback: x402 SDK may provide its own signer
-            logger.warning("eth_account not available, attempting x402 native signer")
+            logger.warning("eth_account or x402 EVM signer is not available")
             raise
+
+    @staticmethod
+    def _decode_payment_required(raw: str) -> dict[str, Any]:
+        """Decode PAYMENT-REQUIRED as JSON or base64/base64url JSON."""
+        import base64
+        import binascii
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            last_error: Exception = exc
+
+        padded = raw + "=" * (-len(raw) % 4)
+        for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+            try:
+                decoded = decoder(padded.encode()).decode()
+                return json.loads(decoded)
+            except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+                last_error = exc
+        raise ValueError("Invalid PAYMENT-REQUIRED header") from last_error
+
+    def _select_payment_requirement(self, payment_required: dict[str, Any]) -> dict[str, Any]:
+        """Pick the requirement used for budget checks from an x402 challenge."""
+        accepts = payment_required.get("accepts")
+        if isinstance(accepts, list) and accepts:
+            for requirement in accepts:
+                if not isinstance(requirement, dict):
+                    continue
+                network = str(requirement.get("network") or "")
+                if self._network and network and network != self._network:
+                    continue
+                return requirement
+            first = accepts[0]
+            return first if isinstance(first, dict) else payment_required
+        return payment_required
+
+    @staticmethod
+    def _extract_amount_usd(requirement: dict[str, Any]) -> float:
+        """Extract USD amount from known x402 requirement shapes."""
+        for atomic_key in ("maxAmountRequired", "maxAmount", "amount"):
+            raw_amount = requirement.get(atomic_key)
+            if raw_amount not in (None, ""):
+                return float(raw_amount) / 1_000_000
+
+        price = requirement.get("price")
+        if isinstance(price, str) and price.startswith("$"):
+            return float(price[1:])
+        return float(price or 0)
 
     async def handle_402(
         self,
@@ -103,22 +152,12 @@ class X402PaymentClient:
                     error="No PAYMENT-REQUIRED header found",
                 )
 
-            # Decode payment requirements
-            try:
-                payment_required = json.loads(base64.b64decode(payment_required_raw))
-            except Exception:
-                # Try as raw JSON
-                payment_required = (
-                    json.loads(payment_required_raw)
-                    if isinstance(payment_required_raw, str)
-                    else payment_required_raw
-                )
+            payment_required = self._decode_payment_required(str(payment_required_raw))
+            requirement = self._select_payment_requirement(payment_required)
 
             # Extract amount and check against budget
-            amount = (
-                float(payment_required.get("maxAmountRequired", 0)) / 1_000_000
-            )  # USDC has 6 decimals
-            recipient = payment_required.get("payTo", "")
+            amount = self._extract_amount_usd(requirement)
+            recipient = requirement.get("payTo") or requirement.get("pay_to") or ""
 
             if amount > budget_remaining:
                 return PaymentResult(
@@ -129,31 +168,25 @@ class X402PaymentClient:
                     error=f"Payment ${amount:.4f} exceeds remaining budget ${budget_remaining:.2f}",
                 )
 
-            # Create payment payload using x402 client
             client = self._get_client()
-            payload = await client.create_payment_payload(payment_required)
+            http_client_cls = import_module("x402.http").x402HTTPClient
+            x402_httpx_client_cls = import_module("x402.http.clients").x402HttpxClient
 
-            # Retry request with payment
-            import httpx
+            async with x402_httpx_client_cls(client) as http_client:
+                request_kwargs: dict[str, Any] = {
+                    "method": method,
+                    "url": url,
+                    "headers": headers or None,
+                }
+                if body is not None:
+                    if isinstance(body, dict | list):
+                        request_kwargs["json"] = body
+                    else:
+                        request_kwargs["content"] = body
+                response = await http_client.request(**request_kwargs)
+                await response.aread()
 
-            payment_headers = {
-                **headers,
-                "PAYMENT-SIGNATURE": base64.b64encode(
-                    json.dumps(payload).encode()
-                    if isinstance(payload, dict)
-                    else str(payload).encode()
-                ).decode(),
-            }
-
-            async with httpx.AsyncClient() as http_client:
-                response = await http_client.request(
-                    method=method,
-                    url=url,
-                    headers=payment_headers,
-                    content=json.dumps(body) if body else None,
-                )
-
-            if response.status_code == 200:
+            if 200 <= response.status_code < 300:
                 # Extract tx hash from response headers if available
                 payment_response = response.headers.get("PAYMENT-RESPONSE", "")
                 tx_hash = None
@@ -163,6 +196,14 @@ class X402PaymentClient:
                         tx_hash = pr_data.get("txHash") or pr_data.get("transaction_hash")
                     except Exception:
                         logger.debug("Failed to parse x402 PAYMENT-RESPONSE header")
+                try:
+                    settle_response = http_client_cls(client).get_payment_settle_response(
+                        lambda name: response.headers.get(name)
+                    )
+                    if settle_response is not None:
+                        tx_hash = tx_hash or getattr(settle_response, "tx_hash", None)
+                except Exception:
+                    logger.debug("Failed to parse x402 settle response")
 
                 return PaymentResult(
                     success=True,

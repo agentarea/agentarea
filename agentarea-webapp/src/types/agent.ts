@@ -38,6 +38,11 @@ export interface Agent {
   planning?: boolean | null;
   a2ui_enabled?: boolean | null;
   skills?: Array<{ id: string; name: string; description?: string | null }> | null;
+  // Catalog provenance (ADR-003): a read-only built-in agent that has not been
+  // forked into the workspace yet. Resolved by slug or UUID; install to fork.
+  is_catalog?: boolean | null;
+  registry_item_id?: string | null;
+  update_available?: boolean | null;
 }
 
 /**

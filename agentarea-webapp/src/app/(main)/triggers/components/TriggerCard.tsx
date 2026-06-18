@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -47,7 +48,15 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
         </div>
       }
     >
-      <div className="text-xs text-muted-foreground">{trigger.agent_name}</div>
+      {trigger.agent_name && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <AgentAvatar
+            agent={{ id: trigger.agent_id || trigger.agent_name, name: trigger.agent_name }}
+            size="xs"
+          />
+          {trigger.agent_name}
+        </div>
+      )}
     </LinkedCard>
   );
 }

@@ -1,12 +1,17 @@
-import { getRebacGraph, listRebacTuples, listSkillCollections } from "@/lib/api";
+import {
+  getAccessControlGraph,
+  listAccessControlRelationships,
+  listSkillCollections,
+} from "@/lib/api";
+import { getAuthContext } from "@/lib/getAuthContext";
 import type {
-  RebacGraph,
-  RebacTuplesResponse,
+  AccessControlGraph,
+  AccessControlRelationshipsResponse,
   SkillCollection,
-} from "@/types/rebac";
+} from "@/types/access-control";
 import AccessControlExplorer from "./AccessControlExplorer";
 
-const EMPTY_GRAPH: RebacGraph = {
+const EMPTY_GRAPH: AccessControlGraph = {
   enabled: false,
   nodes: [],
   edges: [],
@@ -18,27 +23,30 @@ const EMPTY_GRAPH: RebacGraph = {
 };
 
 export default async function AccessControlData() {
-  let graph: RebacGraph = EMPTY_GRAPH;
-  let tuples: RebacTuplesResponse = { tuples: [], count: 0 };
+  let graph: AccessControlGraph = EMPTY_GRAPH;
+  let relationships: AccessControlRelationshipsResponse = { relationships: [], count: 0 };
   let collections: SkillCollection[] = [];
+  let currentUserId: string | null = null;
 
   try {
-    const [graphRes, tuplesRes, collectionsRes] = await Promise.all([
-      getRebacGraph(),
-      listRebacTuples(),
+    const [graphRes, relationshipsRes, collectionsRes, authContext] = await Promise.all([
+      getAccessControlGraph(),
+      listAccessControlRelationships(),
       listSkillCollections(),
+      getAuthContext(),
     ]);
+    currentUserId = authContext.userId;
 
     if (graphRes.error) {
-      console.error("Failed to fetch ReBAC graph:", graphRes.error);
+      console.error("Failed to fetch access-control graph:", graphRes.error);
     } else if (graphRes.data) {
-      graph = graphRes.data as RebacGraph;
+      graph = graphRes.data as AccessControlGraph;
     }
 
-    if (tuplesRes.error) {
-      console.error("Failed to fetch ReBAC tuples:", tuplesRes.error);
-    } else if (tuplesRes.data) {
-      tuples = tuplesRes.data as RebacTuplesResponse;
+    if (relationshipsRes.error) {
+      console.error("Failed to fetch access-control relationships:", relationshipsRes.error);
+    } else if (relationshipsRes.data) {
+      relationships = relationshipsRes.data as AccessControlRelationshipsResponse;
     }
 
     if (collectionsRes.error) {
@@ -56,8 +64,9 @@ export default async function AccessControlData() {
   return (
     <AccessControlExplorer
       graph={graph}
-      tuples={tuples}
+      relationships={relationships}
       collections={collections}
+      currentUserId={currentUserId}
     />
   );
 }

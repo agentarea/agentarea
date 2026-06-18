@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from agentarea_api.api.v1.agents_a2a import handle_task_cancel, handle_task_get
-from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.domain.models import AgentTask
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,11 @@ class MockTaskServiceWithWorkflowStatus:
         self.cancelled_tasks = []
         self.workflow_statuses = {}
 
-    async def get_task(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task(self, task_id: UUID) -> AgentTask | None:
         """Get task without workflow status enrichment."""
         return self.tasks.get(task_id)
 
-    async def get_task_with_workflow_status(self, task_id: UUID) -> SimpleTask | None:
+    async def get_task_with_workflow_status(self, task_id: UUID) -> AgentTask | None:
         """Get task with current workflow status."""
         task = self.tasks.get(task_id)
         if not task:
@@ -60,7 +60,7 @@ class MockTaskServiceWithWorkflowStatus:
         self.cancelled_tasks.append(task_id)
         return True
 
-    def add_task(self, task: SimpleTask):
+    def add_task(self, task: AgentTask):
         """Add a task to the mock service."""
         self.tasks[task.id] = task
 
@@ -77,7 +77,7 @@ async def test_handle_task_get_with_workflow_status():
     task_id = uuid4()
 
     # Create a task with database status "running"
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Test Task",
         description="Test task for workflow status",
@@ -136,7 +136,7 @@ async def test_handle_task_cancel_success():
     task_id = uuid4()
 
     # Create a running task
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Cancellable Task",
         description="Task that can be cancelled",
@@ -177,7 +177,7 @@ async def test_handle_task_cancel_already_completed():
     task_id = uuid4()
 
     # Create a completed task
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Completed Task",
         description="Task that is already completed",
@@ -209,7 +209,7 @@ async def test_handle_task_cancel_with_workflow_status():
     task_id = uuid4()
 
     # Create a task with database status "running"
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Workflow Status Task",
         description="Task with different workflow status",
@@ -261,7 +261,7 @@ async def test_task_status_reflects_workflow_state():
     task_id = uuid4()
 
     # Create a task with initial status
-    task = SimpleTask(
+    task = AgentTask(
         id=task_id,
         title="Workflow State Task",
         description="Task to test workflow state reflection",

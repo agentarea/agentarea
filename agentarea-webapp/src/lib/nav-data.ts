@@ -2,8 +2,8 @@ import {
   Bot,
   Brain,
   ClipboardList,
+  Compass,
   FileText,
-  FolderKanban,
   GalleryVerticalEnd,
   Gauge,
   Home,
@@ -65,12 +65,8 @@ export const navData = {
           url: "/tasks",
           icon: ClipboardList,
         },
-        {
-          title: "Projects",
-          titleKey: "projects",
-          url: "/projects",
-          icon: FolderKanban,
-        },
+        // Projects nav item hidden until the feature is fully working.
+        // Tracked in GitHub: finish the Projects feature before re-enabling.
       ],
     },
     {
@@ -90,6 +86,12 @@ export const navData = {
       labelKey: "build",
       items: [
         {
+          title: "Explore",
+          titleKey: "explore",
+          url: "/explore",
+          icon: Compass,
+        },
+        {
           title: "Agents",
           titleKey: "agents",
           url: "/agents",
@@ -104,7 +106,7 @@ export const navData = {
         {
           title: "Connections",
           titleKey: "connections",
-          url: "/mcp-servers",
+          url: "/connections",
           icon: Plug,
         },
         {

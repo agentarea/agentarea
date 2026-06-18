@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
 
 from . import agents_a2a, agents_well_known
-from ._rebac_grants import grant_user_relation
+from ._access_control_grants import grant_user_relation
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,28 @@ async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUI
     with suppress(ValueError):
         return UUID(identifier)
     agent = await agent_service.get_by_slug(identifier)
-    return agent.id if agent else None
+    if agent:
+        return agent.id
+    # Built-in catalog agents aren't in the tenant table; resolve by projected slug.
+    catalog_agent = await agent_service.get_catalog_by_slug(identifier)
+    return catalog_agent.id if catalog_agent else None
+
+
+async def _grant_agent_owner(agent_id: UUID | str, user_id: str) -> None:
+    """Assert that ``user_id`` owns ``agent_id`` in Keto.
+
+    Called on every path that materializes an agent the caller now owns —
+    create, catalog install (copy-on-write fork), and edit (which forks an
+    un-owned catalog agent) — so a freshly-minted agent never ends up without
+    its ``owners`` relationship (which would 403 the creator on their own row). The
+    Keto write is an idempotent upsert, so re-asserting on update is harmless.
+    """
+    await grant_user_relation(
+        namespace="Agent",
+        object_id=agent_id,
+        relation="owners",
+        user_id=user_id,
+    )
 
 
 @router.post("/", response_model=AgentResponse)
@@ -206,12 +227,7 @@ async def create_agent(
             )
 
     agent = await agent_service.create_agent(data)
-    await grant_user_relation(
-        namespace="Agent",
-        object_id=agent.id,
-        relation="owners",
-        user_id=user_context.user_id,
-    )
+    await _grant_agent_owner(agent.id, user_context.user_id)
     return AgentResponse.from_domain(agent)
 
 
@@ -324,6 +340,30 @@ async def get_agent(
     return AgentResponse.from_domain(agent, include_skills=True)
 
 
+@router.post("/{agent_id}/install", response_model=AgentResponse)
+async def install_agent(
+    agent_id: str,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    """Add a built-in catalog agent to the workspace (copy-on-write fork).
+
+    Resolves a catalog agent by UUID or slug and materializes a tenant copy.
+    Idempotent: returns the existing workspace copy if already installed.
+    """
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.install_catalog_agent(resolved_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    # The fork created a real tenant row; assert ownership so it is not orphaned
+    # in Keto (matching create). Idempotent if the workspace already installed it.
+    await _grant_agent_owner(agent.id, user_context.user_id)
+    agent = await agent_service.get_with_skills(agent.id) or agent
+    return AgentResponse.from_domain(agent, include_skills=True)
+
+
 @router.get("", response_model=list[AgentResponse])
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
@@ -337,7 +377,7 @@ async def list_agents(
         All users in the same workspace can see all workspace agents.
 
         Note: User-level access control should be implemented via authorization
-        layer (future ReBAC) rather than query parameters.
+        layer (future access-control) rather than query parameters.
     """
     agents = await agent_service.list()
     return [AgentResponse.from_domain(agent) for agent in agents]
@@ -362,7 +402,10 @@ async def update_agent(
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    agent = await agent_service.get_with_skills(resolved_id)
+    # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
+    # assert ownership of the resulting row. Idempotent for plain edits.
+    await _grant_agent_owner(agent.id, user_context.user_id)
+    agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)

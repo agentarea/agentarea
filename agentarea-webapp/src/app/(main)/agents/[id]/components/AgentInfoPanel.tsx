@@ -13,6 +13,7 @@ import {
   InfoPanelSection,
   InfoPanelShell,
 } from "@/components/InfoPanel";
+import { ProviderIcon } from "@/components/ui/provider-icon";
 import type { Agent } from "@/types/agent";
 
 export default function AgentInfoPanel({ agent }: { agent: Agent }) {
@@ -27,6 +28,7 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
     agent.model_id ||
     null;
   const providerLabel = agent.model_info?.provider_name ?? null;
+  const providerIconUrl = agent.model_info?.provider_icon_url ?? null;
 
   const instruction = (agent.instruction ?? "").trim();
   const hasTools =
@@ -37,12 +39,28 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
       <InfoPanelBody>
         <InfoPanelSection title="Model">
           <InfoPanelField label="Provider" icon={Brain}>
-            <div className="text-xs text-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-foreground">
+              {providerLabel && (
+                <ProviderIcon
+                  iconUrl={providerIconUrl}
+                  name={providerLabel}
+                  size="sm"
+                />
+              )}
               {providerLabel || "—"}
             </div>
           </InfoPanelField>
           <InfoPanelField label="Model" className="mt-3">
-            <div className="text-xs text-foreground">{modelLabel || "—"}</div>
+            <div className="flex items-center gap-1.5 text-xs text-foreground">
+              {modelLabel && providerLabel && (
+                <ProviderIcon
+                  iconUrl={providerIconUrl}
+                  name={providerLabel}
+                  size="sm"
+                />
+              )}
+              {modelLabel || "—"}
+            </div>
           </InfoPanelField>
           {agent.planning && (
             <div className="mt-3 text-[11px] text-muted-foreground">

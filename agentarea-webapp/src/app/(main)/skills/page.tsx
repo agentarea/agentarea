@@ -41,7 +41,6 @@ export default async function SkillsPage({
 
   const sourceTab = asString(resolvedSearchParams.source_type) || "all";
   const scope = asString(resolvedSearchParams.network_scope);
-  const files = asString(resolvedSearchParams.files) || "all";
   const search = asString(resolvedSearchParams.search);
 
   return (
@@ -59,7 +58,6 @@ export default async function SkillsPage({
           order,
           sourceTab,
           scope,
-          files,
           search,
         }}
       />
