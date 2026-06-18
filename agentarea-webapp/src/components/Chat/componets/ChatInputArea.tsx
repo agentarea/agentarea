@@ -7,7 +7,6 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import {
   ArrowUp,
-  Bot,
   FolderKanban,
   Paperclip,
   Pause,
@@ -15,18 +14,14 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getAgentIconComponent, resolveAgentIdentity } from "@/lib/agent-identity";
 import { cn } from "@/lib/utils";
+import { ContextSelect } from "./ContextSelect";
 import { MentionMenu } from "../MentionMenu";
 
 const NO_PROJECT_VALUE = "__no_project__";
@@ -162,6 +157,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   };
 
   /**
@@ -171,6 +168,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   }>;
 
   /**
@@ -180,6 +179,8 @@ export interface ChatInputAreaProps {
     id: string;
     name: string;
     description?: string | null;
+    icon?: string | null;
+    color_token?: string | null;
   }) => void;
 
   /**
@@ -363,27 +364,49 @@ export function ChatInputArea({
               ))}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             {showContextControls ? (
-              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
-                  <ContextSelect
-                    icon={Bot}
-                    label={t("agent")}
-                    value={currentAgent.id}
-                    disabled={isLoading}
-                    onValueChange={(agentId) => {
-                      const nextAgent = availableAgents.find(
-                        (agent) => agent.id === agentId
-                      );
-                      if (nextAgent) onAgentChange(nextAgent);
-                    }}
-                    options={availableAgents}
-                  />
+                  <div className="basis-full sm:basis-auto">
+                    <ContextSelect
+                      className="min-w-0 sm:shrink"
+                      icon={FolderKanban}
+                      label={t("agent")}
+                      value={currentAgent.id}
+                      disabled={isLoading}
+                      onValueChange={(agentId) => {
+                        const nextAgent = availableAgents.find(
+                          (agent) => agent.id === agentId
+                        );
+                        if (nextAgent) onAgentChange(nextAgent);
+                      }}
+                      options={availableAgents}
+                      renderTriggerIcon={(option) => {
+                        const { iconKey } = resolveAgentIdentity(option);
+                        const Icon = getAgentIconComponent(iconKey);
+
+                        return (
+                          <Icon
+                            className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-300"
+                            strokeWidth={2}
+                          />
+                        );
+                      }}
+                      renderOptionIcon={(option) => (
+                        <AgentAvatar
+                          agent={option}
+                          size="xs"
+                          className="mt-0.5 shrink-0"
+                        />
+                      )}
+                    />
+                  </div>
                 ) : null}
 
                 {availableProjects?.length && onProjectChange ? (
                   <ContextSelect
+                    className="shrink min-w-0"
                     icon={FolderKanban}
                     label={t("project")}
                     value={currentProjectId ?? NO_PROJECT_VALUE}
@@ -402,6 +425,7 @@ export function ChatInputArea({
 
                 {availableTaskPolicies?.length && onTaskPolicyChange ? (
                   <ContextSelect
+                    className="shrink min-w-0"
                     icon={ShieldCheck}
                     label={t("taskPolicy")}
                     value={currentTaskPolicyId ?? DEFAULT_TASK_POLICY_VALUE}
@@ -422,11 +446,11 @@ export function ChatInputArea({
                 ) : null}
               </div>
             ) : (
-              <div />
+              <div className="flex-1" />
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2">
+            <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -519,55 +543,5 @@ export function ChatInputArea({
         accept="*/*"
       />
     </div>
-  );
-}
-
-interface ContextSelectOption {
-  id: string;
-  name: string;
-  description?: string | null;
-}
-
-function ContextSelect({
-  icon: Icon,
-  label,
-  value,
-  disabled,
-  options,
-  onValueChange,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  disabled?: boolean;
-  options: ContextSelectOption[];
-  onValueChange: (value: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger
-        aria-label={label}
-        className="h-8 min-w-0 rounded-full border-border/70 bg-muted/40 px-2 text-xs shadow-none"
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <SelectValue placeholder={label} />
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.id} value={option.id}>
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate">{option.name}</span>
-              {option.description ? (
-                <span className="truncate text-xs text-muted-foreground">
-                  {option.description}
-                </span>
-              ) : null}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

@@ -49,6 +49,8 @@ export default async function WorkplacePage() {
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
+      icon: agent.icon ?? null,
+      color_token: agent.color_token ?? null,
     })) || [];
 
   const projects =
