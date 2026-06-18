@@ -3,6 +3,8 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getMcpCatalogStatusPresentation } from "@/lib/status";
 
 type MCPServer = {
   id: string;
@@ -41,11 +43,18 @@ export default function ServerList({
     {
       header: "Status",
       accessor: "status",
-      render: (value: string) => (
-        <Badge variant="secondary" className="text-xs">
-          {value}
-        </Badge>
-      ),
+      render: (value: string) => {
+        const presentation = getMcpCatalogStatusPresentation(value);
+        return (
+          <StatusIndicator
+            size="sm"
+            tone={presentation.tone}
+            pulse={presentation.pulse}
+          >
+            {presentation.label}
+          </StatusIndicator>
+        );
+      },
     },
     {
       header: "Type",
@@ -109,9 +118,18 @@ export default function ServerList({
               {item.description}
             </div>
             <div className="mt-2 flex gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {item.status}
-              </Badge>
+              {(() => {
+                const presentation = getMcpCatalogStatusPresentation(item.status);
+                return (
+                  <StatusIndicator
+                    size="sm"
+                    tone={presentation.tone}
+                    pulse={presentation.pulse}
+                  >
+                    {presentation.label}
+                  </StatusIndicator>
+                );
+              })()}
               {item.is_public && (
                 <Badge variant="outline" className="text-xs">
                   Public

@@ -7,7 +7,12 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { formatApiError } from "@/lib/api-errors";
+import {
+  getOpenApiConnectionDisplayStatus,
+  getOpenApiConnectionStatusPresentation,
+} from "@/lib/status";
 import {
   deleteOpenAPIConnectionAction as deleteOpenAPIConnection,
   discoverOpenAPIToolsAction as discoverOpenAPITools,
@@ -158,6 +163,13 @@ export default function OpenAPIConnectionDetailPage() {
     );
   }
 
+  const statusPresentation = getOpenApiConnectionStatusPresentation(
+    getOpenApiConnectionDisplayStatus(
+      connection.status,
+      connection.available_tools.length
+    )
+  );
+
   return (
     <ContentBlock
       header={{
@@ -222,14 +234,14 @@ export default function OpenAPIConnectionDetailPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Status</p>
-            <Badge
-              variant={
-                connection.status === "active" ? "success" : "destructive"
-              }
-              className="mt-1"
-            >
-              {connection.status}
-            </Badge>
+            <div className="mt-1">
+              <StatusIndicator
+                tone={statusPresentation.tone}
+                pulse={statusPresentation.pulse}
+              >
+                {statusPresentation.label}
+              </StatusIndicator>
+            </div>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Base URL</p>

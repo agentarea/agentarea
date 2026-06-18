@@ -7,10 +7,11 @@ import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
-  StatusIndicator,
-  type StatusIndicatorTone,
-} from "@/components/ui/status-indicator";
+  getMcpHealthStatusPresentation,
+  getOpenApiConnectionDisplayStatus,
+} from "@/lib/status";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
   HealthCheck,
@@ -154,46 +155,21 @@ export function MyMCPsSection({
   const getOpenAPIHealthStatus = (
     connection: OpenAPIConnection
   ): HealthStatus => {
-    if (connection.status === "failed") return "unhealthy";
-    if (connection.status === "pending" || connection.status === "starting") {
-      return "starting";
-    }
-    if (
-      connection.status === "connected" ||
-      connection.status === "running" ||
-      connection.status === "succeeded" ||
-      connection.available_tools.length > 0
-    ) {
-      return "connected";
-    }
-    return STATUS_TO_HEALTH[connection.status] ?? "unknown";
+    const displayStatus = getOpenApiConnectionDisplayStatus(
+      connection.status,
+      connection.available_tools.length
+    );
+    return STATUS_TO_HEALTH[displayStatus] ?? "unknown";
   };
 
   // Shared status presentation: a coloured dot + label, matching the table design.
   const getStatusIndicator = (status: string) => {
-    const tone: StatusIndicatorTone =
-      status === "connected" || status === "healthy" || status === "running"
-        ? "success"
-        : status === "unhealthy" || status === "error"
-          ? "danger"
-          : "warning";
-    const pulse =
-      status === "starting" ||
-      status === "running" ||
-      status === "healthy" ||
-      status === "unknown";
-    const label =
-      status === "connected"
-        ? t("status.connected")
-        : status === "healthy" || status === "running"
-          ? t("status.running")
-          : status === "unhealthy" || status === "error"
-            ? t("status.error")
-            : status === "starting"
-              ? t("status.starting")
-              : t("status.setup");
+    const presentation = getMcpHealthStatusPresentation(status);
+    const label = presentation.labelKey
+      ? t(`status.${presentation.labelKey}`)
+      : presentation.label;
     return (
-      <StatusIndicator tone={tone} pulse={pulse}>
+      <StatusIndicator tone={presentation.tone} pulse={presentation.pulse}>
         {label}
       </StatusIndicator>
     );

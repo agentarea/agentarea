@@ -1,8 +1,5 @@
 import * as React from "react";
-import type {
-  StatusIndicatorSize,
-  StatusTone,
-} from "@/lib/status/types";
+import type { StatusIndicatorSize, StatusTone } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 const TONE_STYLES = {
@@ -52,7 +49,7 @@ const SIZE_STYLES = {
 >;
 
 export type StatusIndicatorTone = StatusTone;
-export type { StatusIndicatorSize } from "@/lib/status/types";
+export type { StatusIndicatorSize } from "@/lib/status";
 
 export interface StatusIndicatorProps
   extends React.HTMLAttributes<HTMLSpanElement> {
