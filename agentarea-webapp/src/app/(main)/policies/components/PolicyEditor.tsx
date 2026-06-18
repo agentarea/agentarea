@@ -664,11 +664,11 @@ export default function PolicyEditor({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
       <section className="relative overflow-hidden border border-border/70 bg-background">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.035]"
+          className="pointer-events-none absolute inset-0 opacity-[0.025]"
           style={{
             backgroundImage:
               "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
+            backgroundSize: "18px 18px",
           }}
           aria-hidden="true"
         />
