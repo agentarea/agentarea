@@ -7,6 +7,8 @@ import {
   listMCPServers,
   listOpenAPIConnections,
   listPolicies,
+  listWorkspaceMembers,
+  type WorkspaceMember,
 } from "@/lib/api";
 import { getAuthContext } from "@/lib/getAuthContext";
 import type { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
@@ -21,6 +23,12 @@ interface OpenAPIConnectionLike {
     description?: string | null;
     inputSchema?: unknown;
   }> | null;
+}
+
+interface MemberLike {
+  user_id: string;
+  email?: string | null;
+  display_name?: string | null;
 }
 
 interface AgentLike {
@@ -52,7 +60,9 @@ export async function PolicyEditorPageData({
   let mcpInstances: McpInstance[] = [];
   let mcpServers: McpServer[] = [];
   let openapiConnections: OpenAPIConnectionLike[] = [];
+  let members: MemberLike[] = [];
   let policiesError: string | null = null;
+  const authContext = await getAuthContext();
 
   const [
     policiesRes,
@@ -60,7 +70,7 @@ export async function PolicyEditorPageData({
     mcpInstancesRes,
     mcpServersRes,
     openapiConnectionsRes,
-    authContext,
+    membersRes,
   ] = await Promise.all([
     listPolicies().catch((reason) => ({ data: null, error: reason })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
@@ -73,7 +83,12 @@ export async function PolicyEditorPageData({
       data: null,
       error: reason,
     })),
-    getAuthContext(),
+    authContext.workspaceId
+      ? listWorkspaceMembers(authContext.workspaceId).catch((reason) => ({
+          data: null,
+          error: reason,
+        }))
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (policiesRes.error) {
@@ -133,6 +148,36 @@ export async function PolicyEditorPageData({
       | null) ?? []) as OpenAPIConnectionLike[];
   }
 
+  if (membersRes.error) {
+    console.error(
+      "Failed to load members for policy editor:",
+      membersRes.error
+    );
+  } else {
+    members = (
+      ((membersRes.data as WorkspaceMember[] | null) ?? []) as WorkspaceMember[]
+    ).map((member) => ({
+      user_id: member.user_id,
+      email: member.email,
+      display_name: member.display_name,
+    }));
+  }
+
+  if (
+    authContext.userId &&
+    !members.some((member) => member.user_id === authContext.userId)
+  ) {
+    members = [
+      {
+        user_id: authContext.userId,
+        email: authContext.email,
+        display_name:
+          authContext.name || authContext.email || authContext.username || null,
+      },
+      ...members,
+    ];
+  }
+
   const target = resolveTarget({ policyId, policies });
   if (!target) notFound();
 
@@ -161,8 +206,8 @@ export async function PolicyEditorPageData({
             mcpInstances={mcpInstances}
             mcpServers={mcpServers}
             openapiConnections={openapiConnections}
+            members={members}
             workspaceId={authContext.workspaceId}
-            currentUserId={authContext.userId}
           />
         )}
       </div>

@@ -48,8 +48,8 @@ interface PolicyEditorProps {
   mcpInstances: McpInstance[];
   mcpServers: McpServer[];
   openapiConnections: OpenAPIConnectionOption[];
+  members: MemberOption[];
   workspaceId: string | null;
-  currentUserId: string | null;
   returnHref?: string;
 }
 
@@ -72,6 +72,12 @@ interface OpenAPIConnectionOption {
     description?: string | null;
     inputSchema?: unknown;
   }> | null;
+}
+
+interface MemberOption {
+  user_id: string;
+  email?: string | null;
+  display_name?: string | null;
 }
 
 interface ToolConfigLike {
@@ -237,6 +243,23 @@ function humanizeToolName(name: string): string {
     .replace(/^tool:/, "")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function memberLabel(member: MemberOption): string {
+  return member.display_name || member.email || member.user_id;
+}
+
+function approverLabel(ref: string, members: MemberOption[]): string {
+  if (ref.startsWith("user:")) {
+    const userId = ref.slice("user:".length);
+    const member = members.find((item) => item.user_id === userId);
+    return member ? memberLabel(member) : ref;
+  }
+  if (ref.startsWith("role:")) return ref.slice("role:".length);
+  if (ref.startsWith("group:")) {
+    return ref.slice("group:".length).replace("#member", "");
+  }
+  return ref;
 }
 
 function addToolOption(
@@ -869,6 +892,177 @@ function ToolConditionBuilder({
   );
 }
 
+function ApproverSelector({
+  members,
+  values,
+  onChange,
+}: {
+  members: MemberOption[];
+  values: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [subjectKind, setSubjectKind] = useState<"role" | "group">("role");
+  const [subjectName, setSubjectName] = useState("");
+
+  const toggle = (ref: string) => {
+    if (values.includes(ref)) {
+      onChange(values.filter((value) => value !== ref));
+    } else {
+      onChange([...values, ref]);
+    }
+  };
+
+  const addStructuredSubject = () => {
+    const name = subjectName.trim();
+    if (!name) return;
+    const ref =
+      subjectKind === "role" ? `role:${name}` : `group:${name}#member`;
+    if (!values.includes(ref)) onChange([...values, ref]);
+    setSubjectName("");
+  };
+
+  const memberRefs = new Set(members.map((member) => `user:${member.user_id}`));
+  const customValues = values.filter(
+    (value) =>
+      !memberRefs.has(value) &&
+      !value.startsWith("role:") &&
+      !value.startsWith("group:")
+  );
+
+  return (
+    <div className="space-y-3">
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((ref) => (
+            <span
+              key={ref}
+              className="inline-flex items-center gap-1 border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                {ref.split(":")[0]}
+              </span>
+              {approverLabel(ref, members)}
+              <button
+                type="button"
+                aria-label={`Remove ${ref}`}
+                onClick={() =>
+                  onChange(values.filter((value) => value !== ref))
+                }
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-2 md:grid-cols-2">
+        {members.map((member) => {
+          const ref = `user:${member.user_id}`;
+          const selected = values.includes(ref);
+          const label = memberLabel(member);
+          return (
+            <div
+              key={member.user_id}
+              role="checkbox"
+              tabIndex={0}
+              aria-checked={selected}
+              onClick={() => toggle(ref)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggle(ref);
+                }
+              }}
+              className={cn(
+                "flex min-h-[58px] cursor-pointer items-start gap-2 border border-border/70 bg-background px-3 py-2 text-left transition-colors hover:bg-muted/30",
+                selected && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
+              )}
+            >
+              <Checkbox
+                checked={selected}
+                tabIndex={-1}
+                aria-hidden="true"
+                className="pointer-events-none mt-0.5"
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  {label}
+                </span>
+                <span className="mt-1 block truncate text-xs text-muted-foreground">
+                  {member.email && member.email !== label
+                    ? member.email
+                    : member.user_id}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-border/60 pt-3">
+        <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          Role or group
+        </Label>
+        <div className="mt-2 grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
+          <Select
+            value={subjectKind}
+            onValueChange={(value) => setSubjectKind(value as "role" | "group")}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="role">Role</SelectItem>
+              <SelectItem value="group">Group members</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={subjectName}
+            onChange={(event) => setSubjectName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addStructuredSubject();
+              }
+            }}
+            placeholder={subjectKind === "role" ? "admin" : "security"}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addStructuredSubject}
+          >
+            Add
+          </Button>
+        </div>
+      </div>
+
+      <details className="border-t border-border/60 pt-3">
+        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          Advanced subject ref
+        </summary>
+        <div className="mt-3">
+          <TagInput
+            values={customValues}
+            onChange={(nextCustom) => {
+              const standardValues = values.filter(
+                (value) => !customValues.includes(value)
+              );
+              onChange([...standardValues, ...nextCustom]);
+            }}
+            placeholder="user:<id>, role:<name>, or group:<id>#member"
+            validate={(value) => SUBJECT_REF_RE.test(value)}
+            invalidHint="Use a subject ref like user:<id>, role:<name>, or group:<id>#member"
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function MoneyField({
   id,
   label,
@@ -1003,8 +1197,8 @@ export default function PolicyEditor({
   mcpInstances,
   mcpServers,
   openapiConnections,
+  members,
   workspaceId,
-  currentUserId,
   returnHref = "/policies",
 }: PolicyEditorProps) {
   const router = useRouter();
@@ -1108,13 +1302,6 @@ export default function PolicyEditor({
   const removeSelectedAgent = (agentId: string) => {
     setSelectedAgentIds((prev) => prev.filter((id) => id !== agentId));
     if (agentToAddId === agentId) setAgentToAddId("");
-  };
-
-  const addCurrentUserApprover = () => {
-    if (!currentUserId) return;
-    const ref = `user:${currentUserId}`;
-    if (form.approvers.includes(ref)) return;
-    update("approvers", [...form.approvers, ref]);
   };
 
   const resolveSubjects = (): Array<{
@@ -1592,25 +1779,11 @@ export default function PolicyEditor({
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Approvers</Label>
-                    {currentUserId && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addCurrentUserApprover}
-                      >
-                        Me
-                      </Button>
-                    )}
-                  </div>
-                  <TagInput
+                  <Label>Approvers</Label>
+                  <ApproverSelector
+                    members={members}
                     values={form.approvers}
                     onChange={(next) => update("approvers", next)}
-                    placeholder="user:<id>, role:<name>, or group:<id>#member"
-                    validate={(v) => SUBJECT_REF_RE.test(v)}
-                    invalidHint="Use a subject ref like user:<id>, role:<name>, or group:<id>#member"
                   />
                   <p className="text-xs text-muted-foreground">
                     Leave empty to allow any workspace member to approve.
