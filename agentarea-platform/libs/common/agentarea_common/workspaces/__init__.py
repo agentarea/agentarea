@@ -1,9 +1,8 @@
 """Workspace membership and invitation domain.
 
-Lives in common because membership is cross-cutting — many libs will
-eventually consult it. Authz/permissions (Keto integration, role
-presets, per-resource grants) are NOT here; they're a separate layer
-that will be added in a future PR.
+Lives in common because membership is cross-cutting — many libs consult it.
+The public operations stay product-level even when the configured graph backend
+changes.
 """
 
 from .models import (
@@ -16,6 +15,15 @@ from .models import (
     WorkspaceInvitation,
     WorkspaceMembership,
 )
+from .memberships import (
+    check_workspace_membership,
+    get_workspace_membership_graph,
+    grant_workspace_membership,
+    list_workspace_ids_for_member,
+    list_workspace_member_ids,
+    revoke_workspace_membership,
+    workspace_membership,
+)
 from .repository import (
     WorkspaceInvitationRepository,
     WorkspaceMembershipRepository,
@@ -27,7 +35,6 @@ from .service import (
     InvitationNotFound,
     InvitationRevoked,
     WorkspaceInvitationService,
-    WorkspaceMembershipService,
     WorkspaceService,
 )
 from .slug import slugify
@@ -48,8 +55,14 @@ __all__ = [
     "WorkspaceInvitationService",
     "WorkspaceMembership",
     "WorkspaceMembershipRepository",
-    "WorkspaceMembershipService",
     "WorkspaceRepository",
     "WorkspaceService",
+    "check_workspace_membership",
+    "get_workspace_membership_graph",
+    "grant_workspace_membership",
+    "list_workspace_ids_for_member",
+    "list_workspace_member_ids",
+    "revoke_workspace_membership",
     "slugify",
+    "workspace_membership",
 ]

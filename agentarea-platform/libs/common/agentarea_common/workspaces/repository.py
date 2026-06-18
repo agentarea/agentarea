@@ -1,13 +1,12 @@
-"""Repositories for workspace invitations and memberships.
+"""Repositories for workspace invitations and workspace rows.
 
 These don't extend ``WorkspaceScopedRepository`` because:
 - ``WorkspaceInvitation`` is created by a workspace member but the
   acceptance flow is performed by a different user who isn't yet
   scoped to the target workspace — a generic workspace-scope filter
   doesn't fit.
-- ``WorkspaceMembership`` is *the* mechanism that defines workspace
-  membership; bootstrapping it via a workspace-scoped filter would be
-  circular.
+- ``Workspace`` is the scope root, so scoping a workspace lookup by workspace
+  would be circular.
 
 Both repositories accept ``UserContext`` per project convention but
 use it only for explicit policy checks inside the calling service.
@@ -129,11 +128,13 @@ class WorkspaceRepository:
         result = await self.session.execute(select(Workspace).where(Workspace.slug == slug))
         return result.scalar_one_or_none()
 
-    async def list_for_user(self, user_id: str) -> list[Workspace]:
-        """Workspaces the user can reach: their own + any joined via membership."""
-        member_workspace_ids = select(WorkspaceMembership.workspace_id).where(
-            WorkspaceMembership.user_id == user_id
-        )
+    async def list_for_user(
+        self,
+        user_id: str,
+        *,
+        member_workspace_ids: list[str],
+    ) -> list[Workspace]:
+        """Workspaces the user can reach: owned + explicitly granted memberships."""
         result = await self.session.execute(
             select(Workspace)
             .where(

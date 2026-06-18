@@ -3,9 +3,9 @@
 These cover the foundation that the workspace switcher (Step 2) builds on:
 - personal workspaces are real rows, provisioned idempotently, with
   ``id == user_id`` so existing data needs no backfill;
-- shared workspaces get a generated id plus an owner membership;
-- listing returns a user's personal workspace and every workspace they
-  joined via membership.
+- shared workspaces get a generated id;
+- listing returns a user's personal workspace and workspace ids supplied by
+  the membership graph.
 
 The fixtures here intentionally create *only* the workspace tables on an
 in-memory SQLite engine rather than the shared ``db_session`` fixture,
@@ -23,7 +23,6 @@ from agentarea_common.workspaces.models import (
     WorkspaceMembership,
 )
 from agentarea_common.workspaces.repository import (
-    WorkspaceMembershipRepository,
     WorkspaceRepository,
 )
 from agentarea_common.workspaces.service import WorkspaceService
@@ -56,7 +55,6 @@ async def db_session():
 def workspace_service(db_session):
     return WorkspaceService(
         workspace_repo=WorkspaceRepository(db_session),
-        membership_repo=WorkspaceMembershipRepository(db_session),
     )
 
 
@@ -112,7 +110,7 @@ async def test_ensure_personal_is_idempotent(workspace_service):
 
 
 @pytest.mark.asyncio
-async def test_create_shared_creates_workspace_and_owner_membership(workspace_service, db_session):
+async def test_create_shared_creates_workspace_row(workspace_service):
     ws = await workspace_service.create_shared(owner_user_id="user-1", name="Team A")
 
     assert ws.type == WORKSPACE_TYPE_SHARED
@@ -120,20 +118,16 @@ async def test_create_shared_creates_workspace_and_owner_membership(workspace_se
     assert ws.name == "Team A"
     assert ws.owner_user_id == "user-1"
 
-    membership_repo = WorkspaceMembershipRepository(db_session)
-    assert await membership_repo.get(ws.id, "user-1") is not None
-
 
 @pytest.mark.asyncio
-async def test_list_for_user_returns_personal_and_member_workspaces(workspace_service, db_session):
-    # user-1 owns a shared workspace; user-2 is added to it as a member.
+async def test_list_for_user_returns_personal_and_granted_workspaces(workspace_service):
+    # user-1 owns a shared workspace; user-2 receives membership from graph.
     shared = await workspace_service.create_shared(owner_user_id="user-1", name="Team A")
-    membership_repo = WorkspaceMembershipRepository(db_session)
-    await membership_repo.add(
-        WorkspaceMembership(workspace_id=shared.id, user_id="user-2", invitation_id=None)
-    )
 
-    user2_workspaces = await workspace_service.list_for_user("user-2")
+    user2_workspaces = await workspace_service.list_for_user(
+        "user-2",
+        member_workspace_ids=[shared.id],
+    )
     ids = {w.id for w in user2_workspaces}
 
     assert "user-2" in ids  # personal, auto-provisioned by list_for_user

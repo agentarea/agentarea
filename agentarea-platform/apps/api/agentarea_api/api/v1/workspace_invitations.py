@@ -1,19 +1,24 @@
 """Workspace invitation and membership API endpoints.
 
-Scope: workspace-only invitations (link-bearing token grants membership).
-Authz beyond "must be a workspace member" — owner-only checks, role
-presets, per-resource grants — is intentionally out of scope here. That
-lives in the future Keto-integration PR.
+Routes expose product-level workspace membership operations. The configured
+relationship graph owns access decisions; persistence tables are only used for
+invitation state.
 """
 
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_database
+from agentarea_common.rebac import (
+    KetoError,
+    KetoUnavailableError,
+    OpenFGAError,
+    OpenFGAUnavailableError,
+)
 from agentarea_common.workspaces import (
     InvitationAlreadyAccepted,
     InvitationExpired,
@@ -22,9 +27,12 @@ from agentarea_common.workspaces import (
     WorkspaceInvitation,
     WorkspaceInvitationRepository,
     WorkspaceInvitationService,
-    WorkspaceMembership,
-    WorkspaceMembershipRepository,
-    WorkspaceMembershipService,
+)
+from agentarea_common.workspaces.memberships import (
+    get_workspace_membership_graph,
+    grant_workspace_membership,
+    list_workspace_member_ids,
+    revoke_workspace_membership,
 )
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -47,18 +55,10 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 def get_invitation_service(session: SessionDep) -> WorkspaceInvitationService:
-    return WorkspaceInvitationService(
-        WorkspaceInvitationRepository(session),
-        WorkspaceMembershipRepository(session),
-    )
-
-
-def get_membership_service(session: SessionDep) -> WorkspaceMembershipService:
-    return WorkspaceMembershipService(WorkspaceMembershipRepository(session))
+    return WorkspaceInvitationService(WorkspaceInvitationRepository(session))
 
 
 InvitationServiceDep = Annotated[WorkspaceInvitationService, Depends(get_invitation_service)]
-MembershipServiceDep = Annotated[WorkspaceMembershipService, Depends(get_membership_service)]
 
 
 # ---------------------------------------------------------------------------
@@ -127,43 +127,75 @@ def _invitation_to_response(invitation: WorkspaceInvitation) -> InvitationRespon
     )
 
 
-def _membership_to_response(
-    membership: WorkspaceMembership,
-    invitation: WorkspaceInvitation | None = None,
-) -> MemberResponse:
-    email = invitation.email if invitation else None
-    return MemberResponse(
-        id=membership.id,
-        workspace_id=membership.workspace_id,
-        user_id=membership.user_id,
-        email=email,
-        display_name=email,
-        joined_at=membership.created_at,
-        invitation_id=UUID(str(membership.invitation_id)) if membership.invitation_id else None,
-    )
-
-
-async def _members_to_response(
-    session: AsyncSession,
-    memberships: list[WorkspaceMembership],
+def _member_ids_to_response(
+    workspace_id: str,
+    member_ids: list[str],
+    *,
+    current_user_id: str,
+    current_user_email: str | None,
+    current_user_name: str | None,
 ) -> list[MemberResponse]:
-    invitation_repo = WorkspaceInvitationRepository(session)
-    invitation_by_id: dict[str, WorkspaceInvitation] = {}
-
-    for membership in memberships:
-        if not membership.invitation_id:
-            continue
-        invitation = await invitation_repo.get_by_id(membership.invitation_id)
-        if invitation is not None:
-            invitation_by_id[str(invitation.id)] = invitation
-
-    return [
-        _membership_to_response(
-            membership,
-            invitation_by_id.get(str(membership.invitation_id)),
+    responses: list[MemberResponse] = []
+    for member_id in member_ids:
+        is_current_user = member_id == current_user_id
+        display_name = current_user_name if is_current_user else None
+        email = current_user_email if is_current_user else None
+        responses.append(
+            MemberResponse(
+                id=_stable_member_response_id(workspace_id, member_id),
+                workspace_id=workspace_id,
+                user_id=member_id,
+                email=email,
+                display_name=display_name or email,
+                joined_at=datetime.now(UTC),
+                invitation_id=None,
+            )
         )
-        for membership in memberships
-    ]
+    return responses
+
+
+def _stable_member_response_id(workspace_id: str, user_id: str) -> UUID:
+    try:
+        return UUID(str(user_id))
+    except ValueError:
+        return uuid5(NAMESPACE_URL, f"agentarea:workspace-member:{workspace_id}:{user_id}")
+
+
+def _raise_membership_graph_unavailable(exc: Exception) -> None:
+    raise HTTPException(status_code=503, detail="Workspace membership graph unavailable") from exc
+
+
+async def _grant_member(workspace_id: str, user_id: str) -> None:
+    graph = get_workspace_membership_graph()
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Workspace membership graph is disabled")
+    try:
+        await grant_workspace_membership(graph, workspace_id=workspace_id, user_id=user_id)
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        logger.exception("Failed to grant workspace membership")
+        _raise_membership_graph_unavailable(exc)
+
+
+async def _revoke_member(workspace_id: str, user_id: str) -> None:
+    graph = get_workspace_membership_graph()
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Workspace membership graph is disabled")
+    try:
+        await revoke_workspace_membership(graph, workspace_id=workspace_id, user_id=user_id)
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        logger.exception("Failed to revoke workspace membership")
+        _raise_membership_graph_unavailable(exc)
+
+
+async def _list_member_ids(workspace_id: str) -> list[str]:
+    graph = get_workspace_membership_graph()
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Workspace membership graph is disabled")
+    try:
+        return await list_workspace_member_ids(graph, workspace_id)
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        logger.exception("Failed to list workspace memberships")
+        _raise_membership_graph_unavailable(exc)
 
 
 def _ensure_workspace_access(user: UserContextDep, workspace_id: str) -> None:
@@ -266,11 +298,10 @@ async def accept_invitation(
 ):
     """Accept an invitation as the authenticated user.
 
-    Idempotent: accepting twice (or accepting when already a member)
-    returns the same membership.
+    Idempotent for the same acceptor.
     """
     try:
-        invitation, membership = await service.accept(token=body.token, user_id=user.user_id)
+        invitation = await service.accept(token=body.token, user_id=user.user_id)
     except InvitationNotFound as exc:
         raise HTTPException(status_code=404, detail="invalid token") from exc
     except InvitationExpired as exc:
@@ -280,9 +311,11 @@ async def accept_invitation(
     except InvitationAlreadyAccepted as exc:
         raise HTTPException(status_code=409, detail="invitation already accepted") from exc
 
+    await _grant_member(invitation.workspace_id, user.user_id)
+
     return AcceptInvitationResponse(
         workspace_id=invitation.workspace_id,
-        user_id=membership.user_id,
+        user_id=user.user_id,
         invitation_id=invitation.id,
     )
 
@@ -295,12 +328,19 @@ async def accept_invitation(
 async def list_members(
     workspace_id: str,
     user: UserContextDep,
-    session: SessionDep,
-    service: MembershipServiceDep,
 ):
     _ensure_workspace_access(user, workspace_id)
-    members = await service.list_members(workspace_id)
-    return await _members_to_response(session, members)
+    if workspace_id == user.user_id:
+        await _grant_member(workspace_id, user.user_id)
+
+    member_ids = await _list_member_ids(workspace_id)
+    return _member_ids_to_response(
+        workspace_id,
+        member_ids,
+        current_user_id=user.user_id,
+        current_user_email=user.email,
+        current_user_name=None,
+    )
 
 
 @router.delete(
@@ -311,13 +351,7 @@ async def remove_member(
     workspace_id: str,
     user_id: str,
     user: UserContextDep,
-    service: MembershipServiceDep,
 ):
-    """Remove a member from the workspace. Self-removal allowed; removing
-    others requires the caller to be a member of the workspace (owner-only
-    check belongs to the permissions PR).
-    """
+    """Remove a member from the workspace."""
     _ensure_workspace_access(user, workspace_id)
-    removed = await service.remove(workspace_id=workspace_id, user_id=user_id)
-    if not removed:
-        raise HTTPException(status_code=404, detail="Membership not found")
+    await _revoke_member(workspace_id, user_id)
