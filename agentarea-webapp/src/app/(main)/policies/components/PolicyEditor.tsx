@@ -124,7 +124,6 @@ interface FormState {
   conditionOperator: ConditionOperator;
   conditionValue: string;
   // approval
-  approvalAllActions: boolean;
   approvers: string[];
   // safety
   promptInjection: boolean;
@@ -148,7 +147,6 @@ const EMPTY_FORM: FormState = {
   conditionParam: "",
   conditionOperator: "equals",
   conditionValue: "",
-  approvalAllActions: true,
   approvers: [],
   promptInjection: true,
   outputSanitizer: false,
@@ -460,8 +458,6 @@ function policyToForm(policy: Policy): {
       ? [policy.target.slice("tool:".length)]
       : [];
   } else if (policy.effect === "approval") {
-    form.approvalAllActions =
-      policy.target === "*" || policy.target === "tool:*";
     form.tools =
       policy.target.startsWith("tool:") && policy.target !== "tool:*"
         ? [policy.target.slice("tool:".length)]
@@ -543,10 +539,7 @@ function buildRuleBodies(
   if (effect === "approval") {
     const params: Record<string, unknown> = {};
     if (form.approvers.length > 0) params.approvers = form.approvers;
-    if (form.approvalAllActions)
-      return { bodies: [{ target: "*", effect, params }] };
-    if (form.tools.length === 0)
-      return { error: "Add a tool or require approval for all actions." };
+    if (form.tools.length === 0) return { error: "Add a tool." };
     const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
@@ -1174,7 +1167,7 @@ function previewTarget(effect: PolicyEffect, form: FormState): string {
     return form.tools.length === 0 ? "tool:<pending>" : "tool";
   }
   if (effect === "approval") {
-    return form.approvalAllActions ? "*" : "tool";
+    return form.tools.length === 0 ? "tool:<pending>" : "tool";
   }
   return "content";
 }
@@ -1197,9 +1190,7 @@ function previewParams(effect: PolicyEffect, form: FormState): string {
       : "tools=pending";
   }
   if (effect === "approval") {
-    const scope = form.approvalAllActions
-      ? "actions=*"
-      : `tools=${form.tools.length || "pending"}`;
+    const scope = `tools=${form.tools.length || "pending"}`;
     const approvers =
       form.approvers.length > 0 ? ` approvers=${form.approvers.length}` : "";
     return `${scope}${approvers}`;
@@ -1911,39 +1902,22 @@ export default function PolicyEditor({
           {effect === "approval" && (
             <BlueprintSection code="02" title="Rule Config">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="approval-all">
-                      Require for all actions
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Off to require approval for specific tools only.
-                    </p>
-                  </div>
-                  <Switch
-                    id="approval-all"
-                    checked={form.approvalAllActions}
-                    onCheckedChange={(v) => update("approvalAllActions", v)}
+                <div className="space-y-1.5">
+                  <Label>Tools requiring approval</Label>
+                  <ToolSelector
+                    options={toolCatalog}
+                    values={form.tools}
+                    onChange={(next) => update("tools", next)}
+                    emptyText="No tools are attached to the affected agents yet."
                   />
-                </div>
-                {!form.approvalAllActions && (
-                  <div className="space-y-1.5">
-                    <Label>Tools requiring approval</Label>
-                    <ToolSelector
-                      options={toolCatalog}
-                      values={form.tools}
-                      onChange={(next) => update("tools", next)}
-                      emptyText="No tools are attached to the affected agents yet."
+                  {form.tools.length > 0 && (
+                    <ToolConditionBuilder
+                      paramOptions={selectedToolParameterOptions}
+                      form={form}
+                      update={update}
                     />
-                    {form.tools.length > 0 && (
-                      <ToolConditionBuilder
-                        paramOptions={selectedToolParameterOptions}
-                        form={form}
-                        update={update}
-                      />
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
                 <div className="space-y-1.5">
                   <Label>Approvers</Label>
                   <ApproverSelector
