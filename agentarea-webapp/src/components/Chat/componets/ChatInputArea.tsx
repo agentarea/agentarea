@@ -364,44 +364,49 @@ export function ChatInputArea({
               ))}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             {showContextControls ? (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
-                  <ContextSelect
-                    icon={FolderKanban}
-                    label={t("agent")}
-                    value={currentAgent.id}
-                    disabled={isLoading}
-                    onValueChange={(agentId) => {
-                      const nextAgent = availableAgents.find(
-                        (agent) => agent.id === agentId
-                      );
-                      if (nextAgent) onAgentChange(nextAgent);
-                    }}
-                    options={availableAgents}
-                    renderTriggerIcon={(option) => {
-                      const { iconKey } = resolveAgentIdentity(option);
-                      const Icon = getAgentIconComponent(iconKey);
+                  <div className="basis-full sm:basis-auto">
+                    <ContextSelect
+                      className="min-w-0 sm:shrink"
+                      icon={FolderKanban}
+                      label={t("agent")}
+                      value={currentAgent.id}
+                      disabled={isLoading}
+                      onValueChange={(agentId) => {
+                        const nextAgent = availableAgents.find(
+                          (agent) => agent.id === agentId
+                        );
+                        if (nextAgent) onAgentChange(nextAgent);
+                      }}
+                      options={availableAgents}
+                      renderTriggerIcon={(option) => {
+                        const { iconKey } = resolveAgentIdentity(option);
+                        const Icon = getAgentIconComponent(iconKey);
 
-                      return (
-                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
-                          <Icon className="h-3 w-3" strokeWidth={2} />
-                        </span>
-                      );
-                    }}
-                    renderOptionIcon={(option) => (
-                      <AgentAvatar
-                        agent={option}
-                        size="xs"
-                        className="mt-0.5 shrink-0"
-                      />
-                    )}
-                  />
+                        return (
+                          <Icon
+                            className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-300"
+                            strokeWidth={2}
+                          />
+                        );
+                      }}
+                      renderOptionIcon={(option) => (
+                        <AgentAvatar
+                          agent={option}
+                          size="xs"
+                          className="mt-0.5 shrink-0"
+                        />
+                      )}
+                    />
+                  </div>
                 ) : null}
 
                 {availableProjects?.length && onProjectChange ? (
                   <ContextSelect
+                    className="shrink min-w-0"
                     icon={FolderKanban}
                     label={t("project")}
                     value={currentProjectId ?? NO_PROJECT_VALUE}
@@ -420,6 +425,7 @@ export function ChatInputArea({
 
                 {availableTaskPolicies?.length && onTaskPolicyChange ? (
                   <ContextSelect
+                    className="shrink min-w-0"
                     icon={ShieldCheck}
                     label={t("taskPolicy")}
                     value={currentTaskPolicyId ?? DEFAULT_TASK_POLICY_VALUE}
@@ -440,11 +446,11 @@ export function ChatInputArea({
                 ) : null}
               </div>
             ) : (
-              <div />
+              <div className="flex-1" />
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2">
+            <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
