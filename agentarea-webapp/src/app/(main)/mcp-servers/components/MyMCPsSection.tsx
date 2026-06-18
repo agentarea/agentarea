@@ -7,8 +7,11 @@ import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import {
+  StatusIndicator,
+  type StatusIndicatorTone,
+} from "@/components/ui/status-indicator";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
-import { cn } from "@/lib/utils";
 import {
   HealthCheck,
   HealthStatus,
@@ -166,14 +169,14 @@ export function MyMCPsSection({
     return STATUS_TO_HEALTH[connection.status] ?? "unknown";
   };
 
-  // Linear-style status: a coloured dot + label, lighter than a filled badge.
-  const getStatusDot = (status: string) => {
-    const tone: "green" | "red" | "amber" =
+  // Shared status presentation: a coloured dot + label, matching the table design.
+  const getStatusIndicator = (status: string) => {
+    const tone: StatusIndicatorTone =
       status === "connected" || status === "healthy" || status === "running"
-        ? "green"
+        ? "success"
         : status === "unhealthy" || status === "error"
-          ? "red"
-          : "amber";
+          ? "danger"
+          : "warning";
     const label =
       status === "connected"
         ? t("status.connected")
@@ -184,30 +187,8 @@ export function MyMCPsSection({
             : status === "starting"
               ? t("status.starting")
               : t("status.setup");
-    const tones = {
-      green: {
-        dot: "bg-emerald-500 ring-emerald-500/20",
-        text: "text-emerald-600 dark:text-emerald-400",
-      },
-      red: {
-        dot: "bg-red-500 ring-red-500/20",
-        text: "text-red-600 dark:text-red-400",
-      },
-      amber: {
-        dot: "bg-amber-500 ring-amber-500/20",
-        text: "text-amber-600 dark:text-amber-400",
-      },
-    }[tone];
     return (
-      <span
-        className={cn(
-          "inline-flex w-fit items-center gap-2 text-[12.5px] font-medium",
-          tones.text
-        )}
-      >
-        <span className={cn("h-[7px] w-[7px] rounded-full ring-[3px]", tones.dot)} />
-        {label}
-      </span>
+      <StatusIndicator tone={tone}>{label}</StatusIndicator>
     );
   };
 
@@ -311,7 +292,7 @@ export function MyMCPsSection({
           item._type === "openapi" && item._connection
             ? getOpenAPIHealthStatus(item._connection)
             : getHealthStatus(item._instance || item);
-        return getStatusDot(healthStatus);
+        return getStatusIndicator(healthStatus);
       },
     },
   ];
