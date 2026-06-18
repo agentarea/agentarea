@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Link as LinkIcon, UsersRound, X } from "lucide-react";
+import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,7 @@ const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 // --- cap sub-form ---------------------------------------------------------
 
 type CapKind = "spend" | "service" | "tokens";
+type ScopeMode = "workspace" | "agents";
 
 interface FormState {
   enabled: boolean;
@@ -422,7 +423,9 @@ export default function PolicyEditor({
   const router = useRouter();
   const [effect, setEffect] = useState<PolicyEffect>("cap");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("workspace");
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [agentToAddId, setAgentToAddId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -431,19 +434,31 @@ export default function PolicyEditor({
   const subjectType = useMemo<"workspace" | "agent">(() => {
     if (target.mode === "edit")
       return target.policy.subject_type === "workspace" ? "workspace" : "agent";
-    if (target.mode === "create-agent") return "agent";
-    return "workspace";
-  }, [target]);
+    return scopeMode === "agents" ? "agent" : "workspace";
+  }, [scopeMode, target]);
 
-  const selectedAgent = useMemo(
-    () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
-    [agents, selectedAgentId]
+  const selectedAgents = useMemo(
+    () =>
+      selectedAgentIds
+        .map((agentId) => agents.find((agent) => agent.id === agentId))
+        .filter((agent): agent is AgentOption => Boolean(agent)),
+    [agents, selectedAgentIds]
+  );
+
+  const selectedAgentIdSet = useMemo(
+    () => new Set(selectedAgentIds),
+    [selectedAgentIds]
+  );
+
+  const addableAgents = useMemo(
+    () => agents.filter((agent) => !selectedAgentIdSet.has(agent.id)),
+    [agents, selectedAgentIdSet]
   );
 
   const affectedAgents = useMemo(() => {
     if (subjectType === "workspace") return agents;
-    return selectedAgent ? [selectedAgent] : [];
-  }, [agents, selectedAgent, subjectType]);
+    return selectedAgents;
+  }, [agents, selectedAgents, subjectType]);
 
   // Reset form whenever the route opens for a target.
   useEffect(() => {
@@ -451,15 +466,21 @@ export default function PolicyEditor({
       const seeded = policyToForm(target.policy);
       setEffect(seeded.effect);
       setForm(seeded.form);
-      setSelectedAgentId(
-        target.policy.subject_type === "agent" ? target.policy.subject_id : ""
+      setScopeMode(
+        target.policy.subject_type === "agent" ? "agents" : "workspace"
       );
+      setSelectedAgentIds(
+        target.policy.subject_type === "agent" ? [target.policy.subject_id] : []
+      );
+      setAgentToAddId("");
     } else {
       setEffect("cap");
       setForm(EMPTY_FORM);
-      setSelectedAgentId(
-        target.mode === "create-agent" ? (target.agentId ?? "") : ""
+      setScopeMode(target.mode === "create-agent" ? "agents" : "workspace");
+      setSelectedAgentIds(
+        target.mode === "create-agent" && target.agentId ? [target.agentId] : []
       );
+      setAgentToAddId("");
     }
     setError(null);
   }, [target]);
@@ -467,18 +488,48 @@ export default function PolicyEditor({
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const resolveSubjectId = (): string | null => {
-    if (target?.mode === "edit") return target.policy.subject_id;
-    if (subjectType === "agent") return selectedAgentId || null;
-    return workspaceId;
+  const addSelectedAgent = () => {
+    if (!agentToAddId || selectedAgentIdSet.has(agentToAddId)) return;
+    setSelectedAgentIds((prev) => [...prev, agentToAddId]);
+    setAgentToAddId("");
+  };
+
+  const removeSelectedAgent = (agentId: string) => {
+    setSelectedAgentIds((prev) => prev.filter((id) => id !== agentId));
+    if (agentToAddId === agentId) setAgentToAddId("");
+  };
+
+  const resolveSubjects = (): Array<{
+    subject_type: "workspace" | "agent";
+    subject_id: string;
+  }> | null => {
+    if (target?.mode === "edit") {
+      return [
+        {
+          subject_type:
+            target.policy.subject_type === "workspace" ? "workspace" : "agent",
+          subject_id: target.policy.subject_id,
+        },
+      ];
+    }
+    if (subjectType === "agent") {
+      if (selectedAgentIds.length === 0) return null;
+      return selectedAgentIds.map((agentId) => ({
+        subject_type: "agent",
+        subject_id: agentId,
+      }));
+    }
+    return workspaceId
+      ? [{ subject_type: "workspace", subject_id: workspaceId }]
+      : null;
   };
 
   const save = async () => {
-    const subjectId = resolveSubjectId();
-    if (!subjectId) {
+    const subjects = resolveSubjects();
+    if (!subjects) {
       setError(
         subjectType === "agent"
-          ? "Select an agent for this policy."
+          ? "Add at least one agent for this policy."
           : "No workspace context available."
       );
       return;
@@ -516,23 +567,25 @@ export default function PolicyEditor({
           return;
         }
       } else {
-        // POST one rule per body (deny/approval may fan out over tools).
-        for (const body of built.bodies) {
-          const response = await fetch(`/api/proxy/v1/policies`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              subject_type: subjectType,
-              subject_id: subjectId,
-              target: body.target,
-              effect: body.effect,
-              params: body.params,
-              enabled: form.enabled,
-            }),
-          });
-          if (!response.ok) {
-            setError(await readDetail(response, "Save failed"));
-            return;
+        // POST one rule per scope/body pair (deny/approval may fan out over tools).
+        for (const subject of subjects) {
+          for (const body of built.bodies) {
+            const response = await fetch(`/api/proxy/v1/policies`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                subject_type: subject.subject_type,
+                subject_id: subject.subject_id,
+                target: body.target,
+                effect: body.effect,
+                params: body.params,
+                enabled: form.enabled,
+              }),
+            });
+            if (!response.ok) {
+              setError(await readDetail(response, "Save failed"));
+              return;
+            }
           }
         }
       }
@@ -573,7 +626,7 @@ export default function PolicyEditor({
   const title = isEdit
     ? "Edit policy rule"
     : subjectType === "agent"
-      ? "New agent rule"
+      ? "New agent policy"
       : "New workspace rule";
 
   return (
@@ -582,39 +635,121 @@ export default function PolicyEditor({
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground">
-            A policy is a single rule. It applies to{" "}
+            This policy applies to{" "}
             {subjectType === "workspace"
               ? "every agent in this workspace"
-              : "the selected agent"}
+              : selectedAgents.length === 1
+                ? "the selected agent"
+                : "the selected agents"}
             . Tool access grants are managed in the Access view.
           </p>
         </div>
 
         <div className="mt-5 space-y-5">
-          {/* Agent picker — only in agent create mode without a fixed agent */}
-          {target?.mode === "create-agent" && (
-            <div className="space-y-1.5">
-              <Label htmlFor="policy-agent">Agent</Label>
-              <Select
-                value={selectedAgentId}
-                onValueChange={setSelectedAgentId}
-              >
-                <SelectTrigger id="policy-agent">
-                  <SelectValue placeholder="Select an agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent) => (
-                    <SelectItem
-                      key={agent.id}
-                      value={agent.id}
-                      textValue={agent.name}
+          {!isEdit && (
+            <div className="space-y-2">
+              <Label>Applies to</Label>
+              <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
+                {[
+                  { value: "workspace" as const, label: "All agents" },
+                  { value: "agents" as const, label: "Selected agents" },
+                ].map((option) => {
+                  const active = scopeMode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setScopeMode(option.value)}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-sm transition",
+                        active
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
                     >
-                      <AgentIdentity agent={agent} size="xs" />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          )}
+
+          {isEdit && (
+            <div className="rounded-lg border border-border p-4">
+              <Label>Applies to</Label>
+              <p className="mt-1 text-sm text-foreground">
+                {subjectType === "workspace"
+                  ? "All agents"
+                  : selectedAgents[0]?.name || target.policy.subject_id}
+              </p>
+            </div>
+          )}
+
+          {subjectType === "agent" && !isEdit && (
+            <section className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label htmlFor="policy-agent">Agent</Label>
+                  <Select value={agentToAddId} onValueChange={setAgentToAddId}>
+                    <SelectTrigger id="policy-agent">
+                      <SelectValue placeholder="Select an agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addableAgents.map((agent) => (
+                        <SelectItem
+                          key={agent.id}
+                          value={agent.id}
+                          textValue={agent.name}
+                        >
+                          <AgentIdentity agent={agent} size="xs" />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!agentToAddId}
+                  onClick={addSelectedAgent}
+                  aria-label="Add agent"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {selectedAgents.length > 0 ? (
+                  selectedAgents.map((agent) => (
+                    <div
+                      key={agent.id}
+                      className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+                    >
+                      <AgentIdentity
+                        agent={agent}
+                        size="xs"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSelectedAgent(agent.id)}
+                        aria-label={`Remove ${agent.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+                    Add agents to scope this policy.
+                  </p>
+                )}
+              </div>
+            </section>
           )}
 
           {/* Effect */}
@@ -858,9 +993,9 @@ export default function PolicyEditor({
             <p className="text-xs text-muted-foreground">
               {subjectType === "workspace"
                 ? `${affectedAgents.length} workspace agent${affectedAgents.length === 1 ? "" : "s"}`
-                : selectedAgent
-                  ? "Selected agent"
-                  : "No agent selected"}
+                : affectedAgents.length > 0
+                  ? `${affectedAgents.length} selected agent${affectedAgents.length === 1 ? "" : "s"}`
+                  : "No agents selected"}
             </p>
           </div>
         </div>

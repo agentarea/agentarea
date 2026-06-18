@@ -93,10 +93,5 @@ function resolveTarget({
     return policy ? { mode: "edit", policy } : null;
   }
 
-  const hasWorkspacePolicy = policies.some(
-    (policy) => policy.subject_type === "workspace"
-  );
-  return hasWorkspacePolicy
-    ? { mode: "create-agent" }
-    : { mode: "create-workspace" };
+  return { mode: "create-workspace" };
 }
