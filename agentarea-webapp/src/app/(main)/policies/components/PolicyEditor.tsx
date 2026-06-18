@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
@@ -251,7 +251,7 @@ function EffectSegmented({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
+    <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
       {EDITABLE_EFFECTS.map((effect) => {
         const style = EFFECT_STYLES[effect];
         const Icon = style.icon;
@@ -263,9 +263,9 @@ function EffectSegmented({
             disabled={disabled}
             onClick={() => onChange(effect)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               active
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -317,7 +317,7 @@ function TagInput({
           {values.map((value) => (
             <span
               key={value}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs"
+              className="inline-flex items-center gap-1 border border-border/70 bg-muted/30 px-2 py-0.5 font-mono text-xs"
             >
               {value}
               <button
@@ -409,6 +409,33 @@ function NumberField({
         placeholder="optional"
       />
     </div>
+  );
+}
+
+function BlueprintSection({
+  code,
+  title,
+  children,
+  className,
+}: {
+  code: string;
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "grid gap-3 border-t border-border/70 py-4 md:grid-cols-[104px_minmax(0,1fr)]",
+        className
+      )}
+    >
+      <div className="flex items-start gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <span className="font-mono text-foreground/70">{code}</span>
+        <span>{title}</span>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
   );
 }
 
@@ -628,28 +655,55 @@ export default function PolicyEditor({
     : subjectType === "agent"
       ? "New agent policy"
       : "New workspace rule";
+  const hasAgentScopeEditor = subjectType === "agent" && !isEdit;
+  const effectCode = hasAgentScopeEditor ? "03" : "02";
+  const detailsCode = hasAgentScopeEditor ? "04" : "03";
+  const stateCode = hasAgentScopeEditor ? "05" : "04";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="rounded-lg border border-border bg-background p-5">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <p className="text-sm text-muted-foreground">
-            This policy applies to{" "}
-            {subjectType === "workspace"
-              ? "every agent in this workspace"
-              : selectedAgents.length === 1
-                ? "the selected agent"
-                : "the selected agents"}
-            . Tool access grants are managed in the Access view.
-          </p>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="relative overflow-hidden border border-border/70 bg-background">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+          aria-hidden="true"
+        />
+        <div className="relative border-b border-border/70 bg-muted/20 px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Policy Control Plane
+              </p>
+              <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                This policy applies to{" "}
+                {subjectType === "workspace"
+                  ? "every agent in this workspace"
+                  : selectedAgents.length === 1
+                    ? "the selected agent"
+                    : "the selected agents"}
+                . Tool access grants are managed in the Access view.
+              </p>
+            </div>
+            <div className="border border-border/70 bg-background px-3 py-2 text-right">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Scope
+              </p>
+              <p className="mt-1 text-sm font-medium text-foreground">
+                {subjectType === "workspace" ? "All agents" : "Selected"}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-5 space-y-5">
+        <div className="relative px-5">
           {!isEdit && (
-            <div className="space-y-2">
-              <Label>Applies to</Label>
-              <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
+            <BlueprintSection code="01" title="Scope">
+              <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
                 {[
                   { value: "workspace" as const, label: "All agents" },
                   { value: "agents" as const, label: "Selected agents" },
@@ -661,9 +715,9 @@ export default function PolicyEditor({
                       type="button"
                       onClick={() => setScopeMode(option.value)}
                       className={cn(
-                        "rounded-md px-3 py-1.5 text-sm transition",
+                        "px-3 py-1.5 text-sm transition",
                         active
-                          ? "bg-background text-foreground shadow-sm"
+                          ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
                           : "text-muted-foreground hover:text-foreground"
                       )}
                     >
@@ -672,89 +726,92 @@ export default function PolicyEditor({
                   );
                 })}
               </div>
-            </div>
+            </BlueprintSection>
           )}
 
           {isEdit && (
-            <div className="rounded-lg border border-border p-4">
-              <Label>Applies to</Label>
+            <BlueprintSection code="01" title="Scope">
               <p className="mt-1 text-sm text-foreground">
                 {subjectType === "workspace"
                   ? "All agents"
                   : selectedAgents[0]?.name || target.policy.subject_id}
               </p>
-            </div>
+            </BlueprintSection>
           )}
 
-          {subjectType === "agent" && !isEdit && (
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div className="flex items-end gap-2">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Label htmlFor="policy-agent">Agent</Label>
-                  <Select value={agentToAddId} onValueChange={setAgentToAddId}>
-                    <SelectTrigger id="policy-agent">
-                      <SelectValue placeholder="Select an agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {addableAgents.map((agent) => (
-                        <SelectItem
-                          key={agent.id}
-                          value={agent.id}
-                          textValue={agent.name}
-                        >
-                          <AgentIdentity agent={agent} size="xs" />
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={!agentToAddId}
-                  onClick={addSelectedAgent}
-                  aria-label="Add agent"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {selectedAgents.length > 0 ? (
-                  selectedAgents.map((agent) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+          {hasAgentScopeEditor && (
+            <BlueprintSection code="02" title="Agents">
+              <div className="space-y-3">
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Label htmlFor="policy-agent">Agent</Label>
+                    <Select
+                      value={agentToAddId}
+                      onValueChange={setAgentToAddId}
                     >
-                      <AgentIdentity
-                        agent={agent}
-                        size="xs"
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeSelectedAgent(agent.id)}
-                        aria-label={`Remove ${agent.name}`}
+                      <SelectTrigger id="policy-agent">
+                        <SelectValue placeholder="Select an agent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {addableAgents.map((agent) => (
+                          <SelectItem
+                            key={agent.id}
+                            value={agent.id}
+                            textValue={agent.name}
+                          >
+                            <AgentIdentity agent={agent} size="xs" />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={!agentToAddId}
+                    onClick={addSelectedAgent}
+                    aria-label="Add agent"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {selectedAgents.length > 0 ? (
+                    selectedAgents.map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="flex items-center gap-2 border border-border/70 bg-muted/20 px-3 py-2"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
-                    Add agents to scope this policy.
-                  </p>
-                )}
+                        <AgentIdentity
+                          agent={agent}
+                          size="xs"
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSelectedAgent(agent.id)}
+                          aria-label={`Remove ${agent.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
+                      Add agents to scope this policy.
+                    </p>
+                  )}
+                </div>
               </div>
-            </section>
+            </BlueprintSection>
           )}
 
           {/* Effect */}
-          <div className="space-y-1.5">
-            <Label>Effect</Label>
+          <BlueprintSection code={effectCode} title="Effect">
             <EffectSegmented
               value={effect}
               onChange={setEffect}
@@ -765,186 +822,203 @@ export default function PolicyEditor({
                 The effect is fixed once a rule is created.
               </p>
             )}
-          </div>
+          </BlueprintSection>
 
           {/* Effect-specific fields */}
           {effect === "cap" && (
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="cap-kind">Cap type</Label>
-                <Select
-                  value={form.capKind}
-                  onValueChange={(v) => update("capKind", v as CapKind)}
-                >
-                  <SelectTrigger id="cap-kind">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="spend">Spend budget</SelectItem>
-                    <SelectItem value="service">Per-service budget</SelectItem>
-                    <SelectItem value="tokens">Token cap</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <BlueprintSection code={detailsCode} title="Limits">
+              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cap-kind">Cap type</Label>
+                  <Select
+                    value={form.capKind}
+                    onValueChange={(v) => update("capKind", v as CapKind)}
+                  >
+                    <SelectTrigger id="cap-kind">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="spend">Spend budget</SelectItem>
+                      <SelectItem value="service">
+                        Per-service budget
+                      </SelectItem>
+                      <SelectItem value="tokens">Token cap</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {form.capKind === "tokens" ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <NumberField
-                    id="max-tokens"
-                    label="Max tokens"
-                    value={form.maxTokens}
-                    onChange={(v) => update("maxTokens", v)}
-                  />
-                  <NumberField
-                    id="max-tokens-call"
-                    label="Max tokens per call"
-                    value={form.maxTokensPerCall}
-                    onChange={(v) => update("maxTokensPerCall", v)}
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <MoneyField
-                    id="cap-amount"
-                    label="Amount"
-                    value={form.amountUsd}
-                    onChange={(v) => update("amountUsd", v)}
-                  />
-                  {form.capKind === "spend" && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cap-period">Period</Label>
-                      <Select
-                        value={form.period}
-                        onValueChange={(v) =>
-                          update("period", v as "month" | "run")
-                        }
-                      >
-                        <SelectTrigger id="cap-period">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="month">Per month</SelectItem>
-                          <SelectItem value="run">Per run</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+                {form.capKind === "tokens" ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <NumberField
+                      id="max-tokens"
+                      label="Max tokens"
+                      value={form.maxTokens}
+                      onChange={(v) => update("maxTokens", v)}
+                    />
+                    <NumberField
+                      id="max-tokens-call"
+                      label="Max tokens per call"
+                      value={form.maxTokensPerCall}
+                      onChange={(v) => update("maxTokensPerCall", v)}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <MoneyField
+                      id="cap-amount"
+                      label="Amount"
+                      value={form.amountUsd}
+                      onChange={(v) => update("amountUsd", v)}
+                    />
+                    {form.capKind === "spend" && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cap-period">Period</Label>
+                        <Select
+                          value={form.period}
+                          onValueChange={(v) =>
+                            update("period", v as "month" | "run")
+                          }
+                        >
+                          <SelectTrigger id="cap-period">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="month">Per month</SelectItem>
+                            <SelectItem value="run">Per run</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </BlueprintSection>
           )}
 
           {effect === "deny" && (
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <Label>Denied tools</Label>
-              <TagInput
-                values={form.tools}
-                onChange={(next) => update("tools", next)}
-                placeholder="Tool name (e.g. send_email or *)"
-              />
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <LinkIcon className="h-3 w-3" />
-                Granting tool access is managed in the{" "}
-                <Link
-                  href="/policies?view=access"
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Access view
-                </Link>
-                .
-              </p>
-            </section>
+            <BlueprintSection code={detailsCode} title="Deny List">
+              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+                <Label>Denied tools</Label>
+                <TagInput
+                  values={form.tools}
+                  onChange={(next) => update("tools", next)}
+                  placeholder="Tool name (e.g. send_email or *)"
+                />
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <LinkIcon className="h-3 w-3" />
+                  Granting tool access is managed in the{" "}
+                  <Link
+                    href="/policies?view=access"
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    Access view
+                  </Link>
+                  .
+                </p>
+              </div>
+            </BlueprintSection>
           )}
 
           {effect === "approval" && (
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="approval-all">Require for all actions</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Off to require approval for specific tools only.
-                  </p>
-                </div>
-                <Switch
-                  id="approval-all"
-                  checked={form.approvalAllActions}
-                  onCheckedChange={(v) => update("approvalAllActions", v)}
-                />
-              </div>
-              {!form.approvalAllActions && (
-                <div className="space-y-1.5">
-                  <Label>Tools requiring approval</Label>
-                  <TagInput
-                    values={form.tools}
-                    onChange={(next) => update("tools", next)}
-                    placeholder="Tool name (e.g. send_email)"
+            <BlueprintSection code={detailsCode} title="Approval">
+              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="approval-all">
+                      Require for all actions
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Off to require approval for specific tools only.
+                    </p>
+                  </div>
+                  <Switch
+                    id="approval-all"
+                    checked={form.approvalAllActions}
+                    onCheckedChange={(v) => update("approvalAllActions", v)}
                   />
                 </div>
-              )}
-              <div className="space-y-1.5">
-                <Label>Approvers</Label>
-                <TagInput
-                  values={form.approvers}
-                  onChange={(next) => update("approvers", next)}
-                  placeholder="user:<id> or group:<id>#member"
-                  validate={(v) => SUBJECT_REF_RE.test(v)}
-                  invalidHint="Use a subject ref like user:<id> or group:<id>#member"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave empty to allow any workspace member to approve.
-                </p>
+                {!form.approvalAllActions && (
+                  <div className="space-y-1.5">
+                    <Label>Tools requiring approval</Label>
+                    <TagInput
+                      values={form.tools}
+                      onChange={(next) => update("tools", next)}
+                      placeholder="Tool name (e.g. send_email)"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label>Approvers</Label>
+                  <TagInput
+                    values={form.approvers}
+                    onChange={(next) => update("approvers", next)}
+                    placeholder="user:<id> or group:<id>#member"
+                    validate={(v) => SUBJECT_REF_RE.test(v)}
+                    invalidHint="Use a subject ref like user:<id> or group:<id>#member"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to allow any workspace member to approve.
+                  </p>
+                </div>
               </div>
-            </section>
+            </BlueprintSection>
           )}
 
           {effect === "safety" && (
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="prompt-injection" className="font-normal">
-                  Prompt-injection detection
-                </Label>
-                <Switch
-                  id="prompt-injection"
-                  checked={form.promptInjection}
-                  onCheckedChange={(v) => update("promptInjection", v)}
-                />
+            <BlueprintSection code={detailsCode} title="Safety">
+              <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="prompt-injection" className="font-normal">
+                    Prompt-injection detection
+                  </Label>
+                  <Switch
+                    id="prompt-injection"
+                    checked={form.promptInjection}
+                    onCheckedChange={(v) => update("promptInjection", v)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="output-sanitizer" className="font-normal">
+                    Output sanitizer
+                  </Label>
+                  <Switch
+                    id="output-sanitizer"
+                    checked={form.outputSanitizer}
+                    onCheckedChange={(v) => update("outputSanitizer", v)}
+                  />
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="output-sanitizer" className="font-normal">
-                  Output sanitizer
-                </Label>
-                <Switch
-                  id="output-sanitizer"
-                  checked={form.outputSanitizer}
-                  onCheckedChange={(v) => update("outputSanitizer", v)}
-                />
-              </div>
-            </section>
+            </BlueprintSection>
           )}
 
           {/* Enabled */}
-          <div className="flex items-center justify-between rounded-lg border border-border p-4">
-            <div>
-              <Label htmlFor="policy-enabled">Rule enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Disabled rules are kept but not enforced.
-              </p>
+          <BlueprintSection code={stateCode} title="State">
+            <div className="flex items-center justify-between border border-border/70 bg-muted/20 p-4">
+              <div>
+                <Label htmlFor="policy-enabled">Rule enabled</Label>
+                <p className="text-xs text-muted-foreground">
+                  Disabled rules are kept but not enforced.
+                </p>
+              </div>
+              <Switch
+                id="policy-enabled"
+                checked={form.enabled}
+                onCheckedChange={(v) => update("enabled", v)}
+              />
             </div>
-            <Switch
-              id="policy-enabled"
-              checked={form.enabled}
-              onCheckedChange={(v) => update("enabled", v)}
-            />
-          </div>
+          </BlueprintSection>
         </div>
 
         {error && (
-          <p className="text-sm text-destructive" role="alert">
+          <p
+            className="relative mx-5 border-t border-destructive/30 py-3 text-sm text-destructive"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+        <div className="relative flex items-center justify-between gap-2 border-t border-border/70 bg-muted/20 px-5 py-4">
           {isEdit ? (
             <Button
               type="button"
@@ -981,9 +1055,14 @@ export default function PolicyEditor({
         </div>
       </section>
 
-      <aside className="h-fit rounded-lg border border-border bg-background p-4">
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-muted/50">
+      <aside className="h-fit border border-border/70 bg-background">
+        <div className="border-b border-border/70 bg-muted/20 px-4 py-3">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Impact Rail
+          </p>
+        </div>
+        <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3">
+          <span className="grid h-8 w-8 place-items-center border border-border/70 bg-muted/40">
             <UsersRound className="h-4 w-4 text-muted-foreground" />
           </span>
           <div>
@@ -1000,12 +1079,12 @@ export default function PolicyEditor({
           </div>
         </div>
 
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2 p-4">
           {affectedAgents.length > 0 ? (
             affectedAgents.slice(0, 8).map((agent) => (
               <div
                 key={agent.id}
-                className="rounded-md border border-border px-3 py-2"
+                className="border border-border/70 bg-muted/20 px-3 py-2"
               >
                 <AgentIdentity
                   agent={agent}
@@ -1019,7 +1098,7 @@ export default function PolicyEditor({
               </div>
             ))
           ) : (
-            <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+            <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
               {subjectType === "workspace"
                 ? "No agents in this workspace yet."
                 : "Select an agent to preview the affected scope."}
