@@ -9,9 +9,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { TaskStatusIcon } from "@/components/ui/task-status-icon";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { TaskWithAgent } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { getTaskStatusPresentation } from "@/lib/status";
 
 interface TaskDetailsCardProps {
   task: {
@@ -37,30 +37,10 @@ export default function TaskDetailsCard({
   const t = useTranslations("TaskDetailsCard");
   const tStatus = useTranslations("TasksPage.status");
   const status = currentStatus as TaskWithAgent["status"];
-
-  const label = [
-    "running",
-    "completed",
-    "success",
-    "failed",
-    "error",
-    "paused",
-    "pending",
-  ].includes(status)
-    ? tStatus(status)
-    : status.charAt(0).toUpperCase() + status.slice(1);
-
-  const colorClass =
-    {
-      completed: "text-green-600 dark:text-green-500",
-      success: "text-green-600 dark:text-green-500",
-      failed: "text-red-600 dark:text-red-500",
-      error: "text-red-600 dark:text-red-500",
-      running: "text-primary",
-      in_progress: "text-primary",
-      pending: "text-muted-foreground",
-      paused: "text-muted-foreground",
-    }[status] || "text-muted-foreground";
+  const presentation = getTaskStatusPresentation(status);
+  const label = presentation.labelKey
+    ? tStatus(presentation.labelKey)
+    : presentation.label;
 
   return (
     <Card className="shadow-sm">
@@ -81,7 +61,6 @@ export default function TaskDetailsCard({
         {/* Compact Status */}
         <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
           <div className="flex items-center gap-2">
-            <TaskStatusIcon status={status} className="h-5 w-5 shrink-0" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t("status")}
@@ -89,14 +68,13 @@ export default function TaskDetailsCard({
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-2">
-            <span
-              className={cn(
-                "text-[11px] font-normal uppercase tracking-wider",
-                colorClass
-              )}
+            <StatusIndicator
+              size="sm"
+              tone={presentation.tone}
+              pulse={presentation.pulse}
             >
               {label}
-            </span>
+            </StatusIndicator>
           </div>
         </div>
 

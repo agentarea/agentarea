@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
 import { Button } from "@/components/ui/button";
-import { TaskStatusIcon } from "@/components/ui/task-status-icon";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { TaskWithAgent } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { getTaskStatusPresentation } from "@/lib/status";
 import type { DisplayEvent } from "@/types/events";
 
 interface TaskHeaderProps {
@@ -50,41 +50,14 @@ export default function TaskHeader({
 }: TaskHeaderProps) {
   const tStatus = useTranslations("TasksPage.status");
   const status = currentStatus as TaskWithAgent["status"];
-
-  const label = [
-    "running",
-    "completed",
-    "success",
-    "failed",
-    "error",
-    "paused",
-    "pending",
-  ].includes(status)
-    ? tStatus(status)
-    : status.charAt(0).toUpperCase() + status.slice(1);
-
-  const colorClass =
-    {
-      completed: "text-green-600 dark:text-green-500",
-      success: "text-green-600 dark:text-green-500",
-      failed: "text-red-600 dark:text-red-500",
-      error: "text-red-600 dark:text-red-500",
-      running: "text-primary",
-      in_progress: "text-primary",
-      pending: "text-muted-foreground",
-      paused: "text-muted-foreground",
-    }[status] || "text-muted-foreground";
+  const presentation = getTaskStatusPresentation(status);
+  const label = presentation.labelKey
+    ? tStatus(presentation.labelKey)
+    : presentation.label;
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
       <div className="flex items-start gap-4">
-        {/* Smaller Status Indicator */}
-        <div className="flex-shrink-0">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-            <TaskStatusIcon status={status} className="h-6 w-6" />
-          </div>
-        </div>
-
         {/* Compact Main Content */}
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
@@ -92,14 +65,13 @@ export default function TaskHeader({
               {task.description}
             </h1>
             <div className="flex items-center gap-1.5 ml-2">
-              <span
-                className={cn(
-                  "text-[11px] font-normal uppercase tracking-wider",
-                  colorClass
-                )}
+              <StatusIndicator
+                size="sm"
+                tone={presentation.tone}
+                pulse={presentation.pulse}
               >
                 {label}
-              </span>
+              </StatusIndicator>
             </div>
           </div>
 

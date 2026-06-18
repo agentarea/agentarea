@@ -35,7 +35,7 @@ export function getMcpVerificationStatusPresentation(
       return {
         label: "Verifying",
         labelKey: "starting",
-        tone: "warning",
+        tone: "info",
         pulse: true,
       };
     case "failed":
@@ -54,11 +54,12 @@ export function getMcpHealthStatusPresentation(
     case "connected":
       return { label: "Connected", labelKey: "connected", tone: "success" };
     case "healthy":
+      return { label: "Healthy", tone: "success" };
     case "running":
       return {
         label: "Running",
         labelKey: "running",
-        tone: "success",
+        tone: "info",
         pulse: true,
       };
     case "starting":
@@ -113,7 +114,7 @@ export function getOpenApiConnectionStatusPresentation(
     case "succeeded":
       return { label: "Succeeded", tone: "success" };
     case "running":
-      return { label: "Running", tone: "success", pulse: true };
+      return { label: "Running", tone: "info", pulse: true };
     case "starting":
       return { label: "Starting", tone: "warning", pulse: true };
     case "pending":
@@ -164,7 +165,7 @@ export function getMcpCatalogStatusPresentation(
     case "available":
       return { label: "available", tone: "success" };
     case "running":
-      return { label: "running", tone: "success", pulse: true };
+      return { label: "running", tone: "info", pulse: true };
     case "setup":
       return { label: "setup", tone: "warning", pulse: true };
     case "pending":
@@ -177,6 +178,46 @@ export function getMcpCatalogStatusPresentation(
       return { label: "error", tone: "danger" };
     case "inactive":
       return { label: "inactive", tone: "neutral" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getTaskStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "completed":
+      return { label: "Completed", labelKey: "completed", tone: "success" };
+    case "success":
+      return { label: "Success", labelKey: "success", tone: "success" };
+    case "running":
+    case "in_progress":
+      return {
+        label: "Running",
+        labelKey: "running",
+        tone: "info",
+        pulse: true,
+      };
+    case "input_required":
+      return {
+        label: "Input Required",
+        labelKey: "inputRequired",
+        tone: "warning",
+        pulse: true,
+      };
+    case "failed":
+      return { label: "Failed", labelKey: "failed", tone: "danger" };
+    case "error":
+      return { label: "Error", labelKey: "error", tone: "danger" };
+    case "blocked":
+      return { label: "Blocked", labelKey: "blocked", tone: "neutral" };
+    case "cancelled":
+      return { label: "Cancelled", labelKey: "cancelled", tone: "neutral" };
+    case "paused":
+      return { label: "Paused", labelKey: "paused", tone: "neutral" };
+    case "pending":
+      return { label: "Pending", labelKey: "pending", tone: "warning" };
     default:
       return fallbackStatusPresentation(status);
   }
