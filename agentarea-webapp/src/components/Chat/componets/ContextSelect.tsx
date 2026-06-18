@@ -82,16 +82,18 @@ export function ContextSelect({
               "focus:bg-zinc-100/90 dark:text-zinc-100 dark:focus:bg-zinc-900"
             )}
           >
-            <span className="flex min-w-0 items-start gap-2">
+            <span className="grid w-full min-w-0 grid-cols-[auto,minmax(0,1fr)] items-start gap-x-2">
               {renderOptionIcon ? (
                 renderOptionIcon(option)
               ) : (
                 <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
               )}
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate leading-4">{option.name}</span>
+              <span className="flex min-w-0 max-w-full flex-col overflow-hidden">
+                <span className="block w-full min-w-0 truncate leading-4">
+                  {option.name}
+                </span>
                 {option.description ? (
-                  <span className="truncate pt-0.5 text-[11px] font-normal leading-4 text-zinc-500 dark:text-zinc-400">
+                  <span className="block w-full min-w-0 truncate pt-0.5 text-[11px] font-normal leading-4 text-zinc-500 dark:text-zinc-400">
                     {option.description}
                   </span>
                 ) : null}
