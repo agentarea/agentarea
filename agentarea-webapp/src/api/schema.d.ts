@@ -282,10 +282,11 @@ export interface paths {
          * @description Mirror existing grants into the graph backend and seed a starter collection.
          *
          *     Idempotent: safe to call repeatedly. Steps:
-         *       1. If no collections exist, create "All skills" containing every workspace
+         *       1. Mirror workspace members into the graph.
+         *       2. If no collections exist, create "All skills" containing every workspace
          *          skill and grant workspace-member access to the collection.
-         *       2. Mirror each collection membership relationship.
-         *       3. Mirror each direct agent-to-skill grant.
+         *       3. Mirror each collection membership relationship.
+         *       4. Mirror each direct agent-to-skill grant.
          */
         post: operations["sync_grants_v1_access_control_sync_post"];
         delete?: never;
@@ -3746,7 +3747,7 @@ export interface paths {
          *         instruction: "You are a helpful AI assistant"
          *         tools:
          *           - type: code
-         *             name: agentarea/calculator
+         *             name: agentarea/math
          *           - type: mcp
          *             name: my-filesystem
          *             settings:
@@ -6840,7 +6841,7 @@ export interface components {
              * Api Key
              * @description Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.
              */
-            api_key: string;
+            api_key?: string | null;
             /**
              * Description
              * @description Optional human-readable description of this configuration.
@@ -6914,7 +6915,7 @@ export interface components {
         ProviderConfigUpdate: {
             /**
              * Api Key
-             * @description New API key. Replaces the previously stored secret.
+             * @description New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.
              */
             api_key?: string | null;
             /**
@@ -7199,7 +7200,7 @@ export interface components {
              * Resource Kind
              * @enum {string}
              */
-            resource_kind: "skill" | "mcp" | "agent";
+            resource_kind: "skill" | "collection" | "mcp" | "agent";
             /** Subject Id */
             subject_id: string;
         };

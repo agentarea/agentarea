@@ -7091,9 +7091,16 @@
         "description": "Payload for creating an LLM provider configuration.",
         "properties": {
           "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
-            "title": "Api Key",
-            "type": "string"
+            "title": "Api Key"
           },
           "description": {
             "anyOf": [
@@ -7142,8 +7149,7 @@
         },
         "required": [
           "provider_spec_id",
-          "name",
-          "api_key"
+          "name"
         ],
         "title": "ProviderConfigCreate",
         "type": "object"
@@ -7252,14 +7258,13 @@
           "api_key": {
             "anyOf": [
               {
-                "minLength": 1,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "New API key. Replaces the previously stored secret.",
+            "description": "New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.",
             "title": "Api Key"
           },
           "description": {
@@ -8012,6 +8017,7 @@
           "resource_kind": {
             "enum": [
               "skill",
+              "collection",
               "mcp",
               "agent"
             ],
@@ -23517,7 +23523,7 @@
     },
     "/v1/workspace/import": {
       "post": {
-        "description": "Import workspace configuration from YAML.\n\nThis endpoint creates agents, MCP instances, and provider configs\nin the current workspace based on the provided YAML configuration.\n\n**Important Notes:**\n- All resources are created in the current workspace\n- Secrets (API keys, passwords) must be provided as they cannot be exported\n- References to MCP servers and provider specs must exist in the system\n- Import is atomic - if any resource fails, all changes are rolled back\n\n**Example YAML:**\n```yaml\nagents:\n  - name: \"My Assistant\"\n    description: \"Helpful assistant\"\n    instruction: \"You are a helpful AI assistant\"\n    tools:\n      - type: code\n        name: agentarea/calculator\n      - type: mcp\n        name: my-filesystem\n        settings:\n          allowed_tools: [read_file, write_file]\n    planning: false\n\nmcp_instances:\n  - name: \"My Filesystem\"\n    description: \"Local file access\"\n    server_spec_id: \"a1b2c3d4-...\"\n    env_vars:\n      FILESYSTEM_ROOT: \"/workspace\"\n\nprovider_configs:\n  - name: \"My OpenAI\"\n    provider_spec_id: \"932f3839-...\"\n    api_key_placeholder: \"sk-...\"\n```",
+        "description": "Import workspace configuration from YAML.\n\nThis endpoint creates agents, MCP instances, and provider configs\nin the current workspace based on the provided YAML configuration.\n\n**Important Notes:**\n- All resources are created in the current workspace\n- Secrets (API keys, passwords) must be provided as they cannot be exported\n- References to MCP servers and provider specs must exist in the system\n- Import is atomic - if any resource fails, all changes are rolled back\n\n**Example YAML:**\n```yaml\nagents:\n  - name: \"My Assistant\"\n    description: \"Helpful assistant\"\n    instruction: \"You are a helpful AI assistant\"\n    tools:\n      - type: code\n        name: agentarea/math\n      - type: mcp\n        name: my-filesystem\n        settings:\n          allowed_tools: [read_file, write_file]\n    planning: false\n\nmcp_instances:\n  - name: \"My Filesystem\"\n    description: \"Local file access\"\n    server_spec_id: \"a1b2c3d4-...\"\n    env_vars:\n      FILESYSTEM_ROOT: \"/workspace\"\n\nprovider_configs:\n  - name: \"My OpenAI\"\n    provider_spec_id: \"932f3839-...\"\n    api_key_placeholder: \"sk-...\"\n```",
         "operationId": "import_workspace_config_v1_workspace_import_post",
         "requestBody": {
           "content": {
