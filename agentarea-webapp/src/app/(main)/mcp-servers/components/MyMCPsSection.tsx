@@ -177,6 +177,11 @@ export function MyMCPsSection({
         : status === "unhealthy" || status === "error"
           ? "danger"
           : "warning";
+    const pulse =
+      status === "starting" ||
+      status === "running" ||
+      status === "healthy" ||
+      status === "unknown";
     const label =
       status === "connected"
         ? t("status.connected")
@@ -188,7 +193,9 @@ export function MyMCPsSection({
               ? t("status.starting")
               : t("status.setup");
     return (
-      <StatusIndicator tone={tone}>{label}</StatusIndicator>
+      <StatusIndicator tone={tone} pulse={pulse}>
+        {label}
+      </StatusIndicator>
     );
   };
 

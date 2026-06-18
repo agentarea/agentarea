@@ -1,48 +1,66 @@
 import * as React from "react";
+import type {
+  StatusIndicatorSize,
+  StatusTone,
+} from "@/lib/status/types";
 import { cn } from "@/lib/utils";
 
 const TONE_STYLES = {
   success: {
     text: "text-emerald-600 dark:text-emerald-400",
-    dot: "bg-emerald-500 ring-emerald-500/20",
+    dot: "bg-emerald-500",
+    halo: "bg-emerald-100/80 dark:bg-emerald-400/16",
   },
   warning: {
     text: "text-amber-600 dark:text-amber-400",
-    dot: "bg-amber-500 ring-amber-500/20",
+    dot: "bg-amber-500",
+    halo: "bg-amber-100/80 dark:bg-amber-400/16",
   },
   danger: {
     text: "text-red-600 dark:text-red-400",
-    dot: "bg-red-500 ring-red-500/20",
+    dot: "bg-red-500",
+    halo: "bg-red-100/80 dark:bg-red-400/16",
   },
   info: {
     text: "text-sky-600 dark:text-sky-400",
-    dot: "bg-sky-500 ring-sky-500/20",
+    dot: "bg-sky-500",
+    halo: "bg-sky-100/80 dark:bg-sky-400/16",
   },
   neutral: {
     text: "text-muted-foreground",
-    dot: "bg-zinc-400 ring-zinc-400/20 dark:bg-zinc-500 dark:ring-zinc-500/20",
+    dot: "bg-zinc-400 dark:bg-zinc-500",
+    halo: "bg-zinc-100/80 dark:bg-zinc-500/16",
   },
-} as const;
+} satisfies Record<StatusTone, { text: string; dot: string; halo: string }>;
 
 const SIZE_STYLES = {
   default: {
     root: "gap-2 text-[12.5px]",
-    dot: "h-[6px] w-[6px] ring-[3px]",
+    dotWrap: "h-[12px] w-[12px]",
+    halo: "h-[12px] w-[12px]",
+    dot: "h-[6px] w-[6px]",
   },
   sm: {
     root: "gap-1.5 text-xs",
-    dot: "h-[5px] w-[5px] ring-2",
+    dotWrap: "h-[10px] w-[10px]",
+    halo: "h-[10px] w-[10px]",
+    dot: "h-[5px] w-[5px]",
   },
-} as const;
+} satisfies Record<
+  StatusIndicatorSize,
+  { root: string; dotWrap: string; halo: string; dot: string }
+>;
 
-export type StatusIndicatorTone = keyof typeof TONE_STYLES;
-export type StatusIndicatorSize = keyof typeof SIZE_STYLES;
+export type StatusIndicatorTone = StatusTone;
+export type { StatusIndicatorSize } from "@/lib/status/types";
 
 export interface StatusIndicatorProps
   extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: StatusIndicatorTone;
   size?: StatusIndicatorSize;
   dotClassName?: string;
+  haloClassName?: string;
+  pulse?: boolean;
 }
 
 export function StatusIndicator({
@@ -50,6 +68,8 @@ export function StatusIndicator({
   size = "default",
   className,
   dotClassName,
+  haloClassName,
+  pulse = false,
   children,
   ...props
 }: StatusIndicatorProps) {
@@ -69,12 +89,37 @@ export function StatusIndicator({
       <span
         aria-hidden="true"
         className={cn(
-          "rounded-full",
-          toneStyles.dot,
-          sizeStyles.dot,
-          dotClassName
+          "relative inline-flex shrink-0 items-center justify-center",
+          sizeStyles.dotWrap
         )}
-      />
+      >
+        <span
+          className={cn(
+            "absolute inset-0 m-auto rounded-full",
+            toneStyles.halo,
+            sizeStyles.halo,
+            haloClassName
+          )}
+        />
+        {pulse && (
+          <span
+            className={cn(
+              "absolute inset-0 m-auto rounded-full animate-ping",
+              toneStyles.halo,
+              sizeStyles.halo,
+              haloClassName
+            )}
+          />
+        )}
+        <span
+          className={cn(
+            "relative rounded-full",
+            toneStyles.dot,
+            sizeStyles.dot,
+            dotClassName
+          )}
+        />
+      </span>
       <span>{children}</span>
     </span>
   );
