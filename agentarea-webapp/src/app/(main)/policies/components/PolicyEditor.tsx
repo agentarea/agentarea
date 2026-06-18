@@ -131,6 +131,12 @@ interface FormState {
   outputSanitizer: boolean;
 }
 
+interface PolicyDraft {
+  id: string;
+  effect: PolicyEffect;
+  form: FormState;
+}
+
 const EMPTY_FORM: FormState = {
   enabled: true,
   capKind: "spend",
@@ -147,6 +153,22 @@ const EMPTY_FORM: FormState = {
   promptInjection: true,
   outputSanitizer: false,
 };
+
+function cloneForm(form: FormState): FormState {
+  return {
+    ...form,
+    tools: [...form.tools],
+    approvers: [...form.approvers],
+  };
+}
+
+function newDraft(id: string, effect: PolicyEffect = "cap"): PolicyDraft {
+  return {
+    id,
+    effect,
+    form: cloneForm(EMPTY_FORM),
+  };
+}
 
 // Loosely validate Keto subject refs (user:<id> | group:<id>#member, etc.).
 const SUBJECT_REF_RE = /^[a-zA-Z]+:[^\s]+/;
@@ -1202,8 +1224,10 @@ export default function PolicyEditor({
   returnHref = "/policies",
 }: PolicyEditorProps) {
   const router = useRouter();
-  const [effect, setEffect] = useState<PolicyEffect>("cap");
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [drafts, setDrafts] = useState<PolicyDraft[]>(() => [
+    newDraft("draft-1"),
+  ]);
+  const [activeDraftId, setActiveDraftId] = useState("draft-1");
   const [scopeMode, setScopeMode] = useState<ScopeMode>("workspace");
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
   const [agentToAddId, setAgentToAddId] = useState<string>("");
@@ -1211,6 +1235,10 @@ export default function PolicyEditor({
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = target?.mode === "edit";
+  const activeDraft =
+    drafts.find((draft) => draft.id === activeDraftId) ?? drafts[0];
+  const effect = activeDraft?.effect ?? "cap";
+  const form = activeDraft?.form ?? EMPTY_FORM;
 
   const subjectType = useMemo<"workspace" | "agent">(() => {
     if (target.mode === "edit")
@@ -1269,8 +1297,14 @@ export default function PolicyEditor({
   useEffect(() => {
     if (target.mode === "edit") {
       const seeded = policyToForm(target.policy);
-      setEffect(seeded.effect);
-      setForm(seeded.form);
+      setDrafts([
+        {
+          id: "draft-1",
+          effect: seeded.effect,
+          form: cloneForm(seeded.form),
+        },
+      ]);
+      setActiveDraftId("draft-1");
       setScopeMode(
         target.policy.subject_type === "agent" ? "agents" : "workspace"
       );
@@ -1279,8 +1313,8 @@ export default function PolicyEditor({
       );
       setAgentToAddId("");
     } else {
-      setEffect("cap");
-      setForm(EMPTY_FORM);
+      setDrafts([newDraft("draft-1")]);
+      setActiveDraftId("draft-1");
       setScopeMode(target.mode === "create-agent" ? "agents" : "workspace");
       setSelectedAgentIds(
         target.mode === "create-agent" && target.agentId ? [target.agentId] : []
@@ -1291,7 +1325,37 @@ export default function PolicyEditor({
   }, [target]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setDrafts((prev) =>
+      prev.map((draft) =>
+        draft.id === activeDraftId
+          ? { ...draft, form: { ...draft.form, [key]: value } }
+          : draft
+      )
+    );
+
+  const updateActiveEffect = (nextEffect: PolicyEffect) => {
+    setDrafts((prev) =>
+      prev.map((draft) =>
+        draft.id === activeDraftId ? { ...draft, effect: nextEffect } : draft
+      )
+    );
+  };
+
+  const addDraft = () => {
+    const id = `draft-${drafts.length + 1}-${Date.now()}`;
+    setDrafts((prev) => [...prev, newDraft(id, "deny")]);
+    setActiveDraftId(id);
+  };
+
+  const removeDraft = (draftId: string) => {
+    if (drafts.length <= 1) return;
+    const nextActiveId =
+      activeDraftId === draftId
+        ? (drafts.find((draft) => draft.id !== draftId)?.id ?? "draft-1")
+        : activeDraftId;
+    setDrafts((prev) => prev.filter((draft) => draft.id !== draftId));
+    setActiveDraftId(nextActiveId);
+  };
 
   const addSelectedAgent = () => {
     if (!agentToAddId || selectedAgentIdSet.has(agentToAddId)) return;
@@ -1340,9 +1404,18 @@ export default function PolicyEditor({
       return;
     }
 
-    const built = buildRuleBodies(effect, form);
-    if ("error" in built) {
-      setError(built.error);
+    const draftsToSave = isEdit ? [activeDraft] : drafts;
+    const builtDrafts = draftsToSave.map((draft, index) => ({
+      draft,
+      index,
+      result: buildRuleBodies(draft.effect, draft.form),
+    }));
+    const invalidDraft = builtDrafts.find((item) => "error" in item.result);
+    if (invalidDraft && "error" in invalidDraft.result) {
+      setActiveDraftId(invalidDraft.draft.id);
+      setError(
+        `Rule ${invalidDraft.index + 1} (${EFFECT_STYLES[invalidDraft.draft.effect].label}): ${invalidDraft.result.error}`
+      );
       return;
     }
 
@@ -1353,6 +1426,8 @@ export default function PolicyEditor({
         // PATCH the single rule. Edit only writes the first body (a rule edits
         // one rule); extra tools added in edit mode are ignored to keep edit
         // 1:1 with the backing rule.
+        const built = builtDrafts[0].result;
+        if ("error" in built) return;
         const body = built.bodies[0];
         const response = await fetch(
           `/api/proxy/v1/policies/${target.policy.id}`,
@@ -1364,7 +1439,7 @@ export default function PolicyEditor({
               effect: body.effect,
               params: body.params,
               condition: body.condition ?? null,
-              enabled: form.enabled,
+              enabled: activeDraft.form.enabled,
             }),
           }
         );
@@ -1375,23 +1450,27 @@ export default function PolicyEditor({
       } else {
         // POST one rule per scope/body pair (deny/approval may fan out over tools).
         for (const subject of subjects) {
-          for (const body of built.bodies) {
-            const response = await fetch(`/api/proxy/v1/policies`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                subject_type: subject.subject_type,
-                subject_id: subject.subject_id,
-                target: body.target,
-                effect: body.effect,
-                params: body.params,
-                condition: body.condition ?? null,
-                enabled: form.enabled,
-              }),
-            });
-            if (!response.ok) {
-              setError(await readDetail(response, "Save failed"));
-              return;
+          for (const item of builtDrafts) {
+            if ("error" in item.result) continue;
+            for (const body of item.result.bodies) {
+              const response = await fetch(`/api/proxy/v1/policies`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  subject_type: subject.subject_type,
+                  subject_id: subject.subject_id,
+                  target: body.target,
+                  effect: body.effect,
+                  params: body.params,
+                  condition: body.condition ?? null,
+                  enabled: item.draft.form.enabled,
+                }),
+              });
+              if (!response.ok) {
+                setActiveDraftId(item.draft.id);
+                setError(await readDetail(response, "Save failed"));
+                return;
+              }
             }
           }
         }
@@ -1436,23 +1515,32 @@ export default function PolicyEditor({
       ? "New agent policy"
       : "New workspace rule";
   const hasAgentScopeEditor = subjectType === "agent" && !isEdit;
-  const effectCode = hasAgentScopeEditor ? "03" : "02";
-  const detailsCode = hasAgentScopeEditor ? "04" : "03";
-  const stateCode = hasAgentScopeEditor ? "05" : "04";
   const compiledSubjects = resolveSubjects();
-  const compiledBodies = buildRuleBodies(effect, form);
+  const compiledDrafts = drafts.map((draft) => ({
+    draft,
+    result: buildRuleBodies(draft.effect, draft.form),
+  }));
+  const firstInvalidDraft = compiledDrafts.find(
+    (item) => "error" in item.result
+  );
   const compiledError =
     compiledSubjects === null
       ? subjectType === "agent"
         ? "agent scope pending"
         : "workspace scope missing"
-      : "error" in compiledBodies
-        ? compiledBodies.error
+      : firstInvalidDraft && "error" in firstInvalidDraft.result
+        ? `${EFFECT_STYLES[firstInvalidDraft.draft.effect].label}: ${firstInvalidDraft.result.error}`
         : null;
   const compiledRuleCount =
-    compiledSubjects && "bodies" in compiledBodies
-      ? compiledSubjects.length * compiledBodies.bodies.length
+    compiledSubjects && !firstInvalidDraft
+      ? compiledSubjects.length *
+        compiledDrafts.reduce(
+          (sum, item) =>
+            "bodies" in item.result ? sum + item.result.bodies.length : sum,
+          0
+        )
       : null;
+  const enabledDraftCount = drafts.filter((draft) => draft.form.enabled).length;
   const compiledRows = [
     {
       label: "scope",
@@ -1461,7 +1549,12 @@ export default function PolicyEditor({
           ? "workspace"
           : `${selectedAgentIds.length} agent${selectedAgentIds.length === 1 ? "" : "s"}`,
     },
-    { label: "effect", value: EFFECT_STYLES[effect].label.toLowerCase() },
+    { label: "drafts", value: String(drafts.length) },
+    {
+      label: "active",
+      value: `${enabledDraftCount}/${drafts.length} enabled`,
+    },
+    { label: "selected", value: EFFECT_STYLES[effect].label.toLowerCase() },
     { label: "target", value: previewTarget(effect, form) },
     { label: "params", value: previewParams(effect, form) },
     {
@@ -1472,7 +1565,6 @@ export default function PolicyEditor({
       label: "rules",
       value: compiledRuleCount === null ? "pending" : String(compiledRuleCount),
     },
-    { label: "state", value: form.enabled ? "enabled" : "disabled" },
   ];
 
   return (
@@ -1504,144 +1596,218 @@ export default function PolicyEditor({
                 . Tool access grants are managed in the Access view.
               </p>
             </div>
-            <div className="border border-border/70 bg-background px-3 py-2 text-right">
+            <div className="min-w-[220px] border border-border/70 bg-background px-3 py-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Scope
+                Target
               </p>
-              <p className="mt-1 text-sm font-medium text-foreground">
-                {subjectType === "workspace" ? "All agents" : "Selected"}
-              </p>
+              {isEdit ? (
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {subjectType === "workspace"
+                    ? "Workspace"
+                    : selectedAgents[0]?.name || target.policy.subject_id}
+                </p>
+              ) : (
+                <div className="mt-2 inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
+                  {[
+                    { value: "workspace" as const, label: "All agents" },
+                    { value: "agents" as const, label: "Selected agents" },
+                  ].map((option) => {
+                    const active = scopeMode === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setScopeMode(option.value)}
+                        className={cn(
+                          "px-2.5 py-1 text-xs transition",
+                          active
+                            ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
+          {hasAgentScopeEditor && (
+            <div className="mt-4 grid gap-3 border-t border-border/70 pt-4 lg:grid-cols-[minmax(240px,360px)_minmax(0,1fr)]">
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label htmlFor="policy-agent">Agent</Label>
+                  <Select value={agentToAddId} onValueChange={setAgentToAddId}>
+                    <SelectTrigger id="policy-agent">
+                      <SelectValue placeholder="Select an agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addableAgents.map((agent) => (
+                        <SelectItem
+                          key={agent.id}
+                          value={agent.id}
+                          textValue={agent.name}
+                        >
+                          <AgentIdentity agent={agent} size="xs" />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!agentToAddId}
+                  onClick={addSelectedAgent}
+                  aria-label="Add agent"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="min-w-0 space-y-2">
+                {selectedAgents.length > 0 ? (
+                  selectedAgents.map((agent) => (
+                    <div
+                      key={agent.id}
+                      className="flex items-center gap-2 border border-border/70 bg-background px-3 py-2"
+                    >
+                      <AgentIdentity
+                        agent={agent}
+                        size="xs"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSelectedAgent(agent.id)}
+                        aria-label={`Remove ${agent.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
+                    Add agents to scope this policy.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="relative px-5">
-          {!isEdit && (
-            <BlueprintSection code="01" title="Scope">
-              <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
-                {[
-                  { value: "workspace" as const, label: "All agents" },
-                  { value: "agents" as const, label: "Selected agents" },
-                ].map((option) => {
-                  const active = scopeMode === option.value;
+          <BlueprintSection code="01" title="Policy Rules">
+            <div className="space-y-3">
+              <div className="grid gap-2 md:grid-cols-2">
+                {drafts.map((draft, index) => {
+                  const active = draft.id === activeDraftId;
+                  const style = EFFECT_STYLES[draft.effect];
+                  const Icon = style.icon;
                   return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setScopeMode(option.value)}
+                    <div
+                      key={draft.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setActiveDraftId(draft.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveDraftId(draft.id);
+                        }
+                      }}
                       className={cn(
-                        "px-3 py-1.5 text-sm transition",
-                        active
-                          ? "bg-background text-foreground shadow-[inset_0_-2px_0_hsl(var(--primary))]"
-                          : "text-muted-foreground hover:text-foreground"
+                        "cursor-pointer border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/30",
+                        active && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
                       )}
                     >
-                      {option.label}
-                    </button>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Rule {index + 1}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <Icon
+                              className="h-4 w-4 text-muted-foreground"
+                              strokeWidth={1.8}
+                              aria-hidden
+                            />
+                            <span className="text-sm font-medium text-foreground">
+                              {style.label}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {draft.form.enabled ? "enabled" : "disabled"}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {previewParams(draft.effect, draft.form)}
+                          </p>
+                        </div>
+                        {!isEdit && drafts.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeDraft(draft.id);
+                            }}
+                            aria-label={`Remove rule ${index + 1}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </BlueprintSection>
-          )}
 
-          {isEdit && (
-            <BlueprintSection code="01" title="Scope">
-              <p className="mt-1 text-sm text-foreground">
-                {subjectType === "workspace"
-                  ? "All agents"
-                  : selectedAgents[0]?.name || target.policy.subject_id}
-              </p>
-            </BlueprintSection>
-          )}
+              {!isEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addDraft}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Add rule
+                </Button>
+              )}
 
-          {hasAgentScopeEditor && (
-            <BlueprintSection code="02" title="Agents">
-              <div className="space-y-3">
-                <div className="flex items-end gap-2">
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <Label htmlFor="policy-agent">Agent</Label>
-                    <Select
-                      value={agentToAddId}
-                      onValueChange={setAgentToAddId}
-                    >
-                      <SelectTrigger id="policy-agent">
-                        <SelectValue placeholder="Select an agent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {addableAgents.map((agent) => (
-                          <SelectItem
-                            key={agent.id}
-                            value={agent.id}
-                            textValue={agent.name}
-                          >
-                            <AgentIdentity agent={agent} size="xs" />
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    disabled={!agentToAddId}
-                    onClick={addSelectedAgent}
-                    aria-label="Add agent"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {selectedAgents.length > 0 ? (
-                    selectedAgents.map((agent) => (
-                      <div
-                        key={agent.id}
-                        className="flex items-center gap-2 border border-border/70 bg-muted/20 px-3 py-2"
-                      >
-                        <AgentIdentity
-                          agent={agent}
-                          size="xs"
-                          className="flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeSelectedAgent(agent.id)}
-                          aria-label={`Remove ${agent.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
-                      Add agents to scope this policy.
+              <div className="flex flex-wrap items-center justify-between gap-3 border border-border/70 bg-background px-3 py-3">
+                <div className="min-w-0 space-y-2">
+                  <Label>Rule type</Label>
+                  <EffectSegmented
+                    value={effect}
+                    onChange={updateActiveEffect}
+                    disabled={isEdit}
+                  />
+                  {isEdit && (
+                    <p className="text-xs text-muted-foreground">
+                      The rule type is fixed once a rule is created.
                     </p>
                   )}
                 </div>
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="policy-enabled">Enabled</Label>
+                  <Switch
+                    id="policy-enabled"
+                    checked={form.enabled}
+                    onCheckedChange={(v) => update("enabled", v)}
+                  />
+                </div>
               </div>
-            </BlueprintSection>
-          )}
-
-          {/* Effect */}
-          <BlueprintSection code={effectCode} title="Effect">
-            <EffectSegmented
-              value={effect}
-              onChange={setEffect}
-              disabled={isEdit}
-            />
-            {isEdit && (
-              <p className="text-xs text-muted-foreground">
-                The effect is fixed once a rule is created.
-              </p>
-            )}
+            </div>
           </BlueprintSection>
 
           {/* Effect-specific fields */}
           {effect === "cap" && (
-            <BlueprintSection code={detailsCode} title="Limits">
+            <BlueprintSection code="02" title="Rule Config">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="cap-kind">Budget type</Label>
@@ -1711,7 +1877,7 @@ export default function PolicyEditor({
           )}
 
           {effect === "deny" && (
-            <BlueprintSection code={detailsCode} title="Deny List">
+            <BlueprintSection code="02" title="Rule Config">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <Label>Denied tools</Label>
                 <ToolSelector
@@ -1743,7 +1909,7 @@ export default function PolicyEditor({
           )}
 
           {effect === "approval" && (
-            <BlueprintSection code={detailsCode} title="Approval">
+            <BlueprintSection code="02" title="Rule Config">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1794,7 +1960,7 @@ export default function PolicyEditor({
           )}
 
           {effect === "safety" && (
-            <BlueprintSection code={detailsCode} title="Safety">
+            <BlueprintSection code="02" title="Rule Config">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="prompt-injection" className="font-normal">
@@ -1819,23 +1985,6 @@ export default function PolicyEditor({
               </div>
             </BlueprintSection>
           )}
-
-          {/* Enabled */}
-          <BlueprintSection code={stateCode} title="State">
-            <div className="flex items-center justify-between border border-border/70 bg-muted/20 p-4">
-              <div>
-                <Label htmlFor="policy-enabled">Rule enabled</Label>
-                <p className="text-xs text-muted-foreground">
-                  Disabled rules are kept but not enforced.
-                </p>
-              </div>
-              <Switch
-                id="policy-enabled"
-                checked={form.enabled}
-                onCheckedChange={(v) => update("enabled", v)}
-              />
-            </div>
-          </BlueprintSection>
         </div>
 
         {error && (
@@ -1878,7 +2027,11 @@ export default function PolicyEditor({
               disabled={saving}
               onClick={save}
             >
-              {isEdit ? "Save rule" : "Create rule"}
+              {isEdit
+                ? "Save rule"
+                : drafts.length > 1
+                  ? "Create rules"
+                  : "Create rule"}
             </Button>
           </div>
         </div>
