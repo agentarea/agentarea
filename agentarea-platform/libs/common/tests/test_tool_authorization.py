@@ -15,7 +15,7 @@ from agentarea_common.rebac.models import CheckResult
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache(monkeypatch):
-    monkeypatch.delenv("OPENFGA_ENABLED", raising=False)
+    monkeypatch.delenv("ACCESS_CONTROL_BACKEND", raising=False)
     monkeypatch.setenv("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
     monkeypatch.setenv("WORKFLOW__TEMPORAL_NAMESPACE", "default")
     monkeypatch.setenv("WORKFLOW__TEMPORAL_TASK_QUEUE", "test-task-queue")
@@ -53,7 +53,7 @@ def test_policy_requires_approval_only_after_explicit_allow():
 
 @pytest.mark.asyncio
 async def test_task_policy_allow_all_bypasses_graph(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "false")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "disabled")
     get_settings.cache_clear()
     openfga = AsyncMock()
 
@@ -62,6 +62,7 @@ async def test_task_policy_allow_all_bypasses_graph(monkeypatch):
             tool_name="web_search",
             tool_args={"query": "x"},
             user_id="u1",
+            workspace_id="ws-1",
             effective_policy={"tools": {"allowed": ["*"]}},
         ),
         openfga_client=openfga,
@@ -73,7 +74,7 @@ async def test_task_policy_allow_all_bypasses_graph(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scoped_task_policy_denies_when_graph_disabled(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "false")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "disabled")
     get_settings.cache_clear()
 
     decision = await authorize_tool_invocation(
@@ -81,6 +82,7 @@ async def test_scoped_task_policy_denies_when_graph_disabled(monkeypatch):
             tool_name="web_search",
             tool_args={"query": "x"},
             user_id="u1",
+            workspace_id="ws-1",
             effective_policy={"tools": {"allowed": ["web_*"]}},
         )
     )
@@ -91,7 +93,7 @@ async def test_scoped_task_policy_denies_when_graph_disabled(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scoped_task_policy_allows_when_graph_allows(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "true")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
     get_settings.cache_clear()
     openfga = AsyncMock()
     openfga.check.return_value = CheckResult(allowed=True)
@@ -101,6 +103,7 @@ async def test_scoped_task_policy_allows_when_graph_allows(monkeypatch):
             tool_name="web_search",
             tool_args={"query": "x"},
             user_id="u1",
+            workspace_id="ws-1",
             effective_policy={"tools": {"allowed": ["web_*"]}},
         ),
         openfga_client=openfga,
@@ -112,7 +115,7 @@ async def test_scoped_task_policy_allows_when_graph_allows(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scoped_task_policy_denies_when_graph_denies(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "true")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
     get_settings.cache_clear()
     openfga = AsyncMock()
     openfga.check.return_value = CheckResult(allowed=False)
@@ -122,6 +125,7 @@ async def test_scoped_task_policy_denies_when_graph_denies(monkeypatch):
             tool_name="web_search",
             tool_args={"query": "x"},
             user_id="u1",
+            workspace_id="ws-1",
             effective_policy={"tools": {"allowed": ["web_*"]}},
         ),
         openfga_client=openfga,
@@ -133,7 +137,7 @@ async def test_scoped_task_policy_denies_when_graph_denies(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scoped_task_policy_requires_user_id(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "true")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
     get_settings.cache_clear()
     openfga = AsyncMock()
 
@@ -152,8 +156,29 @@ async def test_scoped_task_policy_requires_user_id(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_scoped_task_policy_requires_workspace_id(monkeypatch):
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
+    get_settings.cache_clear()
+    openfga = AsyncMock()
+
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(
+            tool_name="web_search",
+            tool_args={"query": "x"},
+            user_id="u1",
+            effective_policy={"tools": {"allowed": ["web_*"]}},
+        ),
+        openfga_client=openfga,
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY
+    assert decision.reason == "missing workspace_id for tool authorization"
+    openfga.check.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_direct_proxy_graph_only_mode_does_not_require_task_policy(monkeypatch):
-    monkeypatch.setenv("OPENFGA_ENABLED", "true")
+    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
     get_settings.cache_clear()
     openfga = AsyncMock()
     openfga.check.return_value = CheckResult(allowed=True)
@@ -163,6 +188,7 @@ async def test_direct_proxy_graph_only_mode_does_not_require_task_policy(monkeyp
             tool_name="github.create_issue",
             tool_args={"repo": "acme/app"},
             user_id="u1",
+            workspace_id="ws-1",
             policy_required=False,
         ),
         openfga_client=openfga,

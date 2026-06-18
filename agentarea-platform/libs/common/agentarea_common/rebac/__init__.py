@@ -13,6 +13,7 @@ from .models import (
     RelationTuple,
     SubjectSet,
 )
+from .openfga_bootstrap import bootstrap_openfga
 from .openfga_client import OpenFGAClient, OpenFGAError, OpenFGAUnavailableError
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "RelationQuery",
     "RelationTuple",
     "SubjectSet",
+    "bootstrap_openfga",
 ]

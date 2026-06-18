@@ -1,0 +1,12 @@
+{{- if .Values.openfga.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-openfga-authorization-model
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: openfga-authorization-model
+data:
+  authorization-model.json: |
+{{ .Files.Get "files/openfga/authorization-model.json" | indent 4 }}
+{{- end }}

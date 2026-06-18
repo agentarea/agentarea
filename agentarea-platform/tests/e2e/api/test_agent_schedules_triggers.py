@@ -22,6 +22,8 @@ import pytest
 
 from tests.e2e.api.conftest import _psql, create_agent, wait_for_workflow
 
+ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
+
 
 def _trigger_create_calls(events: list[dict]) -> list[dict]:
     """Return every successful create_cron call the agent made.
@@ -122,7 +124,10 @@ def _drive_scheduling_task(
     task_id = (
         client.post(
             f"/v1/agents/{agent_id}/tasks/sync",
-            json={"description": user_message},
+            json={
+                "description": user_message,
+                "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+            },
             timeout=60.0,
         )
         .raise_for_status()

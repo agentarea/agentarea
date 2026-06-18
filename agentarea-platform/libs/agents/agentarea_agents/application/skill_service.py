@@ -551,8 +551,8 @@ class SkillService:
 
         Creates a real, owned skill (workspace_id/created_by come from the
         repository's UserContext — never ``platform``), links it back to the
-        catalog item via ``registry_item_id``, and records the install on the
-        registry item (``installed_entity_id`` + ``installed_version``).
+        catalog item via ``registry_item_id``, and records workspace-scoped
+        install state for that catalog item.
 
         Copy-on-write semantics: the metadata/spec (name, description,
         source_type, content, s3_path reference) is copied into the tenant row,

@@ -405,7 +405,7 @@ async def update_agent(
     # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
     # assert ownership of the resulting row. Idempotent for plain edits.
     await _grant_agent_owner(agent.id, user_context.user_id)
-    agent = await agent_service.get_with_skills(resolved_id)
+    agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return AgentResponse.from_domain(agent, include_skills=True)

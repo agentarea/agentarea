@@ -63,7 +63,7 @@ export default function BaseInfo({
           <div className="space-y-2">
             <FormLabel
               htmlFor="api_key"
-              required={!endpointUrlValue?.trim()}
+              optional={Boolean(endpointUrlValue?.trim())}
               icon={Key}
             >
               {t("apiKey")}
@@ -90,6 +90,9 @@ export default function BaseInfo({
                 {String(errors.api_key.message)}
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              {t("apiKeyOptionalForCustomEndpoint")}
+            </p>
             {!isEdit && onDiscoverModels && (
               <div className="flex items-center gap-2">
                 <Button

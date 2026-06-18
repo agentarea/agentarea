@@ -16,6 +16,7 @@ from agentarea_common.rebac import (
     OpenFGAUnavailableError,
     RelationTuple,
 )
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,10 @@ async def grant_user_relation(
     a user can create a resource and then immediately get 403 on their own row.
     """
     settings = get_settings()
-    if settings.openfga.OPENFGA_ENABLED:
+    if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
         client_type = OpenFGAClient
         backend = "OpenFGA"
-    elif settings.keto.KETO_ENABLED:
+    elif settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
         client_type = KetoClient
         backend = "Keto"
     else:
@@ -46,8 +47,11 @@ async def grant_user_relation(
     try:
         client = get_container().get(client_type)
     except ValueError:
-        logger.warning("%s is enabled but client is not registered; skipping grant", backend)
-        return
+        logger.exception("%s is enabled but client is not registered", backend)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{backend} grant writer is unavailable",
+        ) from None
 
     relationship = RelationTuple(
         namespace=namespace,
@@ -57,5 +61,9 @@ async def grant_user_relation(
     )
     try:
         await client.write_tuple(relationship)
-    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
+    except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
         logger.exception("Failed to grant creator relation in %s: %s", backend, relationship)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{backend} grant write failed",
+        ) from exc

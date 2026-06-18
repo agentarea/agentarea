@@ -30,7 +30,8 @@ class ProviderConfigCreate(BaseModel):
         max_length=255,
         description="Human-readable label for this provider configuration.",
     )
-    api_key: str = Field(
+    api_key: str | None = Field(
+        default=None,
         description=(
             "Secret API key for the provider. Stored encrypted in the "
             "secret manager; never returned in responses. May be empty "
@@ -66,6 +67,14 @@ class ProviderConfigCreate(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v
 
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped or None
+        return v
+
 
 class ProviderConfigUpdate(BaseModel):
     """Patch payload for an existing provider configuration. Unset = unchanged."""
@@ -80,8 +89,10 @@ class ProviderConfigUpdate(BaseModel):
     )
     api_key: str | None = Field(
         default=None,
-        min_length=1,
-        description="New API key. Replaces the previously stored secret.",
+        description=(
+            "New API key. Replaces the previously stored secret. Send an empty "
+            "string to clear the key for keyless custom endpoints."
+        ),
     )
     endpoint_url: str | None = Field(
         default=None,
@@ -100,3 +111,11 @@ class ProviderConfigUpdate(BaseModel):
         default=None,
         description="Toggle workspace-wide visibility.",
     )
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, v: object) -> object:
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped or None
+        return v

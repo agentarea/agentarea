@@ -568,7 +568,7 @@ export function createApiClient(client: Client) {
 
     discoverModelsPreview: async (body: {
       provider_key: string;
-      api_key: string;
+      api_key?: string | null;
       endpoint_url?: string | null;
     }) => {
       const { data, error } = await client.POST(
@@ -1878,7 +1878,7 @@ export function createApiClient(client: Client) {
 
     resolveAccessControl: async (body: {
       subject_id: string;
-      resource_kind: "skill" | "mcp" | "agent";
+      resource_kind: "skill" | "collection" | "mcp" | "agent";
       resource_id: string;
     }) => {
       const { data, error } = await client.POST(

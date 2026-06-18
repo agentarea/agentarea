@@ -123,6 +123,7 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
                 tool_name=tool_name,
                 tool_args=tool_args,
                 user_id=user_context.user_id,
+                workspace_id=user_context.workspace_id,
                 policy_required=False,
             )
         )

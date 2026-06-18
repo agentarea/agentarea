@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from agentarea_common.base.models import BaseModel
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -122,3 +122,26 @@ class RegistryItem(BaseModel):
         self.installed_entity_id = None
         self.update_available = False
         self.installed_version = None
+
+
+class RegistryItemInstall(BaseModel):
+    """Workspace-scoped materialization state for a global registry item."""
+
+    __tablename__ = "registry_item_installs"
+    __table_args__ = (
+        UniqueConstraint(
+            "registry_item_id",
+            "workspace_id",
+            name="uq_registry_item_installs_item_workspace",
+        ),
+    )
+
+    registry_item_id: Mapped[str] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("registry_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workspace_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    installed_entity_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    installed_version: Mapped[str | None] = mapped_column(String(100), nullable=True)

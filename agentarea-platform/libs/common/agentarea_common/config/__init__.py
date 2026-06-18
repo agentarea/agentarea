@@ -4,6 +4,7 @@ This module provides centralized configuration management with clean separation
 of concerns across different settings domains.
 """
 
+from .access_control import AccessControlSettings
 from .app import AppSettings, get_app_settings
 from .auth import AuthSettings, get_auth_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
@@ -20,6 +21,7 @@ from .workflow import TaskExecutionSettings, WorkflowSettings
 
 __all__ = [
     "AWSSettings",
+    "AccessControlSettings",
     "AppSettings",
     "AuthSettings",
     "BaseAppSettings",

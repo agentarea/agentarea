@@ -2790,8 +2790,15 @@
       "DiscoverPreviewRequest": {
         "properties": {
           "api_key": {
-            "title": "Api Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
           },
           "endpoint_url": {
             "anyOf": [
@@ -2810,8 +2817,7 @@
           }
         },
         "required": [
-          "provider_key",
-          "api_key"
+          "provider_key"
         ],
         "title": "DiscoverPreviewRequest",
         "type": "object"
@@ -9411,10 +9417,15 @@
           "user_id": {
             "title": "User Id",
             "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
           }
         },
         "required": [
           "scope",
+          "workspace_id",
           "user_id",
           "tool_name",
           "object_id"
@@ -11900,7 +11911,7 @@
     },
     "/v1/access-control/sync": {
       "post": {
-        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  2. Mirror each collection membership relationship.\n  3. Mirror each direct agent-to-skill grant.",
+        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. Mirror workspace members into the graph.\n  2. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  3. Mirror each collection membership relationship.\n  4. Mirror each direct agent-to-skill grant.",
         "operationId": "sync_grants_v1_access_control_sync_post",
         "responses": {
           "200": {

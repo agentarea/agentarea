@@ -18,7 +18,6 @@ METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 HEALTH_CHECK_PORT: "{{ .Values.global.monitoring.health.port }}"
-KRATOS_JWKS_B64: "{{ .Values.kratos.jwt.jwks_b64 }}"
 KRATOS_ISSUER: "{{ .Values.kratos.jwt.issuer }}"
 KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
 {{- end }}
@@ -96,9 +95,9 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
       key: HEALTH_CHECK_PORT
 - name: KRATOS_JWKS_B64
   valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-backend
-      key: KRATOS_JWKS_B64
+    secretKeyRef:
+      name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }}
+      key: jwks_b64
 - name: KRATOS_ISSUER
   valueFrom:
     configMapKeyRef:

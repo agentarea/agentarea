@@ -759,6 +759,7 @@
     "configurationName": "Configuration Name",
     "configurationNamePlaceholder": "e.g., Production OpenAI Config",
     "apiKeyPlaceholder": "Enter your API key",
+    "apiKeyOptionalForCustomEndpoint": "Leave blank for keyless custom endpoints. No Authorization header will be sent.",
     "customEndpointUrl": "Custom Endpoint URL",
     "customEndpointUrlPlaceholder": "https://api.example.com/v1",
     "updateConfiguration": "Update Configuration",

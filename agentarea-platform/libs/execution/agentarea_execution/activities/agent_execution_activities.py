@@ -776,6 +776,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 tool_name=request.tool_name,
                 tool_args=request.tool_args,
                 user_id=request.user_id,
+                workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
             )
         )

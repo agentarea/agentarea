@@ -315,7 +315,7 @@ export async function discoverModelsAction(configId: string) {
 
 export async function discoverModelsPreviewAction(body: {
   provider_key: string;
-  api_key: string;
+  api_key?: string | null;
   endpoint_url?: string | null;
 }) {
   return await discoverModelsPreview(body);

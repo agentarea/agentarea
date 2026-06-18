@@ -44,7 +44,7 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     )
     name: Mapped[str] = mapped_column(String, nullable=False)  # "My OpenAI", "Work OpenAI"
     description: Mapped[str | None] = mapped_column(String, nullable=True)
-    api_key: Mapped[str] = mapped_column(String, nullable=False)
+    api_key: Mapped[str | None] = mapped_column(String, nullable=True)
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

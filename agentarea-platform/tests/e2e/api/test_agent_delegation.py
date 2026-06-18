@@ -29,6 +29,8 @@ import pytest
 
 from tests.e2e.api.conftest import create_agent, wait_for_workflow
 
+ALLOW_ALL_TOOLS_TASK_POLICY = {"tools": {"allowed": ["*"]}}
+
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -69,7 +71,10 @@ def test_coordinator_with_one_child_completes(
 
     task_id = alice_client.post(
         f"/v1/agents/{coord_id}/tasks/sync",
-        json={"description": f"Ask {specialist_name} to spell the word: omega"},
+        json={
+            "description": f"Ask {specialist_name} to spell the word: omega",
+            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
+        },
         timeout=30.0,
     ).raise_for_status().json()["id"]
 

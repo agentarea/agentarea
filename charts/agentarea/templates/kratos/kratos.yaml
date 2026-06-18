@@ -3,6 +3,7 @@
 {{- $kratosPublicUrl := .Values.kratos.urls.public | default (printf "http://%s-kratos-public:4433" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
 {{- $kratosAdminUrl := .Values.kratos.urls.admin | default (printf "http://%s-kratos-admin:4434" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
 {{- $kratosConfigMapName := default (printf "%s-kratos-config" (include "agentarea.fullname" .)) .Values.kratos.configMapOverrideName -}}
+{{- $kratosRuntimeSecretName := default (printf "%s-kratos-runtime" .Release.Name) .Values.kratos.runtimeSecretName -}}
 {{- if not .Values.kratos.configMapOverrideName }}
 apiVersion: v1
 kind: ConfigMap
@@ -155,13 +156,23 @@ spec:
                   key: password
             - name: DSN
               value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+            - name: KRATOS_SECRETS_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $kratosRuntimeSecretName }}
+                  key: secrets-cookie
+            - name: KRATOS_SECRETS_CIPHER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $kratosRuntimeSecretName }}
+                  key: secrets-cipher
           command: ["sh","-c"]
           args:
             - >
               echo "Checking Env...";
               env | grep POSTGRES;
               echo "DSN: $DSN";
-              kratos serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+              kratos serve -c /etc/config/kratos/kratos.yml --watch-courier
           volumeMounts:
             - name: kratos-config
               mountPath: /etc/config/kratos

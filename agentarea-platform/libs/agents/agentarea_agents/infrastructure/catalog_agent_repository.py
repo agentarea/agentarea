@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from agentarea_common.auth.context import UserContext
 from sqlalchemy import text
@@ -45,39 +46,61 @@ class CatalogAgentRepository:
         """List all catalog agent items (global catalog, no workspace filter)."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "ri.installed_entity_id, ri.installed_version "
+            "rii.installed_entity_id, rii.installed_version "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
+            "LEFT JOIN registry_item_installs rii "
+            "  ON rii.registry_item_id = ri.id "
+            " AND rii.workspace_id = :workspace_id "
             "WHERE r.registry_type = 'agents' "
             "ORDER BY ri.name"
         )
-        result = await self.session.execute(query)
+        result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
         return [self._row_to_item(row) for row in result.fetchall()]
 
     async def get_item(self, item_id: str) -> CatalogAgentItem | None:
         """Get a single catalog agent item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "ri.installed_entity_id, ri.installed_version "
+            "rii.installed_entity_id, rii.installed_version "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
+            "LEFT JOIN registry_item_installs rii "
+            "  ON rii.registry_item_id = ri.id "
+            " AND rii.workspace_id = :workspace_id "
             "WHERE r.registry_type = 'agents' "
             "AND ri.id = :item_id"
         )
-        result = await self.session.execute(query, {"item_id": item_id})
+        result = await self.session.execute(
+            query,
+            {"item_id": item_id, "workspace_id": self.user_context.workspace_id},
+        )
         row = result.fetchone()
         return self._row_to_item(row) if row else None
 
     async def mark_installed(
         self, item_id: str, entity_id: str, installed_version: str | None
     ) -> None:
-        """Record the materialized tenant copy of a catalog agent item."""
+        """Record the workspace materialization of a catalog agent item."""
         await self.session.execute(
             text(
-                "UPDATE registry_items SET installed_entity_id = :eid, "
-                "installed_version = :ver, updated_at = now() WHERE id = :item_id"
+                "INSERT INTO registry_item_installs "
+                "(id, registry_item_id, workspace_id, installed_entity_id, installed_version, "
+                "created_at, updated_at) "
+                "VALUES (:install_id, :item_id, :workspace_id, :eid, :ver, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
+                "ON CONFLICT (registry_item_id, workspace_id) DO UPDATE SET "
+                "installed_entity_id = EXCLUDED.installed_entity_id, "
+                "installed_version = EXCLUDED.installed_version, "
+                "updated_at = CURRENT_TIMESTAMP"
             ),
-            {"eid": entity_id, "ver": installed_version, "item_id": item_id},
+            {
+                "eid": entity_id,
+                "install_id": str(uuid4()),
+                "ver": installed_version,
+                "item_id": item_id,
+                "workspace_id": self.user_context.workspace_id,
+            },
         )
 
     @staticmethod

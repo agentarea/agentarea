@@ -34,6 +34,7 @@ class ToolAuthorizationRequest:
     tool_name: str
     tool_args: dict[str, Any]
     user_id: str | None = None
+    workspace_id: str | None = None
     effective_policy: dict[str, Any] | None = None
     policy_required: bool = True
 
@@ -74,11 +75,16 @@ async def authorize_tool_invocation(
             ToolAuthorizationAction.DENY,
             "missing user_id for tool authorization",
         )
+    if not request.workspace_id:
+        return ToolAuthorizationDecision(
+            ToolAuthorizationAction.DENY,
+            "missing workspace_id for tool authorization",
+        )
 
     from agentarea_common.config import get_settings
 
     settings = get_settings()
-    if not settings.openfga.OPENFGA_ENABLED:
+    if settings.access_control.ACCESS_CONTROL_BACKEND != "openfga":
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
             "OpenFGA tool authorization is disabled",
@@ -96,6 +102,7 @@ async def authorize_tool_invocation(
     allowed = await is_tool_invocation_allowed(
         openfga,
         user_id=request.user_id,
+        workspace_id=request.workspace_id,
         tool_name=request.tool_name,
         tool_args=request.tool_args,
     )
@@ -164,10 +171,10 @@ def _resolve_openfga_client() -> OpenFGAClient | None:
             return get_container().get(OpenFGAClient)
         except ValueError:
             return OpenFGAClient(
-                api_url=settings.openfga.OPENFGA_API_URL,
-                store_id=settings.openfga.OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.OPENFGA_TIMEOUT_SECONDS,
+                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
+                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
+                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
+                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
             )
     except Exception:
         logger.exception("OpenFGA tool authorization client unavailable")

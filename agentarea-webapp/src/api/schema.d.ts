@@ -5081,7 +5081,7 @@ export interface components {
         /** DiscoverPreviewRequest */
         DiscoverPreviewRequest: {
             /** Api Key */
-            api_key: string;
+            api_key?: string | null;
             /** Endpoint Url */
             endpoint_url?: string | null;
             /** Provider Key */
@@ -7810,6 +7810,8 @@ export interface components {
             tool_name: string;
             /** User Id */
             user_id: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** ToolAccessGrantListResponse */
         ToolAccessGrantListResponse: {

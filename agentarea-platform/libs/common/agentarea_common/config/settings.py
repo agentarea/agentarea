@@ -5,6 +5,7 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from .access_control import AccessControlSettings
 from .app import AppSettings
 from .aws import AWSSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     task_execution: TaskExecutionSettings = Field(default_factory=TaskExecutionSettings)
     triggers: TriggerSettings = Field(default_factory=TriggerSettings)
     channel_delivery: ChannelDeliverySettings = Field(default_factory=ChannelDeliverySettings)
+    access_control: AccessControlSettings = Field(default_factory=AccessControlSettings)
     keto: KetoSettings = Field(default_factory=KetoSettings)
     openfga: OpenFGASettings = Field(default_factory=OpenFGASettings)
 
@@ -59,6 +61,7 @@ def get_settings() -> Settings:
         task_execution=TaskExecutionSettings(),
         triggers=TriggerSettings(),
         channel_delivery=ChannelDeliverySettings(),
+        access_control=AccessControlSettings(),
         keto=KetoSettings(),
         openfga=OpenFGASettings(),
     )

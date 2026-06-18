@@ -106,7 +106,7 @@ export const navData = {
         {
           title: "Connections",
           titleKey: "connections",
-          url: "/mcp-servers",
+          url: "/connections",
           icon: Plug,
         },
         {

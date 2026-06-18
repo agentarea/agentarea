@@ -15,7 +15,10 @@ from agentarea_agents.application.skill_service import (
     _project_catalog_skill,
 )
 from agentarea_agents.domain.skill_models import Skill
-from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillItem
+from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogSkillItem,
+    CatalogSkillRepository,
+)
 from agentarea_common.auth.context import UserContext
 
 
@@ -86,6 +89,14 @@ class FakeCatalogRepo:
 
     async def mark_installed(self, item_id, entity_id, installed_version):
         self.installed.append((item_id, entity_id, installed_version))
+
+
+class CapturingSession:
+    def __init__(self):
+        self.executions = []
+
+    async def execute(self, query, params=None):
+        self.executions.append((str(query), params or {}))
 
 
 class FakeFactory:
@@ -193,6 +204,18 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert kw["source_url"] == "https://x"
     # The install is recorded on the catalog item with the new skill id + version.
     assert catalog.installed == [(item.id, str(skill.id), "3")]
+
+
+async def test_catalog_skill_install_state_is_workspace_scoped():
+    session = CapturingSession()
+    repo = CatalogSkillRepository(session, UserContext(user_id="u1", workspace_id="w1"))
+
+    await repo.mark_installed(str(uuid4()), str(uuid4()), "3")
+
+    query, params = session.executions[0]
+    assert "registry_item_installs" in query
+    assert "UPDATE registry_items" not in query
+    assert params["workspace_id"] == "w1"
 
 
 async def test_install_catalog_skill_is_idempotent():

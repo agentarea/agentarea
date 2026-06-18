@@ -199,8 +199,8 @@ class AgentService(BaseCrudService[Agent]):
 
         Creates a real, owned agent (workspace_id/created_by come from the
         repository's UserContext — never ``platform``), links it back to the
-        catalog item via ``registry_item_id``, and records the install on the
-        registry item (``installed_entity_id`` + ``installed_version``).
+        catalog item via ``registry_item_id``, and records workspace-scoped
+        install state for that catalog item.
         """
         spec = item.spec or {}
         tools = spec.get("tools")
