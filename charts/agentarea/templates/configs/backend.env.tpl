@@ -93,11 +93,6 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: HEALTH_CHECK_PORT
-- name: KRATOS_JWKS_B64
-  valueFrom:
-    secretKeyRef:
-      name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }}
-      key: jwks_b64
 - name: KRATOS_ISSUER
   valueFrom:
     configMapKeyRef:
