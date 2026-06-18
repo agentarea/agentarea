@@ -439,6 +439,49 @@ function BlueprintSection({
   );
 }
 
+function previewTarget(effect: PolicyEffect, form: FormState): string {
+  if (effect === "cap") return form.capKind;
+  if (effect === "deny") {
+    return form.tools.length === 0 ? "tool:<pending>" : "tool";
+  }
+  if (effect === "approval") {
+    return form.approvalAllActions ? "*" : "tool";
+  }
+  return "content";
+}
+
+function previewParams(effect: PolicyEffect, form: FormState): string {
+  if (effect === "cap") {
+    if (form.capKind === "tokens") {
+      const parts: string[] = [];
+      if (form.maxTokens) parts.push(`max=${form.maxTokens}`);
+      if (form.maxTokensPerCall) parts.push(`call=${form.maxTokensPerCall}`);
+      return parts.length > 0 ? parts.join(" ") : "tokens=pending";
+    }
+    return `amount=${form.amountUsd || "pending"}${
+      form.capKind === "spend" ? ` period=${form.period}` : ""
+    }`;
+  }
+  if (effect === "deny") {
+    return form.tools.length > 0
+      ? `tools=${form.tools.length}`
+      : "tools=pending";
+  }
+  if (effect === "approval") {
+    const scope = form.approvalAllActions
+      ? "actions=*"
+      : `tools=${form.tools.length || "pending"}`;
+    const approvers =
+      form.approvers.length > 0 ? ` approvers=${form.approvers.length}` : "";
+    return `${scope}${approvers}`;
+  }
+  const checks = [
+    form.promptInjection && "prompt_injection",
+    form.outputSanitizer && "output_sanitizer",
+  ].filter(Boolean);
+  return checks.length > 0 ? checks.join(" ") : "checks=pending";
+}
+
 // --- editor ---------------------------------------------------------------
 
 export default function PolicyEditor({
@@ -659,6 +702,37 @@ export default function PolicyEditor({
   const effectCode = hasAgentScopeEditor ? "03" : "02";
   const detailsCode = hasAgentScopeEditor ? "04" : "03";
   const stateCode = hasAgentScopeEditor ? "05" : "04";
+  const compiledSubjects = resolveSubjects();
+  const compiledBodies = buildRuleBodies(effect, form);
+  const compiledError =
+    compiledSubjects === null
+      ? subjectType === "agent"
+        ? "agent scope pending"
+        : "workspace scope missing"
+      : "error" in compiledBodies
+        ? compiledBodies.error
+        : null;
+  const compiledRuleCount =
+    compiledSubjects && "bodies" in compiledBodies
+      ? compiledSubjects.length * compiledBodies.bodies.length
+      : null;
+  const compiledRows = [
+    {
+      label: "scope",
+      value:
+        subjectType === "workspace"
+          ? "workspace"
+          : `${selectedAgentIds.length} agent${selectedAgentIds.length === 1 ? "" : "s"}`,
+    },
+    { label: "effect", value: effect },
+    { label: "target", value: previewTarget(effect, form) },
+    { label: "params", value: previewParams(effect, form) },
+    {
+      label: "rules",
+      value: compiledRuleCount === null ? "pending" : String(compiledRuleCount),
+    },
+    { label: "state", value: form.enabled ? "enabled" : "disabled" },
+  ];
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -1107,6 +1181,39 @@ export default function PolicyEditor({
           {affectedAgents.length > 8 && (
             <p className="text-xs text-muted-foreground">
               +{affectedAgents.length - 8} more
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-border/70 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Compiled output
+            </p>
+            {compiledError && (
+              <span className="border border-dashed border-border/70 px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                pending
+              </span>
+            )}
+          </div>
+          <dl className="border border-border/70 bg-muted/20 font-mono text-[11px]">
+            {compiledRows.map((row) => (
+              <div
+                key={row.label}
+                className="grid grid-cols-[72px_minmax(0,1fr)] border-b border-border/60 last:border-b-0"
+              >
+                <dt className="border-r border-border/60 px-2 py-1.5 uppercase tracking-[0.12em] text-muted-foreground">
+                  {row.label}
+                </dt>
+                <dd className="truncate px-2 py-1.5 text-foreground/85">
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {compiledError && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {compiledError}
             </p>
           )}
         </div>
