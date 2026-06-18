@@ -1,10 +1,27 @@
 import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import EmptyState from "@/components/EmptyState";
-import { listAgents, listPolicies } from "@/lib/api";
+import {
+  listAgents,
+  listMCPServerInstances,
+  listMCPServers,
+  listOpenAPIConnections,
+  listPolicies,
+} from "@/lib/api";
 import { getAuthContext } from "@/lib/getAuthContext";
+import type { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import type { Policy } from "@/types/policies";
 import PolicyEditor, { type PolicyEditorTarget } from "./PolicyEditor";
+
+interface OpenAPIConnectionLike {
+  id: string;
+  name: string;
+  available_tools?: Array<{
+    name: string;
+    description?: string | null;
+    inputSchema?: unknown;
+  }> | null;
+}
 
 interface AgentLike {
   id: string;
@@ -32,11 +49,30 @@ export async function PolicyEditorPageData({
 }: PolicyEditorPageDataProps) {
   let policies: Policy[] = [];
   let agents: AgentLike[] = [];
+  let mcpInstances: McpInstance[] = [];
+  let mcpServers: McpServer[] = [];
+  let openapiConnections: OpenAPIConnectionLike[] = [];
   let policiesError: string | null = null;
 
-  const [policiesRes, agentsRes, authContext] = await Promise.all([
+  const [
+    policiesRes,
+    agentsRes,
+    mcpInstancesRes,
+    mcpServersRes,
+    openapiConnectionsRes,
+    authContext,
+  ] = await Promise.all([
     listPolicies().catch((reason) => ({ data: null, error: reason })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
+    listMCPServerInstances().catch((reason) => ({ data: null, error: reason })),
+    listMCPServers({ page_size: 100 }).catch((reason) => ({
+      data: null,
+      error: reason,
+    })),
+    listOpenAPIConnections().catch((reason) => ({
+      data: null,
+      error: reason,
+    })),
     getAuthContext(),
   ]);
 
@@ -61,6 +97,40 @@ export async function PolicyEditorPageData({
           ? agent.tools_config
           : null,
     }));
+  }
+
+  if (mcpInstancesRes.error) {
+    console.error(
+      "Failed to load MCP instances for policy editor:",
+      mcpInstancesRes.error
+    );
+  } else {
+    mcpInstances = ((mcpInstancesRes.data as McpInstance[] | null) ??
+      []) as McpInstance[];
+  }
+
+  if (mcpServersRes.error) {
+    console.error(
+      "Failed to load MCP servers for policy editor:",
+      mcpServersRes.error
+    );
+  } else {
+    const data = mcpServersRes.data as
+      | McpServer[]
+      | { items?: McpServer[] }
+      | null;
+    mcpServers = Array.isArray(data) ? data : (data?.items ?? []);
+  }
+
+  if (openapiConnectionsRes.error) {
+    console.error(
+      "Failed to load OpenAPI connections for policy editor:",
+      openapiConnectionsRes.error
+    );
+  } else {
+    openapiConnections = ((openapiConnectionsRes.data as
+      | OpenAPIConnectionLike[]
+      | null) ?? []) as OpenAPIConnectionLike[];
   }
 
   const target = resolveTarget({ policyId, policies });
@@ -88,7 +158,11 @@ export async function PolicyEditorPageData({
           <PolicyEditor
             target={target}
             agents={agents}
+            mcpInstances={mcpInstances}
+            mcpServers={mcpServers}
+            openapiConnections={openapiConnections}
             workspaceId={authContext.workspaceId}
+            currentUserId={authContext.userId}
           />
         )}
       </div>

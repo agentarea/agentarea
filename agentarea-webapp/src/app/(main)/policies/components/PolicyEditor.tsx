@@ -17,6 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  resolveMcpRef,
+  type McpInstance,
+  type McpServer,
+} from "@/lib/mcp/resolveMcpRef";
 import { cn } from "@/lib/utils";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import { EFFECT_STYLES } from "./policy-effects";
@@ -40,7 +45,11 @@ interface AgentOption {
 interface PolicyEditorProps {
   target: PolicyEditorTarget;
   agents: AgentOption[];
+  mcpInstances: McpInstance[];
+  mcpServers: McpServer[];
+  openapiConnections: OpenAPIConnectionOption[];
   workspaceId: string | null;
+  currentUserId: string | null;
   returnHref?: string;
 }
 
@@ -53,6 +62,17 @@ const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 type CapKind = "spend" | "service" | "tokens";
 type ScopeMode = "workspace" | "agents";
 type PolicyPeriod = "month" | "run";
+type ConditionOperator = "equals" | "not_equals" | "contains" | "exists";
+
+interface OpenAPIConnectionOption {
+  id: string;
+  name: string;
+  available_tools?: Array<{
+    name: string;
+    description?: string | null;
+    inputSchema?: unknown;
+  }> | null;
+}
 
 interface ToolConfigLike {
   type?: string | null;
@@ -78,6 +98,9 @@ interface ToolOption {
   id: string;
   label: string;
   source: string;
+  sourceLabel: string;
+  description?: string;
+  parameterKeys: string[];
   agents: string[];
 }
 
@@ -91,6 +114,9 @@ interface FormState {
   maxTokensPerCall: string;
   // deny / approval tools
   tools: string[];
+  conditionParam: string;
+  conditionOperator: ConditionOperator;
+  conditionValue: string;
   // approval
   approvalAllActions: boolean;
   approvers: string[];
@@ -107,6 +133,9 @@ const EMPTY_FORM: FormState = {
   maxTokens: "",
   maxTokensPerCall: "",
   tools: [],
+  conditionParam: "",
+  conditionOperator: "equals",
+  conditionValue: "",
   approvalAllActions: true,
   approvers: [],
   promptInjection: true,
@@ -138,6 +167,56 @@ function str(value: unknown): string {
   return "";
 }
 
+function parseCondition(condition: string | null | undefined): {
+  param: string;
+  operator: ConditionOperator;
+  value: string;
+} | null {
+  if (!condition) return null;
+  const match = condition.match(
+    /^args\.([a-zA-Z0-9_.-]+)\s*(==|!=|contains|exists)\s*(?:"([^"]*)"|(.+))?$/
+  );
+  if (!match) return null;
+  const op = match[2];
+  return {
+    param: match[1],
+    operator:
+      op === "!="
+        ? "not_equals"
+        : op === "contains"
+          ? "contains"
+          : op === "exists"
+            ? "exists"
+            : "equals",
+    value: match[3] ?? match[4] ?? "",
+  };
+}
+
+function buildCondition(form: FormState): string | null {
+  const param = form.conditionParam.trim();
+  if (!param) return null;
+  if (form.conditionOperator === "exists") return `args.${param} exists`;
+  const value = form.conditionValue.trim();
+  if (!value) return null;
+  const operator =
+    form.conditionOperator === "not_equals"
+      ? "!="
+      : form.conditionOperator === "contains"
+        ? "contains"
+        : "==";
+  return `args.${param} ${operator} ${JSON.stringify(value)}`;
+}
+
+function schemaParameterKeys(schema: unknown): string[] {
+  if (!schema || typeof schema !== "object") return [];
+  const record = schema as Record<string, unknown>;
+  const properties =
+    record.properties && typeof record.properties === "object"
+      ? (record.properties as Record<string, unknown>)
+      : null;
+  return properties ? Object.keys(properties).sort() : [];
+}
+
 function asToolNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -164,37 +243,110 @@ function addToolOption(
   map: Map<string, ToolOption>,
   id: string,
   source: string,
-  agentName: string
+  agentName: string,
+  metadata?: {
+    sourceLabel?: string;
+    description?: string | null;
+    parameterKeys?: string[];
+  }
 ) {
   const normalized = id.trim();
   if (!normalized) return;
   const existing = map.get(normalized);
   if (existing) {
     if (!existing.agents.includes(agentName)) existing.agents.push(agentName);
+    if (!existing.description && metadata?.description) {
+      existing.description = metadata.description;
+    }
+    if (metadata?.parameterKeys) {
+      existing.parameterKeys = Array.from(
+        new Set([...existing.parameterKeys, ...metadata.parameterKeys])
+      ).sort();
+    }
     return;
   }
   map.set(normalized, {
     id: normalized,
     label: humanizeToolName(normalized),
     source,
+    sourceLabel: metadata?.sourceLabel ?? source,
+    description: metadata?.description ?? undefined,
+    parameterKeys: metadata?.parameterKeys ?? [],
     agents: [agentName],
   });
 }
 
-function buildToolCatalog(agents: AgentOption[]): ToolOption[] {
+function buildToolCatalog(
+  agents: AgentOption[],
+  mcpInstances: McpInstance[],
+  mcpServers: McpServer[],
+  openapiConnections: OpenAPIConnectionOption[]
+): ToolOption[] {
   const map = new Map<string, ToolOption>();
+  const openapiById = new Map(
+    openapiConnections.map((connection) => [connection.id, connection])
+  );
+
   for (const agent of agents) {
     const agentName = agent.name;
 
     for (const tool of agent.tools ?? []) {
       const name = str(tool?.name);
-      if (tool?.type === "mcp" || tool?.type === "openapi") {
+      if (tool?.type === "mcp") {
+        const ref = resolveMcpRef(name, mcpInstances, mcpServers);
         const allowedTools = asToolNames(tool.settings?.allowed_tools);
-        for (const allowed of allowedTools) {
-          addToolOption(map, allowed, tool.type, agentName);
+        if (ref.status === "instance" && ref.availableTools.length > 0) {
+          const allowedSet =
+            allowedTools.length > 0 ? new Set(allowedTools) : null;
+          for (const available of ref.availableTools) {
+            if (allowedSet && !allowedSet.has(available.name)) continue;
+            addToolOption(map, available.name, "mcp", agentName, {
+              sourceLabel: `MCP · ${ref.displayName}`,
+              description: available.description,
+              parameterKeys: schemaParameterKeys(available.inputSchema),
+            });
+          }
+        } else {
+          for (const allowed of allowedTools) {
+            addToolOption(map, allowed, "mcp", agentName, {
+              sourceLabel: `MCP · ${ref.displayName}`,
+            });
+          }
+          if (allowedTools.length === 0) {
+            addToolOption(map, name, "mcp", agentName, {
+              sourceLabel: `MCP · ${ref.displayName}`,
+            });
+          }
         }
-        if (allowedTools.length === 0) {
-          addToolOption(map, name, tool.type, agentName);
+      } else if (tool?.type === "openapi") {
+        const connection = openapiById.get(name);
+        const allowedTools = asToolNames(tool.settings?.allowed_tools);
+        if (connection?.available_tools?.length) {
+          const allowedSet =
+            allowedTools.length > 0 ? new Set(allowedTools) : null;
+          for (const available of connection.available_tools) {
+            if (allowedSet && !allowedSet.has(available.name)) continue;
+            addToolOption(map, available.name, "openapi", agentName, {
+              sourceLabel: `OpenAPI · ${connection.name}`,
+              description: available.description,
+              parameterKeys: schemaParameterKeys(available.inputSchema),
+            });
+          }
+        } else {
+          for (const allowed of allowedTools) {
+            addToolOption(map, allowed, "openapi", agentName, {
+              sourceLabel: connection
+                ? `OpenAPI · ${connection.name}`
+                : "OpenAPI",
+            });
+          }
+          if (allowedTools.length === 0) {
+            addToolOption(map, name, "openapi", agentName, {
+              sourceLabel: connection
+                ? `OpenAPI · ${connection.name}`
+                : "OpenAPI",
+            });
+          }
         }
       } else {
         addToolOption(
@@ -207,19 +359,23 @@ function buildToolCatalog(agents: AgentOption[]): ToolOption[] {
     }
 
     for (const builtin of agent.tools_config?.builtin_tools ?? []) {
-      addToolOption(map, str(builtin?.tool_name), "builtin", agentName);
+      addToolOption(map, str(builtin?.tool_name), "builtin", agentName, {
+        sourceLabel: "Built-in",
+      });
     }
     for (const mcp of agent.tools_config?.mcp_server_configs ?? []) {
       for (const name of [
         ...asToolNames(mcp?.allowed_tools),
         ...asToolNames(mcp?.tools),
       ]) {
-        addToolOption(map, name, "mcp", agentName);
+        addToolOption(map, name, "mcp", agentName, { sourceLabel: "MCP" });
       }
     }
     for (const openapi of agent.tools_config?.openapi_configs ?? []) {
       for (const name of asToolNames(openapi?.allowed_tools)) {
-        addToolOption(map, name, "openapi", agentName);
+        addToolOption(map, name, "openapi", agentName, {
+          sourceLabel: "OpenAPI",
+        });
       }
     }
   }
@@ -273,6 +429,13 @@ function policyToForm(policy: Policy): {
     form.outputSanitizer = Boolean(p.output_sanitizer);
   }
 
+  const condition = parseCondition(policy.condition);
+  if (condition) {
+    form.conditionParam = condition.param;
+    form.conditionOperator = condition.operator;
+    form.conditionValue = condition.value;
+  }
+
   return { effect: policy.effect, form };
 }
 
@@ -282,6 +445,7 @@ interface RuleBody {
   target: string;
   effect: PolicyEffect;
   params: Record<string, unknown>;
+  condition?: string | null;
 }
 
 // Build the rule bodies the form describes. Returns an error string instead
@@ -320,11 +484,13 @@ function buildRuleBodies(
 
   if (effect === "deny") {
     if (form.tools.length === 0) return { error: "Add at least one tool." };
+    const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
         target: `tool:${tool}`,
         effect,
         params: {},
+        condition,
       })),
     };
   }
@@ -336,11 +502,13 @@ function buildRuleBodies(
       return { bodies: [{ target: "*", effect, params }] };
     if (form.tools.length === 0)
       return { error: "Add a tool or require approval for all actions." };
+    const condition = buildCondition(form);
     return {
       bodies: form.tools.map((tool) => ({
         target: `tool:${tool}`,
         effect,
         params,
+        condition,
       })),
     };
   }
@@ -498,6 +666,8 @@ function ToolSelector({
           id: value,
           label: humanizeToolName(value),
           source: "custom",
+          sourceLabel: "Custom",
+          parameterKeys: [],
           agents: [],
         });
       }
@@ -557,9 +727,31 @@ function ToolSelector({
                     {tool.label}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                    <span>{tool.source}</span>
+                    <span>{tool.sourceLabel}</span>
                     <span>{agentLabel}</span>
                   </span>
+                  {tool.description && (
+                    <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
+                      {tool.description}
+                    </span>
+                  )}
+                  {tool.parameterKeys.length > 0 && (
+                    <span className="mt-2 flex flex-wrap gap-1">
+                      {tool.parameterKeys.slice(0, 4).map((param) => (
+                        <span
+                          key={param}
+                          className="border border-border/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        >
+                          {param}
+                        </span>
+                      ))}
+                      {tool.parameterKeys.length > 4 && (
+                        <span className="px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          +{tool.parameterKeys.length - 4}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </span>
               </div>
             );
@@ -590,6 +782,89 @@ function ToolSelector({
           />
         </div>
       </details>
+    </div>
+  );
+}
+
+function ToolConditionBuilder({
+  paramOptions,
+  form,
+  update,
+}: {
+  paramOptions: string[];
+  form: FormState;
+  update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+}) {
+  const hasCondition = Boolean(form.conditionParam.trim());
+
+  return (
+    <div className="border-t border-border/60 pt-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <Label className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          Parameter guard
+        </Label>
+        {hasCondition && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              update("conditionParam", "");
+              update("conditionValue", "");
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_minmax(0,1fr)]">
+        <Select
+          value={form.conditionParam || "__none"}
+          onValueChange={(value) =>
+            update("conditionParam", value === "__none" ? "" : value)
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Parameter" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">Any parameter</SelectItem>
+            {paramOptions.map((param) => (
+              <SelectItem key={param} value={param}>
+                {param}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={form.conditionOperator}
+          onValueChange={(value) =>
+            update("conditionOperator", value as ConditionOperator)
+          }
+          disabled={!hasCondition}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="equals">Equals</SelectItem>
+            <SelectItem value="not_equals">Not equals</SelectItem>
+            <SelectItem value="contains">Contains</SelectItem>
+            <SelectItem value="exists">Exists</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={form.conditionValue}
+          disabled={!hasCondition || form.conditionOperator === "exists"}
+          onChange={(event) => update("conditionValue", event.target.value)}
+          placeholder="Value"
+        />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Stored as a policy condition. Runtime enforcement for parameter
+        conditions needs the policy engine to evaluate rule conditions before
+        tool execution.
+      </p>
     </div>
   );
 }
@@ -725,7 +1000,11 @@ function previewParams(effect: PolicyEffect, form: FormState): string {
 export default function PolicyEditor({
   target,
   agents,
+  mcpInstances,
+  mcpServers,
+  openapiConnections,
   workspaceId,
+  currentUserId,
   returnHref = "/policies",
 }: PolicyEditorProps) {
   const router = useRouter();
@@ -769,8 +1048,27 @@ export default function PolicyEditor({
   }, [agents, selectedAgents, subjectType]);
 
   const toolCatalog = useMemo(
-    () => buildToolCatalog(affectedAgents),
-    [affectedAgents]
+    () =>
+      buildToolCatalog(
+        affectedAgents,
+        mcpInstances,
+        mcpServers,
+        openapiConnections
+      ),
+    [affectedAgents, mcpInstances, mcpServers, openapiConnections]
+  );
+
+  const selectedToolOptions = useMemo(
+    () => toolCatalog.filter((tool) => form.tools.includes(tool.id)),
+    [form.tools, toolCatalog]
+  );
+
+  const selectedToolParameterOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(selectedToolOptions.flatMap((tool) => tool.parameterKeys))
+      ).sort(),
+    [selectedToolOptions]
   );
 
   // Reset form whenever the route opens for a target.
@@ -810,6 +1108,13 @@ export default function PolicyEditor({
   const removeSelectedAgent = (agentId: string) => {
     setSelectedAgentIds((prev) => prev.filter((id) => id !== agentId));
     if (agentToAddId === agentId) setAgentToAddId("");
+  };
+
+  const addCurrentUserApprover = () => {
+    if (!currentUserId) return;
+    const ref = `user:${currentUserId}`;
+    if (form.approvers.includes(ref)) return;
+    update("approvers", [...form.approvers, ref]);
   };
 
   const resolveSubjects = (): Array<{
@@ -871,6 +1176,7 @@ export default function PolicyEditor({
               target: body.target,
               effect: body.effect,
               params: body.params,
+              condition: body.condition ?? null,
               enabled: form.enabled,
             }),
           }
@@ -892,6 +1198,7 @@ export default function PolicyEditor({
                 target: body.target,
                 effect: body.effect,
                 params: body.params,
+                condition: body.condition ?? null,
                 enabled: form.enabled,
               }),
             });
@@ -970,6 +1277,10 @@ export default function PolicyEditor({
     { label: "effect", value: EFFECT_STYLES[effect].label.toLowerCase() },
     { label: "target", value: previewTarget(effect, form) },
     { label: "params", value: previewParams(effect, form) },
+    {
+      label: "guard",
+      value: buildCondition(form) ?? "none",
+    },
     {
       label: "rules",
       value: compiledRuleCount === null ? "pending" : String(compiledRuleCount),
@@ -1222,6 +1533,13 @@ export default function PolicyEditor({
                   onChange={(next) => update("tools", next)}
                   emptyText="No tools are attached to the affected agents yet."
                 />
+                {form.tools.length > 0 && (
+                  <ToolConditionBuilder
+                    paramOptions={selectedToolParameterOptions}
+                    form={form}
+                    update={update}
+                  />
+                )}
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <LinkIcon className="h-3 w-3" />
                   Granting tool access is managed in the{" "}
@@ -1264,16 +1582,35 @@ export default function PolicyEditor({
                       onChange={(next) => update("tools", next)}
                       emptyText="No tools are attached to the affected agents yet."
                     />
+                    {form.tools.length > 0 && (
+                      <ToolConditionBuilder
+                        paramOptions={selectedToolParameterOptions}
+                        form={form}
+                        update={update}
+                      />
+                    )}
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <Label>Approvers</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Approvers</Label>
+                    {currentUserId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addCurrentUserApprover}
+                      >
+                        Me
+                      </Button>
+                    )}
+                  </div>
                   <TagInput
                     values={form.approvers}
                     onChange={(next) => update("approvers", next)}
-                    placeholder="user:<id> or group:<id>#member"
+                    placeholder="user:<id>, role:<name>, or group:<id>#member"
                     validate={(v) => SUBJECT_REF_RE.test(v)}
-                    invalidHint="Use a subject ref like user:<id> or group:<id>#member"
+                    invalidHint="Use a subject ref like user:<id>, role:<name>, or group:<id>#member"
                   />
                   <p className="text-xs text-muted-foreground">
                     Leave empty to allow any workspace member to approve.

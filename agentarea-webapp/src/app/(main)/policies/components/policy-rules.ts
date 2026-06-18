@@ -204,10 +204,9 @@ export type MatrixDimensionKey =
   | "safety"
   | "custom";
 
-// Classify a rule by effect + target into a matrix dimension. Anything that
-// isn't a known mapping (or carries a CEL condition) is "custom".
+// Classify a rule by effect + target into a matrix dimension. Unknown mappings
+// stay custom, but known tool rules may carry a condition and remain readable.
 export function ruleDimension(policy: Policy): MatrixDimensionKey {
-  if (policy.condition) return "custom";
   const { effect, target } = policy;
 
   if (effect === "cap") {
@@ -285,9 +284,10 @@ function describeRule(
   if (dimension === "tools") {
     const name = toolNameFromTarget(policy.target);
     const verb = policy.effect === "deny" ? "Deny" : "Allow";
+    const base = name === "*" ? "all tools" : name;
     return {
       label: `${verb} tool`,
-      value: name === "*" ? "all tools" : name,
+      value: policy.condition ? `${base} · when ${policy.condition}` : base,
     };
   }
 
@@ -300,9 +300,12 @@ function describeRule(
     if (policy.target === "*")
       return { label: "Approval for all actions", value: `by ${by}` };
     const name = toolNameFromTarget(policy.target);
+    const value = policy.condition
+      ? `by ${by} · when ${policy.condition}`
+      : `by ${by}`;
     return {
       label: `Approval for ${name === "*" ? "all tools" : name}`,
-      value: `by ${by}`,
+      value,
     };
   }
 
