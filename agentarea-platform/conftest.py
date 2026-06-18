@@ -3,6 +3,9 @@
 import asyncio
 import base64
 import json
+import os
+import shutil
+import tempfile
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -165,12 +168,48 @@ def admin_jwt_token(test_jwt_secret):
     )
 
 
-# Pytest configuration
-import os  # noqa: E402
+def _patch_temporal_test_server_startup() -> None:
+    """Make Temporal test-server downloads resilient in CI."""
+    try:
+        from temporalio.testing import WorkflowEnvironment
+    except ImportError:
+        return
+
+    if getattr(WorkflowEnvironment, "_agentarea_test_server_patch", False):
+        return
+
+    original_start_time_skipping = WorkflowEnvironment.start_time_skipping
+
+    async def start_time_skipping_with_retry(cls, **kwargs):
+        download_dir = os.environ.get("TEMPORAL_TEST_SERVER_DOWNLOAD_DIR")
+        if not download_dir:
+            download_dir = os.path.join(tempfile.gettempdir(), "agentarea-temporal-test-server")
+        os.makedirs(download_dir, exist_ok=True)
+        kwargs.setdefault("download_dest_dir", download_dir)
+
+        attempts = int(os.environ.get("TEMPORAL_TEST_SERVER_DOWNLOAD_ATTEMPTS", "4"))
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return await original_start_time_skipping(**kwargs)
+            except Exception as exc:
+                last_error = exc
+                if attempt == attempts:
+                    break
+                shutil.rmtree(download_dir, ignore_errors=True)
+                await asyncio.sleep(min(2**attempt, 10))
+        if last_error is None:
+            raise RuntimeError("Temporal test server did not start")
+        raise last_error
+
+    WorkflowEnvironment.start_time_skipping = classmethod(start_time_skipping_with_retry)
+    WorkflowEnvironment._agentarea_test_server_patch = True
 
 
 def pytest_configure(config):
     """Configure pytest with custom markers and environment variables."""
+    _patch_temporal_test_server_startup()
+
     # Set required environment variables for WorkflowSettings
     os.environ.setdefault("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
     os.environ.setdefault("WORKFLOW__TEMPORAL_NAMESPACE", "default")
