@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link as LinkIcon, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,10 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -20,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import { EFFECT_STYLES } from "./policy-effects";
@@ -47,12 +47,7 @@ interface PolicyEditorProps {
 
 // Effects the editor can author. (`allow` exists in the model but tool grants
 // live in the Access view; the editor focuses on restrictions.)
-const EDITABLE_EFFECTS: PolicyEffect[] = [
-  "cap",
-  "deny",
-  "approval",
-  "safety",
-];
+const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 
 // --- cap sub-form ---------------------------------------------------------
 
@@ -117,7 +112,10 @@ function str(value: unknown): string {
 
 // Seed the form from an existing rule (edit mode). Unknown shapes degrade
 // gracefully — fields that don't apply stay at their defaults.
-function policyToForm(policy: Policy): { effect: PolicyEffect; form: FormState } {
+function policyToForm(policy: Policy): {
+  effect: PolicyEffect;
+  form: FormState;
+} {
   const p =
     typeof policy.params === "object" && policy.params !== null
       ? (policy.params as Record<string, unknown>)
@@ -259,6 +257,7 @@ function EffectSegmented({
     <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
       {EDITABLE_EFFECTS.map((effect) => {
         const style = EFFECT_STYLES[effect];
+        const Icon = style.icon;
         const active = effect === value;
         return (
           <button
@@ -273,8 +272,9 @@ function EffectSegmented({
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <span
-              className={cn("h-2 w-2 shrink-0 rounded-full", style.dot)}
+            <Icon
+              className="h-3.5 w-3.5 shrink-0"
+              strokeWidth={1.8}
               aria-hidden
             />
             {style.label}
@@ -455,7 +455,7 @@ export default function PolicyEditor({
       setEffect("cap");
       setForm(EMPTY_FORM);
       setSelectedAgentId(
-        target.mode === "create-agent" ? target.agentId ?? "" : ""
+        target.mode === "create-agent" ? (target.agentId ?? "") : ""
       );
     }
     setError(null);
@@ -548,9 +548,12 @@ export default function PolicyEditor({
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(`/api/proxy/v1/policies/${target.policy.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/proxy/v1/policies/${target.policy.id}`,
+        {
+          method: "DELETE",
+        }
+      );
       if (!response.ok && response.status !== 204) {
         setError(await readDetail(response, "Delete failed"));
         return;
@@ -610,7 +613,11 @@ export default function PolicyEditor({
           {/* Effect */}
           <div className="space-y-1.5">
             <Label>Effect</Label>
-            <EffectSegmented value={effect} onChange={setEffect} disabled={isEdit} />
+            <EffectSegmented
+              value={effect}
+              onChange={setEffect}
+              disabled={isEdit}
+            />
             {isEdit && (
               <p className="text-xs text-muted-foreground">
                 The effect is fixed once a rule is created.
@@ -836,7 +843,10 @@ export default function PolicyEditor({
 }
 
 // Read a backend 4xx detail message, falling back to a status-based message.
-async function readDetail(response: Response, fallback: string): Promise<string> {
+async function readDetail(
+  response: Response,
+  fallback: string
+): Promise<string> {
   let detail = `${fallback} (${response.status})`;
   try {
     const body = (await response.json()) as { detail?: unknown };
