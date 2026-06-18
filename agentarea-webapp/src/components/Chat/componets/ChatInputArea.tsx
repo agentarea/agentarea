@@ -18,15 +18,9 @@ import {
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { ContextSelect } from "./ContextSelect";
 import { MentionMenu } from "../MentionMenu";
 
 const NO_PROJECT_VALUE = "__no_project__";
@@ -365,7 +359,7 @@ export function ChatInputArea({
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             {showContextControls ? (
-              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
                   <ContextSelect
                     icon={Bot}
@@ -519,55 +513,5 @@ export function ChatInputArea({
         accept="*/*"
       />
     </div>
-  );
-}
-
-interface ContextSelectOption {
-  id: string;
-  name: string;
-  description?: string | null;
-}
-
-function ContextSelect({
-  icon: Icon,
-  label,
-  value,
-  disabled,
-  options,
-  onValueChange,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  disabled?: boolean;
-  options: ContextSelectOption[];
-  onValueChange: (value: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger
-        aria-label={label}
-        className="h-8 min-w-0 rounded-full border-border/70 bg-muted/40 px-2 text-xs shadow-none"
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <SelectValue placeholder={label} />
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.id} value={option.id}>
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate">{option.name}</span>
-              {option.description ? (
-                <span className="truncate text-xs text-muted-foreground">
-                  {option.description}
-                </span>
-              ) : null}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
