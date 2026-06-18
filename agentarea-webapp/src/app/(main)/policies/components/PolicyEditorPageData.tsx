@@ -11,6 +11,16 @@ interface AgentLike {
   name: string;
   icon?: string | null;
   color_token?: string | null;
+  tools?: Array<{
+    type?: string | null;
+    name?: string | null;
+    settings?: Record<string, unknown> | null;
+  }> | null;
+  tools_config?: {
+    builtin_tools?: Array<Record<string, unknown>> | null;
+    mcp_server_configs?: Array<Record<string, unknown>> | null;
+    openapi_configs?: Array<Record<string, unknown>> | null;
+  } | null;
 }
 
 interface PolicyEditorPageDataProps {
@@ -45,6 +55,11 @@ export async function PolicyEditorPageData({
       name: agent.name,
       icon: agent.icon,
       color_token: agent.color_token,
+      tools: Array.isArray(agent.tools) ? agent.tools : null,
+      tools_config:
+        agent.tools_config && typeof agent.tools_config === "object"
+          ? agent.tools_config
+          : null,
     }));
   }
 

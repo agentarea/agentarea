@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,6 +33,8 @@ interface AgentOption {
   name: string;
   icon?: string | null;
   color_token?: string | null;
+  tools?: ToolConfigLike[] | null;
+  tools_config?: ToolsConfigLike | null;
 }
 
 interface PolicyEditorProps {
@@ -49,13 +52,41 @@ const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 
 type CapKind = "spend" | "service" | "tokens";
 type ScopeMode = "workspace" | "agents";
+type PolicyPeriod = "month" | "run";
+
+interface ToolConfigLike {
+  type?: string | null;
+  name?: string | null;
+  settings?: {
+    allowed_tools?: unknown;
+    disabled_methods?: unknown;
+  } | null;
+}
+
+interface ToolsConfigLike {
+  builtin_tools?: Array<{ tool_name?: string | null } | null> | null;
+  mcp_server_configs?: Array<{
+    allowed_tools?: unknown;
+    tools?: unknown;
+  } | null> | null;
+  openapi_configs?: Array<{
+    allowed_tools?: unknown;
+  } | null> | null;
+}
+
+interface ToolOption {
+  id: string;
+  label: string;
+  source: string;
+  agents: string[];
+}
 
 interface FormState {
   enabled: boolean;
   // cap
   capKind: CapKind;
   amountUsd: string;
-  period: "month" | "run";
+  period: PolicyPeriod;
   maxTokens: string;
   maxTokensPerCall: string;
   // deny / approval tools
@@ -107,6 +138,97 @@ function str(value: unknown): string {
   return "";
 }
 
+function asToolNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        return str(record.tool_name) || str(record.name);
+      }
+      return "";
+    })
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function humanizeToolName(name: string): string {
+  return name
+    .replace(/^tool:/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function addToolOption(
+  map: Map<string, ToolOption>,
+  id: string,
+  source: string,
+  agentName: string
+) {
+  const normalized = id.trim();
+  if (!normalized) return;
+  const existing = map.get(normalized);
+  if (existing) {
+    if (!existing.agents.includes(agentName)) existing.agents.push(agentName);
+    return;
+  }
+  map.set(normalized, {
+    id: normalized,
+    label: humanizeToolName(normalized),
+    source,
+    agents: [agentName],
+  });
+}
+
+function buildToolCatalog(agents: AgentOption[]): ToolOption[] {
+  const map = new Map<string, ToolOption>();
+  for (const agent of agents) {
+    const agentName = agent.name;
+
+    for (const tool of agent.tools ?? []) {
+      const name = str(tool?.name);
+      if (tool?.type === "mcp" || tool?.type === "openapi") {
+        const allowedTools = asToolNames(tool.settings?.allowed_tools);
+        for (const allowed of allowedTools) {
+          addToolOption(map, allowed, tool.type, agentName);
+        }
+        if (allowedTools.length === 0) {
+          addToolOption(map, name, tool.type, agentName);
+        }
+      } else {
+        addToolOption(
+          map,
+          name,
+          tool?.type === "code" ? "builtin" : "tool",
+          agentName
+        );
+      }
+    }
+
+    for (const builtin of agent.tools_config?.builtin_tools ?? []) {
+      addToolOption(map, str(builtin?.tool_name), "builtin", agentName);
+    }
+    for (const mcp of agent.tools_config?.mcp_server_configs ?? []) {
+      for (const name of [
+        ...asToolNames(mcp?.allowed_tools),
+        ...asToolNames(mcp?.tools),
+      ]) {
+        addToolOption(map, name, "mcp", agentName);
+      }
+    }
+    for (const openapi of agent.tools_config?.openapi_configs ?? []) {
+      for (const name of asToolNames(openapi?.allowed_tools)) {
+        addToolOption(map, name, "openapi", agentName);
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+}
+
 // Seed the form from an existing rule (edit mode). Unknown shapes degrade
 // gracefully — fields that don't apply stay at their defaults.
 function policyToForm(policy: Policy): {
@@ -137,7 +259,8 @@ function policyToForm(policy: Policy): {
       ? [policy.target.slice("tool:".length)]
       : [];
   } else if (policy.effect === "approval") {
-    form.approvalAllActions = policy.target === "*";
+    form.approvalAllActions =
+      policy.target === "*" || policy.target === "tool:*";
     form.tools =
       policy.target.startsWith("tool:") && policy.target !== "tool:*"
         ? [policy.target.slice("tool:".length)]
@@ -356,6 +479,121 @@ function TagInput({
   );
 }
 
+function ToolSelector({
+  options,
+  values,
+  onChange,
+  emptyText,
+}: {
+  options: ToolOption[];
+  values: string[];
+  onChange: (next: string[]) => void;
+  emptyText: string;
+}) {
+  const visibleOptions = useMemo(() => {
+    const byId = new Map(options.map((option) => [option.id, option]));
+    for (const value of values) {
+      if (!byId.has(value)) {
+        byId.set(value, {
+          id: value,
+          label: humanizeToolName(value),
+          source: "custom",
+          agents: [],
+        });
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [options, values]);
+
+  const toggle = (toolId: string) => {
+    if (values.includes(toolId)) {
+      onChange(values.filter((value) => value !== toolId));
+    } else {
+      onChange([...values, toolId]);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {visibleOptions.length > 0 ? (
+        <div className="grid gap-2 md:grid-cols-2">
+          {visibleOptions.map((tool) => {
+            const selected = values.includes(tool.id);
+            const agentLabel =
+              tool.agents.length > 0
+                ? tool.agents.length === 1
+                  ? tool.agents[0]
+                  : `${tool.agents.length} agents`
+                : "not in current agent catalog";
+            return (
+              <div
+                key={tool.id}
+                role="checkbox"
+                tabIndex={0}
+                aria-checked={selected}
+                onClick={() => toggle(tool.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggle(tool.id);
+                  }
+                }}
+                className={cn(
+                  "cursor-pointer",
+                  "flex min-h-[58px] items-start gap-2 border border-border/70 bg-background px-3 py-2 text-left transition-colors hover:bg-muted/30",
+                  selected && "shadow-[inset_2px_0_0_hsl(var(--primary))]"
+                )}
+              >
+                <Checkbox
+                  checked={selected}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="pointer-events-none mt-0.5"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {tool.label}
+                  </span>
+                  <span className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                    <span>{tool.source}</span>
+                    <span>{agentLabel}</span>
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground">
+          {emptyText}
+        </p>
+      )}
+
+      <details className="border-t border-border/60 pt-3">
+        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          Advanced selector
+        </summary>
+        <div className="mt-3">
+          <TagInput
+            values={values.filter(
+              (value) => !options.some((option) => option.id === value)
+            )}
+            onChange={(customValues) => {
+              const catalogValues = values.filter((value) =>
+                options.some((option) => option.id === value)
+              );
+              onChange([...catalogValues, ...customValues]);
+            }}
+            placeholder="Tool name"
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function MoneyField({
   id,
   label,
@@ -529,6 +767,11 @@ export default function PolicyEditor({
     if (subjectType === "workspace") return agents;
     return selectedAgents;
   }, [agents, selectedAgents, subjectType]);
+
+  const toolCatalog = useMemo(
+    () => buildToolCatalog(affectedAgents),
+    [affectedAgents]
+  );
 
   // Reset form whenever the route opens for a target.
   useEffect(() => {
@@ -950,7 +1193,7 @@ export default function PolicyEditor({
                         <Select
                           value={form.period}
                           onValueChange={(v) =>
-                            update("period", v as "month" | "run")
+                            update("period", v as PolicyPeriod)
                           }
                         >
                           <SelectTrigger id="cap-period">
@@ -958,7 +1201,7 @@ export default function PolicyEditor({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="month">Per month</SelectItem>
-                            <SelectItem value="run">Per run</SelectItem>
+                            <SelectItem value="run">Per task</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -973,10 +1216,11 @@ export default function PolicyEditor({
             <BlueprintSection code={detailsCode} title="Deny List">
               <div className="space-y-3 border border-border/70 bg-muted/20 p-4">
                 <Label>Denied tools</Label>
-                <TagInput
+                <ToolSelector
+                  options={toolCatalog}
                   values={form.tools}
                   onChange={(next) => update("tools", next)}
-                  placeholder="Tool name (e.g. send_email or *)"
+                  emptyText="No tools are attached to the affected agents yet."
                 />
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <LinkIcon className="h-3 w-3" />
@@ -1014,10 +1258,11 @@ export default function PolicyEditor({
                 {!form.approvalAllActions && (
                   <div className="space-y-1.5">
                     <Label>Tools requiring approval</Label>
-                    <TagInput
+                    <ToolSelector
+                      options={toolCatalog}
                       values={form.tools}
                       onChange={(next) => update("tools", next)}
-                      placeholder="Tool name (e.g. send_email)"
+                      emptyText="No tools are attached to the affected agents yet."
                     />
                   </div>
                 )}
