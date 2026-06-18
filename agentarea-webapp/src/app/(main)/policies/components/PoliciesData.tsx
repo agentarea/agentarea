@@ -1,6 +1,5 @@
 import EmptyState from "@/components/EmptyState";
 import { listAgents, listPolicies } from "@/lib/api";
-import { getAuthContext } from "@/lib/getAuthContext";
 import type { Policy } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
 
@@ -14,10 +13,9 @@ export async function PoliciesData() {
   let agents: AgentLike[] = [];
   let policiesError: string | null = null;
 
-  const [policiesRes, agentsRes, authContext] = await Promise.all([
+  const [policiesRes, agentsRes] = await Promise.all([
     listPolicies().catch((reason) => ({ data: null, error: reason })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
-    getAuthContext(),
   ]);
 
   if (policiesRes.error) {
@@ -49,16 +47,5 @@ export async function PoliciesData() {
     );
   }
 
-  const hasWorkspacePolicy = policies.some(
-    (p) => p.subject_type === "workspace"
-  );
-
-  return (
-    <PoliciesEditableView
-      policies={policies}
-      agents={agents}
-      workspaceId={authContext.workspaceId}
-      hasWorkspacePolicy={hasWorkspacePolicy}
-    />
-  );
+  return <PoliciesEditableView policies={policies} agents={agents} />;
 }

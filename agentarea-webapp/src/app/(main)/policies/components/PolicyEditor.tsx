@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Link as LinkIcon, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Link as LinkIcon, UsersRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -37,12 +32,10 @@ interface AgentOption {
 }
 
 interface PolicyEditorProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  target: PolicyEditorTarget | null;
+  target: PolicyEditorTarget;
   agents: AgentOption[];
   workspaceId: string | null;
-  onSaved: () => void;
+  returnHref?: string;
 }
 
 // Effects the editor can author. (`allow` exists in the model but tool grants
@@ -418,13 +411,12 @@ function NumberField({
 // --- editor ---------------------------------------------------------------
 
 export default function PolicyEditor({
-  open,
-  onOpenChange,
   target,
   agents,
   workspaceId,
-  onSaved,
+  returnHref = "/policies",
 }: PolicyEditorProps) {
+  const router = useRouter();
   const [effect, setEffect] = useState<PolicyEffect>("cap");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
@@ -434,16 +426,24 @@ export default function PolicyEditor({
   const isEdit = target?.mode === "edit";
 
   const subjectType = useMemo<"workspace" | "agent">(() => {
-    if (!target) return "workspace";
     if (target.mode === "edit")
       return target.policy.subject_type === "workspace" ? "workspace" : "agent";
     if (target.mode === "create-agent") return "agent";
     return "workspace";
   }, [target]);
 
-  // Reset form whenever the editor opens for a (new) target.
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
+    [agents, selectedAgentId]
+  );
+
+  const affectedAgents = useMemo(() => {
+    if (subjectType === "workspace") return agents;
+    return selectedAgent ? [selectedAgent] : [];
+  }, [agents, selectedAgent, subjectType]);
+
+  // Reset form whenever the route opens for a target.
   useEffect(() => {
-    if (!open || !target) return;
     if (target.mode === "edit") {
       const seeded = policyToForm(target.policy);
       setEffect(seeded.effect);
@@ -459,7 +459,7 @@ export default function PolicyEditor({
       );
     }
     setError(null);
-  }, [open, target]);
+  }, [target]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -534,8 +534,8 @@ export default function PolicyEditor({
         }
       }
 
-      onOpenChange(false);
-      onSaved();
+      router.push(returnHref);
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save policy");
     } finally {
@@ -558,8 +558,8 @@ export default function PolicyEditor({
         setError(await readDetail(response, "Delete failed"));
         return;
       }
-      onOpenChange(false);
-      onSaved();
+      router.push(returnHref);
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete policy");
     } finally {
@@ -574,20 +574,20 @@ export default function PolicyEditor({
       : "New workspace rule";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="rounded-lg border border-border bg-background p-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          <p className="text-sm text-muted-foreground">
             A policy is a single rule. It applies to{" "}
             {subjectType === "workspace"
               ? "every agent in this workspace"
               : "the selected agent"}
             . Tool access grants are managed in the Access view.
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
 
-        <div className="space-y-5 py-1">
+        <div className="mt-5 space-y-5">
           {/* Agent picker — only in agent create mode without a fixed agent */}
           {target?.mode === "create-agent" && (
             <div className="space-y-1.5">
@@ -703,12 +703,12 @@ export default function PolicyEditor({
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <LinkIcon className="h-3 w-3" />
                 Granting tool access is managed in the{" "}
-                <a
+                <Link
                   href="/policies?view=access"
                   className="text-primary underline-offset-4 hover:underline"
                 >
                   Access view
-                </a>
+                </Link>
                 .
               </p>
             </section>
@@ -822,7 +822,7 @@ export default function PolicyEditor({
               variant="outline"
               size="sm"
               disabled={saving}
-              onClick={() => onOpenChange(false)}
+              onClick={() => router.push(returnHref)}
             >
               Cancel
             </Button>
@@ -837,8 +837,57 @@ export default function PolicyEditor({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </section>
+
+      <aside className="h-fit rounded-lg border border-border bg-background p-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-muted/50">
+            <UsersRound className="h-4 w-4 text-muted-foreground" />
+          </span>
+          <div>
+            <h3 className="text-sm font-medium text-foreground">
+              Affected agents
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {subjectType === "workspace"
+                ? `${affectedAgents.length} workspace agent${affectedAgents.length === 1 ? "" : "s"}`
+                : selectedAgent
+                  ? "Selected agent"
+                  : "No agent selected"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {affectedAgents.length > 0 ? (
+            affectedAgents.slice(0, 8).map((agent) => (
+              <div
+                key={agent.id}
+                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <span className="truncate text-sm text-foreground">
+                  {agent.name}
+                </span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  Agent
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+              {subjectType === "workspace"
+                ? "No agents in this workspace yet."
+                : "Select an agent to preview the affected scope."}
+            </p>
+          )}
+          {affectedAgents.length > 8 && (
+            <p className="text-xs text-muted-foreground">
+              +{affectedAgents.length - 8} more
+            </p>
+          )}
+        </div>
+      </aside>
+    </div>
   );
 }
 
