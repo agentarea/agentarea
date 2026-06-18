@@ -126,6 +126,9 @@ jobs:
   platform-test:
     runs-on: ubuntu-latest
     needs: [changes, platform-lint]
+    env:
+      TEMPORAL_TEST_SERVER_DOWNLOAD_DIR: /tmp/temporal-test-server
+      TEMPORAL_TEST_SERVER_DOWNLOAD_ATTEMPTS: "5"
     # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
     if: |
       always() && !cancelled() && needs.platform-lint.result == 'success' && (
