@@ -9,6 +9,8 @@ import PolicyEditor, { type PolicyEditorTarget } from "./PolicyEditor";
 interface AgentLike {
   id: string;
   name: string;
+  icon?: string | null;
+  color_token?: string | null;
 }
 
 interface PolicyEditorPageDataProps {
@@ -41,6 +43,8 @@ export async function PolicyEditorPageData({
     agents = ((agentsRes.data as AgentLike[] | null) ?? []).map((agent) => ({
       id: agent.id,
       name: agent.name,
+      icon: agent.icon,
+      color_token: agent.color_token,
     }));
   }
 

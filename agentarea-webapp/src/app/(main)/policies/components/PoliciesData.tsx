@@ -6,6 +6,8 @@ import PoliciesEditableView from "./PoliciesEditableView";
 interface AgentLike {
   id: string;
   name: string;
+  icon?: string | null;
+  color_token?: string | null;
 }
 
 export async function PoliciesData() {
@@ -31,6 +33,8 @@ export async function PoliciesData() {
     agents = ((agentsRes.data as AgentLike[] | null) ?? []).map((a) => ({
       id: a.id,
       name: a.name,
+      icon: a.icon,
+      color_token: a.color_token,
     }));
   }
 

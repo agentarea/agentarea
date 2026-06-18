@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Link as LinkIcon, UsersRound, X } from "lucide-react";
+import { AgentIdentity } from "@/components/AgentIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ export type PolicyEditorTarget =
 interface AgentOption {
   id: string;
   name: string;
+  icon?: string | null;
+  color_token?: string | null;
 }
 
 interface PolicyEditorProps {
@@ -601,8 +604,12 @@ export default function PolicyEditor({
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
+                    <SelectItem
+                      key={agent.id}
+                      value={agent.id}
+                      textValue={agent.name}
+                    >
+                      <AgentIdentity agent={agent} size="xs" />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -863,14 +870,17 @@ export default function PolicyEditor({
             affectedAgents.slice(0, 8).map((agent) => (
               <div
                 key={agent.id}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                className="rounded-md border border-border px-3 py-2"
               >
-                <span className="truncate text-sm text-foreground">
-                  {agent.name}
-                </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  Agent
-                </span>
+                <AgentIdentity
+                  agent={agent}
+                  size="xs"
+                  right={
+                    <span className="text-[11px] text-muted-foreground">
+                      Agent
+                    </span>
+                  }
+                />
               </div>
             ))
           ) : (
