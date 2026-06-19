@@ -53,6 +53,8 @@ export const StartAgentButton = React.forwardRef<
   StartAgentButtonProps
 >(({ asChild = false, size = "md", className, children, disabled, isLoading = false, ...props }, ref) => {
   const icon = ICON[size ?? "md"];
+  const childElement = asChild ? (React.Children.only(children) as React.ReactElement) : null;
+  const label = childElement ? childElement.props.children : children;
   const content = (
     <>
       <img
@@ -62,7 +64,7 @@ export const StartAgentButton = React.forwardRef<
         width={icon}
         className="h-auto shrink-0 group-disabled:opacity-50"
       />
-      <span>{children ?? "Start agent"}</span>
+      <span>{label ?? "Start agent"}</span>
       <ArrowRight aria-hidden="true" size={icon} className="go-next shrink-0 group-disabled:!translate-x-0" />
       <span
         aria-hidden="true"
@@ -72,10 +74,9 @@ export const StartAgentButton = React.forwardRef<
   );
 
   if (asChild) {
-    const child = React.Children.only(children) as React.ReactElement;
-    return React.cloneElement(child, {
+    return React.cloneElement(childElement, {
       ...props,
-      className: cn(startAgentVariants({ size }), className, child.props.className),
+      className: cn(startAgentVariants({ size }), className, childElement.props.className),
       children: content,
       "aria-disabled": disabled || isLoading || undefined,
     });

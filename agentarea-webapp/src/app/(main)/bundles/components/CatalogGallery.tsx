@@ -700,36 +700,38 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       </button>
 
       {/* header — icon, title/badges, description, primary action */}
-      <div className="flex items-start gap-4">
-        {entry.iconUrl ? (
-          <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
-        ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-            <TypeIcon className="h-5 w-5 text-zinc-400" />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
-            {entry.verified && (
-              <Badge variant="blue" size="sm" className="gap-1">
-                <BadgeCheck className="h-3 w-3" />
-                Verified
-              </Badge>
-            )}
-            {entry.category && (
-              <Badge variant="light" size="sm" className="capitalize">
-                {entry.category}
-              </Badge>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          {entry.iconUrl ? (
+            <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
+          ) : (
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
+              <TypeIcon className="h-5 w-5 text-zinc-400" />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
+              {entry.verified && (
+                <Badge variant="blue" size="sm" className="gap-1">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </Badge>
+              )}
+              {entry.category && (
+                <Badge variant="light" size="sm" className="capitalize">
+                  {entry.category}
+                </Badge>
+              )}
+            </div>
+            {entry.description && (
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                {entry.description}
+              </p>
             )}
           </div>
-          {entry.description && (
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              {entry.description}
-            </p>
-          )}
         </div>
-        <div className="w-full max-w-[210px] shrink-0">
+        <div className="ml-[60px] w-full max-w-[210px] shrink-0 md:ml-auto">
           {entry.type === "skills" ? (
             <AddSkillToAgent skillId={entry.id} />
           ) : state.phase === "done" ? (
