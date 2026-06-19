@@ -36,6 +36,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -728,7 +729,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             </p>
           )}
         </div>
-        <div className="shrink-0">
+        <div className="w-full max-w-[210px] shrink-0">
           {entry.type === "skills" ? (
             <AddSkillToAgent skillId={entry.id} />
           ) : state.phase === "done" ? (
@@ -736,24 +737,19 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
               <Link href="/agents">Go to Agents</Link>
             </Button>
           ) : entry.type === "mcp_servers" ? (
-            <Button asChild>
+            <StartAgentButton asChild size="xs">
               <Link href={connectHref}>
-                <Plug className="h-4 w-4" />
                 Connect
               </Link>
-            </Button>
+            </StartAgentButton>
           ) : (
-            <Button
+            <StartAgentButton
+              size="xs"
               onClick={() => installable[entry.type]?.()}
               isLoading={installing}
             >
-              {!installing && (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
-                </>
-              )}
-            </Button>
+              {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
+            </StartAgentButton>
           )}
         </div>
       </div>
