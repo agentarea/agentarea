@@ -237,3 +237,46 @@ export function getApiKeyStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+export function getTriggerStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "active":
+      return { label: "Active", tone: "success" };
+    case "inactive":
+    case "paused":
+      return {
+        label: status === "paused" ? "Paused" : "Inactive",
+        tone: "neutral",
+      };
+    case "error":
+      return { label: "Error", tone: "danger" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getTriggerExecutionStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "completed":
+      return { label: "Completed", tone: "success" };
+    case "success":
+      return { label: "Success", tone: "success" };
+    case "running":
+    case "in_progress":
+      return { label: "Running", tone: "info", pulse: true };
+    case "pending":
+      return { label: "Pending", tone: "warning", pulse: true };
+    case "failed":
+      return { label: "Failed", tone: "danger" };
+    case "error":
+      return { label: "Error", tone: "danger" };
+    case "cancelled":
+      return { label: "Cancelled", tone: "neutral" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
