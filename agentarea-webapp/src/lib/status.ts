@@ -356,3 +356,21 @@ export function getPolicyStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+export function getBillingStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "active":
+      return { label: "Active", tone: "success" };
+    case "trialing":
+      return { label: "Trialing", tone: "info", pulse: true };
+    case "past_due":
+      return { label: "Past due", tone: "warning" };
+    case "canceled":
+    case "cancelled":
+      return { label: "Canceled", tone: "neutral" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}

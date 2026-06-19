@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import Table from "@/components/Table/Table";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getMcpCatalogStatusPresentation } from "@/lib/status";
 
 type MCPInstance = {
   id: string;
@@ -24,7 +26,20 @@ const columns = [
   {
     header: "Status",
     accessor: "status",
-    render: (value: string | null) => value ?? "—",
+    render: (value: string | null) => {
+      if (!value) return "—";
+      const status = getMcpCatalogStatusPresentation(value);
+      return (
+        <StatusIndicator
+          size="sm"
+          tone={status.tone}
+          pulse={status.pulse}
+          className="whitespace-nowrap"
+        >
+          {status.label}
+        </StatusIndicator>
+      );
+    },
   },
   {
     header: "Created",

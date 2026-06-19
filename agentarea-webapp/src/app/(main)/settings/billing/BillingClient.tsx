@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getBillingStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import type {
   BillingPlanKey,
@@ -126,7 +128,7 @@ function CurrentPlanSection({
                     {t(`plans.${subscription.plan}.description`)}
                   </p>
                 </div>
-                <StatusBadge status={subscription.status} />
+                <SubscriptionStatus status={subscription.status} />
               </div>
             </div>
           </Card>
@@ -174,30 +176,22 @@ function UsageSection({
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function SubscriptionStatus({ status }: { status: string }) {
   const t = useTranslations("BillingPage");
-  const isActive = status === "active";
+  const presentation = getBillingStatusPresentation(status);
   const label = t.has(`currentPlan.statuses.${status}`)
     ? t(`currentPlan.statuses.${status}`)
-    : humanizeKey(status);
+    : presentation.label || humanizeKey(status);
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 text-xs",
-        isActive
-          ? "text-green-600 dark:text-green-400"
-          : "text-amber-600 dark:text-amber-400"
-      )}
+    <StatusIndicator
+      size="sm"
+      tone={presentation.tone}
+      pulse={presentation.pulse}
+      className="whitespace-nowrap"
     >
-      <div
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          isActive ? "bg-green-500" : "bg-amber-500"
-        )}
-      />
       {label}
-    </div>
+    </StatusIndicator>
   );
 }
 
