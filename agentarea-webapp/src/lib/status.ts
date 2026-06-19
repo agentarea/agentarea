@@ -280,3 +280,79 @@ export function getTriggerExecutionStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+export function getAgentStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "active":
+      return { label: "Active", tone: "success" };
+    case "running":
+      return { label: "Running", tone: "info", pulse: true };
+    case "paused":
+      return { label: "Paused", tone: "neutral" };
+    case "inactive":
+    case "disabled":
+      return { label: "Inactive", tone: "neutral" };
+    case "error":
+    case "failed":
+      return { label: "Error", tone: "danger" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getPaymentStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "completed":
+    case "success":
+    case "paid":
+    case "settled":
+    case "confirmed":
+      return { label: "Completed", tone: "success" };
+    case "pending":
+    case "processing":
+      return { label: "Pending", tone: "warning", pulse: true };
+    case "failed":
+    case "error":
+      return { label: "Failed", tone: "danger" };
+    case "cancelled":
+    case "refunded":
+      return { label: "Cancelled", tone: "neutral" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+export function getInboxStatusPresentation(
+  status: string
+): StatusPresentation {
+  const normalized = normalizeStatus(status);
+
+  if (normalized === "waiting_for_approval" || normalized === "pending") {
+    return { label: "Needs approval", tone: "warning", pulse: true };
+  }
+
+  if (normalized === "completed" || normalized === "success") {
+    return { label: "Completed", tone: "success" };
+  }
+
+  return { label: "Failed", tone: "danger" };
+}
+
+export function getPolicyStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "enabled":
+    case "active":
+      return { label: "Enabled", tone: "success" };
+    case "disabled":
+    case "inactive":
+      return { label: "Disabled", tone: "neutral" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}

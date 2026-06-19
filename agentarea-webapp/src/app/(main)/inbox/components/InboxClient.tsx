@@ -23,6 +23,8 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import type { TaskWithAgent } from "@/lib/api";
 import { resolveEscalationAction } from "@/lib/server-actions";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getInboxStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 const FILTER_KEYS = ["all", "pending", "completed", "failed"] as const;
@@ -581,6 +583,7 @@ function DetailPane({
   const status = task.status;
   const pend = isPending(status);
   const norm = normalizeStatus(status);
+  const presentation = getInboxStatusPresentation(status);
   const agentName = (task as any).agent_name || "Unknown agent";
   const result = task.result;
   const resultText =
@@ -590,24 +593,17 @@ function DetailPane({
         ? JSON.stringify(result, null, 2)
         : null;
 
-  const statusPillCls =
-    norm === "pending"
-      ? "text-amber-600 bg-amber-500/10 dark:text-amber-400"
-      : norm === "completed"
-        ? "text-emerald-700 bg-emerald-500/10 dark:text-emerald-400"
-        : "text-red-700 bg-red-500/10 dark:text-red-400";
-
   return (
     <>
       <div className="flex-1 px-5 pt-5">
-        <span
-          className={cn(
-            "mb-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold",
-            statusPillCls
-          )}
+        <StatusIndicator
+          size="sm"
+          tone={presentation.tone}
+          pulse={presentation.pulse}
+          className="mb-3 whitespace-nowrap"
         >
-          <StatusIcon status={status} size={14} /> {STATUS_LABEL[norm]}
-        </span>
+          {presentation.label}
+        </StatusIndicator>
 
         <div className="mb-3.5 flex items-start justify-between gap-2">
           <h2 className="text-[19px] font-semibold leading-tight tracking-tight">
@@ -695,8 +691,17 @@ function DetailPane({
           </div>
         ) : (
           <div className="flex items-center gap-2 py-1.5 text-[12.5px] text-muted-foreground">
-            <StatusIcon status={status} size={16} /> This task is{" "}
-            {STATUS_LABEL[norm].toLowerCase()} — no action needed.
+            <StatusIndicator
+              size="sm"
+              tone={presentation.tone}
+              pulse={presentation.pulse}
+              className="whitespace-nowrap"
+            >
+              {presentation.label}
+            </StatusIndicator>
+            <span>
+              This task is {STATUS_LABEL[norm].toLowerCase()} — no action needed.
+            </span>
           </div>
         )}
       </div>

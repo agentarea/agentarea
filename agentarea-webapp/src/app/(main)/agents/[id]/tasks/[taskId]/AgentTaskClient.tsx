@@ -9,8 +9,9 @@ import {
   Square,
 } from "lucide-react";
 import AgentChat from "@/components/Chat/AgentChat";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTaskStatusPresentation } from "@/lib/status";
 import {
   cancelTask,
   getTaskMessages,
@@ -111,29 +112,17 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
 
   const getStatusBadge = () => {
     const status = task?.status || taskStatus?.status;
-    const statusColors = {
-      completed:
-        "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800",
-      running:
-        "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
-      failed:
-        "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800",
-      paused:
-        "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800",
-      blocked:
-        "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800",
-    };
+    const presentation = getTaskStatusPresentation(status || "unknown");
 
     return (
-      <Badge
-        variant="outline"
-        className={
-          statusColors[status as keyof typeof statusColors] ||
-          "border-gray-200 bg-gray-50 text-gray-700"
-        }
+      <StatusIndicator
+        size="sm"
+        tone={presentation.tone}
+        pulse={presentation.pulse}
+        className="whitespace-nowrap"
       >
-        {status}
-      </Badge>
+        {presentation.label}
+      </StatusIndicator>
     );
   };
 
