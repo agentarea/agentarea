@@ -222,3 +222,18 @@ export function getTaskStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+export function getApiKeyStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "active":
+      return { label: "Active", tone: "success" };
+    case "expired":
+      return { label: "Expired", tone: "warning" };
+    case "revoked":
+      return { label: "Revoked", tone: "danger" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
