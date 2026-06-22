@@ -41,7 +41,7 @@ class Part(BaseModel):
     raw: str | None = None  # base64-encoded bytes
     url: str | None = None
     filename: str | None = None
-    media_type: str | None = Field(None, alias="mediaType")
+    media_type: str | None = Field(default=None, alias="mediaType")
     metadata: dict[str, Any] | None = None
 
     @model_serializer
@@ -74,9 +74,9 @@ class Message(BaseModel):
     role: Literal["USER", "AGENT"]
     parts: list[Part]
     message_id: str = Field(default_factory=lambda: uuid4().hex, alias="messageId")
-    task_id: str | None = Field(None, alias="taskId")
-    context_id: str | None = Field(None, alias="contextId")
-    reference_task_ids: list[str] | None = Field(None, alias="referenceTaskIds")
+    task_id: str | None = Field(default=None, alias="taskId")
+    context_id: str | None = Field(default=None, alias="contextId")
+    reference_task_ids: list[str] | None = Field(default=None, alias="referenceTaskIds")
     extensions: list[str] | None = None
     metadata: dict[str, Any] | None = None
 
@@ -100,7 +100,7 @@ class Artifact(BaseModel):
     metadata: dict[str, Any] | None = None
     index: int = 0
     append: bool | None = None
-    last_chunk: bool | None = Field(None, alias="lastChunk")
+    last_chunk: bool | None = Field(default=None, alias="lastChunk")
 
 
 class Task(BaseModel):
@@ -322,7 +322,7 @@ class AgentSkill(BaseModel):
     input_modes: list[str] | None = Field(None, alias="inputModes")
     output_modes: list[str] | None = Field(None, alias="outputModes")
     security_requirements: list[dict[str, list[str]]] | None = Field(
-        None, alias="securityRequirements"
+        default=None, alias="securityRequirements"
     )
 
 
