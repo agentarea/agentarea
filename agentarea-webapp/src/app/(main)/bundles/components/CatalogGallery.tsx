@@ -17,7 +17,6 @@ import {
   Rows3,
   Search,
   ShieldCheck,
-  Sparkles,
   Star,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -1015,14 +1014,9 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     <div className="flex flex-col items-end gap-1.5">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button size="sm" isLoading={loading}>
-            {!loading && (
-              <>
-                <Sparkles className="h-3.5 w-3.5" />
-                Add to agent
-              </>
-            )}
-          </Button>
+          <StartAgentButton size="xs" isLoading={loading}>
+            Add to agent
+          </StartAgentButton>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-64 p-0">
           <Command>
