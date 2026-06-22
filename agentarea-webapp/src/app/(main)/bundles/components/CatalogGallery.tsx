@@ -730,7 +730,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             )}
           </div>
         </div>
-        <div className="ml-[60px] w-full max-w-[210px] shrink-0 md:ml-auto">
+        <CatalogActionSlot>
           {entry.type === "skills" ? (
             <AddSkillToAgent skillId={entry.id} />
           ) : state.phase === "done" ? (
@@ -752,7 +752,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
               {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
             </StartAgentButton>
           )}
-        </div>
+        </CatalogActionSlot>
       </div>
 
       {/* install feedback */}
@@ -997,7 +997,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
 
   if (phase === "done" && result) {
     return (
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-start gap-1.5 md:items-end">
         <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="h-4 w-4" />
           Added
@@ -1011,7 +1011,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
 
   const loading = phase === "loading";
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex w-full flex-col items-start gap-1.5 md:items-end">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <StartAgentButton size="xs" isLoading={loading}>
@@ -1051,19 +1051,29 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
           </Command>
         </PopoverContent>
       </Popover>
-      <button
+      <StartAgentButton
         type="button"
+        size="xs"
+        light
         onClick={addToWorkspace}
         disabled={loading}
-        className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        className="w-full"
       >
-        or add to workspace
-      </button>
+        Add to workspace
+      </StartAgentButton>
       {phase === "error" && (
-        <span className="max-w-[15rem] text-right text-xs text-red-600 dark:text-red-400">
+        <span className="max-w-[15rem] text-xs text-red-600 md:text-right dark:text-red-400">
           {message}
         </span>
       )}
+    </div>
+  );
+}
+
+function CatalogActionSlot({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="w-full pl-[60px] md:ml-auto md:max-w-[210px] md:pl-0">
+      {children}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function InstallAgentButton({ agentRef }: { agentRef: string }) {
   };
 
   return (
-    <div className="flex w-full max-w-[210px] flex-col items-start gap-1.5">
+    <div className="flex w-full flex-col items-start gap-1.5 md:max-w-[210px]">
       <StartAgentButton
         size="xs"
         onClick={onInstall}
