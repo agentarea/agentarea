@@ -9,6 +9,7 @@ import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/aut
 import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
 
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { AuthSocialLoadingOverlay } from "@/components/auth/AuthSocialLoadingOverlay";
 import { getAuthPageConfig } from "@/lib/auth/page-config";
 
 export const metadata: Metadata = {
@@ -44,7 +45,9 @@ export default async function LoginPage(props: OryPageParams) {
 
   return (
     <AuthLayout>
-      <Login flow={browserFlow} config={loginConfig} />
+      <AuthSocialLoadingOverlay>
+        <Login flow={browserFlow} config={loginConfig} />
+      </AuthSocialLoadingOverlay>
     </AuthLayout>
   );
 }

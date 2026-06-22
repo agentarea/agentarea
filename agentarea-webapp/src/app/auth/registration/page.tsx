@@ -7,6 +7,7 @@ import config from "@/ory.config";
 import { rewriteFlowForBrowser } from "@/lib/auth/browser-config";
 
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { AuthSocialLoadingOverlay } from "@/components/auth/AuthSocialLoadingOverlay";
 import { getAuthPageConfig } from "@/lib/auth/page-config";
 
 export const metadata: Metadata = {
@@ -25,7 +26,9 @@ export default async function RegistrationPage(props: OryPageParams) {
 
   return (
     <AuthLayout>
-      <Registration flow={browserFlow} config={registrationConfig} />
+      <AuthSocialLoadingOverlay>
+        <Registration flow={browserFlow} config={registrationConfig} />
+      </AuthSocialLoadingOverlay>
     </AuthLayout>
   );
 }
