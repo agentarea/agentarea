@@ -283,6 +283,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         top_level_text = execution_data.get("text")
                         if top_level_text:
                             message_texts = [top_level_text]
+                    if not message_texts:
+                        task_text = trigger.task_parameters.get("text")
+                        if isinstance(task_text, str) and task_text.strip():
+                            message_texts = [task_text.strip()]
                     query = (
                         "\n".join(message_texts)
                         if message_texts
@@ -561,6 +565,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     top_level_text = execution_data.get("text")
                     if top_level_text:
                         message_texts = [top_level_text]
+                if not message_texts:
+                    task_text = trigger.task_parameters.get("text")
+                    if isinstance(task_text, str) and task_text.strip():
+                        message_texts = [task_text.strip()]
                 query = (
                     "\n".join(message_texts)
                     if message_texts
