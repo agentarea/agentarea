@@ -57,9 +57,7 @@ def upsert_push_config(
     return params, stored
 
 
-def get_push_config(
-    parameters: dict[str, Any] | None, config_id: str
-) -> dict[str, Any] | None:
+def get_push_config(parameters: dict[str, Any] | None, config_id: str) -> dict[str, Any] | None:
     """Return a single stored push config by id, or None."""
     for cfg in list_push_configs(parameters):
         if cfg.get("id") == config_id:

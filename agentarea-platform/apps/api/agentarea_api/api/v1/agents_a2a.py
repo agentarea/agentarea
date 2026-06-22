@@ -682,9 +682,7 @@ async def handle_task_send(
         )
 
         # Register an inline push webhook if the client supplied one.
-        await _maybe_register_send_push_config(
-            params, task_service, secret_manager, created_task
-        )
+        await _maybe_register_send_push_config(params, task_service, secret_manager, created_task)
 
         # Create A2A protocol-compliant Task response (non-blocking: submitted state).
         # Callers retrieve the final result via tasks/get polling or message/stream.
@@ -812,9 +810,7 @@ async def handle_message_send(
         )
 
         # Register an inline push webhook if the client supplied one.
-        await _maybe_register_send_push_config(
-            params, task_service, secret_manager, created_task
-        )
+        await _maybe_register_send_push_config(params, task_service, secret_manager, created_task)
 
         # Create A2A protocol-compliant Task response (non-blocking: submitted state).
         # Callers retrieve the final result via tasks/get polling or message/stream.
@@ -934,9 +930,7 @@ async def handle_message_stream_sse(
         created_task = await task_service.submit_task(task)
 
         # Register an inline push webhook if the client supplied one.
-        await _maybe_register_send_push_config(
-            params, task_service, secret_manager, created_task
-        )
+        await _maybe_register_send_push_config(params, task_service, secret_manager, created_task)
 
         # Calculate task creation duration
         task_creation_duration_ms = (time.time() - start_time) * 1000
@@ -1429,17 +1423,11 @@ async def register_push_config(
     except UnsafeUrlError as e:
         raise A2AValidationError(f"Unsafe webhook url: {e}", -32602) from e
 
-    new_params, stored = upsert_push_config(
-        task.task_parameters, url, push_config.get("id")
-    )
+    new_params, stored = upsert_push_config(task.task_parameters, url, push_config.get("id"))
     token = push_config.get("token")
     if token:
-        await secret_manager.set_secret(
-            push_token_secret_name(str(task.id), stored["id"]), token
-        )
-    await task_service.task_repository.update_by_id(
-        task.id, TaskUpdate(task_parameters=new_params)
-    )
+        await secret_manager.set_secret(push_token_secret_name(str(task.id), stored["id"]), token)
+    await task_service.task_repository.update_by_id(task.id, TaskUpdate(task_parameters=new_params))
     return stored
 
 
@@ -1540,9 +1528,7 @@ async def handle_push_config_delete(
             task.id, TaskUpdate(task_parameters=new_params)
         )
         try:
-            await secret_manager.set_secret(
-                push_token_secret_name(str(task_id), config_id), ""
-            )
+            await secret_manager.set_secret(push_token_secret_name(str(task_id), config_id), "")
         except Exception:  # noqa: S110 — token cleanup is best-effort
             pass
     return JSONRPCResponse(jsonrpc="2.0", id=request_id, result=None)
@@ -1655,9 +1641,7 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
             name=agent.name,
             description=enhanced_description,
             supportedInterfaces=[
-                AgentInterface(
-                    url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0"
-                )
+                AgentInterface(url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0")
             ],
             version="1.0.0",
             provider=AgentProvider(
@@ -2072,9 +2056,7 @@ async def get_agent_well_known(
             name=agent.name,
             description=enhanced_description,
             supportedInterfaces=[
-                AgentInterface(
-                    url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0"
-                )
+                AgentInterface(url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0")
             ],
             version="1.0.0",
             provider=AgentProvider(organization="AgentArea", url=f"/api/v1/agents/{agent_id}"),
