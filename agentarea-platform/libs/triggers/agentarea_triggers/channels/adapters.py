@@ -334,6 +334,68 @@ class _ComposedAdapter:
         await self._send(channel_config, message)
 
 
+# ── A2A push webhook adapter ──────────────────────────────────────
+
+
+def _a2a_webhook_format(event: dict[str, Any], presentation: str) -> str:
+    """Format a workflow event as an A2A push-notification body (terminal only)."""
+    from agentarea_common.utils.a2a_push import build_push_notification_body
+
+    return build_push_notification_body(event) or ""
+
+
+def make_a2a_webhook_sender(
+    secret_reader: SecretReader,
+) -> Callable[[dict[str, Any], str], Awaitable[None]]:
+    """Build the sender that POSTs an A2A notification to a client webhook.
+
+    The webhook ``url`` is client-supplied, so it is SSRF-validated before every
+    send. The callback ``token`` lives in the secret store (never in task params)
+    and is echoed in ``X-A2A-Notification-Token`` so the client can authenticate us.
+    """
+
+    async def _send(channel_config: dict[str, Any], message: str) -> None:
+        from agentarea_common.utils.a2a_push import push_token_secret_name
+        from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+
+        url = channel_config.get("url")
+        if not url or not message:
+            return
+        try:
+            validate_outbound_url(url)
+        except UnsafeUrlError as e:
+            # Misconfigured/hostile target — do not retry.
+            raise FatalError(f"unsafe push webhook url: {e}") from e
+
+        headers = {"Content-Type": "application/json"}
+        task_id = channel_config.get("task_id")
+        config_id = channel_config.get("config_id")
+        if task_id and config_id:
+            token = await secret_reader.get_secret(push_token_secret_name(task_id, config_id))
+            if token:
+                headers["X-A2A-Notification-Token"] = token
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, content=message, headers=headers)
+        except httpx.HTTPError as e:
+            raise RetryableError(f"push webhook network error: {e}") from e
+
+        if resp.status_code >= 500 or resp.status_code == 429:
+            raise RetryableError(f"push webhook returned {resp.status_code}")
+        if resp.status_code >= 400:
+            raise FatalError(f"push webhook returned {resp.status_code}")
+
+    return _send
+
+
+def make_a2a_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
+    return _ComposedAdapter(
+        formatter=_a2a_webhook_format,
+        sender=make_a2a_webhook_sender(secret_reader),
+    )
+
+
 # ── Registration ──────────────────────────────────────────────────
 
 
@@ -356,3 +418,6 @@ def register_all_adapters(secret_reader: SecretReader) -> None:
             sender=make_http_sender(sender_cfg, secret_reader),
         )
         register_adapter(name, adapter)
+
+    # A2A push notifications: client-supplied webhooks, delivered as A2A events.
+    register_adapter("a2a_webhook", make_a2a_webhook_adapter(secret_reader))

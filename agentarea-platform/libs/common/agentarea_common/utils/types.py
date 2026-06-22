@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from pydantic import (
@@ -10,62 +10,74 @@ from pydantic import (
     Field,
     TypeAdapter,
     field_serializer,
-    model_validator,
+    model_serializer,
 )
 
 
 class TaskState(StrEnum):
-    SUBMITTED = "submitted"
-    WORKING = "working"
-    INPUT_REQUIRED = "input-required"
-    AUTH_REQUIRED = "auth-required"
-    COMPLETED = "completed"
-    CANCELED = "canceled"
-    FAILED = "failed"
-    REJECTED = "rejected"
-    UNKNOWN = "unknown"
+    # A2A v1.0.0 wire values use proto SCREAMING_SNAKE encoding.
+    SUBMITTED = "SUBMITTED"
+    WORKING = "WORKING"
+    INPUT_REQUIRED = "INPUT_REQUIRED"
+    AUTH_REQUIRED = "AUTH_REQUIRED"
+    COMPLETED = "COMPLETED"
+    CANCELED = "CANCELED"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+    UNKNOWN = "TASK_STATE_UNSPECIFIED"
 
 
-class TextPart(BaseModel):
-    kind: Literal["text"] = "text"
-    text: str
-    metadata: dict[str, Any] | None = None
+class Part(BaseModel):
+    """A2A v1.0.0 flat Part — a single model spanning text/file/data content.
 
+    Serializes ONLY the set (non-None) fields, always camelCase (``mediaType``),
+    and never emits a ``kind`` discriminator. A bare text part serializes to
+    exactly ``{"text": "..."}``.
+    """
 
-class FileContent(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    name: str | None = Field(None, alias="filename")
-    mime_type: str | None = Field(None, alias="mimeType")
-    data: str | None = None
-    uri: str | None = Field(None, alias="url")
-
-    @model_validator(mode="after")
-    def check_content(self) -> Self:
-        if not (self.data or self.uri):
-            raise ValueError("Either 'data' or 'uri' must be present in the file")
-        if self.data and self.uri:
-            raise ValueError("Only one of 'data' or 'uri' can be present")
-        return self
-
-
-class FilePart(BaseModel):
-    kind: Literal["file"] = "file"
-    file: FileContent
+    text: str | None = None
+    data: dict[str, Any] | None = None
+    raw: str | None = None  # base64-encoded bytes
+    url: str | None = None
+    filename: str | None = None
+    media_type: str | None = Field(None, alias="mediaType")
     metadata: dict[str, Any] | None = None
 
+    @model_serializer
+    def _serialize(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if self.text is not None:
+            out["text"] = self.text
+        if self.data is not None:
+            out["data"] = self.data
+        if self.raw is not None:
+            out["raw"] = self.raw
+        if self.url is not None:
+            out["url"] = self.url
+        if self.filename is not None:
+            out["filename"] = self.filename
+        if self.media_type is not None:
+            out["mediaType"] = self.media_type
+        if self.metadata is not None:
+            out["metadata"] = self.metadata
+        return out
 
-class DataPart(BaseModel):
-    kind: Literal["data"] = "data"
-    data: dict[str, Any]
-    metadata: dict[str, Any] | None = None
 
-
-Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator="kind")]
+def TextPart(text: str, metadata: dict[str, Any] | None = None) -> Part:  # noqa: N802
+    """Convenience constructor for a text-only :class:`Part` (PascalCase by design)."""
+    return Part(text=text, metadata=metadata)
 
 
 class Message(BaseModel):
-    role: Literal["user", "agent"]
+    model_config = ConfigDict(populate_by_name=True)
+    role: Literal["USER", "AGENT"]
     parts: list[Part]
+    message_id: str = Field(default_factory=lambda: uuid4().hex, alias="messageId")
+    task_id: str | None = Field(None, alias="taskId")
+    context_id: str | None = Field(None, alias="contextId")
+    reference_task_ids: list[str] | None = Field(None, alias="referenceTaskIds")
+    extensions: list[str] | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -104,7 +116,6 @@ class Task(BaseModel):
 class TaskStatusUpdateEvent(BaseModel):
     id: str
     status: TaskStatus
-    final: bool = False
     metadata: dict[str, Any] | None = None
 
 
@@ -117,12 +128,13 @@ class TaskArtifactUpdateEvent(BaseModel):
 class AuthenticationInfo(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    schemes: list[str]
+    scheme: str
     credentials: str | None = None
 
 
 class PushNotificationConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    id: str | None = None
     url: str
     token: str | None = None
     authentication: AuthenticationInfo | None = None
@@ -151,8 +163,15 @@ class TaskSendParams(BaseModel):
 
 
 class TaskPushNotificationConfig(BaseModel):
-    id: str
-    push_notification_config: PushNotificationConfig
+    """A2A v1.0.0 flat push-notification config (no nested object)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    task_id: str = Field(alias="taskId")
+    id: str | None = None
+    url: str
+    token: str | None = None
+    authentication: AuthenticationInfo | None = None
+    tenant: str | None = None
 
 
 ## RPC Messages
@@ -179,26 +198,8 @@ class JSONRPCResponse(JSONRPCMessage):
     error: JSONRPCError | None = None
 
 
-class SendTaskRequest(JSONRPCRequest):
-    method: Literal["tasks/send"] = "tasks/send"
-    params: TaskSendParams | None = None
-
-
-class SendTaskResponse(JSONRPCResponse):
-    result: Task | None = None
-
-
-class SendTaskStreamingRequest(JSONRPCRequest):
-    method: Literal["tasks/sendSubscribe"] = "tasks/sendSubscribe"
-    params: TaskSendParams | None = None
-
-
-class SendTaskStreamingResponse(JSONRPCResponse):
-    result: TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None = None
-
-
 class GetTaskRequest(JSONRPCRequest):
-    method: Literal["tasks/get"] = "tasks/get"
+    method: Literal["GetTask"] = "GetTask"
     params: TaskQueryParams | None = None
 
 
@@ -207,7 +208,7 @@ class GetTaskResponse(JSONRPCResponse):
 
 
 class CancelTaskRequest(JSONRPCRequest):
-    method: Literal["tasks/cancel",] = "tasks/cancel"
+    method: Literal["CancelTask"] = "CancelTask"
     params: TaskIdParams | None = None
 
 
@@ -215,39 +216,67 @@ class CancelTaskResponse(JSONRPCResponse):
     result: Task | None = None
 
 
-class SetTaskPushNotificationRequest(JSONRPCRequest):
-    method: Literal["tasks/pushNotification/set",] = "tasks/pushNotification/set"
+class ListTasksRequest(JSONRPCRequest):
+    method: Literal["ListTasks"] = "ListTasks"
+    params: dict[str, Any] | None = None
+
+
+class CreateTaskPushNotificationConfigRequest(JSONRPCRequest):
+    method: Literal["CreateTaskPushNotificationConfig"] = "CreateTaskPushNotificationConfig"
     params: TaskPushNotificationConfig | None = None
 
 
-class SetTaskPushNotificationResponse(JSONRPCResponse):
+class CreateTaskPushNotificationConfigResponse(JSONRPCResponse):
     result: TaskPushNotificationConfig | None = None
 
 
-class GetTaskPushNotificationRequest(JSONRPCRequest):
-    method: Literal["tasks/pushNotification/get",] = "tasks/pushNotification/get"
+class GetTaskPushNotificationConfigRequest(JSONRPCRequest):
+    method: Literal["GetTaskPushNotificationConfig"] = "GetTaskPushNotificationConfig"
     params: TaskIdParams | None = None
 
 
-class GetTaskPushNotificationResponse(JSONRPCResponse):
+class GetTaskPushNotificationConfigResponse(JSONRPCResponse):
     result: TaskPushNotificationConfig | None = None
 
 
-class TaskResubscriptionRequest(JSONRPCRequest):
-    method: Literal["tasks/resubscribe",] = "tasks/resubscribe"
+class ListTaskPushNotificationConfigsRequest(JSONRPCRequest):
+    method: Literal["ListTaskPushNotificationConfigs"] = "ListTaskPushNotificationConfigs"
+    params: TaskIdParams | None = None
+
+
+class DeleteTaskPushNotificationConfigRequest(JSONRPCRequest):
+    method: Literal["DeleteTaskPushNotificationConfig"] = "DeleteTaskPushNotificationConfig"
+    params: TaskIdParams | None = None
+
+
+class SubscribeToTaskRequest(JSONRPCRequest):
+    method: Literal["SubscribeToTask"] = "SubscribeToTask"
     params: TaskIdParams | None = None
 
 
 # A2A Message endpoints
+class SendMessageConfiguration(BaseModel):
+    """A2A v1.0.0 SendMessageConfiguration — per-send options incl. push registration."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    accepted_output_modes: list[str] | None = Field(None, alias="acceptedOutputModes")
+    history_length: int | None = Field(None, alias="historyLength")
+    task_push_notification_config: TaskPushNotificationConfig | None = Field(
+        None, alias="taskPushNotificationConfig"
+    )
+    blocking: bool | None = None
+
+
 class MessageSendParams(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     message: Message
     context_id: str | None = Field(None, alias="contextId")
+    configuration: SendMessageConfiguration | None = None
     metadata: dict[str, Any] | None = None
 
 
 class MessageSendRequest(JSONRPCRequest):
-    method: Literal["message/send"] = "message/send"
+    method: Literal["SendMessage"] = "SendMessage"
     params: MessageSendParams | None = None
 
 
@@ -256,7 +285,7 @@ class MessageSendResponse(JSONRPCResponse):
 
 
 class MessageStreamRequest(JSONRPCRequest):
-    method: Literal["message/stream"] = "message/stream"
+    method: Literal["SendStreamingMessage"] = "SendStreamingMessage"
     params: MessageSendParams | None = None
 
 
@@ -274,7 +303,6 @@ class AgentCapabilities(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     streaming: bool = False
     push_notifications: bool = Field(False, alias="pushNotifications")
-    state_transition_history: bool = Field(False, alias="stateTransitionHistory")
     extended_agent_card: bool = Field(False, alias="extendedAgentCard")
     extensions: list[dict[str, Any]] | None = None
 
@@ -293,13 +321,18 @@ class AgentSkill(BaseModel):
     examples: list[str] | None = None
     input_modes: list[str] | None = Field(None, alias="inputModes")
     output_modes: list[str] | None = Field(None, alias="outputModes")
+    security_requirements: list[dict[str, list[str]]] | None = Field(
+        None, alias="securityRequirements"
+    )
 
 
 class AgentInterface(BaseModel):
+    """A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple."""
+
     model_config = ConfigDict(populate_by_name=True)
     url: str
-    protocol_binding: str = Field(alias="protocolBinding")
-    protocol_version: str | None = Field(None, alias="protocolVersion")
+    protocol_binding: str = Field("JSONRPC", alias="protocolBinding")
+    protocol_version: str = Field("1.0", alias="protocolVersion")
     tenant: str | None = None
 
 
@@ -307,9 +340,8 @@ class AgentCard(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     name: str
     description: str | None = None
-    url: str
-    supported_interfaces: list[AgentInterface] | None = Field(None, alias="supportedInterfaces")
-    protocol_version: str = Field("0.3.0", alias="protocolVersion")
+    # The ONLY interface list; first entry is the preferred interface.
+    supported_interfaces: list[AgentInterface] = Field(alias="supportedInterfaces")
     version: str = "1.0.0"
     provider: AgentProvider | None = None
     documentation_url: str | None = Field(None, alias="documentationUrl")
@@ -322,33 +354,29 @@ class AgentCard(BaseModel):
         default=["text/plain", "application/json"], alias="defaultOutputModes"
     )
     skills: list[AgentSkill]
-    supports_authenticated_extended_card: bool = Field(
-        True, alias="supportsAuthenticatedExtendedCard"
-    )
     security_schemes: dict[str, Any] | None = Field(None, alias="securitySchemes")
     security: list[dict[str, list[str]]] | None = None
 
 
 # A2A Agent Card endpoints
-class AuthenticatedExtendedCardParams(BaseModel):
+class ExtendedAgentCardParams(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
-class AuthenticatedExtendedCardRequest(JSONRPCRequest):
-    method: Literal["agent/authenticatedExtendedCard"] = "agent/authenticatedExtendedCard"
-    params: AuthenticatedExtendedCardParams | None = None
+class GetExtendedAgentCardRequest(JSONRPCRequest):
+    method: Literal["GetExtendedAgentCard"] = "GetExtendedAgentCard"
+    params: ExtendedAgentCardParams | None = None
 
 
-class AuthenticatedExtendedCardResponse(JSONRPCResponse):
+class GetExtendedAgentCardResponse(JSONRPCResponse):
     result: AgentCard | None = None
 
 
-# SSE stream response types
+# SSE StreamResponse oneof members (no ``kind`` discriminators; wrapped by member name)
 class StreamResponseTask(BaseModel):
-    """SSE event: initial task object."""
+    """StreamResponse member: initial task object."""
 
     model_config = ConfigDict(populate_by_name=True)
-    kind: Literal["task"] = "task"
     id: str
     context_id: str | None = Field(None, alias="contextId")
     status: TaskStatus
@@ -358,40 +386,40 @@ class StreamResponseTask(BaseModel):
 
 
 class StreamResponseStatusUpdate(BaseModel):
-    """SSE event: task status change."""
+    """StreamResponse member: task status change."""
 
     model_config = ConfigDict(populate_by_name=True)
-    kind: Literal["status-update"] = "status-update"
     task_id: str = Field(alias="taskId")
     context_id: str | None = Field(None, alias="contextId")
     status: TaskStatus
-    final: bool = False
+    metadata: dict[str, Any] | None = None
 
 
 class StreamResponseArtifactUpdate(BaseModel):
-    """SSE event: artifact/output chunk."""
+    """StreamResponse member: artifact/output chunk."""
 
     model_config = ConfigDict(populate_by_name=True)
-    kind: Literal["artifact-update"] = "artifact-update"
     task_id: str = Field(alias="taskId")
     context_id: str | None = Field(None, alias="contextId")
     artifact: Artifact
     append: bool = False
     last_chunk: bool = Field(False, alias="lastChunk")
+    metadata: dict[str, Any] | None = None
 
 
 A2ARequest = TypeAdapter(
     Annotated[
         MessageSendRequest
         | MessageStreamRequest
-        | SendTaskRequest
         | GetTaskRequest
         | CancelTaskRequest
-        | SetTaskPushNotificationRequest
-        | GetTaskPushNotificationRequest
-        | TaskResubscriptionRequest
-        | SendTaskStreamingRequest
-        | AuthenticatedExtendedCardRequest,
+        | ListTasksRequest
+        | CreateTaskPushNotificationConfigRequest
+        | GetTaskPushNotificationConfigRequest
+        | ListTaskPushNotificationConfigsRequest
+        | DeleteTaskPushNotificationConfigRequest
+        | SubscribeToTaskRequest
+        | GetExtendedAgentCardRequest,
         Field(discriminator="method"),
     ]
 )
@@ -459,9 +487,27 @@ class ContentTypeNotSupportedError(JSONRPCError):
     data: None = None
 
 
-class VersionNotSupportedError(JSONRPCError):
+class InvalidAgentResponseError(JSONRPCError):
+    code: int = -32006
+    message: str = "Invalid agent response"
+    data: None = None
+
+
+class ExtendedAgentCardNotConfiguredError(JSONRPCError):
     code: int = -32007
-    message: str = "Version not supported"
+    message: str = "Extended Agent Card is not configured"
+    data: None = None
+
+
+class ExtensionSupportRequiredError(JSONRPCError):
+    code: int = -32008
+    message: str = "Extension support is required"
+    data: None = None
+
+
+class VersionNotSupportedError(JSONRPCError):
+    code: int = -32009
+    message: str = "A2A version not supported"
     data: None = None
 
 

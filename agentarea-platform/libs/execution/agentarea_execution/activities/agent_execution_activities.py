@@ -1322,6 +1322,36 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # to avoid N+1 lookups when a single batch carries multiple
             # events for the same task.
             channel_origin_cache: dict[str, dict | None] = {}
+            push_configs_cache: dict[str, list] = {}
+
+            async def _resolve_push_configs(task_id_str: str) -> list:
+                if task_id_str in push_configs_cache:
+                    return push_configs_cache[task_id_str]
+                configs: list = []
+                try:
+                    from uuid import UUID as _UUID
+
+                    from agentarea_tasks.infrastructure.repository import (
+                        TaskRepository as _TaskRepository,
+                    )
+
+                    user_context_inner = UserContext(
+                        user_id=request.user_id,
+                        workspace_id=request.workspace_id,
+                    )
+                    async with ActivityContext(container, user_context_inner) as ctx_inner:
+                        session_inner = container._database.async_session_factory()
+                        ctx_inner._sessions.append(session_inner)
+                        task_repo = _TaskRepository(session_inner, user_context_inner)
+                        task = await task_repo.get_task(_UUID(task_id_str))
+                        if task and task.parameters:
+                            raw = task.parameters.get("a2a_push_configs")
+                            if isinstance(raw, list):
+                                configs = raw
+                except Exception:
+                    logger.exception("a2a push-config lookup failed for task=%s", task_id_str)
+                push_configs_cache[task_id_str] = configs
+                return configs
 
             async def _resolve_channel_origin(task_id_str: str) -> dict | None:
                 if task_id_str in channel_origin_cache:
@@ -1451,6 +1481,27 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             broker=dependencies.broker_client,
                             stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
                         )
+
+                        # A2A push notifications: one delivery per registered webhook.
+                        if task_id and task_id != "unknown":
+                            for cfg in await _resolve_push_configs(str(task_id)):
+                                cfg_id = cfg.get("id")
+                                cfg_url = cfg.get("url")
+                                if not cfg_id or not cfg_url:
+                                    continue
+                                await emit_channel_delivery(
+                                    event=event_with_id,
+                                    channel_origin={
+                                        "type": "a2a_webhook",
+                                        "url": cfg_url,
+                                        "task_id": str(task_id),
+                                        "config_id": cfg_id,
+                                        "presentation": "silent",
+                                    },
+                                    broker=dependencies.broker_client,
+                                    stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                                    dedup_suffix=f"a2a:{cfg_id}",
+                                )
 
                     events_published += 1
 

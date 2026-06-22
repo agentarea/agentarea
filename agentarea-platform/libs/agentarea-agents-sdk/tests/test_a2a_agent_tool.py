@@ -92,7 +92,7 @@ class TestA2AAgentToolExecute:
                 "artifacts": [
                     {
                         "parts": [
-                            {"kind": "text", "text": "The answer is 42."},
+                            {"text": "The answer is 42."},
                         ]
                     }
                 ],
@@ -188,7 +188,7 @@ class TestA2AAgentToolExecute:
             "result": {
                 "id": "paid-task",
                 "status": {"state": "completed"},
-                "artifacts": [{"parts": [{"kind": "text", "text": "paid result"}]}],
+                "artifacts": [{"parts": [{"text": "paid result"}]}],
             },
         }
         payment_calls = []
@@ -235,7 +235,7 @@ class TestA2AAgentToolExecute:
         assert result["payment"]["amount_usd"] == 0.25
         assert payment_calls[0]["response_status"] == 402
         assert payment_calls[0]["tool_name"] == "delegate_to_researcher"
-        assert payment_calls[0]["request_body"]["method"] == "message/send"
+        assert payment_calls[0]["request_body"]["method"] == "SendMessage"
 
     @pytest.mark.asyncio
     async def test_execute_paid_a2a_surfaces_payment_failure(self):
@@ -301,8 +301,8 @@ class TestExtractTaskResult:
     def test_extract_text_artifacts(self):
         task = {
             "artifacts": [
-                {"parts": [{"kind": "text", "text": "line1"}]},
-                {"parts": [{"kind": "text", "text": "line2"}]},
+                {"parts": [{"text": "line1"}]},
+                {"parts": [{"text": "line2"}]},
             ]
         }
         assert self.tool._extract_task_result(task) == "line1\nline2"
@@ -310,7 +310,7 @@ class TestExtractTaskResult:
     def test_extract_data_artifact(self):
         task = {
             "artifacts": [
-                {"parts": [{"kind": "data", "data": {"key": "val"}}]},
+                {"parts": [{"data": {"key": "val"}}]},
             ]
         }
         result = self.tool._extract_task_result(task)
@@ -322,7 +322,7 @@ class TestExtractTaskResult:
             "status": {
                 "state": "completed",
                 "message": {
-                    "parts": [{"kind": "text", "text": "Done via status"}],
+                    "parts": [{"text": "Done via status"}],
                 },
             },
         }

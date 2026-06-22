@@ -139,6 +139,9 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                         # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
                         value = {}
                     update_data["task_metadata"] = value
+                elif field == "task_parameters":
+                    # Domain field task_parameters maps to ORM column `parameters`.
+                    update_data["parameters"] = value
                 else:
                     update_data[field] = value
 

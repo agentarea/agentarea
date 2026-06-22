@@ -35,11 +35,24 @@ class LazySecretReader:
 
         database = get_database()
         async with database.async_session_factory() as session:
-            # Resolve workspace context from trigger_id in the secret name.
-            # Secret name pattern: "channel_cred:<channel_type>:<trigger_id>"
+            # Resolve workspace context from an id embedded in the secret name.
+            # Channel creds:   "channel_cred:<channel_type>:<trigger_id>"  → TriggerORM
+            # A2A push tokens: "a2a_push_token:<task_id>:<config_id>"      → TaskORM
             user_context: UserContext | None = None
             parts = name.split(":")
-            if len(parts) >= 3:
+            if name.startswith("a2a_push_token:") and len(parts) >= 3:
+                try:
+                    from agentarea_tasks.infrastructure.orm import TaskORM
+
+                    task_orm = await session.get(TaskORM, UUID(parts[1]))
+                    if task_orm:
+                        user_context = UserContext(
+                            user_id=str(getattr(task_orm, "created_by", "") or ""),
+                            workspace_id=str(task_orm.workspace_id),
+                        )
+                except (ValueError, Exception):
+                    logger.exception("Failed to resolve task for secret '%s'", name)
+            elif len(parts) >= 3:
                 try:
                     trigger_id = UUID(parts[-1])
                     trigger_orm = await session.get(TriggerORM, trigger_id)

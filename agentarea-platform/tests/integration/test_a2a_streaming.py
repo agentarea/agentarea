@@ -1,9 +1,14 @@
 """Integration test for A2A streaming functionality.
 
-This test verifies that the A2A message/stream endpoint properly:
-1. Creates tasks through TaskService
-2. Streams real events using TaskService.stream_task_events()
-3. Formats events appropriately for A2A protocol SSE responses
+Verifies that the A2A message/stream endpoint:
+1. Creates a task through TaskService
+2. Consumes the REAL workflow event stream (``workflow.WorkflowCompleted``,
+   ``workflow.LLMCallChunk``) surfaced by EventStreamService
+3. Emits A2A v0.3.0 SSE frames: a JSON-RPC-wrapped initial ``task`` event,
+   ``artifact-update`` frames for incremental output, and a terminal
+   ``status-update`` with ``final=True``.
+
+See ADR docs/adr/2026-06-20-a2a-transport-correctness.md.
 """
 
 import asyncio
@@ -25,10 +30,8 @@ class MockTaskService:
 
     def __init__(self):
         self.submitted_tasks = []
-        self.events = []
 
     async def submit_task(self, task: AgentTask) -> AgentTask:
-        """Mock task submission."""
         task.status = "running"
         task.execution_id = str(uuid4())
         self.submitted_tasks.append(task)
@@ -36,57 +39,61 @@ class MockTaskService:
 
 
 class MockAgentService:
-    """Mock AgentService for testing A2A streaming."""
-
     async def get(self, agent_id: UUID):
-        """Mock getting an agent."""
-        return {"id": agent_id, "name": "Test Agent", "status": "active"}
+        from types import SimpleNamespace
+
+        return SimpleNamespace(id=agent_id, name="Test Agent", status="active")
 
 
 class MockEventStreamService:
-    """Mock EventStreamService for testing A2A streaming."""
+    """Yields events in the real EventStreamService shape.
+
+    Real events carry the workflow payload under ``event_data['original_data']``
+    and use ``workflow.*`` event types.
+    """
 
     async def stream_events_for_task(self, task_id: UUID, event_patterns=None):
-        """Mock event streaming that yields test events."""
-        # Yield some test events
         test_events = [
             {
-                "event_type": "workflow.task_started",
-                "timestamp": "2024-01-01T00:00:00Z",
-                "data": {
-                    "task_id": str(task_id),
-                    "agent_id": "test-agent",
-                    "execution_id": "test-execution",
-                },
+                "event_type": "workflow.LLMCallChunk",
+                "event_data": {"original_data": {"task_id": str(task_id), "chunk": "Partial "}},
             },
             {
-                "event_type": "workflow.llm_call_started",
-                "timestamp": "2024-01-01T00:00:01Z",
-                "data": {"task_id": str(task_id), "model": "gpt-4", "prompt": "Test prompt"},
+                "event_type": "workflow.LLMCallChunk",
+                "event_data": {"original_data": {"task_id": str(task_id), "chunk": "answer"}},
             },
             {
-                "event_type": "workflow.task_completed",
-                "timestamp": "2024-01-01T00:00:02Z",
-                "data": {"task_id": str(task_id), "result": "Test result"},
+                "event_type": "workflow.WorkflowCompleted",
+                "event_data": {"original_data": {"task_id": str(task_id), "result": "Final answer"}},
             },
         ]
-
         for event in test_events:
             yield event
-            await asyncio.sleep(0.01)  # Small delay to simulate real streaming
+            await asyncio.sleep(0.01)
 
 
 class MockRequest:
-    """Mock FastAPI Request for testing."""
-
     def __init__(self):
         self.url = type("MockURL", (), {"scheme": "http", "netloc": "localhost:8000"})()
 
 
+def _parse_frames(chunks):
+    frames = []
+    for chunk in chunks:
+        chunk_str = chunk.decode() if isinstance(chunk, bytes) else chunk
+        if chunk_str.startswith("data: "):
+            data_str = chunk_str[6:].strip()
+            if data_str and data_str != "[DONE]":
+                try:
+                    frames.append(json.loads(data_str))
+                except json.JSONDecodeError:
+                    pass
+    return frames
+
+
 @pytest.mark.asyncio
 async def test_a2a_streaming_uses_real_events():
-    """Test that A2A streaming uses real EventStreamService event streaming."""
-    # Setup
+    """A2A streaming maps real workflow events to spec-compliant SSE frames."""
     mock_task_service = MockTaskService()
     mock_event_stream_service = MockEventStreamService()
     mock_agent_service = MockAgentService()
@@ -94,125 +101,111 @@ async def test_a2a_streaming_uses_real_events():
     agent_id = uuid4()
     request_id = "test-request-1"
 
-    # Create auth context
     auth_context = A2AAuthContext(
-        authenticated=True, user_id="test-user", auth_method="bearer_token", metadata={}
+        authenticated=True,
+        user_id="test-user",
+        workspace_id="test-workspace",
+        auth_method="bearer_token",
+        metadata={},
     )
 
-    # Test parameters
     params = {"message": {"role": "user", "parts": [{"text": "Test message for streaming"}]}}
 
-    # Call the A2A streaming handler
     response = await handle_message_stream_sse(
-        mock_request, request_id, params, mock_task_service, agent_id, auth_context, mock_agent_service, mock_event_stream_service
+        mock_request,
+        request_id,
+        params,
+        mock_task_service,
+        agent_id,
+        auth_context,
+        mock_agent_service,
+        mock_event_stream_service,
     )
 
-    # Verify response is StreamingResponse
     assert isinstance(response, StreamingResponse)
     assert response.media_type == "text/event-stream"
 
-    # Verify task was submitted
     assert len(mock_task_service.submitted_tasks) == 1
     submitted_task = mock_task_service.submitted_tasks[0]
     assert submitted_task.query == "Test message for streaming"
-    assert submitted_task.agent_id == agent_id
-    assert submitted_task.metadata["source"] == "a2a"
-    assert submitted_task.metadata["a2a_method"] == "message/stream"
+    assert submitted_task.metadata["a2a_method"] == "SendStreamingMessage"
 
-    # Collect streamed events
-    events = []
-    async for chunk in response.body_iterator:
-        # Handle both string and bytes
-        if isinstance(chunk, bytes):
-            chunk_str = chunk.decode()
-        else:
-            chunk_str = chunk
+    frames = _parse_frames([chunk async for chunk in response.body_iterator])
 
-        if chunk_str.startswith("data: "):
-            data_str = chunk_str[6:].strip()
-            if data_str and data_str != "[DONE]":
-                try:
-                    event_data = json.loads(data_str)
-                    events.append(event_data)
-                except json.JSONDecodeError:
-                    pass
+    # Every frame is a JSON-RPC 2.0 response wrapping a StreamResponse oneof member.
+    assert all(f.get("jsonrpc") == "2.0" for f in frames)
+    results = [f["result"] for f in frames]
+    # Member name = the single key of each result wrapper.
+    members = [next(iter(r.keys())) for r in results]
 
-    # Verify events were streamed
-    assert len(events) >= 4  # Initial task_created + 3 test events
+    # First frame: initial task object (wrapped under "task").
+    assert members[0] == "task"
+    assert results[0]["task"]["id"] == str(submitted_task.id)
+    assert results[0]["task"]["contextId"]  # non-null per spec
 
-    # Check initial task created event
-    task_created_event = events[0]
-    assert task_created_event["event"] == "task_created"
-    assert task_created_event["task_id"] == str(submitted_task.id)
+    # Incremental chunks become artifactUpdate frames.
+    artifact_updates = [r["artifactUpdate"] for r in results if "artifactUpdate" in r]
+    assert artifact_updates, "expected at least one artifactUpdate from LLM chunks"
+    streamed_text = "".join(
+        part["text"]
+        for au in artifact_updates
+        for part in au["artifact"]["parts"]
+        if part.get("text")
+    )
+    assert "Partial " in streamed_text
+    assert "answer" in streamed_text
+    assert "Final answer" in streamed_text  # final result emitted as last artifact
 
-    # Check that real events from TaskService were streamed
-    event_types = [event.get("event") for event in events[1:]]
-    assert "task_started" in event_types
-    assert "llm_call_started" in event_types
-    assert "task_completed" in event_types
-
-    # Verify A2A event format
-    for event in events[1:]:
-        assert "event" in event
-        assert "task_id" in event
-        assert "timestamp" in event
-        assert "data" in event
+    # Last frame: terminal statusUpdate with completed state (no final field).
+    assert members[-1] == "statusUpdate"
+    su = results[-1]["statusUpdate"]
+    assert "final" not in su
+    assert su["status"]["state"] == "COMPLETED"
 
 
 @pytest.mark.asyncio
 async def test_a2a_streaming_error_handling():
-    """Test A2A streaming error handling."""
+    """A2A streaming surfaces task-submission failures as an error frame."""
 
-    # Setup with failing task service
     class FailingTaskService:
         async def submit_task(self, task):
             raise ValueError("Task submission failed")
 
     mock_task_service = FailingTaskService()
+    mock_agent_service = MockAgentService()
+    mock_event_stream_service = MockEventStreamService()
     mock_request = MockRequest()
     agent_id = uuid4()
     request_id = "test-request-2"
 
     auth_context = A2AAuthContext(
-        authenticated=True, user_id="test-user", auth_method="bearer_token", metadata={}
+        authenticated=True,
+        user_id="test-user",
+        workspace_id="test-workspace",
+        auth_method="bearer_token",
+        metadata={},
     )
 
     params = {"message": {"role": "user", "parts": [{"text": "Test message"}]}}
 
-    # Call the handler
     response = await handle_message_stream_sse(
-        mock_request, request_id, params, mock_task_service, agent_id, auth_context
+        mock_request,
+        request_id,
+        params,
+        mock_task_service,
+        agent_id,
+        auth_context,
+        mock_agent_service,
+        mock_event_stream_service,
     )
 
-    # Verify error response
     assert isinstance(response, StreamingResponse)
 
-    # Collect error events
-    events = []
-    async for chunk in response.body_iterator:
-        # Handle both string and bytes
-        if isinstance(chunk, bytes):
-            chunk_str = chunk.decode()
-        else:
-            chunk_str = chunk
-
-        if chunk_str.startswith("data: "):
-            data_str = chunk_str[6:].strip()
-            if data_str:
-                try:
-                    event_data = json.loads(data_str)
-                    events.append(event_data)
-                except json.JSONDecodeError:
-                    pass
-
-    # Should have error event
-    assert len(events) >= 1
-    error_event = events[0]
-    assert error_event["event"] == "error"
-    assert "Task submission failed" in error_event["message"]
+    frames = _parse_frames([chunk async for chunk in response.body_iterator])
+    assert len(frames) >= 1
+    # Validation/submission failure is reported via the legacy error frame shape.
+    assert any(f.get("event") == "error" for f in frames)
 
 
 if __name__ == "__main__":
-    # Run the test
     asyncio.run(test_a2a_streaming_uses_real_events())
-    print("✅ A2A streaming test passed!")

@@ -37,7 +37,7 @@ def _make_specialist_response(result_text: str) -> dict:
             "status": {"state": "completed"},
             "artifacts": [
                 {
-                    "parts": [{"kind": "text", "text": result_text}],
+                    "parts": [{"text": result_text}],
                 }
             ],
         },
@@ -117,7 +117,7 @@ class TestA2ADelegationFlow:
         url = call.args[0] if call.args else call.kwargs.get("url", call[0][0])
         assert url == _SPECIALIST_URL
         body = json.loads(call.kwargs.get("content") or call[1].get("content"))
-        assert body["method"] == "message/send"
+        assert body["method"] == "SendMessage"
         assert body["jsonrpc"] == "2.0"
         parts = body["params"]["message"]["parts"]
         assert any("revenue" in p.get("text", "") for p in parts)
@@ -180,8 +180,8 @@ class TestA2ADelegationFlow:
                 "artifacts": [
                     {
                         "parts": [
-                            {"kind": "text", "text": "Part A."},
-                            {"kind": "text", "text": "Part B."},
+                            {"text": "Part A."},
+                            {"text": "Part B."},
                         ]
                     }
                 ],
