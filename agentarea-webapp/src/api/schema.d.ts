@@ -1277,8 +1277,7 @@ export interface paths {
          * Accept Invitation
          * @description Accept an invitation as the authenticated user.
          *
-         *     Idempotent: accepting twice (or accepting when already a member)
-         *     returns the same membership.
+         *     Idempotent for the same acceptor.
          */
         post: operations["accept_invitation_v1_invitations_accept_post"];
         delete?: never;
@@ -3920,9 +3919,7 @@ export interface paths {
         post?: never;
         /**
          * Remove Member
-         * @description Remove a member from the workspace. Self-removal allowed; removing
-         *     others requires the caller to be a member of the workspace (owner-only
-         *     check belongs to the permissions PR).
+         * @description Remove a member from the workspace.
          */
         delete: operations["remove_member_v1_workspaces__workspace_id__members__user_id__delete"];
         options?: never;

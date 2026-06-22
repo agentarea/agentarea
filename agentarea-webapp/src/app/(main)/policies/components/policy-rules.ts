@@ -4,10 +4,7 @@ import type {
   PolicyEffect,
   PolicyRule,
 } from "@/types/policies";
-import {
-  isToolTarget,
-  toolNameFromTarget,
-} from "@/types/policies";
+import { isToolTarget, toolNameFromTarget } from "@/types/policies";
 
 // Enforcement-stage labels, grounded in the governance engine's phases
 // (PRE_LLM_CALL, POST_LLM_CALL, PRE_TOOL_CALL, TOOL_DISCOVERY, …). The phase is
@@ -72,41 +69,104 @@ export function documentToRules(
   const b = doc.budget;
   if (b) {
     if (b.monthly_spend_cap_usd != null)
-      rules.push({ effect: "cap", category: "Budget", label: "Monthly spend cap", value: fmtMoney(b.monthly_spend_cap_usd), stage: STAGE.beforeLlmOrTool });
+      rules.push({
+        effect: "cap",
+        category: "Budget",
+        label: "Monthly budget",
+        value: fmtMoney(b.monthly_spend_cap_usd),
+        stage: STAGE.beforeLlmOrTool,
+      });
     if (b.run_budget_usd != null)
-      rules.push({ effect: "cap", category: "Budget", label: "Per-run budget", value: fmtMoney(b.run_budget_usd), stage: STAGE.beforeLlmOrTool });
+      rules.push({
+        effect: "cap",
+        category: "Budget",
+        label: "Per-task budget",
+        value: fmtMoney(b.run_budget_usd),
+        stage: STAGE.beforeLlmOrTool,
+      });
     if (b.service_budget_usd != null)
-      rules.push({ effect: "cap", category: "Budget", label: "Per-service budget", value: fmtMoney(b.service_budget_usd), stage: STAGE.beforeLlmOrTool });
+      rules.push({
+        effect: "cap",
+        category: "Budget",
+        label: "Per-service budget",
+        value: fmtMoney(b.service_budget_usd),
+        stage: STAGE.beforeLlmOrTool,
+      });
   }
 
   const t = doc.tokens;
   if (t) {
     if (t.max_tokens != null)
-      rules.push({ effect: "cap", category: "Tokens", label: "Max tokens", value: fmtNum(t.max_tokens), stage: STAGE.beforeLlm });
+      rules.push({
+        effect: "cap",
+        category: "Tokens",
+        label: "Token budget",
+        value: fmtNum(t.max_tokens),
+        stage: STAGE.beforeLlm,
+      });
     if (t.max_tokens_per_call != null)
-      rules.push({ effect: "cap", category: "Tokens", label: "Max tokens per call", value: fmtNum(t.max_tokens_per_call), stage: STAGE.beforeLlm });
+      rules.push({
+        effect: "cap",
+        category: "Tokens",
+        label: "Max tokens per call",
+        value: fmtNum(t.max_tokens_per_call),
+        stage: STAGE.beforeLlm,
+      });
   }
 
   const tools = doc.tools;
   if (tools) {
     if (tools.allowed && tools.allowed.length > 0)
-      rules.push({ effect: "allow", category: "Tools", label: "Allowed tools", value: tools.allowed.join(", "), stage: STAGE.toolDiscovery });
+      rules.push({
+        effect: "allow",
+        category: "Tools",
+        label: "Allowed tools",
+        value: tools.allowed.join(", "),
+        stage: STAGE.toolDiscovery,
+      });
     if (tools.denied && tools.denied.length > 0)
-      rules.push({ effect: "deny", category: "Tools", label: "Denied tools", value: tools.denied.join(", "), stage: STAGE.beforeTool });
+      rules.push({
+        effect: "deny",
+        category: "Tools",
+        label: "Denied tools",
+        value: tools.denied.join(", "),
+        stage: STAGE.beforeTool,
+      });
   }
 
   const a = doc.approval;
   if (a?.requires_human_approval) {
-    const approvers = a.approvers && a.approvers.length > 0 ? a.approvers.join(", ") : "any workspace member";
-    rules.push({ effect: "approval", category: "Approval", label: "Requires human approval", value: `by ${approvers}`, stage: STAGE.sensitiveAction });
+    const approvers =
+      a.approvers && a.approvers.length > 0
+        ? a.approvers.join(", ")
+        : "any workspace member";
+    rules.push({
+      effect: "approval",
+      category: "Approval",
+      label: "Requires human approval",
+      value: `by ${approvers}`,
+      stage: STAGE.sensitiveAction,
+    });
   }
 
   const cs = doc.content_safety;
   if (cs) {
     if (cs.prompt_injection_detection_enabled)
-      rules.push({ effect: "safety", category: "Safety", label: "Prompt-injection detection", value: "on", stage: STAGE.llmInput });
+      rules.push({
+        effect: "safety",
+        category: "Safety",
+        label: "Prompt-injection detection",
+        value: "on",
+        stage: STAGE.llmInput,
+      });
     if (cs.output_sanitizer_enabled)
-      rules.push({ effect: "safety", category: "Safety", label: "Output sanitizer", value: "on", stage: STAGE.llmOutput });
+      rules.push({
+        effect: "safety",
+        category: "Safety",
+        label: "Output sanitizer",
+        value: "on",
+        stage: STAGE.llmOutput,
+      });
   }
 
   return rules;
@@ -144,10 +204,9 @@ export type MatrixDimensionKey =
   | "safety"
   | "custom";
 
-// Classify a rule by effect + target into a matrix dimension. Anything that
-// isn't a known mapping (or carries a CEL condition) is "custom".
+// Classify a rule by effect + target into a matrix dimension. Unknown mappings
+// stay custom, but known tool rules may carry a condition and remain readable.
 export function ruleDimension(policy: Policy): MatrixDimensionKey {
-  if (policy.condition) return "custom";
   const { effect, target } = policy;
 
   if (effect === "cap") {
@@ -189,7 +248,10 @@ const STAGE_BY_DIMENSION: Record<MatrixDimensionKey, string> = {
 };
 
 // Build a human-readable label + value for a single rule.
-function describeRule(policy: Policy, dimension: MatrixDimensionKey): {
+function describeRule(
+  policy: Policy,
+  dimension: MatrixDimensionKey
+): {
   label: string;
   value: string;
 } {
@@ -199,7 +261,7 @@ function describeRule(policy: Policy, dimension: MatrixDimensionKey): {
     const amount = fmtMoney(p.amount_usd);
     if (policy.target === "spend") {
       const period = str(p.period);
-      const label = period === "run" ? "Per-run budget" : "Monthly spend cap";
+      const label = period === "run" ? "Per-task budget" : "Monthly budget";
       return { label, value: amount };
     }
     return { label: "Per-service budget", value: amount };
@@ -210,21 +272,22 @@ function describeRule(policy: Policy, dimension: MatrixDimensionKey): {
     const perCall = p.max_tokens_per_call;
     if (max != null && perCall != null)
       return {
-        label: "Token caps",
+        label: "Token budgets",
         value: `${fmtNum(max)} total · ${fmtNum(perCall)}/call`,
       };
     if (perCall != null)
       return { label: "Max tokens per call", value: fmtNum(perCall) };
     if (max != null) return { label: "Max tokens", value: fmtNum(max) };
-    return { label: "Token cap", value: "set" };
+    return { label: "Token budget", value: "set" };
   }
 
   if (dimension === "tools") {
     const name = toolNameFromTarget(policy.target);
     const verb = policy.effect === "deny" ? "Deny" : "Allow";
+    const base = name === "*" ? "all tools" : name;
     return {
       label: `${verb} tool`,
-      value: name === "*" ? "all tools" : name,
+      value: policy.condition ? `${base} · when ${policy.condition}` : base,
     };
   }
 
@@ -237,9 +300,12 @@ function describeRule(policy: Policy, dimension: MatrixDimensionKey): {
     if (policy.target === "*")
       return { label: "Approval for all actions", value: `by ${by}` };
     const name = toolNameFromTarget(policy.target);
+    const value = policy.condition
+      ? `by ${by} · when ${policy.condition}`
+      : `by ${by}`;
     return {
       label: `Approval for ${name === "*" ? "all tools" : name}`,
-      value: `by ${by}`,
+      value,
     };
   }
 
@@ -433,7 +499,8 @@ function buildDimensions(rules: Policy[]): {
     };
   }
 
-  if (safetyInput && safetyOutput) dims.safety = { value: "on", effect: "safety" };
+  if (safetyInput && safetyOutput)
+    dims.safety = { value: "on", effect: "safety" };
   else if (safetyInput) dims.safety = { value: "input", effect: "safety" };
   else if (safetyOutput) dims.safety = { value: "output", effect: "safety" };
   else if (safetyOn) dims.safety = { value: "on", effect: "safety" };
@@ -493,7 +560,7 @@ export function policiesToMatrix(
     const subjectName = isWorkspace
       ? "Workspace"
       : type === "agent"
-        ? agentNameById.get(id) ?? id
+        ? (agentNameById.get(id) ?? id)
         : `${type}:${id}`;
 
     if (type === "agent") governedAgentIds.add(id);

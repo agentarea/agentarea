@@ -27,11 +27,6 @@ class _FakeWorkspaceRepo:
         return workspace
 
 
-class _FakeMembershipRepo:
-    async def get(self, *_args, **_kwargs):
-        return object()  # already a member -> no insert path needed
-
-
 @pytest.mark.asyncio
 async def test_hook_fires_on_genuine_create():
     fired: list[str] = []
@@ -41,7 +36,6 @@ async def test_hook_fires_on_genuine_create():
 
     service = WorkspaceService(
         _FakeWorkspaceRepo(existing=None),
-        _FakeMembershipRepo(),
         on_created=on_created,
     )
 
@@ -61,7 +55,6 @@ async def test_hook_does_not_fire_on_idempotent_reread():
     )
     service = WorkspaceService(
         _FakeWorkspaceRepo(existing=existing),
-        _FakeMembershipRepo(),
         on_created=on_created,
     )
 
