@@ -12,7 +12,6 @@ import { ElementType } from "react"
 import { useIntl } from "react-intl"
 import defaultLogos from "../../provider-logos"
 import { cn } from "../../utils/cn"
-import { Spinner } from "./spinner"
 
 /**
  * Props for the DefaultButtonSocial component.
@@ -74,31 +73,40 @@ export function DefaultButtonSocial({
 
   return (
     <button
-      className="flex cursor-pointer items-center justify-center gap-3 rounded-buttons border border-button-social-border-default bg-button-social-background-default px-4 py-[13px] transition-colors hover:border-button-social-border-hover hover:bg-button-social-background-hover hover:text-button-social-foreground-hover loading:border-button-social-border-disabled loading:bg-button-social-background-disabled loading:text-button-social-foreground-disabled"
+      className={cn(
+        "flex cursor-pointer items-center rounded-buttons border border-button-social-border-default bg-button-social-background-default px-4 py-[13px] transition-colors hover:border-button-social-border-hover hover:bg-button-social-background-hover hover:text-button-social-foreground-hover loading:border-button-social-border-disabled loading:text-button-social-foreground-disabled",
+        isSubmitting
+          ? "justify-center bg-neutral-100 text-button-social-foreground-disabled"
+          : "justify-center gap-3",
+      )}
       data-testid={`ory/form/node/input/${attributes.name}`}
       data-loading={isSubmitting}
       aria-label={label}
       {...buttonProps}
     >
-      <span className="relative size-5">
-        {!isSubmitting ? (
-          Logo ? (
-            <Logo size={20} />
-          ) : (
-            <GenericLogo label={provider.slice(0, 1)} />
-          )
-        ) : (
-          <Spinner className="size-5" />
-        )}
-      </span>
-      {showLabel && node.meta.label ? (
+      {isSubmitting ? (
+        <span className="flex size-5 items-center justify-center">
+          <span className={cn("loader h-4 w-4 loader-small loader-primary")} />
+        </span>
+      ) : (
         <>
-          <span className="grow text-center leading-none font-medium text-button-social-foreground-default">
-            {label}
+          <span className="relative size-5">
+            {Logo ? (
+              <Logo size={20} />
+            ) : (
+              <GenericLogo label={provider.slice(0, 1)} />
+            )}
           </span>
-          <span className="block size-5"></span>
+          {showLabel && node.meta.label ? (
+            <>
+              <span className="grow text-center leading-none font-medium text-button-social-foreground-default">
+                {label}
+              </span>
+              <span className="block size-5"></span>
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
     </button>
   )
 }

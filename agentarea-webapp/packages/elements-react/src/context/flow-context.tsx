@@ -51,6 +51,16 @@ export type FlowContextValue = OryFlowContainer & {
    * Dispatch function to update the form state.
    */
   dispatchFormState: Dispatch<FormStateAction>
+
+  /**
+   * Value of the social auth button currently pending redirect.
+   */
+  pendingSocialNodeValue: string | null
+
+  /**
+   * Updates the currently pending social auth button.
+   */
+  setPendingSocialNodeValue: Dispatch<string | null>
 }
 
 // This is fine, because we don't export the context itself and guard from it being null in useOryFlow
@@ -75,6 +85,7 @@ export function OryFlowProvider({
 }: OryFlowProviderProps) {
   const [flowContainer, setFlowContainer] = useState(container)
   const [formState, dispatchFormState] = useFormStateReducer(container)
+  const [pendingSocialNodeValue, setPendingSocialNodeValue] = useState<string | null>(null)
 
   return (
     <OryFlowContext.Provider
@@ -90,6 +101,8 @@ export function OryFlowProvider({
           },
           formState,
           dispatchFormState,
+          pendingSocialNodeValue,
+          setPendingSocialNodeValue,
         } as FlowContextValue
       }
     >
