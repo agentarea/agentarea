@@ -21,6 +21,10 @@
     @apply text-xs text-red-500;
   }
 
+  .go-next {
+    @apply stroke-current group-hover:translate-x-2 transition-transform duration-300;
+  }
+
   /* ---- Skills brand identity: 135° diagonal hatch ---- */
   /* group-header band — softer hatch than rows/cards */
   .skill-hatch {

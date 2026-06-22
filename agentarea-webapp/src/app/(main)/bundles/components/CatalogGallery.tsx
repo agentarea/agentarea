@@ -17,7 +17,6 @@ import {
   Rows3,
   Search,
   ShieldCheck,
-  Sparkles,
   Star,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -699,36 +699,38 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       </button>
 
       {/* header — icon, title/badges, description, primary action */}
-      <div className="flex items-start gap-4">
-        {entry.iconUrl ? (
-          <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
-        ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-            <TypeIcon className="h-5 w-5 text-zinc-400" />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
-            {entry.verified && (
-              <Badge variant="blue" size="sm" className="gap-1">
-                <BadgeCheck className="h-3 w-3" />
-                Verified
-              </Badge>
-            )}
-            {entry.category && (
-              <Badge variant="light" size="sm" className="capitalize">
-                {entry.category}
-              </Badge>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          {entry.iconUrl ? (
+            <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
+          ) : (
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
+              <TypeIcon className="h-5 w-5 text-zinc-400" />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
+              {entry.verified && (
+                <Badge variant="blue" size="sm" className="gap-1">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </Badge>
+              )}
+              {entry.category && (
+                <Badge variant="light" size="sm" className="capitalize">
+                  {entry.category}
+                </Badge>
+              )}
+            </div>
+            {entry.description && (
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                {entry.description}
+              </p>
             )}
           </div>
-          {entry.description && (
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              {entry.description}
-            </p>
-          )}
         </div>
-        <div className="shrink-0">
+        <CatalogActionSlot>
           {entry.type === "skills" ? (
             <AddSkillToAgent skillId={entry.id} />
           ) : state.phase === "done" ? (
@@ -736,26 +738,21 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
               <Link href="/agents">Go to Agents</Link>
             </Button>
           ) : entry.type === "mcp_servers" ? (
-            <Button asChild>
+            <StartAgentButton asChild size="xs">
               <Link href={connectHref}>
-                <Plug className="h-4 w-4" />
                 Connect
               </Link>
-            </Button>
+            </StartAgentButton>
           ) : (
-            <Button
+            <StartAgentButton
+              size="xs"
               onClick={() => installable[entry.type]?.()}
               isLoading={installing}
             >
-              {!installing && (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
-                </>
-              )}
-            </Button>
+              {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
+            </StartAgentButton>
           )}
-        </div>
+        </CatalogActionSlot>
       </div>
 
       {/* install feedback */}
@@ -1000,7 +997,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
 
   if (phase === "done" && result) {
     return (
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-start gap-1.5 md:items-end">
         <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="h-4 w-4" />
           Added
@@ -1014,17 +1011,12 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
 
   const loading = phase === "loading";
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex w-full flex-col items-start gap-1.5 md:items-end">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button size="sm" isLoading={loading}>
-            {!loading && (
-              <>
-                <Sparkles className="h-3.5 w-3.5" />
-                Add to agent
-              </>
-            )}
-          </Button>
+          <StartAgentButton size="xs" isLoading={loading}>
+            Add to agent
+          </StartAgentButton>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-64 p-0">
           <Command>
@@ -1059,19 +1051,29 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
           </Command>
         </PopoverContent>
       </Popover>
-      <button
+      <StartAgentButton
         type="button"
+        size="xs"
+        light
         onClick={addToWorkspace}
         disabled={loading}
-        className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        className="w-full"
       >
-        or add to workspace
-      </button>
+        Add to workspace
+      </StartAgentButton>
       {phase === "error" && (
-        <span className="max-w-[15rem] text-right text-xs text-red-600 dark:text-red-400">
+        <span className="max-w-[15rem] text-xs text-red-600 md:text-right dark:text-red-400">
           {message}
         </span>
       )}
+    </div>
+  );
+}
+
+function CatalogActionSlot({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="w-full pl-[60px] md:ml-auto md:max-w-[210px] md:pl-0">
+      {children}
     </div>
   );
 }
