@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTriggerStatusPresentation } from "@/lib/status";
 import {
   findTriggerCatalogEntry,
   getTriggerIconComponent,
@@ -21,6 +23,7 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
   const entry = findTriggerCatalogEntry(trigger, catalog);
   const Icon = getTriggerIconComponent(entry, trigger);
   const isActive = trigger.is_active;
+  const status = getTriggerStatusPresentation(isActive ? "active" : "inactive");
 
   return (
     <LinkedCard
@@ -38,13 +41,14 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
             {renderTriggerIcon(entry, trigger, "h-3 w-3")}
             {entry?.name ?? trigger.trigger_type}
           </Badge>
-          <Badge
+          <StatusIndicator
             size="sm"
-            variant={isActive ? "default" : "secondary"}
-            className="h-5 px-1.5 font-normal"
+            tone={status.tone}
+            pulse={status.pulse}
+            className="whitespace-nowrap"
           >
             {isActive ? t("status.active") : t("status.inactive")}
-          </Badge>
+          </StatusIndicator>
         </div>
       }
     >

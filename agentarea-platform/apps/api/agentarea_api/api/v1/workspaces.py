@@ -15,9 +15,10 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_database
 from agentarea_common.workspaces import (
     Workspace,
-    WorkspaceMembershipRepository,
     WorkspaceRepository,
     WorkspaceService,
+    get_workspace_membership_graph,
+    list_workspace_ids_for_member,
 )
 from agentarea_governance.application import (
     GovernancePolicyService,
@@ -58,7 +59,6 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
 
     return WorkspaceService(
         WorkspaceRepository(session),
-        WorkspaceMembershipRepository(session),
         on_created=seed_default_policies,
     )
 
@@ -87,5 +87,13 @@ async def list_workspaces(
     new user always gets at least one entry. Baseline governance policies are
     seeded by the workspace-creation hook (see ``get_workspace_service``).
     """
-    workspaces = await service.list_for_user(user.user_id, email=user.email)
+    graph = get_workspace_membership_graph()
+    member_workspace_ids = (
+        await list_workspace_ids_for_member(graph, user.user_id) if graph is not None else []
+    )
+    workspaces = await service.list_for_user(
+        user.user_id,
+        email=user.email,
+        member_workspace_ids=member_workspace_ids,
+    )
     return [WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces]

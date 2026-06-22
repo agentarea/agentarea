@@ -26,6 +26,7 @@ import ContentBlock from "@/components/ContentBlock";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   Select,
   SelectContent,
@@ -441,9 +442,9 @@ function ChannelForm({ onBack }: { onBack: () => void }) {
                     )}
                   />
                   <span className="flex-1 text-sm font-medium">{c.name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <StatusIndicator size="sm" tone="success" className="whitespace-nowrap">
                     {c.status}
-                  </span>
+                  </StatusIndicator>
                 </button>
               );
             })}

@@ -45,29 +45,34 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
 
     Combines the policy-level static list from ``AuthorizationService``
     (own workspace + system workspace, plus enterprise overrides) with
-    the dynamic list of workspaces the user has joined via accepted
-    invitations. Membership resolution lives at the request boundary,
-    not inside ``AuthorizationService``, so the auth domain service has
-    no infrastructure dependencies and stays singleton-safe.
+    the dynamic list of workspaces the user has joined. Membership resolution
+    lives at the request boundary, not inside ``AuthorizationService``, so the
+    auth domain service has no infrastructure dependencies and stays
+    singleton-safe.
     """
-    from agentarea_common.config.database import get_database
     from agentarea_common.di.container import resolve
-    from agentarea_common.workspaces.repository import WorkspaceMembershipRepository
+    from agentarea_common.workspaces.memberships import (
+        get_workspace_membership_graph,
+        list_workspace_ids_for_member,
+    )
 
     authz = resolve(AuthorizationService)
     accessible = list(await authz.get_accessible_workspaces(user_context))
 
     try:
-        database = get_database()
-        async with database.async_session_factory() as session:
-            repo = WorkspaceMembershipRepository(session)
-            memberships = await repo.list_for_user(user_context.user_id)
-        for membership in memberships:
-            if membership.workspace_id not in accessible:
-                accessible.append(membership.workspace_id)
+        graph = get_workspace_membership_graph()
+        member_workspace_ids = (
+            await list_workspace_ids_for_member(graph, user_context.user_id)
+            if graph is not None
+            else []
+        )
+        for workspace_id in member_workspace_ids:
+            if workspace_id not in accessible:
+                accessible.append(workspace_id)
     except Exception as exc:
-        # Membership lookup failures must not lock the user out of their
-        # own workspace — degrade to the static policy list.
+        # Membership lookup failures must not lock the user out of their own
+        # workspace. Do not fall back to DB membership; graph grants are the
+        # membership source of truth.
         logger.warning(
             "Could not resolve workspace memberships for user %s: %s",
             user_context.user_id,

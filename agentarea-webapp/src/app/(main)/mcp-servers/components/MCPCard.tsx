@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import {
@@ -106,22 +108,7 @@ export function MCPInstanceCard({
   const specType = (instance.json_spec?.type as string) || "docker";
   const toolCount = getMCPInstanceToolCount(instance);
   const vStatus = getEffectiveMCPVerificationStatus(instance);
-
-  const statusColor =
-    {
-      succeeded: "text-green-600 border-green-300",
-      in_progress: "text-amber-600 border-amber-300",
-      failed: "text-red-600 border-red-300",
-      never_attempted: "text-gray-500 border-gray-300",
-    }[vStatus] ?? "text-gray-500 border-gray-300";
-
-  const statusLabel =
-    {
-      succeeded: "Verified",
-      in_progress: "Verifying",
-      failed: "Failed",
-      never_attempted: "Not verified",
-    }[vStatus] ?? vStatus;
+  const statusPresentation = getMcpVerificationStatusPresentation(vStatus);
 
   const typeLabel =
     specType === "command"
@@ -143,13 +130,14 @@ export function MCPInstanceCard({
       type="view"
       subtitle={
         <div className="flex items-center gap-1.5 w-full">
-          <Badge
+          <StatusIndicator
             size="sm"
-            variant="outline"
-            className={`h-5 px-1.5 font-normal ${statusColor}`}
+            tone={statusPresentation.tone}
+            pulse={statusPresentation.pulse}
+            className="shrink-0"
           >
-            {statusLabel}
-          </Badge>
+            {statusPresentation.label}
+          </StatusIndicator>
           <span className="truncate text-xs text-gray-500">{typeLabel}</span>
           {toolCount > 0 && (
             <span className="text-xs text-gray-400">· {toolCount} tools</span>

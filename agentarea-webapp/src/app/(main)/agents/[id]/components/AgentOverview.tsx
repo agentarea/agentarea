@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import {
   agentColorVar,
@@ -29,6 +30,10 @@ import {
 } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
+import {
+  getAgentStatusPresentation,
+  getTaskStatusPresentation,
+} from "@/lib/status";
 import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
 import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
 import type { Policy } from "@/types/policies";
@@ -62,38 +67,6 @@ const RUNNING_STATUSES = new Set([
   "submitted",
   "in_progress",
 ]);
-
-type TaskPill = "done" | "run" | "wait" | "fail";
-const taskPill = (status: string): TaskPill => {
-  if (status === "completed") return "done";
-  if (status === "failed") return "fail";
-  if (status === "input_required") return "wait";
-  if (RUNNING_STATUSES.has(status)) return "run";
-  return "done";
-};
-const PILL_CLASS: Record<TaskPill, { dot: string; pill: string; label: string }> =
-  {
-    done: {
-      dot: "bg-emerald-500",
-      pill: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-      label: "Done",
-    },
-    run: {
-      dot: "bg-blue-500",
-      pill: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-      label: "Running",
-    },
-    wait: {
-      dot: "bg-amber-500",
-      pill: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-      label: "Waiting",
-    },
-    fail: {
-      dot: "bg-red-500",
-      pill: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
-      label: "Failed",
-    },
-  };
 
 export async function AgentOverview({ agentId }: { agentId: string }) {
   const agentRes = await getAgent(agentId);
@@ -185,7 +158,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   // --- identity / hero meta ---
   const { colorToken, iconKey } = resolveAgentIdentity(agent);
   const HeroIcon = getAgentIconComponent(iconKey);
-  const isActive = String(agent.status ?? "").toLowerCase() === "active";
+  const agentStatus = getAgentStatusPresentation(agent.status || "inactive");
 
   const modelLabel =
     agent.model_info?.config_name ||
@@ -238,22 +211,14 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
             <h1 className="text-xl font-semibold tracking-tight">
               {agent.name}
             </h1>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
-                isActive
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                  : "bg-muted text-muted-foreground"
-              )}
+            <StatusIndicator
+              size="sm"
+              tone={agentStatus.tone}
+              pulse={agentStatus.pulse}
+              className="whitespace-nowrap"
             >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  isActive ? "bg-emerald-500" : "bg-muted-foreground"
-                )}
-              />
-              {isActive ? "Active" : agent.status || "Paused"}
-            </span>
+              {agentStatus.label}
+            </StatusIndicator>
           </div>
 
           {agent.description && (
@@ -374,7 +339,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
               <EmptyRow text="Nothing running right now." />
             ) : (
               runningTasks.map((t) => (
-                <TaskRow key={t.id} task={t} running />
+                <TaskRow key={t.id} task={t} />
               ))
             )}
           </Card>
@@ -674,10 +639,9 @@ function CardHead({
   );
 }
 
-function TaskRow({ task, running }: { task: any; running?: boolean }) {
+function TaskRow({ task }: { task: any }) {
   const status = String(task.status ?? "unknown");
-  const pill = taskPill(status);
-  const meta = PILL_CLASS[pill];
+  const presentation = getTaskStatusPresentation(status);
   const cost = Number(task.result?.total_cost ?? 0);
   const when = relTime(task.created_at ?? task.started_at);
   const title = task.description || task.title || task.id;
@@ -687,27 +651,28 @@ function TaskRow({ task, running }: { task: any; running?: boolean }) {
       href={`/tasks/${task.id}`}
       className="flex items-center gap-3 border-b border-border/60 px-[15px] py-3 transition-colors last:border-b-0 hover:bg-muted/50"
     >
-      <span
-        className={cn(
-          "h-2 w-2 shrink-0 rounded-full",
-          meta.dot,
-          running && "ring-[3px] ring-blue-500/20"
-        )}
-      />
+      <StatusIndicator
+        size="sm"
+        tone={presentation.tone}
+        pulse={presentation.pulse}
+        className="shrink-0"
+      >
+        <span className="sr-only">{presentation.label}</span>
+      </StatusIndicator>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] font-medium">{title}</div>
         <div className="text-[11px] text-muted-foreground">
-          {running ? "Running" : meta.label} · {when}
+          {presentation.label} · {when}
         </div>
       </div>
-      <span
-        className={cn(
-          "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
-          meta.pill
-        )}
+      <StatusIndicator
+        size="sm"
+        tone={presentation.tone}
+        pulse={presentation.pulse}
+        className="whitespace-nowrap"
       >
-        {meta.label}
-      </span>
+        {presentation.label}
+      </StatusIndicator>
       <span className="w-12 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground tabular-nums">
         {cost > 0 ? fmtUsd(cost) : "—"}
       </span>

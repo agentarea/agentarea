@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { installAgentAction } from "@/lib/server-actions";
 import { agentPath } from "@/types";
 
@@ -33,16 +32,14 @@ export function InstallAgentButton({ agentRef }: { agentRef: string }) {
   };
 
   return (
-    <div className="flex flex-col items-start gap-1.5">
-      <Button
-        size="sm"
+    <div className="flex w-full flex-col items-start gap-1.5 md:max-w-[210px]">
+      <StartAgentButton
+        size="xs"
         onClick={onInstall}
         isLoading={pending}
-        className="gap-2"
       >
-        <Plus className="h-4 w-4" />
         Add to workspace
-      </Button>
+      </StartAgentButton>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

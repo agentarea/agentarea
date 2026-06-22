@@ -17,11 +17,9 @@ from .models import (
     WORKSPACE_TYPE_SHARED,
     Workspace,
     WorkspaceInvitation,
-    WorkspaceMembership,
 )
 from .repository import (
     WorkspaceInvitationRepository,
-    WorkspaceMembershipRepository,
     WorkspaceRepository,
 )
 from .slug import slugify
@@ -60,10 +58,8 @@ class WorkspaceInvitationService:
     def __init__(
         self,
         invitation_repo: WorkspaceInvitationRepository,
-        membership_repo: WorkspaceMembershipRepository,
     ) -> None:
         self.invitation_repo = invitation_repo
-        self.membership_repo = membership_repo
 
     async def create_invitation(
         self,
@@ -103,14 +99,11 @@ class WorkspaceInvitationService:
         invitation.status = INVITATION_STATUS_REVOKED
         return await self.invitation_repo.update(invitation)
 
-    async def accept(
-        self, *, token: str, user_id: str
-    ) -> tuple[WorkspaceInvitation, WorkspaceMembership]:
+    async def accept(self, *, token: str, user_id: str) -> WorkspaceInvitation:
         """Accept an invitation as ``user_id``.
 
-        Idempotent on (workspace_id, user_id): if the user is already a
-        member of the target workspace, the invitation is still marked
-        accepted (if pending) and the existing membership is returned.
+        Idempotent for the same acceptor. The caller owns granting workspace
+        membership in the configured authorization graph.
         """
         invitation = await self.invitation_repo.get_by_token_hash(_hash_token(token))
         if invitation is None:
@@ -120,65 +113,35 @@ class WorkspaceInvitationService:
             raise InvitationRevoked("invitation revoked")
 
         if invitation.status == INVITATION_STATUS_ACCEPTED:
-            existing = await self.membership_repo.get(invitation.workspace_id, user_id)
-            if existing is not None:
-                return invitation, existing
+            if invitation.accepted_by_user_id == user_id:
+                return invitation
             raise InvitationAlreadyAccepted("invitation already accepted")
 
         if invitation.is_expired(_utcnow()):
             raise InvitationExpired("invitation expired")
-
-        existing = await self.membership_repo.get(invitation.workspace_id, user_id)
-        if existing is not None:
-            membership = existing
-        else:
-            membership = await self.membership_repo.add(
-                WorkspaceMembership(
-                    workspace_id=invitation.workspace_id,
-                    user_id=user_id,
-                    invitation_id=invitation.id,
-                )
-            )
 
         invitation.status = INVITATION_STATUS_ACCEPTED
         invitation.accepted_at = _utcnow()
         invitation.accepted_by_user_id = user_id
         await self.invitation_repo.update(invitation)
 
-        return invitation, membership
-
-
-class WorkspaceMembershipService:
-    def __init__(self, membership_repo: WorkspaceMembershipRepository) -> None:
-        self.membership_repo = membership_repo
-
-    async def list_members(self, workspace_id: str) -> list[WorkspaceMembership]:
-        return await self.membership_repo.list_for_workspace(workspace_id)
-
-    async def is_member(self, workspace_id: str, user_id: str) -> bool:
-        return (await self.membership_repo.get(workspace_id, user_id)) is not None
-
-    async def remove(self, *, workspace_id: str, user_id: str) -> bool:
-        return await self.membership_repo.delete(workspace_id, user_id)
+        return invitation
 
 
 class WorkspaceService:
     """Lifecycle of the reified ``Workspace`` entity.
 
     Owns provisioning of personal workspaces and creation of shared ones.
-    Membership remains the source of truth for *who* can reach a shared
-    workspace; this service just keeps the workspace row and the owner's
-    membership in sync on create.
+    Workspace membership is granted/revoked by the domain membership graph,
+    outside this workspace-row lifecycle service.
     """
 
     def __init__(
         self,
         workspace_repo: WorkspaceRepository,
-        membership_repo: WorkspaceMembershipRepository,
         on_created: Callable[[Workspace], Awaitable[None]] | None = None,
     ) -> None:
         self.workspace_repo = workspace_repo
-        self.membership_repo = membership_repo
         # Fired exactly once when a workspace row is genuinely inserted (not on
         # idempotent re-reads). The composition layer wires cross-domain
         # provisioning here (e.g. baseline governance policies) without this
@@ -217,8 +180,8 @@ class WorkspaceService:
         return await self.workspace_repo.get_by_slug(slug)
 
     async def create_shared(self, *, owner_user_id: str, name: str) -> Workspace:
-        """Create a shared workspace and make the creator its first member."""
-        workspace = await self._insert_with_unique_slug(
+        """Create a shared workspace row."""
+        return await self._insert_with_unique_slug(
             slugify(name, fallback="workspace"),
             lambda slug: Workspace(
                 id=str(uuid4()),
@@ -228,24 +191,24 @@ class WorkspaceService:
                 owner_user_id=owner_user_id,
             ),
         )
-        if await self.membership_repo.get(workspace.id, owner_user_id) is None:
-            await self.membership_repo.add(
-                WorkspaceMembership(
-                    workspace_id=workspace.id,
-                    user_id=owner_user_id,
-                    invitation_id=None,
-                )
-            )
-        return workspace
 
-    async def list_for_user(self, user_id: str, *, email: str | None = None) -> list[Workspace]:
-        """List every workspace the user can reach (personal + memberships).
+    async def list_for_user(
+        self,
+        user_id: str,
+        *,
+        email: str | None = None,
+        member_workspace_ids: list[str] | None = None,
+    ) -> list[Workspace]:
+        """List every workspace the user can reach.
 
         Provisions the personal workspace first so a brand-new user always
         gets at least one entry.
         """
         await self.ensure_personal(user_id, email=email)
-        return await self.workspace_repo.list_for_user(user_id)
+        return await self.workspace_repo.list_for_user(
+            user_id,
+            member_workspace_ids=member_workspace_ids or [],
+        )
 
     async def _next_free_slug(self, base: str) -> str:
         candidate = base

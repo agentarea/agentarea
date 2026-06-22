@@ -1,35 +1,42 @@
+import {
+  CheckCircle2,
+  ShieldCheck,
+  UserCheck,
+  Wallet,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import type { PolicyEffect } from "@/types/policies";
 
-// Shared effect tokens. Kept deliberately restrained to match the Skills page:
-// a single small status dot carries the only colour; chips stay neutral
-// (muted surface + foreground text) so the list reads calm, not rainbow.
+// Shared effect tokens. Keep them neutral; policy type is carried by the icon,
+// not by a separate colour system.
 export const EFFECT_STYLES: Record<
   PolicyEffect,
-  { label: string; dot: string; chip: string }
+  { label: string; icon: LucideIcon; chip: string }
 > = {
   allow: {
     label: "Allow",
-    dot: "bg-emerald-500/70",
+    icon: CheckCircle2,
     chip: "bg-muted text-foreground/70",
   },
   cap: {
-    label: "Cap",
-    dot: "bg-sky-500/70",
+    label: "Budget",
+    icon: Wallet,
     chip: "bg-muted text-foreground/70",
   },
   approval: {
     label: "Approval",
-    dot: "bg-amber-500/70",
+    icon: UserCheck,
     chip: "bg-muted text-foreground/70",
   },
   deny: {
     label: "Deny",
-    dot: "bg-rose-500/70",
+    icon: Wrench,
     chip: "bg-muted text-foreground/70",
   },
   safety: {
     label: "Safety",
-    dot: "bg-zinc-400",
+    icon: ShieldCheck,
     chip: "bg-muted text-foreground/70",
   },
 };

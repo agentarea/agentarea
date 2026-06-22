@@ -19,6 +19,7 @@ export interface McpAvailableTool {
   name: string;
   display_name?: string;
   description?: string;
+  inputSchema?: unknown;
 }
 
 export type McpRefResolution =
@@ -54,6 +55,8 @@ function toAvailableTools(raw: unknown): McpAvailableTool[] {
         name: string;
         display_name?: unknown;
         description?: unknown;
+        inputSchema?: unknown;
+        input_schema?: unknown;
       };
       tools.push({
         name: t.name,
@@ -61,6 +64,7 @@ function toAvailableTools(raw: unknown): McpAvailableTool[] {
           typeof t.display_name === "string" ? t.display_name : undefined,
         description:
           typeof t.description === "string" ? t.description : undefined,
+        inputSchema: t.inputSchema ?? t.input_schema,
       });
     }
   }

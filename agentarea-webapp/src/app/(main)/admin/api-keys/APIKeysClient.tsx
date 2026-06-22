@@ -9,7 +9,6 @@ import { Check, CheckCircle, Copy, Loader2, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +18,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useToast } from "@/hooks/use-toast";
+import { getApiKeyStatusPresentation } from "@/lib/status";
 import { revokeAPIKeyAction } from "./actions";
 
 const APIKeyStatus = {
@@ -38,21 +39,6 @@ interface APIKey {
   created_at: string;
   expires_at?: string | null;
   last_used_at?: string | null;
-}
-
-function getStatusVariant(
-  status: string
-): "default" | "secondary" | "destructive" | "outline" | "success" {
-  switch (status) {
-    case "active":
-      return "success";
-    case "revoked":
-      return "destructive";
-    case "expired":
-      return "secondary";
-    default:
-      return "outline";
-  }
 }
 
 const ModalIconBackground = ({ type }: { type: "delete" | "success" }) => {
@@ -211,9 +197,20 @@ export default function APIKeysClient({
       accessor: "status",
       header: t("table.status"),
       cellClassName: "w-[12%]",
-      render: (value: APIKeyStatusType) => (
-        <Badge variant={getStatusVariant(value)}>{t(`status.${value}`)}</Badge>
-      ),
+      render: (value: APIKeyStatusType) => {
+        const presentation = getApiKeyStatusPresentation(value);
+
+        return (
+          <StatusIndicator
+            size="sm"
+            tone={presentation.tone}
+            pulse={presentation.pulse}
+            className="whitespace-nowrap"
+          >
+            {t(`status.${value}`)}
+          </StatusIndicator>
+        );
+      },
     },
     {
       accessor: "created_at",

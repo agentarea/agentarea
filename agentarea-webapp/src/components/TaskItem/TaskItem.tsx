@@ -1,9 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Calendar, Clock, GitFork } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
-import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTaskStatusPresentation } from "@/lib/status";
 
 export interface TaskItemData {
   id: string;
@@ -21,48 +23,13 @@ interface TaskItemProps {
   showAgentName?: boolean;
 }
 
-const statusConfig = {
-  running: {
-    color: "text-amber-600 border-amber-300",
-    label: "Running",
-  },
-  completed: {
-    color: "text-green-600 border-green-300",
-    label: "Completed",
-  },
-  success: {
-    color: "text-green-600 border-green-300",
-    label: "Success",
-  },
-  failed: {
-    color: "text-red-600 border-red-300",
-    label: "Failed",
-  },
-  blocked: {
-    color: "text-gray-500 border-gray-300",
-    label: "Blocked",
-  },
-  error: {
-    color: "text-red-600 border-red-300",
-    label: "Error",
-  },
-  paused: {
-    color: "text-gray-500 border-gray-300",
-    label: "Paused",
-  },
-  pending: {
-    color: "text-gray-500 border-gray-300",
-    label: "Pending",
-  },
-};
-
 export default function TaskItem({
   task,
   showAgentName = true,
 }: TaskItemProps) {
-  const status =
-    statusConfig[task.status as keyof typeof statusConfig] ||
-    statusConfig.pending;
+  const tStatus = useTranslations("TasksPage.status");
+  const status = getTaskStatusPresentation(task.status);
+  const statusLabel = status.labelKey ? tStatus(status.labelKey) : status.label;
   const isDelegation = task.parameters?.source === "agent_delegation";
 
   return (
@@ -71,13 +38,14 @@ export default function TaskItem({
       title={task.description}
       type="view"
       topRight={
-        <Badge
+        <StatusIndicator
           size="sm"
-          variant="outline"
-          className={`whitespace-nowrap h-5 px-1.5 font-normal ${status.color}`}
+          tone={status.tone}
+          pulse={status.pulse}
+          className="whitespace-nowrap"
         >
-          {status.label}
-        </Badge>
+          {statusLabel}
+        </StatusIndicator>
       }
     >
       <div className="flex flex-col gap-2 text-xs text-muted-foreground">

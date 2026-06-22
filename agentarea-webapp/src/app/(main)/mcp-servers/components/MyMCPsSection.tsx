@@ -7,8 +7,12 @@ import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import {
+  getMcpHealthStatusPresentation,
+  getOpenApiConnectionDisplayStatus,
+} from "@/lib/status";
 import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
-import { cn } from "@/lib/utils";
 import {
   HealthCheck,
   HealthStatus,
@@ -151,63 +155,23 @@ export function MyMCPsSection({
   const getOpenAPIHealthStatus = (
     connection: OpenAPIConnection
   ): HealthStatus => {
-    if (connection.status === "failed") return "unhealthy";
-    if (connection.status === "pending" || connection.status === "starting") {
-      return "starting";
-    }
-    if (
-      connection.status === "connected" ||
-      connection.status === "running" ||
-      connection.status === "succeeded" ||
-      connection.available_tools.length > 0
-    ) {
-      return "connected";
-    }
-    return STATUS_TO_HEALTH[connection.status] ?? "unknown";
+    const displayStatus = getOpenApiConnectionDisplayStatus(
+      connection.status,
+      connection.available_tools.length
+    );
+    return STATUS_TO_HEALTH[displayStatus] ?? "unknown";
   };
 
-  // Linear-style status: a coloured dot + label, lighter than a filled badge.
-  const getStatusDot = (status: string) => {
-    const tone: "green" | "red" | "amber" =
-      status === "connected" || status === "healthy" || status === "running"
-        ? "green"
-        : status === "unhealthy" || status === "error"
-          ? "red"
-          : "amber";
-    const label =
-      status === "connected"
-        ? t("status.connected")
-        : status === "healthy" || status === "running"
-          ? t("status.running")
-          : status === "unhealthy" || status === "error"
-            ? t("status.error")
-            : status === "starting"
-              ? t("status.starting")
-              : t("status.setup");
-    const tones = {
-      green: {
-        dot: "bg-emerald-500 ring-emerald-500/20",
-        text: "text-emerald-600 dark:text-emerald-400",
-      },
-      red: {
-        dot: "bg-red-500 ring-red-500/20",
-        text: "text-red-600 dark:text-red-400",
-      },
-      amber: {
-        dot: "bg-amber-500 ring-amber-500/20",
-        text: "text-amber-600 dark:text-amber-400",
-      },
-    }[tone];
+  // Shared status presentation: a coloured dot + label, matching the table design.
+  const getStatusIndicator = (status: string) => {
+    const presentation = getMcpHealthStatusPresentation(status);
+    const label = presentation.labelKey
+      ? t(`status.${presentation.labelKey}`)
+      : presentation.label;
     return (
-      <span
-        className={cn(
-          "inline-flex w-fit items-center gap-2 text-[12.5px] font-medium",
-          tones.text
-        )}
-      >
-        <span className={cn("h-[7px] w-[7px] rounded-full ring-[3px]", tones.dot)} />
+      <StatusIndicator tone={presentation.tone} pulse={presentation.pulse}>
         {label}
-      </span>
+      </StatusIndicator>
     );
   };
 
@@ -311,7 +275,7 @@ export function MyMCPsSection({
           item._type === "openapi" && item._connection
             ? getOpenAPIHealthStatus(item._connection)
             : getHealthStatus(item._instance || item);
-        return getStatusDot(healthStatus);
+        return getStatusIndicator(healthStatus);
       },
     },
   ];

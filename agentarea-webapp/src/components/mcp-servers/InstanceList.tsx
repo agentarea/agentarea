@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Edit, Pause, Play, Terminal, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getMcpCatalogStatusPresentation } from "@/lib/status";
 import {
   Table,
   TableBody,
@@ -62,6 +63,9 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
             <TableBody>
               {mcpInstanceList.map((instance) => {
                 const isRunning = instance.status === "running";
+                const statusPresentation = getMcpCatalogStatusPresentation(
+                  instance.status
+                );
 
                 return (
                   <TableRow key={instance.id}>
@@ -77,16 +81,12 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={isRunning ? "default" : "secondary"}
-                        className={
-                          isRunning
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                        }
+                      <StatusIndicator
+                        tone={statusPresentation.tone}
+                        pulse={statusPresentation.pulse}
                       >
-                        {instance.status}
-                      </Badge>
+                        {statusPresentation.label}
+                      </StatusIndicator>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {instance.endpoint_url || "N/A"}
