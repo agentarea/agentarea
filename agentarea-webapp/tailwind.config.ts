@@ -78,6 +78,12 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
+        "ba-shine": {
+          "0%": { left: "-45%", opacity: "0" },
+          "6%": { opacity: "1" },
+          "31%": { left: "120%", opacity: "0" },
+          "100%": { left: "-45%", opacity: "0" },
+        },
         "accordion-down": {
           from: {
             height: "0",
@@ -96,6 +102,7 @@ export default {
         },
       },
       animation: {
+        "ba-shine": "ba-shine 2.9s cubic-bezier(0.4,0,0.2,1) infinite",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },

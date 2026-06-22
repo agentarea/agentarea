@@ -1,20 +1,22 @@
 import { createElement } from "react";
 import {
-  type AgentColorToken,
   agentColorVar,
   agentColorVarSoft,
   getAgentIconComponent,
   resolveAgentIdentity,
+  type AgentColorToken,
 } from "@/lib/agent-identity";
 import { cn } from "@/lib/utils";
 
+export type AgentAvatarAgent = {
+  id: string;
+  name?: string | null;
+  icon?: string | null;
+  color_token?: string | null;
+};
+
 type AgentAvatarProps = {
-  agent: {
-    id: string;
-    name?: string | null;
-    icon?: string | null;
-    color_token?: string | null;
-  };
+  agent: AgentAvatarAgent;
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
   status?: "idle" | "running" | "hitl" | "error" | "paused" | null;
