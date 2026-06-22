@@ -61,29 +61,21 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
     rpc_url = f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
     return AgentCard(
         name=agent.name,
-        description=agent.description,
-        url=rpc_url,
+        description=agent.description or f"AI agent {agent.name}",
         supportedInterfaces=[
-            AgentInterface(
-                url=rpc_url,
-                protocolBinding="JSONRPC",
-                protocolVersion="1.0",
-            )
+            AgentInterface(url=rpc_url, protocolBinding="JSONRPC", protocolVersion="1.0")
         ],
         version="1.0.0",
-        protocolVersion="0.3.0",
         documentationUrl=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
         capabilities=AgentCapabilities(
             streaming=True,
-            pushNotifications=False,
-            stateTransitionHistory=True,
+            pushNotifications=True,
             extendedAgentCard=True,
             extensions=extensions,
         ),
-        provider=AgentProvider(organization="AgentArea"),
+        provider=AgentProvider(organization="AgentArea", url=base_url),
         defaultInputModes=["text/plain", "application/json"],
         defaultOutputModes=["text/plain", "application/json"],
-        supportsAuthenticatedExtendedCard=True,
         securitySchemes={
             "bearer": {
                 "type": "http",
@@ -96,6 +88,7 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
                 id="text-processing",
                 name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
+                tags=["text", "chat"],
                 inputModes=["text/plain"],
                 outputModes=["text/plain"],
             )
@@ -162,7 +155,7 @@ async def get_agent_a2a_info(
 
         return {
             "protocol": "A2A",
-            "version": "0.3.0",
+            "version": "1.0.0",
             "server": "AgentArea",
             "agent": {
                 "id": str(agent_id),
@@ -185,18 +178,22 @@ async def get_agent_a2a_info(
             "future_subdomain": f"agent-{agent_id}.{request.url.hostname}",
             "subdomain_note": "This agent will be available at its own subdomain in the future",
             "supported_methods": [
-                "message/send",
-                "message/stream",
-                "tasks/get",
-                "tasks/cancel",
-                "tasks/resubscribe",
-                "tasks/list",
-                "agent/authenticatedExtendedCard",
+                "SendMessage",
+                "SendStreamingMessage",
+                "GetTask",
+                "CancelTask",
+                "SubscribeToTask",
+                "ListTasks",
+                "CreateTaskPushNotificationConfig",
+                "GetTaskPushNotificationConfig",
+                "ListTaskPushNotificationConfigs",
+                "DeleteTaskPushNotificationConfig",
+                "GetExtendedAgentCard",
             ],
             "capabilities": {
                 "streaming": True,
-                "pushNotifications": False,
-                "stateTransitionHistory": True,
+                "pushNotifications": True,
+                "extendedAgentCard": True,
             },
             "authentication": {
                 "supported": True,

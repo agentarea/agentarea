@@ -32,6 +32,7 @@ async def emit_channel_delivery(
     channel_origin: dict[str, Any] | None,
     broker: BrokerClient,
     stream: str,
+    dedup_suffix: str | None = None,
 ) -> bool:
     """Run the channel-routing decision and submit to the outbound stream.
 
@@ -76,6 +77,8 @@ async def emit_channel_delivery(
                 event_type,
             )
         dedup_key = f"{task_id}:{event_type}:{event_id}"
+        if dedup_suffix:
+            dedup_key = f"{dedup_key}:{dedup_suffix}"
 
         await broker.submit(
             stream,

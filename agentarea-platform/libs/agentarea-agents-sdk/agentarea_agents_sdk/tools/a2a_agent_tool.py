@@ -1,5 +1,6 @@
 """A2A Agent Tool — delegates tasks to another agent via A2A protocol."""
 
+import asyncio
 import json
 import logging
 import re
@@ -14,6 +15,22 @@ from .base_tool import BaseTool, ToolExecutionError
 logger = logging.getLogger(__name__)
 
 A2A_CALL_TIMEOUT = 120.0
+# Terminal A2A task states. Our server emits A2A v1.0.0 SCREAMING_SNAKE values;
+# lowercase variants are kept for tolerance reading remote/older responses.
+_TERMINAL_STATES = {
+    "COMPLETED",
+    "FAILED",
+    "CANCELED",
+    "REJECTED",
+    "completed",
+    "failed",
+    "canceled",
+    "cancelled",
+    "rejected",
+}
+# Polling budget for delegation: stay under the 120s activity timeout.
+_POLL_TOTAL_BUDGET = 110.0
+_POLL_INTERVAL = 2.0
 
 PaymentHandler = Callable[..., Awaitable[dict[str, Any] | None]]
 
@@ -30,8 +47,8 @@ def _sanitize_tool_name(agent_name: str) -> str:
 class A2AAgentTool(BaseTool):
     """Tool that delegates a task to another agent via the A2A protocol.
 
-    Sends a `message/send` JSON-RPC request to the target agent's A2A endpoint
-    and returns the completed task result.
+    Sends a `SendMessage` JSON-RPC request (A2A v1.0.0) to the target agent's
+    A2A endpoint and returns the completed task result.
     """
 
     def __init__(
@@ -74,7 +91,7 @@ class A2AAgentTool(BaseTool):
         }
 
     async def execute(self, **kwargs) -> dict[str, Any]:
-        """Send message/send to the target agent and return the result."""
+        """Send SendMessage to the target agent and return the result."""
         message_text = kwargs.get("message", "")
         if not message_text:
             raise ToolExecutionError(self.name, "message is required")
@@ -82,16 +99,19 @@ class A2AAgentTool(BaseTool):
         rpc_request = {
             "jsonrpc": "2.0",
             "id": uuid4().hex,
-            "method": "message/send",
+            "method": "SendMessage",
             "params": {
                 "message": {
-                    "role": "user",
-                    "parts": [{"kind": "text", "text": message_text}],
+                    "role": "USER",
+                    "parts": [{"text": message_text}],
                 },
             },
         }
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/a2a+json",
+            "A2A-Version": "1.0",
+        }
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
@@ -147,6 +167,17 @@ class A2AAgentTool(BaseTool):
                 }
 
             task = rpc_response.get("result", {})
+
+            # SendMessage is non-blocking: it returns a (possibly non-terminal)
+            # Task. Poll GetTask until the task reaches a terminal state so the
+            # delegating agent receives the actual result. Short HTTP requests +
+            # polling avoids a long-held connection timing out.
+            state = (task.get("status") or {}).get("state") if isinstance(task, dict) else None
+            task_id = task.get("id") if isinstance(task, dict) else None
+            if task_id and state not in _TERMINAL_STATES:
+                task = await self._poll_until_terminal(task_id, headers) or task
+                state = (task.get("status") or {}).get("state") if isinstance(task, dict) else None
+
             result_text = self._extract_task_result(task)
 
             return {
@@ -154,8 +185,8 @@ class A2AAgentTool(BaseTool):
                 "result": result_text,
                 "error": None,
                 "tool_name": self.name,
-                "task_id": task.get("id"),
-                "task_state": task.get("status", {}).get("state"),
+                "task_id": task.get("id") if isinstance(task, dict) else task_id,
+                "task_state": state,
                 "payment": payment_result,
             }
 
@@ -169,21 +200,68 @@ class A2AAgentTool(BaseTool):
             logger.error(f"A2A agent tool call failed: {e}")
             raise ToolExecutionError(self.name, str(e), e) from e
 
+    async def _poll_until_terminal(
+        self, task_id: str, headers: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Poll GetTask until the task is terminal or the budget elapses.
+
+        Returns the latest Task object, or None if no successful poll occurred.
+        """
+        elapsed = 0.0
+        latest: dict[str, Any] | None = None
+        async with httpx.AsyncClient(timeout=A2A_CALL_TIMEOUT) as client:
+            while elapsed < _POLL_TOTAL_BUDGET:
+                await asyncio.sleep(_POLL_INTERVAL)
+                elapsed += _POLL_INTERVAL
+                poll_request = {
+                    "jsonrpc": "2.0",
+                    "id": uuid4().hex,
+                    "method": "GetTask",
+                    "params": {"id": task_id},
+                }
+                try:
+                    resp = await client.post(
+                        self._a2a_url, content=json.dumps(poll_request), headers=headers
+                    )
+                    if resp.status_code != 200:
+                        continue
+                    body = resp.json()
+                except Exception as e:
+                    logger.debug(f"A2A poll for task {task_id} failed: {e}")
+                    continue
+
+                if body.get("error"):
+                    continue
+                task = body.get("result")
+                if not isinstance(task, dict):
+                    continue
+                latest = task
+                state = (task.get("status") or {}).get("state")
+                if state in _TERMINAL_STATES:
+                    return task
+
+        logger.warning(f"A2A delegation to '{self._agent_name}' did not finish within budget")
+        return latest
+
     def _extract_task_result(self, task: dict[str, Any]) -> str:
-        """Extract readable text from a task's artifacts and status message."""
+        """Extract readable text from a task's artifacts and status message.
+
+        A2A v1.0.0 parts are flat (no ``kind``): a part is text if it has ``text``,
+        data if it has ``data``.
+        """
         parts = []
         for artifact in task.get("artifacts") or []:
             for part in artifact.get("parts") or []:
-                if part.get("kind") == "text":
+                if part.get("text") is not None:
                     parts.append(part["text"])
-                elif part.get("kind") == "data":
+                elif part.get("data") is not None:
                     parts.append(json.dumps(part.get("data", {})))
 
         if not parts:
             status_msg = task.get("status", {}).get("message")
             if status_msg:
                 for part in status_msg.get("parts") or []:
-                    if part.get("kind") == "text":
+                    if part.get("text") is not None:
                         parts.append(part["text"])
 
         return "\n".join(parts) if parts else "(No output from agent)"

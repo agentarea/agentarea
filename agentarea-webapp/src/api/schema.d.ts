@@ -4134,11 +4134,6 @@ export interface components {
              */
             pushNotifications: boolean;
             /**
-             * Statetransitionhistory
-             * @default false
-             */
-            stateTransitionHistory: boolean;
-            /**
              * Streaming
              * @default false
              */
@@ -4170,11 +4165,6 @@ export interface components {
             documentationUrl?: string | null;
             /** Name */
             name: string;
-            /**
-             * Protocolversion
-             * @default 0.3.0
-             */
-            protocolVersion: string;
             provider?: components["schemas"]["AgentProvider"] | null;
             /** Security */
             security?: {
@@ -4187,14 +4177,7 @@ export interface components {
             /** Skills */
             skills: components["schemas"]["AgentSkill"][];
             /** Supportedinterfaces */
-            supportedInterfaces?: components["schemas"]["AgentInterface"][] | null;
-            /**
-             * Supportsauthenticatedextendedcard
-             * @default true
-             */
-            supportsAuthenticatedExtendedCard: boolean;
-            /** Url */
-            url: string;
+            supportedInterfaces: components["schemas"]["AgentInterface"][];
             /**
              * Version
              * @default 1.0.0
@@ -4262,12 +4245,21 @@ export interface components {
              */
             tools?: (components["schemas"]["CodeToolConfig"] | components["schemas"]["McpToolConfig-Input"] | components["schemas"]["AgentToolConfig"] | components["schemas"]["OpenApiToolConfig"])[] | null;
         };
-        /** AgentInterface */
+        /**
+         * AgentInterface
+         * @description A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple.
+         */
         AgentInterface: {
-            /** Protocolbinding */
+            /**
+             * Protocolbinding
+             * @default JSONRPC
+             */
             protocolBinding: string;
-            /** Protocolversion */
-            protocolVersion?: string | null;
+            /**
+             * Protocolversion
+             * @default 1.0
+             */
+            protocolVersion: string;
             /** Tenant */
             tenant?: string | null;
             /** Url */
@@ -4386,6 +4378,10 @@ export interface components {
             name: string;
             /** Outputmodes */
             outputModes?: string[] | null;
+            /** Securityrequirements */
+            securityRequirements?: {
+                [key: string]: string[];
+            }[] | null;
             /** Tags */
             tags?: string[] | null;
         };

@@ -81,7 +81,7 @@ def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[st
         return {}
 
     # Create A2A-compatible response
-    a2a_message = Message(role="agent", parts=[TextPart(text=agent_response_text)])
+    a2a_message = Message(role="AGENT", parts=[TextPart(text=agent_response_text)])
 
     # Create A2A-compatible artifact
     a2a_artifact = Artifact(

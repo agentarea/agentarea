@@ -154,7 +154,7 @@ class TestA2ALogging:
             metadata={"user_agent": "test-client", "client_ip": "127.0.0.1"},
         )
 
-        message = Message(role="user", parts=[TextPart(text="Test message")])
+        message = Message(role="USER", parts=[TextPart(text="Test message")])
         message_params = MessageSendParams(message=message)
 
         # Create task with A2A metadata
@@ -162,7 +162,7 @@ class TestA2ALogging:
             message_params=message_params,
             agent_id=agent_id,
             auth_context=auth_context,
-            a2a_method="message/send",
+            a2a_method="SendMessage",
             request_id="test-request-123",
         )
 
@@ -172,7 +172,7 @@ class TestA2ALogging:
 
         # Check core A2A metadata
         assert metadata["source"] == "a2a"
-        assert metadata["a2a_method"] == "message/send"
+        assert metadata["a2a_method"] == "SendMessage"
         assert metadata["a2a_request_id"] == "test-request-123"
         assert metadata["auth_method"] == "bearer"
         assert metadata["authenticated"] is True

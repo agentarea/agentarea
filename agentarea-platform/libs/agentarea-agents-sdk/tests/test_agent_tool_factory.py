@@ -7,6 +7,7 @@ import pytest
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import A2AAgentTool
 from agentarea_agents_sdk.tools.agent_tool_factory import AgentToolFactory
+from agentarea_agents_sdk.tools.delegation_tool import DelegationTool
 
 
 def _make_mock_agent(agent_id="agent-123", name="researcher", description="Researches topics"):
@@ -28,7 +29,10 @@ class TestAgentToolFactoryCreateTool:
         )
 
         assert tool is not None
-        assert isinstance(tool, A2AAgentTool)
+        # Single facade tool; transport binding is A2A here (no task_service provided).
+        assert isinstance(tool, DelegationTool)
+        assert tool.binding_kind == "a2a"
+        assert isinstance(tool.binding, A2AAgentTool)
         assert tool.name == "delegate_to_researcher"
         assert "Researches topics" in tool.description
         agent_service.get_by_name.assert_awaited_once_with("researcher")
@@ -45,7 +49,7 @@ class TestAgentToolFactoryCreateTool:
         )
 
         assert tool is not None
-        assert tool._a2a_url == "http://localhost:8000/agents/agent-123/a2a/rpc"
+        assert tool.binding._a2a_url == "http://localhost:8000/agents/agent-123/a2a/rpc"
 
     @pytest.mark.asyncio
     async def test_create_tool_with_url_override(self):
@@ -60,7 +64,8 @@ class TestAgentToolFactoryCreateTool:
         )
 
         assert tool is not None
-        assert tool._a2a_url == "http://custom:9999/rpc"
+        assert tool.binding_kind == "a2a"
+        assert tool.binding._a2a_url == "http://custom:9999/rpc"
 
     @pytest.mark.asyncio
     async def test_create_tool_with_description_override(self):
@@ -116,7 +121,7 @@ class TestAgentToolFactoryCreateTool:
         )
 
         assert tool is not None
-        assert tool._auth_token == "secret-token"
+        assert tool.binding._auth_token == "secret-token"
 
 
 class TestAgentToolFactoryCreateToolsFromConfig:
@@ -181,7 +186,7 @@ class TestAgentToolFactoryCreateToolsFromConfig:
         )
 
         assert len(tools) == 1
-        assert tools[0]._a2a_url == "http://custom/rpc"
+        assert tools[0].binding._a2a_url == "http://custom/rpc"
         assert "Custom desc" in tools[0].description
 
     @pytest.mark.asyncio

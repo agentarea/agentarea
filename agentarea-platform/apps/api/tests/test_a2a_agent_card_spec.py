@@ -17,14 +17,21 @@ async def test_agent_card_advertises_current_a2a_discovery_fields():
     card = await create_agent_card_for_agent(agent, "https://api.example.com", agent_id)
     payload = card.model_dump(by_alias=True, exclude_none=True)
 
-    assert payload["url"] == f"https://api.example.com/v1/agents/{agent_id}/a2a/rpc"
+    rpc_url = f"https://api.example.com/v1/agents/{agent_id}/a2a/rpc"
+    # A2A v1.0.0 transport advertising: supportedInterfaces[] (first = preferred).
+    assert "url" not in payload
+    assert "protocolVersion" not in payload
+    assert "preferredTransport" not in payload
+    assert "additionalInterfaces" not in payload
     assert payload["supportedInterfaces"] == [
-        {
-            "url": f"https://api.example.com/v1/agents/{agent_id}/a2a/rpc",
-            "protocolBinding": "JSONRPC",
-            "protocolVersion": "1.0",
-        }
+        {"url": rpc_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
     ]
+    # extended-card flag moved into capabilities
     assert payload["capabilities"]["extendedAgentCard"] is True
+    assert "stateTransitionHistory" not in payload["capabilities"]
+    # provider.url is required by spec
+    assert payload["provider"]["url"] == "https://api.example.com"
+    # every skill must carry tags (required by spec)
+    assert all(skill.get("tags") for skill in payload["skills"])
     assert payload["securitySchemes"]["bearer"]["type"] == "http"
     assert payload["security"] == [{"bearer": []}]

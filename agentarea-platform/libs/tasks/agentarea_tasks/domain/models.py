@@ -116,6 +116,7 @@ class TaskUpdate(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     execution_id: str | None = None
+    task_parameters: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
 
     @field_validator("result", mode="before")

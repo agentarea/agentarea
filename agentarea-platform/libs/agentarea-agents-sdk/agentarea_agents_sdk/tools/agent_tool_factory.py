@@ -13,6 +13,7 @@ from typing import Any
 from .a2a_agent_tool import A2AAgentTool
 from .agent_delegation_tool import AgentDelegationTool
 from .base_tool import BaseTool
+from .delegation_tool import DelegationTool
 
 logger = logging.getLogger(__name__)
 
@@ -70,21 +71,27 @@ class AgentToolFactory:
 
             description = description_override or agent.description or f"Agent: {agent_name}"
 
-            # External agent: explicit A2A URL provided
+            # Pick the transport binding for this target agent, then wrap it in the
+            # single DelegationTool facade. The model always sees one delegate_to_<agent>
+            # tool; local-vs-A2A is an execution detail chosen here.
+
+            # Remote agent: an explicit A2A URL forces the A2A binding.
             if a2a_url_override:
-                logger.info(f"Creating external A2A tool for '{agent_name}' -> {a2a_url_override}")
-                return A2AAgentTool(
+                logger.info(f"Delegation '{agent_name}': A2A binding -> {a2a_url_override}")
+                binding = A2AAgentTool(
                     agent_name=agent_name,
                     agent_description=description,
                     a2a_url=a2a_url_override,
                     auth_token=auth_token,
                     payment_handler=payment_handler,
                 )
+                return DelegationTool(binding, "a2a")
 
-            # Internal agent: use task service directly (no HTTP)
+            # Same-platform agent: resolved locally and we have execution context →
+            # local binding (direct task service, no HTTP/auth overhead).
             if task_service and workspace_id and user_id:
-                logger.info(f"Creating delegation tool for '{agent_name}' (id={agent.id})")
-                return AgentDelegationTool(
+                logger.info(f"Delegation '{agent_name}': local binding (id={agent.id})")
+                binding = AgentDelegationTool(
                     agent_name=agent_name,
                     agent_description=description,
                     target_agent_id=agent.id,
@@ -92,20 +99,22 @@ class AgentToolFactory:
                     workspace_id=workspace_id,
                     user_id=user_id,
                 )
+                return DelegationTool(binding, "local")
 
-            # Fallback: external A2A (less ideal — needs auth token to work)
+            # Fallback: no local execution context → A2A binding against our own endpoint.
             logger.warning(
-                f"Creating external A2A tool for '{agent_name}' (no task_service provided). "
-                "Internal delegation preferred — pass task_service for same-platform agents."
+                f"Delegation '{agent_name}': A2A binding fallback (no task_service). "
+                "Pass task_service for same-platform agents to use the local binding."
             )
             a2a_url = f"{base_url}/agents/{agent.id}/a2a/rpc"
-            return A2AAgentTool(
+            binding = A2AAgentTool(
                 agent_name=agent_name,
                 agent_description=description,
                 a2a_url=a2a_url,
                 auth_token=auth_token,
                 payment_handler=payment_handler,
             )
+            return DelegationTool(binding, "a2a")
 
         except Exception as e:
             logger.error(f"Failed to create delegation tool for agent '{agent_name}': {e}")
@@ -147,7 +156,7 @@ class AgentToolFactory:
             )
             if tool:
                 tools.append(tool)
-                tool_type = "internal" if isinstance(tool, AgentDelegationTool) else "external/a2a"
-                logger.info(f"Created {tool_type} agent tool: {tool.name}")
+                kind = getattr(tool, "binding_kind", "unknown")
+                logger.info(f"Created delegation tool ({kind} binding): {tool.name}")
 
         return tools

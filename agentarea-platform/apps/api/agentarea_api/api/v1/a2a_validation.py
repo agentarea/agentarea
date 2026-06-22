@@ -66,13 +66,17 @@ class A2AValidator:
     """A2A protocol validator."""
 
     SUPPORTED_METHODS: ClassVar[set[str]] = {
-        "message/send",
-        "message/stream",
-        "tasks/get",
-        "tasks/cancel",
-        "tasks/resubscribe",
-        "tasks/list",
-        "agent/authenticatedExtendedCard",
+        "SendMessage",
+        "SendStreamingMessage",
+        "GetTask",
+        "CancelTask",
+        "SubscribeToTask",
+        "ListTasks",
+        "CreateTaskPushNotificationConfig",
+        "GetTaskPushNotificationConfig",
+        "ListTaskPushNotificationConfigs",
+        "DeleteTaskPushNotificationConfig",
+        "GetExtendedAgentCard",
     }
 
     @classmethod
@@ -136,9 +140,13 @@ class A2AValidator:
         """Validate request content type."""
         content_type = request.headers.get("content-type", "")
 
-        if not content_type.startswith("application/json"):
+        if not (
+            content_type.startswith("application/json")
+            or content_type.startswith("application/a2a+json")
+        ):
             raise A2AValidationError(
-                f"Invalid content type: {content_type}. Expected: application/json",
+                f"Invalid content type: {content_type}. "
+                "Expected: application/json or application/a2a+json",
                 "INVALID_CONTENT_TYPE",
             )
 
@@ -158,11 +166,11 @@ class A2AValidator:
         json_rpc_request = cls.validate_json_rpc_request(body)
 
         # Validate method-specific parameters
-        if json_rpc_request.method in ["message/send", "message/stream"]:
+        if json_rpc_request.method in ["SendMessage", "SendStreamingMessage"]:
             if json_rpc_request.params:
                 cls.validate_message_send_params(json_rpc_request.params)
 
-        elif json_rpc_request.method in ["tasks/get", "tasks/cancel", "tasks/resubscribe"]:
+        elif json_rpc_request.method in ["GetTask", "CancelTask", "SubscribeToTask"]:
             if json_rpc_request.params:
                 cls.validate_task_params(json_rpc_request.params)
 
