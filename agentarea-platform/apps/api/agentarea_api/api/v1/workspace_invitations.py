@@ -8,7 +8,7 @@ invitation state.
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, NoReturn
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agentarea_common.auth.dependencies import UserContextDep
@@ -161,7 +161,7 @@ def _stable_member_response_id(workspace_id: str, user_id: str) -> UUID:
         return uuid5(NAMESPACE_URL, f"agentarea:workspace-member:{workspace_id}:{user_id}")
 
 
-def _raise_membership_graph_unavailable(exc: Exception) -> None:
+def _raise_membership_graph_unavailable(exc: Exception) -> NoReturn:
     raise HTTPException(status_code=503, detail="Workspace membership graph unavailable") from exc
 
 
