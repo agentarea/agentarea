@@ -847,8 +847,11 @@
       "running": "Running",
       "completed": "Completed",
       "success": "Success",
+      "inputRequired": "Input Required",
       "failed": "Failed",
       "error": "Error",
+      "blocked": "Blocked",
+      "cancelled": "Cancelled",
       "paused": "Paused",
       "pending": "Pending"
     },

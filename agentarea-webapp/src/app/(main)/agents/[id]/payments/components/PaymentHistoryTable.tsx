@@ -15,8 +15,9 @@ import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { StatusDisplay } from "@/components/ui/status-display";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useWalletPayments } from "@/hooks/useAgentWallet";
+import { getPaymentStatusPresentation } from "@/lib/status";
 
 function getExplorerUrl(
   protocol: string,
@@ -182,7 +183,20 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
     {
       header: t("table.status"),
       accessor: "status",
-      render: (value: string) => <StatusDisplay status={value} />,
+      render: (value: string) => {
+        const status = getPaymentStatusPresentation(value);
+
+        return (
+          <StatusIndicator
+            size="sm"
+            tone={status.tone}
+            pulse={status.pulse}
+            className="whitespace-nowrap"
+          >
+            {status.label}
+          </StatusIndicator>
+        );
+      },
     },
   ];
 

@@ -2,28 +2,13 @@
 
 import { formatDistanceToNow } from "date-fns";
 import Table from "@/components/Table/Table";
-import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTriggerExecutionStatusPresentation } from "@/lib/status";
 
 interface ExecutionsTableProps {
   executions: any[];
   triggerId: string;
   currentPage: number;
-}
-
-function getStatusVariant(status: string) {
-  switch (status) {
-    case "completed":
-    case "success":
-      return "default" as const;
-    case "failed":
-    case "error":
-      return "destructive" as const;
-    case "running":
-    case "in_progress":
-      return "secondary" as const;
-    default:
-      return "outline" as const;
-  }
 }
 
 export default function ExecutionsTable({
@@ -42,11 +27,20 @@ export default function ExecutionsTable({
     {
       accessor: "status",
       header: "Status",
-      render: (value: string) => (
-        <Badge variant={getStatusVariant(value)}>
-          {value || "unknown"}
-        </Badge>
-      ),
+      render: (value: string) => {
+        const status = getTriggerExecutionStatusPresentation(value || "unknown");
+
+        return (
+          <StatusIndicator
+            size="sm"
+            tone={status.tone}
+            pulse={status.pulse}
+            className="whitespace-nowrap"
+          >
+            {status.label}
+          </StatusIndicator>
+        );
+      },
     },
     {
       accessor: "executed_at",

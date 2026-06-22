@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { Check, Clock, Copy, Hash, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +18,8 @@ import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTriggerStatusPresentation } from "@/lib/status";
 import { renderTriggerIcon } from "../components/triggerDisplay";
 
 interface TriggerDetailProps {
@@ -59,9 +62,10 @@ function TriggerInfoPanel({
   catalogEntry: any | null;
   agentName: string;
 }) {
+  const tStatus = useTranslations("TriggersPage.status");
   const isActive = trigger.is_active;
-  const statusVariant = isActive ? "success" : "secondary";
-  const statusLabel = isActive ? "Active" : "Inactive";
+  const status = getTriggerStatusPresentation(isActive ? "active" : "inactive");
+  const statusLabel = isActive ? tStatus("active") : tStatus("inactive");
 
   const displayName =
     catalogEntry?.name ??
@@ -73,9 +77,14 @@ function TriggerInfoPanel({
         label="Trigger"
         title={trigger.name}
         right={
-          <Badge variant={statusVariant as any} size="sm">
+          <StatusIndicator
+            size="sm"
+            tone={status.tone}
+            pulse={status.pulse}
+            className="whitespace-nowrap"
+          >
             {statusLabel}
-          </Badge>
+          </StatusIndicator>
         }
       />
       <InfoPanelBody>
@@ -147,8 +156,12 @@ export default function TriggerDetail({
   agentName,
   catalogEntry,
 }: TriggerDetailProps) {
+  const tStatus = useTranslations("TriggersPage.status");
   const isCron = trigger.trigger_type === "cron";
   const webhookUrl = trigger.webhook_url as string | undefined;
+  const status = getTriggerStatusPresentation(
+    trigger.is_active ? "active" : "inactive"
+  );
 
   const displayName = catalogEntry?.name ?? (isCron ? "Cron" : "Webhook");
   const description = catalogEntry?.description ?? null;
@@ -169,12 +182,14 @@ export default function TriggerDetail({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="font-medium text-sm">{displayName}</div>
-                    <Badge
-                      variant={trigger.is_active ? "success" : "secondary"}
+                    <StatusIndicator
                       size="sm"
+                      tone={status.tone}
+                      pulse={status.pulse}
+                      className="whitespace-nowrap"
                     >
-                      {trigger.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                      {trigger.is_active ? tStatus("active") : tStatus("inactive")}
+                    </StatusIndicator>
                     {catalogEntry?.kind && (
                       <Badge variant="outline" size="sm" className="capitalize">
                         {catalogEntry.kind}

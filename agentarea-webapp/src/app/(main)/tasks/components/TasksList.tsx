@@ -6,24 +6,14 @@ import { Calendar, Clock, GitFork } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
-import { Badge } from "@/components/ui/badge";
 import { TaskWithAgent } from "@/lib/api";
+import { getTaskStatusPresentation } from "@/lib/status";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
   viewMode?: string;
 }
-
-const statusColors = {
-  running: "text-amber-600 border-amber-300",
-  completed: "text-green-600 border-green-300",
-  success: "text-green-600 border-green-300",
-  failed: "text-red-600 border-red-300",
-  blocked: "text-gray-500 border-gray-300",
-  error: "text-red-600 border-red-300",
-  paused: "text-gray-500 border-gray-300",
-  pending: "text-gray-500 border-gray-300",
-} as const;
 
 function formatUsdCost(value: number) {
   return `$${value.toFixed(4)}`;
@@ -72,31 +62,20 @@ export default function TasksList({
       accessor: "status",
       header: t("statusLabel"),
       render: (value: string) => {
-        const color =
-          statusColors[value as keyof typeof statusColors] ||
-          "text-gray-500 border-gray-300";
-        // Check if translation exists, otherwise fallback to capitalized value
-        const label = [
-          "running",
-          "completed",
-          "success",
-          "failed",
-          "blocked",
-          "error",
-          "paused",
-          "pending",
-        ].includes(value)
-          ? tStatus(value)
-          : value.charAt(0).toUpperCase() + value.slice(1);
+        const presentation = getTaskStatusPresentation(value);
+        const label = presentation.labelKey
+          ? tStatus(presentation.labelKey)
+          : presentation.label;
 
         return (
-          <Badge
+          <StatusIndicator
             size="sm"
-            variant="outline"
-            className={`whitespace-nowrap h-5 px-1.5 font-normal ${color}`}
+            tone={presentation.tone}
+            pulse={presentation.pulse}
+            className="whitespace-nowrap"
           >
             {label}
-          </Badge>
+          </StatusIndicator>
         );
       },
     },

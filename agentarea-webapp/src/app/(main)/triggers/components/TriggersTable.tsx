@@ -5,12 +5,13 @@ import Link from "next/link";
 import { Clock, Webhook } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getTriggerStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import {
   describeTriggerSchedule,
   formatCompactDistance,
   getTriggerHealth,
-  type TriggerHealth,
 } from "./triggerDisplay";
 
 interface TriggersTableProps {
@@ -19,21 +20,6 @@ interface TriggersTableProps {
    *  needs from the trigger itself. */
   catalog?: any[];
 }
-
-const STATUS_STYLES: Record<TriggerHealth, { dot: string; text: string }> = {
-  active: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-600 dark:text-emerald-500",
-  },
-  paused: {
-    dot: "bg-zinc-300 dark:bg-zinc-600",
-    text: "text-muted-foreground",
-  },
-  error: {
-    dot: "bg-red-500",
-    text: "text-red-600 dark:text-red-500",
-  },
-};
 
 export default function TriggersTable({ triggers }: TriggersTableProps) {
   const tStatus = useTranslations("TriggersPage.status");
@@ -46,7 +32,7 @@ export default function TriggersTable({ triggers }: TriggersTableProps) {
         const TypeIcon = isCron ? Clock : Webhook;
         const schedule = describeTriggerSchedule(trigger);
         const health = getTriggerHealth(trigger);
-        const status = STATUS_STYLES[health];
+        const status = getTriggerStatusPresentation(health);
         const nextRun = trigger.next_run_time ?? trigger.next_run_at;
         const agentName = trigger.agent_name || "—";
 
@@ -120,11 +106,10 @@ export default function TriggersTable({ triggers }: TriggersTableProps) {
             </span>
 
             {/* Status */}
-            <span className="flex w-[92px] shrink-0 items-center justify-end gap-1.5">
-              <span className={cn("h-1.5 w-1.5 rounded-full", status.dot)} />
-              <span className={cn("text-[13px] font-medium", status.text)}>
+            <span className="flex w-[92px] shrink-0 items-center justify-end">
+              <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
                 {tStatus(health)}
-              </span>
+              </StatusIndicator>
             </span>
           </Link>
         );

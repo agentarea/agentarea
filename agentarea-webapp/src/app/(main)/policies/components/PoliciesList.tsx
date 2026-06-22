@@ -11,7 +11,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Table from "@/components/Table/Table";
-import { cn } from "@/lib/utils";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getPolicyStatusPresentation } from "@/lib/status";
 import type { Policy } from "@/types/policies";
 import { policyToRule } from "./policy-rules";
 
@@ -153,26 +154,22 @@ export default function PoliciesList({
     {
       accessor: "status",
       header: "Status",
-      render: (_: unknown, item: PolicyRow) => (
-        <span
-          className={cn(
-            "inline-flex w-fit items-center gap-2 text-[12.5px] font-medium",
-            item.enabled
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground"
-          )}
-        >
-          <span
-            className={cn(
-              "h-[7px] w-[7px] rounded-full ring-[3px]",
-              item.enabled
-                ? "bg-emerald-500 ring-emerald-500/20"
-                : "bg-zinc-400 ring-zinc-400/20"
-            )}
-          />
+      render: (_: unknown, item: PolicyRow) => {
+        const status = getPolicyStatusPresentation(
+          item.enabled ? "enabled" : "disabled"
+        );
+
+        return (
+          <StatusIndicator
+            size="sm"
+            tone={status.tone}
+            pulse={status.pulse}
+            className="whitespace-nowrap"
+          >
           {item.enabled ? "Enabled" : "Disabled"}
-        </span>
-      ),
+          </StatusIndicator>
+        );
+      },
     },
   ];
 

@@ -24,6 +24,8 @@ import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getMcpRuntimeHealthStatusPresentation } from "@/lib/status";
 import { getMCPInstanceHealth } from "@/lib/api";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
@@ -544,15 +546,19 @@ export default function MCPInstanceDetail({
                   <div>
                     <span className="text-muted-foreground">Status</span>
                     <p className="mt-0.5">
-                      {health.healthy ? (
-                        <span className="flex items-center gap-1 text-green-600">
-                          Healthy
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-red-600">
-                          <XCircle className="h-3.5 w-3.5" /> Unhealthy
-                        </span>
-                      )}
+                      {(() => {
+                        const presentation = getMcpRuntimeHealthStatusPresentation(
+                          health.healthy ? "healthy" : "unhealthy"
+                        );
+                        return (
+                          <StatusIndicator
+                            tone={presentation.tone}
+                            pulse={presentation.pulse}
+                          >
+                            {presentation.label}
+                          </StatusIndicator>
+                        );
+                      })()}
                     </p>
                   </div>
                   <div>
