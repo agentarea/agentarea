@@ -31,6 +31,12 @@
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-remote-oauth-registry.json
   description: Curated official vendor-hosted remote MCP servers with OAuth (GitHub, Notion, Slack, Linear, Canva, Figma, ...)
 
+# Curated command/stdio MCP servers (hand-maintained). Source JSON is published to
+# S3 from the landing repo (NOT tracked in this repo). Currently: Telegram.
+- name: mcp-curated-catalog
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+  description: Curated command/stdio MCP server catalog (Telegram, ...)
+
 - name: llm-providers-catalog
   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
   description: Built-in LLM provider catalog
