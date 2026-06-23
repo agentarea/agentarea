@@ -10,13 +10,24 @@ type CheckboxLabelProps = {
 }
 
 const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
+const parenthesizedUrlRegex =
+  /((?:[A-ZА-ЯЁ][^\s()]*)(?:\s+[A-Za-zА-Яа-яЁё][^\s()]*){0,4})\s*\(((?:https?:\/\/)?[^()\s]+\.[^()\s]+(?:\/[^()\s]*)?)\)/gu
+
+function normalizeParenthesizedLinks(labelText: string) {
+  return labelText.replace(
+    parenthesizedUrlRegex,
+    (_match, linkText: string, url: string) =>
+      `[${linkText}](${url.startsWith("http") ? url : `https://${url}`})`,
+  )
+}
 
 export function computeLabelElements(labelText: string) {
+  const normalizedLabelText = normalizeParenthesizedLinks(labelText)
   const elements = []
   let lastIndex = 0
 
   // Use matchAll to find all markdown links
-  for (const match of labelText.matchAll(linkRegex)) {
+  for (const match of normalizedLabelText.matchAll(linkRegex)) {
     const linkText = match[1]
     const url = match[2]
     const matchStart = match.index
@@ -28,7 +39,7 @@ export function computeLabelElements(labelText: string) {
 
     // Push the text before the match
     if (matchStart > lastIndex) {
-      elements.push(labelText.slice(lastIndex, matchStart))
+      elements.push(normalizedLabelText.slice(lastIndex, matchStart))
     }
 
     // Push the <a> tag for the markdown link
@@ -49,8 +60,8 @@ export function computeLabelElements(labelText: string) {
   }
 
   // Push any remaining text after the last match
-  if (lastIndex < labelText.length) {
-    elements.push(labelText.slice(lastIndex))
+  if (lastIndex < normalizedLabelText.length) {
+    elements.push(normalizedLabelText.slice(lastIndex))
   }
   return elements
 }
