@@ -21,6 +21,7 @@ import {
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { TaskWithAgent } from "@/lib/api";
 import { resolveEscalationAction } from "@/lib/server-actions";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -357,67 +358,56 @@ export function InboxClient({ items, error }: InboxClientProps) {
                 visible.map((t) => {
                   const id = String(t.id);
                   const status = effectiveStatus(t);
+                  const presentation = getInboxStatusPresentation(status);
                   const pend = isPending(status);
                   const isSel = id === selId;
                   const isChecked = checked.has(id);
                   return (
-                    <div
+                    <InteractiveListRow
                       key={id}
                       onClick={() => setSelId(id)}
                       className={cn(
-                        "group relative flex cursor-pointer items-start gap-3 border-b border-border/60 px-4 py-2.5 transition-colors",
-                        isSel ? "bg-primary/10" : "hover:bg-muted/60"
+                        "items-start border-b border-border/60 py-2.5 transition-colors",
+                        isSel ? "bg-muted/60" : "hover:bg-muted/60"
                       )}
-                    >
-                      {isSel && (
-                        <span className="absolute inset-y-0 left-0 w-[2px] bg-primary" />
-                      )}
-
-                      {pend && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleCheck(id);
-                          }}
-                          className={cn(
-                            "mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border transition",
-                            isChecked
-                              ? "border-primary bg-primary text-white opacity-100"
-                              : "border-muted-foreground/50 text-transparent",
-                            !isChecked &&
-                              !anyChecked &&
-                              "opacity-0 group-hover:opacity-100"
+                      contentClassName="items-start"
+                      decorationTone={presentation.tone}
+                      decorationVisible={isSel}
+                      start={
+                        <>
+                          {pend && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCheck(id);
+                              }}
+                              className={cn(
+                                "mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border transition",
+                                isChecked
+                                  ? "border-primary bg-primary text-white opacity-100"
+                                  : "border-muted-foreground/50 text-transparent",
+                                !isChecked &&
+                                  !anyChecked &&
+                                  "opacity-0 group-hover:opacity-100"
+                              )}
+                              aria-label="Select task"
+                            >
+                              <Check size={11} strokeWidth={3} />
+                            </button>
                           )}
-                          aria-label="Select task"
-                        >
-                          <Check size={11} strokeWidth={3} />
-                        </button>
-                      )}
-
-                      <InboxStatusMark status={status} />
-
-                      <div className="min-w-0 flex-1 pt-0">
-                        <p className="truncate text-[13px] font-semibold">
-                          {t.description || "Untitled task"}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
-                          <AgentChip
-                            id={t.agent_id}
-                            name={(t as any).agent_name || "Unknown agent"}
-                          />
-                          <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50" />
-                          <span className="whitespace-nowrap">
-                            {formatRelative(t.created_at)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex shrink-0 items-start gap-3 pt-0.5">
+                          <InboxStatusMark status={status} />
+                        </>
+                      }
+                      endClassName="items-start gap-3 pt-0.5"
+                      end={
                         <span className="w-[62px] text-right font-mono text-[11.5px] text-muted-foreground">
                           {fmtCost((t as any).total_cost)}
                         </span>
-                        {pend && (
-                          <div className="flex items-center gap-1.5 opacity-0 transition group-hover:opacity-100">
+                      }
+                      hoverActionsClassName="items-start gap-1.5 pt-2.5"
+                      hoverActions={
+                        pend ? (
+                          <>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -438,10 +428,26 @@ export function InboxClient({ items, error }: InboxClientProps) {
                             >
                               <X size={15} strokeWidth={2} />
                             </button>
-                          </div>
-                        )}
+                          </>
+                        ) : null
+                      }
+                    >
+                      <div className="min-w-0 flex-1 pt-0">
+                        <p className="truncate text-[13px] font-semibold">
+                          {t.description || "Untitled task"}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+                          <AgentChip
+                            id={t.agent_id}
+                            name={(t as any).agent_name || "Unknown agent"}
+                          />
+                          <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50" />
+                          <span className="whitespace-nowrap">
+                            {formatRelative(t.created_at)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    </InteractiveListRow>
                   );
                 })
               )}
