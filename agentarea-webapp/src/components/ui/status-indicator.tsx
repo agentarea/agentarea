@@ -117,7 +117,7 @@ export function StatusIndicator({
           )}
         />
       </span>
-      <span>{children}</span>
+      {children ? <span>{children}</span> : null}
     </span>
   );
 }

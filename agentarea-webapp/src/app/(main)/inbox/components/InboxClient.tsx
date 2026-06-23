@@ -68,18 +68,19 @@ function fmtCost(cost?: number | null): string {
   return cost == null ? "—" : `$${Number(cost).toFixed(4)}`;
 }
 
-function StatusIcon({ status, size = 18 }: { status: string; size?: number }) {
-  const cls = "shrink-0";
-  switch (normalizeStatus(status)) {
-    case "pending":
-      return <Clock size={size} className={cn(cls, "text-amber-500")} />;
-    case "completed":
-      return (
-        <CheckCircle2 size={size} className={cn(cls, "text-emerald-500")} />
-      );
-    default:
-      return <XCircle size={size} className={cn(cls, "text-red-500")} />;
-  }
+function InboxStatusMark({ status }: { status: string }) {
+  const presentation = getInboxStatusPresentation(status);
+
+  return (
+    <StatusIndicator
+      tone={presentation.tone}
+      pulse={presentation.pulse}
+      size="default"
+      aria-label={presentation.label}
+      title={presentation.label}
+      className="mt-1 shrink-0"
+    />
+  );
 }
 
 function AgentChip({ id, name }: { id?: string | null; name: string }) {
@@ -364,7 +365,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
                       key={id}
                       onClick={() => setSelId(id)}
                       className={cn(
-                        "group relative flex cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-2.5 transition-colors",
+                        "group relative flex cursor-pointer items-start gap-3 border-b border-border/60 px-4 py-2.5 transition-colors",
                         isSel ? "bg-primary/10" : "hover:bg-muted/60"
                       )}
                     >
@@ -379,7 +380,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
                             toggleCheck(id);
                           }}
                           className={cn(
-                            "grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border transition",
+                            "mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border transition",
                             isChecked
                               ? "border-primary bg-primary text-white opacity-100"
                               : "border-muted-foreground/50 text-transparent",
@@ -393,9 +394,9 @@ export function InboxClient({ items, error }: InboxClientProps) {
                         </button>
                       )}
 
-                      <StatusIcon status={status} />
+                      <InboxStatusMark status={status} />
 
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 pt-0">
                         <p className="truncate text-[13px] font-semibold">
                           {t.description || "Untitled task"}
                         </p>
@@ -411,7 +412,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-3">
+                      <div className="flex shrink-0 items-start gap-3 pt-0.5">
                         <span className="w-[62px] text-right font-mono text-[11.5px] text-muted-foreground">
                           {fmtCost((t as any).total_cost)}
                         </span>
