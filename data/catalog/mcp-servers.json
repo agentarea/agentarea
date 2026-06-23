@@ -1,0 +1,87 @@
+{
+  "metadata": {
+    "source": "curated",
+    "generated_by": "agentarea curated command/stdio MCP catalog",
+    "total_count": 1
+  },
+  "servers": [
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/telegram",
+        "title": "Telegram",
+        "description": "Telegram MCP server (Telethon) — list chats, read and search messages, download media, and (when enabled) send. Read-only by default.",
+        "version": "0.6.3",
+        "websiteUrl": "https://github.com/chigwell/telegram-mcp",
+        "repository": {
+          "url": "https://github.com/chigwell/telegram-mcp",
+          "source": "github"
+        },
+        "packages": [
+          {
+            "registryType": "pypi",
+            "identifier": "telegram-mcp",
+            "name": "telegram-mcp",
+            "version": "0.6.3",
+            "transport": {
+              "type": "stdio"
+            },
+            "environmentVariables": [
+              {
+                "name": "TELEGRAM_API_ID",
+                "description": "Telegram API ID from https://my.telegram.org/apps",
+                "required": true,
+                "isRequired": true,
+                "isSecret": true
+              },
+              {
+                "name": "TELEGRAM_API_HASH",
+                "description": "Telegram API hash from https://my.telegram.org/apps",
+                "required": true,
+                "isRequired": true,
+                "isSecret": true
+              },
+              {
+                "name": "TELEGRAM_SESSION_STRING",
+                "description": "Telethon StringSession produced once via the interactive auth flow (phone number + login code). Generated outside the platform, then pasted here.",
+                "required": true,
+                "isRequired": true,
+                "isSecret": true
+              },
+              {
+                "name": "TELEGRAM_EXPOSED_TOOLS",
+                "description": "Tool exposure mode. 'read-only' (default) disables sending, deleting, and other mutating tools. Set to 'all' to enable write access.",
+                "required": false,
+                "isRequired": false,
+                "isSecret": false,
+                "default": "read-only"
+              }
+            ]
+          }
+        ],
+        "icons": [
+          {
+            "src": "https://www.google.com/s2/favicons?domain=telegram.org&sz=128",
+            "mimeType": "image/png",
+            "sizes": ["128x128"]
+          }
+        ],
+        "metadata": {
+          "agentarea:source_type": "community",
+          "agentarea:source_url": "https://github.com/chigwell/telegram-mcp",
+          "agentarea:logo_domain": "telegram.org",
+          "agentarea:logo_source_url": "https://www.google.com/s2/favicons?domain=telegram.org&sz=128",
+          "agentarea:notes": "Python stdio server run via 'uvx telegram-mcp' inside agentarea/mcp-bridge:latest. Read-only by default via TELEGRAM_EXPOSED_TOOLS. Requires a pre-generated Telethon session string."
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-06-20T00:00:00Z",
+          "updatedAt": "2026-06-20T00:00:00Z"
+        }
+      }
+    }
+  ]
+}

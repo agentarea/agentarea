@@ -81,6 +81,82 @@ class TestDetectType:
             RegistryService._detect_type({"servers": {"not": "a list"}})
 
 
+class TestParseMCPServers:
+    def _telegram_entry(self):
+        # Mirrors data/catalog/mcp-servers.json (standard MCP registry format,
+        # pypi package → stdio command wrapped by mcp-bridge).
+        return {
+            "servers": [
+                {
+                    "server": {
+                        "name": "ai.agentarea.catalog/telegram",
+                        "title": "Telegram",
+                        "description": "Telegram MCP server (Telethon).",
+                        "version": "0.6.3",
+                        "packages": [
+                            {
+                                "registryType": "pypi",
+                                "identifier": "telegram-mcp",
+                                "name": "telegram-mcp",
+                                "version": "0.6.3",
+                                "environmentVariables": [
+                                    {"name": "TELEGRAM_API_ID", "required": True, "isSecret": True},
+                                    {"name": "TELEGRAM_API_HASH", "required": True, "isSecret": True},
+                                    {
+                                        "name": "TELEGRAM_SESSION_STRING",
+                                        "required": True,
+                                        "isSecret": True,
+                                    },
+                                    {
+                                        "name": "TELEGRAM_EXPOSED_TOOLS",
+                                        "required": False,
+                                        "isSecret": False,
+                                        "default": "read-only",
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    "_meta": {
+                        "io.modelcontextprotocol.registry/official": {"isLatest": True}
+                    },
+                }
+            ]
+        }
+
+    def test_pypi_package_parses_to_uvx_command(self):
+        items = RegistryService._parse_mcp_servers(self._telegram_entry())
+
+        # Only the pypi package → a single command-type item.
+        assert len(items) == 1
+        spec = items[0]["spec"]
+        assert items[0]["name"] == "Telegram"
+        assert items[0]["external_id"] == "ai.agentarea.catalog/telegram/command"
+        assert spec["connection_type"] == "command"
+        assert spec["command"] == "uvx"
+        assert spec["args"] == ["telegram-mcp"]
+        assert spec["transport"] == "stdio"
+
+    def test_env_schema_preserved_for_ui_and_secret_routing(self):
+        items = RegistryService._parse_mcp_servers(self._telegram_entry())
+        env_schema = items[0]["spec"]["env_schema"]
+
+        names = [e["name"] for e in env_schema]
+        assert names == [
+            "TELEGRAM_API_ID",
+            "TELEGRAM_API_HASH",
+            "TELEGRAM_SESSION_STRING",
+            "TELEGRAM_EXPOSED_TOOLS",
+        ]
+        # Credentials route through the secret manager (isSecret) and are required.
+        by_name = {e["name"]: e for e in env_schema}
+        assert by_name["TELEGRAM_SESSION_STRING"]["isSecret"] is True
+        assert by_name["TELEGRAM_SESSION_STRING"]["required"] is True
+        # Read-only by default, user-overridable, not a secret.
+        assert by_name["TELEGRAM_EXPOSED_TOOLS"]["default"] == "read-only"
+        assert by_name["TELEGRAM_EXPOSED_TOOLS"]["isSecret"] is False
+
+
 class TestParseLLMProviders:
     def test_basic_provider(self):
         data = {

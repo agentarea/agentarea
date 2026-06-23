@@ -1,5 +1,15 @@
 # Agent-to-Agent (A2A) Communication Guide
 
+> ⚠️ **OUTDATED (2026-06-20).** This guide describes the retired Google ADK /
+> `InMemoryTaskManager` / `AgentCommunicationService` model. The current design runs
+> A2A over Temporal tasks + the workflow event stream. See:
+> - **`docs/adr/2026-06-20-a2a-transport-correctness.md`** — how an A2A task produces and
+>   returns a result (authoritative).
+> - `docs/plans/2026-03-10-agent-delegation-remote-mcp.md` — delegation via `A2AAgentTool`.
+> - `docs/plans/2026-03-10-a2a-spec-compliance.md` — A2A v0.3.0 wire contract.
+>
+> The sections below are kept for historical context only.
+
 Welcome to the **AgentArea agent-to-agent communication** documentation.  
 This feature allows an _agent A_ to request work from _agent B_ by **creating a task for it** via the A2A-protocol API. Under the hood it is powered by:
 

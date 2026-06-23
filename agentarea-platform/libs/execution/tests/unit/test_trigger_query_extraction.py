@@ -7,14 +7,24 @@ Covers webhook-based (Telegram, Slack, Discord, etc.) and poll-based (extractors
 class TestTriggerQueryFromWebhookParsedData:
     """Webhook parsers put text at top level of execution_data."""
 
-    def _extract_query(self, execution_data: dict, trigger_description: str = "Default trigger") -> str:
+    def _extract_query(
+        self,
+        execution_data: dict,
+        trigger_description: str = "Default trigger",
+        task_parameters: dict | None = None,
+    ) -> str:
         """Replicate the query extraction logic from trigger_execution_activities."""
+        task_parameters = task_parameters or {}
         extracted_events = execution_data.get("extracted_events", [])
         message_texts = [e.get("text") for e in extracted_events if e.get("text")]
         if not message_texts:
             top_level_text = execution_data.get("text")
             if top_level_text:
                 message_texts = [top_level_text]
+        if not message_texts:
+            task_text = task_parameters.get("text")
+            if isinstance(task_text, str) and task_text.strip():
+                message_texts = [task_text.strip()]
         return "\n".join(message_texts) if message_texts else (
             trigger_description or "Execute trigger"
         )
@@ -48,6 +58,19 @@ class TestTriggerQueryFromWebhookParsedData:
         }
         query = self._extract_query(execution_data, "Monitor GitHub pushes")
         assert query == "Monitor GitHub pushes"
+
+    def test_task_parameter_text_used_before_description(self):
+        """Task text configured on the trigger is used when event data has no text."""
+        execution_data = {
+            "webhook_type": "generic",
+            "body": {"event": "scheduled"},
+        }
+        query = self._extract_query(
+            execution_data,
+            "Fallback description",
+            {"text": "Run the scheduled report"},
+        )
+        assert query == "Run the scheduled report"
 
     def test_empty_text_falls_back_to_description(self):
         """Empty string text should fall back to description."""
@@ -99,14 +122,24 @@ class TestTriggerQueryFromWebhookParsedData:
 class TestTriggerServiceQueryExtraction:
     """Same logic in trigger_service.py uses 'events' key instead of 'extracted_events'."""
 
-    def _extract_query(self, trigger_data: dict, trigger_description: str = "Default trigger") -> str:
+    def _extract_query(
+        self,
+        trigger_data: dict,
+        trigger_description: str = "Default trigger",
+        task_parameters: dict | None = None,
+    ) -> str:
         """Replicate the query extraction logic from trigger_service."""
+        task_parameters = task_parameters or {}
         events = trigger_data.get("events", [])
         message_texts = [e.get("text") for e in events if e.get("text")]
         if not message_texts:
             top_level_text = trigger_data.get("text")
             if top_level_text:
                 message_texts = [top_level_text]
+        if not message_texts:
+            task_text = task_parameters.get("text")
+            if isinstance(task_text, str) and task_text.strip():
+                message_texts = [task_text.strip()]
         return "\n".join(message_texts) if message_texts else (
             trigger_description or "Execute trigger"
         )
@@ -131,3 +164,13 @@ class TestTriggerServiceQueryExtraction:
         trigger_data = {"raw_data": {}}
         query = self._extract_query(trigger_data, "Cron job trigger")
         assert query == "Cron job trigger"
+
+    def test_task_parameter_text_used_before_description(self):
+        """Cron/fallback trigger text becomes the task query before description."""
+        trigger_data = {"raw_data": {}}
+        query = self._extract_query(
+            trigger_data,
+            "Cron job trigger",
+            {"text": "Summarize yesterday's metrics"},
+        )
+        assert query == "Summarize yesterday's metrics"
