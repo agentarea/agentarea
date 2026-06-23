@@ -393,6 +393,13 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.timeoutSeconds | int | `5` |  |
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
+| registryReconcile.enabled | bool | `true` |  |
+| registryReconcile.registries[0].name | string | `"system-llm-providers"` |  |
+| registryReconcile.registries[0].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"` |  |
+| registryReconcile.registries[1].name | string | `"system-llm-models"` |  |
+| registryReconcile.registries[1].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"` |  |
+| registryReconcile.registries[2].name | string | `"system-mcp-servers"` |  |
+| registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
 | keto.enabled | bool | `false` |  |
 | keto.replicaCount | int | `1` |  |
 | keto.image.repository | string | `"oryd/keto"` |  |
