@@ -20,11 +20,15 @@ interface InteractiveListRowProps {
   hoverActions?: ReactNode;
   indicator?: ReactNode;
   onClick?: () => void;
+  selected?: boolean;
   className?: string;
+  dividerClassName?: string;
   contentClassName?: string;
   decorationTone?: StatusTone;
   decorationTintClassName?: string;
   decorationVisible?: boolean;
+  hoverClassName?: string;
+  selectedClassName?: string;
   endClassName?: string;
   hoverActionsClassName?: string;
   indicatorClassName?: string;
@@ -39,11 +43,15 @@ export function InteractiveListRow({
   hoverActions,
   indicator,
   onClick,
+  selected = false,
   className,
+  dividerClassName = "border-b border-zinc-200 dark:border-zinc-700",
   contentClassName,
   decorationTone,
   decorationTintClassName,
   decorationVisible = false,
+  hoverClassName = "hover:bg-muted/60 dark:hover:bg-zinc-700/20",
+  selectedClassName = "bg-muted/60 dark:bg-zinc-700/20",
   endClassName,
   hoverActionsClassName,
   indicatorClassName,
@@ -68,8 +76,10 @@ export function InteractiveListRow({
       onClick={onClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        "group relative flex min-w-0 items-center gap-3 overflow-hidden px-4",
+        "group relative flex min-w-0 items-center gap-3 overflow-hidden px-4 py-2.5 transition-colors",
+        dividerClassName,
         isClickable && "cursor-pointer",
+        selected ? selectedClassName : hoverClassName,
         className
       )}
     >

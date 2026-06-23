@@ -31,7 +31,6 @@ export default function SkillRow({
   return (
     <InteractiveListRow
       onClick={open}
-      className="h-10 border-b border-zinc-100 hover:bg-muted/60 dark:border-zinc-800/70 dark:hover:bg-zinc-800/50"
       start={
         <SkillTile color={source.color} icon={SourceIcon} variant="row" />
       }

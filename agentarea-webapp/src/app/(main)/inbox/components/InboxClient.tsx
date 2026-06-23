@@ -311,7 +311,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
           <div
             className={cn(
               "flex min-w-0 flex-col overflow-hidden",
-              selected && "border-r border-border"
+              selected && "border-r border-zinc-200 dark:border-zinc-700"
             )}
           >
             {anyChecked && (
@@ -366,11 +366,8 @@ export function InboxClient({ items, error }: InboxClientProps) {
                     <InteractiveListRow
                       key={id}
                       onClick={() => setSelId(id)}
-                      className={cn(
-                        "items-start border-b border-border/60 py-2.5 transition-colors",
-                        isSel ? "bg-muted/60" : "hover:bg-muted/60"
-                      )}
-                      contentClassName="items-start"
+                      selected={isSel}
+                      className="items-start"
                       decorationTone={presentation.tone}
                       decorationVisible={isSel}
                       start={
@@ -398,13 +395,11 @@ export function InboxClient({ items, error }: InboxClientProps) {
                           <InboxStatusMark status={status} />
                         </>
                       }
-                      endClassName="items-start gap-3 pt-0.5"
                       end={
                         <span className="w-[62px] text-right font-mono text-[11.5px] text-muted-foreground">
                           {fmtCost((t as any).total_cost)}
                         </span>
                       }
-                      hoverActionsClassName="items-start gap-1.5 pt-2.5"
                       hoverActions={
                         pend ? (
                           <>
