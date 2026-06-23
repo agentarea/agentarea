@@ -1,7 +1,6 @@
-import { useCallback, useEffect } from "react"
+import { useCallback } from "react"
 import { useFormContext } from "react-hook-form"
-import { useDebounceValue } from "usehooks-ts"
-import { useComponents } from "../../../../context"
+import { useComponents, useOryFlow } from "../../../../context"
 import { OryNodeButtonButtonProps } from "../../../../types"
 import { UiNodeInput } from "../../../../util/utilFixSDKTypesHelper"
 
@@ -25,34 +24,26 @@ export function extractProvider(
 
 export function SSOButtonRenderer({ node }: SsoButtonProps) {
   const { Node } = useComponents()
+  const { pendingSocialNodeValue } = useOryFlow()
   const attributes = node.attributes
+  const isPending = pendingSocialNodeValue === String(attributes.value)
 
   const {
     setValue,
     formState: { isSubmitting, isReady },
   } = useFormContext()
-  // Safari cancels form submission events, if we do a state update in the same tick
-  // so we delay the state update by 100ms
-  const [clicked, setClicked] = useDebounceValue(false, 100)
-
-  useEffect(() => {
-    if (!isSubmitting) {
-      setClicked(false)
-    }
-  }, [isSubmitting, setClicked])
 
   const clickHandler = useCallback(() => {
     setValue("provider", attributes.value)
     setValue("method", node.group)
-    setClicked(true)
-  }, [setValue, attributes.value, node.group, setClicked])
+  }, [setValue, attributes.value, node.group])
 
   const buttonProps = {
     type: "submit",
     name: attributes.name,
     value: attributes.value,
     onClick: clickHandler,
-    disabled: attributes.disabled || !isReady || isSubmitting,
+    disabled: attributes.disabled || !isReady || isSubmitting || isPending,
   } satisfies OryNodeButtonButtonProps
   const provider = extractProvider(node.meta.label?.context) ?? ""
 
@@ -62,7 +53,7 @@ export function SSOButtonRenderer({ node }: SsoButtonProps) {
       attributes={attributes}
       buttonProps={buttonProps}
       provider={provider}
-      isSubmitting={clicked}
+      isSubmitting={isPending}
     />
   )
 }

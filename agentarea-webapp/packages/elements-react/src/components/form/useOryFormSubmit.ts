@@ -52,7 +52,23 @@ export function useOryFormSubmit(
     // This is necessary to avoid sending empty strings to the backend, which can cause validation errors.
     // TODO: Kratos could be improved to handle this better, and treat empty strings as missing values.
     const data = removeEmptyStrings(initialData)
-    console.log("Submitting form data:", data)
+    const socialProvider =
+      typeof data.provider === "string" ? data.provider : null
+    const isSocialSubmit =
+      (data.method === UiNodeGroupEnum.Oidc ||
+        data.method === UiNodeGroupEnum.Saml) &&
+      socialProvider !== null
+    let didRedirect = false
+
+    if (isSocialSubmit) {
+      flowContainer.setPendingSocialNodeValue(socialProvider)
+    }
+
+    const redirectWithPendingState: OnRedirectHandler = (url, external) => {
+      didRedirect = true
+      onRedirect(url, external)
+    }
+
     switch (flowContainer.flowType) {
       case FlowType.Login: {
         const submitData: UpdateLoginFlowBody = {
@@ -63,7 +79,7 @@ export function useOryFormSubmit(
         }
 
         await onSubmitLogin(flowContainer, config, {
-          onRedirect,
+          onRedirect: redirectWithPendingState,
           setFlowContainer: handleSuccess,
           body: submitData,
         })
@@ -79,7 +95,7 @@ export function useOryFormSubmit(
         }
 
         await onSubmitRegistration(flowContainer, config, {
-          onRedirect,
+          onRedirect: redirectWithPendingState,
           setFlowContainer: handleSuccess,
           body: submitData,
         })
@@ -87,7 +103,7 @@ export function useOryFormSubmit(
       }
       case FlowType.Verification:
         await onSubmitVerification(flowContainer, config, {
-          onRedirect,
+          onRedirect: redirectWithPendingState,
           setFlowContainer: handleSuccess,
           body: data as unknown as UpdateVerificationFlowBody,
         })
@@ -101,7 +117,7 @@ export function useOryFormSubmit(
           submitData.email = ""
         }
         await onSubmitRecovery(flowContainer, config, {
-          onRedirect,
+          onRedirect: redirectWithPendingState,
           setFlowContainer: handleSuccess,
           body: submitData,
         })
@@ -147,7 +163,7 @@ export function useOryFormSubmit(
         }
 
         await onSubmitSettings(flowContainer, config, {
-          onRedirect,
+          onRedirect: redirectWithPendingState,
           setFlowContainer: handleSuccess,
           body: submitData,
         })
@@ -167,10 +183,15 @@ export function useOryFormSubmit(
           oauth2Success.redirect_to &&
           typeof oauth2Success.redirect_to === "string"
         ) {
-          onRedirect(oauth2Success.redirect_to as string, true)
+          redirectWithPendingState(oauth2Success.redirect_to as string, true)
         }
       }
     }
+
+    if (isSocialSubmit && !didRedirect) {
+      flowContainer.setPendingSocialNodeValue(null)
+    }
+
     if ("password" in data) {
       methods.setValue("password", "")
     }
