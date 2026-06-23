@@ -1,0 +1,106 @@
+{{- if .Values.registryReconcile.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-registry-reconcile
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: registry-reconcile
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    # Standard resource (not a Helm hook) that waits for the database, mirroring
+    # the db-migration Job. ttlSecondsAfterFinished clears it so a later upgrade
+    # recreates and re-runs it (reconcile is idempotent).
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: registry-reconcile
+        {{- with .Values.global.extraSelectorLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      restartPolicy: Never
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+        # Wait for the database (registries/items live in the platform DB).
+        - name: wait-for-db
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.database.host" . }} {{ .Values.global.database.port }}; do
+                echo "Waiting for database..."
+                sleep 2
+              done
+              echo "Database is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      containers:
+        - name: reconcile
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          workingDir: /app/apps/api
+          command:
+            - agentarea-api
+            - reconcile
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env-databasejobs
+          env:
+            # Database credentials
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            # Registry definitions consumed by `agentarea-api reconcile`
+            # (JSON array; bound to the --registries-config option via envvar).
+            - name: REGISTRIES_CONFIG
+              value: {{ .Values.registryReconcile.registries | toJson | quote }}
+          {{- if or .Values.global.jobs.kube.resources .Values.backend.resources }}
+          resources:
+            {{- if .Values.global.jobs.kube.resources }}
+            {{- toYaml .Values.global.jobs.kube.resources | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  backoffLimit: 3
+{{- end }}

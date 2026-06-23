@@ -768,6 +768,25 @@ jobs:
   dbMigration:
     enabled: true
 
+# Registry reconcile (replaces the standalone agentarea-operator).
+# A post-migration Job runs `agentarea-api reconcile`, which ensures each
+# registry exists and syncs it via the platform RegistryService (the same code
+# path the API and CLI use). Idempotent: re-runs on every install/upgrade.
+# Disable to bring your own catalog or start empty.
+registryReconcile:
+  enabled: true
+  # Each entry needs `name` + `source_url`; the catalog type is auto-detected
+  # from the fetched payload. Skills are intentionally NOT seeded by default
+  # (the public skill catalog is ~123k entries across 25 shards); add skill
+  # shards explicitly if you want them.
+  registries:
+    - name: system-llm-providers
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
+    - name: system-llm-models
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
+    - name: system-mcp-servers
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).
 # Disabled by default; enable to turn on real relationship-based access checks.
