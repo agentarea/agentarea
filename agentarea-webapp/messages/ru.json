@@ -255,6 +255,76 @@
       "title": "Биллинг здесь недоступен",
       "description": "В этой инсталляции нет сервиса биллинга. Подпиской и потреблением управляет ваш провайдер."
     },
+    "cloudMigration": {
+      "badge": "Self-hosted инсталляция",
+      "title": "Биллинг управляется в Agentarea Cloud",
+      "description": "Локальная инсталляция не управляет оплатой. В cloud эта страница станет простой billing workspace: способы привязки оплаты, история платежей и hosted controls для публичных агентов.",
+      "openCloud": "Перейти в cloud",
+      "contactSales": "Связаться с отделом продаж",
+      "benefits": {
+        "paymentMethods": {
+          "title": "Привязка оплаты",
+          "description": "В cloud будут конкретные способы подключить billing providers, не смешивая payment setup с локальным приложением."
+        },
+        "paymentHistory": {
+          "title": "История платежей",
+          "description": "Компактная таблица invoice, charge и billing events должна жить в hosted billing service."
+        },
+        "publicAgents": {
+          "title": "Сделать агента публичным",
+          "description": "Открывайте выбранных агентов в интернете через hosted endpoints без своего ingress и публичного auth-слоя."
+        },
+        "guardrails": {
+          "title": "Hosted guardrails",
+          "description": "Managed policy checks, квоты, approval-пути и audit trail остаются рядом с агентами, когда они работают в cloud."
+        }
+      }
+    },
+    "cloudBilling": {
+      "badge": "Cloud инсталляция",
+      "title": "Cloud billing workspace",
+      "description": "Эта страница может показывать hosted billing surface для текущего workspace: migration entry point, привязку оплаты, историю платежей, публичных агентов, hosted guardrails и контекст инфраструктуры.",
+      "openCloud": "Migrate to cloud",
+      "contactSales": "Связаться с отделом продаж",
+      "estimate": {
+        "title": "Текущий setup в Agentarea Cloud",
+        "subtitle": "Оценка инфраструктуры считается по CPU и RAM telemetry. Agent spend показывается отдельно.",
+        "infraLabel": "Оценка cloud infrastructure",
+        "telemetryPending": "Ждём telemetry",
+        "basedOnResources": "По CPU/RAM",
+        "cpu": "CPU core-hours",
+        "memory": "RAM GB-hours",
+        "agents": "Агенты",
+        "connections": "Подключения",
+        "taskRuns": "Запуски задач"
+      },
+      "agentUsage": {
+        "label": "Agent usage:",
+        "description": "{spend} agent spend с начала месяца, прогноз {projected} к концу месяца. Это контекст использования, а не оценка инфраструктуры."
+      },
+      "features": {
+        "paymentMethods": {
+          "title": "Привязка оплаты",
+          "description": "Cloud может показывать конкретную настройку billing provider без payment controls внутри OSS приложения."
+        },
+        "paymentHistory": {
+          "title": "История платежей",
+          "description": "Hosted таблица invoice, charge и billing events появится здесь, когда cloud billing включён."
+        },
+        "publicAgents": {
+          "title": "Make agents public",
+          "description": "Открывайте выбранных агентов в интернет через hosted endpoints, ingress, auth и rate limits."
+        },
+        "guardrails": {
+          "title": "Hosted guardrails",
+          "description": "Managed policy checks, квоты, approvals и audit trails остаются привязанными к cloud-run агентам."
+        },
+        "managedInfra": {
+          "title": "Гарантированная инфраструктура",
+          "description": "Cloud может показывать managed runtime capacity, uptime posture и support commitments в одном месте."
+        }
+      }
+    },
     "empty": {
       "title": "Пока нет данных о биллинге",
       "description": "Информация о подписке и потреблении появится здесь, когда станет доступной."

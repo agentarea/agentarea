@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { BudgetsData } from "./components/BudgetsData";
@@ -13,6 +13,7 @@ export default async function BudgetsPage() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Budgets" }],
+        description: "Track workspace spend and tune the monthly cap.",
       }}
     >
       <div className="main-content">

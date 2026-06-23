@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
@@ -63,6 +64,77 @@ function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ResourceCell({ event }: { event: AuditEvent }) {
+  const resource = event.resource;
+  const label = resource?.label ?? event.resource_type;
+  const typeLabel = resource?.type_label ?? event.resource_type;
+
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-2">
+        {resource?.href ? (
+          <Link
+            href={resource.href as any}
+            className="truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {label}
+          </Link>
+        ) : (
+          <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+            {label}
+          </span>
+        )}
+        <Badge variant="zinc" size="sm" className="shrink-0 font-normal">
+          {typeLabel}
+        </Badge>
+      </div>
+      {event.resource_id && !resource?.found && (
+        <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+          {event.resource_id}
+        </div>
+      )}
+      {event.resource_id && resource?.found && (
+        <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+          {event.resource_id.slice(0, 8)}
+        </div>
+      )}
+      {event.changes && event.changes.length > 0 && (
+        <ChangesDetail changes={event.changes} />
+      )}
+    </div>
+  );
+}
+
+function ActorCell({ event }: { event: AuditEvent }) {
+  const actor = event.actor;
+  const label = actor?.label ?? event.actor_id;
+  const description = actor?.description;
+
+  return (
+    <div className="min-w-0">
+      {actor?.href ? (
+        <Link
+          href={actor.href as any}
+          className="block truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {label}
+        </Link>
+      ) : (
+        <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+          {label}
+        </span>
+      )}
+      {description && (
+        <span className="block truncate text-xs text-muted-foreground">
+          {description}
+        </span>
+      )}
     </div>
   );
 }
@@ -149,29 +221,20 @@ export default function AuditLogClient({
       header: t("table.resource"),
       cellClassName: "",
       render: (_: unknown, event: AuditEvent) => (
-        <div>
-          <span className="text-sm">{event.resource_type}</span>
-          {event.resource_id && (
-            <span className="text-xs text-muted-foreground ml-1.5 font-mono">
-              {event.resource_id.slice(0, 8)}
-            </span>
-          )}
-          {expandedId === event.id &&
-            event.changes &&
-            event.changes.length > 0 && (
-              <ChangesDetail changes={event.changes} />
-            )}
-        </div>
+        <ResourceCell
+          event={{
+            ...event,
+            changes: expandedId === event.id ? event.changes : undefined,
+          }}
+        />
       ),
     },
     {
       accessor: "actor_id",
       header: t("table.actor"),
-      cellClassName: "w-[120px]",
-      render: (value: string) => (
-        <span className="text-sm truncate max-w-[120px] block">
-          {value.length > 12 ? value.slice(0, 12) + "..." : value}
-        </span>
+      cellClassName: "w-[180px] max-w-[220px]",
+      render: (_value: string, event: AuditEvent) => (
+        <ActorCell event={event} />
       ),
     },
     {
