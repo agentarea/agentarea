@@ -52,14 +52,16 @@ export function useOryFormSubmit(
     // This is necessary to avoid sending empty strings to the backend, which can cause validation errors.
     // TODO: Kratos could be improved to handle this better, and treat empty strings as missing values.
     const data = removeEmptyStrings(initialData)
+    const socialProvider =
+      typeof data.provider === "string" ? data.provider : null
     const isSocialSubmit =
       (data.method === UiNodeGroupEnum.Oidc ||
         data.method === UiNodeGroupEnum.Saml) &&
-      typeof data.provider === "string"
+      socialProvider !== null
     let didRedirect = false
 
     if (isSocialSubmit) {
-      flowContainer.setPendingSocialNodeValue(data.provider)
+      flowContainer.setPendingSocialNodeValue(socialProvider)
     }
 
     const redirectWithPendingState: OnRedirectHandler = (url, external) => {
