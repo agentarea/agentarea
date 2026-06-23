@@ -616,6 +616,16 @@ body div[data-sonner-toast][data-type="warning"] {
   display: block !important;
 }
 
+.ory-elements label.ory-checkbox-row,
+.ory-elements [data-testid*="form/node"] label.ory-checkbox-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  gap: 0.75rem !important;
+  margin-bottom: 0 !important;
+}
+
 /* Remove gap between label and input */
 .ory-elements [data-testid*="form/node"]:has(label):has(input),
 .ory-elements [data-testid*="form/node"]:has(label):has(select),

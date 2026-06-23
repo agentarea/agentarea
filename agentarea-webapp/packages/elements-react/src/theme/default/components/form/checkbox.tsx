@@ -37,37 +37,37 @@ export const DefaultCheckbox = ({ node, inputProps }: OryNodeCheckboxProps) => {
   const hasError = node.messages.some((m) => m.type === "error")
 
   return (
-    <label className="flex cursor-pointer items-start gap-3 self-stretch antialiased">
-      <span className="flex h-5 items-center">
-        <input
-          {...inputProps}
-          className={cn(
-            "peer size-4 appearance-none rounded-forms border border-checkbox-border-checkbox-border-default bg-checkbox-background-default checked:border-checkbox-border-checkbox-border-checked checked:bg-checkbox-background-checked",
-            hasError && "border-interface-border-validation-danger",
-          )}
-          data-testid={`ory/form/node/input/${node.attributes.name}`}
-        />
-        <CheckboxSVG />
-      </span>
-      <span className="flex flex-col">
-        <span className="leading-tight font-normal text-interface-foreground-default-primary">
+    <div className="w-full self-stretch antialiased">
+      <label className="ory-checkbox-row flex cursor-pointer items-start gap-3 self-stretch">
+        <span className="relative mt-1 flex h-4 w-4 shrink-0 items-center justify-center">
+          <input
+            {...inputProps}
+            className={cn(
+              "peer absolute inset-0 m-0 size-4 appearance-none rounded-forms border border-checkbox-border-checkbox-border-default bg-checkbox-background-default checked:border-checkbox-border-checkbox-border-checked checked:bg-checkbox-background-checked",
+              hasError && "border-interface-border-validation-danger",
+            )}
+            data-testid={`ory/form/node/input/${node.attributes.name}`}
+          />
+          <CheckboxSVG />
+        </span>
+        <span className="min-w-0 flex-1 text-base leading-tight font-normal text-interface-foreground-default-primary">
           <CheckboxLabel label={label} />
         </span>
-        {node.messages.map((message) => (
-          <span
-            key={message.id}
-            className={cn(
-              "mt-1",
-              message.type === "error"
-                ? "text-interface-foreground-validation-danger"
-                : "text-interface-foreground-default-secondary",
-            )}
-            {...messageTestId(message)}
-          >
-            {uiTextToFormattedMessage(message, intl)}
-          </span>
-        ))}
-      </span>
-    </label>
+      </label>
+      {node.messages.map((message) => (
+        <span
+          key={message.id}
+          className={cn(
+            "mt-1 block",
+            message.type === "error"
+              ? "text-interface-foreground-validation-danger"
+              : "text-interface-foreground-default-secondary",
+          )}
+          {...messageTestId(message)}
+        >
+          {uiTextToFormattedMessage(message, intl)}
+        </span>
+      ))}
+    </div>
   )
 }
