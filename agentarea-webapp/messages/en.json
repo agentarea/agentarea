@@ -290,6 +290,76 @@
       "title": "Billing isn't available here",
       "description": "This deployment doesn't include the billing service. Subscription and usage are managed by your provider."
     },
+    "cloudMigration": {
+      "badge": "Self-hosted deployment",
+      "title": "Billing is managed in Agentarea Cloud",
+      "description": "This local deployment does not manage payments. In cloud, this page becomes a focused billing workspace for payment methods, payment history, and hosted controls around public agents.",
+      "openCloud": "Migrate to cloud",
+      "contactSales": "Talk to sales",
+      "benefits": {
+        "paymentMethods": {
+          "title": "Connect payment methods",
+          "description": "Cloud will show concrete ways to attach billing providers and keep payment setup outside the local app."
+        },
+        "paymentHistory": {
+          "title": "Payment history",
+          "description": "A compact table for invoices, charges, and billing events belongs in the hosted billing service."
+        },
+        "publicAgents": {
+          "title": "Make agents public",
+          "description": "Expose selected agents on the internet through hosted endpoints instead of running your own ingress and public auth layer."
+        },
+        "guardrails": {
+          "title": "Hosted guardrails",
+          "description": "Managed policy checks, quotas, approval paths, and audit trails travel with agents when they run in cloud."
+        }
+      }
+    },
+    "cloudBilling": {
+      "badge": "Cloud deployment",
+      "title": "Cloud billing workspace",
+      "description": "This page can show the hosted billing surface for the current workspace: migration entry point, payment setup, payment history, public agents, hosted guardrails, and infrastructure context.",
+      "openCloud": "Migrate to cloud",
+      "contactSales": "Talk to sales",
+      "estimate": {
+        "title": "Current setup in Agentarea Cloud",
+        "subtitle": "Infra estimate is based on CPU and RAM telemetry. Agent spend is shown separately.",
+        "infraLabel": "Estimated cloud infrastructure",
+        "telemetryPending": "Telemetry pending",
+        "basedOnResources": "CPU/RAM based",
+        "cpu": "CPU core-hours",
+        "memory": "RAM GB-hours",
+        "agents": "Agents",
+        "connections": "Connections",
+        "taskRuns": "Task runs tracked"
+      },
+      "agentUsage": {
+        "label": "Agent usage:",
+        "description": "{spend} month-to-date agent spend, projected {projected} by month end. This is usage context, not the infrastructure estimate."
+      },
+      "features": {
+        "paymentMethods": {
+          "title": "Connect payment methods",
+          "description": "Cloud can show concrete billing provider setup without mixing payment controls into the OSS app."
+        },
+        "paymentHistory": {
+          "title": "Payment history",
+          "description": "A hosted table for invoices, charges, and billing events can live here when cloud billing is enabled."
+        },
+        "publicAgents": {
+          "title": "Make agents public",
+          "description": "Expose selected agents to the internet through hosted endpoints, ingress, auth, and rate limits."
+        },
+        "guardrails": {
+          "title": "Hosted guardrails",
+          "description": "Managed policy checks, quotas, approvals, and audit trails stay attached to cloud-run agents."
+        },
+        "managedInfra": {
+          "title": "Guaranteed infrastructure",
+          "description": "Cloud can present managed runtime capacity, uptime posture, and support commitments in one place."
+        }
+      }
+    },
     "empty": {
       "title": "No billing data yet",
       "description": "Subscription and usage details will appear here once available."

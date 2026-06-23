@@ -20,6 +20,36 @@ export type TriggerFormState = {
   success?: boolean;
 };
 
+function parseTaskParameters(raw: string | null): {
+  data?: Record<string, any>;
+  error?: TriggerFormState;
+} {
+  if (!raw || !raw.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        error: {
+          message: "Invalid JSON in task parameters",
+          errors: { task_parameters: ["Task parameters must be a JSON object"] },
+        },
+      };
+    }
+
+    return { data: parsed };
+  } catch {
+    return {
+      error: {
+        message: "Invalid JSON in task parameters",
+        errors: { task_parameters: ["Invalid JSON format"] },
+      },
+    };
+  }
+}
+
 function buildConfig(formData: FormData): Record<string, any> {
   const trigger_type = formData.get("trigger_type") as string;
   const data_extractor = formData.get("data_extractor") as string | null;
@@ -74,18 +104,9 @@ export async function createTriggerAction(
 
   const config = buildConfig(formData);
 
-  // Parse task parameters
-  let task_parameters: Record<string, any> | undefined;
-  if (task_parameters_raw && task_parameters_raw.trim()) {
-    try {
-      task_parameters = JSON.parse(task_parameters_raw);
-    } catch {
-      return {
-        message: "Invalid JSON in task parameters",
-        errors: { task_parameters: ["Invalid JSON format"] },
-      };
-    }
-  }
+  const parsedTaskParameters = parseTaskParameters(task_parameters_raw);
+  if (parsedTaskParameters.error) return parsedTaskParameters.error;
+  const task_parameters = parsedTaskParameters.data;
 
   // Parse failure threshold
   const failure_threshold = failure_threshold_raw
@@ -172,18 +193,9 @@ export async function updateTriggerAction(
   const task_parameters_raw = formData.get("task_parameters") as string;
   const failure_threshold_raw = formData.get("failure_threshold") as string;
 
-  // Parse task parameters
-  let task_parameters: Record<string, any> | undefined;
-  if (task_parameters_raw && task_parameters_raw.trim()) {
-    try {
-      task_parameters = JSON.parse(task_parameters_raw);
-    } catch {
-      return {
-        message: "Invalid JSON in task parameters",
-        errors: { task_parameters: ["Invalid JSON format"] },
-      };
-    }
-  }
+  const parsedTaskParameters = parseTaskParameters(task_parameters_raw);
+  if (parsedTaskParameters.error) return parsedTaskParameters.error;
+  const task_parameters = parsedTaskParameters.data;
 
   // Parse failure threshold
   const failure_threshold = failure_threshold_raw

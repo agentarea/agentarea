@@ -8,6 +8,10 @@
 #   docker exec agentarea-backend /app/.venv/bin/agentarea-api reconcile \
 #       --config-file /tmp/rs.local.yaml
 
+- name: mcp-curated-catalog
+  source_url: /tmp/catalog/mcp-servers.json
+  description: Curated command/stdio MCP server catalog (local)
+
 - name: agents-catalog
   source_url: /tmp/catalog/agents.json
   description: Built-in agent catalog (local)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useEffect, useActionState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
@@ -21,6 +21,11 @@ import {
   Webhook,
   Circle,
   Info,
+  FileText,
+  Paperclip,
+  Server,
+  Sparkles,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -40,11 +45,21 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
+  listMCPServerInstancesAction as listMCPServerInstances,
+  listSkillsAction as listSkills,
+} from "@/lib/server-actions";
+import {
   createTriggerAction,
   updateTriggerAction,
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
+import {
+  composeTaskParameters,
+  normalizeTaskParameters,
+  splitLines,
+  type TaskParameterRef,
+} from "../components/taskParameters";
 
 interface CatalogEntry {
   id: string;
@@ -67,6 +82,8 @@ interface CreateTriggerFormProps {
 }
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+type SelectableResource = TaskParameterRef;
 
 const TIMEZONES = [
   "UTC",
@@ -118,6 +135,27 @@ export function CreateTriggerForm({
   const [selectedEvents, setSelectedEvents] = useState<string[]>(
     initialData?.event_types || []
   );
+  const initialTaskParameters = useMemo(
+    () => normalizeTaskParameters(initialData?.task_parameters),
+    [initialData?.task_parameters]
+  );
+  const [taskText, setTaskText] = useState(initialTaskParameters.text);
+  const [taskFilesText, setTaskFilesText] = useState(
+    initialTaskParameters.files.join("\n")
+  );
+  const [taskSkills, setTaskSkills] = useState<TaskParameterRef[]>(
+    initialTaskParameters.skills
+  );
+  const [taskMcps, setTaskMcps] = useState<TaskParameterRef[]>(
+    initialTaskParameters.mcps
+  );
+  const [taskRestJson, setTaskRestJson] = useState(
+    Object.keys(initialTaskParameters.rest).length > 0
+      ? JSON.stringify(initialTaskParameters.rest, null, 2)
+      : ""
+  );
+  const [availableSkills, setAvailableSkills] = useState<SelectableResource[]>([]);
+  const [availableMcps, setAvailableMcps] = useState<SelectableResource[]>([]);
 
   // Fetch catalog from backend
   useEffect(() => {
@@ -133,6 +171,40 @@ export function CreateTriggerForm({
         }
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTaskResources() {
+      const [skillsResponse, mcpsResponse] = await Promise.all([
+        listSkills().catch(() => ({ data: [] })),
+        listMCPServerInstances().catch(() => ({ data: [] })),
+      ]);
+
+      if (cancelled) return;
+
+      setAvailableSkills(
+        (((skillsResponse as any).data as any[]) || []).map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+        }))
+      );
+      setAvailableMcps(
+        (((mcpsResponse as any).data as any[]) || []).map((mcp) => ({
+          id: mcp.id,
+          name: mcp.name,
+          description: mcp.description,
+        }))
+      );
+    }
+
+    fetchTaskResources();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const selected = catalog.find((e) => e.id === selectedId);
@@ -163,6 +235,72 @@ export function CreateTriggerForm({
         : [...prev, method]
     );
   };
+
+  const addTaskResource = (
+    resourceId: string,
+    available: SelectableResource[],
+    selected: TaskParameterRef[],
+    onChange: (items: TaskParameterRef[]) => void
+  ) => {
+    const resource = available.find((item) => item.id === resourceId);
+    if (!resource || selected.some((item) => item.id === resource.id)) return;
+    onChange([...selected, resource]);
+  };
+
+  const removeTaskResource = (
+    resourceId: string,
+    selected: TaskParameterRef[],
+    onChange: (items: TaskParameterRef[]) => void
+  ) => {
+    onChange(selected.filter((item) => item.id !== resourceId));
+  };
+
+  const taskParametersValue = useMemo(() => {
+    let rest: Record<string, unknown> = {};
+    if (taskRestJson.trim()) {
+      try {
+        const parsed = JSON.parse(taskRestJson);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          rest = parsed;
+        } else {
+          return "__INVALID_TASK_PARAMETERS_JSON__";
+        }
+      } catch {
+        return "__INVALID_TASK_PARAMETERS_JSON__";
+      }
+    }
+
+    return JSON.stringify(
+      composeTaskParameters({
+        text: taskText,
+        files: splitLines(taskFilesText),
+        skills: taskSkills,
+        mcps: taskMcps,
+        rest,
+      })
+    );
+  }, [taskText, taskFilesText, taskSkills, taskMcps, taskRestJson]);
+
+  const renderSelectedResource = (
+    resource: TaskParameterRef,
+    onRemove: (id: string) => void
+  ) => (
+    <div
+      key={resource.id}
+      className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs"
+    >
+      <span className="truncate">{resource.name || resource.id}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-4 w-4 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
+        onClick={() => onRemove(resource.id)}
+      >
+        <X className="h-3 w-3" />
+      </Button>
+    </div>
+  );
 
   useEffect(() => {
     if (state.success) {
@@ -260,6 +398,11 @@ export function CreateTriggerForm({
         {selected?.data_extractor && (
           <input type="hidden" name="data_extractor" value={selected.data_extractor} />
         )}
+        <input
+          type="hidden"
+          name="task_parameters"
+          value={taskParametersValue}
+        />
 
         {/* Catalog Picker */}
         {!isEditing ? (
@@ -532,26 +675,122 @@ export function CreateTriggerForm({
         )}
 
         {/* Task Parameters */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="task_parameters" icon={Code2} optional>
+        <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+          <FormLabel icon={Code2} optional>
             {t("taskParameters")}
           </FormLabel>
-          <Textarea
-            id="task_parameters"
-            name="task_parameters"
-            placeholder={t("taskParametersPlaceholder")}
-            defaultValue={
-              initialData?.task_parameters
-                ? JSON.stringify(initialData.task_parameters, null, 2)
-                : ""
-            }
-            className="font-mono min-h-[100px]"
-          />
-          {state.errors?.task_parameters && (
-            <p className="text-sm text-destructive">
-              {state.errors.task_parameters[0]}
-            </p>
-          )}
+
+          <div className="grid gap-2">
+            <FormLabel htmlFor="task_text" icon={FileText} optional>
+              Task text
+            </FormLabel>
+            <Textarea
+              id="task_text"
+              value={taskText}
+              onChange={(event) => setTaskText(event.target.value)}
+              placeholder="Text to pass into each task created by this trigger"
+              className="min-h-[96px]"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <FormLabel htmlFor="task_files" icon={Paperclip} optional>
+              Additional files
+            </FormLabel>
+            <Textarea
+              id="task_files"
+              value={taskFilesText}
+              onChange={(event) => setTaskFilesText(event.target.value)}
+              placeholder="One file path or URL per line"
+              className="min-h-[72px] font-mono text-xs"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <FormLabel icon={Sparkles} optional>
+              Additional skills
+            </FormLabel>
+            <Select
+              value=""
+              onValueChange={(value) =>
+                addTaskResource(value, availableSkills, taskSkills, setTaskSkills)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Add a skill" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSkills
+                  .filter((skill) => !taskSkills.some((item) => item.id === skill.id))
+                  .map((skill) => (
+                    <SelectItem key={skill.id} value={skill.id}>
+                      {skill.name || skill.id}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {taskSkills.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {taskSkills.map((skill) =>
+                  renderSelectedResource(skill, (id) =>
+                    removeTaskResource(id, taskSkills, setTaskSkills)
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <FormLabel icon={Server} optional>
+              Additional MCP
+            </FormLabel>
+            <Select
+              value=""
+              onValueChange={(value) =>
+                addTaskResource(value, availableMcps, taskMcps, setTaskMcps)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Add an MCP server" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMcps
+                  .filter((mcp) => !taskMcps.some((item) => item.id === mcp.id))
+                  .map((mcp) => (
+                    <SelectItem key={mcp.id} value={mcp.id}>
+                      {mcp.name || mcp.id}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {taskMcps.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {taskMcps.map((mcp) =>
+                  renderSelectedResource(mcp, (id) =>
+                    removeTaskResource(id, taskMcps, setTaskMcps)
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <FormLabel htmlFor="task_parameters_rest" icon={Code2} optional>
+              Other JSON parameters
+            </FormLabel>
+            <Textarea
+              id="task_parameters_rest"
+              value={taskRestJson}
+              onChange={(event) => setTaskRestJson(event.target.value)}
+              placeholder={t("taskParametersPlaceholder")}
+              className="min-h-[96px] font-mono text-xs"
+            />
+            {state.errors?.task_parameters && (
+              <p className="text-sm text-destructive">
+                {state.errors.task_parameters[0]}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Failure Threshold */}
