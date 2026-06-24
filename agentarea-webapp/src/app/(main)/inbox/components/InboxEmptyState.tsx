@@ -83,7 +83,7 @@ export function InboxEmptyState({ filter, counts }: InboxEmptyStateProps) {
   const [action, additionAction, tertiaryAction] = buttons;
 
   return (
-    <div className="flex h-full justify-center px-6 py-10">п
+    <div className="flex h-full justify-center px-6 py-10">
       <div className="flex w-full flex-col gap-3">
         <EmptyState
           title={title}
