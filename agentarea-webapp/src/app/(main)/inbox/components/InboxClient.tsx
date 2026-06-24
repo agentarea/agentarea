@@ -21,6 +21,7 @@ import {
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { TaskWithAgent } from "@/lib/api";
 import { resolveEscalationAction } from "@/lib/server-actions";
@@ -235,32 +236,16 @@ export function InboxClient({ items, error }: InboxClientProps) {
 
   const toolbar = (
     <div className="flex h-[46px] w-full items-center gap-3">
-      <div className="inline-flex rounded-lg bg-muted p-[3px]">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => changeFilter(f.key)}
-            className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium transition-colors",
-              filter === f.key
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {f.label}
-            <span
-              className={cn(
-                "text-[11px] font-semibold",
-                filter === f.key
-                  ? "text-muted-foreground"
-                  : "text-muted-foreground/70"
-              )}
-            >
-              {counts[f.key]}
-            </span>
-          </button>
-        ))}
-      </div>
+      <CountSegmentedControl
+        items={FILTERS.map((item) => ({
+          value: item.key,
+          label: item.label,
+          count: counts[item.key],
+        }))}
+        value={filter}
+        onChange={changeFilter}
+        layoutId="inbox-filter-control"
+      />
       <div className="flex-1" />
       {filter !== "pending" || counts.pending > 0 ? (
         <div className="text-[12.5px] text-muted-foreground">
