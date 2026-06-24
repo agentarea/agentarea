@@ -8,15 +8,17 @@ import {
   Bot,
   Check,
   CheckCircle2,
-  Inbox as InboxIcon,
   ScrollText,
+  ShieldAlert,
   ShieldCheck,
   X,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import EmptyState from "@/components/EmptyState";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import {
@@ -527,89 +529,94 @@ function InboxEmptyState({
 }) {
   const copy: Record<
     FilterValue,
-    { title: string; description: string; Icon: typeof InboxIcon }
+    {
+      title: string;
+      description: string;
+      icons: LucideIcon[];
+      buttons: { label: string; href: string }[];
+    }
   > = {
     all: {
       title: "No inbox decisions yet",
       description:
         "When an agent needs approval, completes a governed action, or fails a controlled step, it will appear here for review.",
-      Icon: InboxIcon,
+      icons: [Bot, ShieldCheck, ScrollText],
+      buttons: [
+        { label: "Open task history", href: "/tasks" },
+        { label: "Check triggers", href: "/triggers" },
+      ],
     },
     pending: {
       title: "Approval queue is clear",
       description:
         "No agent is waiting on a human decision right now. New escalations will land here before they can continue.",
-      Icon: CheckCircle2,
+      icons: [Bot, ShieldAlert, ScrollText],
+      buttons: [
+        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
+        { label: "Open task history", href: "/tasks" },
+        { label: "Check triggers", href: "/triggers" },
+      ],
     },
     completed: {
       title: "No completed approvals",
       description:
         "Approved actions will appear here after operators release them, so you can audit what moved forward.",
-      Icon: CheckCircle2,
+      icons: [CheckCircle2, ShieldCheck, ScrollText],
+      buttons: [
+        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
+        { label: "Open task history", href: "/tasks" },
+        { label: "Check triggers", href: "/triggers" },
+      ],
     },
     failed: {
       title: "No rejected or failed approvals",
       description:
         "Rejected actions and failed escalations will appear here when a governed path is stopped.",
-      Icon: XCircle,
+      icons: [XCircle, ShieldAlert, ScrollText],
+      buttons: [
+        ...(counts.all > 0 ? [{ label: "View all", href: "/inbox" }] : []),
+        { label: "Open task history", href: "/tasks" },
+        { label: "Check triggers", href: "/triggers" },
+      ],
     },
   };
-  const { title, description, Icon } = copy[filter];
+  const { title, description, icons, buttons } = copy[filter];
+  const [action, additionAction, tertiaryAction] = buttons;
 
   return (
-    <div className="flex h-full items-center justify-center px-6 py-10">
-      <div className="flex max-w-[560px] flex-col items-center text-center">
-        <InboxEmptyIllustration Icon={Icon} />
-        <h2 className="mt-4 text-[15px] font-semibold text-foreground">
-          {title}
-        </h2>
-        <p className="mt-1.5 max-w-[460px] text-[13px] leading-6 text-muted-foreground">
-          {description}
-        </p>
-
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          {filter !== "all" && counts.all > 0 && (
+    <div className="flex h-full justify-center px-6 py-10">
+      <div className="flex w-full flex-col gap-3">
+        <EmptyState
+          title={title}
+          description={description}
+          icons={icons}
+          action={
+            action
+              ? {
+                  label: action.label,
+                  href: action.href,
+                }
+              : undefined
+          }
+          additionAction={
+            additionAction
+              ? {
+                  label: additionAction.label,
+                  href: additionAction.href,
+                }
+              : undefined
+          }
+        />
+        {/* {tertiaryAction && (
+          <div className="flex justify-center">
             <Link
-              href="/inbox"
-              className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
+              href={tertiaryAction.href}
+              className="inline-flex h-8 items-center justify-center rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition hover:text-foreground"
             >
-              View all
+              {tertiaryAction.label}
             </Link>
-          )}
-          <Link
-            href="/tasks"
-            className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
-          >
-            Open task history
-          </Link>
-          <Link
-            href="/triggers"
-            className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-[12.5px] font-medium text-foreground transition hover:bg-muted"
-          >
-            Check triggers
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InboxEmptyIllustration({ Icon }: { Icon: typeof InboxIcon }) {
-  return (
-    <div className="relative flex h-[72px] w-[260px] items-center justify-center text-muted-foreground">
-      <div className="absolute left-[58px] right-[58px] top-1/2 h-px bg-border" />
-      <div className="relative z-10 grid h-11 w-11 place-items-center rounded-lg border border-border bg-background shadow-sm">
-        <Bot size={20} strokeWidth={1.8} />
-      </div>
-      <div className="relative z-10 mx-5 grid h-12 w-12 place-items-center rounded-lg border border-primary/25 bg-primary/5 text-primary shadow-sm">
-        <ShieldCheck size={22} strokeWidth={1.8} />
-      </div>
-      <div className="relative z-10 grid h-11 w-11 place-items-center rounded-lg border border-border bg-background shadow-sm">
-        {Icon === InboxIcon ? (
-          <ScrollText size={20} strokeWidth={1.8} />
-        ) : (
-          <Icon size={20} strokeWidth={1.8} />
-        )}
+          </div>
+        )} */}
       </div>
     </div>
   );

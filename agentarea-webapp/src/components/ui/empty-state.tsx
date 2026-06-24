@@ -63,13 +63,14 @@ export function EmptyState({
           </div>
         )}
       </div>
-      <h2 className="mt-6 font-medium text-foreground">{title}</h2>
-      <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+      <h3 className="mt-6 font-medium text-foreground">{title}</h3>
+      <p className="mt-1 whitespace-pre-line font-light text-sm text-muted-foreground">
         {description}
       </p>
-      <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+      <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
         {action && (
           <Button
+            size="sm"
             onClick={action.onClick}
             className={cn("shadow-sm active:shadow-none")}
           >
@@ -79,6 +80,7 @@ export function EmptyState({
 
         {additionAction && (
           <Button
+            size="sm"
             onClick={additionAction.onClick}
             variant="outline"
             className={cn("shadow-sm active:shadow-none")}
