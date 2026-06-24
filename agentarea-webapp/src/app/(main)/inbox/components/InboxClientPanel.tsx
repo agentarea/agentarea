@@ -145,9 +145,7 @@ export function InboxClientPanel({
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Wallet size={15} /> Cost
           </div>
-          <div className="text-right font-mono">
-            {fmtCost((task as any).total_cost)}
-          </div>
+          <div className="text-right font-mono">{fmtCost(task.total_cost)}</div>
         </div>
 
         {pend && (
