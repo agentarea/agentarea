@@ -20,7 +20,12 @@ from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = "20260624_0001_merge_heads"
-down_revision: str | None = ("010_add_a2ui_enabled", "20260618_1200_reg_item_installs", "gg2_add_wallet_fk_cascades", "jj1_docker_url_nullable")
+down_revision: str | None = (
+    "010_add_a2ui_enabled",
+    "20260618_1200_reg_item_installs",
+    "gg2_add_wallet_fk_cascades",
+    "jj1_docker_url_nullable",
+)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
