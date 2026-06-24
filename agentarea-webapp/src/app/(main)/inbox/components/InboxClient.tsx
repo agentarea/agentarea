@@ -21,6 +21,7 @@ import {
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { Button } from "@/components/ui/button";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { TaskWithAgent } from "@/lib/api";
@@ -437,7 +438,11 @@ export function InboxClient({ items, error }: InboxClientProps) {
           {/* ---- detail pane ---- */}
           {selected && (
             <aside className="hidden min-w-0 flex-col overflow-y-auto lg:flex">
-              <DetailPane task={selected} onResolve={resolveOne} />
+              <DetailPane
+                task={selected}
+                onResolve={resolveOne}
+                onClose={() => setSelId(null)}
+              />
             </aside>
           )}
         </div>
@@ -546,9 +551,11 @@ function InboxEmptyIllustration({ Icon }: { Icon: typeof InboxIcon }) {
 function DetailPane({
   task,
   onResolve,
+  onClose,
 }: {
   task: TaskWithAgent | null;
   onResolve: (task: TaskWithAgent, approved: boolean) => void;
+  onClose: () => void;
 }) {
   if (!task) {
     return (
@@ -582,23 +589,34 @@ function DetailPane({
 
   return (
     <>
-      <div className="flex-1 px-5 pt-5">
+      <div className="relative flex-1 px-5 pt-5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={onClose}
+          aria-label="Close details panel"
+          className="absolute right-3 top-3"
+        >
+          <X size={14} strokeWidth={2} />
+        </Button>
+
         <StatusIndicator
           size="sm"
           tone={presentation.tone}
           pulse={presentation.pulse}
-          className="mb-3 whitespace-nowrap"
+          className="mb-3 whitespace-nowrap pr-12"
         >
           {presentation.label}
         </StatusIndicator>
 
         <div className="mb-3.5 flex items-start justify-between gap-2">
-          <h2 className="text-[19px] font-semibold leading-tight tracking-tight">
+          <h2 className="pr-4 text-[19px] font-semibold leading-tight tracking-tight">
             {task.description || "Untitled task"}
           </h2>
           <Link
             href={`/tasks/${task.id}`}
-            className="mt-0.5 shrink-0 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+            className="mt-0.5 shrink-0 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
           >
             <ExternalLink size={12} /> Open
           </Link>
