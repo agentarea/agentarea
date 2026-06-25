@@ -14,6 +14,7 @@ import {
   DollarSign,
   Key,
   Link,
+  type LucideIcon,
   List,
   Network,
   Receipt,
@@ -31,6 +32,7 @@ import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
 type EmptyStateProps = {
   title: string;
   description?: string;
+  icons?: LucideIcon[];
   iconsType?:
     | "404"
     | "agent"
@@ -59,32 +61,35 @@ export default function EmptyState({
   title,
   action,
   additionAction,
+  icons,
   iconsType,
 }: EmptyStateProps) {
   const router = useRouter();
-  const icons = iconsType
-    ? iconsType === "404"
-      ? [Ban, Unplug, BotOff]
-      : iconsType === "agent"
-        ? [Bot, Zap, Shield]
-        : iconsType === "apiKey"
-          ? [Key, Shield, Zap]
-          : iconsType === "llm"
-            ? [Sparkles, Cpu, Brain]
-            : iconsType === "mcp"
-              ? [Server, Network, Link]
-              : iconsType === "payments"
-                ? [DollarSign, Wallet, Receipt]
-                : iconsType === "tasks"
-                  ? [List, Bot, Blocks]
-                  : iconsType === "triggers"
-                    ? [Zap, Clock, Timer]
-                    : iconsType === "audit"
-                      ? [ScrollText, Shield, Clock]
-                      : iconsType === "skills"
-                        ? [Sparkles, Zap, Blocks]
-                        : [Bot, Blocks, ChevronsLeftRightEllipsis]
-    : [Bot, Blocks, ChevronsLeftRightEllipsis];
+  const resolvedIcons =
+    icons ||
+    (iconsType
+      ? iconsType === "404"
+        ? [Ban, Unplug, BotOff]
+        : iconsType === "agent"
+          ? [Bot, Zap, Shield]
+          : iconsType === "apiKey"
+            ? [Key, Shield, Zap]
+            : iconsType === "llm"
+              ? [Sparkles, Cpu, Brain]
+              : iconsType === "mcp"
+                ? [Server, Network, Link]
+                : iconsType === "payments"
+                  ? [DollarSign, Wallet, Receipt]
+                  : iconsType === "tasks"
+                    ? [List, Bot, Blocks]
+                    : iconsType === "triggers"
+                      ? [Zap, Clock, Timer]
+                      : iconsType === "audit"
+                        ? [ScrollText, Shield, Clock]
+                        : iconsType === "skills"
+                          ? [Sparkles, Zap, Blocks]
+                          : [Bot, Blocks, ChevronsLeftRightEllipsis]
+      : [Bot, Blocks, ChevronsLeftRightEllipsis]);
 
   return (
     <motion.div
@@ -97,7 +102,7 @@ export default function EmptyState({
         className="max-w-auto w-full hover:border-accent/20 hover:bg-white dark:bg-zinc-800 dark:hover:border-white/30 dark:hover:bg-zinc-800"
         title={title}
         description={description || ""}
-        icons={icons}
+        icons={resolvedIcons}
         action={
           action
             ? {

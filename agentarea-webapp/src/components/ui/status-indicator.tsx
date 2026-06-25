@@ -6,27 +6,27 @@ const TONE_STYLES = {
   success: {
     text: "text-emerald-600 dark:text-emerald-400",
     dot: "bg-emerald-500",
-    halo: "bg-emerald-100/80 dark:bg-emerald-400/16",
+    halo: "bg-emerald-100/80 dark:bg-emerald-500/30",
   },
   warning: {
     text: "text-amber-600 dark:text-amber-400",
     dot: "bg-amber-500",
-    halo: "bg-amber-100/80 dark:bg-amber-400/16",
+    halo: "bg-amber-100/80 dark:bg-amber-500/30",
   },
   danger: {
     text: "text-red-600 dark:text-red-400",
     dot: "bg-red-500",
-    halo: "bg-red-100/80 dark:bg-red-400/16",
+    halo: "bg-red-100/80 dark:bg-red-500/30",
   },
   info: {
     text: "text-sky-600 dark:text-sky-400",
     dot: "bg-sky-500",
-    halo: "bg-sky-100/80 dark:bg-sky-400/16",
+    halo: "bg-sky-100/80 dark:bg-sky-500/30",
   },
   neutral: {
     text: "text-muted-foreground",
     dot: "bg-zinc-400 dark:bg-zinc-500",
-    halo: "bg-zinc-100/80 dark:bg-zinc-500/16",
+    halo: "bg-zinc-100/80 dark:bg-zinc-500/30",
   },
 } satisfies Record<StatusTone, { text: string; dot: string; halo: string }>;
 
@@ -117,7 +117,7 @@ export function StatusIndicator({
           )}
         />
       </span>
-      <span>{children}</span>
+      {children ? <span>{children}</span> : null}
     </span>
   );
 }

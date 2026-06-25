@@ -1,14 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Copy, MoreHorizontal, Star } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ArrowUpRight, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
 import { scopeMeta, SkillTile, sourceMeta } from "./skillsMeta";
@@ -25,14 +19,13 @@ export default function SkillsCard({
   onToggleFavorite,
 }: SkillsCardProps) {
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
   const source = sourceMeta(skill.source_type);
   const scope = scopeMeta(skill.network_scope);
   const SourceIcon = source.icon;
   const ScopeIcon = scope.icon;
 
   const open = () => router.push(`/skills/${skill.id}`);
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const stop = (e: MouseEvent) => e.stopPropagation();
 
   return (
     <div
@@ -87,9 +80,7 @@ export default function SkillsCard({
       <span
         className={cn(
           "absolute right-2.5 top-2.5 z-[2] flex items-center gap-0.5 transition-opacity",
-          menuOpen
-            ? "opacity-100"
-            : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+          "opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100"
         )}
       >
         <button
@@ -118,25 +109,6 @@ export default function SkillsCard({
         >
           <Copy className="h-[15px] w-[15px]" />
         </button>
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild onClick={stop}>
-            <button
-              type="button"
-              title="More"
-              className="grid h-[26px] w-[26px] place-items-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
-            >
-              <MoreHorizontal className="h-[15px] w-[15px]" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={stop}>
-            <DropdownMenuItem onSelect={() => router.push(`/skills/${skill.id}`)}>
-              Open skill
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onToggleFavorite(skill.id)}>
-              {isFavorite ? "Remove favorite" : "Add to favorites"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </span>
 
       {/* brand: diagonal hatch — soft footer band that grows into a full wash on hover */}

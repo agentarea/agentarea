@@ -34,27 +34,6 @@
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
-  /* row: accent hatch that softly slides in from the right edge on hover */
-  .skill-row-hatch {
-    position: absolute;
-    inset: 0 0 0 auto;
-    width: 230px;
-    z-index: 0;
-    background-image: var(--hatch-accent);
-    pointer-events: none;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 82%);
-    mask-image: linear-gradient(90deg, transparent, #000 82%);
-    opacity: 0;
-    transform: translateX(14px);
-    transition:
-      opacity 0.2s,
-      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .group:hover .skill-row-hatch {
-    opacity: 0.85;
-    transform: none;
-  }
-
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
   .skill-card-hatch {
     position: absolute;
@@ -185,6 +164,36 @@
       rgba(34, 82, 179, 0.07) 9px,
       rgba(34, 82, 179, 0.07) 10px
     );
+    --row-tint-success: linear-gradient(
+      90deg,
+      transparent,
+      rgba(16, 185, 129, 0.08) 58%,
+      rgba(16, 185, 129, 0.16) 100%
+    );
+    --row-tint-warning: linear-gradient(
+      90deg,
+      transparent,
+      rgba(245, 158, 11, 0.08) 58%,
+      rgba(245, 158, 11, 0.16) 100%
+    );
+    --row-tint-danger: linear-gradient(
+      90deg,
+      transparent,
+      rgba(239, 68, 68, 0.08) 58%,
+      rgba(239, 68, 68, 0.16) 100%
+    );
+    --row-tint-info: linear-gradient(
+      90deg,
+      transparent,
+      rgba(14, 165, 233, 0.08) 58%,
+      rgba(14, 165, 233, 0.16) 100%
+    );
+    --row-tint-neutral: linear-gradient(
+      90deg,
+      transparent,
+      rgba(161, 161, 170, 0.08) 58%,
+      rgba(161, 161, 170, 0.14) 100%
+    );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(
       135deg,
@@ -254,6 +263,36 @@
       transparent 9px,
       rgba(120, 150, 235, 0.1) 9px,
       rgba(120, 150, 235, 0.1) 10px
+    );
+    --row-tint-success: linear-gradient(
+      90deg,
+      transparent,
+      rgba(52, 211, 153, 0.06) 58%,
+      rgba(52, 211, 153, 0.12) 100%
+    );
+    --row-tint-warning: linear-gradient(
+      90deg,
+      transparent,
+      rgba(251, 191, 36, 0.06) 58%,
+      rgba(251, 191, 36, 0.12) 100%
+    );
+    --row-tint-danger: linear-gradient(
+      90deg,
+      transparent,
+      rgba(248, 113, 113, 0.06) 58%,
+      rgba(248, 113, 113, 0.12) 100%
+    );
+    --row-tint-info: linear-gradient(
+      90deg,
+      transparent,
+      rgba(56, 189, 248, 0.06) 58%,
+      rgba(56, 189, 248, 0.12) 100%
+    );
+    --row-tint-neutral: linear-gradient(
+      90deg,
+      transparent,
+      rgba(161, 161, 170, 0.05) 58%,
+      rgba(161, 161, 170, 0.1) 100%
     );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(
