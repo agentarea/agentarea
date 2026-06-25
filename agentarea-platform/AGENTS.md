@@ -50,8 +50,18 @@ agentarea-platform/
 - **Audit decorator**: Prefer `@audited(action, resource_type, resource_id_param=...)` on service mutation methods
 - **Money type**: All monetary values (costs, budgets, balances) use `Money` from `agentarea_common.money`. `Money` is `Decimal` with Pydantic str serialization — use it for model fields, arithmetic, and function args. Use `to_money()` to construct, `serialize_money()` for raw dicts/events. Never use `float` for money.
 
+## EXTENSION POINTS (OSS ↔ enterprise)
+
+Enterprise features plug in via `agentarea.extensions` entry points (see `libs/common/agentarea_common/extensions/`). Before adding a new extension point, classify it — this prevents the "installed plugin silently overrides explicit config" class of bug:
+
+- **Selector** (exactly ONE implementation is active — e.g. the `PermissionService` backend). The active impl is chosen by **explicit config** (`ACCESS_CONTROL_BACKEND`), and explicit config MUST win over a merely-installed extension. The extension is a **fallback**, used only when the operator picked no concrete backend. "Installed ⇒ active" is forbidden for selectors. Always **log the resolved impl**, and warn when an extension is shadowed by explicit config. (This mirrors Spring `@ConditionalOnMissingBean` / Django `AUTHENTICATION_BACKENDS` / Vault mounts — selection is config-driven, never classpath-driven.)
+- **Additive** (layers on without replacing — e.g. `entitlement_guard`, middleware, hooks). Here "installed ⇒ active" is correct; nothing is contradicted.
+
+The `permissions` selector wiring lives in `apps/api/.../main.py` and `apps/worker/.../main.py` — keep both in sync.
+
 ## ANTI-PATTERNS (THIS DIR)
 
+- Never let an installed extension override an EXPLICIT selector config (e.g. a `permissions` extension must not shadow `ACCESS_CONTROL_BACKEND`); explicit config wins, extension is fallback. See EXTENSION POINTS above.
 - Never skip `UserContext` in repository constructors
 - Never use `metadata` as field name (use `event_metadata`)
 - Never create service without DI registration
