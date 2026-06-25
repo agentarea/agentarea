@@ -80,19 +80,40 @@ async def initialize_services():
             )
             register_singleton(KetoClient, keto_client)
 
+        # PermissionService is a SELECTOR extension point: exactly one impl is
+        # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
+        # installed "permissions" extension. (Previously the extension was checked
+        # first and silently overrode the configured backend -- e.g. an installed
+        # keto extension shadowed ACCESS_CONTROL_BACKEND=openfga so OpenFGA never
+        # enforced.) The extension is a FALLBACK, used only when the operator did
+        # not select a concrete backend. See AGENTS.md "Extension points".
+        backend = settings.access_control.ACCESS_CONTROL_BACKEND
         perm_factory = ExtensionRegistry.get_factory("permissions")
-        if perm_factory:
-            register_factory(PermissionService, perm_factory)
-        elif openfga_client is not None:
+        if openfga_client is not None:
             from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
 
             register_singleton(PermissionService, OpenFGAPermissionService(openfga_client))
+            perm_impl = "OpenFGAPermissionService"
         elif keto_client is not None:
             from agentarea_common.auth.keto_permission import KetoPermissionService
 
             register_singleton(PermissionService, KetoPermissionService(keto_client))
+            perm_impl = "KetoPermissionService"
+        elif perm_factory:
+            register_factory(PermissionService, perm_factory)
+            perm_impl = "extension:permissions"
         else:
             register_singleton(PermissionService, WorkspaceScopedPermissionService())
+            perm_impl = "WorkspaceScopedPermissionService"
+
+        if perm_factory and perm_impl != "extension:permissions":
+            logger.warning(
+                "Ignoring registered 'permissions' extension: ACCESS_CONTROL_BACKEND=%s "
+                "selects %s explicitly. An extension cannot override an explicit backend.",
+                backend,
+                perm_impl,
+            )
+        logger.info("PermissionService=%s (ACCESS_CONTROL_BACKEND=%s)", perm_impl, backend)
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
