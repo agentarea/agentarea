@@ -3,7 +3,7 @@ import "./globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { Inter } from "next/font/google";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SessionProvider } from "@ory/elements-react/client";
 import { getServerSession } from "@ory/nextjs/app";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -11,40 +11,70 @@ import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
-export const metadata: Metadata = {
-  metadataBase: new URL('https://app.agentarea.ai/'),
+const sharedMetadata: Omit<Metadata, "metadataBase"> = {
   title: {
     default: "AgentArea",
     template: "%s | AgentArea",
   },
-  description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+  description:
+    "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
   openGraph: {
     title: "AgentArea - Privacy-First Agent Platform",
-    description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
-    locale: 'en_US',
-    type: 'website',
-    siteName: 'AgentArea',
+    description:
+      "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+    locale: "en_US",
+    type: "website",
+    siteName: "AgentArea",
     images: [
       {
-        url: '/cover.png',
+        url: "/cover.png",
         width: 1308,
         height: 650,
-        alt: 'AgentArea - Privacy-First Agent Platform'
-      }
+        alt: "AgentArea - Privacy-First Agent Platform",
+      },
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'AgentArea - Privacy-First Agent Platform',
-    description: "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
-    images: ['/cover.png'],
+    card: "summary_large_image",
+    title: "AgentArea - Privacy-First Agent Platform",
+    description:
+      "Connect intelligent agents securely with privacy at the core. Our platform ensures data protection while enabling seamless agent collaboration.",
+    images: ["/cover.png"],
   },
   other: {
-    'vk:image': '/cover.png',
-    'og:image': '/cover.png',
-    'og:image:alt': 'AgentArea - Privacy-First Agent Platform',
-  }
+    "vk:image": "/cover.png",
+    "og:image": "/cover.png",
+    "og:image:alt": "AgentArea - Privacy-First Agent Platform",
+  },
 };
+
+function getMetadataFallbackBase() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://app.agentarea.ai/"
+  );
+}
+
+async function getMetadataBase() {
+  const requestHeaders = await headers();
+  const host =
+    requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
+
+  if (!host) {
+    return new URL(getMetadataFallbackBase());
+  }
+
+  const protocol = requestHeaders.get("x-forwarded-proto") || "https";
+  return new URL(`${protocol}://${host}`);
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: await getMetadataBase(),
+    ...sharedMetadata,
+  };
+}
 
 const inter = Inter({
   subsets: ["latin"],
