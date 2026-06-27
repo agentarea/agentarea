@@ -83,7 +83,7 @@ class TriggerResponse(BaseModel):
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] = Field(default_factory=list)
 
-    # Poll-based extractor type (e.g., "mailslurper")
+    # Poll-based extractor type (e.g., "imap")
     data_extractor: str | None = None
 
     # Channel credentials indicator (actual credentials never returned)
@@ -370,7 +370,7 @@ async def create_trigger(
         has_creds = False
         if payload.channel_credentials and secret_manager:
             # Channel type for secret key: use webhook_type or derive from data_extractor.
-            # Extractor names like "mailslurper" map to channel type via suffix stripping.
+            # Extractor names like "telegram_polling" map to channel type via suffix stripping.
             extractor = payload.data_extractor or ""
             channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"

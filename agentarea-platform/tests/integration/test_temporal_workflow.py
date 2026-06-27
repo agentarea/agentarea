@@ -5,7 +5,7 @@ import asyncio
 import logging
 from uuid import uuid4
 
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager

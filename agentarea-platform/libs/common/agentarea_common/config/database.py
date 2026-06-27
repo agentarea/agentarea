@@ -1,4 +1,18 @@
-"""Database configuration and connection management."""
+"""Database configuration and connection management.
+
+Single source of truth for SQLAlchemy engines and sessions. There is exactly
+one ``Database`` instance per process, owning:
+
+* ``engine`` / ``async_session_factory`` — primary async (write) connections,
+  transactional.
+* ``read_engine`` / ``read_session_factory`` — read-replica async connections
+  (AUTOCOMMIT; falls back to the primary host when no replica is configured).
+* ``sync_engine`` / ``sync_session_factory`` — synchronous connections, used by
+  Alembic migrations.
+
+All pools share the same liveness/recycle policy so the configuration cannot
+drift between engines.
+"""
 
 import logging
 from collections.abc import AsyncGenerator, Generator
@@ -90,22 +104,51 @@ class Database:
         return cls._instance
 
     def _setup_engines(self) -> None:
-        """Setup async and sync database engines."""
-        engine_kwargs = {
+        """Setup async (write + read replica) and sync database engines.
+
+        ``pool_pre_ping`` verifies a pooled connection is still alive on checkout
+        and transparently reconnects if the server closed it. Without it, a
+        connection reaped server-side (idle timeout, restart, PgBouncer) is
+        handed out dead and asyncpg raises "the underlying connection is closed".
+        """
+        # Shared liveness/recycle policy applied to every engine so pool
+        # configuration cannot drift between write, read, and sync engines.
+        pool_kwargs = {
             "echo": self.settings.echo,
-            "pool_size": self.settings.pool_size,
-            "max_overflow": self.settings.max_overflow,
-            "pool_timeout": self.settings.pool_timeout,
+            "pool_pre_ping": True,
             "pool_recycle": self.settings.pool_recycle,
+            "pool_timeout": self.settings.pool_timeout,
         }
 
-        self.engine: AsyncEngine = create_async_engine(self.settings.url, **engine_kwargs)
-        self.sync_engine: Engine = create_engine(self.settings.sync_url, **engine_kwargs)
+        self.engine: AsyncEngine = create_async_engine(
+            self.settings.url,
+            pool_size=self.settings.pool_size,
+            max_overflow=self.settings.max_overflow,
+            **pool_kwargs,
+        )
+        self.sync_engine: Engine = create_engine(
+            self.settings.sync_url,
+            pool_size=self.settings.pool_size,
+            max_overflow=self.settings.max_overflow,
+            **pool_kwargs,
+        )
+        self.read_engine: AsyncEngine = create_async_engine(
+            self.settings.read_url,
+            pool_size=self.settings.READ_POOL_SIZE,
+            max_overflow=self.settings.READ_POOL_MAX_OVERFLOW,
+            execution_options={"isolation_level": "AUTOCOMMIT"},
+            **pool_kwargs,
+        )
 
     def _setup_session_factories(self) -> None:
-        """Setup session factories for async and sync sessions."""
+        """Setup session factories for async (write/read) and sync sessions."""
         self.async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        self.read_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+            self.read_engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
@@ -114,9 +157,15 @@ class Database:
             expire_on_commit=False,
         )
 
+    # Backwards-compatible alias for callers that used the read/write-split
+    # module's ``db.session_factory``.
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        return self.async_session_factory
+
     @asynccontextmanager
-    async def get_db(self) -> AsyncGenerator[AsyncSession, None]:
-        """Get an async database session with automatic transaction management."""
+    async def session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Get an async (write) database session with transaction management."""
         session = self.async_session_factory()
         try:
             yield session
@@ -126,6 +175,22 @@ class Database:
             raise
         finally:
             await session.close()
+
+    # ``get_db`` is the historical name for the transactional write session
+    # context manager; keep it as an alias of ``session``.
+    get_db = session
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Get a read-only database session (AUTOCOMMIT — no transaction management)."""
+        session = self.read_session_factory()
+        try:
+            yield session
+        finally:
+            try:
+                await session.close()
+            except Exception as exc:
+                logger.debug("Failed to close read DB session cleanly: %s", exc)
 
     @contextmanager
     def get_sync_db(self) -> Generator[Session, None, None]:
@@ -147,7 +212,8 @@ def get_db_settings() -> DatabaseSettings:
     return DatabaseSettings()
 
 
-# Global database instance - initialized lazily
+# Global database instance - initialized lazily so importing this module does
+# not build engines (and read POSTGRES_* env) at import time.
 _db_instance: Database | None = None
 
 
@@ -160,10 +226,38 @@ def get_database() -> Database:
 
 
 def get_db():
-    """Get an async database session."""
+    """Get an async (write) database session context manager."""
     return get_database().get_db()
 
 
 def get_sync_db():
     """Get a synchronous database session."""
     return get_database().get_sync_db()
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency for an async (write) database session.
+
+    Flat async-generator form (commit/rollback/close) so ``session.close()``
+    still runs when the client disconnects mid-response and FastAPI cancels the
+    generator.
+    """
+    async with get_database().session() as session:
+        yield session
+
+
+async def get_read_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency for a read-only (AUTOCOMMIT) database session."""
+    async with get_database().read_session() as session:
+        yield session
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolve the module-level ``db`` singleton (PEP 562).
+
+    Lets ``from agentarea_common.config.database import db`` work without
+    building engines at import time of this module.
+    """
+    if name == "db":
+        return get_database()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

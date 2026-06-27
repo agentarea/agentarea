@@ -241,6 +241,9 @@ async def validate_model_instance(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Test a model instance configuration before creating it."""
+    provider_type: str | None = None
+    model_name: str | None = None
+
     try:
         # Get provider config and model spec
         provider_config = await provider_service.get_provider_config(data.provider_config_id)
@@ -338,6 +341,6 @@ async def validate_model_instance(
             success=False,
             message=message,
             error_type=error_type,
-            provider_type=provider_type if "provider_type" in locals() else None,
-            model_name=model_name if "model_name" in locals() else None,
+            provider_type=provider_type,
+            model_name=model_name,
         )

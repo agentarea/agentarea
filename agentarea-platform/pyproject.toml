@@ -307,45 +307,46 @@ exclude = [
     "**/build",
     "tests"
 ]
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 defineConstant = { DEBUG = true }
 pythonVersion = "3.12"
 pythonPlatform = "All"
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
-reportUnusedClass = "warning"
-reportUnusedFunction = "warning"
-reportUnusedVariable = "warning"
-reportDuplicateImport = "warning"
-reportOptionalSubscript = "warning"
-reportOptionalMemberAccess = "warning"
-reportOptionalCall = "warning"
-reportOptionalIterable = "warning"
-reportOptionalContextManager = "warning"
-reportOptionalOperand = "warning"
-reportTypedDictNotRequiredAccess = "warning"
-reportPrivateUsage = "warning"
-reportTypeCommentUsage = "warning"
-reportIncompatibleMethodOverride = "warning"
-reportIncompatibleVariableOverride = "warning"
-reportInconsistentConstructor = "warning"
-reportPossiblyUnboundVariable = "warning"
+reportUnusedClass = "error"
+reportUnusedFunction = "error"
+reportUnusedVariable = "error"
+reportDuplicateImport = "error"
+reportOptionalSubscript = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
+reportTypedDictNotRequiredAccess = "error"
+reportPrivateUsage = "error"
+reportTypeCommentUsage = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+reportInconsistentConstructor = "error"
+reportPossiblyUnboundVariable = "error"
 reportMissingSuperCall = false
-reportUninitializedInstanceVariable = "warning"
-reportUnknownParameterType = "warning"
-reportUnknownArgumentType = "warning"
-reportUnknownLambdaType = "warning"
+reportUninitializedInstanceVariable = "error"
+reportUnknownParameterType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportCallInDefaultInitializer = false
-reportUnnecessaryIsInstance = "warning"
-reportUnnecessaryCast = "warning"
-reportImplicitStringConcatenation = "warning"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryCast = "error"
+reportImplicitStringConcatenation = "error"
 reportUnusedCallResult = false
-reportUnusedExpression = "warning"
-reportUnnecessaryTypeIgnoreComment = "warning"
-reportMatchNotExhaustive = "warning"
+reportUnusedExpression = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportMatchNotExhaustive = "error"
+reportUnsupportedDunderAll = "error"
 
 # Hatch build configuration for workspace root
 [tool.hatch.build.targets.wheel]

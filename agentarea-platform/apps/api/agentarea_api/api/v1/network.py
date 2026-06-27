@@ -119,7 +119,7 @@ async def get_network_topology(
 
     from agentarea_agents.domain.models import Agent
     from agentarea_agents.domain.skill_models import Skill, skill_members_table
-    from agentarea_common.infrastructure.database import db
+    from agentarea_common.config.database import db
 
     accessible_workspaces = user_context.accessible_workspaces or [user_context.workspace_id]
 

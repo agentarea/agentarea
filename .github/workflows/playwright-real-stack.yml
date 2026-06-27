@@ -1,0 +1,102 @@
+name: Playwright Real Stack
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "agentarea-webapp/**"
+      - "agentarea-platform/**"
+      - "docker-compose.dev.yaml"
+      - ".env.example"
+      - ".github/workflows/playwright-real-stack.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-stack:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-real-stack-e2e')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install webapp dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        working-directory: agentarea-webapp
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare compose env
+        run: cp .env.example .env
+
+      - name: Start real stack services
+        run: |
+          docker compose -f docker-compose.dev.yaml up -d \
+            db postgres_init rustfs valkey \
+            kratos-migrate kratos \
+            openfga-migrate openfga \
+            mailpit \
+            app_migrations app
+
+      - name: Wait for real stack
+        run: |
+          for url in \
+            http://localhost:8000/health \
+            http://localhost:4433/health/ready \
+            http://localhost:4434/health/ready \
+            http://localhost:8025/api/v1/messages
+          do
+            echo "Waiting for $url"
+            for _ in $(seq 1 90); do
+              if curl -fsS "$url" >/dev/null; then
+                echo "$url is ready"
+                break
+              fi
+              sleep 2
+            done
+            curl -fsS "$url" >/dev/null
+          done
+
+      - name: Run Playwright against real stack
+        working-directory: agentarea-webapp
+        env:
+          PLAYWRIGHT_REAL_STACK: "1"
+          PLAYWRIGHT_API_BASE_URL: http://localhost:8000
+          PLAYWRIGHT_KRATOS_PUBLIC_URL: http://localhost:4433
+          PLAYWRIGHT_KRATOS_ADMIN_URL: http://localhost:4434
+          PLAYWRIGHT_MAILPIT_URL: http://localhost:8025
+          API_URL: http://localhost:8000
+          ORY_ADMIN_URL: http://localhost:4434
+          ORY_SDK_URL: http://localhost:4433
+          ORY_BROWSER_URL: http://localhost:4433
+        run: pnpm run test:e2e:real
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-real-stack-report
+          path: agentarea-webapp/playwright-report
+          if-no-files-found: ignore
+
+      - name: Dump compose logs
+        if: failure()
+        run: docker compose -f docker-compose.dev.yaml logs --no-color
+
+      - name: Stop compose stack
+        if: always()
+        run: docker compose -f docker-compose.dev.yaml down -v

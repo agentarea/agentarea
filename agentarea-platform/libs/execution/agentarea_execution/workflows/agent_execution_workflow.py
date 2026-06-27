@@ -2,7 +2,6 @@ import json
 from typing import Any, cast
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 from temporalio.workflow import ParentClosePolicy
 
@@ -111,6 +110,7 @@ from .constants import (
     Activities,
     EventTypes,
     ExecutionStatus,
+    make_retry_policy,
 )
 
 
@@ -441,7 +441,7 @@ class AgentExecutionWorkflow:
             Activities.BUILD_AGENT_CONFIG,
             args=[agent_config_request],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         # Convert result to dict for state storage (supports Pydantic BaseModel or plain dict)
@@ -467,7 +467,7 @@ class AgentExecutionWorkflow:
                     Activities.RESOLVE_MODEL,
                     args=[resolve_model_request],
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                    retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
                 )
                 workflow.logger.info(
                     f"Model resolved and cached: {self.state.resolved_model.get('model_name')}"
@@ -500,7 +500,7 @@ class AgentExecutionWorkflow:
                 args=[tools_request],
                 result_type=DiscoverToolProvidersResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Reconstruct ToolProviders from serialized data
@@ -539,7 +539,7 @@ class AgentExecutionWorkflow:
                 args=[tools_request],
                 result_type=ToolDiscoveryResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Normalize tools to list[dict] for state storage, accepting multiple shapes
@@ -885,7 +885,7 @@ class AgentExecutionWorkflow:
             args=[resolve_request],
             result_type=ResolveAgentToolsResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         # Build registry: sanitized tool name → {agent_id, agent_name, config}
@@ -1216,7 +1216,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
     def _should_continue_execution(self) -> tuple[bool, str]:
@@ -1494,7 +1494,7 @@ class AgentExecutionWorkflow:
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=LLM_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(LLM_RETRY_ATTEMPTS),
             )
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -1845,7 +1845,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
     async def _execute_request_user_input(self, tool_call: ToolCall) -> None:
@@ -1881,7 +1881,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         self.event_manager.add_event(
@@ -1940,7 +1940,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         self.state.messages.append(
@@ -2052,7 +2052,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         self.event_manager.add_event(
@@ -2120,7 +2120,7 @@ class AgentExecutionWorkflow:
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
         return bool(approved)
 
@@ -2211,7 +2211,7 @@ class AgentExecutionWorkflow:
                 args=[mcp_request],
                 start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Normalize result to a dict for robust access
@@ -2374,7 +2374,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=SearchHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if search_result.success and search_result.results:
                     self.state.messages.append(
@@ -2404,7 +2404,7 @@ class AgentExecutionWorkflow:
                 Activities.RECALL_HISTORY,
                 args=[request],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             # Format events for the agent
@@ -2473,7 +2473,7 @@ class AgentExecutionWorkflow:
                 ],
                 result_type=ReadOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             content = (
@@ -2515,7 +2515,7 @@ class AgentExecutionWorkflow:
                 ],
                 result_type=StoreOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
             if store_result.success:
                 return build_output_summary(content, output_id)
@@ -2762,7 +2762,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=SkillFileResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if file_result.success:
                     script_content = file_result.content_text
@@ -2801,7 +2801,7 @@ class AgentExecutionWorkflow:
             ],
             result_type=ExecuteSkillScriptResult,
             start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=2),
+            retry_policy=make_retry_policy(2),
         )
 
         # Build result message
@@ -2892,7 +2892,7 @@ class AgentExecutionWorkflow:
                 args=[create_task_request],
                 result_type=CreateDelegationTaskResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             if create_task_result.status != "created" or not create_task_result.task_id:
@@ -3085,7 +3085,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=StoreHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if store_hist_result.success:
                     self.state.history_chunk_counter += 1
@@ -3112,7 +3112,7 @@ class AgentExecutionWorkflow:
                 args=[compact_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             # Rebuild message list: system prompt + summary + kept recent messages
@@ -3226,7 +3226,7 @@ class AgentExecutionWorkflow:
                 Activities.PUBLISH_WORKFLOW_EVENTS,
                 args=[events_request],
                 start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(EVENT_PUBLISH_RETRY_ATTEMPTS),
             )
 
             self.event_manager.clear_events()
@@ -3262,7 +3262,7 @@ class AgentExecutionWorkflow:
             Activities.PUBLISH_WORKFLOW_EVENTS,
             args=[events_request],
             start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=1),  # Single attempt only
+            retry_policy=make_retry_policy(1),  # Single attempt only
         )
 
     async def _finalize_execution(self, result: dict[str, Any]) -> AgentExecutionResult:
@@ -3322,7 +3322,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         try:
@@ -3330,7 +3330,7 @@ class AgentExecutionWorkflow:
                 Activities.CLEANUP_SANDBOX_WORKFLOW,
                 args=[workflow.info().workflow_id],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=1),
+                retry_policy=make_retry_policy(1),
             )
         except Exception as e:
             workflow.logger.warning(f"Sandbox workflow cleanup failed: {e}")
@@ -3390,7 +3390,7 @@ class AgentExecutionWorkflow:
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
     @staticmethod

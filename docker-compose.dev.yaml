@@ -519,8 +519,11 @@ services:
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: debug
-      # SMTP Configuration - Override courier settings via environment variables
-      COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
+      # SMTP Configuration - Override courier settings via environment variables.
+      # disable_starttls defaults to true because the bundled dev catcher (mailpit)
+      # speaks plain SMTP on :1025 with no STARTTLS; set SMTP_DISABLE_STARTTLS=false
+      # (and SMTP_PROTOCOL=smtps) when pointing at a real TLS-capable provider.
+      COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}&disable_starttls=${SMTP_DISABLE_STARTTLS:-true}"
       COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_EMAIL}
       COURIER_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${OIDC_GOOGLE_CLIENT_ID:-}
@@ -540,8 +543,10 @@ services:
     restart: unless-stopped
 
   # Ory Keto ReBAC migration
+  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
   keto-migrate:
     image: oryd/keto:v0.12.0
+    profiles: ["keto"]
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
     command: migrate up -y -c /etc/config/keto/keto.yml
@@ -556,8 +561,10 @@ services:
         condition: service_completed_successfully
 
   # Ory Keto ReBAC permission server
+  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
   keto:
     image: oryd/keto:v0.12.0
+    profiles: ["keto"]
     ports:
       - "4466:4466" # read API
       - "4467:4467" # write API
@@ -647,14 +654,25 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # MailSlurper for email testing (catches emails in development)
-  mailslurper:
-    image: oryd/mailslurper:latest-smtps
+  # Mailpit — dev email catcher (SMTP sink + web UI + REST API).
+  # Replaces the unmaintained mailslurper. Captured mail is persisted to
+  # ./data/mailpit so it survives container recreation. Nothing depends_on this
+  # service: Kratos' courier retries delivery, so a slow mailpit start is harmless.
+  mailpit:
+    image: axllent/mailpit:v1.30.2
     ports:
-      - "4436:4436" # web UI
-      - "4437:4437" # SMTP
+      - "8025:8025" # web UI + REST API (GET /api/v1/messages)
+      # SMTP (1025) stays internal on auth-network; Kratos reaches it as mailpit:1025
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      # The dev courier link is plain SMTP; accept whatever creds it sends.
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    volumes:
+      - ./data/mailpit:/data
     networks:
       - auth-network
+    restart: unless-stopped
 
   # Hydra DB Migration
   hydra-migrate:

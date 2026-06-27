@@ -17,9 +17,9 @@ from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
 from agentarea_common.config import get_settings
+from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.event_stream_service import EventStreamService
-from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_service import ProviderService
@@ -560,7 +560,7 @@ async def get_public_webhook_manager(
                 }
 
             # Create a FRESH session for the execution phase to avoid greenlet reuse issues
-            from agentarea_common.infrastructure.database import db
+            from agentarea_common.config.database import db
 
             async with db.session() as fresh_session:
                 workspace_id = trigger.workspace_id or "system"

@@ -113,4 +113,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     secretKeyRef:
       name: "{{ .Values.global.secrets.application }}"
       key: api-auth-header-value
+{{- if .Values.kratos.enabled }}
+- name: KRATOS_JWKS_B64
+  valueFrom:
+    secretKeyRef:
+      name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}
+      key: jwks_b64
+{{- end }}
 {{- end }}

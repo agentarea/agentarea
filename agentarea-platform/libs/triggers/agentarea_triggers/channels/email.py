@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class EmailAdapter:
     """Send messages via SMTP.
 
-    Inbound is handled by data extractors (MailSlurper, IMAP).
+    Inbound is handled by data extractors (e.g. IMAP).
     This adapter handles outbound: formatting events as HTML emails.
 
     Credentials (smtp_host, smtp_port, username, password, from_address, use_tls)

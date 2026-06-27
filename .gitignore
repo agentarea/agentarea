@@ -153,6 +153,7 @@ agentarea-talk.html
 /data/rustfs/
 /data/valkey/
 /data/mcp-containers/
+/data/mailpit/
 
 # Build/tool caches and test artifacts
 .cache/

@@ -7,7 +7,7 @@ from uuid import UUID
 from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.audit.repository import AuditRepository
 from agentarea_common.auth import UserContextDep
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession

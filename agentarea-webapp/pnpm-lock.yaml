@@ -182,6 +182,9 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.0
         version: 4.7.0(prettier@3.6.2)
+      '@playwright/test':
+        specifier: 1.55.1
+        version: 1.55.1
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9

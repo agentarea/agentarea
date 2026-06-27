@@ -79,7 +79,7 @@ class CronTrigger(Trigger):
     timezone: str = Field(default="UTC")
 
     # Data extraction for poll-based channels (email, RSS, API polling)
-    data_extractor: str | None = None  # "mailslurper", "imap", "rss", etc.
+    data_extractor: str | None = None  # "imap", "rss", etc.
     data_extractor_config: dict[str, Any] | None = None  # Connection/auth details
     data_extractor_state: dict[str, Any] | None = None  # Cursor/checkpoint tracking
 

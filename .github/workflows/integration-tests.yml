@@ -7,8 +7,17 @@ permissions:
   contents: read
 
 env:
+  # The app's DatabaseSettings builds the URL from POSTGRES_* (default host "db"),
+  # NOT from DATABASE_URL -- so these must be set explicitly or migrations resolve
+  # host "db" and fail. Likewise the workflow client reads WORKFLOW__TEMPORAL_SERVER_URL.
+  POSTGRES_HOST: localhost
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_DB: agentarea_test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
   REDIS_URL: redis://localhost:6379/0
+  WORKFLOW__TEMPORAL_SERVER_URL: localhost:7233
   TEMPORAL_HOST: localhost:7233
 
 jobs:
@@ -38,23 +47,6 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      temporal:
-        image: temporalio/auto-setup:1.29.1
-        env:
-          DB: postgres12_pgx
-          DB_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PWD: postgres
-          POSTGRES_SEEDS: postgres
-          DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-        options: >-
-          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 7233:7233
-
     steps:
       - uses: actions/checkout@v4
 
@@ -94,6 +86,23 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
 
+      - name: Start Temporal dev server (SQLite)
+        run: |
+          curl -sSf https://temporal.download/cli.sh | sh
+          echo "$HOME/.temporalio/bin" >> "$GITHUB_PATH"
+          nohup "$HOME/.temporalio/bin/temporal" server start-dev \
+            --ip 0.0.0.0 --headless \
+            --db-filename /tmp/temporal-ci.db \
+            --log-level error > /tmp/temporal-dev.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if "$HOME/.temporalio/bin/temporal" operator cluster health \
+                --address localhost:7233 >/dev/null 2>&1; then
+              echo "Temporal dev server is healthy"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
+
       - name: Smoke test - Temporal workflows
         working-directory: ./agentarea-platform
         run: |
@@ -130,22 +139,6 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      temporal:
-        image: temporalio/auto-setup:1.29.1
-        env:
-          DB: postgres12_pgx
-          DB_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PWD: postgres
-          POSTGRES_SEEDS: postgres
-        options: >-
-          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 7233:7233
-
     steps:
       - uses: actions/checkout@v4
 
@@ -176,6 +169,23 @@ jobs:
           uv run --package agentarea-api agentarea-api migrate
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Start Temporal dev server (SQLite)
+        run: |
+          curl -sSf https://temporal.download/cli.sh | sh
+          echo "$HOME/.temporalio/bin" >> "$GITHUB_PATH"
+          nohup "$HOME/.temporalio/bin/temporal" server start-dev \
+            --ip 0.0.0.0 --headless \
+            --db-filename /tmp/temporal-ci.db \
+            --log-level error > /tmp/temporal-dev.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if "$HOME/.temporalio/bin/temporal" operator cluster health \
+                --address localhost:7233 >/dev/null 2>&1; then
+              echo "Temporal dev server is healthy"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
 
       - name: Run integration tests
         working-directory: ./agentarea-platform

@@ -15,7 +15,7 @@ from uuid import UUID
 from agentarea_agents.domain.models import Agent
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_common.money import to_money
 from agentarea_governance.domain.rules import (
     PolicyEffect,

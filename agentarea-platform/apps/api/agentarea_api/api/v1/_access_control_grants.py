@@ -21,6 +21,11 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
+def _is_existing_tuple_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "already exists" in message or "tuple to be written already existed" in message
+
+
 async def grant_user_relation(
     *,
     namespace: str,
@@ -62,6 +67,9 @@ async def grant_user_relation(
     try:
         await client.write_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
+        if _is_existing_tuple_error(exc):
+            logger.debug("Creator relation already exists in %s: %s", backend, relationship)
+            return
         logger.exception("Failed to grant creator relation in %s: %s", backend, relationship)
         raise HTTPException(
             status_code=503,

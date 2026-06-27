@@ -22,22 +22,7 @@ pytest tests/integration/test_mcp_real_integration.py -v
 pytest tests/integration/test_mcp_real_integration.py::test_weather_mcp_integration -v
 ```
 
-### 2. С помощью runner script
-
-```bash
-# Preset тесты
-python scripts/run_mcp_tests.py --preset weather
-python scripts/run_mcp_tests.py --preset filesystem
-
-# Кастомный тест
-python scripts/run_mcp_tests.py \
-  --image weather-mcp:latest \
-  --url http://weather-service:3000 \
-  --tools examples/weather_mcp/tools.json \
-  --name weather-mcp
-```
-
-### 3. Прямой запуск
+### 2. Прямой запуск
 
 ```bash
 cd tests/integration
@@ -57,13 +42,6 @@ python test_mcp_real_integration.py
 - Использует FastAPI + uvicorn
 - Инструменты: `read_file`, `write_file`, `list_directory`
 - Тестовая задача: создание и чтение файла
-
-### Custom MCP Integration (scripts/run_mcp_tests.py)
-Настраиваемый тест для любого MCP сервера:
-- Использует готовые Docker образы
-- Прямые API вызовы (не зависит от тестовых классов)
-- Полностью независимый workflow
-- Кастомные инструменты через JSON файл
 
 ## Создание кастомного теста
 
@@ -93,16 +71,6 @@ docker build -t my-custom-mcp:latest .
     }
   }
 ]
-```
-
-### 2. Запустите тест
-
-```bash
-python scripts/run_mcp_tests.py \
-  --image my-custom-mcp:latest \
-  --url http://my-mcp-service:3000 \
-  --tools my_mcp/tools.json \
-  --name my-mcp-server
 ```
 
 ## Требования

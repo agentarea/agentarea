@@ -239,3 +239,10 @@ def pytest_collection_modifyitems(config, items):
             if marker.args:
                 flow = marker.args[0]
                 COVERED_FLOWS.add(getattr(flow, "value", flow))
+
+
+# SQLite-backed Temporal server fixtures (see module docstring for when to use).
+from agentarea_common.testing.temporal import (  # noqa: E402, F401
+    temporal_sqlite_client,
+    temporal_sqlite_env,
+)

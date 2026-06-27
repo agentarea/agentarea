@@ -368,7 +368,12 @@ function CatalogTable({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border/60">
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col className="w-10" />
+          <col className="md:w-[42%]" />
+          <col className="hidden md:table-column" />
+        </colgroup>
         <tbody>
           {entries.map((e) => {
             const TypeIcon = TYPE_ICON[e.type];
@@ -388,8 +393,8 @@ function CatalogTable({
                   )}
                 </td>
                 <td className="py-2 pl-2 pr-3 align-middle">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{e.title}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 truncate font-medium">{e.title}</span>
                     {e.verified && (
                       <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                     )}

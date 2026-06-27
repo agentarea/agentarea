@@ -13,7 +13,7 @@ from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from croniter import croniter

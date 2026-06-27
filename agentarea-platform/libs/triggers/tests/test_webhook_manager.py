@@ -1,6 +1,7 @@
 """Unit tests for WebhookManager."""
 
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -423,6 +424,28 @@ class TestDefaultWebhookManager:
             body={"test": "data"},
             query_params={},
             raw_body=raw,
+        )
+
+        assert response["status_code"] == 200
+        mock_execution_callback.execute_webhook_trigger.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_webhook_accepts_string_execution_status(
+        self, webhook_manager, mock_execution_callback, sample_webhook_trigger
+    ):
+        """Webhook responses should not require execution.status to be an enum."""
+        mock_execution_callback.execute_webhook_trigger.return_value = SimpleNamespace(
+            status="success"
+        )
+        await webhook_manager.register_webhook(sample_webhook_trigger)
+
+        response = await webhook_manager.handle_webhook_request(
+            webhook_id=sample_webhook_trigger.webhook_id,
+            method="POST",
+            headers={"content-type": "application/json"},
+            body={"test": "data"},
+            query_params={},
+            raw_body=b'{"test": "data"}',
         )
 
         assert response["status_code"] == 200

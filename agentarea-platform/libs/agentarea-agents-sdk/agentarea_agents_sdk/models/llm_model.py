@@ -794,12 +794,13 @@ class LLMModel:
 
             async for chunk in response_stream:  # type: ignore[assignment]
                 # chunk: ModelResponse
+                delta_content = ""
+                delta_reasoning = ""
+                delta_tool_calls = None
+                tool_calls_updated = False
+
                 if chunk.choices:
                     delta = chunk.choices[0].delta
-                    delta_content = ""
-                    delta_reasoning = ""
-                    delta_tool_calls = None
-                    tool_calls_updated = False
 
                     # Handle reasoning/thinking chunks (LiteLLM exposes as reasoning_content)
                     if hasattr(delta, "reasoning_content") and delta.reasoning_content:
@@ -945,8 +946,8 @@ class LLMModel:
 
                 # Yield delta response for each content, reasoning, or tool-calls update
                 if (
-                    ("delta_content" in locals() and delta_content)
-                    or ("delta_reasoning" in locals() and delta_reasoning)
+                    delta_content
+                    or delta_reasoning
                     or delta_tool_calls is not None
                     or (hasattr(chunk, "usage") and chunk.usage)
                 ):
@@ -959,12 +960,12 @@ class LLMModel:
                             total_tokens=getattr(chunk.usage, "total_tokens", 0),
                         )
                     yield LLMResponse(
-                        content=delta_content if "delta_content" in locals() else "",
+                        content=delta_content,
                         role="assistant",
                         tool_calls=delta_tool_calls,
                         cost=cost,
                         usage=usage_delta,
-                        reasoning_content=delta_reasoning if "delta_reasoning" in locals() else "",
+                        reasoning_content=delta_reasoning,
                     )
 
             # Calculate cost after streaming ends using litellm.completion_cost()

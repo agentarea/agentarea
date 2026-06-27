@@ -41,6 +41,7 @@ from prometheus_client import Counter
 # Third-party imports
 from temporalio import activity
 
+from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError
 from ..interfaces import ActivityDependencies
 
 # Add import for new Pydantic models
@@ -349,7 +350,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 agent = await agent_service.get_with_catalog(request.agent_id)
             if not agent:
-                raise ValueError(f"Agent {request.agent_id} not found")
+                raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
             # Build skill information
             skills_info = []
@@ -427,7 +428,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # Get agent configuration
             agent = await agent_service.get(request.agent_id)
             if not agent:
-                raise ValueError(f"Agent {request.agent_id} not found")
+                raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
             # Use tool manager to discover available tools (split path).
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
@@ -514,7 +515,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_instance_service = await ctx.get_model_instance_service()
             model_instance = await model_instance_service.get(_UUID(request.model_id))
             if not model_instance:
-                raise ValueError(f"Model instance {request.model_id} not found")
+                raise ModelInstanceNotFoundError(f"Model instance {request.model_id} not found")
 
             provider_type = model_instance.provider_config.provider_spec.provider_type
             model_name = model_instance.model_spec.model_name
@@ -550,6 +551,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request: LLMCallRequest,
     ) -> LLMCallResult:
         """Call LLM with messages and optional tools using streaming."""
+        provider_type: Any | None = None
+
         try:
             # model_id must be a UUID representing a model instance ID
             try:
@@ -609,7 +612,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     model_instance_service = await ctx.get_model_instance_service()
                     model_instance = await model_instance_service.get(model_uuid)
                     if not model_instance:
-                        raise ValueError(f"Model instance with ID {request.model_id} not found")
+                        raise ModelInstanceNotFoundError(
+                            f"Model instance with ID {request.model_id} not found"
+                        )
 
                     # Extract required parameters from model instance
                     provider_type = model_instance.provider_config.provider_spec.provider_type
@@ -744,7 +749,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     agent_id=request.agent_id,
                     execution_id=request.execution_id or "",
                     model_id=request.model_id,
-                    provider_type=provider_type if "provider_type" in locals() else None,
+                    provider_type=provider_type,
                     event_broker=dependencies.event_broker,
                 )
 
@@ -909,6 +914,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         logger.warning(f"Unknown code tool requested: {tool_name}")
 
             payment_handler: Callable[..., Awaitable[dict[str, Any] | None]] | None = None
+
+            async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
+                return None
+
             if request.agent_id:
                 agent_id = request.agent_id
 
@@ -1714,7 +1723,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     model_instance_service = await ctx.get_model_instance_service()
                     model_instance = await model_instance_service.get(model_uuid)
                     if not model_instance:
-                        raise ValueError(f"Model instance {request.model_id} not found")
+                        raise ModelInstanceNotFoundError(f"Model instance {request.model_id} not found")
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
                     model_name = model_instance.model_spec.model_name

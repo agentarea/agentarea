@@ -103,7 +103,7 @@ class TestBuildChannelOrigin:
             agent_id=uuid4(),
             created_by="user1",
             cron_expression="*/5 * * * *",
-            data_extractor="mailslurper",
+            data_extractor="imap",
         )
         trigger_data = {
             "channel_origin": {

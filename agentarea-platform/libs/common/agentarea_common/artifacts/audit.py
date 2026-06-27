@@ -93,7 +93,7 @@ class DbArtifactEventRecorder:
         action: str,
         actor: ArtifactActor,
     ) -> None:
-        from agentarea_common.infrastructure.database import db
+        from agentarea_common.config.database import db
 
         event = ArtifactEvent(
             workspace_id=workspace_id,

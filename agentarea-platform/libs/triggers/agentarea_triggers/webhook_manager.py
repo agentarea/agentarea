@@ -55,6 +55,17 @@ class WebhookValidationResult:
         self.error_message = error_message
 
 
+def _execution_status_value(execution: object) -> str:
+    status = getattr(execution, "status", None)
+    if status is None and isinstance(execution, dict):
+        status = execution.get("status")
+    if hasattr(status, "value"):
+        return str(status.value)
+    if status is not None:
+        return str(status)
+    return "unknown"
+
+
 class WebhookExecutionCallback(ABC):
     """Callback interface for webhook execution."""
 
@@ -384,7 +395,7 @@ class DefaultWebhookManager(WebhookManager):
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     execution_time_ms=execution_time_ms,
-                    status=execution.status.value if hasattr(execution, "status") else "unknown",
+                    status=_execution_status_value(execution),
                 )
 
                 # Return success response
