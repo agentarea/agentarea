@@ -1,37 +1,27 @@
-"""Exceptions for agent execution activities.
+"""Domain error taxonomy for agent execution.
 
-``NonRetryableActivityError`` and its subclasses mark failures that are
-permanent: the workflow can never succeed by retrying the activity (a missing
-agent, a missing model instance, invalid configuration, ...). The workflow
-passes ``NON_RETRYABLE_ERROR_TYPES`` to every activity's
-``RetryPolicy.non_retryable_error_types`` so Temporal fails fast instead of
-burning the whole retry budget on an error that will recur identically.
+``PermanentError`` marks a failure that can never succeed by retrying: the
+input is wrong, not the moment (a missing agent, a missing model instance,
+invalid configuration). This is a domain classification — "permanent vs
+transient" is part of the ubiquitous language — so it lives in the domain and
+knows nothing about Temporal or any transport.
 
-Temporal matches ``non_retryable_error_types`` against the raised exception's
-class name, not its base classes, so every concrete type must be listed in
-``NON_RETRYABLE_ERROR_TYPES`` explicitly.
+The infrastructure layer (``workflows/retry.py``) translates this taxonomy into
+Temporal's ``RetryPolicy.non_retryable_error_types``. Keep concrete permanent
+failures as subclasses of ``PermanentError`` and the retry policy picks them up
+automatically.
 """
 
 from __future__ import annotations
 
 
-class NonRetryableActivityError(Exception):
-    """Base class for activity failures that must not be retried."""
+class PermanentError(Exception):
+    """Base class for failures that must not be retried."""
 
 
-class AgentNotFoundError(NonRetryableActivityError):
+class AgentNotFoundError(PermanentError):
     """The requested agent does not exist (neither tenant row nor catalog)."""
 
 
-class ModelInstanceNotFoundError(NonRetryableActivityError):
+class ModelInstanceNotFoundError(PermanentError):
     """The requested model instance does not exist."""
-
-
-# Exception class names that must never be retried. Kept in sync with the
-# concrete subclasses above — Temporal matches on the concrete class name, so
-# listing only the base class would not catch the subclasses.
-NON_RETRYABLE_ERROR_TYPES: list[str] = [
-    NonRetryableActivityError.__name__,
-    AgentNotFoundError.__name__,
-    ModelInstanceNotFoundError.__name__,
-]

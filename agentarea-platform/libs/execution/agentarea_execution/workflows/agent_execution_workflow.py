@@ -110,8 +110,8 @@ from .constants import (
     Activities,
     EventTypes,
     ExecutionStatus,
-    make_retry_policy,
 )
+from .retry import make_retry_policy
 
 
 @workflow.defn

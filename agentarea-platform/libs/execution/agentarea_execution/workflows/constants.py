@@ -3,10 +3,6 @@
 from datetime import timedelta
 from typing import Final
 
-from temporalio.common import RetryPolicy
-
-from agentarea_execution.exceptions import NON_RETRYABLE_ERROR_TYPES
-
 # Execution limits
 MAX_ITERATIONS: Final[int] = 50
 MAX_TOOL_CALLS_PER_ITERATION: Final[int] = 10
@@ -29,21 +25,6 @@ DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for chi
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
 LLM_RETRY_ATTEMPTS: Final[int] = 1
-
-
-def make_retry_policy(maximum_attempts: int = DEFAULT_RETRY_ATTEMPTS) -> RetryPolicy:
-    """Build a RetryPolicy that never retries permanent failures.
-
-    Activities that raise a ``NonRetryableActivityError`` subclass (missing
-    agent/model, invalid configuration) cannot succeed on retry, so Temporal
-    fails the workflow immediately instead of exhausting ``maximum_attempts``.
-    Use this everywhere instead of constructing ``RetryPolicy`` directly so the
-    non-retryable set stays consistent across activities.
-    """
-    return RetryPolicy(
-        maximum_attempts=maximum_attempts,
-        non_retryable_error_types=NON_RETRYABLE_ERROR_TYPES,
-    )
 
 
 # Context window management
