@@ -5,7 +5,6 @@ from agentarea_common.config import get_settings
 from agentarea_common.events.router import get_event_router
 
 from .mcp_events import register_mcp_event_handlers
-from .task_events import register_task_event_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,6 @@ router = get_event_router(
 )
 
 # Register event handlers with the router
-register_task_event_handlers(router)
 register_mcp_event_handlers(router)
 
 

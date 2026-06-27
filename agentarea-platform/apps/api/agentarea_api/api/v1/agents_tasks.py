@@ -15,7 +15,6 @@ from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     get_agent_service,
-    get_event_stream_service,
     get_model_instance_service,
     get_read_agent_service,
     get_read_task_service,
@@ -23,7 +22,6 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.schemas.dto import RunCreate
@@ -401,7 +399,6 @@ async def create_task_for_agent_with_stream(
     user_context: UserContextDep,
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Create and execute a task for the specified agent with real-time SSE stream."""
     # Verify agent exists. Built-in agents live in the registry catalog (ADR-003)
@@ -1417,7 +1414,6 @@ async def stream_task_events(
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
     # Verify agent exists
