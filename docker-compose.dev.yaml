@@ -655,7 +655,7 @@ services:
     restart: unless-stopped
 
   # Mailpit — dev email catcher (SMTP sink + web UI + REST API).
-  # Replaces the unmaintained mailslurper. Captured mail is persisted to
+  # Captured mail is persisted to
   # ./data/mailpit so it survives container recreation. Nothing depends_on this
   # service: Kratos' courier retries delivery, so a slow mailpit start is harmless.
   mailpit:

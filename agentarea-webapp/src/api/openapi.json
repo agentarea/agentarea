@@ -9654,7 +9654,7 @@
                 "type": "null"
               }
             ],
-            "description": "Polling extractor identifier (e.g. 'mailslurper', 'imap').",
+            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
             "title": "Data Extractor"
           },
           "data_extractor_config": {

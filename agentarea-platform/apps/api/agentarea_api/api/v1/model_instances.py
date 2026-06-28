@@ -310,6 +310,11 @@ async def validate_model_instance(
             tokens_used=tokens_used,
         )
 
+    except HTTPException:
+        # Missing provider config / model spec raise HTTPException(404) inside
+        # this try; let them surface as real HTTP errors instead of being
+        # downgraded to a 200 {success: false} by the broad handler below.
+        raise
     except Exception as e:
         error_message = str(e)
         error_type = type(e).__name__

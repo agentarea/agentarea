@@ -1050,7 +1050,9 @@ kratos:
           exposed_headers:
             - Content-Type
             - Set-Cookie
-    dsn: ${DSN}
+    # dsn is supplied at runtime via the DSN env var, which Ory reads natively.
+    # Keeping the DB password out of the config file avoids unsafe sed
+    # substitution of values that may contain sed metacharacters (|, &, \).
     secrets:
       cookie:
         - ${KRATOS_SECRETS_COOKIE}

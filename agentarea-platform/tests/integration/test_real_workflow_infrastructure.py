@@ -260,7 +260,7 @@ INSERT INTO workspaces (id, name, description, created_at, updated_at)
 VALUES ('test-workspace-id', 'Test Workspace', 'Workspace for integration testing', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
--- 2. Create test user (if not exists)  
+-- 2. Create test user (if not exists)
 INSERT INTO users (id, email, name, created_at, updated_at)
 VALUES ('test-user-id', 'test@example.com', 'Test User', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
@@ -286,12 +286,12 @@ VALUES ('test-model-instance-id', 'ollama-provider-config', 'qwen25-model-spec',
 ON CONFLICT (id) DO NOTHING;
 
 -- 7. Create test agent
-INSERT INTO agents (id, workspace_id, name, description, instruction, model_id, tools_config, events_config, planning, created_by, created_at, updated_at)
+INSERT INTO agents (id, workspace_id, name, description, instruction, model_id, tools, events_config, planning, created_by, created_at, updated_at)
 VALUES ('test-agent-id', 'test-workspace-id', 'Test Agent', 'Agent for integration testing', 'You are a helpful AI assistant. When you complete a task, use the task_complete tool.', 'test-model-instance-id', '{}', '{}', false, 'test-user-id', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Query to verify setup
-SELECT 
+SELECT
     a.id as agent_id,
     a.name as agent_name,
     mi.id as model_instance_id,
@@ -300,7 +300,7 @@ SELECT
     ps.provider_type
 FROM agents a
 JOIN model_instances mi ON a.model_id = mi.id
-JOIN provider_configs pc ON mi.provider_config_id = pc.id  
+JOIN provider_configs pc ON mi.provider_config_id = pc.id
 JOIN provider_specs ps ON pc.provider_spec_id = ps.id
 WHERE a.id = 'test-agent-id';
 """
@@ -308,12 +308,6 @@ WHERE a.id = 'test-agent-id';
     logger.info("📝 Database setup script created:")
     logger.info("Save this as setup_test_database.sql and run it:")
     logger.info(setup_script)
-
-    # Also save to file
-    with open("setup_test_database.sql", "w") as f:
-        f.write(setup_script)
-
-    logger.info("✅ Script saved as setup_test_database.sql")
 
 
 @pytest.mark.asyncio

@@ -124,6 +124,10 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: openfga-migrate
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   template:
     metadata:

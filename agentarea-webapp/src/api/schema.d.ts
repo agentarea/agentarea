@@ -7912,7 +7912,7 @@ export interface components {
             cron_expression?: string | null;
             /**
              * Data Extractor
-             * @description Polling extractor identifier (e.g. 'mailslurper', 'imap').
+             * @description Polling extractor identifier (e.g. 'imap', 'rss').
              */
             data_extractor?: string | null;
             /**

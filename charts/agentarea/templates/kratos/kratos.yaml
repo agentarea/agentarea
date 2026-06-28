@@ -180,7 +180,6 @@ spec:
               env | grep POSTGRES;
               echo "DSN: $DSN";
               sed
-              -e "s|\${DSN}|$DSN|g"
               -e "s|\${KRATOS_SECRETS_COOKIE}|$KRATOS_SECRETS_COOKIE|g"
               -e "s|\${KRATOS_SECRETS_CIPHER}|$KRATOS_SECRETS_CIPHER|g"
               /etc/config/kratos/kratos.yml > /tmp/kratos.yml;
@@ -257,6 +256,10 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: kratos-migrate
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   template:
     metadata:
