@@ -69,3 +69,24 @@ def test_session_context_managers_exist():
     # ``get_db`` is an alias of ``session`` (same underlying function on the
     # class; instance access produces distinct bound-method objects).
     assert Database.get_db is Database.session
+
+
+def test_read_engine_reuses_write_pool_without_replica():
+    """No replica configured -> read path shares the write engine's pool.
+
+    Avoids opening a second connection pool to the same Postgres in every
+    process. Reads still run in AUTOCOMMIT.
+    """
+    from agentarea_common.config.database import Database, DatabaseSettings
+
+    db = Database(DatabaseSettings(POSTGRES_READ_HOST=None))
+    assert db.read_engine.pool is db.engine.pool
+    assert db.read_engine.get_execution_options().get("isolation_level") == "AUTOCOMMIT"
+
+
+def test_read_engine_is_dedicated_pool_with_replica():
+    """A configured replica gets its own pool to the replica host."""
+    from agentarea_common.config.database import Database, DatabaseSettings
+
+    db = Database(DatabaseSettings(POSTGRES_READ_HOST="replica.invalid"))
+    assert db.read_engine.pool is not db.engine.pool

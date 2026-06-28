@@ -104,7 +104,7 @@ class Database:
         return cls._instance
 
     def _setup_engines(self) -> None:
-        """Setup async (write + read replica) and sync database engines.
+        """Setup async (write + read) and sync database engines.
 
         ``pool_pre_ping`` verifies a pooled connection is still alive on checkout
         and transparently reconnects if the server closed it. Without it, a
@@ -132,13 +132,27 @@ class Database:
             max_overflow=self.settings.max_overflow,
             **pool_kwargs,
         )
-        self.read_engine: AsyncEngine = create_async_engine(
-            self.settings.read_url,
-            pool_size=self.settings.READ_POOL_SIZE,
-            max_overflow=self.settings.READ_POOL_MAX_OVERFLOW,
-            execution_options={"isolation_level": "AUTOCOMMIT"},
-            **pool_kwargs,
-        )
+
+        if self.settings.POSTGRES_READ_HOST:
+            # A read replica is configured: give it its own connection pool to
+            # the replica host, sized independently and running in AUTOCOMMIT.
+            self.read_engine: AsyncEngine = create_async_engine(
+                self.settings.read_url,
+                pool_size=self.settings.READ_POOL_SIZE,
+                max_overflow=self.settings.READ_POOL_MAX_OVERFLOW,
+                execution_options={"isolation_level": "AUTOCOMMIT"},
+                **pool_kwargs,
+            )
+        else:
+            # No replica: read_url is the primary, so opening a second pool to
+            # the same Postgres just duplicates connections in every process
+            # (notably the Temporal worker, which never opens read sessions).
+            # Reuse the write engine's pool via a lightweight execution-options
+            # variant — reads still run in AUTOCOMMIT (no transactions), they
+            # just share the primary's connections.
+            self.read_engine = self.engine.execution_options(
+                isolation_level="AUTOCOMMIT"
+            )
 
     def _setup_session_factories(self) -> None:
         """Setup session factories for async (write/read) and sync sessions."""
