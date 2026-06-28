@@ -24,6 +24,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -486,6 +487,16 @@ async def create_task_for_agent_with_stream(
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
+        except AgentModelNotConfiguredError as e:
+            yield _format_sse_event(
+                "error",
+                {
+                    "agent_id": str(agent_id),
+                    "error": str(e),
+                    "error_type": "model_not_configured",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
         except ValueError:
             # Agent validation errors
             yield _format_sse_event(
@@ -562,6 +573,8 @@ async def create_task_for_agent_sync(
         return task_response
 
     except PolicyValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except AgentModelNotConfiguredError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
         # Agent validation errors

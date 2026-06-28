@@ -1,4 +1,4 @@
-import type { components } from "../api/schema";
+import type { AgentCard as ApiAgentCard, AgentResponse, AgentareaApiApiV1ModelSpecsModelSpecResponse, InvitationCreatedResponse, InvitationResponse, McpServerInstanceResponse, McpServerResponse, MemberResponse, ModelInstanceResponse, ProjectResponse, ProviderConfigResponse, ProviderSpecResponse, ProviderSpecWithModelsResponse, TaskResponse as ApiTaskResponse } from "@/api/client/types.gen";
 import { createApiClient } from "./api-factory";
 import { getServerClient } from "./server-client";
 
@@ -328,11 +328,11 @@ export const fetchCatalogPage = async (
   });
   if (error) return { items: [], hasMore: false, error };
   const lists = await Promise.all(
-    (registries ?? []).map((r) =>
+    (registries ?? []).map((r: { id: string }) =>
       listRegistryItems(r.id, { limit, offset })
     )
   );
-  const items = lists.flatMap((l) => l.data ?? []);
+  const items = lists.flatMap((l: { data?: unknown[] }) => l.data ?? []);
   // A short page (relative to the requested limit) means the server has no more.
   const hasMore = items.length >= limit;
   return { items, hasMore, error: null };
@@ -350,23 +350,23 @@ export const getProvidersAndConfigs = async () => {
   };
 };
 
-export type Agent = components["schemas"]["AgentResponse"];
-export type MCPServer = components["schemas"]["MCPServerResponse"];
+export type Agent = AgentResponse;
+export type MCPServer = McpServerResponse;
 export type MCPServerInstance =
-  components["schemas"]["MCPServerInstanceResponse"];
-export type ProviderSpec = components["schemas"]["ProviderSpecResponse"];
+  McpServerInstanceResponse;
+export type ProviderSpec = ProviderSpecResponse;
 export type ProviderSpecWithModels =
-  components["schemas"]["ProviderSpecWithModelsResponse"];
-export type ProviderConfig = components["schemas"]["ProviderConfigResponse"];
+  ProviderSpecWithModelsResponse;
+export type ProviderConfig = ProviderConfigResponse;
 export type ModelSpec =
-  components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
-export type ChatAgent = components["schemas"]["AgentResponse"];
+  AgentareaApiApiV1ModelSpecsModelSpecResponse;
+export type ModelInstance = ModelInstanceResponse;
+export type ChatAgent = AgentResponse;
 export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = any;
-export type TaskResponse = components["schemas"]["TaskResponse"];
-export type AgentCard = components["schemas"]["AgentCard"];
-export type TaskWithAgent = TaskResponse & {
+export type TaskResponse = ApiTaskResponse;
+export type AgentCard = ApiAgentCard;
+export type TaskWithAgent = ApiTaskResponse & {
   agent_name?: string;
   agent_description?: string | null;
   // Set by the /v1/inbox endpoint for waiting_for_approval tasks so the inbox can
@@ -384,9 +384,9 @@ export type {
   SkillUpdateRequest,
 } from "@/types/skill";
 
-export type Project = components["schemas"]["ProjectResponse"];
+export type Project = ProjectResponse;
 
-export type WorkspaceMember = components["schemas"]["MemberResponse"];
-export type WorkspaceInvitation = components["schemas"]["InvitationResponse"];
+export type WorkspaceMember = MemberResponse;
+export type WorkspaceInvitation = InvitationResponse;
 export type WorkspaceInvitationCreated =
-  components["schemas"]["InvitationCreatedResponse"];
+  InvitationCreatedResponse;

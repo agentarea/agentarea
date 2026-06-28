@@ -1,8 +1,8 @@
 "use client";
 
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import * as React from "react";
 import { Bot, Check, ChevronDown, Plus, Search } from "lucide-react";
-import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
+type LLMModelInstance = ModelInstanceResponse;
 
 export interface ProviderModelSelectorProps {
   modelInstances: LLMModelInstance[];

@@ -1,7 +1,7 @@
-import createClient from "openapi-fetch";
-import type { components, paths } from "../api/schema";
+import type { AgentCreate, AgentUpdate, CreateInvitationBody, McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, McpServerUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ModelSpecCreate, ModelSpecUpdate, OpenApiConnectionCreate, OpenApiConnectionUpdate, PolicyDocument, ProjectCreate, ProjectUpdate, ProviderConfigCreate, ProviderConfigResponse, ProviderConfigUpdate, TaskCreate } from "@/api/client/types.gen";
+import type { ServerClient } from "./server-client";
 
-type Client = ReturnType<typeof createClient<paths>>;
+type Client = ServerClient;
 
 function withStatus<TData, TError>(result: {
   data?: TData;
@@ -44,7 +44,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createAgent: async (agent: components["schemas"]["AgentCreate"]) => {
+    createAgent: async (agent: AgentCreate) => {
       const { data, error } = await client.POST("/v1/agents/", { body: agent });
       return { data, error };
     },
@@ -72,7 +72,7 @@ export function createApiClient(client: Client) {
 
     updateAgent: async (
       agentId: string,
-      agent: components["schemas"]["AgentUpdate"]
+      agent: AgentUpdate
     ) => {
       const { data, error } = await client.PATCH("/v1/agents/{agent_id}", {
         params: { path: { agent_id: agentId } },
@@ -115,7 +115,7 @@ export function createApiClient(client: Client) {
 
     createAgentTask: async (
       agentId: string,
-      task: components["schemas"]["TaskCreate"]
+      task: TaskCreate
     ) => {
       // Use the synchronous (non-streaming) endpoint: it returns the created
       // task as JSON (including its id) right after the workflow is started,
@@ -319,7 +319,7 @@ export function createApiClient(client: Client) {
     },
 
     createMCPServer: async (
-      server: components["schemas"]["MCPServerCreate"]
+      server: McpServerCreate
     ) => {
       const { data, error } = await client.POST("/v1/mcp-servers/", {
         body: server,
@@ -346,7 +346,7 @@ export function createApiClient(client: Client) {
 
     updateMCPServer: async (
       serverId: string,
-      server: components["schemas"]["MCPServerUpdate"]
+      server: McpServerUpdate
     ) => {
       const { data, error } = await client.PATCH(
         "/v1/mcp-servers/{server_id}",
@@ -387,7 +387,7 @@ export function createApiClient(client: Client) {
     },
 
     createMCPServerInstance: async (
-      instance: components["schemas"]["MCPServerInstanceCreate"]
+      instance: McpServerInstanceCreate
     ) => {
       const { data, error } = await client.POST("/v1/mcp-server-instances/", {
         body: instance,
@@ -417,7 +417,7 @@ export function createApiClient(client: Client) {
 
     updateMCPServerInstance: async (
       instanceId: string,
-      instance: components["schemas"]["MCPServerInstanceUpdate"]
+      instance: McpServerInstanceUpdate
     ) => {
       const { data, error } = await client.PATCH(
         "/v1/mcp-server-instances/{instance_id}",
@@ -505,7 +505,7 @@ export function createApiClient(client: Client) {
     },
 
     createProviderConfig: async (
-      config: components["schemas"]["ProviderConfigCreate"]
+      config: ProviderConfigCreate
     ) => {
       const { data, error } = await client.POST("/v1/provider-configs/", {
         body: config,
@@ -515,7 +515,7 @@ export function createApiClient(client: Client) {
 
     getProviderConfig: async (
       id: string
-    ): Promise<components["schemas"]["ProviderConfigResponse"]> => {
+    ): Promise<ProviderConfigResponse> => {
       const response = await client.GET("/v1/provider-configs/{config_id}", {
         params: { path: { config_id: id } },
       });
@@ -534,7 +534,7 @@ export function createApiClient(client: Client) {
 
     updateProviderConfig: async (
       configId: string,
-      config: components["schemas"]["ProviderConfigUpdate"]
+      config: ProviderConfigUpdate
     ) => {
       const { data, error } = await client.PUT(
         "/v1/provider-configs/{config_id}",
@@ -589,7 +589,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createModelSpec: async (spec: components["schemas"]["ModelSpecCreate"]) => {
+    createModelSpec: async (spec: ModelSpecCreate) => {
       const { data, error } = await client.POST("/v1/model-specs/", {
         body: spec,
       });
@@ -618,7 +618,7 @@ export function createApiClient(client: Client) {
 
     updateModelSpec: async (
       modelSpecId: string,
-      spec: components["schemas"]["ModelSpecUpdate"]
+      spec: ModelSpecUpdate
     ) => {
       const { data, error } = await client.PATCH(
         "/v1/model-specs/{model_spec_id}",
@@ -661,7 +661,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    upsertModelSpec: async (spec: components["schemas"]["ModelSpecCreate"]) => {
+    upsertModelSpec: async (spec: ModelSpecCreate) => {
       const { data, error } = await client.POST("/v1/model-specs/upsert", {
         body: spec,
       });
@@ -681,7 +681,7 @@ export function createApiClient(client: Client) {
     },
 
     createModelInstance: async (
-      instance: components["schemas"]["ModelInstanceCreate"]
+      instance: ModelInstanceCreate
     ) => {
       const { data, error } = await client.POST("/v1/model-instances/", {
         body: instance,
@@ -690,7 +690,7 @@ export function createApiClient(client: Client) {
     },
 
     bulkCreateModelInstances: async (
-      body: components["schemas"]["ModelInstanceBulkCreateRequest"]
+      body: ModelInstanceBulkCreateRequest
     ) => {
       const { data, error } = await client.POST(
         "/v1/model-instances/bulk" as any,
@@ -1223,7 +1223,7 @@ export function createApiClient(client: Client) {
 
     createWorkspaceInvitation: async (
       workspaceId: string,
-      body: components["schemas"]["CreateInvitationBody"]
+      body: CreateInvitationBody
     ) => {
       const { data, error } = await client.POST(
         "/v1/workspaces/{workspace_id}/invitations",
@@ -1332,7 +1332,7 @@ export function createApiClient(client: Client) {
     },
 
     createOpenAPIConnection: async (
-      body: components["schemas"]["OpenAPIConnectionCreate"]
+      body: OpenApiConnectionCreate
     ) => {
       const { data, error } = await client.POST(
         "/v1/openapi-connections/" as any,
@@ -1359,7 +1359,7 @@ export function createApiClient(client: Client) {
 
     updateOpenAPIConnection: async (
       connectionId: string,
-      body: components["schemas"]["OpenAPIConnectionUpdate"]
+      body: OpenApiConnectionUpdate
     ) => {
       const { data, error } = await client.PATCH(
         `/v1/openapi-connections/${connectionId}` as any,
@@ -1477,7 +1477,7 @@ export function createApiClient(client: Client) {
       return withStatus(result);
     },
 
-    createProject: async (project: components["schemas"]["ProjectCreate"]) => {
+    createProject: async (project: ProjectCreate) => {
       const { data, error } = await client.POST("/v1/projects/", {
         body: project,
       });
@@ -1486,7 +1486,7 @@ export function createApiClient(client: Client) {
 
     updateProject: async (
       projectId: string,
-      project: components["schemas"]["ProjectUpdate"]
+      project: ProjectUpdate
     ) => {
       const { data, error } = await client.PATCH("/v1/projects/{project_id}", {
         params: { path: { project_id: projectId } },

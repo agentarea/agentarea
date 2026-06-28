@@ -8,6 +8,8 @@
  * logged-in" shell.
  */
 
+import { KRATOS_WHOAMI_TIMEOUT_MS } from "./server-timeouts";
+
 /**
  * Route prefixes that require an authenticated session.
  *
@@ -70,6 +72,10 @@ export async function hasLiveSession(
           Accept: "application/json",
           Cookie: cookieHeader,
         },
+        // Bound the middleware gate: this runs before any route renders, so a
+        // stalled Kratos here would block the first byte of every page. Fail
+        // closed (treat as no session) rather than hang.
+        signal: AbortSignal.timeout(KRATOS_WHOAMI_TIMEOUT_MS),
       }
     );
 

@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
+  ExternalLink,
+  FileText,
   LayoutGrid,
   Loader2,
   Plug,
@@ -17,6 +19,7 @@ import {
   Rows3,
   Search,
   ShieldCheck,
+  Sparkles,
   Star,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +39,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { Streamdown } from "streamdown";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import ModelBadge from "@/components/ui/model-badge";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -46,6 +52,7 @@ import {
   arr,
   normalize,
   str,
+  strArr,
   type CatalogEntry,
   type CatalogType,
   type RawSpec,
@@ -616,8 +623,10 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
 
   // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
   // topical labels — keep them out of the chip row (surfaced elsewhere instead).
+  // Bundle capabilities get their own labeled row, so drop them here too.
+  const capabilitySet = new Set(bundleCapabilities(spec));
   const topicalTags = entry.tags.filter(
-    (t) => !t.includes(":") && t !== FEATURED_TAG
+    (t) => !t.includes(":") && t !== FEATURED_TAG && !capabilitySet.has(t)
   );
 
   // Setup reuses the existing "create instance from spec" page — the catalog
@@ -797,43 +806,26 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
 
       {/* details */}
       <div className="space-y-5 border-t border-border/60 pt-6">
-        {entry.type === "bundles" && (
+        {entry.type === "bundles" && <BundleContents spec={spec} />}
+        {entry.type === "agents" && (
+          <Inside
+            icon={Bot}
+            label="Preferred models"
+            rows={entry.meta}
+            hint="The actual model is picked from your workspace on install."
+          />
+        )}
+        {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
+        {entry.type === "skills" && (
           <>
-            <Inside icon={Bot} label="Agents" rows={arr(spec.agents).map((a) => String(a.name ?? a.key))} />
-            <Inside icon={Puzzle} label="Skills" rows={arr(spec.skills).map((s) => String(s.name ?? s.key))} />
-            <Inside
-              icon={Plug}
-              label="Connections"
-              rows={arr(spec.mcps).map((m) => String(m.name ?? m.key))}
-              hint="Connected via OAuth after install"
+            <SkillContent
+              skillId={entry.id}
+              sourceType={str(spec.source_type) ?? "content"}
+              sourceUrl={str(spec.source_url)}
             />
-            <Inside
-              icon={Clock}
-              label="Automations"
-              rows={arr(spec.automations).map((a) => {
-                const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.schedule);
-                const name = String(a.name ?? a.key ?? "automation");
-                return kind ? `${name} · ${kind}` : name;
-              })}
-              hint="Imported disabled — enable when ready"
-            />
-            <Inside
-              icon={ShieldCheck}
-              label="Policies"
-              rows={arr(spec.policies).map((p) => {
-                const msg = str(p.message);
-                if (msg) return msg;
-                const effect = str(p.effect);
-                const target = str(p.target);
-                return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
-              })}
-              hint="Govern this bundle at runtime"
-            />
+            <SkillFacts entry={entry} />
           </>
         )}
-        {entry.type === "agents" && <Inside icon={Bot} label="Model" rows={entry.meta} />}
-        {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
-        {entry.type === "skills" && <SkillFacts entry={entry} />}
       </div>
     </div>
   );
@@ -911,6 +903,261 @@ function Inside({
       </ul>
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+// ── Bundle contents (rich breakdown of what's inside a bundle) ──
+
+// Each entity in a bundle carries far more than a name: agents have an
+// instruction, a model, and the skills/connections they wire up; skills carry a
+// source and a content preview; connections carry a transport and the secrets
+// they bind. The detail view surfaces all of it so you can judge a bundle
+// before installing — not just count its parts. Everything is referenced by
+// in-bundle `key` (portable; ids are resolved on install), so we resolve those
+// keys to display names against the bundle's own entity lists.
+
+// Presentation capabilities a bundle advertises ("interactive", "write"…),
+// carried in metadata — surfaced as their own labeled row, not loose tags.
+function bundleCapabilities(spec: RawSpec): string[] {
+  return strArr((spec.metadata as RawSpec | undefined)?.capabilities);
+}
+
+// Display name for an in-bundle reference key (e.g. an agent's skill/mcp key).
+function bundleRefName(items: Record<string, unknown>[], key: string): string {
+  const found = items.find((i) => str(i.key) === key);
+  return found ? String(found.name ?? key) : key;
+}
+
+// Models are literal ids ("gpt-4o") or "${setup.x}" placeholders. Resolve the
+// placeholder to the setup field's default so the card shows a real model name
+// instead of a raw template; hide it when nothing concrete is known.
+function resolveBundleModel(
+  model: string | null,
+  setup: Record<string, unknown>[]
+): string | null {
+  if (!model) return null;
+  const ref = model.match(/^\$\{setup\.([a-zA-Z0-9_]+)\}$/);
+  if (!ref) return model;
+  const field = setup.find((f) => str(f.key) === ref[1]);
+  return field ? str(field.default) : null;
+}
+
+// First meaningful line of a SKILL.md body, with the leading "# Heading" (which
+// just repeats the skill name) dropped.
+function skillPreview(content: string | null): string | null {
+  if (!content) return null;
+  const body = content
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0 && !l.startsWith("#"));
+  return body ?? null;
+}
+
+function BundleSection({
+  icon: Icon,
+  label,
+  count,
+  hint,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  count: number;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+        <span className="tabular-nums">({count})</span>
+      </div>
+      <div className="space-y-2">{children}</div>
+      {hint && <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// A small icon+text chip used to show an agent's wired skills/connections.
+function RefChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function BundleContents({ spec }: { spec: RawSpec }) {
+  const agents = arr(spec.agents);
+  const skills = arr(spec.skills);
+  const mcps = arr(spec.mcps);
+  const setup = arr(spec.setup);
+  const automations = arr(spec.automations);
+  const policies = arr(spec.policies);
+  const capabilities = bundleCapabilities(spec);
+
+  const total =
+    agents.length +
+    skills.length +
+    mcps.length +
+    automations.length +
+    policies.length +
+    capabilities.length;
+  if (total === 0) return null;
+
+  return (
+    <>
+      {capabilities.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" />
+            Capabilities
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {capabilities.map((c) => (
+              <Badge key={c} variant="light" size="sm" className="gap-1 capitalize">
+                <Sparkles className="h-3 w-3" />
+                {c.replace(/[-_]+/g, " ")}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <BundleSection icon={Bot} label="Agents" count={agents.length}>
+        {agents.map((a, i) => {
+          const usesSkills = strArr(a.skills).map((k) => bundleRefName(skills, k));
+          const usesMcps = strArr(a.mcps).map((k) => bundleRefName(mcps, k));
+          const model = resolveBundleModel(str(a.model), setup);
+          const instruction = str(a.instruction);
+          return (
+            <div
+              key={str(a.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 p-3"
+            >
+              <div className="flex items-center gap-2">
+                <AgentAvatar
+                  agent={{ id: String(a.key ?? a.name ?? i), name: str(a.name) }}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(a.name ?? a.key)}
+                </span>
+                {model && (
+                  <ModelBadge modelDisplayName={model} size="sm" className="shrink-0" />
+                )}
+              </div>
+              {instruction && (
+                <p className="mt-2 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                  {instruction}
+                </p>
+              )}
+              {(usesSkills.length > 0 || usesMcps.length > 0) && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {usesSkills.map((s) => (
+                    <RefChip key={`s-${s}`} icon={Puzzle} label={s} />
+                  ))}
+                  {usesMcps.map((m) => (
+                    <RefChip key={`m-${m}`} icon={Plug} label={m} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <BundleSection icon={Puzzle} label="Skills" count={skills.length}>
+        {skills.map((s, i) => {
+          const source = str(s.source_type) ?? "content";
+          const preview =
+            source === "github" ? str(s.source_url) : skillPreview(str(s.content));
+          return (
+            <div
+              key={str(s.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(s.name ?? s.key)}
+                </span>
+                <Badge variant="light" size="sm" className="shrink-0">
+                  {source}
+                </Badge>
+              </div>
+              {preview && (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+              )}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <BundleSection
+        icon={Plug}
+        label="Connections"
+        count={mcps.length}
+        hint="Connected via OAuth or your credentials after install"
+      >
+        {mcps.map((m, i) => {
+          const transport = str((m.json_spec as RawSpec | undefined)?.type);
+          const binds = Object.keys(
+            (m.bindings as Record<string, unknown> | undefined) ?? {}
+          );
+          return (
+            <div
+              key={str(m.key) ?? i}
+              className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-white dark:bg-zinc-800">
+                  <Plug className="h-3.5 w-3.5 text-zinc-400" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {String(m.name ?? m.key)}
+                </span>
+                {transport && (
+                  <Badge variant="light" size="sm" className="shrink-0">
+                    {transport}
+                  </Badge>
+                )}
+              </div>
+              {binds.length > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Requires: {binds.join(", ")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </BundleSection>
+
+      <Inside
+        icon={Clock}
+        label="Automations"
+        rows={automations.map((a) => {
+          const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
+          const name = String(a.name ?? a.key ?? "automation");
+          return kind ? `${name} · ${kind}` : name;
+        })}
+        hint="Imported disabled — enable when ready"
+      />
+      <Inside
+        icon={ShieldCheck}
+        label="Policies"
+        rows={policies.map((p) => {
+          const msg = str(p.message);
+          if (msg) return msg;
+          const effect = str(p.effect);
+          const target = str(p.target);
+          return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
+        })}
+        hint="Govern this bundle at runtime"
+      />
+    </>
   );
 }
 
@@ -1079,6 +1326,233 @@ function CatalogActionSlot({ children }: { children: React.ReactNode }) {
   return (
     <div className="w-full pl-[60px] md:ml-auto md:max-w-[210px] md:pl-0">
       {children}
+    </div>
+  );
+}
+
+type SkillFile = { path: string; size: number; url?: string | null };
+type FileBody =
+  | { kind: "md"; value: string }
+  | { kind: "text"; value: string }
+  | { kind: "link"; value: string };
+
+// Extensions we can safely preview inline as text. Anything else gets an
+// "open" link to its presigned URL instead of a garbled inline dump.
+const TEXT_EXT = new Set([
+  "md", "markdown", "txt", "py", "js", "ts", "tsx", "jsx", "json", "yaml",
+  "yml", "sh", "bash", "toml", "ini", "cfg", "csv", "html", "css", "xml",
+  "sql", "env",
+]);
+
+function isTextFile(path: string): boolean {
+  return TEXT_EXT.has(path.split(".").pop()?.toLowerCase() ?? "");
+}
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Strip YAML frontmatter (name/description — already shown in the header) from
+// a SKILL.md body before rendering, matching the installed-skill viewer.
+function skillBody(content: string): string {
+  const m = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+  return (m ? m[2] : content).trim();
+}
+
+// Skill contents. The catalog item id resolves on the backend to either a
+// tenant skill or a read-only catalog projection (see SkillService
+// `get_with_catalog`), so the existing skill-file endpoints serve
+// not-yet-installed catalog skills too:
+//   GET /v1/skills/{id}/files        → the file tree (a single synthetic
+//                                      SKILL.md for content skills; the real
+//                                      S3 tree for multi-file packages)
+//   GET /v1/skills/{id}/content      → the SKILL.md markdown
+//   GET /v1/skills/{id}/files/{path} → a presigned URL to any package file
+// We list the tree, render SKILL.md inline, and lazily load other text files on
+// click — falling back to an "open" link when a file can't be previewed inline.
+function SkillContent({
+  skillId,
+  sourceType,
+  sourceUrl,
+}: {
+  skillId: string;
+  sourceType: string;
+  sourceUrl: string | null;
+}) {
+  const [files, setFiles] = useState<SkillFile[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [bodies, setBodies] = useState<Record<string, FileBody>>({});
+  const [error, setError] = useState<string | null>(null);
+  const requested = useRef<Set<string>>(new Set());
+
+  // Load the file list once. A GitHub-sourced skill has no inlined files in the
+  // catalog (they're fetched on install), so we skip straight to a source link.
+  useEffect(() => {
+    if (sourceType === "github") return;
+    let active = true;
+    getJSON<{ files: SkillFile[] }>(`v1/skills/${skillId}/files`)
+      .then((d) => {
+        if (!active) return;
+        const fs = Array.isArray(d.files) ? d.files : [];
+        setFiles(fs);
+        const def = fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
+        setSelected(def?.path ?? null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setFiles([]);
+        setError("Could not load skill files.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [skillId, sourceType]);
+
+  // Lazily load the selected file's body. SKILL.md comes from /content; other
+  // files resolve to a presigned URL we then fetch (text) or link to.
+  useEffect(() => {
+    if (!selected || bodies[selected] || requested.current.has(selected)) return;
+    requested.current.add(selected);
+    let active = true;
+    void (async () => {
+      try {
+        if (selected.toLowerCase() === "skill.md") {
+          const d = await getJSON<{ content: string }>(`v1/skills/${skillId}/content`);
+          if (active)
+            setBodies((b) => ({
+              ...b,
+              [selected]: { kind: "md", value: skillBody(d.content || "") },
+            }));
+          return;
+        }
+        const { url } = await getJSON<{ url: string }>(
+          `v1/skills/${skillId}/files/${encodeURI(selected)}?redirect=false`
+        );
+        if (isTextFile(selected)) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error();
+            const text = await res.text();
+            if (active) setBodies((b) => ({ ...b, [selected]: { kind: "text", value: text } }));
+            return;
+          } catch {
+            // Cross-origin / unreadable — fall through to a plain open link.
+          }
+        }
+        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: url } }));
+      } catch {
+        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selected, skillId, bodies]);
+
+  if (sourceType === "github") {
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+        <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 text-sm">
+          <p className="font-medium">Sourced from a repository</p>
+          <p className="text-xs text-muted-foreground">
+            The skill files are fetched from{" "}
+            {sourceUrl ? (
+              <a href={sourceUrl} target="_blank" rel="noreferrer" className="break-all underline">
+                {sourceUrl}
+              </a>
+            ) : (
+              "its source repository"
+            )}{" "}
+            on install.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (files === null) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading skill…
+      </div>
+    );
+  }
+  if (files.length === 0) {
+    return error ? <p className="text-sm text-muted-foreground">{error}</p> : null;
+  }
+
+  const single = files.length === 1 && files[0].path.toLowerCase() === "skill.md";
+  const body = selected ? bodies[selected] : undefined;
+
+  const pane = (
+    <div className="max-h-[480px] min-w-0 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
+      {!body ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      ) : body.kind === "md" ? (
+        <Streamdown className="prose prose-sm max-w-none dark:prose-invert">
+          {body.value}
+        </Streamdown>
+      ) : body.kind === "text" ? (
+        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">{body.value}</pre>
+      ) : body.value ? (
+        <a
+          href={body.value}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm underline"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open file
+        </a>
+      ) : (
+        <p className="text-sm text-muted-foreground">Preview unavailable.</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Puzzle className="h-3.5 w-3.5" />
+        {single ? "Skill instructions" : "Skill files"}
+        {!single && <span className="tabular-nums">({files.length})</span>}
+      </div>
+      {single ? (
+        pane
+      ) : (
+        <div className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)]">
+          <ul className="space-y-0.5 self-start rounded-lg border border-border/60 p-1.5">
+            {files.map((f) => (
+              <li key={f.path}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(f.path)}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors",
+                    selected === f.path
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{f.path}</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                    {fmtSize(f.size)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {pane}
+        </div>
+      )}
     </div>
   );
 }

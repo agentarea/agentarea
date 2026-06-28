@@ -1,56 +1,14 @@
 "use server";
 
-import { z } from "zod";
-import type { components } from "@/api/schema";
+import type { AgentCreate } from "@/api/client/types.gen";
+import { zAgentCreate } from "@/api/client/zod.gen";
 import { createAgent } from "@/lib/api";
+import { toAgentCreate } from "../shared/agentContract";
+import type { AgentFormValues } from "./types";
 
-// Type definitions for MCP tool configuration (previously from schema MCPConfig/MCPToolConfig)
-interface MCPToolConfig {
-  tool_name: string;
-  requires_user_confirmation?: boolean;
-}
-
-interface MCPConfig {
-  mcp_server_id: string;
-  allowed_tools?: MCPToolConfig[] | null;
-}
-
-// Define Zod schema for MCP Tool Config
-const MCPToolConfigSchema = z.object({
-  tool_name: z.string().min(1, "Tool name is required"),
-  requires_user_confirmation: z.boolean().optional().default(false),
-});
-
-// Define Zod schema for MCPConfig to validate tools_config array
-const MCPConfigSchema = z.object({
-  mcp_server_id: z.string().uuid("Invalid MCP Server ID"),
-  allowed_tools: z.array(MCPToolConfigSchema).optional().nullable(),
-});
-
-// Define Zod schema for OpenAPI Config
-const OpenAPIConfigSchema = z.object({
-  openapi_connection_id: z.string().uuid("Invalid OpenAPI connection ID"),
-  openapi_connection_name: z.string().optional(),
-  allowed_tools: z.array(z.string()).optional().nullable(),
-  load_mode: z.enum(["explicit", "searchable"]).optional(),
-});
-
-// Define Zod schema for Builtin Tool Config
-const BuiltinToolConfigSchema = z.object({
-  tool_name: z.string().min(1, "Builtin tool name is required"),
-  requires_user_confirmation: z.boolean().optional().default(false),
-  enabled: z.boolean().optional().default(true),
-  disabled_methods: z.record(z.boolean()).optional(),
-});
-
-// Define Zod schema for individual Event Config items
-const EventConfigItemSchema = z.object({
-  event_type: z.string().min(1, "Event type is required"), // e.g., 'text_input', 'cron'
-  config: z.record(z.unknown()).optional().nullable(), // For future event-specific configs
-  enabled: z.boolean().default(true), // Whether the event is enabled - always boolean
-});
-
-// Extended type for form state that includes the instruction field
+// Form-state contract consumed by AgentForm (and the edit form): drives error
+// display and the "success" / created-id detection. Input to the action is the
+// typed RHF object (AgentFormValues) directly — no FormData round-trip.
 export interface AddAgentFormState {
   message: string;
   errors?: { [key: string]: string[] };
@@ -80,416 +38,47 @@ export interface AddAgentFormState {
         load_mode?: "explicit" | "searchable";
       }> | null;
     } | null;
-  events_config?: {
-    events?: Array<{
-      event_type: string;
-      config?: Record<string, unknown> | null;
-      enabled?: boolean;
+    events_config?: {
+      events?: Array<{
+        event_type: string;
+        config?: Record<string, unknown> | null;
+        enabled?: boolean;
       }> | null;
-  } | null;
-  planning?: boolean;
-  a2ui_enabled?: boolean;
-  skill_ids?: string[] | null;
-  id?: string;
+    } | null;
+    planning?: boolean;
+    a2ui_enabled?: boolean;
+    skill_ids?: string[] | null;
+    id?: string;
   };
-  // Field-specific errors
-  name?: string[];
-  description?: string[];
-  instruction?: string[];
-  model_id?: string[];
-  "events_config.events"?: string[];
-  "tools_config.mcp_server_configs"?: string[];
-  planning?: string[];
-  _form?: string[];
-}
-
-const AgentSchema = z.object({
-  name: z.string().min(1, "Agent name is required"),
-  description: z.string().optional(),
-  instruction: z.string().min(1, "Instruction is required"),
-  model_id: z.string().min(1, "Model is required"),
-  tools_config: z
-    .object({
-      mcp_server_configs: z.array(MCPConfigSchema).optional().nullable(),
-      builtin_tools: z.array(BuiltinToolConfigSchema).optional().nullable(),
-      openapi_configs: z.array(OpenAPIConfigSchema).optional().nullable(),
-    })
-    .optional()
-    .nullable(),
-  events_config: z
-    .object({
-      // Expect an array of EventConfigItemSchema objects
-      events: z.array(EventConfigItemSchema).optional().nullable(),
-    })
-    .optional()
-    .nullable(),
-  planning: z.boolean().optional(),
-  a2ui_enabled: z.boolean().optional(),
-});
-
-function buildToolsPayload(
-  toolsConfig: z.infer<typeof AgentSchema>["tools_config"]
-) {
-  const tools: any[] = [];
-
-  for (const mcpConfig of toolsConfig?.mcp_server_configs || []) {
-    const allowedTools = (mcpConfig.allowed_tools || []).map((tool) => ({
-      tool_name: tool.tool_name,
-      requires_user_confirmation: tool.requires_user_confirmation || false,
-    }));
-
-    tools.push({
-      type: "mcp",
-      name: mcpConfig.mcp_server_id,
-      settings: {
-        allowed_tools: allowedTools.length > 0 ? allowedTools : null,
-      },
-    });
-  }
-
-  for (const openapiConfig of toolsConfig?.openapi_configs || []) {
-    tools.push({
-      type: "openapi",
-      name: openapiConfig.openapi_connection_id,
-      settings: {
-        openapi_connection_id: openapiConfig.openapi_connection_id,
-        allowed_tools:
-          openapiConfig.allowed_tools && openapiConfig.allowed_tools.length > 0
-            ? openapiConfig.allowed_tools
-            : null,
-        load_mode: openapiConfig.load_mode,
-      },
-    });
-  }
-
-  for (const builtinTool of toolsConfig?.builtin_tools || []) {
-    const disabledMethods = builtinTool.disabled_methods
-      ? Object.entries(builtinTool.disabled_methods)
-          .filter(([, enabled]) => enabled === false)
-          .map(([method]) => method)
-      : null;
-
-    tools.push({
-      type: "code",
-      name: builtinTool.tool_name,
-      settings: {
-        disabled_methods: disabledMethods?.length ? disabledMethods : null,
-        requires_user_confirmation:
-          builtinTool.requires_user_confirmation ?? null,
-      },
-    });
-  }
-
-  return tools.length > 0 ? tools : null;
 }
 
 export async function addAgent(
-  prevState: AddAgentFormState,
-  formData: FormData
+  input: AgentFormValues
 ): Promise<AddAgentFormState> {
-  // Need to manually reconstruct the array/object structure for validation
-  const mcpConfigs: Record<
-    number,
-    Partial<MCPConfig>
-  > = {};
-  const mcpToolConfigs: Record<
-    number,
-    Record<number, Partial<MCPToolConfig>>
-  > = {};
-  type BuiltinToolConfigMutable = {
-    tool_name?: string;
-    requires_user_confirmation?: boolean;
-    enabled?: boolean;
-    disabled_methods?: Record<string, boolean>;
-  };
-  const builtinToolConfigs: Record<number, BuiltinToolConfigMutable> = {};
-  type OpenAPIConfigMutable = {
-    openapi_connection_id?: string;
-    openapi_connection_name?: string;
-    allowed_tools?: string[];
-    load_mode?: "explicit" | "searchable";
-  };
-  const openapiConfigs: Record<number, OpenAPIConfigMutable> = {};
+  // Map the UI form to the backend contract, then validate against the
+  // GENERATED schema. zAgentCreate is generated from the backend OpenAPI spec,
+  // so any drift between frontend and backend fails here at the boundary
+  // instead of silently producing a malformed request.
+  const body = toAgentCreate(input);
+  const parsed = zAgentCreate.safeParse(body);
 
-  formData.forEach((value, key) => {
-    // Handle MCP server configs
-    const mcpMatch = key.match(
-      /tools_config\.mcp_server_configs\[(\d+)\]\.mcp_server_id/
-    );
-    if (mcpMatch) {
-      const index = parseInt(mcpMatch[1], 10);
-      if (!mcpConfigs[index]) {
-        mcpConfigs[index] = {};
-      }
-      mcpConfigs[index].mcp_server_id = value as string;
-    }
-
-    // Handle allowed tools
-    const toolMatch = key.match(
-      /tools_config\.mcp_server_configs\[(\d+)\]\.allowed_tools\[(\d+)\]\.\(.*\)/
-    );
-    if (toolMatch) {
-      const serverIndex = parseInt(toolMatch[1], 10);
-      const toolIndex = parseInt(toolMatch[2], 10);
-      const field =
-        toolMatch[3] as keyof MCPToolConfig;
-
-      if (!mcpToolConfigs[serverIndex]) {
-        mcpToolConfigs[serverIndex] = {};
-      }
-      if (!mcpToolConfigs[serverIndex][toolIndex]) {
-        mcpToolConfigs[serverIndex][toolIndex] = {};
-      }
-
-      if (field === "requires_user_confirmation") {
-        mcpToolConfigs[serverIndex][toolIndex][field] =
-          value === "on" || value === "true";
-      } else if (field === "tool_name") {
-        mcpToolConfigs[serverIndex][toolIndex][field] = value as string;
-      } else {
-        (mcpToolConfigs[serverIndex][toolIndex] as any)[field] =
-          value as unknown;
-      }
-    }
-
-    // Handle builtin tools
-    const builtinMatch = key.match(
-      /tools_config\.builtin_tools\[(\d+)\]\.([^\]]+)/
-    );
-    if (builtinMatch) {
-      const index = parseInt(builtinMatch[1], 10);
-      const field = builtinMatch[2] as keyof BuiltinToolConfigMutable;
-
-      if (!builtinToolConfigs[index]) {
-        builtinToolConfigs[index] = {};
-      }
-
-      switch (field) {
-        case "requires_user_confirmation":
-        case "enabled":
-          builtinToolConfigs[index][field] = value === "on" || value === "true";
-          break;
-        case "disabled_methods":
-          try {
-            const parsed = JSON.parse(value as string) as Record<
-              string,
-              boolean
-            >;
-            builtinToolConfigs[index].disabled_methods = parsed;
-          } catch (parseError) {
-            console.error(
-              `Failed to parse disabled_methods JSON for builtin tool ${index}:`,
-              parseError
-            );
-            builtinToolConfigs[index].disabled_methods = {};
-          }
-          break;
-        case "tool_name":
-          builtinToolConfigs[index].tool_name = value as string;
-          break;
-        default:
-          break;
-      }
-    }
-
-    // Handle OpenAPI configs
-    const openapiIdMatch = key.match(
-      /tools_config\.openapi_configs\[(\d+)\]\.openapi_connection_id/
-    );
-    if (openapiIdMatch) {
-      const index = parseInt(openapiIdMatch[1], 10);
-      if (!openapiConfigs[index]) {
-        openapiConfigs[index] = {};
-      }
-      openapiConfigs[index].openapi_connection_id = value as string;
-    }
-
-    const openapiNameMatch = key.match(
-      /tools_config\.openapi_configs\[(\d+)\]\.openapi_connection_name/
-    );
-    if (openapiNameMatch) {
-      const index = parseInt(openapiNameMatch[1], 10);
-      if (!openapiConfigs[index]) {
-        openapiConfigs[index] = {};
-      }
-      openapiConfigs[index].openapi_connection_name = value as string;
-    }
-
-    const openapiToolMatch = key.match(
-      /tools_config\.openapi_configs\[(\d+)\]\.allowed_tools\[(\d+)\]/
-    );
-    if (openapiToolMatch) {
-      const index = parseInt(openapiToolMatch[1], 10);
-      if (!openapiConfigs[index]) {
-        openapiConfigs[index] = {};
-      }
-      if (!openapiConfigs[index].allowed_tools) {
-        openapiConfigs[index].allowed_tools = [];
-      }
-      openapiConfigs[index].allowed_tools!.push(value as string);
-    }
-
-    const openapiLoadModeMatch = key.match(
-      /tools_config\.openapi_configs\[(\d+)\]\.load_mode/
-    );
-    if (openapiLoadModeMatch) {
-      const index = parseInt(openapiLoadModeMatch[1], 10);
-      if (!openapiConfigs[index]) {
-        openapiConfigs[index] = {};
-      }
-      const v = value as string;
-      if (v === "explicit" || v === "searchable") {
-        openapiConfigs[index].load_mode = v;
-      }
-    }
-  });
-
-  // Combine MCP configs with their allowed tools
-  Object.keys(mcpConfigs).forEach((serverIndexStr) => {
-    const serverIndex = parseInt(serverIndexStr, 10);
-    if (mcpToolConfigs[serverIndex]) {
-      mcpConfigs[serverIndex].allowed_tools = Object.values(
-        mcpToolConfigs[serverIndex]
-      ) as MCPToolConfig[];
-    }
-  });
-  // Convert the record back to an array, ensuring required fields are present or handled by Zod
-  const mcpConfigsArray = Object.values(mcpConfigs).map(
-    (config) => config as MCPConfig
-  );
-
-  // Convert builtin tools record to array
-  const builtinToolsArray = Object.values(builtinToolConfigs).map((config) => ({
-    tool_name: config.tool_name as string,
-    requires_user_confirmation: !!config.requires_user_confirmation,
-    enabled: config.enabled !== undefined ? config.enabled : true,
-    disabled_methods: config.disabled_methods,
-  }));
-
-  // Convert OpenAPI configs record to array
-  const openapiConfigsArray = Object.values(openapiConfigs).map((config) => ({
-    openapi_connection_id: config.openapi_connection_id as string,
-    openapi_connection_name: config.openapi_connection_name,
-    allowed_tools: config.allowed_tools,
-    load_mode: config.load_mode,
-  }));
-
-  // Reconstruct events array using new format
-  const eventConfigs: Record<
-    number,
-    {
-      event_type: string;
-      config?: Record<string, unknown> | null;
-      enabled: boolean;
-    }
-  > = {};
-  formData.forEach((value, key) => {
-    const match = key.match(/events_config\.events\[(\d+)\]\.([^\]]+)/);
-    if (match) {
-      const index = parseInt(match[1], 10);
-      const field = match[2] as "event_type" | "config" | "enabled";
-      if (!eventConfigs[index]) {
-        eventConfigs[index] = { event_type: "", enabled: true };
-      }
-      // Handle potential JSON parsing for config
-      if (field === "config") {
-        if (typeof value === "string" && value.trim()) {
-          try {
-            eventConfigs[index].config = JSON.parse(value);
-          } catch (parseError) {
-            console.error(
-              `Failed to parse event config JSON for index ${index}:`,
-              parseError
-            );
-            eventConfigs[index].config = {
-              error: "INVALID_JSON",
-            } as unknown as Record<string, unknown>;
-          }
-        } else {
-          eventConfigs[index].config = null;
-        }
-      } else if (field === "event_type") {
-        eventConfigs[index].event_type = value as string;
-      } else if (field === "enabled") {
-        eventConfigs[index].enabled = value === "on" || value === "true";
-      }
-    }
-  });
-  const eventConfigsArray = Object.values(eventConfigs);
-
-  // Parse skill_ids
-  const skillIds: string[] = [];
-  formData.forEach((value, key) => {
-    const skillMatch = key.match(/skill_ids\[(\d+)\]/);
-    if (skillMatch) {
-      skillIds.push(value as string);
-    }
-  });
-
-  // Get form values
-  const name = formData.get("name") as string;
-  const description = formData.get("description") as string;
-  const instruction = formData.get("instruction") as string;
-  const model_id = formData.get("model_id") as string;
-
-  const planningValue = formData.get("planning");
-  const a2uiValue = formData.get("a2ui_enabled");
-
-  const rawFormData = {
-    name,
-    description,
-    instruction,
-    model_id,
-    tools_config: {
-      mcp_server_configs: mcpConfigsArray,
-      builtin_tools: builtinToolsArray,
-      openapi_configs: openapiConfigsArray,
-    },
-    events_config: { events: eventConfigsArray },
-    planning: planningValue === "on" || planningValue === "true",
-    a2ui_enabled: a2uiValue === "on" || a2uiValue === "true",
-    skill_ids: skillIds,
-  };
-
-  const validatedFields = AgentSchema.safeParse(rawFormData);
-
-  if (!validatedFields.success) {
-    // Attempt to map Zod errors to the nested structure
-    const mappedErrors: { [key: string]: string[] } = {}; // Use the simplified error structure
-    for (const issue of validatedFields.error.issues) {
-      const path = issue.path.join(".");
-      if (!mappedErrors[path]) {
-        mappedErrors[path] = [];
-      }
-      mappedErrors[path].push(issue.message);
+  if (!parsed.success) {
+    const errors: { [key: string]: string[] } = {};
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.join(".") || "_form";
+      (errors[path] ??= []).push(issue.message);
     }
     return {
       message: "Validation failed. Please check the fields.",
-      errors: mappedErrors,
-      fieldValues: rawFormData,
+      errors,
+      fieldValues: input,
     };
   }
 
   try {
-    // Call backend API to create agent - send both description and instruction
-    const { data, error } = await createAgent({
-      name: validatedFields.data.name,
-      description: validatedFields.data.description || "",
-      instruction: validatedFields.data.instruction,
-      model_id: validatedFields.data.model_id,
-      tools: buildToolsPayload(validatedFields.data.tools_config),
-      events_config: validatedFields.data.events_config
-        ? {
-            events: validatedFields.data.events_config.events || null,
-          }
-        : null,
-      planning: validatedFields.data.planning || null,
-      a2ui_enabled: validatedFields.data.a2ui_enabled || null,
-      skill_ids: skillIds.length > 0 ? skillIds : null,
-    } as any);
+    const { data, error } = await createAgent(parsed.data as AgentCreate);
 
     if (error) {
-      // If the error is from the API, extract field errors if possible
       const errorMessage =
         (error as any)?.message ||
         (error as any)?.detail?.[0]?.msg ||
@@ -497,22 +86,17 @@ export async function addAgent(
       return {
         message: "Failed to create agent",
         errors: { _form: [`API error: ${errorMessage}`] },
-        fieldValues: validatedFields.data,
+        fieldValues: input,
       };
     }
 
     if (data) {
-      // Return success state with created agent data
       return {
         message: "Agent created successfully!",
-        fieldValues: {
-          ...validatedFields.data,
-          id: data.id, // Include the agent ID
-        },
+        fieldValues: { ...input, id: data.id },
       };
     }
   } catch (err) {
-    // Handle unexpected errors (network, etc.)
     return {
       message: "Failed to create agent",
       errors: {
@@ -520,13 +104,13 @@ export async function addAgent(
           `Unexpected error: ${err instanceof Error ? err.message : "Unknown error"}`,
         ],
       },
-      fieldValues: validatedFields.data,
+      fieldValues: input,
     };
   }
 
   return {
     message: "Unknown error occurred",
     errors: { _form: ["Unknown error occurred"] },
-    fieldValues: validatedFields.data,
+    fieldValues: input,
   };
 }

@@ -1,9 +1,9 @@
 "use client";
 
+import type { PolicyDocument } from "@/api/client/types.gen";
 import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import { useMentions } from "@/hooks/useMentions";
 import {
   pauseAgentTaskAction as pauseAgentTask,
@@ -63,7 +63,7 @@ export interface TaskPolicyOption {
   policy?: TaskPolicyRule;
 }
 
-type TaskPolicyDocument = components["schemas"]["PolicyDocument"];
+type TaskPolicyDocument = PolicyDocument;
 
 function buildTaskPolicyDocument(
   rule: TaskPolicyRule | undefined

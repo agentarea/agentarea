@@ -1,10 +1,10 @@
 "use client";
 
+import type { McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import FullChat from "@/components/Chat/FullChat";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import Divider from "@/components/ui/divider";
@@ -30,8 +30,8 @@ import {
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import { useChat } from "./ChatContext";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
+type MCPServer = McpServerResponse;
+type LLMModelInstance = ModelInstanceResponse;
 
 interface AgentFormProps {
   mcpServers: MCPServer[];

@@ -1,9 +1,9 @@
 "use client";
 
+import type { McpServerResponse } from "@/api/client/types.gen";
 import React from "react";
 import { Info, Server, FileText, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
+type MCPServer = McpServerResponse;
 
 export interface MCPInstanceConfigFormProps {
   server: MCPServer;

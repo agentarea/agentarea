@@ -1,11 +1,11 @@
-import { components } from "@/api/schema";
+import type { AgentareaApiApiV1ModelSpecsModelSpecResponse, ModelInstanceResponse, ProviderConfigResponse, ProviderSpecResponse } from "@/api/client/types.gen";
 
 // Re-export types from API schema for convenience
-export type ProviderSpec = components["schemas"]["ProviderSpecResponse"];
-export type ProviderConfig = components["schemas"]["ProviderConfigResponse"];
+export type ProviderSpec = ProviderSpecResponse;
+export type ProviderConfig = ProviderConfigResponse;
 export type ModelSpec =
-  components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
+  AgentareaApiApiV1ModelSpecsModelSpecResponse;
+export type ModelInstance = ModelInstanceResponse;
 
 // Custom types for the form
 export interface SelectedModel {

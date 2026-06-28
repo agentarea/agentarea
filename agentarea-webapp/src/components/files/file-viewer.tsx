@@ -233,7 +233,6 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "image" && (
           <div className="flex h-full items-center justify-center p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt={fileName} className="max-h-full max-w-full object-contain" />
           </div>
         )}

@@ -1,8 +1,8 @@
 "use client";
 
+import type { AgentResponse, McpServerInstanceResponse, McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useActionState, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
-import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -16,10 +16,10 @@ import { updateAgent } from "./actions";
 import SkillsSection from "./components/SkillsSection";
 import type { Skill } from "@/lib/api";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-type Agent = components["schemas"]["AgentResponse"];
-type MCPInstance = components["schemas"]["MCPServerInstanceResponse"];
+type MCPServer = McpServerResponse;
+type LLMModelInstance = ModelInstanceResponse;
+type Agent = AgentResponse;
+type MCPInstance = McpServerInstanceResponse;
 
 interface AgentSkill {
   id: string;
@@ -129,60 +129,11 @@ export default function EditAgentClient({
 
   // Handle form submission with react-hook-form validation
   const onSubmit = (data: AgentFormValues) => {
-    // Create FormData for server action
-    const formData = new FormData();
-    formData.append("id", agent.id);
-    formData.append("name", data.name);
-    formData.append("description", data.description || "");
-    formData.append("instruction", data.instruction);
-    formData.append("model_id", data.model_id);
-    formData.append("planning", data.planning.toString());
-
-    // Add tools config
-    data.tools_config.mcp_server_configs.forEach((config, index) => {
-      formData.append(
-        `tools_config.mcp_server_configs[${index}].mcp_server_id`,
-        config.mcp_server_id
-      );
-      if (config.allowed_tools) {
-        config.allowed_tools.forEach((tool, toolIndex) => {
-          formData.append(
-            `tools_config.mcp_server_configs[${index}].allowed_tools[${toolIndex}].tool_name`,
-            tool.tool_name
-          );
-          formData.append(
-            `tools_config.mcp_server_configs[${index}].allowed_tools[${toolIndex}].requires_user_confirmation`,
-            (tool.requires_user_confirmation ?? false).toString()
-          );
-        });
-      }
+    formAction({
+      ...data,
+      id: agent.id,
+      skill_ids: selectedSkills.map((skill) => skill.id),
     });
-
-    // Add events config
-    data.events_config.events.forEach((event, index) => {
-      formData.append(
-        `events_config.events[${index}].event_type`,
-        event.event_type
-      );
-      if (event.config) {
-        formData.append(
-          `events_config.events[${index}].config`,
-          JSON.stringify(event.config)
-        );
-      }
-      formData.append(
-        `events_config.events[${index}].enabled`,
-        (event.enabled ?? true).toString()
-      );
-    });
-
-    // Add skills
-    selectedSkills.forEach((skill, index) => {
-      formData.append(`skill_ids[${index}]`, skill.id);
-    });
-
-    // Call server action
-    formAction(formData);
   };
 
   return (

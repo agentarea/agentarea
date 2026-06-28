@@ -18,7 +18,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { addMCPServer, MCPServerFormState } from "./actions";
+import {
+  addMCPServer,
+  type MCPServerFormState,
+  type MCPServerFormValues,
+} from "./actions";
 import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
 
 // Define the header schema for external servers
@@ -205,37 +209,21 @@ export function AddMCPServerForm() {
     }
   };
 
-  // Build FormData from validated form values and call the server action
   const onSubmit = async (data: FormValues) => {
     dispatchSubmitting(true);
     setState(initialState);
 
     try {
-      const fd = new window.FormData();
-      fd.set("type", data.type);
-      fd.set("name", data.name);
-      fd.set("description", data.description);
-      fd.set("dockerImageUrl", data.dockerImageUrl || "");
-      fd.set("version", data.version || "1.0.0");
-      fd.set("command", data.command || "");
-      fd.set("args", data.args || "");
-      fd.set("endpointUrl", data.endpointUrl || "");
-      fd.set("tags", data.tags || "");
-      fd.set("isPublic", String(data.isPublic));
-      // Serialize headers array in the format actions.ts expects
-      if (data.headers) {
-        data.headers.forEach((header, index) => {
-          fd.set(`headers.${index}.key`, header.key);
-          fd.set(`headers.${index}.value`, header.value);
-        });
-      }
+      const input: MCPServerFormValues = {
+        ...data,
+        version: data.version || "1.0.0",
+        authConfigId:
+          selectedAuthConfigId && selectedAuthConfigId !== "none"
+            ? selectedAuthConfigId
+            : null,
+      };
 
-      // Auth config
-      if (selectedAuthConfigId && selectedAuthConfigId !== "none") {
-        fd.set("authConfigId", selectedAuthConfigId);
-      }
-
-      const result = await addMCPServer(state, fd);
+      const result = await addMCPServer(state, input);
 
       // addMCPServer calls redirect() on success which throws NEXT_REDIRECT
       // If we get here, it means there was an error

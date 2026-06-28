@@ -23,6 +23,14 @@ export default defineConfig({
       testMatch: /.*\.real\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      // AI-driven (Stagehand) specs. Stagehand manages its own local browser,
+      // so these tests use no Playwright `page` fixture - the project exists for
+      // grouping/reporting and a dedicated `--project` filter.
+      name: "chromium-ai-stack",
+      testMatch: /.*\.ai\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: process.env.PLAYWRIGHT_REUSE_SERVER
     ? undefined

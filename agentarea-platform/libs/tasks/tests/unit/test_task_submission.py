@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_governance.domain.policies import EffectivePolicy
+from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -208,6 +209,81 @@ async def test_create_and_execute_routes_to_active_workflow_when_chat_id_present
     mocks["task_manager"].submit_task.assert_not_awaited()
     executor.send_workflow_command.assert_awaited_once()
     assert result.status == "routed"
+
+
+def _model_less_agent():
+    agent = MagicMock(id=uuid4())
+    agent.name = "no-model-agent"
+    agent.model_id = None  # installed catalog agent with no matching workspace model
+    return agent
+
+
+@pytest.mark.asyncio
+async def test_create_and_execute_blocks_agent_without_model():
+    """A run for an agent with no model must fail fast, not dispatch to Temporal."""
+    service, mocks = _make_service()
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    with pytest.raises(AgentModelNotConfiguredError):
+        await service.create_and_execute_task_with_workflow(
+            agent_id=agent.id,
+            description="do x",
+            workspace_id="ws-abc",
+            user_id="user-123",
+        )
+
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_model_override_in_parameters_bypasses_model_guard():
+    """A per-run model_override satisfies the model requirement."""
+    service, mocks = _make_service()
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    await service.create_and_execute_task_with_workflow(
+        agent_id=agent.id,
+        description="do x",
+        workspace_id="ws-abc",
+        user_id="user-123",
+        parameters={"model_override": "inst-override"},
+    )
+
+    mocks["task_manager"].submit_task.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_followup_routing_is_not_blocked_by_missing_model():
+    """A follow-up routed to a live workflow reuses its model and skips the guard."""
+    executor = MagicMock()
+    executor.send_workflow_command = AsyncMock(return_value=True)
+    service, mocks = _make_service(temporal_executor=executor)
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    candidate = MagicMock(
+        id=uuid4(),
+        execution_id="task-existing",
+        description="prev",
+        user_id="user-123",
+        workspace_id="ws-abc",
+        agent_id=uuid4(),
+        parameters={},
+    )
+    mocks["task_repo"].find_active_by_agent_and_chat = AsyncMock(return_value=[candidate])
+
+    result = await service.create_and_execute_task_with_workflow(
+        agent_id=agent.id,
+        description="follow-up",
+        workspace_id="ws-abc",
+        parameters={"channel_origin": {"chat_id": "c-99"}},
+        user_id="user-123",
+    )
+
+    assert result.status == "routed"
+    mocks["task_manager"].submit_task.assert_not_awaited()
 
 
 @pytest.mark.asyncio

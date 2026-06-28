@@ -1,6 +1,10 @@
 "use server";
 
-import type { components } from "@/api/schema";
+import type { McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ProviderConfigCreate, ProviderConfigUpdate } from "@/api/client/types.gen";
+import {
+  zProviderConfigCreate,
+  zProviderConfigUpdate,
+} from "@/api/client/zod.gen";
 import { env } from "@/env";
 import {
   addAgentToProject,
@@ -230,7 +234,7 @@ export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
 }
 
 export async function createMCPServerAction(
-  server: components["schemas"]["MCPServerCreate"]
+  server: McpServerCreate
 ) {
   return await createMCPServer(server);
 }
@@ -248,7 +252,7 @@ export async function listSkillsAction(params?: {
 }
 
 export async function createMCPServerInstanceAction(
-  instance: components["schemas"]["MCPServerInstanceCreate"]
+  instance: McpServerInstanceCreate
 ) {
   return await createMCPServerInstance(instance);
 }
@@ -259,7 +263,7 @@ export async function getMCPServerInstanceAction(instanceId: string) {
 
 export async function updateMCPServerInstanceAction(
   instanceId: string,
-  instance: components["schemas"]["MCPServerInstanceUpdate"]
+  instance: McpServerInstanceUpdate
 ) {
   return await updateMCPServerInstance(instanceId, instance);
 }
@@ -281,26 +285,39 @@ export async function listProviderSpecsWithModelsAction(params?: {
 }
 
 export async function createProviderConfigAction(
-  config: components["schemas"]["ProviderConfigCreate"]
+  config: ProviderConfigCreate
 ) {
-  return await createProviderConfig(config);
+  const parsed = zProviderConfigCreate.safeParse(config);
+  if (!parsed.success) {
+    return { data: undefined, error: parsed.error };
+  }
+  return await createProviderConfig(
+    parsed.data as ProviderConfigCreate
+  );
 }
 
 export async function updateProviderConfigAction(
   configId: string,
-  config: components["schemas"]["ProviderConfigUpdate"]
+  config: ProviderConfigUpdate
 ) {
-  return await updateProviderConfig(configId, config);
+  const parsed = zProviderConfigUpdate.safeParse(config);
+  if (!parsed.success) {
+    return { data: undefined, error: parsed.error };
+  }
+  return await updateProviderConfig(
+    configId,
+    parsed.data as ProviderConfigUpdate
+  );
 }
 
 export async function createModelInstanceAction(
-  instance: components["schemas"]["ModelInstanceCreate"]
+  instance: ModelInstanceCreate
 ) {
   return await createModelInstance(instance);
 }
 
 export async function bulkCreateModelInstancesAction(
-  body: components["schemas"]["ModelInstanceBulkCreateRequest"]
+  body: ModelInstanceBulkCreateRequest
 ) {
   return await bulkCreateModelInstances(body);
 }

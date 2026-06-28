@@ -1,3 +1,4 @@
+import type { McpServerResponse } from "@/api/client/types.gen";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
@@ -8,7 +9,6 @@ import {
   UseFieldArrayReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Accordion } from "@/components/ui/accordion";
@@ -37,7 +37,7 @@ import { MethodsList } from "./MethodsList";
 import { SelectableList } from "./SelectableList";
 import { TriggerControl } from "./TriggerControl";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
+type MCPServer = McpServerResponse;
 
 type ToolConfigProps = {
   control: any;

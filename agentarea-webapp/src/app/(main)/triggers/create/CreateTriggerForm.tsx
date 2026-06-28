@@ -82,6 +82,7 @@ interface CreateTriggerFormProps {
 }
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+const KIND_ORDER: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
 
 type SelectableResource = TaskParameterRef;
 
@@ -166,12 +167,12 @@ export function CreateTriggerForm({
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
         } else {
-          const firstKind = kindOrder.find((k) => data.some((e) => e.kind === k));
+          const firstKind = KIND_ORDER.find((k) => data.some((e) => e.kind === k));
           if (firstKind) setActiveTab(firstKind);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [initialData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +218,7 @@ export function CreateTriggerForm({
       setSelectedMethods(selected.default_methods ?? ["POST"]);
       setSelectedEvents([]);
     }
-  }, [selectedId]);
+  }, [isEditing, selected]);
 
   const availableEvents = selected?.events ?? [];
   const credentialFields = selected?.credential_fields ?? [];
@@ -347,9 +348,8 @@ export function CreateTriggerForm({
     email: Mail,
     webhook: Webhook,
   };
-  const kindOrder: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
   const kinds = new Set(catalog.map((e) => e.kind));
-  const orderedKinds = kindOrder.filter((k) => kinds.has(k));
+  const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
 
   useEffect(() => {
     if (!activeTab || isEditing) return;

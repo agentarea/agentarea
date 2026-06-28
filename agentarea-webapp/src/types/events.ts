@@ -1,8 +1,11 @@
-import { components } from "@/api/schema";
+import type {
+  TaskEvent as ApiTaskEvent,
+  TaskEventResponse as ApiTaskEventResponse,
+} from "@/api/client/types.gen";
 
 // Base types from API schema
-export type TaskEvent = components["schemas"]["TaskEvent"];
-export type TaskEventResponse = components["schemas"]["TaskEventResponse"];
+export type TaskEvent = ApiTaskEvent;
+export type TaskEventResponse = ApiTaskEventResponse;
 
 // Extended SSE event types
 export interface SSEEvent {

@@ -26,7 +26,10 @@ export default async function AgentTasksPage({ params }: Props) {
   try {
     const { data: tasksData, error } = await listAgentTasks(realId);
     if (!error && tasksData) {
-      initialTasks = tasksData.map((task) => ({ ...task, taskStatus: undefined }));
+      initialTasks = tasksData.map((task: TaskWithStatus) => ({
+        ...task,
+        taskStatus: undefined,
+      }));
     }
   } catch (error) {
     console.error("Failed to load initial tasks:", error);

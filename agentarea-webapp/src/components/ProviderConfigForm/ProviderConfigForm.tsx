@@ -8,6 +8,15 @@ import { AlertCircle, Bot, Server } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import type {
+  ProviderConfigCreate,
+  ProviderConfigUpdate,
+  ProviderSpecWithModelsResponse,
+} from "@/api/client/types.gen";
+import {
+  zProviderConfigCreate,
+  zProviderConfigUpdate,
+} from "@/api/client/zod.gen";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -31,19 +40,20 @@ import {
 import BaseInfo from "./components/BaseInfo";
 import ModelInstances from "./components/ModelInstances";
 
-// Form validation schema
-const providerConfigSchema = z.object({
-  provider_spec_id: z.string().min(1, "Provider is required"),
-  name: z
-    .string()
-    .min(1, "Name is required")
-    .max(255, "Name must be less than 255 characters"),
-  api_key: z.string().optional(),
-  endpoint_url: z.string().optional(),
-  is_public: z.boolean(),
-});
+const providerConfigCreateFormSchema = zProviderConfigCreate.superRefine(
+  (data, ctx) => {
+    if (!data.endpoint_url?.trim() && !data.api_key?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["api_key"],
+        message:
+          "API key is required (or set a custom endpoint URL for keyless proxies)",
+      });
+    }
+  }
+);
 
-type ProviderConfigFormData = z.infer<typeof providerConfigSchema>;
+type ProviderConfigFormData = z.input<typeof zProviderConfigCreate>;
 
 export default function ProviderConfigForm({
   initialData,
@@ -93,7 +103,8 @@ export default function ProviderConfigForm({
       }
 
       const specs = providerSpecsResponse.data || [];
-      const specsWithModels = providerSpecsWithModelsResponse.data || [];
+      const specsWithModels =
+        (providerSpecsWithModelsResponse.data || []) as ProviderSpecWithModelsResponse[];
 
       // Extract and flatten model specs from the provider specs with models
       const models = specsWithModels.flatMap((spec) =>
@@ -143,23 +154,7 @@ export default function ProviderConfigForm({
     reset,
   } = useForm<ProviderConfigFormData>({
     resolver: zodResolver(
-      isEdit
-        ? providerConfigSchema
-        : providerConfigSchema.superRefine((data, ctx) => {
-            // API key is required for hosted providers, but optional when a
-            // custom endpoint URL is set — self-hosted / proxy backends
-            // (ollama, vLLM, OpenAI-compatible gateways) often accept
-            // keyless traffic, and the backend suppresses the Authorization
-            // header when the key is empty.
-            if (!data.endpoint_url?.trim() && !data.api_key?.trim()) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["api_key"],
-                message:
-                  "API key is required (or set a custom endpoint URL for keyless proxies)",
-              });
-            }
-          })
+      isEdit ? zProviderConfigCreate : providerConfigCreateFormSchema
     ),
     defaultValues: {
       provider_spec_id:
@@ -287,9 +282,6 @@ export default function ProviderConfigForm({
   };
 
   const onSubmit = async (data: ProviderConfigFormData) => {
-    console.log("onSubmit", data);
-    console.log("endpoint_url value:", data.endpoint_url);
-    console.log("endpoint_url type:", typeof data.endpoint_url);
     setIsSubmitting(true);
     setError(null);
 
@@ -299,7 +291,7 @@ export default function ProviderConfigForm({
       let providerError;
 
       if (isEdit && initialData) {
-        const updateData: any = {
+        const updateData: ProviderConfigUpdate = {
           name: data.name,
           endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
           is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
@@ -309,18 +301,26 @@ export default function ProviderConfigForm({
         if (data.api_key && data.api_key.trim() !== "") {
           updateData.api_key = data.api_key;
         }
-        console.log("Update data:", updateData);
-        const result = await updateProviderConfig(initialData.id, updateData);
+        const parsedUpdate = zProviderConfigUpdate.safeParse(updateData);
+        if (!parsedUpdate.success) {
+          throw new Error(parsedUpdate.error.issues[0]?.message || "Invalid provider configuration");
+        }
+        const result = await updateProviderConfig(initialData.id, parsedUpdate.data);
         providerConfig = result.data;
         providerError = result.error;
       } else {
-        const result = await createProviderConfig({
+        const createData: ProviderConfigCreate = {
           provider_spec_id: data.provider_spec_id,
           name: data.name,
           api_key: data.api_key || "", // API key is required for creation, so this should never be undefined
           endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
           is_public: data.is_public,
-        });
+        };
+        const parsedCreate = zProviderConfigCreate.safeParse(createData);
+        if (!parsedCreate.success) {
+          throw new Error(parsedCreate.error.issues[0]?.message || "Invalid provider configuration");
+        }
+        const result = await createProviderConfig(parsedCreate.data);
         providerConfig = result.data;
         providerError = result.error;
       }
@@ -566,8 +566,8 @@ export default function ProviderConfigForm({
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
               providerConfigId={isEdit && initialData ? initialData.id : undefined}
-              apiKey={watchedApiKey}
-              endpointUrl={watchedEndpointUrl}
+              apiKey={watchedApiKey ?? undefined}
+              endpointUrl={watchedEndpointUrl ?? undefined}
               onModelsDiscovered={() => loadData({ silent: true })}
             />
           )}

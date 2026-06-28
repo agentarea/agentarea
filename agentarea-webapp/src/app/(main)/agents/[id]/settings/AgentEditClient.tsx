@@ -1,17 +1,17 @@
 "use client";
 
+import type { McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
 import type { AgentFormValues } from "../../create/types";
 import AgentForm from "../../shared/AgentForm";
 import { updateAgentSettings } from "./actions";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
+type MCPServer = McpServerResponse;
+type LLMModelInstance = ModelInstanceResponse;
 
 interface AgentEditClientProps {
   agentId: string;

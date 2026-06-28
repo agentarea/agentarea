@@ -22,6 +22,22 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+def pick_model_instance_id(
+    preferred_models: list[str], instance_ids_by_name: dict[str, str]
+) -> str | None:
+    """Pick the instance id for the first preferred model that has one.
+
+    ``preferred_models`` is a priority-ordered list of model slugs;
+    ``instance_ids_by_name`` maps model slug to a workspace model-instance id.
+    Returns ``None`` when no preferred model is configured in the workspace.
+    """
+    for name in preferred_models:
+        instance_id = instance_ids_by_name.get(name)
+        if instance_id is not None:
+            return instance_id
+    return None
+
+
 @dataclass(frozen=True)
 class CatalogAgentItem:
     """A built-in agent definition projected from a registry item."""
@@ -77,6 +93,43 @@ class CatalogAgentRepository:
         )
         row = result.fetchone()
         return self._row_to_item(row) if row else None
+
+    async def model_instance_ids_by_name(self) -> dict[str, str]:
+        """Map ``model_specs.model_name`` to an active model-instance id for this workspace.
+
+        Catalog agents are global and reference models by slug (e.g. ``gpt-4o``),
+        but the runnable ``model_id`` is a per-workspace ``model_instances`` row.
+        The first active instance per model name wins. Use this to resolve many
+        catalog items without an N+1 query.
+
+        Uses raw SQL against the LLM tables to avoid a cross-library dependency on
+        ``agentarea-llm`` (same rationale as the registry reads above).
+        """
+        query = text(
+            "SELECT ms.model_name, mi.id "
+            "FROM model_instances mi "
+            "JOIN model_specs ms ON ms.id = mi.model_spec_id "
+            "WHERE mi.workspace_id = :workspace_id "
+            "AND mi.is_active = true"
+        )
+        result = await self.session.execute(
+            query, {"workspace_id": self.user_context.workspace_id}
+        )
+        by_name: dict[str, str] = {}
+        for row in result.fetchall():
+            by_name.setdefault(row.model_name, str(row.id))
+        return by_name
+
+    async def resolve_model_instance_id(self, preferred_models: list[str]) -> str | None:
+        """Resolve preferred model slugs to a single workspace model-instance id.
+
+        Walks ``preferred_models`` in priority order and returns the id of the
+        first matching active instance, or ``None`` when nothing matches (so the
+        agent installs without a bound model).
+        """
+        if not preferred_models:
+            return None
+        return pick_model_instance_id(preferred_models, await self.model_instance_ids_by_name())
 
     async def mark_installed(
         self, item_id: str, entity_id: str, installed_version: str | None

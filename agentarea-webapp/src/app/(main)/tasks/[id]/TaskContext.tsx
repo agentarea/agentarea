@@ -106,27 +106,32 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
     }
   }, [taskId]);
 
+  const statusTaskId = task?.id;
+  const statusAgentId = task?.agent_id;
+
   // Load status in background (non-blocking, uses Temporal)
   useEffect(() => {
-    if (!task) return;
+    if (!statusTaskId || !statusAgentId) return;
     const loadStatus = async () => {
       try {
-        const res = await getAgentTaskStatus(task.agent_id, task.id);
+        const res = await getAgentTaskStatus(statusAgentId, statusTaskId);
         if (!res.error) setTaskStatus(res.data as TaskStatus);
       } catch {
         // Status is optional — page works without it
       }
     };
     loadStatus();
-  }, [task?.id]);
+  }, [statusAgentId, statusTaskId]);
+
+  const policyTaskId = task?.id;
 
   // Load the immutable governance policy snapshot for the task (best-effort:
   // legacy tasks return 404, which we treat as "no policy").
   useEffect(() => {
-    if (!task) return;
+    if (!policyTaskId) return;
     const loadPolicy = async () => {
       try {
-        const res = await getTaskPolicySnapshot(task.id);
+        const res = await getTaskPolicySnapshot(policyTaskId);
         if (!res.error && res.data) {
           setPolicy(
             (res.data as EffectivePolicyResponse).effective_policy ?? null
@@ -137,14 +142,14 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
       }
     };
     loadPolicy();
-  }, [task?.id]);
+  }, [policyTaskId]);
 
   // Only fetch client-side if no server data was provided
   useEffect(() => {
     if (!initialTask && !initialError) {
       loadTask();
     }
-  }, []);
+  }, [initialError, initialTask, loadTask]);
 
   return (
     <TaskContext.Provider

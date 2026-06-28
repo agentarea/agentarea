@@ -1,4 +1,4 @@
-import type { components } from "@/api/schema";
+import type { AgentCreate } from "@/api/client/types.gen";
 import type { AddAgentFormState } from "./actions";
 
 /**

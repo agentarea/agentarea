@@ -31,7 +31,7 @@ export default async function AgentDelegationPage({
     (a: { id: string }) => a.id !== resolvedParams.id
   );
 
-  const connectedAgentNames = new Set(
+  const connectedAgentNames = new Set<string>(
     (agent?.tools ?? [])
       .filter((t: { type: string }) => t.type === "agent")
       .map((t: { name: string }) => t.name)
