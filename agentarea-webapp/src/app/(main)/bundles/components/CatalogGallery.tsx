@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -213,30 +214,29 @@ export default function CatalogGallery({
 
   return (
     <div className="space-y-4">
-      {/* Type tabs — the primary axis */}
-      <div className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
-        {TYPES.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.key}
-              onClick={() => {
-                void setType(t.key);
-                void setCategory(ALL);
-                void setItemId(null);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                type === t.key
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {t.label}
-            </button>
-          );
-        })}
+      {/* Type tabs — the primary axis. Reuses the inbox segmented control. */}
+      <div className="border-b border-border/60 pb-3">
+        <CountSegmentedControl
+          items={TYPES.map((t) => {
+            const Icon = t.icon;
+            return {
+              value: t.key,
+              label: (
+                <span className="flex items-center gap-1.5">
+                  <Icon className="h-4 w-4" />
+                  {t.label}
+                </span>
+              ),
+            };
+          })}
+          value={type}
+          onChange={(next) => {
+            void setType(next);
+            void setCategory(ALL);
+            void setItemId(null);
+          }}
+          layoutId="catalog-type-control"
+        />
       </div>
 
       <div className="flex gap-6">
