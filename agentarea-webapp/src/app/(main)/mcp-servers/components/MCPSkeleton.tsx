@@ -3,9 +3,7 @@ import {
   LinkedCardSkeleton,
   type SkeletonColumn,
 } from "@/components/Skeleton";
-
-const GRID_CLASS =
-  "grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 
 // MCPInstanceCard / OpenAPIConnectionCard: icon + status/type subtitle, no body.
 function MCPCardSkeleton() {
@@ -45,7 +43,7 @@ export default function MCPSkeleton({
         viewMode={viewMode}
         columns={columns}
         rows={8}
-        gridClassName={GRID_CLASS}
+        gridClassName={CARD_GRID_DENSE}
         count={10}
         Card={MCPCardSkeleton}
       />

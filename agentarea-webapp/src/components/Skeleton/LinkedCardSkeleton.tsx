@@ -30,7 +30,7 @@ export default function LinkedCardSkeleton({
   return (
     <Card
       className={cn(
-        "group relative flex h-full cursor-default flex-col justify-between px-4 py-4",
+        "relative flex h-full cursor-default flex-col justify-between px-4 py-4",
         "border border-zinc-200 dark:border-zinc-800",
         "bg-white dark:bg-zinc-900",
         className

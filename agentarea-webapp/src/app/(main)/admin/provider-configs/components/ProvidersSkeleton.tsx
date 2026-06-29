@@ -3,9 +3,7 @@ import {
   LinkedCardSkeleton,
   type SkeletonColumn,
 } from "@/components/Skeleton";
-
-const GRID_CLASS =
-  "grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 
 // ProviderConfigCard: icon + provider subtitle + a models/badge body row.
 function ProviderConfigCardSkeleton() {
@@ -42,7 +40,7 @@ export default function ProvidersSkeleton({
           viewMode={viewMode}
           columns={configColumns}
           rows={5}
-          gridClassName={GRID_CLASS}
+          gridClassName={CARD_GRID_DENSE}
           count={5}
           Card={ProviderConfigCardSkeleton}
         />
@@ -55,7 +53,7 @@ export default function ProvidersSkeleton({
           viewMode={viewMode}
           columns={specColumns}
           rows={5}
-          gridClassName={GRID_CLASS}
+          gridClassName={CARD_GRID_DENSE}
           count={10}
           Card={ProviderSpecCardSkeleton}
         />

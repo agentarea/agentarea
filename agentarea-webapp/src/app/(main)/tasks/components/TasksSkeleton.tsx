@@ -3,9 +3,7 @@ import {
   LinkedCardSkeleton,
   type SkeletonColumn,
 } from "@/components/Skeleton";
-
-const GRID_CLASS =
-  "grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
+import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
 
 // TaskItem: status badge top-right, body = agent row + date/time row.
 function TaskCardSkeleton() {
@@ -23,7 +21,7 @@ export default function TasksSkeleton({ viewMode, columns }: TasksSkeletonProps)
       viewMode={viewMode}
       columns={columns}
       rows={8}
-      gridClassName={GRID_CLASS}
+      gridClassName={CARD_GRID_WIDE}
       count={10}
       Card={TaskCardSkeleton}
     />

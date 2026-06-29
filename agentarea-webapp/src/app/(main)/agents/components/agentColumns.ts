@@ -29,5 +29,4 @@ export const AGENT_COLUMNS: AgentColumnMeta[] = [
 ];
 
 /** Grid classes shared by the real agents grid and its skeleton. */
-export const AGENTS_GRID_CLASS =
-  "grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
+export { CARD_GRID_WIDE as AGENTS_GRID_CLASS } from "@/lib/collectionGrids";

@@ -1,8 +1,6 @@
 import { LinkedCardSkeleton } from "@/components/Skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const GRID_CLASS =
-  "grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 
 // TriggerCard: icon + (type badge / status) subtitle + optional agent row.
 function TriggerCardSkeleton() {
@@ -41,7 +39,7 @@ interface TriggersSkeletonProps {
 export default function TriggersSkeleton({ viewMode = "table" }: TriggersSkeletonProps) {
   if (viewMode === "table") return <TriggersTableSkeleton />;
   return (
-    <div className={GRID_CLASS} aria-hidden="true">
+    <div className={CARD_GRID_DENSE} aria-hidden="true">
       {Array.from({ length: 10 }).map((_, i) => (
         <TriggerCardSkeleton key={i} />
       ))}

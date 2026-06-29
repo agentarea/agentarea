@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import ModelsList from "./ModelsList";
 import { ProviderConfigCard } from "./ProviderItem";
 import { ProviderConfig } from "./types";
@@ -87,7 +88,7 @@ export default function ProviderConfigsView({
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={CARD_GRID_DENSE}>
       {configs.map((config) => (
         <ProviderConfigCard key={config.id} config={config} />
       ))}

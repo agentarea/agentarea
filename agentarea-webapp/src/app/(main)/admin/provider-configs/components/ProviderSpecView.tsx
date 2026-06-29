@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import ModelsList from "./ModelsList";
 import { ProviderSpecCard } from "./ProviderItem";
 import { ProviderSpec } from "./types";
@@ -92,7 +93,7 @@ export default function ProviderSpecView({
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={CARD_GRID_DENSE}>
       {specs.map((spec) => (
         <ProviderSpecCard key={spec.id} spec={spec} />
       ))}
