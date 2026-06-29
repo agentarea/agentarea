@@ -278,27 +278,32 @@ export default function CatalogGallery({
   // main column shows the detail in place — tabs + facets stay, so it feels
   // like browsing a marketplace rather than a full-page takeover.
   const active = itemId ? (entries.find((e) => e.id === itemId) ?? null) : null;
+  // Drives the empty-state copy + "Clear filters" affordance.
+  const hasFilters = query.trim() !== "" || category !== ALL;
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-6">
-        {/* Facet sidebar — always reserved (fixed width) so the layout doesn't
-            shift when categories arrive. Shows a skeleton while loading. */}
-        <aside className="hidden w-52 shrink-0 lg:block">
-          {loading ? (
-            <FacetSkeleton />
-          ) : categories.length > 0 ? (
-            <FacetGroup
-              label="Category"
-              options={categories}
-              selected={category}
-              onSelect={(v) => {
-                void setCategory(v);
-                void setItemId(null);
-              }}
-            />
-          ) : null}
-        </aside>
+    <div className="flex gap-6">
+        {/* Facet sidebar — reserved (fixed width) while loading or when the type
+            has categories, so the layout doesn't shift as they arrive. Omitted
+            entirely for category-less types so the grid isn't left with an empty
+            left gutter. */}
+        {(loading || categories.length > 0) && (
+          <aside className="hidden w-52 shrink-0 lg:block">
+            {loading ? (
+              <FacetSkeleton />
+            ) : (
+              <FacetGroup
+                label="Category"
+                options={categories}
+                selected={category}
+                onSelect={(v) => {
+                  void setCategory(v);
+                  void setItemId(null);
+                }}
+              />
+            )}
+          </aside>
+        )}
 
         {/* Main */}
         <div className="min-w-0 flex-1 space-y-4">
@@ -312,6 +317,7 @@ export default function CatalogGallery({
               value={query}
               onChange={(e) => void setQuery(e.target.value)}
               placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+              aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
               className="pl-9"
             />
           </div>
@@ -324,7 +330,22 @@ export default function CatalogGallery({
           )}
           {loading && <GridSkeleton />}
           {!loading && filtered.length === 0 && !error && (
-            <EmptyState title="Nothing here" detail="Try another type, clear filters, or search." />
+            <EmptyState
+              title={hasFilters ? "No matches" : "Nothing here"}
+              detail={
+                hasFilters
+                  ? "Nothing matches your search and filters."
+                  : "Nothing to show for this type yet."
+              }
+              onClear={
+                hasFilters
+                  ? () => {
+                      void setQuery("");
+                      void setCategory(ALL);
+                    }
+                  : undefined
+              }
+            />
           )}
 
           {!loading && filtered.length > 0 && (
@@ -358,7 +379,6 @@ export default function CatalogGallery({
           )}
         </div>
       </div>
-    </div>
   );
 }
 
@@ -1124,11 +1144,24 @@ function GridSkeleton() {
   );
 }
 
-function EmptyState({ title, detail }: { title: string; detail: string }) {
+function EmptyState({
+  title,
+  detail,
+  onClear,
+}: {
+  title: string;
+  detail: string;
+  onClear?: () => void;
+}) {
   return (
     <div className="rounded-lg border border-dashed border-border/60 px-6 py-12 text-center">
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      {onClear && (
+        <Button variant="outline" size="sm" className="mt-4" onClick={onClear}>
+          Clear filters
+        </Button>
+      )}
     </div>
   );
 }
