@@ -21,7 +21,7 @@ export default async function ConnectionsPage({
   const t = await getTranslations("MCPServersPage");
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
-  const cookieTab = cookieStore.get("tab_mcp-servers")?.value;
+  const cookieTab = cookieStore.get("tab_connections")?.value;
   const tab =
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
