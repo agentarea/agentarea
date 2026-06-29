@@ -209,6 +209,10 @@ export default function CatalogGallery({
     parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
   );
   const [itemId, setItemId] = useQueryState("item", parseAsString);
+  // Deep-link fallback for ?item= that points outside the loaded page(s).
+  const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
+  const [deepError, setDeepError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(
@@ -274,10 +278,45 @@ export default function CatalogGallery({
     return () => io.disconnect();
   }, [hasMore, more, loading, type, offset, load]);
 
-  // Selected item (from ?item=) resolved against what's loaded. When set, the
-  // main column shows the detail in place — tabs + facets stay, so it feels
-  // like browsing a marketplace rather than a full-page takeover.
-  const active = itemId ? (entries.find((e) => e.id === itemId) ?? null) : null;
+  // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
+  // page(s) (e.g. a shared link to something deep in the catalog), fetch that
+  // one item by id so the detail still opens instead of silently falling back
+  // to the grid.
+  useEffect(() => {
+    if (!itemId) {
+      setDeepItem(null);
+      setDeepError(null);
+      setDeepLoading(false);
+      return;
+    }
+    if (entries.some((e) => e.id === itemId)) return; // already in the list
+    if (deepItem?.id === itemId) return; // already fetched
+    let alive = true;
+    setDeepLoading(true);
+    setDeepError(null);
+    getJSON<RegistryItem>(`v1/registries/catalog/items/${itemId}`)
+      .then((it) => {
+        if (!alive) return;
+        setDeepItem(normalize(type, it));
+        setDeepLoading(false);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setDeepError(e instanceof Error ? e.message : "Failed to load");
+        setDeepLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId, entries, type, deepItem?.id]);
+
+  // Selected item (from ?item=) — resolved against the loaded page first, then
+  // the deep-link fallback. When set, the main column shows the detail in place
+  // — tabs + facets stay, so it feels like browsing a marketplace rather than a
+  // full-page takeover.
+  const active =
+    (itemId ? (entries.find((e) => e.id === itemId) ?? null) : null) ??
+    (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters = query.trim() !== "" || category !== ALL;
 
@@ -309,6 +348,23 @@ export default function CatalogGallery({
         <div className="min-w-0 flex-1 space-y-4">
           {active ? (
             <DetailView entry={active} onBack={() => void setItemId(null)} />
+          ) : itemId ? (
+            <DeepItemStatus onBack={() => void setItemId(null)}>
+              {deepLoading ? (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading…
+                </span>
+              ) : (
+                <EmptyState
+                  title="Item not found"
+                  detail={
+                    deepError ??
+                    "This item may have been removed or isn't available."
+                  }
+                />
+              )}
+            </DeepItemStatus>
           ) : (
           <>
           <div className="relative">
@@ -1162,6 +1218,29 @@ function EmptyState({
           Clear filters
         </Button>
       )}
+    </div>
+  );
+}
+
+// Back-button shell for the deep-link states (loading / not-found), so an
+// ?item= link that isn't in the loaded page still shows chrome to return.
+function DeepItemStatus({
+  onBack,
+  children,
+}: {
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to catalog
+      </button>
+      {children}
     </div>
   );
 }
