@@ -10,11 +10,9 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
-  LayoutGrid,
   Loader2,
   Plug,
   Puzzle,
-  Rows3,
   Search,
   ShieldCheck,
   Star,
@@ -37,6 +35,7 @@ import {
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import HeaderTabs from "@/components/HeaderTabs";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -142,6 +141,29 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
   );
 }
 
+// Grid/table switcher for the subheader (right side, paired with the type
+// tabs). Reuses the shared HeaderTabs control — same look as agents/connections.
+// Hidden while a detail item is open (?item=), where there's nothing to switch.
+export function ExploreViewToggle() {
+  const [view, setView] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
+  );
+  const [itemId] = useQueryState("item", parseAsString);
+  if (itemId) return null;
+
+  return (
+    <HeaderTabs
+      tabs={[
+        { value: "table", label: "Table view" },
+        { value: "grid", label: "Grid view" },
+      ]}
+      value={view}
+      onChange={(v) => void setView(v as ViewMode)}
+    />
+  );
+}
+
 // ── Component ──
 
 type CatalogGalleryProps = {
@@ -180,7 +202,9 @@ export default function CatalogGallery({
 
   const [query, setQuery] = useQueryState("q", parseAsString.withDefault(""));
   const [category, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
-  const [view, setView] = useQueryState(
+  // `view` is read-only here — the grid/table toggle lives in the subheader
+  // (ExploreViewToggle) and drives this same nuqs key.
+  const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
   );
@@ -282,17 +306,14 @@ export default function CatalogGallery({
             <DetailView entry={active} onBack={() => void setItemId(null)} />
           ) : (
           <>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => void setQuery(e.target.value)}
-                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
-                className="pl-9"
-              />
-            </div>
-            <ViewToggle view={view} onChange={(v) => void setView(v)} />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => void setQuery(e.target.value)}
+              placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+              className="pl-9"
+            />
           </div>
 
           {error && (
@@ -337,40 +358,6 @@ export default function CatalogGallery({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── View toggle (grid / table) ──
-
-function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
-  const opts: { key: ViewMode; icon: LucideIcon; label: string }[] = [
-    { key: "grid", icon: LayoutGrid, label: "Grid view" },
-    { key: "table", icon: Rows3, label: "Table view" },
-  ];
-  return (
-    <div className="flex shrink-0 rounded-md border border-border/60 p-0.5">
-      {opts.map((o) => {
-        const Icon = o.icon;
-        return (
-          <button
-            key={o.key}
-            type="button"
-            title={o.label}
-            aria-label={o.label}
-            aria-pressed={view === o.key}
-            onClick={() => onChange(o.key)}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded transition-colors",
-              view === o.key
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        );
-      })}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import ContentBlock from "@/components/ContentBlock";
 import { fetchCatalogPage } from "@/lib/api";
 import CatalogGallery, {
   ExploreTypeTabs,
+  ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
 import {
   PAGE,
@@ -42,7 +43,12 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         description:
           "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
       }}
-      subheader={<ExploreTypeTabs initialType={type} />}
+      subheader={
+        <>
+          <ExploreTypeTabs initialType={type} />
+          <ExploreViewToggle />
+        </>
+      }
     >
       <CatalogGallery
         key={type}
