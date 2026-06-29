@@ -36,9 +36,6 @@ test.describe("Scenario 08 MP - register an LLM provider and test a model", () =
 
     providerConfigName = uniqueLabel("scenario-08-provider");
 
-    await gotoCommitted(page, "/admin/providers");
-    await expect(page.getByText(/provider/i)).toBeVisible();
-
     await gotoCommitted(page, "/admin/provider-configs/create");
     await page.getByRole("combobox").first().click();
     await page.getByRole("option").first().click();

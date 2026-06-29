@@ -257,8 +257,11 @@ export function AddOpenAPIForm() {
         return;
       }
 
+      // NB: do NOT call router.refresh() right after push() - the refresh aborts
+      // the in-flight navigation, leaving the user stuck on this form after a
+      // successful 201 (looks like a hang). The action revalidates /mcp-servers
+      // server-side, so the new connection is present when we land there.
       router.push("/mcp-servers");
-      router.refresh();
     } catch (err) {
       console.error("Failed to create OpenAPI connection", err);
       setError(

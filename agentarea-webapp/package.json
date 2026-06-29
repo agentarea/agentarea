@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "type-check": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:real": "PLAYWRIGHT_REAL_STACK=1 playwright test --project=chromium-real-stack",
     "test:e2e:current-stand": "PLAYWRIGHT_REAL_STACK=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test --project=chromium-real-stack",

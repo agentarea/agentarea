@@ -812,7 +812,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             icon={Bot}
             label="Preferred models"
             rows={entry.meta}
-            hint="The actual model is picked from your workspace on install."
+            hint="Suggested models — pick one for this agent after adding it."
           />
         )}
         {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}

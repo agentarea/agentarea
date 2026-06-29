@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import type { McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ProviderConfigCreate, ProviderConfigUpdate } from "@/api/client/types.gen";
 import {
   zProviderConfigCreate,
@@ -501,7 +502,13 @@ export async function discoverOpenAPIToolsAction(connectionId: string) {
 export async function createOpenAPIConnectionAction(
   body: Parameters<typeof createOpenAPIConnection>[0]
 ) {
-  return await createOpenAPIConnection(body);
+  const result = await createOpenAPIConnection(body);
+  if (!result.error) {
+    // Invalidate the list so the new connection is present when the form
+    // navigates to /mcp-servers (the client no longer calls router.refresh).
+    revalidatePath("/mcp-servers");
+  }
+  return result;
 }
 
 export async function updateOpenAPIConnectionAction(

@@ -30,21 +30,17 @@ test.describe("Scenario 13 MP - inspect audit and dashboard activity", () => {
     test.setTimeout(90_000);
     await installBrowserSession(context, user);
 
+    // Outcome: the audit log records a real governance event (seedAgent creates
+    // the agent -> an `agent.create` event), and it is DURABLE: still present
+    // after a reload (not stream-only). This is the actual FR being verified.
     await gotoCommitted(page, "/settings/audit");
-    await expect(
-      page.getByText(/action|resource|actor|no events|enterprise/i)
-    ).toBeVisible({ timeout: 15_000 });
-    const auditText = (await page.locator("body").innerText()).slice(0, 80);
+    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
     await page.reload({ waitUntil: "commit" });
-    await expect(page.locator("body")).toContainText(auditText.slice(0, 30), {
-      timeout: 15_000,
-    });
+    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
 
     await gotoCommitted(page, "/dashboard");
-    await expect(page.getByText(/spend|activity|agents|blockers/i)).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(page.getByText("Dashboard").first()).toBeVisible({ timeout: 15_000 });
     await gotoCommitted(page, "/settings/audit");
-    await expect(page.locator("body")).toContainText(auditText.slice(0, 30));
+    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
   });
 });

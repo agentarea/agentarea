@@ -62,7 +62,7 @@ jobs:
 
       - name: Type check
         working-directory: agentarea-webapp
-        run: pnpm run type-check || true  # Don't fail, just warn
+        run: pnpm run type-check
 
       - name: Build application
         working-directory: agentarea-webapp

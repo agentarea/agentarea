@@ -13,7 +13,6 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.slug import generate_slug
 
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
@@ -186,21 +185,8 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.event_broker = event_broker
 
     async def _resolve_unique_slug(self, name: str) -> str:
-        """Generate a workspace-unique slug from ``name``.
-
-        Tries ``base``, then ``base-2``, ``base-3``, ... up to ``base-999``.
-        """
-        base = generate_slug(name)
-
-        if await self.repository.get_by_slug(base) is None:
-            return base
-
-        for suffix in range(2, 1000):
-            candidate = f"{base}-{suffix}"
-            if await self.repository.get_by_slug(candidate) is None:
-                return candidate
-
-        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+        """Delegate to the repository (single source of truth for slug uniqueness)."""
+        return await self.repository.resolve_unique_slug(name)
 
     async def get_by_slug(self, slug: str) -> MCPServer | None:
         """Get an MCP server spec by workspace-scoped slug."""
@@ -627,8 +613,13 @@ class MCPServerInstanceService:
         server_payload: MCPServerCreate,
         instance_payload: MCPServerInstanceCreate,
     ) -> MCPServerInstance | None:
+        # `slug` is NOT NULL; route through the repository's single slug resolver
+        # so this path can't drift from the others (it previously omitted slug
+        # entirely -> NotNullViolationError 500 on the UI "Add Server").
+        slug = await self.mcp_server_repository.resolve_unique_slug(server_payload.name)
         server = MCPServer(
             name=server_payload.name,
+            slug=slug,
             description=server_payload.description,
             docker_image_url=server_payload.docker_image_url,
             version=server_payload.version,

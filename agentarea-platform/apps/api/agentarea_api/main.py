@@ -21,7 +21,6 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
-from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 
@@ -310,7 +309,6 @@ def create_app() -> FastAPI:
     # Add routers - PUBLIC routes first (no auth), then PROTECTED routes (auth required)
     # RFC 9728 OAuth AS metadata — no prefix so /.well-known/... is top-level
     app.include_router(oauth_as_router)
-    app.include_router(events_router, prefix="/events", tags=["events"])
 
     # Webhook receiver — mounted outside /v1 to bypass auth middleware/dependencies
     # External services (Telegram, Slack, GitHub, etc.) POST to /webhooks/{id}

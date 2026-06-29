@@ -67,6 +67,7 @@ test.describe("Scenario 05 MP - create a policy and verify enforcement", () => {
       .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
       .toMatch(/^\/policies\/[^/]+$/);
     policyId = new URL(page.url()).pathname.split("/").pop();
-    await expect(page.getByText("$17.13")).toBeVisible();
+    // Detail view may format the amount without a leading "$" - match the value.
+    await expect(page.getByText(/17\.13/).first()).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -8,16 +8,11 @@ no database.
 
 from uuid import UUID, uuid4
 
-from agentarea_agents.application.agent_service import (
-    AgentService,
-    _preferred_models_from_spec,
-    _project_catalog_item,
-)
+from agentarea_agents.application.agent_service import AgentService, _project_catalog_item
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
     CatalogAgentItem,
     CatalogAgentRepository,
-    pick_model_instance_id,
 )
 from agentarea_common.auth.context import UserContext
 
@@ -62,10 +57,9 @@ class FakeAgentRepo:
 
 
 class FakeCatalogRepo:
-    def __init__(self, items=None, instance_ids_by_name=None):
+    def __init__(self, items=None):
         self._items = items or []
         self.installed = []
-        self._instance_ids_by_name = instance_ids_by_name or {}
 
     async def list_items(self):
         return list(self._items)
@@ -75,15 +69,6 @@ class FakeCatalogRepo:
 
     async def mark_installed(self, item_id, entity_id, installed_version):
         self.installed.append((item_id, entity_id, installed_version))
-
-    async def model_instance_ids_by_name(self):
-        return dict(self._instance_ids_by_name)
-
-    async def resolve_model_instance_id(self, preferred_models):
-        for name in preferred_models:
-            if name in self._instance_ids_by_name:
-                return self._instance_ids_by_name[name]
-        return None
 
 
 class FakeFactory:
@@ -129,20 +114,18 @@ def test_project_catalog_item_marks_read_only_with_provenance():
     item = _item(
         spec={"instruction": "hello", "preferred_models": ["gpt-4o"], "tools": [{"a": 1}], "planning": True}
     )
-    # The resolved per-workspace model instance is passed in by the service.
-    agent = _project_catalog_item(item, model_id="instance-123")
+    agent = _project_catalog_item(item)
     assert str(agent.id) == item.id
     assert agent.registry_item_id == item.id
     assert agent.is_catalog is True
     assert agent.update_available is False
     assert agent.instruction == "hello"
-    assert agent.model_id == "instance-123"
     assert agent.tools == [{"a": 1}]
 
 
-def test_project_catalog_item_without_resolved_model_has_no_model():
-    # The catalog never carries a runnable model_id; with nothing resolved the
-    # projection has no model bound (not a bogus slug).
+def test_project_catalog_item_never_binds_a_model():
+    # The catalog never binds a concrete model — that's a per-workspace instance.
+    # preferred_models is a UI hint only; the backend never guesses a model_id.
     item = _item(spec={"instruction": "hello", "preferred_models": ["gpt-4o"]})
     agent = _project_catalog_item(item)
     assert agent.model_id is None
@@ -254,7 +237,10 @@ async def test_install_catalog_agent_unknown_returns_none():
     assert await svc.install_catalog_agent(uuid4()) is None
 
 
-async def test_fork_resolves_preferred_model_to_workspace_instance():
+async def test_fork_installs_without_a_model():
+    # The catalog never binds a concrete model — that's a per-workspace instance.
+    # The forked agent starts with model_id=None regardless of preferred_models;
+    # the backend never guesses a model (the UI suggests one from the hint).
     item = _item(
         name="Builtin A",
         version="3",
@@ -266,7 +252,7 @@ async def test_fork_resolves_preferred_model_to_workspace_instance():
         },
     )
     repo = FakeAgentRepo()
-    catalog = FakeCatalogRepo([item], instance_ids_by_name={"gpt-4o": "inst-gpt4o"})
+    catalog = FakeCatalogRepo([item])
     svc = _service(repo, catalog)
 
     agent = await svc._fork_catalog_agent(item)
@@ -275,102 +261,10 @@ async def test_fork_resolves_preferred_model_to_workspace_instance():
     kw = repo.created_kwargs[0]
     assert kw["registry_item_id"] == item.id
     assert kw["instruction"] == "ins"
-    # The catalog's preferred slug is resolved to the workspace model-instance id.
-    assert kw["model_id"] == "inst-gpt4o"
+    assert kw["model_id"] is None
     assert kw["tools"] == [{"x": 1}]
     # The install is recorded on the catalog item with the new agent id + version.
     assert catalog.installed == [(item.id, str(agent.id), "3")]
-
-
-async def test_fork_without_matching_model_installs_without_model():
-    # No configured instance matches the preferred model: the agent forks with no
-    # model bound rather than copying a non-existent model reference.
-    item = _item(
-        name="Builtin A",
-        spec={"instruction": "ins", "preferred_models": ["gpt-4o"]},
-    )
-    repo = FakeAgentRepo()
-    catalog = FakeCatalogRepo([item], instance_ids_by_name={})
-    svc = _service(repo, catalog)
-
-    await svc._fork_catalog_agent(item)
-
-    assert repo.created_kwargs[0]["model_id"] is None
-
-
-async def test_fork_legacy_model_id_slug_is_treated_as_preferred():
-    # Older catalog specs stored a single model slug under ``model_id`` (never an
-    # instance UUID); it is honoured as a one-element preference.
-    item = _item(
-        name="Legacy",
-        spec={"instruction": "ins", "model_id": "gpt-4o"},
-    )
-    repo = FakeAgentRepo()
-    catalog = FakeCatalogRepo([item], instance_ids_by_name={"gpt-4o": "inst-gpt4o"})
-    svc = _service(repo, catalog)
-
-    await svc._fork_catalog_agent(item)
-
-    assert repo.created_kwargs[0]["model_id"] == "inst-gpt4o"
-
-
-def test_preferred_models_from_spec_reads_list():
-    assert _preferred_models_from_spec({"preferred_models": ["a", "b"]}) == ["a", "b"]
-
-
-def test_preferred_models_from_spec_drops_non_strings():
-    assert _preferred_models_from_spec({"preferred_models": ["a", None, 1, "b", ""]}) == ["a", "b"]
-
-
-def test_preferred_models_from_spec_legacy_model_id_fallback():
-    # Legacy catalog specs stored a single slug under model_id (never a UUID).
-    assert _preferred_models_from_spec({"model_id": "gpt-4o"}) == ["gpt-4o"]
-
-
-def test_preferred_models_from_spec_empty():
-    assert _preferred_models_from_spec({}) == []
-
-
-def test_pick_model_instance_id_honours_priority_order():
-    by_name = {"b": "inst-b", "c": "inst-c"}
-    # "a" has no instance; "b" is the first preferred one that does.
-    assert pick_model_instance_id(["a", "b", "c"], by_name) == "inst-b"
-
-
-def test_pick_model_instance_id_returns_none_when_no_match():
-    assert pick_model_instance_id(["a", "b"], {"c": "inst-c"}) is None
-    assert pick_model_instance_id([], {"a": "inst-a"}) is None
-
-
-async def test_model_instance_ids_by_name_is_workspace_scoped_first_wins():
-    class Row:
-        def __init__(self, model_name, _id):
-            self.model_name = model_name
-            self.id = _id
-
-    class Result:
-        def __init__(self, rows):
-            self._rows = rows
-
-        def fetchall(self):
-            return self._rows
-
-    class FakeSession:
-        def __init__(self, rows):
-            self._rows = rows
-            self.params = None
-
-        async def execute(self, query, params=None):
-            self.params = params or {}
-            return Result(self._rows)
-
-    session = FakeSession([Row("gpt-4o", "inst-1"), Row("gpt-4o", "inst-2"), Row("o3", "inst-3")])
-    repo = CatalogAgentRepository(session, UserContext(user_id="u1", workspace_id="w1"))
-
-    by_name = await repo.model_instance_ids_by_name()
-
-    assert by_name == {"gpt-4o": "inst-1", "o3": "inst-3"}  # first active instance per name wins
-    assert session.params["workspace_id"] == "w1"
 
 
 async def test_catalog_agent_install_state_is_workspace_scoped():

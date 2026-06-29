@@ -14,7 +14,6 @@ from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
     CatalogAgentItem,
     CatalogAgentRepository,
-    pick_model_instance_id,
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
@@ -22,24 +21,7 @@ from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
 logger = logging.getLogger(__name__)
 
 
-def _preferred_models_from_spec(spec: dict[str, Any]) -> list[str]:
-    """Read a catalog agent's preferred model slugs (priority order) from its spec.
-
-    The catalog is global, so it carries model *preferences* (slugs), never a
-    concrete ``model_id`` (which is a per-workspace model-instance UUID). Older,
-    not-yet-resynced catalog specs stored a single slug under ``model_id``; accept
-    that as a one-element fallback.
-    """
-    preferred = spec.get("preferred_models")
-    if isinstance(preferred, list):
-        return [m for m in preferred if isinstance(m, str) and m]
-    legacy = spec.get("model_id")
-    if isinstance(legacy, str) and legacy:
-        return [legacy]
-    return []
-
-
-def _project_catalog_item(item: CatalogAgentItem, model_id: str | None = None) -> Agent:
+def _project_catalog_item(item: CatalogAgentItem) -> Agent:
     """Project a catalog agent item into a transient, read-only ``Agent``.
 
     The projected agent is NOT persisted. Its ``id`` is the catalog item's id so
@@ -47,8 +29,9 @@ def _project_catalog_item(item: CatalogAgentItem, model_id: str | None = None) -
     metadata (``is_catalog``, ``registry_item_id``, ``update_available``) is
     attached as plain attributes for the API layer to surface.
 
-    ``model_id`` is the per-workspace model instance resolved from the item's
-    preferred models, or ``None`` when no configured instance matches.
+    ``model_id`` is left unset: the catalog never binds a concrete model (that is
+    a per-workspace instance). ``spec.preferred_models`` is a hint the UI may use
+    to suggest a model; the backend never guesses one.
     """
     spec = item.spec or {}
     tools = spec.get("tools")
@@ -62,7 +45,7 @@ def _project_catalog_item(item: CatalogAgentItem, model_id: str | None = None) -
         status="active",
         description=item.description if item.description is not None else spec.get("description"),
         instruction=spec.get("instruction"),
-        model_id=model_id,
+        model_id=None,
         tools=tools,
         events_config=spec.get("events_config"),
         planning=spec.get("planning"),
@@ -140,14 +123,10 @@ class AgentService(BaseCrudService[Agent]):
         if not include_catalog:
             return list(tenant_agents)
 
-        instance_ids_by_name = await catalog_repo.model_instance_ids_by_name()
         result: list[Agent] = list(tenant_agents)
         for item in catalog_items:
             if item.id not in forked_by_item:
-                model_id = pick_model_instance_id(
-                    _preferred_models_from_spec(item.spec or {}), instance_ids_by_name
-                )
-                result.append(_project_catalog_item(item, model_id))
+                result.append(_project_catalog_item(item))
         return result
 
     async def get_with_catalog(self, id: UUID) -> Agent | None:
@@ -159,14 +138,8 @@ class AgentService(BaseCrudService[Agent]):
         agent = await self.get(id)
         if agent is not None:
             return agent
-        catalog_repo = self._get_catalog_repository()
-        item = await catalog_repo.get_item(str(id))
-        if item is None:
-            return None
-        model_id = await catalog_repo.resolve_model_instance_id(
-            _preferred_models_from_spec(item.spec or {})
-        )
-        return _project_catalog_item(item, model_id)
+        item = await self._get_catalog_repository().get_item(str(id))
+        return _project_catalog_item(item) if item else None
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -239,9 +212,9 @@ class AgentService(BaseCrudService[Agent]):
         if not isinstance(tools, list):
             tools = None
 
-        catalog_repo = self._get_catalog_repository()
-        model_id = await catalog_repo.resolve_model_instance_id(_preferred_models_from_spec(spec))
-
+        # The catalog never binds a concrete model — that is a per-workspace
+        # instance. The forked agent starts with no model; the UI uses
+        # ``spec.preferred_models`` to suggest one. The backend never guesses.
         slug = await self._resolve_unique_slug(item.name)
         repo = self._get_agent_repository()
         agent = await repo.create(
@@ -252,13 +225,13 @@ class AgentService(BaseCrudService[Agent]):
             if item.description is not None
             else spec.get("description"),
             instruction=spec.get("instruction"),
-            model_id=model_id,
+            model_id=None,
             tools=tools,
             events_config=spec.get("events_config"),
             planning=spec.get("planning"),
             registry_item_id=item.id,
         )
-        await catalog_repo.mark_installed(item.id, str(agent.id), item.version)
+        await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
         return agent
 
     async def install_catalog_agent(self, id: UUID) -> Agent | None:
@@ -359,10 +332,7 @@ class AgentService(BaseCrudService[Agent]):
         catalog_repo = self._get_catalog_repository()
         for item in await catalog_repo.list_items():
             if generate_slug(item.name) == slug:
-                model_id = await catalog_repo.resolve_model_instance_id(
-                    _preferred_models_from_spec(item.spec or {})
-                )
-                return _project_catalog_item(item, model_id)
+                return _project_catalog_item(item)
         return None
 
     async def get_with_skills(self, id: UUID) -> Agent | None:

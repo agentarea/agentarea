@@ -43,11 +43,13 @@ test.describe("UI create-flows (deterministic, no AI)", () => {
     }
   });
 
-  // KNOWN BUG (red on purpose): submitting this form currently fails server-side
-  // validation. mcp-servers/add/actions.ts reads `members` from FormData (-> null
-  // when the form never sets it) and validates it with `z.string().optional()`,
-  // which rejects null. So no MCP server is ever created through the UI. Fix:
-  // `members: formData.get("members") ?? undefined` (or schema `.nullish()`).
+  // Regression guard: this used to fail with a backend 500. The with-spec create
+  // path (MCPServerInstanceService.create_instance_with_spec) built MCPServer(...)
+  // without the NOT NULL `slug` column -> NotNullViolationError, surfaced as the
+  // opaque "API Error: Unknown error". Fixed by generating a unique slug there
+  // (libs/mcp/.../service.py). The earlier "members from FormData" theory was
+  // stale: the form now sends a typed object validated by the generated zod
+  // schema, no `members` field involved.
   test("create a Docker MCP server through the form", async ({
     context,
     page,

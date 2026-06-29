@@ -93,17 +93,25 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
     ).toBeVisible({ timeout: 15_000 });
 
     // --- FUNCTIONAL OUTCOME 2: a configuration edit persists --------------
+    // Edit the plain description input (reliable) rather than the rich-text
+    // instruction editor. CRITICAL: gate on hydration first - the form is a
+    // client component server-rendered by streaming SSR, so right after `commit`
+    // react-hook-form hasn't attached yet and fill() is silently dropped (then
+    // React resets the field). Waiting until #name shows the agent's persisted
+    // name proves the form hydrated with initialData before we type.
+    const editedDescription = `Edited by scenario 02 ${Date.now()}`;
     await gotoCommitted(page, `/agents/${createdRef}/settings`);
-    const editor = page.locator("#instruction [contenteditable=true]");
-    await editor.fill("Edited instructions for scenario 02.");
-    await page.getByRole("button", { name: /save/i }).first().click();
+    await expect(page.locator("#name")).toHaveValue(name, { timeout: 15_000 });
+    await page.locator("#description").fill(editedDescription);
+    // Submit is bound to the form by id (it lives in the page header), so target
+    // it precisely rather than a fuzzy /save/i that can match the wrong element.
+    await page.locator('button[form="agent-form"]').click();
+    await page.waitForTimeout(1500); // let the save server-action round-trip
     await page.reload({ waitUntil: "commit" });
-    await page
-      .waitForLoadState("domcontentloaded", { timeout: 8_000 })
-      .catch(() => undefined);
+    await expect(page.locator("#name")).toHaveValue(name, { timeout: 15_000 });
     await expect(
-      page.getByText("Edited instructions for scenario 02", { exact: false }),
-      "edited instruction should survive a reload (persisted, not stream-only)"
-    ).toBeVisible({ timeout: 15_000 });
+      page.locator("#description"),
+      "edited description should survive a reload (persisted, not stream-only)"
+    ).toHaveValue(editedDescription, { timeout: 15_000 });
   });
 });

@@ -8,7 +8,22 @@ import (
 	"time"
 
 	redis "github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 )
+
+// Event bus contract (ADR-0018): events are XADDed to per-type Redis Streams
+// in CloudEvents binary content mode. Envelope attributes become `ce_*` fields
+// and the payload is a JSON string under `data`. The Python API consumes these
+// via RedisStreamsEventBus — keep these constants in sync with the Python
+// `topic_for(type)` mapping (`events:<type>`) and event-type strings.
+const (
+	eventSource = "agentarea-mcp-manager"
+
+	statusChangedType = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
+	errorType         = "agentarea.mcp.v1.MCPServerInstanceError"
+)
+
+func streamFor(eventType string) string { return "events:" + eventType }
 
 // StatusUpdateEvent represents a container status update event
 type StatusUpdateEvent struct {
@@ -58,6 +73,41 @@ func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
 	}
 }
 
+// buildEventFields encodes an event as Redis stream fields in CloudEvents
+// binary content mode. `subject` is the partition key (empty -> omitted).
+func buildEventFields(eventType, subject string, data any) (map[string]any, error) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	fields := map[string]any{
+		"ce_id":              uuid.NewString(),
+		"ce_type":            eventType,
+		"ce_source":          eventSource,
+		"ce_time":            time.Now().UTC().Format(time.RFC3339),
+		"ce_specversion":     "1.0",
+		"ce_datacontenttype": "application/json",
+		"data":               string(payload),
+	}
+	if subject != "" {
+		fields["ce_subject"] = subject
+	}
+	return fields, nil
+}
+
+// publish XADDs the event to the stream for its type.
+func (p *EventPublisher) publish(ctx context.Context, eventType, subject string, data any) error {
+	fields, err := buildEventFields(eventType, subject, data)
+	if err != nil {
+		return err
+	}
+	return p.redisClient.XAdd(ctx, &redis.XAddArgs{
+		Stream: streamFor(eventType),
+		Values: fields,
+	}).Err()
+}
+
 // PublishStatusUpdate publishes a container status update event
 func (p *EventPublisher) PublishStatusUpdate(ctx context.Context, instanceID, name, status string, containerID, url string) error {
 	event := StatusUpdateEvent{
@@ -69,29 +119,7 @@ func (p *EventPublisher) PublishStatusUpdate(ctx context.Context, instanceID, na
 		Timestamp:   time.Now(),
 	}
 
-	// Wrap in FastStream message format to match the API's expected structure
-	eventData := map[string]any{
-		"event_id":   generateEventID(),
-		"timestamp":  event.Timestamp.Format(time.RFC3339),
-		"event_type": "MCPServerInstanceStatusChanged",
-		"data":       event,
-	}
-
-	message := map[string]any{
-		"data":    eventData,
-		"headers": map[string]any{},
-	}
-
-	eventBytes, err := json.Marshal(message)
-	if err != nil {
-		p.logger.Error("Failed to marshal status update event",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-		return err
-	}
-
-	err = p.redisClient.Publish(ctx, "MCPServerInstanceStatusChanged", string(eventBytes)).Err()
-	if err != nil {
+	if err := p.publish(ctx, statusChangedType, instanceID, event); err != nil {
 		p.logger.Error("Failed to publish status update event",
 			slog.String("instance_id", instanceID),
 			slog.String("status", status),
@@ -117,29 +145,7 @@ func (p *EventPublisher) PublishError(ctx context.Context, instanceID, name, err
 		Timestamp:  time.Now(),
 	}
 
-	// Wrap in FastStream message format
-	eventData := map[string]any{
-		"event_id":   generateEventID(),
-		"timestamp":  event.Timestamp.Format(time.RFC3339),
-		"event_type": "MCPServerInstanceError",
-		"data":       event,
-	}
-
-	message := map[string]any{
-		"data":    eventData,
-		"headers": map[string]any{},
-	}
-
-	eventBytes, err := json.Marshal(message)
-	if err != nil {
-		p.logger.Error("Failed to marshal error event",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-		return err
-	}
-
-	err = p.redisClient.Publish(ctx, "MCPServerInstanceError", string(eventBytes)).Err()
-	if err != nil {
+	if err := p.publish(ctx, errorType, instanceID, event); err != nil {
 		p.logger.Error("Failed to publish error event",
 			slog.String("instance_id", instanceID),
 			slog.String("error", err.Error()))
@@ -178,19 +184,4 @@ func (p *EventPublisher) PublishFailed(ctx context.Context, instanceID, name, er
 // Close closes the Redis connection
 func (p *EventPublisher) Close() error {
 	return p.redisClient.Close()
-}
-
-// generateEventID generates a unique event ID
-func generateEventID() string {
-	return "evt_" + time.Now().Format("20060102_150405") + "_" + randomString(8)
-}
-
-// randomString generates a random string of specified length
-func randomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-	}
-	return string(b)
 }

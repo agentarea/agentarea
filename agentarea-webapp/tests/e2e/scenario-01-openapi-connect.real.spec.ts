@@ -25,10 +25,11 @@ test.describe("Scenario 01 MP - connect an OpenAPI tool and attach it to an agen
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  // KNOWN REAL BUG (red on purpose): OpenAPI connection UI submit currently
-  // hangs. On 422 it also renders FastAPI's raw detail array as a React child
-  // and crashes instead of showing a user-facing validation error
-  // (src/app/(main)/mcp-servers/add-openapi/form.tsx:255).
+  // Regression guard: the create used to 201 server-side but the form stayed
+  // put (it called router.refresh() right after router.push(), aborting the
+  // navigation - looked like a hang). Fixed by dropping the refresh and
+  // revalidating /mcp-servers in the server action. This asserts submit ->
+  // success -> navigation to /mcp-servers.
   test("creates an OpenAPI connection from a spec URL before agent attach", async ({
     context,
     page,

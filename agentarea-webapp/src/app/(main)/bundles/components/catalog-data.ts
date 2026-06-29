@@ -131,9 +131,10 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     };
   }
   if (type === "agents") {
-    // Catalog agents declare model *preferences* (slugs, priority order); the
-    // concrete model is resolved per workspace on install. Fall back to the
-    // legacy single ``model_id`` slug for not-yet-resynced catalog data.
+    // Catalog agents declare model *preferences* (slugs, priority order) — a hint
+    // for the UI to suggest a model. The backend never binds a concrete model on
+    // install. Fall back to the legacy single ``model_id`` slug for not-yet-
+    // resynced catalog data.
     const preferred = strArr(spec.preferred_models);
     const legacy = str(spec.model_id);
     const models = preferred.length > 0 ? preferred : legacy ? [legacy] : [];

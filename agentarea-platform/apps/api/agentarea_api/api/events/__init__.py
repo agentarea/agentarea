@@ -1,3 +1,3 @@
-from .events_router import router as events_router
+from .events_router import start_events_router, stop_events_router
 
-__all__ = ["events_router"]
+__all__ = ["start_events_router", "stop_events_router"]

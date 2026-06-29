@@ -11,7 +11,7 @@ from agentarea_mcp.application.service import (
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
-from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
+from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerInstanceCreate
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,6 +117,46 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
     svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=server_spec)
 
     return svc
+
+
+# ---------------------------------------------------------------------------
+# create_instance_with_spec - slug regression
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_create_instance_with_spec_populates_slug():
+    """Regression: the with-spec create path must populate the NOT NULL `slug`.
+
+    It previously built ``MCPServer(...)`` without a slug, so the first real
+    INSERT raised ``NotNullViolationError`` (500) on the UI "Add Server".
+    Mocked-DB tests never caught it because a mock session does not enforce the
+    constraint - so assert the *behavior*: the slug is resolved via the single
+    repository resolver and set on the persisted server.
+    """
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="my-server")
+    svc.create_instance = AsyncMock(return_value=MagicMock(spec=MCPServerInstance))
+
+    server_payload = MCPServerCreate(
+        name="My Server",
+        description="created in a regression test",
+        docker_image_url="img:latest",
+        version="1.0.0",
+    )
+    instance_payload = MCPServerInstanceCreate.model_construct(
+        name="My Server",
+        description="created in a regression test",
+        server_spec_id="",
+        json_spec={},
+        auth_config_id=None,
+    )
+
+    await svc.create_instance_with_spec(server_payload, instance_payload)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("My Server")
+    added_server = svc.repository.session.add.call_args[0][0]
+    assert added_server.slug == "my-server"
 
 
 # ---------------------------------------------------------------------------

@@ -87,26 +87,20 @@ async function expectOk(response: any, label: string) {
   }
 }
 
+// Builtin catalog ids (global). Local Ollama gives seeded agents a REAL,
+// executable model (zero cost / rate-limit). The worker rewrites localhost ->
+// host.docker.internal, so endpoint_url "http://localhost:11434" reaches host
+// Ollama. Requires `ollama serve` + the qwen3:0.6b model pulled.
+const OLLAMA_PROVIDER_SPEC = "55cd391c-c58b-43fd-ae4b-99d4a00ea00c";
+const OLLAMA_QWEN3_MODEL_SPEC = "368ea505-76c6-426e-ad6e-23458efbfc1d"; // qwen3:0.6b
+
 export async function seedModelChain(
   request: APIRequestContext,
   user: AuthedUser,
   prefix: string
 ) {
-  const specs = await authedRequest(request, user, "get", "/v1/provider-specs/");
-  await expectOk(specs, "GET /v1/provider-specs/");
-  const provider = (await specs.json())[0];
-  expect(provider?.id, "provider spec required for model precondition").toBeTruthy();
-
-  const modelSpec = await authedRequest(request, user, "post", "/v1/model-specs/", {
-    data: {
-      provider_spec_id: provider.id,
-      model_name: uniqueLabel(`${prefix}-model`),
-      display_name: `${prefix} Model`,
-      context_window: 4096,
-    },
-  });
-  await expectOk(modelSpec, "POST /v1/model-specs/");
-  const modelSpecBody = await modelSpec.json();
+  const provider = { id: OLLAMA_PROVIDER_SPEC };
+  const modelSpecBody = { id: OLLAMA_QWEN3_MODEL_SPEC };
 
   const providerConfig = await authedRequest(
     request,
@@ -117,8 +111,7 @@ export async function seedModelChain(
       data: {
         provider_spec_id: provider.id,
         name: uniqueLabel(`${prefix}-provider`),
-        api_key: "pw-secret-value",
-        endpoint_url: "https://example.invalid",
+        endpoint_url: "http://localhost:11434",
       },
     }
   );
@@ -135,7 +128,7 @@ export async function seedModelChain(
         provider_config_id: providerConfigBody.id,
         model_spec_id: modelSpecBody.id,
         name: uniqueLabel(`${prefix}-instance`),
-        description: "Playwright scenario model instance",
+        description: "Playwright scenario model instance (local Ollama qwen3:0.6b)",
       },
     }
   );
