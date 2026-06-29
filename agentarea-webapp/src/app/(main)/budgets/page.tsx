@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { BudgetsData } from "./components/BudgetsData";
+import BudgetsSkeleton from "./components/BudgetsSkeleton";
 
 export const metadata: Metadata = {
   title: "Budgets",
@@ -17,13 +17,7 @@ export default async function BudgetsPage() {
       }}
     >
       <div className="main-content">
-        <Suspense
-          fallback={
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<BudgetsSkeleton />}>
           <BudgetsData />
         </Suspense>
       </div>

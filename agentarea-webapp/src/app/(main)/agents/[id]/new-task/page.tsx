@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import { getAgent, listModelInstances } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import AgentNewTask from "./components/AgentNewTask";
@@ -33,13 +33,7 @@ export default async function AgentNewTaskPage({ params }: Props) {
     : undefined;
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-32 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<FormSkeleton className="p-4" />}>
       <AgentNewTask agent={{ ...agent, model_info } as any} />
     </Suspense>
   );

@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
+import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
 import { MyMCPsSection } from "./MyMCPsSection";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 
@@ -38,14 +38,11 @@ export default async function MCPServersContent({
     <div id="my-connections">
       <Suspense
         fallback={
-          <div className="py-1">
-            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-              {t("myConnections")}
-            </h4>
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          </div>
+          <MCPSkeleton
+            viewMode={viewMode}
+            columns={mcpSkeletonColumns(t)}
+            headerLabel={t("myConnections")}
+          />
         }
       >
         <MyConnectionsSectionServer

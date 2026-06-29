@@ -4,10 +4,11 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { AGENT_COLUMNS } from "@/app/(main)/agents/components/agentColumns";
 import AgentsContent from "@/app/(main)/agents/components/AgentsContent";
 import AgentsHeaderTabs from "@/app/(main)/agents/components/AgentsHeaderTabs";
+import AgentsSkeleton from "@/app/(main)/agents/components/AgentsSkeleton";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 
@@ -37,6 +38,14 @@ export default async function AgentsBrowsePage({
       ? resolvedSearchParams.tab
       : cookieTab || "grid";
 
+  // Resolve table header labels here (the page has the translations); the
+  // skeleton stays a sync component so it never re-suspends as a fallback.
+  const skeletonColumns = AGENT_COLUMNS.map((column) => ({
+    header: t(column.labelKey),
+    cellClassName: column.cellClassName,
+    barClassName: column.barClassName,
+  }));
+
   return (
     <ContentBlock
       header={{
@@ -64,11 +73,7 @@ export default async function AgentsBrowsePage({
     >
       <Suspense
         key={`${searchQuery}-${tab}`}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
+        fallback={<AgentsSkeleton viewMode={tab} columns={skeletonColumns} />}
       >
         <AgentsContent searchQuery={searchQuery} viewMode={tab} />
       </Suspense>

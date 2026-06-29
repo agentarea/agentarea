@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import AddDockerServerForm from "./AddDockerServerForm";
 import AddDockerServerHeaderControls from "./AddDockerServerHeaderControls";
 
@@ -23,13 +23,7 @@ export default async function AddMCPServerPage() {
         controls: <AddDockerServerHeaderControls />,
       }}
     >
-        <Suspense
-          fallback={
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<FormSkeleton />}>
           <AddDockerServerForm />
         </Suspense>
     </ContentBlock>

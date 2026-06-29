@@ -3,11 +3,13 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { AddConnectionDropdown } from "../mcp-servers/components/AddConnectionDropdown";
 import MCPHeaderTabs from "../mcp-servers/components/MCPHeaderTabs";
 import MCPServersContent from "../mcp-servers/components/MCPServersContent";
+import MCPSkeleton, {
+  mcpSkeletonColumns,
+} from "../mcp-servers/components/MCPSkeleton";
 
 export const metadata: Metadata = {
   title: "Connections",
@@ -48,8 +50,12 @@ export default async function ConnectionsPage({
       <Suspense
         key={`${searchQuery}-${tab}`}
         fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
+          <div id="my-connections">
+            <MCPSkeleton
+              viewMode={tab}
+              columns={mcpSkeletonColumns(t)}
+              headerLabel={t("myConnections")}
+            />
           </div>
         }
       >

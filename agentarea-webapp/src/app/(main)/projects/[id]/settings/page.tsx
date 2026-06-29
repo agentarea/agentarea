@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getProjectAction, updateProjectAction } from "@/lib/server-actions";
 
@@ -71,11 +71,7 @@ export default function ProjectSettingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
+    return <FormSkeleton className="p-6 lg:max-w-xl" fields={3} />;
   }
 
   return (

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import AgentEditContent from "./AgentEditContent";
 
 export const metadata: Metadata = {
@@ -19,13 +19,7 @@ export default async function AgentSettingsPage({
   const resolvedParams = await params;
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-32 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<FormSkeleton className="p-4" />}>
       <AgentEditContent agentId={resolvedParams.id} />
     </Suspense>
   );

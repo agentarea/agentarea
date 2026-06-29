@@ -3,10 +3,10 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import ProjectsContent from "./components/ProjectsContent";
+import ProjectsSkeleton from "./components/ProjectsSkeleton";
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -41,14 +41,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         <SearchInput urlParamName="search" urlPath="/projects" />
       }
     >
-      <Suspense
-        key={searchQuery}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
+      <Suspense key={searchQuery} fallback={<ProjectsSkeleton />}>
         <ProjectsContent searchQuery={searchQuery} />
       </Suspense>
     </ContentBlock>

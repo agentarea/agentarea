@@ -1,8 +1,8 @@
 "use client";
 
 import { Download, FileText } from "lucide-react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTaskContext } from "../TaskContext";
 
 export default function TaskArtifactsPage() {
@@ -10,8 +10,10 @@ export default function TaskArtifactsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner />
+      <div className="space-y-2 p-4" aria-hidden="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+        ))}
       </div>
     );
   }

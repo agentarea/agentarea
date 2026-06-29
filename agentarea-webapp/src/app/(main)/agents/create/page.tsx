@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import AgentPageWrapper from "../shared/AgentPageWrapper";
 import { ChatProvider } from "../shared/ChatContext";
 import CreateAgentContent from "./CreateAgentContent";
@@ -24,13 +24,7 @@ export default async function CreateAgentPage() {
         useContentBlock={true}
         controls={<CreateAgentHeaderControls label={t("createAgent")} />}
       >
-        <Suspense
-          fallback={
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<FormSkeleton className="p-4" />}>
           <CreateAgentContent />
         </Suspense>
       </AgentPageWrapper>

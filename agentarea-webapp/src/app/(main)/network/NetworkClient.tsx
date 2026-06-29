@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import NetworkLegend from "./components/NetworkLegend";
 import NetworkMetricsPanel from "./components/NetworkMetricsPanel";
 import NodeDetailDrawer from "./components/NodeDetailDrawer";
@@ -74,11 +75,7 @@ export default function NetworkClient() {
   };
 
   if (loading && !topology) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <NetworkGraphSkeleton />;
   }
 
   if (!topology || topology.nodes.length === 0) {
@@ -133,6 +130,33 @@ export default function NetworkClient() {
           onClose={() => handleSelect(null)}
         />
       )}
+    </div>
+  );
+}
+
+// Placeholder for the topology canvas — scattered node bubbles while the graph
+// data loads. The header tabs stay mounted above (page subheader).
+function NetworkGraphSkeleton() {
+  const nodes = [
+    { top: "30%", left: "22%" },
+    { top: "18%", left: "55%" },
+    { top: "52%", left: "38%" },
+    { top: "42%", left: "72%" },
+    { top: "72%", left: "58%" },
+    { top: "62%", left: "20%" },
+  ];
+  return (
+    <div className="relative h-full w-full" aria-hidden="true">
+      {nodes.map((n, i) => (
+        <div
+          key={i}
+          className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2"
+          style={{ top: n.top, left: n.left }}
+        >
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <Skeleton className="h-2.5 w-14" />
+        </div>
+      ))}
     </div>
   );
 }
