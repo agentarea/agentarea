@@ -1,6 +1,6 @@
 import React from "react";
 import { Streamdown } from "streamdown";
-import { formatTimestamp } from "../../../utils/dateUtils";
+import { useFormatTimestamp } from "../../../utils/dateUtils";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
 
@@ -18,6 +18,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   timestamp,
   agent_name,
 }) => {
+  const formatTimestamp = useFormatTimestamp();
   return (
     <MessageWrapper>
       <BaseMessage

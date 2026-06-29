@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { cn } from "@/lib/utils";
-import { formatTimestamp } from "../../../utils/dateUtils";
+import { useFormatTimestamp } from "../../../utils/dateUtils";
 import { LLMResponseData } from "../types";
 import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
 import MessageWrapper from "./MessageWrapper";
@@ -35,6 +35,7 @@ export const LLMResponseMessage: React.FC<{
   data: LLMResponseData;
   agent_name?: string;
 }> = ({ data, agent_name }) => {
+  const formatTimestamp = useFormatTimestamp();
   return (
     <MessageWrapper>
       <div className="min-w-0 flex-1 pb-1">
