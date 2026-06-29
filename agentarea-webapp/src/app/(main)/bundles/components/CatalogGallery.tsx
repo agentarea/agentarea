@@ -68,9 +68,7 @@ import {
 } from "./catalog-data";
 import {
   addCatalogSkillToAgentAction,
-  analyzeBundleAction,
   fetchCatalogPageAction,
-  installBundleAction,
   installCatalogAgentAction,
   installCatalogSkillAction,
   getSkillFileUrlAction,
@@ -81,6 +79,7 @@ import {
   type AgentLite,
   type WorkspaceModel,
 } from "./actions";
+import { BundleInstallWizard } from "./BundleInstallWizard";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -650,6 +649,9 @@ type SetupTier =
 
 function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void }) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
+  // Bundles open an inline configure-then-install step rather than installing on
+  // the first click (pick model, skip connections, tune policies, then commit).
+  const [configuring, setConfiguring] = useState(false);
 
   const spec = entry.spec;
   const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
@@ -673,32 +675,8 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   useEffect(() => {
     // Reset only when the selected item changes.
     setState({ phase: "idle" });
+    setConfiguring(false);
   }, [entry.id]);
-
-  async function installBundle() {
-    const required = arr(spec.setup).filter(
-      (f) => f.required && (f.default === undefined || f.default === null || f.default === "")
-    );
-    if (required.length > 0) {
-      setState({ phase: "needs_config" });
-      return;
-    }
-    setState({ phase: "loading" });
-    try {
-      const preview = await analyzeBundleAction({ source: JSON.stringify(spec) });
-      const setupValues: Record<string, unknown> = {};
-      for (const f of preview.setup ?? []) {
-        if (f.default !== undefined && f.default !== null) setupValues[f.key] = f.default;
-      }
-      const result = await installBundleAction({
-        bundle: preview.bundle,
-        setup_values: setupValues,
-      });
-      setState({ phase: "done", created: (result.entities ?? []).length });
-    } catch (e) {
-      setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
-    }
-  }
 
   async function installAgent() {
     setState({ phase: "loading" });
@@ -713,14 +691,19 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   }
 
   const installing = state.phase === "loading";
-  // Skills use the dedicated <AddSkillToAgent> control (agent picker + install),
-  // so they're handled outside this generic install map.
-  const installable: Record<CatalogEntry["type"], (() => void) | null> = {
-    bundles: installBundle,
-    agents: installAgent,
-    skills: null,
-    mcp_servers: null,
-  };
+
+  // Bundles route through the configure-then-install wizard in place of the
+  // detail view; everything else keeps the look-first detail layout.
+  if (entry.type === "bundles" && configuring) {
+    return (
+      <BundleInstallWizard
+        source={JSON.stringify(spec)}
+        title={entry.title}
+        iconUrl={entry.iconUrl}
+        onBack={() => setConfiguring(false)}
+      />
+    );
+  }
 
   return (
     <div className="max-w-2xl space-y-8">
@@ -780,7 +763,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
           ) : (
             <StartAgentButton
               size="xs"
-              onClick={() => installable[entry.type]?.()}
+              onClick={() => (entry.type === "bundles" ? setConfiguring(true) : installAgent())}
               isLoading={installing}
             >
               {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
@@ -790,15 +773,6 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       </div>
 
       {/* install feedback */}
-      {state.phase === "needs_config" && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30">
-          Needs configuration — open it in the{" "}
-          <Link href="/bundles/import" className="underline">
-            importer
-          </Link>
-          .
-        </div>
-      )}
       {state.phase === "error" && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

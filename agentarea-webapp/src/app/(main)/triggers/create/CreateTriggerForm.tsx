@@ -50,7 +50,9 @@ import {
 } from "@/lib/server-actions";
 import {
   createTriggerAction,
+  listTriggerCatalogAction,
   updateTriggerAction,
+  type TriggerCatalogEntry,
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
@@ -61,28 +63,13 @@ import {
   type TaskParameterRef,
 } from "../components/taskParameters";
 
-interface CatalogEntry {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  kind: "messaging" | "event" | "schedule";
-  backend_type: "cron" | "webhook";
-  webhook_type?: string;
-  default_methods?: string[];
-  default_cron?: string;
-  data_extractor?: string;
-  credential_fields?: { key: string; label: string; placeholder: string }[];
-  events?: string[];
-}
-
 interface CreateTriggerFormProps {
   agents: any[];
   initialData?: any;
 }
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-const KIND_ORDER: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
+const KIND_ORDER: TriggerCatalogEntry["kind"][] = ["schedule", "messaging", "event"];
 
 type SelectableResource = TaskParameterRef;
 
@@ -102,7 +89,7 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-function resolveInitialId(catalog: CatalogEntry[], initialData?: any): string {
+function resolveInitialId(catalog: TriggerCatalogEntry[], initialData?: any): string {
   if (!initialData) return "";
   if (initialData.trigger_type === "cron") return "cron";
   const wt = initialData.config?.webhook_type;
@@ -126,7 +113,7 @@ export function CreateTriggerForm({
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [catalog, setCatalog] = useState<TriggerCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("");
@@ -160,9 +147,8 @@ export function CreateTriggerForm({
 
   // Fetch catalog from backend
   useEffect(() => {
-    fetch("/api/proxy/v1/triggers/catalog")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: CatalogEntry[]) => {
+    listTriggerCatalogAction()
+      .then((data) => {
         setCatalog(data);
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
@@ -359,7 +345,7 @@ export function CreateTriggerForm({
     }
   }, [activeTab, catalog, isEditing]);
 
-  const renderCard = (entry: CatalogEntry) => {
+  const renderCard = (entry: TriggerCatalogEntry) => {
     const Icon = triggerIcons[entry.icon] ?? triggerIcons[entry.id] ?? Circle;
     const isSelected = selectedId === entry.id;
     return (

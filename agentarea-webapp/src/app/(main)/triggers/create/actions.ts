@@ -1,14 +1,52 @@
 "use server";
 
 import type { TriggerCreate } from "@/api/client/types.gen";
-import { zTriggerCreate } from "@/api/client/zod.gen";
-import { createTrigger, updateTrigger } from "@/lib/api";
+import {
+  zGetCatalogV1TriggersCatalogGetResponse,
+  zTriggerCreate,
+} from "@/api/client/zod.gen";
+import { createTrigger, listTriggerCatalog, updateTrigger } from "@/lib/api";
+import { z } from "zod";
 
 export type TriggerFormState = {
   message: string;
   errors?: { [key: string]: string[] };
   success?: boolean;
 };
+
+const zTriggerCatalogEntry = z.object({
+  id: z.string(),
+  name: z.string(),
+  icon: z.string(),
+  description: z.string(),
+  kind: z.enum(["messaging", "event", "schedule"]),
+  backend_type: z.enum(["cron", "webhook"]),
+  webhook_type: z.string().optional(),
+  default_methods: z.array(z.string()).optional(),
+  default_cron: z.string().optional(),
+  data_extractor: z.string().optional(),
+  credential_fields: z
+    .array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        placeholder: z.string(),
+      })
+    )
+    .optional(),
+  events: z.array(z.string()).optional(),
+});
+
+export type TriggerCatalogEntry = z.infer<typeof zTriggerCatalogEntry>;
+
+export async function listTriggerCatalogAction(): Promise<TriggerCatalogEntry[]> {
+  const { data, error } = await listTriggerCatalog();
+  if (error || !data) {
+    throw new Error("Failed to load trigger catalog");
+  }
+  const records = zGetCatalogV1TriggersCatalogGetResponse.parse(data);
+  return z.array(zTriggerCatalogEntry).parse(records);
+}
 
 function parseTaskParameters(raw: string | null): {
   data?: Record<string, any>;

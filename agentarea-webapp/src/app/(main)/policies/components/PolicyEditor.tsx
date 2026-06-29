@@ -24,6 +24,11 @@ import {
 } from "@/lib/mcp/resolveMcpRef";
 import { cn } from "@/lib/utils";
 import type { Policy, PolicyEffect } from "@/types/policies";
+import {
+  createPolicyRuleAction,
+  deletePolicyRuleAction,
+  updatePolicyRuleAction,
+} from "./actions";
 import { EFFECT_STYLES } from "./policy-effects";
 
 // What the editor is operating on. Create modes pre-scope the rule to a
@@ -1420,34 +1425,21 @@ export default function PolicyEditor({
         const built = builtDrafts[0].result;
         if ("error" in built) return;
         const body = built.bodies[0];
-        const response = await fetch(
-          `/api/proxy/v1/policies/${target.policy.id}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              target: body.target,
-              effect: body.effect,
-              params: body.params,
-              condition: body.condition ?? null,
-              enabled: activeDraft.form.enabled,
-            }),
-          }
-        );
-        if (!response.ok) {
-          setError(await readDetail(response, "Save failed"));
-          return;
-        }
+        await updatePolicyRuleAction(target.policy.id, {
+          target: body.target,
+          effect: body.effect,
+          params: body.params,
+          condition: body.condition ?? null,
+          enabled: activeDraft.form.enabled,
+        });
       } else {
         // POST one rule per scope/body pair (deny/approval may fan out over tools).
         for (const subject of subjects) {
           for (const item of builtDrafts) {
             if ("error" in item.result) continue;
             for (const body of item.result.bodies) {
-              const response = await fetch(`/api/proxy/v1/policies`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+              try {
+                await createPolicyRuleAction({
                   subject_type: subject.subject_type,
                   subject_id: subject.subject_id,
                   target: body.target,
@@ -1455,12 +1447,10 @@ export default function PolicyEditor({
                   params: body.params,
                   condition: body.condition ?? null,
                   enabled: item.draft.form.enabled,
-                }),
-              });
-              if (!response.ok) {
+                });
+              } catch (e) {
                 setActiveDraftId(item.draft.id);
-                setError(await readDetail(response, "Save failed"));
-                return;
+                throw e;
               }
             }
           }
@@ -1481,16 +1471,7 @@ export default function PolicyEditor({
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/proxy/v1/policies/${target.policy.id}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!response.ok && response.status !== 204) {
-        setError(await readDetail(response, "Delete failed"));
-        return;
-      }
+      await deletePolicyRuleAction(target.policy.id);
       router.push(returnHref);
       router.refresh();
     } catch (e) {
@@ -2102,29 +2083,4 @@ export default function PolicyEditor({
       </aside>
     </div>
   );
-}
-
-// Read a backend 4xx detail message, falling back to a status-based message.
-async function readDetail(
-  response: Response,
-  fallback: string
-): Promise<string> {
-  let detail = `${fallback} (${response.status})`;
-  try {
-    const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") {
-      detail = body.detail;
-    } else if (Array.isArray(body.detail)) {
-      detail = body.detail
-        .map((item) =>
-          item && typeof item === "object" && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .join(", ");
-    }
-  } catch {
-    // keep the status-based message
-  }
-  return detail;
 }

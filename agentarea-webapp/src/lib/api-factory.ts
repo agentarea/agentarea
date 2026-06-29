@@ -1,4 +1,4 @@
-import type { AgentCreate, AgentUpdate, CreateInvitationBody, McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, McpServerUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ModelSpecCreate, ModelSpecUpdate, OpenApiConnectionCreate, OpenApiConnectionUpdate, PolicyDocument, ProjectCreate, ProjectUpdate, ProviderConfigCreate, ProviderConfigResponse, ProviderConfigUpdate, TaskCreate } from "@/api/client/types.gen";
+import type { A2UiActionPayload, AgentCreate, AgentUpdate, AnalyzeRequest, CreateInvitationBody, InstallRequest, McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, McpServerUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ModelSpecCreate, ModelSpecUpdate, OpenApiConnectionCreate, OpenApiConnectionUpdate, PolicyDocument, PolicyRuleCreateRequest, PolicyRuleUpdateRequest, ProjectCreate, ProjectUpdate, ProviderConfigCreate, ProviderConfigResponse, ProviderConfigUpdate, RelationshipWriteRequest, ResolveRequest, TaskCreate, ToolAccessCheckRequest, ToolAccessGrantRequest } from "@/api/client/types.gen";
 import type { ServerClient } from "./server-client";
 
 type Client = ServerClient;
@@ -15,14 +15,37 @@ function withStatus<TData, TError>(result: {
   };
 }
 
+// Extract a human-readable message from an API error. The backend returns
+// RFC 9457 problem+json ({ type, title, status, code, detail, ... }); validation
+// failures carry field errors under `errors`. We also keep the legacy FastAPI
+// shape (detail-as-array of {msg}) for backward compatibility.
 function formatErrorDetail(error: unknown) {
   if (!error) return "No response data";
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
-  if (typeof error === "object" && "detail" in error) {
-    const detail = (error as { detail?: unknown }).detail;
+  if (typeof error === "object") {
+    const obj = error as {
+      detail?: unknown;
+      errors?: unknown;
+      title?: unknown;
+    };
+
+    // problem+json validation errors: surface field-level messages.
+    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
+      const msgs = obj.errors
+        .map((item) =>
+          typeof item === "object" && item && "msg" in item
+            ? String((item as { msg: unknown }).msg)
+            : String(item)
+        )
+        .filter(Boolean);
+      if (msgs.length > 0) return msgs.join(", ");
+    }
+
+    const detail = obj.detail;
     if (typeof detail === "string") return detail;
     if (Array.isArray(detail)) {
+      // Legacy FastAPI validation shape.
       return detail
         .map((item) =>
           typeof item === "object" && item && "msg" in item
@@ -31,6 +54,9 @@ function formatErrorDetail(error: unknown) {
         )
         .join(", ");
     }
+
+    // problem+json without a usable detail: fall back to the title.
+    if (typeof obj.title === "string") return obj.title;
   }
   return JSON.stringify(error);
 }
@@ -102,6 +128,20 @@ export function createApiClient(client: Client) {
           params: { path: { registry_id: registryId }, query: params },
         }
       );
+      return { data, error };
+    },
+
+    analyzeBundle: async (body: AnalyzeRequest) => {
+      const { data, error } = await client.POST("/v1/bundles/analyze", {
+        body,
+      });
+      return { data, error };
+    },
+
+    installBundle: async (body: InstallRequest) => {
+      const { data, error } = await client.POST("/v1/bundles/install", {
+        body,
+      });
       return { data, error };
     },
 
@@ -220,6 +260,21 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.POST(
         `/v1/agents/${agentId}/tasks/${taskId}/command` as any,
         { body: payload } as any
+      );
+      return { data, error };
+    },
+
+    sendA2UIAction: async (
+      agentId: string,
+      taskId: string,
+      payload: A2UiActionPayload
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+          body: payload,
+        }
       );
       return { data, error };
     },
@@ -923,10 +978,22 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    getSkillFile: async (skillId: string, filePath: string) => {
+    getSkillFile: async (
+      skillId: string,
+      filePath: string,
+      options?: { redirect?: boolean }
+    ) => {
       const { data, error } = await client.GET(
-        `/v1/skills/${skillId}/files/${filePath}` as any,
-        {}
+        "/v1/skills/{skill_id}/files/{path}",
+        {
+          params: {
+            path: { skill_id: skillId, path: filePath },
+            query:
+              options?.redirect === undefined
+                ? undefined
+                : { redirect: options.redirect },
+          },
+        }
       );
       return { data, error };
     },
@@ -1757,9 +1824,8 @@ export function createApiClient(client: Client) {
     },
 
     // Policies API (unified rule model). A policy is a single rule; the old
-    // typed PolicyDocument GET/PUT endpoints are gone. Mutations from client
-    // components go through the generic proxy (/api/proxy/v1/policies); these
-    // helpers cover the server-side reads.
+    // typed PolicyDocument GET/PUT endpoints are gone. Client components call
+    // server actions, and these helpers keep policy access on the typed SDK path.
     listPolicies: async (params?: {
       subject_type?: string;
       subject_id?: string;
@@ -1776,16 +1842,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createPolicy: async (body: {
-      subject_type: string;
-      subject_id: string;
-      target: string;
-      effect: string;
-      params?: Record<string, unknown>;
-      condition?: string | null;
-      enabled?: boolean;
-      priority?: number;
-    }) => {
+    createPolicy: async (body: PolicyRuleCreateRequest) => {
       const { data, error } = await client.POST(
         "/v1/policies" as any,
         {
@@ -1797,16 +1854,7 @@ export function createApiClient(client: Client) {
 
     updatePolicy: async (
       id: string,
-      body: {
-        subject_type?: string;
-        subject_id?: string;
-        target?: string;
-        effect?: string;
-        params?: Record<string, unknown>;
-        condition?: string | null;
-        enabled?: boolean;
-        priority?: number;
-      }
+      body: PolicyRuleUpdateRequest
     ) => {
       const { data, error } = await client.PATCH(
         "/v1/policies/{id}" as any,
@@ -1876,11 +1924,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    resolveAccessControl: async (body: {
-      subject_id: string;
-      resource_kind: "skill" | "collection" | "mcp" | "agent";
-      resource_id: string;
-    }) => {
+    resolveAccessControl: async (body: ResolveRequest) => {
       const { data, error } = await client.POST(
         "/v1/access-control/resolve" as any,
         {
@@ -1890,13 +1934,7 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createAccessControlRelationship: async (body: {
-      namespace: string;
-      object: string;
-      relation: string;
-      subject_id?: string;
-      subject_set?: string;
-    }) => {
+    createAccessControlRelationship: async (body: RelationshipWriteRequest) => {
       const { data, error } = await client.POST(
         "/v1/access-control/relationships" as any,
         {
@@ -1906,18 +1944,28 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    deleteAccessControlRelationship: async (body: {
-      namespace: string;
-      object: string;
-      relation: string;
-      subject_id?: string;
-      subject_set?: string;
-    }) => {
+    deleteAccessControlRelationship: async (body: RelationshipWriteRequest) => {
       const { data, error } = await client.DELETE(
         "/v1/access-control/relationships" as any,
         {
           body: body as any,
         }
+      );
+      return { data, error };
+    },
+
+    grantToolAccess: async (body: ToolAccessGrantRequest) => {
+      const { data, error } = await client.POST(
+        "/v1/tool-access/grants",
+        { body }
+      );
+      return { data, error };
+    },
+
+    checkToolAccess: async (body: ToolAccessCheckRequest) => {
+      const { data, error } = await client.POST(
+        "/v1/tool-access/checks",
+        { body }
       );
       return { data, error };
     },

@@ -18,6 +18,8 @@ export const {
   // Registry / Catalog API
   listRegistries,
   listRegistryItems,
+  analyzeBundle,
+  installBundle,
 
   // Agent Task API
   listAgentTasks,
@@ -29,6 +31,7 @@ export const {
   pauseAgentTask,
   resumeAgentTask,
   sendTaskCommand,
+  sendA2UIAction,
   resolveEscalation,
   getAgentTaskEvents,
 
@@ -164,6 +167,8 @@ export const {
   resolveAccessControl,
   createAccessControlRelationship,
   deleteAccessControlRelationship,
+  grantToolAccess,
+  checkToolAccess,
   listSkillCollections,
 
   // Audit Logs API
