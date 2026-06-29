@@ -114,8 +114,6 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.enabled | bool | `false` |  |
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
-| global.api.rateLimit.enabled | bool | `true` |  |
-| global.api.rateLimit.requestsPerMinute | int | `1000` |  |
 | global.webapp.url | string | `""` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |

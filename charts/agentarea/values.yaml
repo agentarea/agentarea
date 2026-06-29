@@ -149,10 +149,6 @@ global:
       enabled: false
       headerName: ""
       headerValue: ""
-    # Rate limiting
-    rateLimit:
-      enabled: true
-      requestsPerMinute: 1000
 
   # Web application configuration
   webapp:
