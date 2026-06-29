@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import BillingContent from "./BillingContent";
+import BillingSkeleton from "./BillingSkeleton";
 
 export const metadata: Metadata = {
   title: "Billing",
@@ -23,13 +23,7 @@ export default async function BillingPage() {
         description: t("description"),
       }}
     >
-      <Suspense
-        fallback={
-          <div className="flex h-64 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
+      <Suspense fallback={<BillingSkeleton />}>
         <BillingContent />
       </Suspense>
     </ContentBlock>

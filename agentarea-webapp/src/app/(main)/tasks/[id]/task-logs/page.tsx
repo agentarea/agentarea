@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTaskContext } from "../TaskContext";
 
 export default function TaskLogsPage() {
@@ -16,8 +16,14 @@ export default function TaskLogsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner />
+      <div className="space-y-1.5 p-4" aria-hidden="true">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <Skeleton
+            key={i}
+            className="h-3"
+            style={{ width: `${60 + ((i * 7) % 35)}%` }}
+          />
+        ))}
       </div>
     );
   }

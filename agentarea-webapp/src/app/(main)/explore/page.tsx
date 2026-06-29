@@ -42,7 +42,6 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       }}
     >
       <CatalogGallery
-        key={type}
         initialType={type}
         initialEntries={entries}
         initialHasMore={hasMore}

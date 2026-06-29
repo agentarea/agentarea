@@ -18,7 +18,6 @@ import {
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import {
   Popover,
   PopoverContent,
@@ -38,6 +37,7 @@ import { setCookie } from "@/utils/cookies";
 import { getValidTimestamp } from "@/utils/dateUtils";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
+import SkillsContentSkeleton from "./SkillsContentSkeleton";
 import {
   SCOPE_META,
   SCOPE_ORDER,
@@ -438,9 +438,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       {/* ---------------- body ---------------- */}
       <div className="min-h-0 flex-1 overflow-auto">
         {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <LoadingSpinner />
-          </div>
+          <SkillsContentSkeleton view={view} />
         ) : error ? (
           <div className="flex h-64 items-center justify-center text-destructive">
             {t("error.loadSkills")}

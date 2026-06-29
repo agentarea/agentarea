@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderSpec } from "@/lib/api";
@@ -60,11 +60,7 @@ export default async function CreateProviderConfigPage({
     >
       <Suspense
         key={preselectedProviderId || "create"}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
+        fallback={<FormSkeleton />}
       >
         <ProviderConfigFormWrapper
           preselectedProviderId={preselectedProviderId}

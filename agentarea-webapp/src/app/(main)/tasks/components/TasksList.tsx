@@ -7,6 +7,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskWithAgent } from "@/lib/api";
+import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 
@@ -141,7 +142,7 @@ export default function TasksList({
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <div className={CARD_GRID_WIDE}>
       {initialTasks.map((task) => (
         <TaskItem key={task.id} task={task} />
       ))}

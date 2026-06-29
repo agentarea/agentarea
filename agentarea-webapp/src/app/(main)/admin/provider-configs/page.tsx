@@ -5,11 +5,11 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
+import ProvidersSkeleton from "./components/ProvidersSkeleton";
 
 export const metadata: Metadata = {
   title: "Provider Configs",
@@ -36,6 +36,17 @@ export default async function ProviderConfigsPage({
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
       : cookieTab || "grid";
+
+  const configColumns = [
+    { header: t("table.name"), barClassName: "h-4 w-32" },
+    { header: t("table.provider"), barClassName: "h-4 w-24" },
+    { header: t("table.models"), barClassName: "h-5 w-28 rounded-full" },
+  ];
+  const specColumns = [
+    { header: t("table.name"), barClassName: "h-4 w-32" },
+    { header: t("table.description"), cellClassName: "max-w-[300px]", barClassName: "h-3 w-48" },
+    { header: t("table.models"), barClassName: "h-5 w-28 rounded-full" },
+  ];
 
   return (
     <ContentBlock
@@ -68,9 +79,13 @@ export default async function ProviderConfigsPage({
       <Suspense
         key={searchQuery}
         fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
+          <ProvidersSkeleton
+            viewMode={tab}
+            configsLabel={t("providerConfigsSection")}
+            specsLabel={t("providerSpecsSection")}
+            configColumns={configColumns}
+            specColumns={specColumns}
+          />
         }
       >
         <ProvidersData searchQuery={searchQuery} viewMode={tab} />

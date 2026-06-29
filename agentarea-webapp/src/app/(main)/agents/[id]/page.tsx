@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { DetailSkeleton } from "@/components/Skeleton";
 import { AgentOverview } from "./components/AgentOverview";
 
 interface Props {
@@ -10,13 +10,7 @@ export default async function AgentDetailPage({ params }: Props) {
   const { id } = await params;
   return (
     <div className="main-content">
-      <Suspense
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
+      <Suspense fallback={<DetailSkeleton />}>
         <AgentOverview agentId={id} />
       </Suspense>
     </div>

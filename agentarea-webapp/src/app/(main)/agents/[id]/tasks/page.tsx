@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listAgentTasks, type Agent } from "@/lib/api";
 import AgentTasksList from "./components/AgentTasksList";
+import AgentTasksSkeleton from "./components/AgentTasksSkeleton";
 import { TaskWithStatus } from "./types";
 
 export const metadata: Metadata = {
@@ -33,13 +33,7 @@ export default async function AgentTasksPage({ params }: Props) {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-32 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<AgentTasksSkeleton />}>
       <AgentTasksList agentId={realId} initialTasks={initialTasks} />
     </Suspense>
   );
