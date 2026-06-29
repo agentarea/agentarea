@@ -101,6 +101,10 @@ groups:
       - name: API_AUTH_HEADER_VALUE
         secretName: "{{ .Values.global.secrets.application }}"
         key: "api-auth-header-value"
+      - name: KRATOS_JWKS_B64
+        conditional: '{{ .Values.kratos.enabled }}'
+        secretName: '{{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}'
+        key: jwks_b64
 
   mcpManager:
     configVars:
