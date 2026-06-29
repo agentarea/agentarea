@@ -157,7 +157,9 @@ export function CreateTriggerForm({
           if (firstKind) setActiveTab(firstKind);
         }
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error("Failed to load trigger catalog:", e);
+      });
   }, [initialData]);
 
   useEffect(() => {

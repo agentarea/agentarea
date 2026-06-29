@@ -155,8 +155,8 @@ export function AddMCPServerForm() {
         setNewAuthName("");
         setNewAuthType("api_key");
       }
-    } catch {
-      // Error creating auth config
+    } catch (e) {
+      console.error("Failed to create MCP auth config:", e);
     } finally {
       setNewAuthSaving(false);
     }

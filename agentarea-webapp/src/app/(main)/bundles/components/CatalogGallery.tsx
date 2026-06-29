@@ -1485,8 +1485,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
         const def = fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
         setSelected(def?.path ?? null);
       })
-      .catch(() => {
+      .catch((e) => {
         if (!active) return;
+        console.error("Failed to load skill files:", e);
         setFiles([]);
         setError("Could not load skill files.");
       });
