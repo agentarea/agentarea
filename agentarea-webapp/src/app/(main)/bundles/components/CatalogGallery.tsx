@@ -10,12 +10,14 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
+  Compass,
   Loader2,
   Plug,
   Puzzle,
   Search,
   ShieldCheck,
   Star,
+  Telescope,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,7 @@ import {
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import HeaderTabs from "@/components/HeaderTabs";
+import EmptyState from "@/components/EmptyState";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import {
@@ -358,10 +361,11 @@ export default function CatalogGallery({
               ) : (
                 <EmptyState
                   title="Item not found"
-                  detail={
+                  description={
                     deepError ??
                     "This item may have been removed or isn't available."
                   }
+                  iconsType="404"
                 />
               )}
             </DeepItemStatus>
@@ -388,16 +392,20 @@ export default function CatalogGallery({
           {!loading && filtered.length === 0 && !error && (
             <EmptyState
               title={hasFilters ? "No matches" : "Nothing here"}
-              detail={
+              description={
                 hasFilters
                   ? "Nothing matches your search and filters."
                   : "Nothing to show for this type yet."
               }
-              onClear={
+              icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+              action={
                 hasFilters
-                  ? () => {
-                      void setQuery("");
-                      void setCategory(ALL);
+                  ? {
+                      label: "Clear filters",
+                      onClick: () => {
+                        void setQuery("");
+                        void setCategory(ALL);
+                      },
                     }
                   : undefined
               }
@@ -1196,28 +1204,6 @@ function GridSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="h-48 animate-pulse rounded-lg border border-border/60 bg-muted/40" />
       ))}
-    </div>
-  );
-}
-
-function EmptyState({
-  title,
-  detail,
-  onClear,
-}: {
-  title: string;
-  detail: string;
-  onClear?: () => void;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-border/60 px-6 py-12 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-      {onClear && (
-        <Button variant="outline" size="sm" className="mt-4" onClick={onClear}>
-          Clear filters
-        </Button>
-      )}
     </div>
   );
 }
