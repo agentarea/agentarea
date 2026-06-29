@@ -64,9 +64,23 @@ import {
   type CatalogEntry,
   type CatalogType,
   type RawSpec,
-  type Registry,
   type RegistryItem,
 } from "./catalog-data";
+import {
+  addCatalogSkillToAgentAction,
+  analyzeBundleAction,
+  fetchCatalogPageAction,
+  installBundleAction,
+  installCatalogAgentAction,
+  installCatalogSkillAction,
+  getSkillFileUrlAction,
+  getSkillMarkdownAction,
+  listSkillFilesAction,
+  listActiveModelInstancesAction,
+  listWorkspaceAgentsAction,
+  type AgentLite,
+  type WorkspaceModel,
+} from "./actions";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -91,21 +105,8 @@ type ViewMode = (typeof VIEW_KEYS)[number];
 // The first page is server-rendered (see explore/page.tsx); these helpers only
 // run for offset > 0 appends, so they can never race the initial paint.
 
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`/api/proxy/${path}`, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()) as T;
-}
-
 async function fetchPage(type: CatalogType, offset: number): Promise<RegistryItem[]> {
-  const registries = await getJSON<Registry[]>(
-    `v1/registries/?registry_type=${type}&active_only=true`
-  );
-  // Most types have a single registry; sum a page across them for robustness.
-  const lists = await Promise.all(
-    registries.map((r) => getJSON<RegistryItem[]>(`v1/registries/${r.id}/items?limit=${PAGE}&offset=${offset}`))
-  );
-  return lists.flat();
+  return fetchCatalogPageAction(type, offset);
 }
 
 const TYPE_ICON: Record<CatalogType, LucideIcon> = {
@@ -684,24 +685,15 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
     }
     setState({ phase: "loading" });
     try {
-      const aRes = await fetch(`/api/proxy/v1/bundles/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: JSON.stringify(spec) }),
-      });
-      const preview = await aRes.json();
-      if (!aRes.ok) throw new Error(preview?.detail ?? "Analyze failed");
+      const preview = await analyzeBundleAction({ source: JSON.stringify(spec) });
       const setupValues: Record<string, unknown> = {};
       for (const f of preview.setup ?? []) {
         if (f.default !== undefined && f.default !== null) setupValues[f.key] = f.default;
       }
-      const iRes = await fetch(`/api/proxy/v1/bundles/install`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bundle: preview.bundle, setup_values: setupValues }),
+      const result = await installBundleAction({
+        bundle: preview.bundle,
+        setup_values: setupValues,
       });
-      const result = await iRes.json();
-      if (!iRes.ok) throw new Error(result?.detail?.message ?? result?.detail ?? "Install failed");
       setState({ phase: "done", created: (result.entities ?? []).length });
     } catch (e) {
       setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
@@ -713,13 +705,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
     try {
       // entry.id is the registry_item id; the endpoint forks a tenant copy
       // (copy-on-write) and is idempotent if already installed.
-      const iRes = await fetch(`/api/proxy/v1/agents/${entry.id}/install`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const result = await iRes.json();
-      if (!iRes.ok)
-        throw new Error(result?.detail?.message ?? result?.detail ?? "Install failed");
+      await installCatalogAgentAction(entry.id);
       setState({ phase: "done", created: 1 });
     } catch (e) {
       setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
@@ -849,6 +835,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
               skillId={entry.id}
               sourceType={str(spec.source_type) ?? "content"}
               sourceUrl={str(spec.source_url)}
+              content={str(spec.content)}
             />
             <SkillFacts entry={entry} />
           </>
@@ -862,20 +849,12 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
 // a model on install (that's a per-workspace instance). This surfaces those
 // preferences and, by fetching the workspace's configured models, suggests which
 // one to pick — highlighting an available match or saying plainly when none fit.
-type WorkspaceModel = {
-  id: string;
-  model_name?: string | null;
-  model_display_name?: string | null;
-  provider_name?: string | null;
-  provider_icon_url?: string | null;
-};
-
 function PreferredModels({ models }: { models: string[] }) {
   const [instances, setInstances] = useState<WorkspaceModel[] | null>(null);
 
   useEffect(() => {
     let active = true;
-    getJSON<WorkspaceModel[]>("v1/model-instances/?is_active=true")
+    listActiveModelInstancesAction()
       .then((d) => active && setInstances(Array.isArray(d) ? d : []))
       .catch(() => active && setInstances([]));
     return () => {
@@ -1273,8 +1252,6 @@ function BundleContents({ spec }: { spec: RawSpec }) {
   );
 }
 
-type AgentLite = { id: string; name: string };
-
 // Primary action for a catalog skill: attach it to an agent. A workspace skill
 // that isn't attached to any agent does nothing, so the high-intent path is
 // "add to agent" — fork the catalog skill into the workspace (copy-on-write,
@@ -1291,15 +1268,8 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
   useEffect(() => {
     if (!open || agents !== null) return;
     let active = true;
-    fetch("/api/proxy/v1/agents", { headers: { Accept: "application/json" } })
-      .then((r) => r.json())
-      .then(
-        (d) =>
-          active &&
-          setAgents(
-            Array.isArray(d) ? d.map((a) => ({ id: String(a.id), name: String(a.name) })) : []
-          )
-      )
+    listWorkspaceAgentsAction()
+      .then((d) => active && setAgents(d))
       .catch(() => active && setAgents([]));
     return () => {
       active = false;
@@ -1308,13 +1278,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
 
   // Materialize the catalog skill into the workspace; returns the tenant id.
   async function fork(): Promise<string> {
-    const r = await fetch(`/api/proxy/v1/skills/${skillId}/install`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.detail?.message ?? d?.detail ?? "Install failed");
-    return String(d.id);
+    return installCatalogSkillAction(skillId);
   }
 
   async function addToWorkspace() {
@@ -1333,24 +1297,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     setOpen(false);
     setPhase("loading");
     try {
-      const tenantId = await fork();
-      // set_skills replaces the whole set, so merge with the agent's current ones.
-      const aRes = await fetch(`/api/proxy/v1/agents/${agent.id}`, {
-        headers: { Accept: "application/json" },
-      });
-      const a = await aRes.json();
-      if (!aRes.ok) throw new Error(a?.detail ?? "Could not load agent");
-      const current = arr(a.skills)
-        .map((s) => str(s.id))
-        .filter((id): id is string => Boolean(id));
-      const skill_ids = Array.from(new Set([...current, tenantId]));
-      const pRes = await fetch(`/api/proxy/v1/agents/${agent.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skill_ids }),
-      });
-      const p = await pRes.json();
-      if (!pRes.ok) throw new Error(p?.detail?.message ?? p?.detail ?? "Could not attach skill");
+      await addCatalogSkillToAgentAction(skillId, agent.id);
       setResult({ label: `Open ${agent.name}`, href: `/agents/${agent.id}` });
       setPhase("done");
     } catch (e) {
@@ -1484,30 +1431,82 @@ function skillBody(content: string): string {
 //   GET /v1/skills/{id}/files/{path} → a presigned URL to any package file
 // We list the tree, render SKILL.md inline, and lazily load other text files on
 // click — falling back to an "open" link when a file can't be previewed inline.
+// A catalog skill is a read-only registry projection; its body comes from one of
+// three sources, each rendered by its own single-purpose view:
+//   github          → files are fetched on install, so link to the source
+//   inlined content → the SKILL.md lives in the registry spec; render it
+//   multi-file pkg  → browse the file tree via the skill-files API
 function SkillContent({
   skillId,
   sourceType,
   sourceUrl,
+  content,
 }: {
   skillId: string;
   sourceType: string;
   sourceUrl: string | null;
+  content: string | null;
 }) {
+  if (sourceType === "github") return <SkillSourceLink sourceUrl={sourceUrl} />;
+  if (content) return <SkillMarkdown content={content} />;
+  return <SkillPackageFiles skillId={skillId} />;
+}
+
+function SkillSourceLink({ sourceUrl }: { sourceUrl: string | null }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+      <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 text-sm">
+        <p className="font-medium">Sourced from a repository</p>
+        <p className="text-xs text-muted-foreground">
+          The skill files are fetched from{" "}
+          {sourceUrl ? (
+            <a href={sourceUrl} target="_blank" rel="noreferrer" className="break-all underline">
+              {sourceUrl}
+            </a>
+          ) : (
+            "its source repository"
+          )}{" "}
+          on install.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SkillMarkdown({ content }: { content: string }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Puzzle className="h-3.5 w-3.5" />
+        Skill instructions
+      </div>
+      <div className="max-h-[480px] overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
+        <Streamdown className="prose prose-sm max-w-none dark:prose-invert">
+          {skillBody(content)}
+        </Streamdown>
+      </div>
+    </div>
+  );
+}
+
+// Browse a materialized (installed / multi-file) skill package via the skill-files
+// API. Catalog content skills never reach here — their SKILL.md is inlined and
+// rendered by SkillMarkdown.
+function SkillPackageFiles({ skillId }: { skillId: string }) {
   const [files, setFiles] = useState<SkillFile[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [bodies, setBodies] = useState<Record<string, FileBody>>({});
   const [error, setError] = useState<string | null>(null);
   const requested = useRef<Set<string>>(new Set());
 
-  // Load the file list once. A GitHub-sourced skill has no inlined files in the
-  // catalog (they're fetched on install), so we skip straight to a source link.
+  // Load the file list once.
   useEffect(() => {
-    if (sourceType === "github") return;
     let active = true;
-    getJSON<{ files: SkillFile[] }>(`v1/skills/${skillId}/files`)
-      .then((d) => {
+    listSkillFilesAction(skillId)
+      .then((skillFiles) => {
         if (!active) return;
-        const fs = Array.isArray(d.files) ? d.files : [];
+        const fs = Array.isArray(skillFiles) ? skillFiles : [];
         setFiles(fs);
         const def = fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
         setSelected(def?.path ?? null);
@@ -1520,7 +1519,7 @@ function SkillContent({
     return () => {
       active = false;
     };
-  }, [skillId, sourceType]);
+  }, [skillId]);
 
   // Lazily load the selected file's body. SKILL.md comes from /content; other
   // files resolve to a presigned URL we then fetch (text) or link to.
@@ -1531,17 +1530,15 @@ function SkillContent({
     void (async () => {
       try {
         if (selected.toLowerCase() === "skill.md") {
-          const d = await getJSON<{ content: string }>(`v1/skills/${skillId}/content`);
+          const md = await getSkillMarkdownAction(skillId);
           if (active)
             setBodies((b) => ({
               ...b,
-              [selected]: { kind: "md", value: skillBody(d.content || "") },
+              [selected]: { kind: "md", value: skillBody(md || "") },
             }));
           return;
         }
-        const { url } = await getJSON<{ url: string }>(
-          `v1/skills/${skillId}/files/${encodeURI(selected)}?redirect=false`
-        );
+        const url = await getSkillFileUrlAction(skillId, selected);
         if (isTextFile(selected)) {
           try {
             const res = await fetch(url);
@@ -1562,28 +1559,6 @@ function SkillContent({
       active = false;
     };
   }, [selected, skillId, bodies]);
-
-  if (sourceType === "github") {
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-        <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 text-sm">
-          <p className="font-medium">Sourced from a repository</p>
-          <p className="text-xs text-muted-foreground">
-            The skill files are fetched from{" "}
-            {sourceUrl ? (
-              <a href={sourceUrl} target="_blank" rel="noreferrer" className="break-all underline">
-                {sourceUrl}
-              </a>
-            ) : (
-              "its source repository"
-            )}{" "}
-            on install.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (files === null) {
     return (
