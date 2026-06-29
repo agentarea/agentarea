@@ -236,6 +236,9 @@ export default function CatalogGallery({
             void setItemId(null);
           }}
           layoutId="catalog-type-control"
+          // Primary page-level navigation → solid dark pill, distinct from the
+          // inbox's quieter "subtle" secondary filter.
+          variant="solid"
         />
       </div>
 
