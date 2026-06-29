@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Pencil, RefreshCw, Trash2 } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { DetailSkeleton } from "@/components/Skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -144,11 +144,7 @@ export default function OpenAPIConnectionDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
+    return <DetailSkeleton className="p-6" />;
   }
 
   if (error && !connection) {

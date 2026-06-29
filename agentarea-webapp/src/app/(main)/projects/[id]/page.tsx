@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { DetailSkeleton } from "@/components/Skeleton";
 import { AssociationSection } from "./components/AssociationSection";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -56,11 +56,7 @@ export default function ProjectOverviewPage() {
   }, [projectId]);
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!project) return null;

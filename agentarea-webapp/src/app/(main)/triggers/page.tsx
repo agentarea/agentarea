@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
+import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
@@ -61,11 +61,10 @@ export default async function TriggersPage({
         </>
       }
     >
-      <Suspense key={`${viewMode}-${searchQuery}-${typeFilter}`} fallback={
-        <div className="flex h-64 items-center justify-center">
-          <LoadingSpinner />
-        </div>
-      }>
+      <Suspense
+        key={`${viewMode}-${searchQuery}-${typeFilter}`}
+        fallback={<TriggersSkeleton viewMode={viewMode} />}
+      >
         <TriggersContent
           viewMode={viewMode}
           searchQuery={searchQuery}

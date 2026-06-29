@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { getProviderConfig } from "@/lib/api";
 import { notFoundOnApi404 } from "@/lib/server-resource";
@@ -52,14 +52,7 @@ export default async function EditProviderConfigPage({
         ),
       }}
     >
-      <Suspense
-        key={providerConfigId}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
+      <Suspense key={providerConfigId} fallback={<FormSkeleton />}>
         <ProviderConfigFormWrapper
           preselectedProviderId={providerConfigId}
           isEdit={true}

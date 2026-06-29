@@ -1,10 +1,9 @@
-import React from "react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { DetailSkeleton } from "@/components/Skeleton";
 
 export default function Loading() {
   return (
-    <div className="flex h-64 items-center justify-center">
-      <LoadingSpinner />
+    <div className="main-content">
+      <DetailSkeleton />
     </div>
   );
 }

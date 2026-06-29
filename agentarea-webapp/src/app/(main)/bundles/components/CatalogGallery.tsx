@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -124,13 +131,21 @@ export default function CatalogGallery({
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   // `type` uses shallow:false so switching tabs re-runs the Server Component
-  // (explore/page.tsx) and re-fetches the first page server-side. Combined with
-  // `key={type}` on this component, every type view starts from fresh SSR data —
-  // there is no client fetch on mount and no stale-response race across types.
+  // (explore/page.tsx) and re-fetches the first page server-side — every type
+  // view starts from fresh SSR data, with no client fetch on mount and no
+  // stale-response race across types.
+  //
+  // The round-trip runs inside a transition: `isPending` lets us skeleton ONLY
+  // the content/facets while the persistent chrome (type tabs, search, view
+  // toggle, "Category" label) stays mounted. This component is NOT remounted on
+  // type change (no `key`) — instead an effect below re-seeds state from the new
+  // SSR props, so the chrome never flashes.
+  const [isPending, startTransition] = useTransition();
   const [type, setType] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
+      startTransition,
     })
   );
   // Seeded from the server-rendered first page (no initial client fetch / flash).
@@ -149,6 +164,20 @@ export default function CatalogGallery({
   );
   const [itemId, setItemId] = useQueryState("item", parseAsString);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Re-seed from fresh SSR data when the type's server round-trip lands. Because
+  // the component is no longer remounted on type change, this is what swaps in
+  // the new type's first page — while `isPending` skeletons the content. The
+  // ref guards the initial mount (already seeded via useState initializers).
+  const seededType = useRef(initialType);
+  useEffect(() => {
+    if (seededType.current === initialType) return;
+    seededType.current = initialType;
+    setEntries(initialEntries);
+    setOffset(initialEntries.length);
+    setHasMore(initialHasMore);
+    setError(initialError);
+  }, [initialType, initialEntries, initialHasMore, initialError]);
 
   const load = useCallback(
     async (t: CatalogType, off: number, append: boolean) => {
@@ -218,6 +247,10 @@ export default function CatalogGallery({
   // like browsing a marketplace rather than a full-page takeover.
   const active = itemId ? (entries.find((e) => e.id === itemId) ?? null) : null;
 
+  // "Busy" = first-page client load OR an in-flight type switch (SSR round-trip).
+  // Either way we skeleton the content/facets but keep the chrome mounted.
+  const busy = loading || isPending;
+
   return (
     <div className="space-y-4">
       {/* Type tabs — the primary axis */}
@@ -250,7 +283,7 @@ export default function CatalogGallery({
         {/* Facet sidebar — always reserved (fixed width) so the layout doesn't
             shift when categories arrive. Shows a skeleton while loading. */}
         <aside className="hidden w-52 shrink-0 lg:block">
-          {loading ? (
+          {busy ? (
             <FacetSkeleton />
           ) : categories.length > 0 ? (
             <FacetGroup
@@ -290,12 +323,12 @@ export default function CatalogGallery({
               {error}
             </div>
           )}
-          {loading && <GridSkeleton />}
-          {!loading && filtered.length === 0 && !error && (
+          {busy && <ContentSkeleton view={view} />}
+          {!busy && filtered.length === 0 && !error && (
             <EmptyState title="Nothing here" detail="Try another type, clear filters, or search." />
           )}
 
-          {!loading && filtered.length > 0 && (
+          {!busy && filtered.length > 0 && (
             <>
               {view === "grid" ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -1588,12 +1621,59 @@ function SkillFacts({ entry }: { entry: CatalogEntry }) {
 
 // ── Misc ──
 
-function GridSkeleton() {
+// Content placeholder that matches the selected view — grid of card-shaped
+// skeletons or table rows — so switching type never shifts the layout.
+function ContentSkeleton({ view }: { view: ViewMode }) {
+  if (view === "table") return <CatalogTableSkeleton />;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-48 animate-pulse rounded-lg border border-border/60 bg-muted/40" />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <CatalogCardSkeleton key={i} />
       ))}
+    </div>
+  );
+}
+
+// Mirrors CatalogCard: h-24 logo header + padded title/description body.
+function CatalogCardSkeleton() {
+  return (
+    <div
+      className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
+      aria-hidden="true"
+    >
+      <div className="flex h-24 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
+        <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+      </div>
+    </div>
+  );
+}
+
+// Mirrors CatalogTable rows: icon + title + (md) description.
+function CatalogTableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60" aria-hidden="true">
+      <table className="w-full text-sm">
+        <tbody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="border-b border-border/40 last:border-0">
+              <td className="w-10 py-2 pl-3 pr-0">
+                <div className="h-6 w-6 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="py-2 pl-2 pr-3">
+                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="hidden py-2 pr-4 md:table-cell">
+                <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

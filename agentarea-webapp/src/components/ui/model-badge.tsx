@@ -65,15 +65,19 @@ export default function ModelBadge({
       title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ""}`}
     >
       {renderIcon()}
-      <span
-        className={cn(
-          "font-medium text-gray-700",
-          isSm ? "text-[10px]" : "text-xs"
-        )}
-      >
-        {getModelName()}
-      </span>
-      {providerName && !isSm && (
+      {isLoading ? (
+        <Skeleton className={cn("rounded", isSm ? "h-2.5 w-12" : "h-3 w-16")} />
+      ) : (
+        <span
+          className={cn(
+            "font-medium text-gray-700",
+            isSm ? "text-[10px]" : "text-xs"
+          )}
+        >
+          {getModelName()}
+        </span>
+      )}
+      {providerName && !isLoading && !isSm && (
         <span className="text-xs text-gray-500">({providerName})</span>
       )}
     </div>

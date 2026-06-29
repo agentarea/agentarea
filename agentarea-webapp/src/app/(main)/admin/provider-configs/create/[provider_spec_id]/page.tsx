@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { FormSkeleton } from "@/components/Skeleton";
 import ProviderConfigFormWrapper from "../components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 
@@ -35,14 +35,7 @@ export default async function CreateProviderConfigWithSpecPage({
         ),
       }}
     >
-      <Suspense
-        key={provider_spec_id}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
-      >
+      <Suspense key={provider_spec_id} fallback={<FormSkeleton />}>
         <ProviderConfigFormWrapper
           preselectedProviderId={provider_spec_id}
           isEdit={false}

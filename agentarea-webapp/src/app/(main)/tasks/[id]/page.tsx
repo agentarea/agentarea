@@ -11,6 +11,7 @@ import type { MessageComponentType } from "@/components/Chat/types";
 import { processEventsToMessages } from "@/components/Chat/utils/eventProcessor";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
@@ -234,11 +235,20 @@ export default function TaskDetailsPage() {
     setChatInput(e.target.value);
   };
 
-  // Show loading state
+  // Show loading state — chat-shaped placeholder (alternating message bubbles).
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner />
+      <div className="mx-auto w-full max-w-3xl space-y-4 p-4" aria-hidden="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}
+          >
+            <Skeleton
+              className={`h-16 rounded-lg ${i % 2 ? "w-1/2" : "w-2/3"}`}
+            />
+          </div>
+        ))}
       </div>
     );
   }
