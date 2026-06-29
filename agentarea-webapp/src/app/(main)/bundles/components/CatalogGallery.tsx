@@ -101,6 +101,47 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
   mcp_servers: Plug,
 };
 
+// ── Type switcher (lives in the ContentBlock subheader) ──
+// Lifted out of the gallery into the standard bordered subheader band — same
+// pattern as the agents / connections pages — so it no longer sits inside the
+// scrollable, padded content area. Shares the `type` URL state with the gallery
+// below (same nuqs key), so selecting a tab drives both in lock-step.
+export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
+  const [type, setType] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
+      shallow: false,
+    })
+  );
+  const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
+  const [, setItemId] = useQueryState("item", parseAsString);
+
+  return (
+    <CountSegmentedControl
+      items={TYPES.map((t) => {
+        const Icon = t.icon;
+        return {
+          value: t.key,
+          label: (
+            <span className="flex items-center gap-1.5">
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </span>
+          ),
+        };
+      })}
+      value={type}
+      onChange={(next) => {
+        void setType(next);
+        void setCategory(ALL);
+        void setItemId(null);
+      }}
+      variant="solid"
+      layoutId="catalog-type-control"
+    />
+  );
+}
+
 // ── Component ──
 
 type CatalogGalleryProps = {
@@ -121,7 +162,9 @@ export default function CatalogGallery({
   // (explore/page.tsx) and re-fetches the first page server-side. Combined with
   // `key={type}` on this component, every type view starts from fresh SSR data —
   // there is no client fetch on mount and no stale-response race across types.
-  const [type, setType] = useQueryState(
+  // `type` is read-only here — the switcher lives in the subheader
+  // (ExploreTypeTabs) and drives this same nuqs key.
+  const [type] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
@@ -214,34 +257,6 @@ export default function CatalogGallery({
 
   return (
     <div className="space-y-4">
-      {/* Type tabs — the primary axis. Reuses the inbox segmented control. */}
-      <div className="border-b border-border/60 pb-3">
-        <CountSegmentedControl
-          items={TYPES.map((t) => {
-            const Icon = t.icon;
-            return {
-              value: t.key,
-              label: (
-                <span className="flex items-center gap-1.5">
-                  <Icon className="h-4 w-4" />
-                  {t.label}
-                </span>
-              ),
-            };
-          })}
-          value={type}
-          onChange={(next) => {
-            void setType(next);
-            void setCategory(ALL);
-            void setItemId(null);
-          }}
-          layoutId="catalog-type-control"
-          // Primary page-level navigation → solid dark pill, distinct from the
-          // inbox's quieter "subtle" secondary filter.
-          variant="solid"
-        />
-      </div>
-
       <div className="flex gap-6">
         {/* Facet sidebar — always reserved (fixed width) so the layout doesn't
             shift when categories arrive. Shows a skeleton while loading. */}

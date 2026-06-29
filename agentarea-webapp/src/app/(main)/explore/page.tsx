@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import ContentBlock from "@/components/ContentBlock";
 import { fetchCatalogPage } from "@/lib/api";
-import CatalogGallery from "../bundles/components/CatalogGallery";
+import CatalogGallery, {
+  ExploreTypeTabs,
+} from "../bundles/components/CatalogGallery";
 import {
   PAGE,
   isCatalogType,
@@ -40,6 +42,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         description:
           "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
       }}
+      subheader={<ExploreTypeTabs initialType={type} />}
     >
       <CatalogGallery
         key={type}
