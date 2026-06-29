@@ -65,6 +65,24 @@ export function strArr(v: unknown): string[] {
     : [];
 }
 
+// Normalize a model slug for tolerant matching: drop the provider prefix
+// ("openai/gpt-4o-mini" → "gpt-4o-mini"), lowercase, strip non-alphanumerics.
+export function normalizeModelSlug(s: string): string {
+  const tail = s.includes("/") ? s.slice(s.lastIndexOf("/") + 1) : s;
+  return tail.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Does a workspace model name plausibly satisfy a catalog "preferred" slug?
+// Tolerant (substring either way) because catalog slugs are bare ("gpt-4o")
+// while real instances are provider-prefixed/variant ("openai/gpt-4o-mini").
+// Non-binding — it only drives a UI suggestion, never a backend choice.
+export function modelNameMatchesPreferred(modelName: string, preferred: string): boolean {
+  const m = normalizeModelSlug(modelName);
+  const p = normalizeModelSlug(preferred);
+  if (!m || !p) return false;
+  return m.includes(p) || p.includes(m);
+}
+
 // Best-effort logo URL from whatever the source preserved. MCP registry items
 // keep the full upstream server object under spec.raw_spec, whose `icons` is a
 // list of {src, mimeType}. Other types may carry a flat icon/metadata.icon.

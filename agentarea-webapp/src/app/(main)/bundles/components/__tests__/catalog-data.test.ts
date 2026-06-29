@@ -2,7 +2,12 @@
  * Tests for the catalog normalize() data layer (pure functions).
  * Run with: npx tsx "src/app/(main)/bundles/components/__tests__/catalog-data.test.ts"
  */
-import { normalize, type RegistryItem } from "../catalog-data";
+import {
+  modelNameMatchesPreferred,
+  normalize,
+  normalizeModelSlug,
+  type RegistryItem,
+} from "../catalog-data";
 
 let failed = 0;
 function assertEqual<T>(actual: T, expected: T, name: string) {
@@ -121,6 +126,33 @@ assertEqual(
   "Nice Name",
   "skill: explicit display_name wins over generated title",
 );
+
+// ── tolerant model matching (drives the "preferred models" suggestion) ──
+
+assertEqual(normalizeModelSlug("openai/gpt-4o-mini"), "gpt4omini", "normalize: drops provider prefix");
+assertEqual(normalizeModelSlug("GPT-4o"), "gpt4o", "normalize: lowercases + strips punctuation");
+
+assertEqual(
+  modelNameMatchesPreferred("openai/gpt-4o-mini", "gpt-4o"),
+  true,
+  "match: bare slug matches provider-prefixed variant",
+);
+assertEqual(
+  modelNameMatchesPreferred("openai/gpt-4o", "gpt-4o"),
+  true,
+  "match: exact family after prefix strip",
+);
+assertEqual(
+  modelNameMatchesPreferred("anthropic/claude-3-opus", "gpt-4o"),
+  false,
+  "match: unrelated model does not match",
+);
+assertEqual(
+  modelNameMatchesPreferred("minimax/minimax-m2.7", "o3"),
+  false,
+  "match: short slug does not spuriously match",
+);
+assertEqual(modelNameMatchesPreferred("", "gpt-4o"), false, "match: empty model name → false");
 
 if (failed > 0) {
   console.error(`\n${failed} test(s) failed`);

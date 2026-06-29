@@ -57,6 +57,7 @@ import {
   PAGE,
   TYPE_KEYS,
   arr,
+  modelNameMatchesPreferred,
   normalize,
   str,
   strArr,
@@ -840,14 +841,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       {/* details */}
       <div className="space-y-5 border-t border-border/60 pt-6">
         {entry.type === "bundles" && <BundleContents spec={spec} />}
-        {entry.type === "agents" && (
-          <Inside
-            icon={Bot}
-            label="Preferred models"
-            rows={entry.meta}
-            hint="Suggested models — pick one for this agent after adding it."
-          />
-        )}
+        {entry.type === "agents" && <PreferredModels models={entry.meta} />}
         {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
         {entry.type === "skills" && (
           <>
@@ -860,6 +854,91 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// A catalog agent declares model *preferences* (slugs); the backend never binds
+// a model on install (that's a per-workspace instance). This surfaces those
+// preferences and, by fetching the workspace's configured models, suggests which
+// one to pick — highlighting an available match or saying plainly when none fit.
+type WorkspaceModel = {
+  id: string;
+  model_name?: string | null;
+  model_display_name?: string | null;
+  provider_name?: string | null;
+  provider_icon_url?: string | null;
+};
+
+function PreferredModels({ models }: { models: string[] }) {
+  const [instances, setInstances] = useState<WorkspaceModel[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getJSON<WorkspaceModel[]>("v1/model-instances/?is_active=true")
+      .then((d) => active && setInstances(Array.isArray(d) ? d : []))
+      .catch(() => active && setInstances([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (models.length === 0) return null;
+
+  const matchFor = (slug: string) =>
+    (instances ?? []).filter((mi) =>
+      modelNameMatchesPreferred(str(mi.model_name) ?? "", slug)
+    );
+  const anyMatch = instances != null && models.some((s) => matchFor(s).length > 0);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Bot className="h-3.5 w-3.5" />
+        Preferred models
+        <span className="tabular-nums">({models.length})</span>
+      </div>
+      <ul className="space-y-1">
+        {models.map((slug) => {
+          const best = matchFor(slug)[0];
+          return (
+            <li
+              key={slug}
+              className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1.5 text-sm"
+            >
+              <span className="truncate">{slug}</span>
+              {instances == null ? null : best ? (
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <ModelBadge
+                    size="sm"
+                    className="bg-transparent px-0 py-0"
+                    providerName={best.provider_name ?? undefined}
+                    iconUrl={best.provider_icon_url ?? undefined}
+                    modelDisplayName={
+                      best.model_display_name || best.model_name || slug
+                    }
+                  />
+                  <Badge variant="success" size="sm" className="gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    In your workspace
+                  </Badge>
+                </span>
+              ) : (
+                <Badge variant="light" size="sm" className="shrink-0 text-muted-foreground">
+                  Not configured
+                </Badge>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {instances == null
+          ? "Checking your workspace models…"
+          : anyMatch
+            ? "The agent is added without a model — pick a suggested one (or any other) before running it."
+            : "None are configured in your workspace yet — add a provider, then pick a model for this agent."}
+      </p>
     </div>
   );
 }
