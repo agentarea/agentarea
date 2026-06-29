@@ -3,102 +3,99 @@ import nextTypescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "out/**", "build/**", "node_modules/**", "dist/**", "**/dist/**", "packages/**", "next-env.d.ts", "src/api/client/**"],
+    ignores: [
+      ".next/**",
+      "out/**",
+      "build/**",
+      "node_modules/**",
+      "dist/**",
+      "**/dist/**",
+      "packages/**",
+      "next-env.d.ts",
+      // Generated API client — never hand-edited, do not lint.
+      "src/api/client/**",
+    ],
   },
   ...nextCoreWebVitals,
   ...nextTypescript,
-  // Global: downgrade exhaustive-deps to warnings to avoid CI failures
+
+  // ── Strict project rules ──────────────────────────────────────────────────
+  // We deliberately treat real bug-catchers as errors instead of relaxing them
+  // away. The previous config disabled all of these "to unblock CI"; that is
+  // exactly how an error-swallowing catch hid a real bug.
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,mjs}"],
     rules: {
-      "react-hooks/exhaustive-deps": "off",
+      // Correctness / bug-catchers
+      "no-empty": ["error", { allowEmptyCatch: false }], // no silent `catch {}`
+      "no-console": ["error", { allow: ["warn", "error"] }], // keep error/warn, ban stray logs
+      eqeqeq: ["error", "always", { null: "ignore" }],
+      "no-var": "error",
+      "prefer-const": "error",
+      "no-throw-literal": "error",
+      "no-unneeded-ternary": "error",
+      "object-shorthand": ["error", "properties"],
+
+      // TypeScript
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrors: "all",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-unused-expressions": [
+        "error",
+        { allowShortCircuit: true, allowTernary: true },
+      ],
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        { "ts-expect-error": "allow-with-description", "ts-ignore": true },
+      ],
+
+      // React
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error",
+
+      // Non-bug noise — visible but non-blocking. The React Compiler rules
+      // (react-hooks v6) are advisory for a codebase not authored for it, and
+      // <img> vs next/Image is a perf nudge, not a correctness bug. Ratchet to
+      // error later if we adopt them.
+      "@next/next/no-img-element": "warn",
       "react-hooks/set-state-in-effect": "off",
-      "react-hooks/use-memo": "off",
       "react-hooks/purity": "off",
       "react-hooks/immutability": "off",
-      "@next/next/no-img-element": "off",
+      "react-hooks/use-memo": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/preserve-manual-memoization": "off",
     },
   },
-  // Global: relax TypeScript strictness to warnings for CI
+
+  // ── Carve-outs ────────────────────────────────────────────────────────────
+  // Type declaration files legitimately model external/any-shaped payloads.
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["src/types/**/*.{ts,tsx}", "**/*.d.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "off",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
     },
   },
-  // General TypeScript tweaks: allow unused vars prefixed with _
+  // Config / CJS loaders may use require and console.
   {
-    files: ["**/*.{ts,tsx}", "**/*.mjs"],
-    rules: {
-      "@typescript-eslint/no-unused-vars": [
-        "off",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
-    },
-  },
-  // Allow top-level directives like 'use client' without triggering no-unused-expressions
-  {
-    files: ["src/lib/auth.ts", "src/app/**/*.{ts,tsx}"],
-    rules: {
-      "no-unused-expressions": "off",
-      "@typescript-eslint/no-unused-expressions": "off",
-    },
-  },
-  // Also disable unused-expressions in lib files that use 'use client'
-  {
-    files: ["src/lib/**/*.{ts,tsx}"],
-    rules: {
-      "no-unused-expressions": "off",
-      "@typescript-eslint/no-unused-expressions": "off",
-    },
-  },
-  // Temporarily disable hooks rule in util where a hook is used (to be refactored)
-  {
-    files: ["src/utils/dateUtils.ts"],
-    rules: {
-      "react-hooks/rules-of-hooks": "off",
-    },
-  },
-  // Relax strictness for working lib files to unblock CI lint quickly
-  {
-    files: ["src/lib/**/*.{ts,tsx}", "src/lib/client.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "off",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
-    },
-  },
-  // Reduce severity in types definitions to warnings
-  {
-    files: ["src/types/**/*.{ts,tsx}"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
-    },
-  },
-  // Relax strict rules in app components to unblock lint
-  {
-    files: ["src/app/**/*.{ts,tsx}"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "off",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
-      "react-hooks/exhaustive-deps": "warn",
-    },
-  },
-  // Allow require in config files and CJS loaders
-  {
-    files: ["*.config.{ts,js,mjs}", "tailwind.config.ts", "*.cjs"],
+    files: ["*.config.{ts,js,mjs}", "tailwind.config.ts", "*.cjs", "eslint.config.mjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
+      "no-console": "off",
+    },
+  },
+  // Test/script scaffolding may log freely.
+  {
+    files: ["**/__tests__/**", "tests/**", "**/*.test.{ts,tsx}", "scripts/**"],
+    rules: {
+      "no-console": "off",
     },
   },
 ];
