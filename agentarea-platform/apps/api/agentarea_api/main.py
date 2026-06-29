@@ -14,7 +14,7 @@ for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", 
 
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.exceptions.registration import register_workspace_error_handlers
+from agentarea_common.exceptions.registration import register_error_handlers
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -330,21 +330,26 @@ def create_app() -> FastAPI:
     _tool_count = sum(len(ts._tool_methods) for ts in get_platform_tools())
     logger.info("Native MCP server mounted at /mcp with %d platform tools", _tool_count)
 
-    # Register workspace error handlers
-    register_workspace_error_handlers(app)
+    # Register the unified error handlers (RFC 9457 problem+json): AppError,
+    # PermissionError, validation, HTTPException, DB integrity, and a catch-all
+    # so no response is ever a non-JSON body.
+    register_error_handlers(app)
 
-    # Map BudgetCapExceededError to HTTP 402 Payment Required so the UI can
-    # surface a clear "raise the cap or wait" message with the actual numbers.
+    # Map the domain BudgetCapExceededError to HTTP 402 Payment Required. The
+    # domain exception stays free of web concerns; the composition layer renders
+    # it via the shared problem+json helper, surfacing the numbers so the UI can
+    # show "you've spent $X of $Y, raise the cap or wait".
+    from agentarea_common.exceptions import problem_response
     from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
-    from fastapi.responses import JSONResponse
 
     @app.exception_handler(BudgetCapExceededError)
     async def _budget_cap_exceeded_handler(_request: Request, exc: BudgetCapExceededError):
-        return JSONResponse(
+        return problem_response(
             status_code=402,
-            content={
-                "detail": str(exc),
+            code="budget_cap_exceeded",
+            detail=str(exc),
+            extra={
                 "current_mtd_usd": exc.current_mtd_usd,
                 "cap_usd": exc.cap_usd,
                 "workspace_id": exc.workspace_id,
