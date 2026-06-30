@@ -7,7 +7,7 @@ import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import ModelsList from "./ModelsList";
 import { ProviderConfigCard } from "./ProviderItem";
-import { ProviderConfig } from "./types";
+import { ModelInstance, ProviderConfig } from "./types";
 
 interface ProviderConfigsViewProps {
   configs: ProviderConfig[];
@@ -30,7 +30,7 @@ export default function ProviderConfigsView({
     {
       accessor: "name",
       header: t("name"),
-      render: (value: string, item: any) => (
+      render: (value: string, item: ProviderConfig) => (
         <div className="flex items-center gap-2">
           {item.spec?.icon_url && (
             <img
@@ -50,7 +50,7 @@ export default function ProviderConfigsView({
     {
       accessor: "model_instances",
       header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
+      render: (value: ModelInstance[]) => <ModelsList models={value || []} />,
     },
   ];
 

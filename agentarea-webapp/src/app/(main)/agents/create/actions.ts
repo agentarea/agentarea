@@ -79,9 +79,10 @@ export async function addAgent(
     const { data, error } = await createAgent(parsed.data as AgentCreate);
 
     if (error) {
+      const apiErr = error as { message?: string; detail?: Array<{ msg: string }> };
       const errorMessage =
-        (error as any)?.message ||
-        (error as any)?.detail?.[0]?.msg ||
+        apiErr?.message ||
+        apiErr?.detail?.[0]?.msg ||
         "Unknown error";
       return {
         message: "Failed to create agent",

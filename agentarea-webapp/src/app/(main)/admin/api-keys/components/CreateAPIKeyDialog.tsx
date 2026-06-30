@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calendar, Key } from "lucide-react";
 import { useForm } from "react-hook-form";
-import type { ApiKeyCreateRequest } from "@/api/client/types.gen";
+import type { ApiKeyCreateRequest, ApiKeyCreateResponse } from "@/api/client/types.gen";
 import { zApiKeyCreateRequest } from "@/api/client/zod.gen";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
@@ -68,12 +68,12 @@ export default function CreateAPIKeyDialog({
         return;
       }
 
-      const token = (result.data as any)?.token;
+      const token = (result.data as ApiKeyCreateResponse)?.token;
 
       reset();
       onOpenChange(false);
       onSuccess?.(token);
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: t("error.createFailed"),
         variant: "destructive",

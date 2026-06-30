@@ -1,7 +1,36 @@
-import type { A2UiActionPayload, AgentCreate, AgentUpdate, AnalyzeRequest, CreateInvitationBody, InstallRequest, McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, McpServerUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ModelSpecCreate, ModelSpecUpdate, OpenApiConnectionCreate, OpenApiConnectionUpdate, PolicyDocument, PolicyRuleCreateRequest, PolicyRuleUpdateRequest, ProjectCreate, ProjectUpdate, ProviderConfigCreate, ProviderConfigResponse, ProviderConfigUpdate, RelationshipWriteRequest, ResolveRequest, TaskCreate, ToolAccessCheckRequest, ToolAccessGrantRequest } from "@/api/client/types.gen";
+import type { A2UiActionPayload, AgentCreate, AgentUpdate, AnalyzeRequest, CreateInvitationBody, InstallRequest, McpServerCreate, McpServerInstanceCreate, McpServerInstanceUpdate, McpServerUpdate, ModelInstanceBulkCreateRequest, ModelInstanceCreate, ModelSpecCreate, ModelSpecUpdate, OpenApiConnectionCreate, OpenApiConnectionUpdate, PolicyRuleCreateRequest, PolicyRuleUpdateRequest, ProjectCreate, ProjectUpdate, ProviderConfigCreate, ProviderConfigResponse, ProviderConfigUpdate, RelationshipWriteRequest, ResolveRequest, TaskCreate, ToolAccessCheckRequest, ToolAccessGrantRequest } from "@/api/client/types.gen";
 import type { ServerClient } from "./server-client";
 
 type Client = ServerClient;
+
+type McpHealthCheck = {
+  service_name: string;
+  slug: string;
+  url: string;
+  healthy: boolean;
+  http_reachable: boolean;
+  response_time_ms: number;
+  error?: string;
+  timestamp: string;
+  container_status: string;
+  details?: {
+    proxy_url?: string;
+    direct_http_endpoint?: string;
+    container_port?: number;
+    container_image?: string;
+  };
+};
+
+type McpHealthContainersResponse = {
+  health_checks: McpHealthCheck[];
+  total: number;
+};
+
+type SkillsPageObject = {
+  items?: unknown[];
+  has_next?: boolean;
+  page?: number;
+};
 
 function withStatus<TData, TError>(result: {
   data?: TData;
@@ -215,11 +244,11 @@ export function createApiClient(client: Client) {
                 end_time?: string;
                 execution_time?: string;
                 error?: string;
-                result?: any;
+                result?: unknown;
                 message?: string;
-                artifacts?: any;
+                artifacts?: unknown;
                 session_id?: string;
-                usage_metadata?: any;
+                usage_metadata?: unknown;
               }
             | undefined,
           error: response.error,
@@ -255,11 +284,11 @@ export function createApiClient(client: Client) {
     sendTaskCommand: async (
       agentId: string,
       taskId: string,
-      payload: { command: string; [key: string]: any }
+      payload: { command: string; [key: string]: unknown }
     ) => {
       const { data, error } = await client.POST(
-        `/v1/agents/${agentId}/tasks/${taskId}/command` as any,
-        { body: payload } as any
+        `/v1/agents/${agentId}/tasks/${taskId}/command`,
+        { body: payload }
       );
       return { data, error };
     },
@@ -287,10 +316,10 @@ export function createApiClient(client: Client) {
       comment: string = ""
     ) => {
       const { data, error } = await client.POST(
-        "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation" as any,
+        "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation",
         {
-          params: { path: { agent_id: agentId, task_id: taskId } } as any,
-          body: { escalation_id: escalationId, approved, comment } as any,
+          params: { path: { agent_id: agentId, task_id: taskId } },
+          body: { escalation_id: escalationId, approved, comment },
         }
       );
       return { data, error };
@@ -327,20 +356,20 @@ export function createApiClient(client: Client) {
       message: string;
       conversation_id?: string;
     }) => {
-      const { data, error } = await client.POST("/v1/chat/messages" as any, {
-        body: message as any,
+      const { data, error } = await client.POST("/v1/chat/messages", {
+        body: message,
       });
       return { data, error };
     },
 
     getChatAgents: async () => {
-      const { data, error } = await client.GET("/v1/chat/agents" as any, {});
+      const { data, error } = await client.GET("/v1/chat/agents", {});
       return { data, error };
     },
 
     getChatAgent: async (agentId: string) => {
       const { data, error } = await client.GET(
-        "/v1/chat/agents/{agent_id}" as any,
+        "/v1/chat/agents/{agent_id}",
         {
           params: { path: { agent_id: agentId } },
         }
@@ -350,7 +379,7 @@ export function createApiClient(client: Client) {
 
     getChatMessageStatus: async (taskId: string) => {
       const { data, error } = await client.GET(
-        "/v1/chat/messages/{task_id}/status" as any,
+        "/v1/chat/messages/{task_id}/status",
         {
           params: { path: { task_id: taskId } },
         }
@@ -430,7 +459,7 @@ export function createApiClient(client: Client) {
     },
 
     checkMCPServerInstanceConfiguration: async (checkRequest: {
-      json_spec: Record<string, any>;
+      json_spec: Record<string, unknown>;
     }) => {
       const { data, error } = await client.POST(
         "/v1/mcp-server-instances/check",
@@ -486,7 +515,7 @@ export function createApiClient(client: Client) {
 
     verifyMCPServerInstance: async (instanceId: string) => {
       const { data, error } = await client.POST(
-        `/v1/mcp-server-instances/${instanceId}/verify` as any,
+        `/v1/mcp-server-instances/${instanceId}/verify`,
         {}
       );
       return { data, error };
@@ -494,7 +523,7 @@ export function createApiClient(client: Client) {
 
     validateMCPServerInstanceSpec: async (spec: Record<string, unknown>) => {
       const { data, error } = await client.POST(
-        "/v1/mcp-server-instances/validate" as any,
+        "/v1/mcp-server-instances/validate",
         { body: spec }
       );
       return { data, error };
@@ -613,7 +642,7 @@ export function createApiClient(client: Client) {
 
     discoverModels: async (configId: string) => {
       const { data, error } = await client.POST(
-        "/v1/provider-configs/{config_id}/discover" as any,
+        "/v1/provider-configs/{config_id}/discover",
         {
           params: { path: { config_id: configId } },
         }
@@ -627,7 +656,7 @@ export function createApiClient(client: Client) {
       endpoint_url?: string | null;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/provider-configs/discover-preview" as any,
+        "/v1/provider-configs/discover-preview",
         { body }
       );
       return { data, error };
@@ -748,8 +777,8 @@ export function createApiClient(client: Client) {
       body: ModelInstanceBulkCreateRequest
     ) => {
       const { data, error } = await client.POST(
-        "/v1/model-instances/bulk" as any,
-        { body: body as any }
+        "/v1/model-instances/bulk",
+        { body }
       );
       return { data, error };
     },
@@ -760,7 +789,7 @@ export function createApiClient(client: Client) {
       test_message?: string;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/model-instances/test" as any,
+        "/v1/model-instances/test",
         {
           body: testRequest,
         }
@@ -796,12 +825,12 @@ export function createApiClient(client: Client) {
 
     // Authentication API
     getCurrentUser: async () => {
-      const { data, error } = await client.GET("/v1/auth/users/me" as any, {});
+      const { data, error } = await client.GET("/v1/auth/users/me", {});
       return { data, error };
     },
 
     testProtectedEndpoint: async () => {
-      const { data, error } = await client.GET("/v1/protected/test" as any, {});
+      const { data, error } = await client.GET("/v1/protected/test", {});
       return { data, error };
     },
 
@@ -823,7 +852,7 @@ export function createApiClient(client: Client) {
         ? `/v1/agents/tools?${queryString}`
         : `/v1/agents/tools`;
 
-      const { data, error } = await client.GET(path as any, {});
+      const { data, error } = await client.GET(path, {});
       return { data, error };
     },
 
@@ -849,7 +878,7 @@ export function createApiClient(client: Client) {
         if (error || !data) {
           return { health_checks: [], total: 0 };
         }
-        return data as any;
+        return data as McpHealthContainersResponse;
       } catch (error) {
         console.warn("Failed to fetch MCP health status:", error);
         return { health_checks: [], total: 0 };
@@ -884,9 +913,9 @@ export function createApiClient(client: Client) {
         if (error || !data) {
           return { health_check: null };
         }
-        const healthData = data as any;
+        const healthData = data as McpHealthContainersResponse;
         const healthCheck = healthData.health_checks?.find(
-          (check: any) => check.service_name === managerServiceName
+          (check) => check.service_name === managerServiceName
         );
         return { health_check: healthCheck || null };
       } catch (error) {
@@ -921,32 +950,32 @@ export function createApiClient(client: Client) {
           : {}),
       });
 
-      const { data, error } = await client.GET("/v1/skills" as any, {
-        params: { query: query(options.page || 1) } as any,
+      const { data, error } = await client.GET("/v1/skills", {
+        params: { query: query(options.page || 1) },
       });
 
       if (options.paginated) {
         return { data, error };
       }
 
-      const items = Array.isArray(data) ? data : (data as any)?.items || [];
-      if (error || Array.isArray(data) || !(data as any)?.has_next) {
+      const items = Array.isArray(data) ? data : (data as SkillsPageObject)?.items || [];
+      if (error || Array.isArray(data) || !(data as SkillsPageObject)?.has_next) {
         return { data: items, error };
       }
 
       const allItems = [...items];
-      let page = (data as any).page || 1;
-      let hasNext = Boolean((data as any).has_next);
+      let page = (data as SkillsPageObject).page || 1;
+      let hasNext = Boolean((data as SkillsPageObject).has_next);
       while (hasNext) {
         page += 1;
-        const next = await client.GET("/v1/skills" as any, {
-          params: { query: query(page) } as any,
+        const next = await client.GET("/v1/skills", {
+          params: { query: query(page) },
         });
         if (next.error) {
           return { data: allItems, error: next.error };
         }
 
-        const nextData = next.data as any;
+        const nextData = next.data as unknown[] | SkillsPageObject;
         const nextItems = Array.isArray(nextData)
           ? nextData
           : nextData?.items || [];
@@ -958,13 +987,13 @@ export function createApiClient(client: Client) {
     },
 
     getSkill: async (skillId: string) => {
-      const result = await client.GET(`/v1/skills/${skillId}` as any, {});
+      const result = await client.GET(`/v1/skills/${skillId}`, {});
       return withStatus(result);
     },
 
     getSkillContent: async (skillId: string) => {
       const { data, error } = await client.GET(
-        `/v1/skills/${skillId}/content` as any,
+        `/v1/skills/${skillId}/content`,
         {}
       );
       return { data, error };
@@ -972,7 +1001,7 @@ export function createApiClient(client: Client) {
 
     getSkillFiles: async (skillId: string, includeUrls: boolean = false) => {
       const { data, error } = await client.GET(
-        `/v1/skills/${skillId}/files${includeUrls ? "?include_urls=true" : ""}` as any,
+        `/v1/skills/${skillId}/files${includeUrls ? "?include_urls=true" : ""}`,
         {}
       );
       return { data, error };
@@ -1004,7 +1033,7 @@ export function createApiClient(client: Client) {
       name?: string | null;
       description?: string | null;
     }) => {
-      const { data, error } = await client.POST("/v1/skills" as any, {
+      const { data, error } = await client.POST("/v1/skills", {
         body: skill,
       });
       return { data, error };
@@ -1035,7 +1064,7 @@ export function createApiClient(client: Client) {
         content?: string | null;
       }
     ) => {
-      const { data, error } = await client.PUT(`/v1/skills/${skillId}` as any, {
+      const { data, error } = await client.PUT(`/v1/skills/${skillId}`, {
         body: skill,
       });
       return { data, error };
@@ -1043,7 +1072,7 @@ export function createApiClient(client: Client) {
 
     installSkill: async (skillId: string) => {
       const { data, error } = await client.POST(
-        `/v1/skills/${skillId}/install` as any,
+        `/v1/skills/${skillId}/install`,
         {}
       );
       return { data, error };
@@ -1051,7 +1080,7 @@ export function createApiClient(client: Client) {
 
     deleteSkill: async (skillId: string) => {
       const { data, error } = await client.DELETE(
-        `/v1/skills/${skillId}` as any,
+        `/v1/skills/${skillId}`,
         {}
       );
       return { data, error };
@@ -1060,7 +1089,7 @@ export function createApiClient(client: Client) {
     // MCP Auth Config API
     listMCPAuthConfigs: async () => {
       const { data, error } = await client.GET(
-        "/v1/mcp-auth-configs/" as any,
+        "/v1/mcp-auth-configs/",
         {}
       );
       return { data, error };
@@ -1070,11 +1099,11 @@ export function createApiClient(client: Client) {
       name: string;
       description?: string;
       auth_type: string;
-      config?: Record<string, any>;
-      credentials?: Record<string, any>;
+      config?: Record<string, unknown>;
+      credentials?: Record<string, unknown>;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/mcp-auth-configs/" as any,
+        "/v1/mcp-auth-configs/",
         { body }
       );
       return { data, error };
@@ -1082,12 +1111,12 @@ export function createApiClient(client: Client) {
 
     // API Keys API
     listAPIKeys: async () => {
-      const { data, error } = await client.GET("/v1/api-keys/" as any, {});
+      const { data, error } = await client.GET("/v1/api-keys/", {});
       return { data, error };
     },
 
     createAPIKey: async (body: { name: string; expires_in_days?: number }) => {
-      const { data, error } = await client.POST("/v1/api-keys/" as any, {
+      const { data, error } = await client.POST("/v1/api-keys/", {
         body,
       });
       return { data, error };
@@ -1095,7 +1124,7 @@ export function createApiClient(client: Client) {
 
     getAPIKey: async (tokenId: string) => {
       const { data, error } = await client.GET(
-        `/v1/api-keys/${tokenId}` as any,
+        `/v1/api-keys/${tokenId}`,
         {}
       );
       return { data, error };
@@ -1103,7 +1132,7 @@ export function createApiClient(client: Client) {
 
     revokeAPIKey: async (tokenId: string) => {
       const { data, error } = await client.DELETE(
-        `/v1/api-keys/${tokenId}` as any,
+        `/v1/api-keys/${tokenId}`,
         {}
       );
       return { data, error };
@@ -1112,7 +1141,7 @@ export function createApiClient(client: Client) {
     // Triggers API
     listTriggerCatalog: async () => {
       const { data, error } = await client.GET(
-        "/v1/triggers/catalog" as any,
+        "/v1/triggers/catalog",
         {}
       );
       return { data, error };
@@ -1123,7 +1152,7 @@ export function createApiClient(client: Client) {
       trigger_type?: string;
       active_only?: boolean;
     }) => {
-      const { data, error } = await client.GET("/v1/triggers/" as any, {
+      const { data, error } = await client.GET("/v1/triggers/", {
         params: { query: params },
       });
       return { data, error };
@@ -1133,21 +1162,21 @@ export function createApiClient(client: Client) {
       name: string;
       trigger_type: string;
       agent_id: string;
-      config: Record<string, any>;
-      task_parameters?: Record<string, any>;
+      config: Record<string, unknown>;
+      task_parameters?: Record<string, unknown>;
       failure_threshold?: number;
     }) => {
       // Flatten config into the body — backend expects flat fields
       const { config, ...rest } = body;
       const flat = { ...rest, ...config };
-      const { data, error } = await client.POST("/v1/triggers/" as any, {
+      const { data, error } = await client.POST("/v1/triggers/", {
         body: flat,
       });
       return { data, error };
     },
 
     getTrigger: async (triggerId: string) => {
-      const result = await client.GET(`/v1/triggers/${triggerId}` as any, {});
+      const result = await client.GET(`/v1/triggers/${triggerId}`, {});
       return withStatus(result);
     },
 
@@ -1157,15 +1186,15 @@ export function createApiClient(client: Client) {
         name?: string;
         cron_expression?: string;
         timezone?: string;
-        task_parameters?: Record<string, any>;
+        task_parameters?: Record<string, unknown>;
         failure_threshold?: number;
         description?: string;
         is_active?: boolean;
-        conditions?: Record<string, any>;
+        conditions?: Record<string, unknown>;
       }
     ) => {
       const { data, error } = await client.PUT(
-        `/v1/triggers/${triggerId}` as any,
+        `/v1/triggers/${triggerId}`,
         { body }
       );
       return { data, error };
@@ -1173,7 +1202,7 @@ export function createApiClient(client: Client) {
 
     deleteTrigger: async (triggerId: string) => {
       const { data, error } = await client.DELETE(
-        `/v1/triggers/${triggerId}` as any,
+        `/v1/triggers/${triggerId}`,
         {}
       );
       return { data, error };
@@ -1181,7 +1210,7 @@ export function createApiClient(client: Client) {
 
     enableTrigger: async (triggerId: string) => {
       const { data, error } = await client.POST(
-        `/v1/triggers/${triggerId}/enable` as any,
+        `/v1/triggers/${triggerId}/enable`,
         {}
       );
       return { data, error };
@@ -1189,7 +1218,7 @@ export function createApiClient(client: Client) {
 
     disableTrigger: async (triggerId: string) => {
       const { data, error } = await client.POST(
-        `/v1/triggers/${triggerId}/disable` as any,
+        `/v1/triggers/${triggerId}/disable`,
         {}
       );
       return { data, error };
@@ -1197,7 +1226,7 @@ export function createApiClient(client: Client) {
 
     getTriggerStatus: async (triggerId: string) => {
       const { data, error } = await client.GET(
-        `/v1/triggers/${triggerId}/status` as any,
+        `/v1/triggers/${triggerId}/status`,
         {}
       );
       return { data, error };
@@ -1211,7 +1240,7 @@ export function createApiClient(client: Client) {
       }
     ) => {
       const { data, error } = await client.GET(
-        `/v1/triggers/${triggerId}/executions` as any,
+        `/v1/triggers/${triggerId}/executions`,
         {
           params: { query: params },
         }
@@ -1221,7 +1250,7 @@ export function createApiClient(client: Client) {
 
     getTriggerMetrics: async (triggerId: string) => {
       const { data, error } = await client.GET(
-        `/v1/triggers/${triggerId}/metrics` as any,
+        `/v1/triggers/${triggerId}/metrics`,
         {}
       );
       return { data, error };
@@ -1229,7 +1258,7 @@ export function createApiClient(client: Client) {
 
     getTriggerTimeline: async (triggerId: string) => {
       const { data, error } = await client.GET(
-        `/v1/triggers/${triggerId}/timeline` as any,
+        `/v1/triggers/${triggerId}/timeline`,
         {}
       );
       return { data, error };
@@ -1237,7 +1266,7 @@ export function createApiClient(client: Client) {
 
     getTriggerCorrelations: async (triggerId: string) => {
       const { data, error } = await client.GET(
-        `/v1/triggers/${triggerId}/correlations` as any,
+        `/v1/triggers/${triggerId}/correlations`,
         {}
       );
       return { data, error };
@@ -1246,7 +1275,7 @@ export function createApiClient(client: Client) {
     // Workspace Import/Export API
     exportWorkspace: async () => {
       const { data, error } = await client.GET(
-        "/v1/workspace/export" as any,
+        "/v1/workspace/export",
         {}
       );
       return { data, error };
@@ -1257,7 +1286,7 @@ export function createApiClient(client: Client) {
       skip_missing_dependencies?: boolean;
       override_existing?: boolean;
     }) => {
-      const { data, error } = await client.POST("/v1/workspace/import" as any, {
+      const { data, error } = await client.POST("/v1/workspace/import", {
         body,
       });
       return { data, error };
@@ -1324,7 +1353,7 @@ export function createApiClient(client: Client) {
     // MCP Instance Tools Discovery
     discoverMCPInstanceTools: async (instanceId: string) => {
       const { data, error } = await client.POST(
-        `/v1/mcp-server-instances/${instanceId}/discover-tools` as any,
+        `/v1/mcp-server-instances/${instanceId}/discover-tools`,
         {}
       );
       return { data, error };
@@ -1332,7 +1361,7 @@ export function createApiClient(client: Client) {
 
     testMCPInstanceAuth: async (instanceId: string) => {
       const { data, error } = await client.POST(
-        `/v1/mcp-server-instances/${instanceId}/test-auth` as any,
+        `/v1/mcp-server-instances/${instanceId}/test-auth`,
         {}
       );
       return { data, error };
@@ -1341,7 +1370,7 @@ export function createApiClient(client: Client) {
     // Skill Bundle API
     listSkillMembers: async (skillId: string) => {
       const { data, error } = await client.GET(
-        `/v1/skills/${skillId}/members` as any,
+        `/v1/skills/${skillId}/members`,
         {}
       );
       return { data, error };
@@ -1349,7 +1378,7 @@ export function createApiClient(client: Client) {
 
     addSkillMember: async (skillId: string, childSkillId: string) => {
       const { data, error } = await client.POST(
-        `/v1/skills/${skillId}/members` as any,
+        `/v1/skills/${skillId}/members`,
         {
           body: { child_skill_id: childSkillId },
         }
@@ -1359,7 +1388,7 @@ export function createApiClient(client: Client) {
 
     removeSkillMember: async (skillId: string, childSkillId: string) => {
       const { data, error } = await client.DELETE(
-        `/v1/skills/${skillId}/members/${childSkillId}` as any,
+        `/v1/skills/${skillId}/members/${childSkillId}`,
         {}
       );
       return { data, error };
@@ -1367,7 +1396,7 @@ export function createApiClient(client: Client) {
 
     flattenSkill: async (skillId: string) => {
       const { data, error } = await client.GET(
-        `/v1/skills/${skillId}/flatten` as any,
+        `/v1/skills/${skillId}/flatten`,
         {}
       );
       return { data, error };
@@ -1376,7 +1405,7 @@ export function createApiClient(client: Client) {
     // Network Topology API
     getNetworkTopology: async () => {
       const { data, error } = await client.GET(
-        "/v1/network/topology" as any,
+        "/v1/network/topology",
         {}
       );
       return { data, error };
@@ -1390,7 +1419,7 @@ export function createApiClient(client: Client) {
       offset?: number;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/openapi-connections/" as any,
+        "/v1/openapi-connections/",
         {
           params: { query: params },
         }
@@ -1402,7 +1431,7 @@ export function createApiClient(client: Client) {
       body: OpenApiConnectionCreate
     ) => {
       const { data, error } = await client.POST(
-        "/v1/openapi-connections/" as any,
+        "/v1/openapi-connections/",
         { body }
       );
       return { data, error };
@@ -1410,7 +1439,7 @@ export function createApiClient(client: Client) {
 
     deleteOpenAPIConnection: async (connectionId: string) => {
       const { data, error } = await client.DELETE(
-        `/v1/openapi-connections/${connectionId}` as any,
+        `/v1/openapi-connections/${connectionId}`,
         {}
       );
       return { data, error };
@@ -1418,7 +1447,7 @@ export function createApiClient(client: Client) {
 
     getOpenAPIConnection: async (connectionId: string) => {
       const result = await client.GET(
-        `/v1/openapi-connections/${connectionId}` as any,
+        `/v1/openapi-connections/${connectionId}`,
         {}
       );
       return withStatus(result);
@@ -1429,8 +1458,8 @@ export function createApiClient(client: Client) {
       body: OpenApiConnectionUpdate
     ) => {
       const { data, error } = await client.PATCH(
-        `/v1/openapi-connections/${connectionId}` as any,
-        { body: body as any }
+        `/v1/openapi-connections/${connectionId}`,
+        { body }
       );
       return { data, error };
     },
@@ -1449,20 +1478,20 @@ export function createApiClient(client: Client) {
     }) => {
       const { data, error } = await client.POST(
         "/v1/openapi-connections/preview-spec",
-        { body: body as any }
+        { body }
       );
       return { data, error };
     },
 
     // Compound MCP API
     listCompoundMCPs: async () => {
-      const { data, error } = await client.GET("/v1/compound-mcps/" as any, {});
+      const { data, error } = await client.GET("/v1/compound-mcps/", {});
       return { data, error };
     },
 
     getCompoundMCP: async (compoundId: string) => {
       const { data, error } = await client.GET(
-        "/v1/compound-mcps/{compound_id}" as any,
+        "/v1/compound-mcps/{compound_id}",
         {
           params: { path: { compound_id: compoundId } },
         }
@@ -1470,16 +1499,16 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createCompoundMCP: async (body: any) => {
-      const { data, error } = await client.POST("/v1/compound-mcps/" as any, {
+    createCompoundMCP: async (body: unknown) => {
+      const { data, error } = await client.POST("/v1/compound-mcps/", {
         body,
       });
       return { data, error };
     },
 
-    updateCompoundMCP: async (compoundId: string, body: any) => {
+    updateCompoundMCP: async (compoundId: string, body: unknown) => {
       const { data, error } = await client.PUT(
-        "/v1/compound-mcps/{compound_id}" as any,
+        "/v1/compound-mcps/{compound_id}",
         {
           params: { path: { compound_id: compoundId } },
           body,
@@ -1490,7 +1519,7 @@ export function createApiClient(client: Client) {
 
     deleteCompoundMCP: async (compoundId: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/compound-mcps/{compound_id}" as any,
+        "/v1/compound-mcps/{compound_id}",
         {
           params: { path: { compound_id: compoundId } },
         }
@@ -1500,7 +1529,7 @@ export function createApiClient(client: Client) {
 
     listCompoundMCPMembers: async (compoundId: string) => {
       const { data, error } = await client.GET(
-        "/v1/compound-mcps/{compound_id}/members" as any,
+        "/v1/compound-mcps/{compound_id}/members",
         {
           params: { path: { compound_id: compoundId } },
         }
@@ -1508,9 +1537,9 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    addCompoundMCPMember: async (compoundId: string, body: any) => {
+    addCompoundMCPMember: async (compoundId: string, body: unknown) => {
       const { data, error } = await client.POST(
-        "/v1/compound-mcps/{compound_id}/members" as any,
+        "/v1/compound-mcps/{compound_id}/members",
         {
           params: { path: { compound_id: compoundId } },
           body,
@@ -1521,7 +1550,7 @@ export function createApiClient(client: Client) {
 
     removeCompoundMCPMember: async (compoundId: string, instanceId: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/compound-mcps/{compound_id}/members/{instance_id}" as any,
+        "/v1/compound-mcps/{compound_id}/members/{instance_id}",
         {
           params: {
             path: { compound_id: compoundId, instance_id: instanceId },
@@ -1572,7 +1601,7 @@ export function createApiClient(client: Client) {
     // Project Association API
     addSkillToProject: async (projectId: string, skillId: string) => {
       const { data, error } = await client.POST(
-        "/v1/projects/{project_id}/skills" as any,
+        "/v1/projects/{project_id}/skills",
         {
           params: { path: { project_id: projectId } },
           body: { id: skillId },
@@ -1583,7 +1612,7 @@ export function createApiClient(client: Client) {
 
     removeSkillFromProject: async (projectId: string, skillId: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/projects/{project_id}/skills/{skill_id}" as any,
+        "/v1/projects/{project_id}/skills/{skill_id}",
         {
           params: { path: { project_id: projectId, skill_id: skillId } },
         }
@@ -1593,7 +1622,7 @@ export function createApiClient(client: Client) {
 
     addAgentToProject: async (projectId: string, agentId: string) => {
       const { data, error } = await client.POST(
-        "/v1/projects/{project_id}/agents" as any,
+        "/v1/projects/{project_id}/agents",
         {
           params: { path: { project_id: projectId } },
           body: { id: agentId },
@@ -1604,7 +1633,7 @@ export function createApiClient(client: Client) {
 
     removeAgentFromProject: async (projectId: string, agentId: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/projects/{project_id}/agents/{agent_id}" as any,
+        "/v1/projects/{project_id}/agents/{agent_id}",
         {
           params: { path: { project_id: projectId, agent_id: agentId } },
         }
@@ -1617,7 +1646,7 @@ export function createApiClient(client: Client) {
       mcpInstanceId: string
     ) => {
       const { data, error } = await client.POST(
-        "/v1/projects/{project_id}/mcp-instances" as any,
+        "/v1/projects/{project_id}/mcp-instances",
         {
           params: { path: { project_id: projectId } },
           body: { id: mcpInstanceId },
@@ -1631,7 +1660,7 @@ export function createApiClient(client: Client) {
       mcpInstanceId: string
     ) => {
       const { data, error } = await client.DELETE(
-        "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}" as any,
+        "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}",
         {
           params: {
             path: { project_id: projectId, mcp_instance_id: mcpInstanceId },
@@ -1644,7 +1673,7 @@ export function createApiClient(client: Client) {
     // Project Files API
     listProjectFiles: async (projectId: string) => {
       const { data, error } = await client.GET(
-        "/v1/projects/{project_id}/files" as any,
+        "/v1/projects/{project_id}/files",
         {
           params: { path: { project_id: projectId } },
         }
@@ -1673,7 +1702,7 @@ export function createApiClient(client: Client) {
 
     downloadProjectFile: async (projectId: string, filePath: string) => {
       const { data, error } = await client.GET(
-        "/v1/projects/{project_id}/files/{file_path}" as any,
+        "/v1/projects/{project_id}/files/{file_path}",
         {
           params: { path: { project_id: projectId, file_path: filePath } },
         }
@@ -1683,7 +1712,7 @@ export function createApiClient(client: Client) {
 
     deleteProjectFile: async (projectId: string, filePath: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/projects/{project_id}/files/{file_path}" as any,
+        "/v1/projects/{project_id}/files/{file_path}",
         {
           params: { path: { project_id: projectId, file_path: filePath } },
         }
@@ -1693,12 +1722,12 @@ export function createApiClient(client: Client) {
 
     // Workspace Files API (read-only)
     listWorkspaceFiles: async () => {
-      const { data, error } = await client.GET("/v1/files" as any, {} as any);
+      const { data, error } = await client.GET("/v1/files", {});
       return { data, error };
     },
 
     downloadWorkspaceFile: async (filePath: string) => {
-      const { data, error } = await client.GET("/v1/files/{file_path}" as any, {
+      const { data, error } = await client.GET("/v1/files/{file_path}", {
         params: { path: { file_path: filePath } },
       });
       return { data, error };
@@ -1706,10 +1735,10 @@ export function createApiClient(client: Client) {
 
     workspaceFileHistory: async (filePath: string) => {
       const { data, error } = await client.GET(
-        "/v1/files/history" as any,
+        "/v1/files/history",
         {
           params: { query: { path: filePath } },
-        } as any
+        }
       );
       return { data, error };
     },
@@ -1717,52 +1746,52 @@ export function createApiClient(client: Client) {
     // Wallet API
     getAgentWallet: async (agentId: string) => {
       const { data, error } = await client.GET(
-        "/v1/agents/{agent_id}/wallet" as any,
+        "/v1/agents/{agent_id}/wallet",
         {
           params: { path: { agent_id: agentId } },
-        } as any
+        }
       );
       return { data, error };
     },
 
-    createAgentWallet: async (agentId: string, body: any) => {
+    createAgentWallet: async (agentId: string, body: unknown) => {
       const { data, error } = await client.POST(
-        "/v1/agents/{agent_id}/wallet" as any,
+        "/v1/agents/{agent_id}/wallet",
         {
           params: { path: { agent_id: agentId } },
           body,
-        } as any
+        }
       );
       return { data, error };
     },
 
-    updateAgentWallet: async (agentId: string, body: any) => {
+    updateAgentWallet: async (agentId: string, body: unknown) => {
       const { data, error } = await client.PUT(
-        "/v1/agents/{agent_id}/wallet" as any,
+        "/v1/agents/{agent_id}/wallet",
         {
           params: { path: { agent_id: agentId } },
           body,
-        } as any
+        }
       );
       return { data, error };
     },
 
     deleteAgentWallet: async (agentId: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/agents/{agent_id}/wallet" as any,
+        "/v1/agents/{agent_id}/wallet",
         {
           params: { path: { agent_id: agentId } },
-        } as any
+        }
       );
       return { data, error };
     },
 
     getAgentWalletBalance: async (agentId: string) => {
       const { data, error } = await client.GET(
-        "/v1/agents/{agent_id}/wallet/balance" as any,
+        "/v1/agents/{agent_id}/wallet/balance",
         {
           params: { path: { agent_id: agentId } },
-        } as any
+        }
       );
       return { data, error };
     },
@@ -1777,21 +1806,21 @@ export function createApiClient(client: Client) {
       }
     ) => {
       const { data, error } = await client.GET(
-        "/v1/agents/{agent_id}/wallet/payments" as any,
+        "/v1/agents/{agent_id}/wallet/payments",
         {
           params: { path: { agent_id: agentId }, query: params },
-        } as any
+        }
       );
       return { data, error };
     },
 
-    fundAgentWallet: async (agentId: string, body: any) => {
+    fundAgentWallet: async (agentId: string, body: unknown) => {
       const { data, error } = await client.POST(
-        "/v1/agents/{agent_id}/wallet/fund" as any,
+        "/v1/agents/{agent_id}/wallet/fund",
         {
           params: { path: { agent_id: agentId } },
           body,
-        } as any
+        }
       );
       return { data, error };
     },
@@ -1808,16 +1837,16 @@ export function createApiClient(client: Client) {
       page_size?: number;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/inbox/" as any,
+        "/v1/inbox/",
         {
           params: { query: params },
-        } as any
+        }
       );
       return { data, error };
     },
 
     getTask: async (taskId: string) => {
-      const result = await client.GET("/v1/tasks/{task_id}" as any, {
+      const result = await client.GET("/v1/tasks/{task_id}", {
         params: { path: { task_id: taskId } },
       });
       return withStatus(result);
@@ -1834,20 +1863,20 @@ export function createApiClient(client: Client) {
       enabled?: boolean;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/policies" as any,
+        "/v1/policies",
         {
           params: { query: params },
-        } as any
+        }
       );
       return { data, error };
     },
 
     createPolicy: async (body: PolicyRuleCreateRequest) => {
       const { data, error } = await client.POST(
-        "/v1/policies" as any,
+        "/v1/policies",
         {
-          body: body as any,
-        } as any
+          body,
+        }
       );
       return { data, error };
     },
@@ -1857,21 +1886,21 @@ export function createApiClient(client: Client) {
       body: PolicyRuleUpdateRequest
     ) => {
       const { data, error } = await client.PATCH(
-        "/v1/policies/{id}" as any,
+        "/v1/policies/{id}",
         {
           params: { path: { id } },
-          body: body as any,
-        } as any
+          body,
+        }
       );
       return { data, error };
     },
 
     deletePolicy: async (id: string) => {
       const { data, error } = await client.DELETE(
-        "/v1/policies/{id}" as any,
+        "/v1/policies/{id}",
         {
           params: { path: { id } },
-        } as any
+        }
       );
       return { data, error };
     },
@@ -1883,8 +1912,8 @@ export function createApiClient(client: Client) {
       task_policy?: Record<string, unknown>;
     }) => {
       const { data, error } = await client.POST(
-        "/v1/governance/effective-policy/preview" as any,
-        { body: (body ?? {}) as any }
+        "/v1/governance/effective-policy/preview",
+        { body: (body ?? {}) }
       );
       return { data, error };
     },
@@ -1893,10 +1922,10 @@ export function createApiClient(client: Client) {
     // creation time. 404 when no snapshot exists (e.g. legacy tasks).
     getTaskPolicySnapshot: async (taskId: string) => {
       const { data, error } = await client.GET(
-        "/v1/governance/task-policy-snapshots/{task_id}" as any,
+        "/v1/governance/task-policy-snapshots/{task_id}",
         {
           params: { path: { task_id: taskId } },
-        } as any
+        }
       );
       return { data, error };
     },
@@ -1904,8 +1933,8 @@ export function createApiClient(client: Client) {
     // Access-control graph explorer API
     getAccessControlGraph: async () => {
       const { data, error } = await client.GET(
-        "/v1/access-control/graph" as any,
-        {} as any
+        "/v1/access-control/graph",
+        {}
       );
       return { data, error };
     },
@@ -1916,19 +1945,19 @@ export function createApiClient(client: Client) {
       subject?: string;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/access-control/relationships" as any,
+        "/v1/access-control/relationships",
         {
           params: { query: params },
-        } as any
+        }
       );
       return { data, error };
     },
 
     resolveAccessControl: async (body: ResolveRequest) => {
       const { data, error } = await client.POST(
-        "/v1/access-control/resolve" as any,
+        "/v1/access-control/resolve",
         {
-          body: body as any,
+          body,
         }
       );
       return { data, error };
@@ -1936,9 +1965,9 @@ export function createApiClient(client: Client) {
 
     createAccessControlRelationship: async (body: RelationshipWriteRequest) => {
       const { data, error } = await client.POST(
-        "/v1/access-control/relationships" as any,
+        "/v1/access-control/relationships",
         {
-          body: body as any,
+          body,
         }
       );
       return { data, error };
@@ -1946,9 +1975,9 @@ export function createApiClient(client: Client) {
 
     deleteAccessControlRelationship: async (body: RelationshipWriteRequest) => {
       const { data, error } = await client.DELETE(
-        "/v1/access-control/relationships" as any,
+        "/v1/access-control/relationships",
         {
-          body: body as any,
+          body,
         }
       );
       return { data, error };
@@ -1972,8 +2001,8 @@ export function createApiClient(client: Client) {
 
     listSkillCollections: async () => {
       const { data, error } = await client.GET(
-        "/v1/skill-collections" as any,
-        {} as any
+        "/v1/skill-collections",
+        {}
       );
       return { data, error };
     },
@@ -1990,17 +2019,17 @@ export function createApiClient(client: Client) {
       limit?: number;
     }) => {
       const { data, error } = await client.GET(
-        "/v1/audit-logs/" as any,
+        "/v1/audit-logs/",
         {
           params: { query: params },
-        } as any
+        }
       );
       return { data, error };
     },
 
     // Billing API (served by the enterprise/billing service; absent in core → 404)
     getBillingOverview: async () => {
-      const result = await client.GET("/v1/billing/overview" as any, {} as any);
+      const result = await client.GET("/v1/billing/overview", {});
       return {
         data: result.data,
         error: result.error,

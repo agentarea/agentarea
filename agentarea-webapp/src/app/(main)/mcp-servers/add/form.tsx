@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Code, Globe, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
+import { Code, Globe, Lock, LockOpen, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,22 @@ const HeaderSchema = z.object({
   value: z.string().min(1, "Header value is required"),
 });
 
+// Environment variable rows for docker / command servers. The key names a
+// variable the server needs; the value is optional (leave it blank to declare a
+// field someone fills in later). `secret` routes the value through the secret
+// manager instead of storing it in plaintext.
+const EnvVarSchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  secret: z.boolean(),
+});
+
+// Mirror of the backend / server-action heuristic so a pasted JSON config marks
+// obvious secrets automatically; the per-row toggle always lets the user override.
+function isSecretEnvName(name: string): boolean {
+  return /(_TOKEN|_SECRET|_KEY|_PASSWORD|_API_KEY|_DSN)$/.test(name.toUpperCase());
+}
+
 // Define the unified schema for client-side validation
 // Create base schema without refine for shape access
 const BaseMCPServerSchema = z.object({
@@ -45,6 +61,7 @@ const BaseMCPServerSchema = z.object({
   args: z.string().optional(),
   endpointUrl: z.string().optional(),
   headers: z.array(HeaderSchema),
+  env: z.array(EnvVarSchema),
   tags: z.string().optional(),
   isPublic: z.boolean(),
 });
@@ -181,6 +198,7 @@ export function AddMCPServerForm() {
       args: "",
       endpointUrl: "",
       headers: [],
+      env: [],
       tags: "",
       isPublic: true,
     },
@@ -191,7 +209,17 @@ export function AddMCPServerForm() {
     name: "headers",
   });
 
+  const {
+    fields: envFields,
+    append: appendEnv,
+    remove: removeEnv,
+  } = useFieldArray({
+    control,
+    name: "env",
+  });
+
   const watchedType = watch("type");
+  const watchedEnv = watch("env");
 
   // Fetch auth configs when type is external
   useEffect(() => {
@@ -250,18 +278,27 @@ export function AddMCPServerForm() {
     const name = watch("name");
     const description = watch("description");
 
+    const envObj = (watch("env") || []).reduce<Record<string, string>>(
+      (acc, e) => {
+        if (e?.key?.trim()) acc[e.key.trim()] = e.value ?? "";
+        return acc;
+      },
+      {}
+    );
+    const envPart = Object.keys(envObj).length ? { env: envObj } : {};
+
     if (type === "command") {
       const command = watch("command") || "";
       const argsStr = watch("args") || "";
       const args = argsStr.trim() ? argsStr.trim().split(/\s+/) : [];
-      return JSON.stringify({ command, args, ...(name ? { _name: name } : {}), ...(description ? { _description: description } : {}) }, null, 2);
+      return JSON.stringify({ command, args, ...envPart, ...(name ? { _name: name } : {}), ...(description ? { _description: description } : {}) }, null, 2);
     } else if (type === "external") {
       const endpointUrl = watch("endpointUrl") || "";
       return JSON.stringify({ url: endpointUrl, ...(name ? { _name: name } : {}), ...(description ? { _description: description } : {}) }, null, 2);
     } else {
       const dockerImageUrl = watch("dockerImageUrl") || "";
       const version = watch("version") || "1.0.0";
-      return JSON.stringify({ image: dockerImageUrl, version, ...(name ? { _name: name } : {}), ...(description ? { _description: description } : {}) }, null, 2);
+      return JSON.stringify({ image: dockerImageUrl, version, ...envPart, ...(name ? { _name: name } : {}), ...(description ? { _description: description } : {}) }, null, 2);
     }
   }, [watch]);
 
@@ -324,7 +361,13 @@ export function AddMCPServerForm() {
         setValue("dockerImageUrl", parsed.image || parsed.docker_image_url);
         if (parsed.version) setValue("version", parsed.version);
       }
-      if (parsed.env) {
+      if (parsed.env && typeof parsed.env === "object") {
+        const envEntries = Object.entries(parsed.env).map(([key, value]) => ({
+          key,
+          value: value == null ? "" : String(value),
+          secret: isSecretEnvName(key),
+        }));
+        setValue("env", envEntries);
         const currentDesc = watch("description");
         if (!currentDesc) {
           setValue("description", `Environment: ${Object.keys(parsed.env).join(", ")}`);
@@ -549,6 +592,70 @@ export function AddMCPServerForm() {
               </p>
             </div>
           </>
+        )}
+
+        {/* Environment variables & secrets (docker / command) */}
+        {!jsonMode && (watchedType === "docker" || watchedType === "command") && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Environment variables &amp; secrets</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => appendEnv({ key: "", value: "", secret: false })}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add variable
+              </Button>
+            </div>
+
+            {envFields.map((field, index) => {
+              const isSecret = !!watchedEnv?.[index]?.secret;
+              return (
+                <div key={field.id} className="flex items-center gap-2">
+                  <Input
+                    {...register(`env.${index}.key`)}
+                    placeholder="KEY (e.g. TELEGRAM_API_ID)"
+                    className="flex-1 font-mono"
+                  />
+                  <Input
+                    {...register(`env.${index}.value`)}
+                    type={isSecret ? "password" : "text"}
+                    placeholder="value"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant={isSecret ? "default" : "outline"}
+                    size="sm"
+                    title={isSecret ? "Stored as a secret" : "Mark as secret"}
+                    onClick={() => setValue(`env.${index}.secret`, !isSecret)}
+                  >
+                    {isSecret ? (
+                      <Lock className="h-4 w-4" />
+                    ) : (
+                      <LockOpen className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeEnv(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+
+            <p className="text-sm text-muted-foreground">
+              Values are saved on this server so it runs right away. Variables
+              marked secret are stored in the secret manager, never in plaintext.
+              Leave a value blank to just declare the field.
+            </p>
+          </div>
         )}
 
         {/* External-specific Fields */}

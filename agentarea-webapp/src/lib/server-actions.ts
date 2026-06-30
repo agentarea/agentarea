@@ -96,7 +96,6 @@ import {
   updateProject,
   updateProviderConfig,
   updateSkill,
-  uploadProjectFile,
   workspaceFileHistory,
 } from "@/lib/api";
 import {
@@ -164,7 +163,7 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 export async function sendTaskCommandAction(
   agentId: string,
   taskId: string,
-  payload: { command: string; [key: string]: any }
+  payload: { command: string; [key: string]: unknown }
 ) {
   return await sendTaskCommand(agentId, taskId, payload);
 }
@@ -229,7 +228,7 @@ export async function getMCPHealthStatusAction() {
 }
 
 export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
-  json_spec: Record<string, any>;
+  json_spec: Record<string, unknown>;
 }) {
   return await checkMCPServerInstanceConfiguration(checkRequest);
 }
@@ -351,8 +350,8 @@ export async function createMCPAuthConfigAction(body: {
   name: string;
   description?: string;
   auth_type: string;
-  config?: Record<string, any>;
-  credentials?: Record<string, any>;
+  config?: Record<string, unknown>;
+  credentials?: Record<string, unknown>;
 }) {
   return await createMCPAuthConfig(body);
 }
@@ -602,7 +601,7 @@ export async function createProjectAction(project: {
   description?: string | null;
   instructions?: string | null;
 }) {
-  return await createProject(project as any);
+  return await createProject(project);
 }
 
 export async function updateProjectAction(
@@ -613,7 +612,7 @@ export async function updateProjectAction(
     instructions?: string | null;
   }
 ) {
-  return await updateProject(projectId, project as any);
+  return await updateProject(projectId, project);
 }
 
 export async function deleteProjectAction(projectId: string) {
@@ -770,11 +769,11 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-export async function createAgentWalletAction(agentId: string, body: any) {
+export async function createAgentWalletAction(agentId: string, body: unknown) {
   return await createAgentWallet(agentId, body);
 }
 
-export async function updateAgentWalletAction(agentId: string, body: any) {
+export async function updateAgentWalletAction(agentId: string, body: unknown) {
   return await updateAgentWallet(agentId, body);
 }
 
@@ -798,7 +797,7 @@ export async function getAgentWalletPaymentsAction(
   return await getAgentWalletPayments(agentId, params);
 }
 
-export async function fundAgentWalletAction(agentId: string, body: any) {
+export async function fundAgentWalletAction(agentId: string, body: unknown) {
   return await fundAgentWallet(agentId, body);
 }
 

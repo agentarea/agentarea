@@ -55,7 +55,6 @@ const ROUTES = [
   "/triggers/create",
   "/triggers/new",
   "/mcp-servers/add",
-  "/mcp-servers/add-docker-server",
   "/mcp-servers/add-openapi",
   // Bundles
   "/bundles/catalog",

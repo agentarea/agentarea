@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ProviderSpecWithModelsResponse } from "@/api/client/types.gen";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { PlusCircleIcon, SearchIcon } from "lucide-react";
@@ -21,12 +22,12 @@ export default async function ProviderSpecsPage({
   const t = await getTranslations("Common");
   const tProviders = await getTranslations("ProvidersPage");
 
-  let providerSpecs: any[] = [];
+  let providerSpecs: ProviderSpecWithModelsResponse[] = [];
   let loadError: string | null = null;
 
   try {
     const providersResponse = await listProviderSpecsWithModels();
-    providerSpecs = (providersResponse.data as any[]) || [];
+    providerSpecs = (providersResponse.data as ProviderSpecWithModelsResponse[]) || [];
     if (providersResponse.error) {
       loadError = "Failed to load provider specifications";
     }
@@ -39,7 +40,7 @@ export default async function ProviderSpecsPage({
     {
       header: tProviders("table.provider"),
       accessor: "name",
-      render: (value: string, row: any) => (
+      render: (value: string, row: ProviderSpecWithModelsResponse) => (
         <div className="flex items-center gap-3">
           {row.icon_url && (
             <img
@@ -81,7 +82,7 @@ export default async function ProviderSpecsPage({
     {
       header: tProviders("table.models"),
       accessor: "models",
-      render: (models: any[]) => (
+      render: (models: ProviderSpecWithModelsResponse["models"]) => (
         <div className="text-xs text-muted-foreground">
           {models?.length || 0} {tProviders("table.modelsCount")}
         </div>
@@ -141,7 +142,7 @@ export default async function ProviderSpecsPage({
           />
         }
         routeChange="/admin/providers"
-        cardContent={(item: any) => (
+        cardContent={(item: ProviderSpecWithModelsResponse) => (
           <div className="flex flex-col gap-2">
             <div className="mb-2 flex items-center gap-3">
               {item.icon_url && (

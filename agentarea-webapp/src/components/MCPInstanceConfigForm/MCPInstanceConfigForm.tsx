@@ -186,6 +186,7 @@ export default function MCPInstanceConfigForm({
                   <Input
                     id={`env_${envName}`}
                     name={`env_${envName}`}
+                    type={envVar?.isSecret ? "password" : "text"}
                     placeholder={envVar?.default || t("envVarPlaceholder", { name: envName })}
                     value={envVars[envName] || ""}
                     onChange={(e) => onChangeEnvVar(envName, e.target.value)}

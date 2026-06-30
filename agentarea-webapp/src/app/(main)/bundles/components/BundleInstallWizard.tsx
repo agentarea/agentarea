@@ -12,7 +12,7 @@
 // bundle, and /install takes a (possibly edited) bundle + setup values. We edit
 // the analyzed bundle in place and send the result.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -23,6 +23,7 @@ import {
   Clock,
   Loader2,
   Plug,
+  Plus,
   Puzzle,
   ShieldCheck,
 } from "lucide-react";
@@ -47,6 +48,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import ConfigSheet from "@/app/(main)/agents/create/components/ConfigSheet";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { cn } from "@/lib/utils";
 import type {
   BundleAgent,
@@ -73,6 +76,90 @@ function setupRefKey(value: string | null | undefined): string | null {
   return m ? m[1] : null;
 }
 
+// ── Edit state ──────────────────────────────────────────────────────────────
+// Every choice the user makes in the wizard (which agents/connections/policies
+// to keep, what to enable, setup values) lives in one reducer instead of a pile
+// of useState setters. One state object, one set of typed actions, immutable
+// updates — easy to extend and to reason about on install.
+
+type EditState = {
+  setupValues: Record<string, unknown>;
+  agentOff: Set<string>; // excluded agents
+  mcpOff: Set<string>; // globally excluded connections
+  agentMcpOff: Record<string, Set<string>>; // connections detached per agent
+  autoEnabled: Record<string, boolean>;
+  policyOff: Set<string>; // excluded policies
+  policyEnabled: Record<string, boolean>;
+};
+
+const INITIAL_EDIT: EditState = {
+  setupValues: {},
+  agentOff: new Set(),
+  mcpOff: new Set(),
+  agentMcpOff: {},
+  autoEnabled: {},
+  policyOff: new Set(),
+  policyEnabled: {},
+};
+
+type EditAction =
+  | {
+      type: "init";
+      setupValues: Record<string, unknown>;
+      autoEnabled: Record<string, boolean>;
+      policyEnabled: Record<string, boolean>;
+    }
+  | { type: "setSetup"; key: string; value: unknown }
+  | { type: "toggleAgent"; key: string; on: boolean }
+  | { type: "toggleGlobalMcp"; key: string; on: boolean }
+  | { type: "toggleAgentMcp"; agentKey: string; mcpKey: string; on: boolean }
+  | { type: "toggleAuto"; key: string; on: boolean }
+  | { type: "togglePolicyInclude"; key: string; on: boolean }
+  | { type: "togglePolicyEnabled"; key: string; on: boolean };
+
+// Add/remove a key from a Set immutably (`present` = should it be in the set).
+function withKey(set: Set<string>, key: string, present: boolean): Set<string> {
+  const next = new Set(set);
+  if (present) next.add(key);
+  else next.delete(key);
+  return next;
+}
+
+function editReducer(state: EditState, action: EditAction): EditState {
+  switch (action.type) {
+    case "init":
+      return {
+        ...INITIAL_EDIT,
+        setupValues: action.setupValues,
+        autoEnabled: action.autoEnabled,
+        policyEnabled: action.policyEnabled,
+      };
+    case "setSetup":
+      return { ...state, setupValues: { ...state.setupValues, [action.key]: action.value } };
+    // `on` = included → the key is ABSENT from the "off" set.
+    case "toggleAgent":
+      return { ...state, agentOff: withKey(state.agentOff, action.key, !action.on) };
+    case "toggleGlobalMcp":
+      return { ...state, mcpOff: withKey(state.mcpOff, action.key, !action.on) };
+    case "toggleAgentMcp": {
+      const set = withKey(
+        state.agentMcpOff[action.agentKey] ?? new Set(),
+        action.mcpKey,
+        !action.on
+      );
+      return { ...state, agentMcpOff: { ...state.agentMcpOff, [action.agentKey]: set } };
+    }
+    case "toggleAuto":
+      return { ...state, autoEnabled: { ...state.autoEnabled, [action.key]: action.on } };
+    case "togglePolicyInclude":
+      return { ...state, policyOff: withKey(state.policyOff, action.key, !action.on) };
+    case "togglePolicyEnabled":
+      return { ...state, policyEnabled: { ...state.policyEnabled, [action.key]: action.on } };
+    default:
+      return state;
+  }
+}
+
 type Phase =
   | { kind: "analyzing" }
   | { kind: "form" }
@@ -94,15 +181,13 @@ export function BundleInstallWizard({
   const [phase, setPhase] = useState<Phase>({ kind: "analyzing" });
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [models, setModels] = useState<WorkspaceModel[]>([]);
+  const [providerSheetOpen, setProviderSheetOpen] = useState(false);
 
-  // Edit state — kept separate from the analyzed bundle so we can rebuild the
+  // Edit state — one reducer keyed by the analyzed bundle, rebuilt into the
   // canonical object on install without mutating the preview.
-  const [setupValues, setSetupValues] = useState<Record<string, unknown>>({});
-  const [mcpOff, setMcpOff] = useState<Set<string>>(new Set()); // globally excluded connections
-  const [agentMcpOff, setAgentMcpOff] = useState<Record<string, Set<string>>>({}); // per-agent detached
-  const [autoEnabled, setAutoEnabled] = useState<Record<string, boolean>>({});
-  const [policyOff, setPolicyOff] = useState<Set<string>>(new Set());
-  const [policyEnabled, setPolicyEnabled] = useState<Record<string, boolean>>({});
+  const [edit, dispatch] = useReducer(editReducer, INITIAL_EDIT);
+  const { setupValues, agentOff, mcpOff, agentMcpOff, autoEnabled, policyOff, policyEnabled } =
+    edit;
 
   useEffect(() => {
     let active = true;
@@ -120,15 +205,16 @@ export function BundleInstallWizard({
         for (const f of pv.setup ?? []) {
           if (f.default !== undefined && f.default !== null) sv[f.key] = f.default;
         }
-        setSetupValues(sv);
-        setAutoEnabled(
-          Object.fromEntries((bundle.automations ?? []).map((a) => [a.key, Boolean(a.enabled)]))
-        );
-        setPolicyEnabled(
-          Object.fromEntries(
+        dispatch({
+          type: "init",
+          setupValues: sv,
+          autoEnabled: Object.fromEntries(
+            (bundle.automations ?? []).map((a) => [a.key, Boolean(a.enabled)])
+          ),
+          policyEnabled: Object.fromEntries(
             (bundle.policies ?? []).map((p) => [p.key, p.enabled !== false])
-          )
-        );
+          ),
+        });
         setPhase({ kind: "form" });
       })
       .catch((e: unknown) => {
@@ -151,11 +237,11 @@ export function BundleInstallWizard({
     return keys;
   }, [preview]);
 
-  const agents = preview?.bundle.agents ?? [];
-  const mcps = preview?.bundle.mcps ?? [];
-  const automations = preview?.bundle.automations ?? [];
-  const policies = preview?.bundle.policies ?? [];
-  const setup = preview?.setup ?? [];
+  const agents = useMemo(() => preview?.bundle.agents ?? [], [preview]);
+  const mcps = useMemo(() => preview?.bundle.mcps ?? [], [preview]);
+  const automations = useMemo(() => preview?.bundle.automations ?? [], [preview]);
+  const policies = useMemo(() => preview?.bundle.policies ?? [], [preview]);
+  const setup = useMemo(() => preview?.setup ?? [], [preview]);
 
   const mcpByKey = useMemo(() => {
     const m = new Map<string, BundleMcp>();
@@ -171,11 +257,12 @@ export function BundleInstallWizard({
   const installedMcpKeys = useMemo(() => {
     const used = new Set<string>();
     for (const a of agents) {
+      if (agentOff.has(a.key)) continue; // an excluded agent provisions nothing
       for (const ref of a.mcps ?? []) if (isAgentMcpOn(a.key, ref)) used.add(ref);
     }
     return used;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, mcpOff, agentMcpOff]);
+  }, [agents, agentOff, mcpOff, agentMcpOff]);
 
   // Required setup fields that are still empty block the install (mirrors the
   // backend's required_setup_errors so we fail in the form, not after a POST).
@@ -185,46 +272,46 @@ export function BundleInstallWizard({
       const v = setupValues[f.key];
       return v === undefined || v === null || v === "";
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup, setupValues]);
 
-  function setSetup(key: string, value: unknown) {
-    setSetupValues((prev) => ({ ...prev, [key]: value }));
-  }
+  const setSetup = (key: string, value: unknown) => dispatch({ type: "setSetup", key, value });
+  const toggleAgent = (key: string, on: boolean) => dispatch({ type: "toggleAgent", key, on });
+  const toggleGlobalMcp = (key: string, on: boolean) =>
+    dispatch({ type: "toggleGlobalMcp", key, on });
+  const toggleAgentMcp = (agentKey: string, mcpKey: string, on: boolean) =>
+    dispatch({ type: "toggleAgentMcp", agentKey, mcpKey, on });
+  const toggleAuto = (key: string, on: boolean) => dispatch({ type: "toggleAuto", key, on });
+  const togglePolicyInclude = (key: string, on: boolean) =>
+    dispatch({ type: "togglePolicyInclude", key, on });
+  const togglePolicyEnabled = (key: string, on: boolean) =>
+    dispatch({ type: "togglePolicyEnabled", key, on });
 
-  function toggleGlobalMcp(key: string, on: boolean) {
-    setMcpOff((prev) => {
-      const next = new Set(prev);
-      if (on) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  function toggleAgentMcp(agentKey: string, mcpKey: string, on: boolean) {
-    setAgentMcpOff((prev) => {
-      const next = { ...prev };
-      const set = new Set(next[agentKey] ?? []);
-      if (on) set.delete(mcpKey);
-      else set.add(mcpKey);
-      next[agentKey] = set;
-      return next;
-    });
+  // Re-pull workspace models after the quick provider setup sheet creates one,
+  // so the new model is immediately selectable without leaving the wizard.
+  async function refreshModels() {
+    try {
+      setModels(await listActiveModelInstancesAction());
+    } catch {
+      /* keep the current list on failure */
+    }
   }
 
   async function install() {
     if (!preview) return;
     setPhase({ kind: "installing" });
     try {
-      const finalAgents: BundleAgent[] = agents.map((a) => ({
-        ...a,
-        mcps: (a.mcps ?? []).filter((ref) => isAgentMcpOn(a.key, ref)),
-      }));
+      const finalAgents: BundleAgent[] = agents
+        .filter((a) => !agentOff.has(a.key))
+        .map((a) => ({
+          ...a,
+          mcps: (a.mcps ?? []).filter((ref) => isAgentMcpOn(a.key, ref)),
+        }));
+      const keptAgentKeys = new Set(finalAgents.map((a) => a.key));
       const finalMcps: BundleMcp[] = mcps.filter((m) => installedMcpKeys.has(m.key));
-      const finalAutomations: BundleAutomation[] = automations.map((a) => ({
-        ...a,
-        enabled: autoEnabled[a.key] ?? false,
-      }));
+      // Drop automations whose target agent is no longer being installed.
+      const finalAutomations: BundleAutomation[] = automations
+        .filter((a) => keptAgentKeys.has(a.agent))
+        .map((a) => ({ ...a, enabled: autoEnabled[a.key] ?? false }));
       const finalPolicies: BundlePolicy[] = policies
         .filter((p) => !policyOff.has(p.key))
         .map((p) => ({ ...p, enabled: policyEnabled[p.key] !== false }));
@@ -322,6 +409,7 @@ export function BundleInstallWizard({
                     isModel={modelFieldKeys.has(f.key)}
                     models={models}
                     onChange={(v) => setSetup(f.key, v)}
+                    onAddProvider={() => setProviderSheetOpen(true)}
                   />
                 ))}
               </div>
@@ -331,56 +419,70 @@ export function BundleInstallWizard({
           {/* Agents */}
           {agents.length > 0 && (
             <Section title="Agents" count={agents.length}>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Choose which agents to install and which connections each one gets.
+              </p>
               <div className="space-y-2">
-                {agents.map((a) => (
-                  <div
-                    key={a.key}
-                    className="rounded-lg border border-border/60 bg-muted/20 p-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AgentAvatar agent={{ id: a.key, name: a.name }} size="sm" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{a.name}</span>
-                    </div>
-                    {a.instruction && (
-                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                        {a.instruction}
-                      </p>
-                    )}
-                    {(a.mcps ?? []).length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Connections
-                        </p>
-                        {(a.mcps ?? []).map((ref) => {
-                          const conn = mcpByKey.get(ref);
-                          const on = isAgentMcpOn(a.key, ref);
-                          const globallyOff = mcpOff.has(ref);
-                          return (
-                            <label
-                              key={ref}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <Checkbox
-                                checked={on}
-                                disabled={globallyOff}
-                                onCheckedChange={(c) => toggleAgentMcp(a.key, ref, Boolean(c))}
-                              />
-                              <Plug className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="min-w-0 flex-1 truncate">
-                                {conn?.name ?? ref}
-                              </span>
-                              {globallyOff && (
-                                <span className="text-[11px] text-muted-foreground">
-                                  not installed
-                                </span>
-                              )}
-                            </label>
-                          );
-                        })}
+                {agents.map((a) => {
+                  const included = !agentOff.has(a.key);
+                  return (
+                    <div
+                      key={a.key}
+                      className={cn(
+                        "rounded-lg border border-border/60 bg-muted/20 p-3",
+                        !included && "opacity-60"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <AgentAvatar agent={{ id: a.key, name: a.name }} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {a.name}
+                        </span>
+                        <Switch
+                          checked={included}
+                          onCheckedChange={(c) => toggleAgent(a.key, c)}
+                        />
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {a.instruction && (
+                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                          {a.instruction}
+                        </p>
+                      )}
+                      {included && (a.mcps ?? []).length > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Connections
+                          </p>
+                          {(a.mcps ?? []).map((ref) => {
+                            const conn = mcpByKey.get(ref);
+                            const on = isAgentMcpOn(a.key, ref);
+                            const globallyOff = mcpOff.has(ref);
+                            return (
+                              <label key={ref} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={on}
+                                  disabled={globallyOff}
+                                  onCheckedChange={(c) =>
+                                    toggleAgentMcp(a.key, ref, Boolean(c))
+                                  }
+                                />
+                                <Plug className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {conn?.name ?? ref}
+                                </span>
+                                {globallyOff && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    not installed
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </Section>
           )}
@@ -444,9 +546,7 @@ export function BundleInstallWizard({
                     </div>
                     <Switch
                       checked={autoEnabled[a.key] ?? false}
-                      onCheckedChange={(c) =>
-                        setAutoEnabled((prev) => ({ ...prev, [a.key]: c }))
-                      }
+                      onCheckedChange={(c) => toggleAuto(a.key, c)}
                     />
                   </div>
                 ))}
@@ -471,14 +571,7 @@ export function BundleInstallWizard({
                       <Checkbox
                         className="mt-0.5"
                         checked={included}
-                        onCheckedChange={(c) =>
-                          setPolicyOff((prev) => {
-                            const next = new Set(prev);
-                            if (c) next.delete(p.key);
-                            else next.add(p.key);
-                            return next;
-                          })
-                        }
+                        onCheckedChange={(c) => togglePolicyInclude(p.key, Boolean(c))}
                       />
                       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
@@ -493,9 +586,7 @@ export function BundleInstallWizard({
                       <Switch
                         checked={included && policyEnabled[p.key] !== false}
                         disabled={!included}
-                        onCheckedChange={(c) =>
-                          setPolicyEnabled((prev) => ({ ...prev, [p.key]: c }))
-                        }
+                        onCheckedChange={(c) => togglePolicyEnabled(p.key, c)}
                       />
                     </div>
                   );
@@ -527,6 +618,27 @@ export function BundleInstallWizard({
           </div>
         </div>
       )}
+
+      {/* Quick LLM provider setup — slides in from the right; on save we re-pull
+          the model list so the new model is immediately pickable. */}
+      <ConfigSheet
+        title="Add a model provider"
+        description="Connect an LLM provider to use its models in this bundle."
+        triggerClassName="hidden"
+        open={providerSheetOpen}
+        onOpenChange={setProviderSheetOpen}
+      >
+        <ProviderConfigForm
+          className="overflow-y-auto pb-6"
+          onAfterSubmit={async () => {
+            await refreshModels();
+            setProviderSheetOpen(false);
+          }}
+          onCancel={() => setProviderSheetOpen(false)}
+          isClear
+          autoRedirect={false}
+        />
+      </ConfigSheet>
     </div>
   );
 }
@@ -557,12 +669,14 @@ function SetupFieldInput({
   isModel,
   models,
   onChange,
+  onAddProvider,
 }: {
   field: SetupField;
   value: unknown;
   isModel: boolean;
   models: WorkspaceModel[];
   onChange: (v: unknown) => void;
+  onAddProvider: () => void;
 }) {
   const id = `setup-${field.key}`;
   const type = field.type ?? "string";
@@ -579,6 +693,7 @@ function SetupFieldInput({
           value={typeof value === "string" ? value : undefined}
           suggested={str(field.default)}
           onChange={onChange}
+          onAddProvider={onAddProvider}
         />
       ) : type === "boolean" ? (
         <div className="flex items-center gap-2">
@@ -624,11 +739,13 @@ function ModelPicker({
   value,
   suggested,
   onChange,
+  onAddProvider,
 }: {
   models: WorkspaceModel[];
   value: string | undefined;
   suggested: string | null;
   onChange: (id: string) => void;
+  onAddProvider: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const selected = models.find((m) => m.id === value) ?? null;
@@ -671,9 +788,16 @@ function ModelPicker({
               <CommandEmpty>
                 <div className="space-y-1.5 py-3 text-center text-sm text-muted-foreground">
                   <p>No models configured.</p>
-                  <Link href="/admin/provider-configs" className="block underline">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onAddProvider();
+                    }}
+                    className="block w-full underline"
+                  >
                     Add a provider
-                  </Link>
+                  </button>
                 </div>
               </CommandEmpty>
               <CommandGroup>
@@ -699,6 +823,21 @@ function ModelPicker({
                   </CommandItem>
                 ))}
               </CommandGroup>
+              {models.length > 0 && (
+                <div className="border-t border-border/60 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onAddProvider();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add provider
+                  </button>
+                </div>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
@@ -751,7 +890,7 @@ function InstallSummary({ result, onBack }: { result: InstallResult; onBack: () 
           <Link href="/agents">Go to Agents</Link>
         </Button>
         <Button variant="ghost" size="sm" onClick={onBack}>
-          Back to catalog
+          Done
         </Button>
       </div>
     </div>

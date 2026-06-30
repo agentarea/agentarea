@@ -168,7 +168,7 @@ export default function TaskDetailsPage() {
 
         const { error } = await sendTaskCommand(task.agent_id, task.id, {
           command: "queue_message",
-          message: message,
+          message,
         });
         if (error) {
           toast.error("Failed to send message");

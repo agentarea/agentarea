@@ -9,6 +9,8 @@ import ModelsList from "./ModelsList";
 import { ProviderSpecCard } from "./ProviderItem";
 import { ProviderSpec } from "./types";
 
+type ProviderModelEntry = ProviderSpec["models"][number];
+
 interface ProviderSpecViewProps {
   specs: ProviderSpec[];
   searchQuery: string;
@@ -30,7 +32,7 @@ export default function ProviderSpecView({
     {
       accessor: "name",
       header: t("name"),
-      render: (value: string, item: any) => (
+      render: (value: string, item: ProviderSpec) => (
         <div className="flex items-center gap-2">
           {item.icon_url && (
             <img
@@ -55,7 +57,7 @@ export default function ProviderSpecView({
     {
       accessor: "models",
       header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
+      render: (value: ProviderModelEntry[]) => <ModelsList models={value || []} />,
     },
   ];
 

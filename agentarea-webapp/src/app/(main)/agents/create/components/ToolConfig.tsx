@@ -839,7 +839,7 @@ const ToolConfig = ({
                       trigger={{
                         id: builtinTool.name,
                         name: displayName,
-                        description: description,
+                        description,
                         icon: IconComponent,
                         available_methods: builtinTool.available_methods,
                       }}

@@ -17,7 +17,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import type { LucideProps } from "lucide-react";
+import type { LucideIcon, LucideProps } from "lucide-react";
 
 export type NavSection = {
   id: string;
@@ -29,7 +29,7 @@ export type NavSection = {
     title: string;
     titleKey?: string;
     url: string;
-    icon?: any;
+    icon?: LucideIcon;
   }[];
 };
 

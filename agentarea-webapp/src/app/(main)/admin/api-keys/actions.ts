@@ -27,7 +27,7 @@ export async function createAPIKeyAction(input: ApiKeyCreateRequest) {
   const { data, error } = await createAPIKeyAPI(apiKeyBody);
 
   if (error) {
-    return { error: (error as any).detail?.[0]?.msg || "Failed to create API key" };
+    return { error: (error as { detail?: Array<{ msg: string }> }).detail?.[0]?.msg || "Failed to create API key" };
   }
 
   return { data };
@@ -37,7 +37,7 @@ export async function revokeAPIKeyAction(tokenId: string) {
   const { data, error } = await revokeAPIKeyAPI(tokenId);
 
   if (error) {
-    return { error: (error as any).detail?.[0]?.msg || "Failed to revoke API key" };
+    return { error: (error as { detail?: Array<{ msg: string }> }).detail?.[0]?.msg || "Failed to revoke API key" };
   }
 
   return { data };

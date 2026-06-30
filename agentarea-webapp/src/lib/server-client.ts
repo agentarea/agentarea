@@ -24,8 +24,8 @@ type LegacyMethod = (
   url: string,
   options?: LegacyRequestOptions
 ) => Promise<{
-  data?: any;
-  error?: any;
+  data?: unknown;
+  error?: unknown;
   response: Response;
 }>;
 
@@ -50,7 +50,7 @@ function createServerClient(): ServerClient {
     options?: LegacyRequestOptions
   ) => {
     const { params, ...rest } = options ?? {};
-    const result = await (client.request as any)({
+    const result = await client.request({
       ...rest,
       method,
       path: params?.path,

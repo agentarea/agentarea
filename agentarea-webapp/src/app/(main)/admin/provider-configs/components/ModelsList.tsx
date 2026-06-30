@@ -1,6 +1,15 @@
 import ModelBadge from "@/components/ui/model-badge";
 
-export default function ModelsList({ models }: { models: any[] }) {
+interface ModelEntry {
+  provider_name?: string | null;
+  provider_icon_url?: string | null;
+  model_display_name?: string | null;
+  display_name?: string | null;
+  model_name?: string | null;
+  name?: string | null;
+}
+
+export default function ModelsList({ models }: { models: ModelEntry[] }) {
   return (
     <div>
       {models && models.length > 0 && (

@@ -22,6 +22,11 @@ export type MCPServerFormValues = {
     key: string;
     value: string;
   }>;
+  env?: Array<{
+    key: string;
+    value: string;
+    secret: boolean;
+  }>;
   tags?: string;
   isPublic: boolean;
   authConfigId?: string | null;
@@ -79,6 +84,40 @@ function isSecretHeaderName(name: string): boolean {
   );
 }
 
+// Mirrors the backend heuristic (MCPServerService._is_secret_env_name) so the
+// secret flag is consistent whether it is inferred here or there. The explicit
+// per-variable toggle in the form always wins over this fallback.
+function isSecretEnvName(name: string): boolean {
+  return /(_TOKEN|_SECRET|_KEY|_PASSWORD|_API_KEY|_DSN)$/.test(name.toUpperCase());
+}
+
+// Split the editable env rows into the two artifacts the API expects:
+//   - env_schema: the *field* definitions, stored on the reusable spec
+//     (every named variable, with its secret flag). No values here.
+//   - environment: the *values*, stored on the instance. Secret values are
+//     routed into the secret manager by the backend based on env_schema.
+function splitEnvRows(env: MCPServerFormValues["env"]): {
+  envSchema: Array<{ name: string; description: string; isSecret: boolean }>;
+  environment: Record<string, string>;
+} {
+  const rows = (env || [])
+    .map((e) => ({ key: e.key.trim(), value: e.value, secret: e.secret }))
+    .filter((e) => e.key !== "");
+
+  const envSchema = rows.map((e) => ({
+    name: e.key,
+    description: `Environment variable ${e.key}`,
+    isSecret: e.secret || isSecretEnvName(e.key),
+  }));
+
+  const environment: Record<string, string> = {};
+  for (const e of rows) {
+    if (e.value !== "") environment[e.key] = e.value;
+  }
+
+  return { envSchema, environment };
+}
+
 function fieldValues(input: MCPServerFormValues): MCPServerFormState["fieldValues"] {
   return {
     type: input.type || "docker",
@@ -103,6 +142,7 @@ function toServerConnectionCreate(
   let instanceJsonSpec: Record<string, unknown> = {};
 
   if (input.type === "docker") {
+    const { envSchema, environment } = splitEnvRows(input.env);
     server = {
       name: input.name,
       description: input.description,
@@ -110,21 +150,23 @@ function toServerConnectionCreate(
       version: input.version || "1.0.0",
       tags,
       is_public: input.isPublic,
-      env_schema: [],
+      env_schema: envSchema,
       json_spec: {
         type: "docker",
         image: input.dockerImageUrl!,
       },
     };
+    instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
   } else if (input.type === "command") {
     const argsArray = input.args ? input.args.trim().split(/\s+/) : [];
+    const { envSchema, environment } = splitEnvRows(input.env);
     server = {
       name: input.name,
       description: input.description,
       version: input.version || "1.0.0",
       tags,
       is_public: input.isPublic,
-      env_schema: [],
+      env_schema: envSchema,
       cmd: [input.command!, ...argsArray],
       json_spec: {
         type: "command",
@@ -132,6 +174,7 @@ function toServerConnectionCreate(
         args: argsArray,
       },
     };
+    instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
   } else {
     const headersObject: Record<string, string> = {};
     for (const header of input.headers || []) {
