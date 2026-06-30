@@ -380,6 +380,11 @@
     @apply text-xs text-zinc-400;
   }
 
+  /* Shared style for the description column in list/table views. */
+  .table-description {
+    @apply text-xs font-light text-muted-foreground;
+  }
+
   .form-content {
     @apply space-y-5;
   }

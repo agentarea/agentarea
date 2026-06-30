@@ -1,7 +1,9 @@
 "use client";
 
 import React, {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -17,14 +19,14 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
-  LayoutGrid,
+  Compass,
   Loader2,
   Plug,
   Puzzle,
-  Rows3,
   Search,
   ShieldCheck,
   Star,
+  Telescope,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,10 +45,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { HoverLink } from "@/components/ui/hover-link";
+import HeaderTabs from "@/components/HeaderTabs";
+import EmptyState from "@/components/EmptyState";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
+import { getCookie, setCookie } from "@/utils/cookies";
 import {
   ALL,
+  EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
   PAGE,
   TYPE_KEYS,
@@ -77,7 +85,7 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
 
 const VIEW_KEYS = ["grid", "table"] as const;
 
-type ViewMode = (typeof VIEW_KEYS)[number];
+export type ViewMode = (typeof VIEW_KEYS)[number];
 
 // ── Data (client-side, for infinite-scroll "load more" only) ──
 // The first page is server-rendered (see explore/page.tsx); these helpers only
@@ -107,6 +115,132 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
   mcp_servers: Plug,
 };
 
+// ── Shared "type switch in flight" signal ──
+// The type tabs live in the ContentBlock subheader while the gallery lives in
+// the content area, so the transition that wraps the SSR round-trip is owned
+// here and consumed by both: the tabs trigger it, the gallery skeletons its
+// content on `isPending` for the whole round-trip. This keeps the persistent
+// chrome mounted and — crucially — avoids any flash of the previous type's data
+// mid-switch (React holds the old tree during a transition, so a type-vs-seed
+// comparison would briefly read stale; `isPending` doesn't).
+type ExplorePending = {
+  isPending: boolean;
+  startTransition: React.TransitionStartFunction;
+};
+const ExplorePendingContext = createContext<ExplorePending | null>(null);
+
+export function ExplorePendingProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [isPending, startTransition] = useTransition();
+  return (
+    <ExplorePendingContext.Provider value={{ isPending, startTransition }}>
+      {children}
+    </ExplorePendingContext.Provider>
+  );
+}
+
+function useExplorePending() {
+  return useContext(ExplorePendingContext);
+}
+
+// ── Type switcher (lives in the ContentBlock subheader) ──
+// Lifted out of the gallery into the standard bordered subheader band — same
+// pattern as the agents / connections pages — so it no longer sits inside the
+// scrollable, padded content area. Shares the `type` URL state with the gallery
+// below (same nuqs key), so selecting a tab drives both in lock-step.
+export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
+  // shallow:false re-runs the explore Server Component. The transition is owned
+  // by ExplorePendingProvider (shared with the gallery) so its `isPending`
+  // drives the gallery's content skeleton for the whole round-trip.
+  const pending = useExplorePending();
+  const [type, setType] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
+      shallow: false,
+      startTransition: pending?.startTransition,
+    })
+  );
+  const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
+  const [, setItemId] = useQueryState("item", parseAsString);
+
+  return (
+    <CountSegmentedControl
+      items={TYPES.map((t) => {
+        const Icon = t.icon;
+        return {
+          value: t.key,
+          label: (
+            <span className="flex items-center gap-1.5">
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </span>
+          ),
+        };
+      })}
+      value={type}
+      onChange={(next) => {
+        void setType(next);
+        void setCategory(ALL);
+        void setItemId(null);
+      }}
+      variant="solid"
+      layoutId="catalog-type-control"
+    />
+  );
+}
+
+// Grid/table switcher for the subheader (right side, paired with the type
+// tabs). Reuses the shared HeaderTabs control — same look as agents/connections.
+// Hidden while a detail item is open (?item=), where there's nothing to switch.
+export function ExploreViewToggle({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
+  const [view, setView] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
+  );
+  const [itemId] = useQueryState("item", parseAsString);
+
+  // Restore the persisted view when landing on /explore without an explicit
+  // ?view param (e.g. via the sidebar link). The server seeds `initialView`
+  // from the same cookie to avoid a flash, but client-side restoration is the
+  // authoritative path: a cached RSC or auth-gated SSR can serve a stale
+  // default, so on mount we reconcile against the freshly-read cookie and write
+  // the param if the saved choice differs from what's shown.
+  useEffect(() => {
+    const hasParam = new URLSearchParams(window.location.search).has("view");
+    if (hasParam) return;
+    const saved = getCookie(EXPLORE_VIEW_COOKIE);
+    if ((saved === "table" || saved === "grid") && saved !== view) {
+      void setView(saved);
+    }
+    // Run once on mount — restoring the persisted choice for this visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (itemId) return null;
+
+  return (
+    <HeaderTabs
+      tabs={[
+        { value: "table", label: "Table view" },
+        { value: "grid", label: "Grid view" },
+      ]}
+      value={view}
+      onChange={(v) => {
+        // Persist so the choice survives leaving and returning to /explore.
+        setCookie(EXPLORE_VIEW_COOKIE, v);
+        void setView(v as ViewMode);
+      }}
+    />
+  );
+}
+
 // ── Component ──
 
 type CatalogGalleryProps = {
@@ -114,6 +248,8 @@ type CatalogGalleryProps = {
   initialEntries: CatalogEntry[];
   initialHasMore: boolean;
   initialError?: string | null;
+  /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
+  initialView?: ViewMode;
 };
 
 export default function CatalogGallery({
@@ -121,6 +257,7 @@ export default function CatalogGallery({
   initialEntries,
   initialHasMore,
   initialError = null,
+  initialView = "grid",
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   // `type` uses shallow:false so switching tabs re-runs the Server Component
@@ -128,19 +265,20 @@ export default function CatalogGallery({
   // view starts from fresh SSR data, with no client fetch on mount and no
   // stale-response race across types.
   //
-  // The round-trip runs inside a transition: `isPending` lets us skeleton ONLY
-  // the content/facets while the persistent chrome (type tabs, search, view
-  // toggle, "Category" label) stays mounted. This component is NOT remounted on
-  // type change (no `key`) — instead an effect below re-seeds state from the new
-  // SSR props, so the chrome never flashes.
-  const [isPending, startTransition] = useTransition();
-  const [type, setType] = useQueryState(
+  // `type` is read-only here — the switcher lives in the subheader
+  // (ExploreTypeTabs) and drives this same nuqs key. The component is NOT
+  // remounted on type change (no `key`); the effect below re-seeds state from
+  // the new SSR props, and `busy` skeletons the content while the switch is in
+  // flight, so the persistent chrome never flashes.
+  const [type] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
-      startTransition,
     })
   );
+  // Shared transition state (the subheader tabs own the setter) — drives the
+  // content skeleton while a type switch is in flight.
+  const explorePending = useExplorePending();
   // Seeded from the server-rendered first page (no initial client fetch / flash).
   const [entries, setEntries] = useState<CatalogEntry[]>(initialEntries);
   const [offset, setOffset] = useState(initialEntries.length);
@@ -151,17 +289,25 @@ export default function CatalogGallery({
 
   const [query, setQuery] = useQueryState("q", parseAsString.withDefault(""));
   const [category, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
-  const [view, setView] = useQueryState(
+  // `view` is read-only here — the grid/table toggle lives in the subheader
+  // (ExploreViewToggle) and drives this same nuqs key. Default is seeded from
+  // the persisted cookie (via props) so it matches the toggle when there's no
+  // URL param yet.
+  const [view] = useQueryState(
     "view",
-    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
   const [itemId, setItemId] = useQueryState("item", parseAsString);
+  // Deep-link fallback for ?item= that points outside the loaded page(s).
+  const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
+  const [deepError, setDeepError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Re-seed from fresh SSR data when the type's server round-trip lands. Because
   // the component is no longer remounted on type change, this is what swaps in
-  // the new type's first page — while `isPending` skeletons the content. The
-  // ref guards the initial mount (already seeded via useState initializers).
+  // the new type's first page when the transition commits. The ref guards the
+  // initial mount (already seeded via the useState initializers above).
   const seededType = useRef(initialType);
   useEffect(() => {
     if (seededType.current === initialType) return;
@@ -235,79 +381,110 @@ export default function CatalogGallery({
     return () => io.disconnect();
   }, [hasMore, more, loading, type, offset, load]);
 
-  // Selected item (from ?item=) resolved against what's loaded. When set, the
-  // main column shows the detail in place — tabs + facets stay, so it feels
-  // like browsing a marketplace rather than a full-page takeover.
-  const active = itemId ? (entries.find((e) => e.id === itemId) ?? null) : null;
+  // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
+  // page(s) (e.g. a shared link to something deep in the catalog), fetch that
+  // one item by id so the detail still opens instead of silently falling back
+  // to the grid.
+  useEffect(() => {
+    if (!itemId) {
+      setDeepItem(null);
+      setDeepError(null);
+      setDeepLoading(false);
+      return;
+    }
+    if (entries.some((e) => e.id === itemId)) return; // already in the list
+    if (deepItem?.id === itemId) return; // already fetched
+    let alive = true;
+    setDeepLoading(true);
+    setDeepError(null);
+    getJSON<RegistryItem>(`v1/registries/catalog/items/${itemId}`)
+      .then((it) => {
+        if (!alive) return;
+        setDeepItem(normalize(type, it));
+        setDeepLoading(false);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setDeepError(e instanceof Error ? e.message : "Failed to load");
+        setDeepLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId, entries, type, deepItem?.id]);
 
-  // "Busy" = first-page client load OR an in-flight type switch (SSR round-trip).
+  // Selected item (from ?item=) — resolved against the loaded page first, then
+  // the deep-link fallback. When set, the main column shows the detail in place
+  // — tabs + facets stay, so it feels like browsing a marketplace rather than a
+  // full-page takeover.
+  const active =
+    (itemId ? (entries.find((e) => e.id === itemId) ?? null) : null) ??
+    (deepItem?.id === itemId ? deepItem : null);
+  // Drives the empty-state copy + "Clear filters" affordance.
+  const hasFilters = query.trim() !== "" || category !== ALL;
+
+  // "Busy" = first-page client load OR an in-flight type switch (the shared
+  // transition from ExplorePendingProvider, triggered by the subheader tabs).
   // Either way we skeleton the content/facets but keep the chrome mounted.
-  const busy = loading || isPending;
+  const busy = loading || (explorePending?.isPending ?? false);
 
   return (
-    <div className="space-y-4">
-      {/* Type tabs — the primary axis */}
-      <div className="flex flex-wrap gap-2 border-b border-border/60 pb-3">
-        {TYPES.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.key}
-              onClick={() => {
-                void setType(t.key);
-                void setCategory(ALL);
-                void setItemId(null);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                type === t.key
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex gap-6">
-        {/* Facet sidebar — always reserved (fixed width) so the layout doesn't
-            shift when categories arrive. Shows a skeleton while loading. */}
-        <aside className="hidden w-52 shrink-0 lg:block">
-          {busy ? (
-            <FacetSkeleton />
-          ) : categories.length > 0 ? (
-            <FacetGroup
-              label="Category"
-              options={categories}
-              selected={category}
-              onSelect={(v) => {
-                void setCategory(v);
-                void setItemId(null);
-              }}
-            />
-          ) : null}
-        </aside>
+    <div className="flex gap-6">
+        {/* Facet sidebar — reserved (fixed width) while busy or when the type
+            has categories, so the layout doesn't shift as they arrive. Omitted
+            entirely for category-less types so the grid isn't left with an empty
+            left gutter. */}
+        {(busy || categories.length > 0) && (
+          <aside className="hidden w-52 shrink-0 lg:block">
+            {busy ? (
+              <FacetSkeleton />
+            ) : (
+              <FacetGroup
+                label="Category"
+                options={categories}
+                selected={category}
+                onSelect={(v) => {
+                  void setCategory(v);
+                  void setItemId(null);
+                }}
+              />
+            )}
+          </aside>
+        )}
 
         {/* Main */}
         <div className="min-w-0 flex-1 space-y-4">
           {active ? (
             <DetailView entry={active} onBack={() => void setItemId(null)} />
+          ) : itemId ? (
+            <DeepItemStatus onBack={() => void setItemId(null)}>
+              {deepLoading ? (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading…
+                </span>
+              ) : (
+                <EmptyState
+                  title="Item not found"
+                  description={
+                    deepError ??
+                    "This item may have been removed or isn't available."
+                  }
+                  iconsType="404"
+                />
+              )}
+            </DeepItemStatus>
           ) : (
           <>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => void setQuery(e.target.value)}
-                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
-                className="pl-9"
-              />
-            </div>
-            <ViewToggle view={view} onChange={(v) => void setView(v)} />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => void setQuery(e.target.value)}
+              placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+              aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
+              className="pl-9"
+            />
           </div>
 
           {error && (
@@ -318,13 +495,32 @@ export default function CatalogGallery({
           )}
           {busy && <ContentSkeleton view={view} />}
           {!busy && filtered.length === 0 && !error && (
-            <EmptyState title="Nothing here" detail="Try another type, clear filters, or search." />
+            <EmptyState
+              title={hasFilters ? "No matches" : "Nothing here"}
+              description={
+                hasFilters
+                  ? "Nothing matches your search and filters."
+                  : "Nothing to show for this type yet."
+              }
+              icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+              action={
+                hasFilters
+                  ? {
+                      label: "Clear filters",
+                      onClick: () => {
+                        void setQuery("");
+                        void setCategory(ALL);
+                      },
+                    }
+                  : undefined
+              }
+            />
           )}
 
           {!busy && filtered.length > 0 && (
             <>
               {view === "grid" ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filtered.map((e) => (
                     <CatalogCard key={e.id} entry={e} onOpen={() => void setItemId(e.id)} />
                   ))}
@@ -352,41 +548,6 @@ export default function CatalogGallery({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── View toggle (grid / table) ──
-
-function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
-  const opts: { key: ViewMode; icon: LucideIcon; label: string }[] = [
-    { key: "grid", icon: LayoutGrid, label: "Grid view" },
-    { key: "table", icon: Rows3, label: "Table view" },
-  ];
-  return (
-    <div className="flex shrink-0 rounded-md border border-border/60 p-0.5">
-      {opts.map((o) => {
-        const Icon = o.icon;
-        return (
-          <button
-            key={o.key}
-            type="button"
-            title={o.label}
-            aria-label={o.label}
-            aria-pressed={view === o.key}
-            onClick={() => onChange(o.key)}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded transition-colors",
-              view === o.key
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -420,21 +581,39 @@ function CatalogTable({
                     </span>
                   )}
                 </td>
-                <td className="py-2 pl-2 pr-3 align-middle">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{e.title}</span>
+                {/* Title column is capped (responsive) so a long name
+                    truncates with an ellipsis instead of wrapping to multiple
+                    lines and blowing up the row height. `min-w-0` on the flex
+                    row + the name lets the name shrink; the badges stay
+                    `shrink-0` so they're never clipped. */}
+                <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 truncate font-medium">{e.title}</span>
                     {e.verified && (
                       <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                     )}
                     {e.category && (
-                      <Badge variant="light" size="sm" className="capitalize">
+                      <Badge
+                        variant="light"
+                        size="sm"
+                        className="shrink-0 whitespace-nowrap capitalize"
+                      >
                         {e.category}
                       </Badge>
                     )}
                   </div>
                 </td>
-                <td className="hidden max-w-0 truncate py-2 pr-4 text-xs text-muted-foreground md:table-cell">
-                  {e.description}
+                {/* Description absorbs the remaining row width and truncates
+                    with an ellipsis. `w-full` grabs the leftover space (pinning
+                    the title column to its content, no dead gap); `max-w-0` is
+                    what makes truncation actually work — without it auto table
+                    layout grows the column to fit the nowrap text and it spills
+                    past the edge with no ellipsis. Together they give the inner
+                    block a definite width to clip against. Hidden below md. */}
+                <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                  <div className="table-description truncate">
+                    {e.description}
+                  </div>
                 </td>
               </tr>
             );
@@ -555,7 +734,7 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
       onClick={onOpen}
       className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-shadow hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900"
     >
-      <div className="relative flex h-24 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         {entry.verified ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
@@ -588,14 +767,12 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             <TypeIcon className="h-4 w-4 text-zinc-400" />
           </span>
         )}
-        <span className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <Badge variant="default" size="sm">
-            View
-          </Badge>
+        <span className="absolute right-2 top-2">
+          <HoverLink text="View" />
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold">{entry.title}</span>
           {entry.category && (
@@ -604,10 +781,14 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             </Badge>
           )}
         </div>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{entry.description}</p>
+        <p className="table-description line-clamp-2">{entry.description}</p>
         {entry.meta.length > 0 && (
-          <div className="mt-auto truncate pt-2 text-[11px] text-muted-foreground">
-            {entry.meta.join(" · ")}
+          <div className="mt-auto flex flex-wrap gap-1 pt-1.5">
+            {entry.meta.map((m) => (
+              <Badge key={m} variant="secondary" size="sm" className="font-normal">
+                {m}
+              </Badge>
+            ))}
           </div>
         )}
       </div>
@@ -1147,25 +1328,75 @@ function SkillFacts({ entry }: { entry: CatalogEntry }) {
 function ContentSkeleton({ view }: { view: ViewMode }) {
   if (view === "table") return <CatalogTableSkeleton />;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, i) => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      {Array.from({ length: 10 }).map((_, i) => (
         <CatalogCardSkeleton key={i} />
       ))}
     </div>
   );
 }
 
-// Mirrors CatalogCard: h-24 logo header + padded title/description body.
+// Route-level skeleton for explore/loading.tsx. Mirrors the in-component `busy`
+// layout (facet rail + search + content grid) so a hard refresh — where the SSR
+// page is still awaiting its first fetch and React hasn't mounted the gallery
+// yet — shows the same chrome-preserving skeleton instead of the generic
+// full-screen spinner. Reads `type`/`view` from the URL so it matches the
+// destination view exactly.
+export function CatalogGallerySkeleton({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
+  const [type] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
+  );
+  // Match the view the page will actually restore (URL param > persisted cookie
+  // > server-seeded default), read on the client via a lazy initializer. The
+  // server seed alone is unreliable (a cached RSC / auth-gated SSR can serve a
+  // stale default), which made the skeleton flash card placeholders while a
+  // table view was loading. Reading the cookie here keeps the skeleton shape in
+  // sync without a flash or a hydration mismatch (server + client agree on a
+  // fresh load).
+  const [view] = useState<ViewMode>(() => {
+    if (typeof document === "undefined") return initialView;
+    const fromUrl = new URLSearchParams(window.location.search).get("view");
+    const saved = fromUrl ?? getCookie(EXPLORE_VIEW_COOKIE);
+    return saved === "table" || saved === "grid" ? saved : initialView;
+  });
+  const label = TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? "";
+  return (
+    <div className="flex gap-6">
+      <aside className="hidden w-52 shrink-0 lg:block">
+        <FacetSkeleton />
+      </aside>
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            disabled
+            placeholder={`Search ${label}…`}
+            aria-hidden
+            className="pl-9"
+          />
+        </div>
+        <ContentSkeleton view={view} />
+      </div>
+    </div>
+  );
+}
+
+// Mirrors CatalogCard: h-20 logo header + padded title/description body.
 function CatalogCardSkeleton() {
   return (
     <div
       className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
       aria-hidden="true"
     >
-      <div className="flex h-24 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="flex h-20 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
         <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
         <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
@@ -1188,7 +1419,7 @@ function CatalogTableSkeleton() {
               <td className="py-2 pl-2 pr-3">
                 <div className="h-4 w-40 animate-pulse rounded bg-muted" />
               </td>
-              <td className="hidden py-2 pr-4 md:table-cell">
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
                 <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
               </td>
             </tr>
@@ -1199,11 +1430,25 @@ function CatalogTableSkeleton() {
   );
 }
 
-function EmptyState({ title, detail }: { title: string; detail: string }) {
+// Back-button shell for the deep-link states (loading / not-found), so an
+// ?item= link that isn't in the loaded page still shows chrome to return.
+function DeepItemStatus({
+  onBack,
+  children,
+}: {
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-dashed border-border/60 px-6 py-12 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+    <div className="space-y-6">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to catalog
+      </button>
+      {children}
     </div>
   );
 }
