@@ -1,7 +1,9 @@
 "use client";
 
 import React, {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -110,21 +112,52 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
   mcp_servers: Plug,
 };
 
+// ── Shared "type switch in flight" signal ──
+// The type tabs live in the ContentBlock subheader while the gallery lives in
+// the content area, so the transition that wraps the SSR round-trip is owned
+// here and consumed by both: the tabs trigger it, the gallery skeletons its
+// content on `isPending` for the whole round-trip. This keeps the persistent
+// chrome mounted and — crucially — avoids any flash of the previous type's data
+// mid-switch (React holds the old tree during a transition, so a type-vs-seed
+// comparison would briefly read stale; `isPending` doesn't).
+type ExplorePending = {
+  isPending: boolean;
+  startTransition: React.TransitionStartFunction;
+};
+const ExplorePendingContext = createContext<ExplorePending | null>(null);
+
+export function ExplorePendingProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [isPending, startTransition] = useTransition();
+  return (
+    <ExplorePendingContext.Provider value={{ isPending, startTransition }}>
+      {children}
+    </ExplorePendingContext.Provider>
+  );
+}
+
+function useExplorePending() {
+  return useContext(ExplorePendingContext);
+}
+
 // ── Type switcher (lives in the ContentBlock subheader) ──
 // Lifted out of the gallery into the standard bordered subheader band — same
 // pattern as the agents / connections pages — so it no longer sits inside the
 // scrollable, padded content area. Shares the `type` URL state with the gallery
 // below (same nuqs key), so selecting a tab drives both in lock-step.
 export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
-  // shallow:false re-runs the explore Server Component; wrap it in a transition
-  // so the switch is non-blocking (no Suspense blank) — the gallery skeletons
-  // its content via `busy` while the new SSR page streams in.
-  const [, startTransition] = useTransition();
+  // shallow:false re-runs the explore Server Component. The transition is owned
+  // by ExplorePendingProvider (shared with the gallery) so its `isPending`
+  // drives the gallery's content skeleton for the whole round-trip.
+  const pending = useExplorePending();
   const [type, setType] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
-      startTransition,
+      startTransition: pending?.startTransition,
     })
   );
   const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
@@ -211,6 +244,9 @@ export default function CatalogGallery({
       shallow: false,
     })
   );
+  // Shared transition state (the subheader tabs own the setter) — drives the
+  // content skeleton while a type switch is in flight.
+  const explorePending = useExplorePending();
   // Seeded from the server-rendered first page (no initial client fetch / flash).
   const [entries, setEntries] = useState<CatalogEntry[]>(initialEntries);
   const [offset, setOffset] = useState(initialEntries.length);
@@ -236,19 +272,17 @@ export default function CatalogGallery({
 
   // Re-seed from fresh SSR data when the type's server round-trip lands. Because
   // the component is no longer remounted on type change, this is what swaps in
-  // the new type's first page — and flipping `seededType` back to the live type
-  // is what clears `busy` (which skeletons the content meanwhile). Tracked in
-  // state (not a ref) so the comparison below is render-safe; the guard skips
-  // the initial mount, already seeded via the useState initializers above.
-  const [seededType, setSeededType] = useState(initialType);
+  // the new type's first page when the transition commits. The ref guards the
+  // initial mount (already seeded via the useState initializers above).
+  const seededType = useRef(initialType);
   useEffect(() => {
-    if (seededType === initialType) return;
-    setSeededType(initialType);
+    if (seededType.current === initialType) return;
+    seededType.current = initialType;
     setEntries(initialEntries);
     setOffset(initialEntries.length);
     setHasMore(initialHasMore);
     setError(initialError);
-  }, [initialType, initialEntries, initialHasMore, initialError, seededType]);
+  }, [initialType, initialEntries, initialHasMore, initialError]);
 
   const load = useCallback(
     async (t: CatalogType, off: number, append: boolean) => {
@@ -355,12 +389,10 @@ export default function CatalogGallery({
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters = query.trim() !== "" || category !== ALL;
 
-  // "Busy" = first-page client load OR an in-flight type switch. The switch is
-  // detected by comparing the live URL `type` (updated optimistically by the
-  // subheader tabs) against the type whose SSR data is currently seeded — while
-  // they differ the new first page hasn't landed yet. Either way we skeleton the
-  // content/facets but keep the persistent chrome mounted.
-  const busy = loading || type !== seededType;
+  // "Busy" = first-page client load OR an in-flight type switch (the shared
+  // transition from ExplorePendingProvider, triggered by the subheader tabs).
+  // Either way we skeleton the content/facets but keep the chrome mounted.
+  const busy = loading || (explorePending?.isPending ?? false);
 
   return (
     <div className="flex gap-6">
