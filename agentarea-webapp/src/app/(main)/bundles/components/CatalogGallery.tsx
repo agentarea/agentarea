@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/popover";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { HoverLink } from "@/components/ui/hover-link";
 import HeaderTabs from "@/components/HeaderTabs";
 import EmptyState from "@/components/EmptyState";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
@@ -519,7 +520,7 @@ export default function CatalogGallery({
           {!busy && filtered.length > 0 && (
             <>
               {view === "grid" ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filtered.map((e) => (
                     <CatalogCard key={e.id} entry={e} onOpen={() => void setItemId(e.id)} />
                   ))}
@@ -733,7 +734,7 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
       onClick={onOpen}
       className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white text-left transition-shadow hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900"
     >
-      <div className="relative flex h-24 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="relative flex h-20 items-center justify-center gap-1.5 border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         {entry.verified ? (
           <span className="absolute left-2 top-2">
             <Badge variant="blue" size="sm" className="gap-1">
@@ -766,14 +767,12 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             <TypeIcon className="h-4 w-4 text-zinc-400" />
           </span>
         )}
-        <span className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <Badge variant="default" size="sm">
-            View
-          </Badge>
+        <span className="absolute right-2 top-2">
+          <HoverLink text="View" />
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold">{entry.title}</span>
           {entry.category && (
@@ -782,10 +781,14 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             </Badge>
           )}
         </div>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{entry.description}</p>
+        <p className="table-description line-clamp-2">{entry.description}</p>
         {entry.meta.length > 0 && (
-          <div className="mt-auto truncate pt-2 text-[11px] text-muted-foreground">
-            {entry.meta.join(" · ")}
+          <div className="mt-auto flex flex-wrap gap-1 pt-1.5">
+            {entry.meta.map((m) => (
+              <Badge key={m} variant="secondary" size="sm" className="font-normal">
+                {m}
+              </Badge>
+            ))}
           </div>
         )}
       </div>
@@ -1325,8 +1328,8 @@ function SkillFacts({ entry }: { entry: CatalogEntry }) {
 function ContentSkeleton({ view }: { view: ViewMode }) {
   if (view === "table") return <CatalogTableSkeleton />;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, i) => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      {Array.from({ length: 10 }).map((_, i) => (
         <CatalogCardSkeleton key={i} />
       ))}
     </div>
@@ -1383,17 +1386,17 @@ export function CatalogGallerySkeleton({
   );
 }
 
-// Mirrors CatalogCard: h-24 logo header + padded title/description body.
+// Mirrors CatalogCard: h-20 logo header + padded title/description body.
 function CatalogCardSkeleton() {
   return (
     <div
       className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
       aria-hidden="true"
     >
-      <div className="flex h-24 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+      <div className="flex h-20 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
         <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
         <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
         <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
