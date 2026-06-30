@@ -1282,6 +1282,43 @@ function ContentSkeleton({ view }: { view: ViewMode }) {
   );
 }
 
+// Route-level skeleton for explore/loading.tsx. Mirrors the in-component `busy`
+// layout (facet rail + search + content grid) so a hard refresh — where the SSR
+// page is still awaiting its first fetch and React hasn't mounted the gallery
+// yet — shows the same chrome-preserving skeleton instead of the generic
+// full-screen spinner. Reads `type`/`view` from the URL so it matches the
+// destination view exactly.
+export function CatalogGallerySkeleton() {
+  const [type] = useQueryState(
+    "type",
+    parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
+  );
+  const [view] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
+  );
+  const label = TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? "";
+  return (
+    <div className="flex gap-6">
+      <aside className="hidden w-52 shrink-0 lg:block">
+        <FacetSkeleton />
+      </aside>
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            disabled
+            placeholder={`Search ${label}…`}
+            aria-hidden
+            className="pl-9"
+          />
+        </div>
+        <ContentSkeleton view={view} />
+      </div>
+    </div>
+  );
+}
+
 // Mirrors CatalogCard: h-24 logo header + padded title/description body.
 function CatalogCardSkeleton() {
   return (
