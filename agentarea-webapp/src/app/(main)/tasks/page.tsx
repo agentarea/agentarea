@@ -3,10 +3,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { TasksData } from "./components/TasksData";
 import TasksHeaderTabs from "./components/TasksHeaderTabs";
+import TasksSkeleton from "./components/TasksSkeleton";
 
 export const metadata: Metadata = {
   title: "Tasks",
@@ -32,6 +32,14 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       ? resolvedSearchParams.tab
       : cookieTab || "grid";
 
+  const skeletonColumns = [
+    { header: t("description"), barClassName: "h-4 w-48" },
+    { header: t("agent"), barClassName: "h-4 w-28" },
+    { header: t("statusLabel"), barClassName: "h-5 w-20 rounded-full" },
+    { header: t("cost"), barClassName: "h-4 w-12" },
+    { header: t("created"), barClassName: "h-8 w-24" },
+  ];
+
   return (
     <ContentBlock
       header={{
@@ -46,11 +54,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     >
       <Suspense
         key={`${searchQuery}-${tab}`}
-        fallback={
-          <div className="flex h-32 items-center justify-center">
-            <LoadingSpinner />
-          </div>
-        }
+        fallback={<TasksSkeleton viewMode={tab} columns={skeletonColumns} />}
       >
         <TasksData searchQuery={searchQuery} viewMode={tab} />
       </Suspense>

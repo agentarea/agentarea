@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -109,10 +116,15 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
 // scrollable, padded content area. Shares the `type` URL state with the gallery
 // below (same nuqs key), so selecting a tab drives both in lock-step.
 export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
+  // shallow:false re-runs the explore Server Component; wrap it in a transition
+  // so the switch is non-blocking (no Suspense blank) — the gallery skeletons
+  // its content via `busy` while the new SSR page streams in.
+  const [, startTransition] = useTransition();
   const [type, setType] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
+      startTransition,
     })
   );
   const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
@@ -184,11 +196,15 @@ export default function CatalogGallery({
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   // `type` uses shallow:false so switching tabs re-runs the Server Component
-  // (explore/page.tsx) and re-fetches the first page server-side. Combined with
-  // `key={type}` on this component, every type view starts from fresh SSR data —
-  // there is no client fetch on mount and no stale-response race across types.
+  // (explore/page.tsx) and re-fetches the first page server-side — every type
+  // view starts from fresh SSR data, with no client fetch on mount and no
+  // stale-response race across types.
+  //
   // `type` is read-only here — the switcher lives in the subheader
-  // (ExploreTypeTabs) and drives this same nuqs key.
+  // (ExploreTypeTabs) and drives this same nuqs key. The component is NOT
+  // remounted on type change (no `key`); the effect below re-seeds state from
+  // the new SSR props, and `busy` skeletons the content while the switch is in
+  // flight, so the persistent chrome never flashes.
   const [type] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
@@ -217,6 +233,22 @@ export default function CatalogGallery({
   const [deepLoading, setDeepLoading] = useState(false);
   const [deepError, setDeepError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Re-seed from fresh SSR data when the type's server round-trip lands. Because
+  // the component is no longer remounted on type change, this is what swaps in
+  // the new type's first page — and flipping `seededType` back to the live type
+  // is what clears `busy` (which skeletons the content meanwhile). Tracked in
+  // state (not a ref) so the comparison below is render-safe; the guard skips
+  // the initial mount, already seeded via the useState initializers above.
+  const [seededType, setSeededType] = useState(initialType);
+  useEffect(() => {
+    if (seededType === initialType) return;
+    setSeededType(initialType);
+    setEntries(initialEntries);
+    setOffset(initialEntries.length);
+    setHasMore(initialHasMore);
+    setError(initialError);
+  }, [initialType, initialEntries, initialHasMore, initialError, seededType]);
 
   const load = useCallback(
     async (t: CatalogType, off: number, append: boolean) => {
@@ -323,15 +355,22 @@ export default function CatalogGallery({
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters = query.trim() !== "" || category !== ALL;
 
+  // "Busy" = first-page client load OR an in-flight type switch. The switch is
+  // detected by comparing the live URL `type` (updated optimistically by the
+  // subheader tabs) against the type whose SSR data is currently seeded — while
+  // they differ the new first page hasn't landed yet. Either way we skeleton the
+  // content/facets but keep the persistent chrome mounted.
+  const busy = loading || type !== seededType;
+
   return (
     <div className="flex gap-6">
-        {/* Facet sidebar — reserved (fixed width) while loading or when the type
+        {/* Facet sidebar — reserved (fixed width) while busy or when the type
             has categories, so the layout doesn't shift as they arrive. Omitted
             entirely for category-less types so the grid isn't left with an empty
             left gutter. */}
-        {(loading || categories.length > 0) && (
+        {(busy || categories.length > 0) && (
           <aside className="hidden w-52 shrink-0 lg:block">
-            {loading ? (
+            {busy ? (
               <FacetSkeleton />
             ) : (
               <FacetGroup
@@ -388,8 +427,8 @@ export default function CatalogGallery({
               {error}
             </div>
           )}
-          {loading && <GridSkeleton />}
-          {!loading && filtered.length === 0 && !error && (
+          {busy && <ContentSkeleton view={view} />}
+          {!busy && filtered.length === 0 && !error && (
             <EmptyState
               title={hasFilters ? "No matches" : "Nothing here"}
               description={
@@ -412,7 +451,7 @@ export default function CatalogGallery({
             />
           )}
 
-          {!loading && filtered.length > 0 && (
+          {!busy && filtered.length > 0 && (
             <>
               {view === "grid" ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -1198,12 +1237,59 @@ function SkillFacts({ entry }: { entry: CatalogEntry }) {
 
 // ── Misc ──
 
-function GridSkeleton() {
+// Content placeholder that matches the selected view — grid of card-shaped
+// skeletons or table rows — so switching type never shifts the layout.
+function ContentSkeleton({ view }: { view: ViewMode }) {
+  if (view === "table") return <CatalogTableSkeleton />;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-48 animate-pulse rounded-lg border border-border/60 bg-muted/40" />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <CatalogCardSkeleton key={i} />
       ))}
+    </div>
+  );
+}
+
+// Mirrors CatalogCard: h-24 logo header + padded title/description body.
+function CatalogCardSkeleton() {
+  return (
+    <div
+      className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900"
+      aria-hidden="true"
+    >
+      <div className="flex h-24 items-center justify-center border-b border-border/40 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] [background-size:12px_12px] dark:bg-[radial-gradient(circle,theme(colors.zinc.800)_1px,transparent_1px)]">
+        <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
+        <div className="h-3 w-2/3 animate-pulse rounded bg-muted/60" />
+      </div>
+    </div>
+  );
+}
+
+// Mirrors CatalogTable rows: icon + title + (md) description.
+function CatalogTableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60" aria-hidden="true">
+      <table className="w-full text-sm">
+        <tbody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="border-b border-border/40 last:border-0">
+              <td className="w-10 py-2 pl-3 pr-0">
+                <div className="h-6 w-6 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="py-2 pl-2 pr-3">
+                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+              </td>
+              <td className="hidden py-2 pr-4 md:table-cell">
+                <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

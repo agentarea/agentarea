@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
 import {
@@ -90,8 +90,22 @@ export default function ProjectFilesPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner />
+      <div className="flex h-[calc(100vh-8rem)] flex-col" aria-hidden="true">
+        <div className="flex items-center justify-between border-b px-4 py-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-7 w-28 rounded-md" />
+        </div>
+        <div className="flex-1 space-y-2 p-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton className="h-4 w-4 rounded-sm" />
+              <Skeleton
+                className="h-4"
+                style={{ width: `${40 + ((i * 11) % 40)}%` }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

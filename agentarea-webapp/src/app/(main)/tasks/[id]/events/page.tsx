@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import type { DisplayEvent, EventLevel } from "@/types/events";
 import { useTaskContext } from "../TaskContext";
@@ -111,8 +111,17 @@ export default function TaskEventsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner />
+      <div className="main-content space-y-2 p-4" aria-hidden="true">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3 border-b border-zinc-100 py-2.5 dark:border-zinc-800"
+          >
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        ))}
       </div>
     );
   }

@@ -18,6 +18,7 @@ import { Streamdown } from "streamdown";
 import ContentBlock from "@/components/ContentBlock";
 import DeleteButton from "@/components/DeleteButton";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { DetailSkeleton } from "@/components/Skeleton";
 import SkillPanel from "@/components/SkillPanel/SkillPanel";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
@@ -350,9 +351,7 @@ export default function SkillDetailPage() {
           ],
         }}
       >
-        <div className="flex h-64 items-center justify-center">
-          <LoadingSpinner />
-        </div>
+        <DetailSkeleton />
       </ContentBlock>
     );
   }

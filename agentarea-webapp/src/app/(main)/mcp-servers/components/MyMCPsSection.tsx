@@ -8,6 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import {
   getMcpHealthStatusPresentation,
   getOpenApiConnectionDisplayStatus,
@@ -372,7 +373,7 @@ export function MyMCPsSection({
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={CARD_GRID_DENSE}>
       {mcpInstances.map((instance) => {
         const serverSpec = mcpServers.find(
           (server) => server.id === instance.server_spec_id

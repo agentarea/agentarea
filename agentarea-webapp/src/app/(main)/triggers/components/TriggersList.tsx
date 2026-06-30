@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
+import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import TriggerCard from "./TriggerCard";
 import TriggersTable from "./TriggersTable";
 
@@ -45,7 +46,7 @@ export default function TriggersList({
   return (
     <>
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className={CARD_GRID_DENSE}>
           {triggers.map((trigger) => (
             <TriggerCard key={trigger.id} trigger={trigger} catalog={catalog} />
           ))}

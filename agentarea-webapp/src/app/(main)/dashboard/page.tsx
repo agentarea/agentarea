@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { DashboardData } from "./components/DashboardData";
+import DashboardSkeleton from "./components/DashboardSkeleton";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -16,13 +16,7 @@ export default async function DashboardPage() {
       }}
     >
       <div className="main-content">
-        <Suspense
-          fallback={
-            <div className="flex h-32 items-center justify-center">
-              <LoadingSpinner />
-            </div>
-          }
-        >
+        <Suspense fallback={<DashboardSkeleton />}>
           <DashboardData />
         </Suspense>
       </div>

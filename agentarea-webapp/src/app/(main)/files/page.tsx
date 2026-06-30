@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ContentBlock from "@/components/ContentBlock";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   listWorkspaceFilesAction,
   downloadWorkspaceFileAction,
@@ -45,27 +45,46 @@ export default function WorkspaceFilesPage() {
     return (data as any)?.events ?? [];
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
   return (
     <ContentBlock
       header={{ breadcrumb: [{ label: "Files" }] }}
       className="p-0 overflow-hidden"
     >
-      <FileBrowser
-        files={files}
-        directories={directories}
-        fetchUrl={fetchUrl}
-        fetchHistory={fetchHistory}
-        emptyMessage="No files in this workspace yet."
-        className="h-full"
-      />
+      {loading ? (
+        <FileBrowserSkeleton />
+      ) : (
+        <FileBrowser
+          files={files}
+          directories={directories}
+          fetchUrl={fetchUrl}
+          fetchHistory={fetchHistory}
+          emptyMessage="No files in this workspace yet."
+          className="h-full"
+        />
+      )}
     </ContentBlock>
+  );
+}
+
+// Mirrors FileBrowser's two-panel layout: a file-tree column + an empty editor.
+function FileBrowserSkeleton() {
+  return (
+    <div className="flex h-full" aria-hidden="true">
+      <div className="w-[28%] shrink-0 space-y-1.5 border-r border-border p-3">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2"
+            style={{ paddingLeft: `${(i % 3) * 14}px` }}
+          >
+            <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-sm" />
+            <Skeleton className="h-3.5" style={{ width: `${50 + ((i * 13) % 40)}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="flex-1 p-4">
+        <Skeleton className="h-5 w-48" />
+      </div>
+    </div>
   );
 }
