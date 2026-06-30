@@ -50,8 +50,10 @@ import HeaderTabs from "@/components/HeaderTabs";
 import EmptyState from "@/components/EmptyState";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
+import { getCookie, setCookie } from "@/utils/cookies";
 import {
   ALL,
+  EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
   PAGE,
   TYPE_KEYS,
@@ -82,7 +84,7 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
 
 const VIEW_KEYS = ["grid", "table"] as const;
 
-type ViewMode = (typeof VIEW_KEYS)[number];
+export type ViewMode = (typeof VIEW_KEYS)[number];
 
 // ── Data (client-side, for infinite-scroll "load more" only) ──
 // The first page is server-rendered (see explore/page.tsx); these helpers only
@@ -192,12 +194,34 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
 // Grid/table switcher for the subheader (right side, paired with the type
 // tabs). Reuses the shared HeaderTabs control — same look as agents/connections.
 // Hidden while a detail item is open (?item=), where there's nothing to switch.
-export function ExploreViewToggle() {
+export function ExploreViewToggle({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
   const [view, setView] = useQueryState(
     "view",
-    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
   const [itemId] = useQueryState("item", parseAsString);
+
+  // Restore the persisted view when landing on /explore without an explicit
+  // ?view param (e.g. via the sidebar link). The server seeds `initialView`
+  // from the same cookie to avoid a flash, but client-side restoration is the
+  // authoritative path: a cached RSC or auth-gated SSR can serve a stale
+  // default, so on mount we reconcile against the freshly-read cookie and write
+  // the param if the saved choice differs from what's shown.
+  useEffect(() => {
+    const hasParam = new URLSearchParams(window.location.search).has("view");
+    if (hasParam) return;
+    const saved = getCookie(EXPLORE_VIEW_COOKIE);
+    if ((saved === "table" || saved === "grid") && saved !== view) {
+      void setView(saved);
+    }
+    // Run once on mount — restoring the persisted choice for this visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (itemId) return null;
 
   return (
@@ -207,7 +231,11 @@ export function ExploreViewToggle() {
         { value: "grid", label: "Grid view" },
       ]}
       value={view}
-      onChange={(v) => void setView(v as ViewMode)}
+      onChange={(v) => {
+        // Persist so the choice survives leaving and returning to /explore.
+        setCookie(EXPLORE_VIEW_COOKIE, v);
+        void setView(v as ViewMode);
+      }}
     />
   );
 }
@@ -219,6 +247,8 @@ type CatalogGalleryProps = {
   initialEntries: CatalogEntry[];
   initialHasMore: boolean;
   initialError?: string | null;
+  /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
+  initialView?: ViewMode;
 };
 
 export default function CatalogGallery({
@@ -226,6 +256,7 @@ export default function CatalogGallery({
   initialEntries,
   initialHasMore,
   initialError = null,
+  initialView = "grid",
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
   // `type` uses shallow:false so switching tabs re-runs the Server Component
@@ -258,10 +289,12 @@ export default function CatalogGallery({
   const [query, setQuery] = useQueryState("q", parseAsString.withDefault(""));
   const [category, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
   // `view` is read-only here — the grid/table toggle lives in the subheader
-  // (ExploreViewToggle) and drives this same nuqs key.
+  // (ExploreViewToggle) and drives this same nuqs key. Default is seeded from
+  // the persisted cookie (via props) so it matches the toggle when there's no
+  // URL param yet.
   const [view] = useQueryState(
     "view",
-    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
+    parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
   const [itemId, setItemId] = useQueryState("item", parseAsString);
   // Deep-link fallback for ?item= that points outside the loaded page(s).
@@ -547,21 +580,39 @@ function CatalogTable({
                     </span>
                   )}
                 </td>
-                <td className="py-2 pl-2 pr-3 align-middle">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{e.title}</span>
+                {/* Title column is capped (responsive) so a long name
+                    truncates with an ellipsis instead of wrapping to multiple
+                    lines and blowing up the row height. `min-w-0` on the flex
+                    row + the name lets the name shrink; the badges stay
+                    `shrink-0` so they're never clipped. */}
+                <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 truncate font-medium">{e.title}</span>
                     {e.verified && (
                       <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                     )}
                     {e.category && (
-                      <Badge variant="light" size="sm" className="capitalize">
+                      <Badge
+                        variant="light"
+                        size="sm"
+                        className="shrink-0 whitespace-nowrap capitalize"
+                      >
                         {e.category}
                       </Badge>
                     )}
                   </div>
                 </td>
-                <td className="hidden max-w-0 truncate py-2 pr-4 text-xs text-muted-foreground md:table-cell">
-                  {e.description}
+                {/* Description absorbs the remaining row width and truncates
+                    with an ellipsis. `w-full` grabs the leftover space (pinning
+                    the title column to its content, no dead gap); `max-w-0` is
+                    what makes truncation actually work — without it auto table
+                    layout grows the column to fit the nowrap text and it spills
+                    past the edge with no ellipsis. Together they give the inner
+                    block a definite width to clip against. Hidden below md. */}
+                <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                  <div className="table-description truncate">
+                    {e.description}
+                  </div>
                 </td>
               </tr>
             );
@@ -1288,15 +1339,28 @@ function ContentSkeleton({ view }: { view: ViewMode }) {
 // yet — shows the same chrome-preserving skeleton instead of the generic
 // full-screen spinner. Reads `type`/`view` from the URL so it matches the
 // destination view exactly.
-export function CatalogGallerySkeleton() {
+export function CatalogGallerySkeleton({
+  initialView = "grid",
+}: {
+  initialView?: ViewMode;
+}) {
   const [type] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault("bundles")
   );
-  const [view] = useQueryState(
-    "view",
-    parseAsStringLiteral(VIEW_KEYS).withDefault("grid")
-  );
+  // Match the view the page will actually restore (URL param > persisted cookie
+  // > server-seeded default), read on the client via a lazy initializer. The
+  // server seed alone is unreliable (a cached RSC / auth-gated SSR can serve a
+  // stale default), which made the skeleton flash card placeholders while a
+  // table view was loading. Reading the cookie here keeps the skeleton shape in
+  // sync without a flash or a hydration mismatch (server + client agree on a
+  // fresh load).
+  const [view] = useState<ViewMode>(() => {
+    if (typeof document === "undefined") return initialView;
+    const fromUrl = new URLSearchParams(window.location.search).get("view");
+    const saved = fromUrl ?? getCookie(EXPLORE_VIEW_COOKIE);
+    return saved === "table" || saved === "grid" ? saved : initialView;
+  });
   const label = TYPES.find((t) => t.key === type)?.label.toLowerCase() ?? "";
   return (
     <div className="flex gap-6">
@@ -1352,7 +1416,7 @@ function CatalogTableSkeleton() {
               <td className="py-2 pl-2 pr-3">
                 <div className="h-4 w-40 animate-pulse rounded bg-muted" />
               </td>
-              <td className="hidden py-2 pr-4 md:table-cell">
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
                 <div className="h-3 w-64 animate-pulse rounded bg-muted/60" />
               </td>
             </tr>
