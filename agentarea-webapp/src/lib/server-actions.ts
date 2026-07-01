@@ -44,6 +44,7 @@ import {
   getAgentWalletBalance,
   getAgentWalletPayments,
   getAllTasks,
+  getInbox,
   getMCPHealthStatus,
   getMCPServerInstance,
   getModelSpec,
@@ -170,6 +171,15 @@ export async function cancelAgentTaskAction(agentId: string, taskId: string) {
 
 export async function getAllTasksAction() {
   return await getAllTasks();
+}
+
+export async function getInboxAction(params?: {
+  status?: string;
+  agent_id?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return await getInbox(params);
 }
 
 export async function getTaskAction(taskId: string) {

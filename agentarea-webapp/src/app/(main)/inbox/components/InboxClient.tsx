@@ -1,10 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import {
   Sheet,
   SheetContent,
@@ -25,16 +33,41 @@ import {
   type FilterValue,
 } from "@/app/(main)/inbox/components/inboxShared";
 import type { TaskWithAgent } from "@/lib/api";
-import { resolveEscalationAction } from "@/lib/server-actions";
+import { getInboxAction, resolveEscalationAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
 interface InboxClientProps {
-  items: InboxTask[];
+  initialItems: InboxTask[];
+  initialTotal: number;
+  pageSize: number;
   error: string | null;
 }
 
-export function InboxClient({ items, error }: InboxClientProps) {
+export function InboxClient({
+  initialItems,
+  initialTotal,
+  pageSize,
+  error,
+}: InboxClientProps) {
   const router = useRouter();
+  const [items, setItems] = useState<InboxTask[]>(initialItems);
+  const [total, setTotal] = useState(initialTotal);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [reachedEnd, setReachedEnd] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Refs mirror the paging state so loadMore stays referentially stable and the
+  // guard is synchronous. A state-based `loadingMore` guard races: the observer
+  // can fire twice before setState commits, launching duplicate fetches and
+  // thrashing the layout.
+  const pageRef = useRef(1);
+  const loadingRef = useRef(false);
+  const itemsLenRef = useRef(initialItems.length);
+  const totalRef = useRef(initialTotal);
+  const reachedEndRef = useRef(false);
+
+  const hasMore = !reachedEnd && items.length < total;
   const [filter, setFilter] = useQueryState(
     "filter",
     parseAsStringLiteral(FILTER_KEYS).withDefault("all")
@@ -50,10 +83,90 @@ export function InboxClient({ items, error }: InboxClientProps) {
   >({});
   const [, startTransition] = useTransition();
 
+  // A fresh first page arrives after router.refresh() (e.g. resolving an
+  // escalation). Reset the accumulated list and pending UI state to match.
   useEffect(() => {
+    setItems(initialItems);
+    setTotal(initialTotal);
+    setLoadingMore(false);
+    setReachedEnd(false);
     setResolved({});
     setChecked(new Set());
-  }, [items]);
+    pageRef.current = 1;
+    loadingRef.current = false;
+    itemsLenRef.current = initialItems.length;
+    totalRef.current = initialTotal;
+    reachedEndRef.current = false;
+  }, [initialItems, initialTotal]);
+
+  const loadMore = useCallback(async () => {
+    if (
+      loadingRef.current ||
+      reachedEndRef.current ||
+      itemsLenRef.current >= totalRef.current
+    ) {
+      return;
+    }
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const nextPage = pageRef.current + 1;
+      const res = await getInboxAction({
+        page: nextPage,
+        page_size: pageSize,
+      });
+      if (res.error) {
+        // Stop auto-retrying on error, otherwise the visible sentinel keeps
+        // re-triggering into a hot loop.
+        reachedEndRef.current = true;
+        setReachedEnd(true);
+        return;
+      }
+      const data = res.data as any;
+      const newItems = (data?.items ?? []) as InboxTask[];
+      pageRef.current = nextPage;
+      if (typeof data?.total === "number") {
+        totalRef.current = data.total;
+        setTotal(data.total);
+      }
+      setItems((prev) => {
+        const seen = new Set(prev.map((task) => String(task.id)));
+        const merged = [
+          ...prev,
+          ...newItems.filter((task) => !seen.has(String(task.id))),
+        ];
+        // No forward progress (empty page or all duplicates) → stop, or the
+        // sentinel stays visible and we loop forever.
+        if (merged.length === prev.length) {
+          reachedEndRef.current = true;
+          setReachedEnd(true);
+        }
+        itemsLenRef.current = merged.length;
+        return merged;
+      });
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [pageSize]);
+
+  // Re-observe when the list grows so that, if the sentinel is still in view
+  // after a page loads, the next page is fetched — one page per cycle. The
+  // synchronous loadingRef guard prevents overlap; reachedEnd/hasMore terminate.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { root, rootMargin: "200px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, items.length]);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 1023px)");
@@ -277,7 +390,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
               />
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
               <InboxTaskList
                 visible={visible}
                 filter={filter}
@@ -290,6 +403,15 @@ export function InboxClient({ items, error }: InboxClientProps) {
                 onToggleCheck={toggleCheck}
                 onResolve={resolveOne}
               />
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  className="flex justify-center py-4"
+                  aria-hidden={!loadingMore}
+                >
+                  {loadingMore && <LoadingSpinner size="sm" />}
+                </div>
+              )}
             </div>
           </div>
 

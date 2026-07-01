@@ -1,6 +1,8 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import type { TaskWithAgent } from "@/lib/api";
 
+export const INBOX_PAGE_SIZE = 50;
+
 export const FILTER_KEYS = ["all", "pending", "completed", "failed"] as const;
 export type FilterValue = (typeof FILTER_KEYS)[number];
 export type InboxCounts = Record<FilterValue, number>;
