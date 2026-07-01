@@ -143,7 +143,7 @@ export function InboxTaskList({
             }
           >
             <div className="min-w-0 flex-1 pt-0">
-              <p className="truncate text-[13px] font-semibold">
+              <p className="truncate text-[13px] font-[500] mb-1.5">
                 {task.description || "Untitled task"}
               </p>
               <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
