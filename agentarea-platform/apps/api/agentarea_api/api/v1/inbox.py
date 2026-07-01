@@ -32,6 +32,9 @@ class InboxResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    # Per-status totals across the whole workspace (independent of pagination),
+    # so the UI can show accurate segment counts without loading every page.
+    status_counts: dict[str, int] = {}
 
 
 async def _pending_escalations_for_tasks(
@@ -105,9 +108,10 @@ async def get_inbox_items(
             limit=page_size,
             offset=offset,
         )
-        total = await task_service.task_repository.count_by_statuses(
+        status_counts = await task_service.task_repository.count_grouped_by_statuses(
             statuses=query_statuses,
         )
+        total = sum(status_counts.values())
 
         agent_map = {str(agent.id): agent.name for agent in agents_result}
 
@@ -141,7 +145,13 @@ async def get_inbox_items(
                 )
             )
 
-        return InboxResponse(items=items, total=total, page=page, page_size=page_size)
+        return InboxResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            status_counts=status_counts,
+        )
     except Exception as e:
         logger.error(f"Failed to get inbox items: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e

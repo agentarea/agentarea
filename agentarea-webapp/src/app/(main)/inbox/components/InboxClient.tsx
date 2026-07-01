@@ -29,6 +29,7 @@ import {
   type InboxCounts,
   type InboxTask,
   isPending,
+  bucketStatusCounts,
   normalizeStatus,
   type FilterValue,
 } from "@/app/(main)/inbox/components/inboxShared";
@@ -39,6 +40,7 @@ import { cn } from "@/lib/utils";
 interface InboxClientProps {
   initialItems: InboxTask[];
   initialTotal: number;
+  initialStatusCounts: Record<string, number>;
   pageSize: number;
   error: string | null;
 }
@@ -46,12 +48,15 @@ interface InboxClientProps {
 export function InboxClient({
   initialItems,
   initialTotal,
+  initialStatusCounts,
   pageSize,
   error,
 }: InboxClientProps) {
   const router = useRouter();
   const [items, setItems] = useState<InboxTask[]>(initialItems);
   const [total, setTotal] = useState(initialTotal);
+  const [statusCounts, setStatusCounts] =
+    useState<Record<string, number>>(initialStatusCounts);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reachedEnd, setReachedEnd] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -88,6 +93,7 @@ export function InboxClient({
   useEffect(() => {
     setItems(initialItems);
     setTotal(initialTotal);
+    setStatusCounts(initialStatusCounts);
     setLoadingMore(false);
     setReachedEnd(false);
     setResolved({});
@@ -97,7 +103,7 @@ export function InboxClient({
     itemsLenRef.current = initialItems.length;
     totalRef.current = initialTotal;
     reachedEndRef.current = false;
-  }, [initialItems, initialTotal]);
+  }, [initialItems, initialTotal, initialStatusCounts]);
 
   const loadMore = useCallback(async () => {
     if (
@@ -128,6 +134,10 @@ export function InboxClient({
       if (typeof data?.total === "number") {
         totalRef.current = data.total;
         setTotal(data.total);
+      }
+      // Fresh workspace-wide breakdown; keeps segment counts current.
+      if (data?.status_counts) {
+        setStatusCounts(data.status_counts as Record<string, number>);
       }
       setItems((prev) => {
         const seen = new Set(prev.map((task) => String(task.id)));
@@ -181,11 +191,12 @@ export function InboxClient({
     [resolved]
   );
 
-  const counts = useMemo<InboxCounts>(() => {
-    const next = { all: items.length, pending: 0, completed: 0, failed: 0 };
-    for (const task of items) next[normalizeStatus(effectiveStatus(task))]++;
-    return next;
-  }, [items, effectiveStatus]);
+  // Segment counts come from the workspace-wide backend breakdown, not the
+  // loaded page, so they stay accurate no matter how far the list is scrolled.
+  const counts = useMemo<InboxCounts>(
+    () => bucketStatusCounts(statusCounts),
+    [statusCounts]
+  );
 
   const visible = useMemo(() => {
     return items.filter((task) =>
@@ -329,7 +340,7 @@ export function InboxClient({
         <InboxToolbar
           counts={counts}
           filter={filter}
-          visibleCount={visible.length}
+          visibleCount={counts[filter]}
           onChange={changeFilter}
         />
       }

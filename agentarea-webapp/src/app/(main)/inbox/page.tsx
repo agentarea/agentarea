@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default async function InboxPage() {
   let items: TaskWithAgent[] = [];
   let total = 0;
+  let statusCounts: Record<string, number> = {};
   let error: string | null = null;
 
   try {
@@ -17,8 +18,10 @@ export default async function InboxPage() {
     if (res.error) {
       error = "Failed to load inbox";
     } else {
-      items = ((res.data as any)?.items ?? []) as TaskWithAgent[];
-      total = ((res.data as any)?.total ?? items.length) as number;
+      const data = res.data as any;
+      items = (data?.items ?? []) as TaskWithAgent[];
+      total = (data?.total ?? items.length) as number;
+      statusCounts = (data?.status_counts ?? {}) as Record<string, number>;
     }
   } catch {
     error = "Failed to load inbox";
@@ -28,6 +31,7 @@ export default async function InboxPage() {
     <InboxClient
       initialItems={items}
       initialTotal={total}
+      initialStatusCounts={statusCounts}
       pageSize={INBOX_PAGE_SIZE}
       error={error}
     />

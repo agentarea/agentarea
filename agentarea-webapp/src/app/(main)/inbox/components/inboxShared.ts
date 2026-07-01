@@ -35,6 +35,22 @@ export function normalizeStatus(
   return "failed";
 }
 
+/**
+ * Fold a backend `{status: count}` map into UI filter buckets. These totals
+ * span the whole workspace, so segment counts stay accurate regardless of how
+ * many pages the infinite scroll has loaded.
+ */
+export function bucketStatusCounts(
+  statusCounts: Record<string, number> | null | undefined
+): InboxCounts {
+  const next: InboxCounts = { all: 0, pending: 0, completed: 0, failed: 0 };
+  for (const [status, count] of Object.entries(statusCounts ?? {})) {
+    next.all += count;
+    next[normalizeStatus(status)] += count;
+  }
+  return next;
+}
+
 export function formatRelative(dateStr?: string | null): string {
   if (!dateStr) return "";
   try {
