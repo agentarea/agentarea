@@ -259,7 +259,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             .group_by(TaskORM.status)
         )
         result = await self.session.execute(stmt)
-        return dict(result.all())
+        return dict(result.tuples().all())
 
     async def sum_spend_since(self, since: datetime) -> float:
         """Sum task.result.total_cost for the current workspace since a given UTC time.

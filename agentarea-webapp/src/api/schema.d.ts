@@ -5527,6 +5527,13 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+            /**
+             * Status Counts
+             * @default {}
+             */
+            status_counts: {
+                [key: string]: number;
+            };
             /** Total */
             total: number;
         };
