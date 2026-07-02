@@ -159,6 +159,61 @@ async def test_create_instance_with_spec_populates_slug():
     assert added_server.slug == "my-server"
 
 
+@pytest.mark.asyncio
+async def test_materialize_workspace_spec_copy_populates_slug():
+    """Regression: copy-on-write of a catalog spec must populate the NOT NULL `slug`.
+
+    Connecting a built-in catalog MCP (e.g. the Vercel remote-OAuth entry)
+    materializes a workspace copy. That path built ``MCPServer(...)`` without a
+    slug, so the INSERT raised ``NotNullViolationError``. Assert the slug is
+    resolved and set on the copy that gets added to the session.
+    """
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="vercel")
+
+    source = MagicMock()
+    source.name = "Vercel"
+    source.description = "Remote MCP server for Vercel."
+    source.docker_image_url = None
+    source.version = "1.0.0"
+    source.tags = ["registry", "url", "streamable-http"]
+    source.env_schema = []
+    source.cmd = None
+    source.remote_url = "https://mcp.vercel.com"
+    source.registry_item_id = uuid.uuid4()
+    source.json_spec = {"name": "ai.agentarea.catalog/vercel"}
+    source.registry_url = "https://example.com/mcp-remote-oauth-registry.json"
+
+    await svc._materialize_workspace_spec_copy(source)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("Vercel")
+    added_copy = svc.repository.session.add.call_args[0][0]
+    assert added_copy.slug == "vercel"
+
+
+@pytest.mark.asyncio
+async def test_auto_create_spec_for_instance_populates_slug():
+    """Regression: auto-created specs (no server_spec_id) must populate `slug`."""
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="my-server")
+
+    payload = MCPServerInstanceCreate.model_construct(
+        name="My Server",
+        description="auto-created in a regression test",
+        server_spec_id="",
+        json_spec={"type": "docker", "image": "img:latest"},
+        auth_config_id=None,
+    )
+
+    await svc._auto_create_spec_for_instance(payload)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("My Server")
+    added_server = svc.repository.session.add.call_args[0][0]
+    assert added_server.slug == "my-server"
+
+
 # ---------------------------------------------------------------------------
 # derive_bundle_verification
 # ---------------------------------------------------------------------------

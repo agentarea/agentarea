@@ -377,6 +377,7 @@ class MCPServerInstanceService:
 
         server = MCPServer(
             name=payload.name,
+            slug=await self.mcp_server_repository.resolve_unique_slug(payload.name),
             description=payload.description or payload.name,
             docker_image_url=transport_spec.get("image") if spec_type == "docker" else None,
             remote_url=transport_spec.get("endpoint_url") if spec_type == "url" else None,
@@ -470,6 +471,7 @@ class MCPServerInstanceService:
         """
         copy = MCPServer(
             name=source.name,
+            slug=await self.mcp_server_repository.resolve_unique_slug(source.name),
             description=source.description or source.name,
             docker_image_url=source.docker_image_url,
             version=source.version or "1.0.0",
