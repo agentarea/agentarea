@@ -832,8 +832,8 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   // Setup reuses the existing "create instance from spec" page — the catalog
   // never configures inline. Each catalog connection links to an MCP spec.
   const connectHref = entry.installEntityId
-    ? `/mcp-servers/create/${entry.installEntityId}`
-    : "/mcp-servers/add";
+    ? `/connections/create/${entry.installEntityId}`
+    : "/connections/add";
 
   useEffect(() => {
     // Reset only when the selected item changes.

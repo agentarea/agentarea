@@ -18,7 +18,7 @@ export const PROTECTED_ROUTE_PREFIXES: string[] = [
   "/workplace",
   "/agents",
   "/tasks",
-  "/mcp-servers",
+  "/connections",
   "/settings",
   "/admin",
   "/skills",

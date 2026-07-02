@@ -257,7 +257,7 @@ export function AddOpenAPIForm() {
         return;
       }
 
-      router.push("/mcp-servers");
+      router.push("/connections");
       router.refresh();
     } catch (err) {
       console.error("Failed to create OpenAPI connection", err);
@@ -469,7 +469,7 @@ export function AddOpenAPIForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/mcp-servers")}
+              onClick={() => router.push("/connections")}
             >
               {t("cancel")}
             </Button>
@@ -481,7 +481,7 @@ export function AddOpenAPIForm() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/mcp-servers")}
+          onClick={() => router.push("/connections")}
         >
           {t("cancel")}
         </Button>

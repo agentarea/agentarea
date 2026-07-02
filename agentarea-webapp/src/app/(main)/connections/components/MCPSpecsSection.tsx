@@ -78,7 +78,7 @@ export function MCPSpecsSection({
   }, [servers, selectedCategory, selectedType]);
 
   const handleConfigureInstance = (server: MCPServer) => {
-    router.push(`/mcp-servers/create/${server.id}`);
+    router.push(`/connections/create/${server.id}`);
   };
 
   const serverColumns = [

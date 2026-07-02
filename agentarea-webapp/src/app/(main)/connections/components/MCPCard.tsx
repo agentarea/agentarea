@@ -124,7 +124,7 @@ export function MCPInstanceCard({
 
   return (
     <LinkedCard
-      href={`/mcp-servers/${instance.id}`}
+      href={`/connections/${instance.id}`}
       title={displayTitle}
       icon={providerIcon || getMCPIcon(instance.name)}
       type="view"
@@ -157,7 +157,7 @@ export function OpenAPIConnectionCard({
 }: OpenAPIConnectionCardProps) {
   return (
     <LinkedCard
-      href={`/mcp-servers/openapi/${connection.id}`}
+      href={`/connections/openapi/${connection.id}`}
       title={connection.name}
       icon={<OpenAPIConnectionMark connection={connection} />}
       type="view"
@@ -229,7 +229,7 @@ export function MCPServerSpecCard({
 
   return (
     <LinkedCard
-      href={onConfigure ? undefined : `/mcp-servers/create/${server.id}`}
+      href={onConfigure ? undefined : `/connections/create/${server.id}`}
       onClick={onConfigure ? () => onConfigure(server) : undefined}
       title={displayTitle}
       icon={specIcon || getMCPIcon(server.name)}

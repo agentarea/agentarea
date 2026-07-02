@@ -1,5 +1,5 @@
 import type { components } from "@/api/schema";
-import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 
 /**
  * Resolves an agent's MCP tool reference to a concrete instance/server.

@@ -244,7 +244,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       const probeResult = await probeInstanceAuthAction(created.id);
 
       if (probeResult.data?.status === "ok") {
-        router.push(`/mcp-servers/${created.id}`);
+        router.push(`/connections/${created.id}`);
         return;
       }
       if (probeResult.data?.status === "auth_required") {
@@ -256,7 +256,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         }
       }
 
-      router.push(`/mcp-servers/${created.id}`);
+      router.push(`/connections/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
     } finally {
@@ -300,7 +300,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         const { instanceName } = getValues();
         setVerifyingInstance({ id: created.id, name: instanceName });
       } else {
-        router.push(`/mcp-servers/${created.id}`);
+        router.push(`/connections/${created.id}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create connection");
@@ -334,11 +334,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         <VerifyingModal
           instanceId={verifyingInstance.id}
           instanceName={verifyingInstance.name}
-          onSuccess={(id) => router.push(`/mcp-servers/${id}`)}
-          onDelete={() => router.push("/mcp-servers")}
+          onSuccess={(id) => router.push(`/connections/${id}`)}
+          onDelete={() => router.push("/connections")}
           onEditRetry={(id) => {
             setVerifyingInstance(null);
-            router.push(`/mcp-servers/${id}`);
+            router.push(`/connections/${id}`);
           }}
         />
       )}
@@ -579,7 +579,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         setVerifyingInstance({ id: created.id, name: instanceName });
       } else {
-        router.replace(`/mcp-servers/${created.id}`);
+        router.replace(`/connections/${created.id}`);
       }
     } catch (error) {
       console.error("Instance creation error:", error);
@@ -594,11 +594,11 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
         <VerifyingModal
           instanceId={verifyingInstance.id}
           instanceName={verifyingInstance.name}
-          onSuccess={(id) => router.replace(`/mcp-servers/${id}`)}
-          onDelete={() => router.replace("/mcp-servers")}
+          onSuccess={(id) => router.replace(`/connections/${id}`)}
+          onDelete={() => router.replace("/connections")}
           onEditRetry={(id) => {
             setVerifyingInstance(null);
-            router.replace(`/mcp-servers/${id}`);
+            router.replace(`/connections/${id}`);
           }}
         />
       )}

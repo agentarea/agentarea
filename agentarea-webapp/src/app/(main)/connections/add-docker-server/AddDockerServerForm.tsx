@@ -70,7 +70,7 @@ export default function AddDockerServerForm() {
       });
 
       // On success, redirect to MCP servers page
-      router.push("/mcp-servers");
+      router.push("/connections");
       router.refresh();
     } catch (error) {
       console.error("Error submitting form:", error);

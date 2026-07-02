@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { FormSkeleton } from "@/components/Skeleton";
-import AddDockerServerForm from "./AddDockerServerForm";
-import AddDockerServerHeaderControls from "./AddDockerServerHeaderControls";
+import { AddMCPServerForm } from "./form";
+import AddMCPServerHeaderControls from "./header-controls";
 
 export default async function AddMCPServerPage() {
   const t = await getTranslations("MCPServersPage");
@@ -12,20 +12,20 @@ export default async function AddMCPServerPage() {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: t("title"), href: "/mcp-servers" },
-          { label: t("newServer.docker.title") },
+          { label: t("title"), href: "/connections" },
+          { label: "Add Server" },
         ],
-        description: t("newServer.description"),
+        description: "Connect an MCP server to your workspace",
         backLink: {
           label: "Back to MCP Servers",
-          href: "/mcp-servers",
+          href: "/connections",
         },
-        controls: <AddDockerServerHeaderControls />,
+        controls: <AddMCPServerHeaderControls />,
       }}
     >
-        <Suspense fallback={<FormSkeleton />}>
-          <AddDockerServerForm />
-        </Suspense>
+      <Suspense fallback={<FormSkeleton />}>
+        <AddMCPServerForm />
+      </Suspense>
     </ContentBlock>
   );
 }

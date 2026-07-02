@@ -231,13 +231,13 @@ async function buildResourceIndex(
     ["mcp_instance"],
     () => fetchData(listMCPServerInstances()),
     "MCP instance",
-    (id) => `/mcp-servers/${id}`
+    (id) => `/connections/${id}`
   );
   queue(
     ["mcp_server"],
     () => fetchData(listMCPServers({ page_size: 100 })),
     "MCP server",
-    () => "/mcp-servers"
+    () => "/connections"
   );
   queue(
     ["governance_policy", "policy"],
@@ -415,7 +415,7 @@ function fallbackResourceLabel(type: string, id: string) {
 
 function fallbackResourceHref(type: string, id: string | null): string | null {
   if (!id) {
-    if (type === "mcp_server" || type === "mcp_instance") return "/mcp-servers";
+    if (type === "mcp_server" || type === "mcp_instance") return "/connections";
     if (type === "governance_policy" || type === "policy") return "/policies";
     if (type === "api_key") return "/admin/api-keys";
     return null;
@@ -431,9 +431,9 @@ function fallbackResourceHref(type: string, id: string | null): string | null {
     case "skill":
       return `/skills/${id}`;
     case "mcp_instance":
-      return `/mcp-servers/${id}`;
+      return `/connections/${id}`;
     case "mcp_server":
-      return "/mcp-servers";
+      return "/connections";
     case "governance_policy":
     case "policy":
       return "/policies";

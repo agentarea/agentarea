@@ -39,7 +39,7 @@ const OPTIONS: ConnectionOption[] = [
     title: "Connect MCP Server",
     description:
       "Create a reusable connection from a Docker image, command, or hosted URL.",
-    href: "/mcp-servers/add",
+    href: "/connections/add",
     iconClass: "bg-primary/5",
     icon: <img src="/mcp.svg" alt="" className="h-5 w-5 object-contain" />,
   },
@@ -48,7 +48,7 @@ const OPTIONS: ConnectionOption[] = [
     title: "OpenAPI Connection",
     description:
       "Wrap a REST API as agent tools by importing its OpenAPI / Swagger spec.",
-    href: "/mcp-servers/add-openapi",
+    href: "/connections/add-openapi",
     iconClass: "bg-zinc-100 dark:bg-zinc-800",
     icon: <OpenAPIConnectionMark className="h-5 w-5 rounded text-[7px]" />,
   },

@@ -116,7 +116,7 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                           className="h-8 w-8 p-0"
                           asChild
                         >
-                          <Link href={`/mcp-servers/instances/${instance.id}`}>
+                          <Link href={`/connections/instances/${instance.id}`}>
                             <Edit className="h-4 w-4" />
                             <span className="sr-only">Edit</span>
                           </Link>

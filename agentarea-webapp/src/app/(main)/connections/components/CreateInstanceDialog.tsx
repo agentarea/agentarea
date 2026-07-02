@@ -122,7 +122,7 @@ export function CreateInstanceDialog({
         if (vStatus === "in_progress" || vStatus === "never_attempted") {
           setVerifyingInstance({ id: created.id, name: instanceName });
         } else {
-          router.push(`/mcp-servers/${created.id}`);
+          router.push(`/connections/${created.id}`);
         }
       } catch (error) {
         const errorMessage =
@@ -157,7 +157,7 @@ export function CreateInstanceDialog({
           instanceName={verifyingInstance.name}
           onSuccess={(id) => {
             setVerifyingInstance(null);
-            router.push(`/mcp-servers/${id}`);
+            router.push(`/connections/${id}`);
           }}
           onDelete={() => {
             setVerifyingInstance(null);
@@ -165,7 +165,7 @@ export function CreateInstanceDialog({
           }}
           onEditRetry={(id) => {
             setVerifyingInstance(null);
-            router.push(`/mcp-servers/${id}`);
+            router.push(`/connections/${id}`);
           }}
         />
       )}

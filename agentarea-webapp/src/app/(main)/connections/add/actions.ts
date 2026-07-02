@@ -300,7 +300,7 @@ export async function addMCPServer(
 
     if (response.data) {
       console.log("MCP server added successfully:", response.data);
-      revalidatePath("/mcp-servers");
+      revalidatePath("/connections");
     } else if (response.error) {
       console.error("Failed to add MCP server:", response.error);
       const errorMessage = response.error.detail?.[0]?.msg || "Unknown error";
@@ -346,7 +346,7 @@ export async function addMCPServer(
   }
 
   if (response.data) {
-    redirect(`/mcp-servers/${response.data.id}`);
+    redirect(`/connections/${response.data.id}`);
   } else {
     return {
       message: "Failed to add server after API call.",
