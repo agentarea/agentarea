@@ -12,6 +12,7 @@ import { Badge, badgeVariants } from "@/components/ui/badge";
 import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import FormError from "@/components/FormError";
 import { cn } from "@/lib/utils";
 import { ToolsTable } from "../../components/ToolsTable";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
@@ -134,10 +135,7 @@ function LinkPill({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={cn(
-        badgeVariants({ variant: "outline" }),
-        "hover:text-foreground"
-      )}
+      className={badgeVariants({ variant: "outline", interactive: true })}
     >
       <Icon className="h-3.5 w-3.5" />
       {children}
@@ -496,11 +494,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="mt-6 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        {error && <FormError className="mt-6">{error}</FormError>}
 
         {/* Spec fields */}
         {hasFields && probeState === "idle" && (
@@ -558,9 +552,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
             </div>
           )}
 
-        {/* Connect button — initial state */}
+        {/* Connect button — initial state (Try Again stacks below, same width) */}
         {!validation && probeState === "idle" && (
-          <div className="mt-6">
+          <div className="mt-6 flex flex-col gap-2">
             <StartAgentButton
               type="button"
               size="xs"
@@ -571,6 +565,20 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
             >
               {isWorking ? "Connecting…" : "Connect"}
             </StartAgentButton>
+            {error && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full max-w-[200px]"
+                onClick={() => {
+                  setError(null);
+                  setValidation(null);
+                }}
+              >
+                Try Again
+              </Button>
+            )}
           </div>
         )}
 
@@ -650,21 +658,6 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
               </div>
             )}
           </div>
-        )}
-
-        {/* Retry on error */}
-        {error && (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 w-auto"
-            onClick={() => {
-              setError(null);
-              setValidation(null);
-            }}
-          >
-            Try Again
-          </Button>
         )}
 
         <EncryptionNote />
