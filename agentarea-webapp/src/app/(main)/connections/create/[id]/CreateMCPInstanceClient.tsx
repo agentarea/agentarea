@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -228,7 +228,7 @@ function SpecHeader({
 
 function EncryptionNote() {
   return (
-    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground/60">
       <Lock className="h-3.5 w-3.5" />
       Credentials are encrypted at rest and scoped to this workspace.
     </div>
@@ -258,6 +258,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const {
     register,
     getValues,
+    watch,
   } = useForm<UrlFormValues>({
     defaultValues: {
       instanceName: getTitle(server),
@@ -422,6 +423,39 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
   const verified = validation?.status === "ok";
 
+  // Create lives in the subheader (consistent with every other form). The body
+  // "Connect" button only authorizes / validates the connection.
+  const nameValue = watch("instanceName");
+  const canCreate = !!nameValue?.trim() && verified;
+  const canForce = !!nameValue?.trim();
+
+  const handleCreateRef = useRef<() => void>(() => {});
+  handleCreateRef.current = handleCreate;
+
+  const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!canCreate || isWorking) return;
+    handleCreate();
+  };
+
+  // Keep the subheader Create / Force create buttons in sync with form state.
+  useEffect(() => {
+    document.dispatchEvent(
+      new CustomEvent("mcp-create-state", {
+        detail: { createEnabled: canCreate, forceEnabled: canForce, creating: isWorking },
+      })
+    );
+  }, [canCreate, canForce, isWorking]);
+
+  // "Force create" in the subheader dispatches an event onto the form element.
+  useEffect(() => {
+    const form = document.getElementById("mcp-instance-form");
+    if (!form) return;
+    const handler = () => handleCreateRef.current();
+    form.addEventListener("mcp-force-create", handler);
+    return () => form.removeEventListener("mcp-force-create", handler);
+  }, []);
+
   return (
     <>
       {verifyingInstance && (
@@ -436,7 +470,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
           }}
         />
       )}
-      <div className="mx-auto w-full max-w-[600px] px-2 py-10">
+      <form
+        id="mcp-instance-form"
+        onSubmit={handleCreateSubmit}
+        className="mx-auto w-full max-w-[600px] px-2 py-10"
+      >
         <SpecHeader server={server} verified={verified} />
 
         <Divider className="my-6" />
@@ -451,7 +489,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
             autoComplete="off"
             {...register("instanceName", { required: true })}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground/60">
             Shown across agents, tasks and audit logs. Must be unique in this
             workspace.
           </p>
@@ -507,31 +545,26 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
           </div>
         )}
 
-        {/* Validation success — tools table + create button */}
-        {validation?.status === "ok" && (
-          <div className="mt-6 space-y-4">
-            {validation.tools && validation.tools.length > 0 && (
+        {/* Validation success — discovered tools preview. Creation itself is
+            triggered from the subheader (Create instance / Force create). */}
+        {validation?.status === "ok" &&
+          validation.tools &&
+          validation.tools.length > 0 && (
+            <div className="mt-6">
               <ToolsTable
                 tools={validation.tools}
                 label={`${validation.tools.length} tools found`}
               />
-            )}
-            <StartAgentButton
-              size="md"
-              onClick={handleCreate}
-              isLoading={isWorking}
-              disabled={isWorking}
-            >
-              Create connection
-            </StartAgentButton>
-          </div>
-        )}
+            </div>
+          )}
 
         {/* Connect button — initial state */}
         {!validation && probeState === "idle" && (
           <div className="mt-6">
             <StartAgentButton
-              size="md"
+              type="button"
+              size="xs"
+              className="max-w-[200px]"
               onClick={handleValidate}
               isLoading={isWorking}
               disabled={isWorking}
@@ -569,7 +602,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
                   This server supports OAuth authorization.
                 </p>
                 <StartAgentButton
-                  size="md"
+                  type="button"
+                  size="xs"
+                  className="w-auto"
                   onClick={handleOAuth}
                   isLoading={isWorking}
                 >
@@ -603,7 +638,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
                   />
                 </div>
                 <StartAgentButton
-                  size="md"
+                  type="button"
+                  size="xs"
+                  className="w-auto"
                   onClick={handleCreate}
                   isLoading={isWorking}
                   disabled={isWorking}
@@ -618,6 +655,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         {/* Retry on error */}
         {error && (
           <Button
+            type="button"
             variant="outline"
             className="mt-4 w-auto"
             onClick={() => {
@@ -630,7 +668,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         )}
 
         <EncryptionNote />
-      </div>
+      </form>
     </>
   );
 }
