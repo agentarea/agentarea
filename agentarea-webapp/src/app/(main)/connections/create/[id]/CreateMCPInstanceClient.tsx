@@ -161,18 +161,18 @@ function SpecHeader({
 
   return (
     <div className="flex items-start gap-4">
-      <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-muted">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg">
         {iconSrc ? (
           <Image
             src={iconSrc}
             alt={title}
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded"
+            width={48}
+            height={48}
+            className="h-full w-full object-cover"
             unoptimized
           />
         ) : (
-          <Globe className="h-7 w-7 text-muted-foreground" />
+          <Globe className="h-6 w-6 text-muted-foreground" />
         )}
       </div>
 
