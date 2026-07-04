@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
@@ -9,6 +8,7 @@ from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
@@ -60,8 +60,8 @@ class ModelInstanceResponse(BaseModel):
     description: str | None
     is_active: bool
     is_public: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related data
     provider_name: str | None = None

@@ -21,6 +21,16 @@ logger = logging.getLogger(__name__)
 _SECRET_PREFIX = "mcp_auth_cred"  # noqa: S105
 
 
+class OAuthReauthRequiredError(Exception):
+    """The OAuth session cannot be renewed unattended — the user must reconnect.
+
+    Raised when an access token is expired/rejected and no usable refresh path
+    exists (no refresh_token, or the refresh grant itself failed). Callers should
+    surface this as an actionable "reconnect with OAuth" state rather than a raw
+    upstream 401/403.
+    """
+
+
 def _secret_key(config_id: UUID) -> str:
     return f"{_SECRET_PREFIX}:{config_id}"
 
@@ -68,12 +78,18 @@ class MCPAuthService:
     # Auth header injection helpers (used by proxy layer)
     # ------------------------------------------------------------------
 
-    async def get_auth_headers(self, config: MCPAuthConfig) -> dict[str, str]:
+    async def get_auth_headers(
+        self, config: MCPAuthConfig, *, force_refresh: bool = False
+    ) -> dict[str, str]:
         """Return HTTP headers to inject for the given auth config.
 
         For API key: ``{header_name: header_value}``
         For bearer:  ``{Authorization: Bearer <token>}``
         For oauth2:  ``{Authorization: Bearer <access_token>}`` (after refresh if needed)
+
+        ``force_refresh`` forces an OAuth token refresh even if the stored token
+        looks unexpired — used to react to an upstream 401/403. Raises
+        :class:`OAuthReauthRequiredError` when the session can't be renewed.
         """
         creds = await self._load_credentials(config)
 
@@ -89,26 +105,35 @@ class MCPAuthService:
             return {"Authorization": f"Bearer {token}"}
 
         if config.auth_type == AUTH_TYPE_OAUTH2:
-            access_token = await self._get_oauth2_token(config, creds)
+            access_token = await self._get_oauth2_token(
+                config, creds, force_refresh=force_refresh
+            )
             return {"Authorization": f"Bearer {access_token}"}
 
         return {}
 
-    async def _get_oauth2_token(self, config: MCPAuthConfig, creds: dict[str, Any]) -> str:
+    async def _get_oauth2_token(
+        self, config: MCPAuthConfig, creds: dict[str, Any], *, force_refresh: bool = False
+    ) -> str:
         """Return a valid OAuth2 access token, refreshing if needed."""
         import time
 
         access_token = creds.get("access_token", "")
         expires_at = creds.get("expires_at", 0)
 
-        # Refresh if expired (with 30 s buffer)
-        if not access_token or time.time() >= expires_at - 30:
+        # Refresh if forced, missing, or expired (with 30 s buffer).
+        if force_refresh or not access_token or time.time() >= expires_at - 30:
             access_token = await self._refresh_oauth2_token(config, creds)
 
         return access_token
 
     async def _refresh_oauth2_token(self, config: MCPAuthConfig, creds: dict[str, Any]) -> str:
-        """Obtain a new access token using Client Credentials or Refresh Token flow."""
+        """Obtain a new access token using Client Credentials or Refresh Token flow.
+
+        Raises :class:`OAuthReauthRequiredError` when renewal is impossible (no
+        refresh_token and no client_secret for client_credentials) or the token
+        endpoint rejects the grant — both mean the user must reconnect.
+        """
         import time
 
         import httpx
@@ -127,20 +152,38 @@ class MCPAuthService:
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
                 "client_id": client_id,
-                "client_secret": client_secret,
             }
-        else:
+            # Public (PKCE/DCR) clients have no secret; only send one if present.
+            if client_secret:
+                payload["client_secret"] = client_secret
+        elif client_secret:
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": client_id,
                 "client_secret": client_secret,
                 "scope": " ".join(scopes),
             }
+        else:
+            # Nothing to renew with — the AS never issued a refresh_token (e.g.
+            # offline_access wasn't granted) and there's no client_secret.
+            raise OAuthReauthRequiredError(
+                f"auth config {config.id} has no refresh_token or client_secret; reconnect required"
+            )
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(token_url, data=payload, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(token_url, data=payload, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            # 4xx from the token endpoint means the grant is dead (revoked /
+            # expired refresh_token) — the user must reconnect.
+            if 400 <= exc.response.status_code < 500:
+                raise OAuthReauthRequiredError(
+                    f"token refresh rejected ({exc.response.status_code}) for auth config "
+                    f"{config.id}; reconnect required"
+                ) from exc
+            raise
 
         access_token: str = data["access_token"]
         expires_in: int = data.get("expires_in", 900)

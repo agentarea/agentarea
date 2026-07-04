@@ -28,6 +28,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
@@ -63,19 +64,19 @@ class TriggerResponse(BaseModel):
     is_active: bool
     task_parameters: dict[str, Any]
     conditions: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
     created_by: str
 
     # Business logic safety
     failure_threshold: int
     consecutive_failures: int
-    last_execution_at: datetime | None = None
+    last_execution_at: UtcDatetime | None = None
 
     # Type-specific fields (optional)
     cron_expression: str | None = None
     timezone: str | None = None
-    next_run_time: datetime | None = None
+    next_run_time: UtcDatetime | None = None
     webhook_id: str | None = None
     allowed_methods: list[str] | None = None
     webhook_type: str | None = None
@@ -167,7 +168,7 @@ class TriggerExecutionResponse(BaseModel):
 
     id: UUID
     trigger_id: UUID
-    executed_at: datetime
+    executed_at: UtcDatetime
     status: str
     task_id: UUID | None = None
     execution_time_ms: int
@@ -212,7 +213,7 @@ class TriggerStatusResponse(BaseModel):
 
     trigger_id: UUID
     is_active: bool
-    last_execution_at: datetime | None = None
+    last_execution_at: UtcDatetime | None = None
     consecutive_failures: int
     should_disable_due_to_failures: bool
 

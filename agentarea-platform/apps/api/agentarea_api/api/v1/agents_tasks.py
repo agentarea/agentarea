@@ -22,6 +22,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
@@ -111,7 +112,7 @@ class TaskResponse(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
 
@@ -147,7 +148,7 @@ class TaskWithAgent(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
     # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
@@ -281,7 +282,7 @@ class TaskEvent(BaseModel):
     task_id: str
     agent_id: str
     execution_id: str
-    timestamp: datetime
+    timestamp: UtcDatetime
     event_type: str
     message: str
     metadata: dict[str, Any] = {}
@@ -323,24 +324,21 @@ async def _tail_task_events_sse(
     *,
     emit_connected: bool = True,
 ) -> AsyncGenerator[str, None]:
-    """Stream a task's events as SSE by tailing the ``task_events`` table.
+    """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
-    The DB is the single source of truth: the workflow's publish activity
-    inserts events there, so this works for both live tasks (events arrive as
-    they happen) and tasks that already finished (full history is replayed).
-
-    This deliberately tails the DB instead of subscribing to Redis pub/sub: a
-    subscriber attaches only *after* the task starts, so for a fast task the
-    workflow events are published before the subscription exists and are lost
-    (pub/sub does not replay). Tailing the durable event log has no such race.
+    This is a CQRS read side (ADR-0018), not a poll of the write model. The
+    full history is replayed from the durable ``task_events`` table (catch-up),
+    then new events are tailed live from the per-task Redis stream the worker
+    XADDs to. Dedup by event id makes the catch-up->live hand-off race-free, so
+    a fast task whose events land before the reader attaches loses nothing
+    (the old reason this used DB polling) — without the 0.25s poll.
     """
-    import asyncio
-
     from agentarea_api.api.deps.database import get_db_session
+    from agentarea_common.broker.redis_streams import RedisStreamsBroker
+    from agentarea_common.config import get_settings
+    from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream
+    from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_event_feed
     from sqlalchemy import text
-
-    poll_interval_seconds = 0.25
-    max_wall_time_seconds = 30 * 60
 
     if emit_connected:
         yield _format_sse_event(
@@ -354,11 +352,7 @@ async def _tail_task_events_sse(
             },
         )
 
-    seen_event_ids: set[str] = set()
-    terminal_seen = False
-    deadline = asyncio.get_event_loop().time() + max_wall_time_seconds
-
-    while not terminal_seen and asyncio.get_event_loop().time() < deadline:
+    async def _snapshot() -> list[TaskEventEnvelope]:
         async with get_db_session() as session:
             rows = (
                 await session.execute(
@@ -371,26 +365,35 @@ async def _tail_task_events_sse(
                     {"task_id": str(task_id)},
                 )
             ).fetchall()
+        return [
+            TaskEventEnvelope(
+                event_type=row.event_type,
+                event_id=str(row.id),
+                timestamp=row.timestamp.isoformat() if row.timestamp else None,
+                data=dict(row.data or {}),
+            )
+            for row in rows
+        ]
 
-        new_rows = [r for r in rows if str(r.id) not in seen_event_ids]
-        for row in new_rows:
-            event_id = str(row.id)
-            seen_event_ids.add(event_id)
-            event_type = row.event_type
-            row_data = dict(row.data or {})
+    redis_url = getattr(get_settings().broker, "REDIS_URL", "redis://localhost:6379")
+    broker = RedisStreamsBroker(redis_url)
+    stream = RedisStreamsEventStream(broker)
+    try:
+        async for env in iter_task_event_feed(
+            stream=stream,
+            task_id=str(task_id),
+            snapshot=_snapshot,
+            terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
+        ):
             sse_event = {
-                "event_type": event_type,
-                "event_id": event_id,
-                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                "data": _filter_domain_fields(row_data),
+                "event_type": env.event_type,
+                "event_id": env.event_id,
+                "timestamp": env.timestamp,
+                "data": _filter_domain_fields(dict(env.data)),
             }
-            yield _format_sse_event(event_type, sse_event)
-            if event_type in _TERMINAL_EVENT_TYPES:
-                terminal_seen = True
-                break
-
-        if not terminal_seen:
-            await asyncio.sleep(poll_interval_seconds)
+            yield _format_sse_event(env.event_type, sse_event)
+    finally:
+        await broker.aclose()
 
 
 @router.post("/")
@@ -874,8 +877,8 @@ class TaskSummary(BaseModel):
     agent_id: UUID
     workspace_id: str
     status: str
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
+    started_at: UtcDatetime | None = None
+    ended_at: UtcDatetime | None = None
     duration_ms: float | None = None
     iterations: int = 0
     llm_calls: int = 0

@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -11,6 +10,7 @@ from agentarea_api.api.v1.mcp_oauth_links import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -44,8 +44,8 @@ class MCPServerInstanceResponse(BaseModel):
     last_dispatch: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
     auth_config_id: UUID | str | None = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(

@@ -14,6 +14,7 @@ from agentarea_api.api.deps.services import (
     get_agent_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -83,8 +84,8 @@ class WalletResponse(BaseModel):
     service_budget_usd: float
     service_budget_period: str
     status: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: UtcDatetime | None = None
+    updated_at: UtcDatetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -109,7 +110,7 @@ class PaymentRecordResponse(BaseModel):
     status: str
     error_message: str | None = None
     protocol_metadata: dict[str, Any] | None = None
-    created_at: datetime | None = None
+    created_at: UtcDatetime | None = None
 
     model_config = {"from_attributes": True}
 
