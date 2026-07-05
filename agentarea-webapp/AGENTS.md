@@ -45,6 +45,8 @@ agentarea-webapp/
 - **Auth**: `useAuth()` hook for user state, `src/lib/auth.ts` for server auth. The server SDK injects the token + `X-Workspace-Slug` automatically (`src/api/client-runtime.ts`) — never handle tokens manually.
 - **Real-time**: `useSSE()` or `useTaskEvents()` hooks for streaming
 - **Styling**: Tailwind + shadcn/ui components
+- **List pages (grid+table)**: use `@/components/GridAndTableViews` — pass `data`, `columns`, `cardContent`, `itemLink`, `routeChange`, `searchParams`. Do NOT hand-roll a `<ul>`/`<div className="grid">` list or a bespoke card per page. Reference: `mcp-servers/ServerList.tsx`, `admin/providers/page.tsx`, `clients/page.tsx`, `projects/components/ProjectsContent.tsx`.
+- **Entity icons**: single source of truth in `@/lib/entity-icons` (`ENTITY_ICONS[kind]` / `<EntityIcon kind="agent" />`). Kinds: agent→Bot, mcp→Server, skill→Sparkles, project→FolderTree, client→Plug, tool→Wrench, trigger→Zap. Do NOT inline `Bot`/`Server`/`Sparkles`/`Plug` from lucide for an entity — add the kind to the map instead.
 
 ## KEY HOOKS
 
