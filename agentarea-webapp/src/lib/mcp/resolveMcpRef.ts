@@ -1,5 +1,5 @@
 import type { McpServerInstanceResponse, McpServerResponse } from "@/api/client/types.gen";
-import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 
 /**
  * Resolves an agent's MCP tool reference to a concrete instance/server.

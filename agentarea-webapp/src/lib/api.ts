@@ -33,6 +33,7 @@ export const {
   sendTaskCommand,
   sendA2UIAction,
   resolveEscalation,
+  submitTaskInput,
   getAgentTaskEvents,
 
   // Chat API
@@ -233,6 +234,18 @@ export const {
   addMcpInstanceToProject,
   removeMcpInstanceFromProject,
 
+  // Client (agent-proxy) API
+  listClients,
+  getClient,
+  createClient,
+  updateClient,
+  deleteClient,
+  addSkillToClient,
+  removeSkillFromClient,
+  addMcpInstanceToClient,
+  removeMcpInstanceFromClient,
+  pullClientFromProject,
+
   // Project Files API
   listProjectFiles,
   uploadProjectFile,
@@ -254,41 +267,23 @@ export const {
   fundAgentWallet,
 } = api;
 
-type TaskEvent = {
-  id: string;
-  event_type: string;
-  timestamp: string;
-  data?: { content?: string; result?: string };
-};
-
-type SpecWithModels = {
-  id: string;
-  models: Array<{ id: string }>;
-};
-
-type ConfigWithInstances = {
-  provider_spec_id: string;
-  model_instance_ids: string[];
-  [key: string]: unknown;
-};
-
 // Convenience helpers built on top of the generated API
 export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   // Build message history from task events
   const { data: events, error } = await getAgentTaskEvents(agentId, taskId, {
     page_size: 100,
-  });
+  } as any);
   if (error || !events) {
     return { data: [], error };
   }
 
-  const messages = (events as { events: TaskEvent[] }).events
-    .filter((event) =>
+  const messages = (events as any).events
+    .filter((event: any) =>
       ["LLMCallCompleted", "ToolCallCompleted", "WorkflowCompleted"].includes(
         event.event_type
       )
     )
-    .map((event) => ({
+    .map((event: any) => ({
       id: event.id,
       content: event.data?.content || event.data?.result || "",
       role: event.event_type === "LLMCallCompleted" ? "assistant" : "system",
@@ -312,19 +307,19 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   if (configsResponse.error || !configsResponse.data) {
     return { configs: configsResponse, specs: providersResponse };
   }
-  const configs = (configsResponse.data || []) as ConfigWithInstances[];
-  const specsWithModels = (providersResponse.data || []) as SpecWithModels[];
+  const configs = configsResponse.data || [];
+  const specsWithModels = providersResponse.data || [];
   const specsById = Object.fromEntries(
-    specsWithModels.map((s) => [s.id, s])
+    specsWithModels.map((s: any) => [s.id, s])
   );
-  const configsWithModels = configs.map((config) => ({
+  const configsWithModels = configs.map((config: any) => ({
     ...config,
     models_list: config.model_instance_ids
       .map((modelSpecId: string) => {
         const providerSpec = specsById[config.provider_spec_id];
         if (!providerSpec) return null;
         return (
-          providerSpec.models.find((m) => m.id === modelSpecId) || null
+          providerSpec.models.find((m: any) => m.id === modelSpecId) || null
         );
       })
       .filter(Boolean),
@@ -386,7 +381,7 @@ export type ModelSpec =
 export type ModelInstance = ModelInstanceResponse;
 export type ChatAgent = AgentResponse;
 export type ChatResponse = { task_id: string; status: string };
-export type ConversationResponse = unknown;
+export type ConversationResponse = any;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {

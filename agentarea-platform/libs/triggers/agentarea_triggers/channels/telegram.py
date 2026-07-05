@@ -99,10 +99,14 @@ class TelegramAdapter:
             "parse_mode": "MarkdownV2",
         }
 
-        # Reply to original message if available
+        # Reply to original message if available. Use allow_sending_without_reply
+        # so a stale/deleted/unknown message_id never fails the whole delivery —
+        # Telegram returns 400 "message to be replied not found" otherwise, which
+        # DLQs the reply and the user sees nothing.
         reply_to = channel_config.get("message_id")
         if reply_to:
             payload["reply_to_message_id"] = reply_to
+            payload["allow_sending_without_reply"] = True
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         try:

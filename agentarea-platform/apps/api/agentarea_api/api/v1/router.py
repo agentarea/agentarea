@@ -18,6 +18,7 @@ from . import (
     api_keys,
     audit,
     bundles,
+    clients,
     dashboard,
     files,
     governance,
@@ -148,6 +149,7 @@ protected_v1_router.include_router(network.router)
 
 # Projects - PROTECTED
 protected_v1_router.include_router(projects.router)
+protected_v1_router.include_router(clients.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)

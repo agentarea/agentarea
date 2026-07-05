@@ -123,7 +123,15 @@ export default function GridAndTableViews({
             </div>
           </TabsContent>
           <TabsContent value="table">
-            <Table data={data} columns={columns} />
+            <Table
+              data={data}
+              columns={columns}
+              onRowClick={
+                itemLink
+                  ? (item) => window.location.assign(itemLink(item))
+                  : undefined
+              }
+            />
           </TabsContent>
         </>
       )}
@@ -229,7 +237,18 @@ export function GridAndTableSectionsViews({
                     </div>
                   </TabsContent>
                   <TabsContent value="table">
-                    <Table data={sectionData.data} columns={columns} />
+                    <Table
+                      data={sectionData.data}
+                      columns={columns}
+                      onRowClick={
+                        sectionData.itemLink || itemLink
+                          ? (item) =>
+                              window.location.assign(
+                                (sectionData.itemLink || itemLink)!(item)
+                              )
+                          : undefined
+                      }
+                    />
                   </TabsContent>
                 </>
               ) : (

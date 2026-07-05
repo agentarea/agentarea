@@ -236,10 +236,22 @@ def create_app() -> FastAPI:
     _mcp_app = _mcp_server.streamable_http_app()
     _mcp_app.add_middleware(MCPAuthMiddleware)
 
+    from agentarea_api.api.v1.client_mcp import (
+        ClientMCPScopeMiddleware,
+        client_mcp_server,
+    )
+
+    _client_mcp_app = client_mcp_server.streamable_http_app()
+    _client_mcp_app.add_middleware(MCPAuthMiddleware)
+    _client_mcp_app.add_middleware(ClientMCPScopeMiddleware)
+
     @asynccontextmanager
     async def _lifespan(app: FastAPI):
         async with combined_lifespan(app):
-            async with _mcp_server.session_manager.run():
+            async with (
+                _mcp_server.session_manager.run(),
+                client_mcp_server.session_manager.run(),
+            ):
                 yield
 
     app = FastAPI(
@@ -324,6 +336,7 @@ def create_app() -> FastAPI:
     # Session manager lifespan is run in _lifespan (above) so the task group
     # is guaranteed to be initialised before any request reaches the handler.
     app.mount("/mcp", _mcp_app)
+    app.mount("/client-mcp", _client_mcp_app)
 
     from agentarea_api.tools import get_platform_tools
 

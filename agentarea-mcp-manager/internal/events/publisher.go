@@ -21,6 +21,12 @@ const (
 
 	statusChangedType = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
 	errorType         = "agentarea.mcp.v1.MCPServerInstanceError"
+
+	// Retention contract for these ephemeral notification streams: they are a
+	// bounded buffer for live tailing (Publish-Subscribe), not a durable log.
+	// Approximate trimming (~) keeps XADD O(1) while capping memory. Consumers
+	// tail live ("$"); a late reader only sees the last ~streamMaxLen entries.
+	streamMaxLen = 1000
 )
 
 func streamFor(eventType string) string { return "events:" + eventType }
@@ -103,8 +109,9 @@ func (p *EventPublisher) publish(ctx context.Context, eventType, subject string,
 		return err
 	}
 	return p.redisClient.XAdd(ctx, &redis.XAddArgs{
-		Stream: streamFor(eventType),
-		Values: fields,
+		Stream:       streamFor(eventType),
+		MaxLenApprox: streamMaxLen,
+		Values:       fields,
 	}).Err()
 }
 

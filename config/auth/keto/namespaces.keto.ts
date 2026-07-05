@@ -107,3 +107,20 @@ class Agent implements Namespace {
     own: (ctx: Context): boolean => this.related.owners.includes(ctx.subject),
   }
 }
+
+class Client implements Namespace {
+  // Agent-proxy bundle: use == connect a harness to its endpoint; manage == edit/delete.
+  related: {
+    users: (User | SubjectSet<Workspace, "members">)[]
+    owners: User[]
+  }
+
+  permits = {
+    use: (ctx: Context): boolean =>
+      this.related.users.includes(ctx.subject) ||
+      this.related.owners.includes(ctx.subject),
+
+    manage: (ctx: Context): boolean =>
+      this.related.owners.includes(ctx.subject),
+  }
+}

@@ -28,8 +28,9 @@ test.describe("Scenario 01 MP - connect an OpenAPI tool and attach it to an agen
   // Regression guard: the create used to 201 server-side but the form stayed
   // put (it called router.refresh() right after router.push(), aborting the
   // navigation - looked like a hang). Fixed by dropping the refresh and
-  // revalidating /mcp-servers in the server action. This asserts submit ->
-  // success -> navigation to /mcp-servers.
+  // revalidating the connections list in the server action. This asserts
+  // submit -> success -> navigation to /connections (the MCP feature moved
+  // there; the old /mcp-servers path 307-redirects to /connections).
   test("creates an OpenAPI connection from a spec URL before agent attach", async ({
     context,
     page,
@@ -37,7 +38,7 @@ test.describe("Scenario 01 MP - connect an OpenAPI tool and attach it to an agen
     test.setTimeout(90_000);
     await installBrowserSession(context, user);
 
-    await gotoCommitted(page, "/mcp-servers/add-openapi");
+    await gotoCommitted(page, "/connections/add-openapi");
     await page.getByRole("button", { name: "Paste JSON" }).click();
 
     await page.locator("#spec_json").fill(
@@ -58,8 +59,8 @@ test.describe("Scenario 01 MP - connect an OpenAPI tool and attach it to an agen
     );
 
     await page.getByRole("button", { name: "Create Connection" }).click();
-    await expectRedirectedAwayFrom(page, "/mcp-servers/add-openapi", 30_000);
-    await expect(page).toHaveURL(/\/mcp-servers/);
+    await expectRedirectedAwayFrom(page, "/connections/add-openapi", 30_000);
+    await expect(page).toHaveURL(/\/connections/);
     expect(new URL(page.url()).origin).toBe(new URL(baseURL).origin);
   });
 });

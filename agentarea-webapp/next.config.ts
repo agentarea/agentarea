@@ -20,6 +20,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    // The MCP "Connections" feature now lives under /connections.
+    // Keep old /mcp-servers bookmarks and deep links working.
+    return [
+      {
+        source: "/mcp-servers",
+        destination: "/connections",
+        permanent: false,
+      },
+      {
+        source: "/mcp-servers/:path*",
+        destination: "/connections/:path*",
+        permanent: false,
+      },
+    ];
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION:
       process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version,

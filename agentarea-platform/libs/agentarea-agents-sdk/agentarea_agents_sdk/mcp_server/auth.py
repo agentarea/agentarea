@@ -177,7 +177,7 @@ class MCPAuthMiddleware:
                 get_auth_provider,
             )
 
-            api_key_prefix = "aa_"
+            api_key_prefix = "aat_"
 
             # --- API key path ---
             if bearer_token.startswith(api_key_prefix):

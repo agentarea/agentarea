@@ -1273,7 +1273,8 @@ class TriggerService:
         """Build channel_origin metadata for outbound routing.
 
         Extracts channel-specific routing info from trigger data so the
-        ChannelRouter can send responses back to the originating channel.
+        outbound channel delivery can send responses back to the
+        originating channel.
 
         Returns:
             Channel origin dict or None if no outbound routing needed.

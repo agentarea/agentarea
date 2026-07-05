@@ -20,10 +20,9 @@ test.describe("Scenario 04 MP - add an MCP server and use its tool from an agent
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  // KNOWN REAL BUG (red on purpose): mcp-servers/add/actions.ts builds a
-  // payload that still fails generated request validation before redirecting,
-  // so the UI stays on the form with a 422-style validation failure
-  // (src/app/(main)/mcp-servers/add/actions.ts:224).
+  // The MCP feature now lives under /connections (the old /mcp-servers path
+  // 307-redirects there). On submit the Add form creates the server and
+  // navigates to its detail page at /connections/{id}.
   test("creates a Docker MCP server through the real Add form", async ({
     context,
     page,
@@ -31,13 +30,13 @@ test.describe("Scenario 04 MP - add an MCP server and use its tool from an agent
     test.setTimeout(90_000);
     await installBrowserSession(context, user);
 
-    await gotoCommitted(page, "/mcp-servers/add");
+    await gotoCommitted(page, "/connections/add");
     await page.locator("#name").fill(`scenario-04-mcp-${Date.now()}`);
     await page.locator("#description").fill("Scenario 04 MCP server");
     await page.locator("#dockerImageUrl").fill("ghcr.io/example/e2e-mcp:latest");
     await page.getByRole("button", { name: "Add Server" }).click();
 
-    await expectRedirectedAwayFrom(page, "/mcp-servers/add");
-    await expect(page).toHaveURL(/\/mcp-servers\/[^/]+/);
+    await expectRedirectedAwayFrom(page, "/connections/add");
+    await expect(page).toHaveURL(/\/connections\/[^/]+/);
   });
 });

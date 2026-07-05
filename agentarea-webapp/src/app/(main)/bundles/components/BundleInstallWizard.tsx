@@ -25,6 +25,7 @@ import {
   Plug,
   Plus,
   Puzzle,
+  Send,
   ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,7 @@ import { cn } from "@/lib/utils";
 import type {
   BundleAgent,
   BundleAutomation,
+  BundleChannel,
   BundleMcp,
   BundlePolicy,
   ImportPreview,
@@ -87,6 +89,7 @@ type EditState = {
   agentOff: Set<string>; // excluded agents
   mcpOff: Set<string>; // globally excluded connections
   agentMcpOff: Record<string, Set<string>>; // connections detached per agent
+  channelEnabled: Record<string, boolean>;
   autoEnabled: Record<string, boolean>;
   policyOff: Set<string>; // excluded policies
   policyEnabled: Record<string, boolean>;
@@ -97,6 +100,7 @@ const INITIAL_EDIT: EditState = {
   agentOff: new Set(),
   mcpOff: new Set(),
   agentMcpOff: {},
+  channelEnabled: {},
   autoEnabled: {},
   policyOff: new Set(),
   policyEnabled: {},
@@ -106,6 +110,7 @@ type EditAction =
   | {
       type: "init";
       setupValues: Record<string, unknown>;
+      channelEnabled: Record<string, boolean>;
       autoEnabled: Record<string, boolean>;
       policyEnabled: Record<string, boolean>;
     }
@@ -113,6 +118,7 @@ type EditAction =
   | { type: "toggleAgent"; key: string; on: boolean }
   | { type: "toggleGlobalMcp"; key: string; on: boolean }
   | { type: "toggleAgentMcp"; agentKey: string; mcpKey: string; on: boolean }
+  | { type: "toggleChannel"; key: string; on: boolean }
   | { type: "toggleAuto"; key: string; on: boolean }
   | { type: "togglePolicyInclude"; key: string; on: boolean }
   | { type: "togglePolicyEnabled"; key: string; on: boolean };
@@ -131,6 +137,7 @@ function editReducer(state: EditState, action: EditAction): EditState {
       return {
         ...INITIAL_EDIT,
         setupValues: action.setupValues,
+        channelEnabled: action.channelEnabled,
         autoEnabled: action.autoEnabled,
         policyEnabled: action.policyEnabled,
       };
@@ -149,6 +156,8 @@ function editReducer(state: EditState, action: EditAction): EditState {
       );
       return { ...state, agentMcpOff: { ...state.agentMcpOff, [action.agentKey]: set } };
     }
+    case "toggleChannel":
+      return { ...state, channelEnabled: { ...state.channelEnabled, [action.key]: action.on } };
     case "toggleAuto":
       return { ...state, autoEnabled: { ...state.autoEnabled, [action.key]: action.on } };
     case "togglePolicyInclude":
@@ -186,8 +195,16 @@ export function BundleInstallWizard({
   // Edit state — one reducer keyed by the analyzed bundle, rebuilt into the
   // canonical object on install without mutating the preview.
   const [edit, dispatch] = useReducer(editReducer, INITIAL_EDIT);
-  const { setupValues, agentOff, mcpOff, agentMcpOff, autoEnabled, policyOff, policyEnabled } =
-    edit;
+  const {
+    setupValues,
+    agentOff,
+    mcpOff,
+    agentMcpOff,
+    channelEnabled,
+    autoEnabled,
+    policyOff,
+    policyEnabled,
+  } = edit;
 
   useEffect(() => {
     let active = true;
@@ -208,6 +225,9 @@ export function BundleInstallWizard({
         dispatch({
           type: "init",
           setupValues: sv,
+          channelEnabled: Object.fromEntries(
+            (bundle.channels ?? []).map((c) => [c.key, Boolean(c.enabled)])
+          ),
           autoEnabled: Object.fromEntries(
             (bundle.automations ?? []).map((a) => [a.key, Boolean(a.enabled)])
           ),
@@ -239,9 +259,26 @@ export function BundleInstallWizard({
 
   const agents = useMemo(() => preview?.bundle.agents ?? [], [preview]);
   const mcps = useMemo(() => preview?.bundle.mcps ?? [], [preview]);
+  const channels = useMemo(() => preview?.bundle.channels ?? [], [preview]);
   const automations = useMemo(() => preview?.bundle.automations ?? [], [preview]);
   const policies = useMemo(() => preview?.bundle.policies ?? [], [preview]);
   const setup = useMemo(() => preview?.setup ?? [], [preview]);
+
+  // Tool-scoping is just governance policy: allow/deny rules targeting `tool:X`
+  // bound to an agent. CapabilityGuard enforces them at runtime (default-deny
+  // once an allowlist exists), so we surface the resulting scope per agent.
+  const toolScope = (agentKey: string) => {
+    const allowed: string[] = [];
+    const denied: string[] = [];
+    for (const p of policies) {
+      if (p.subject !== agentKey) continue;
+      const m = (p.target ?? "").match(/^tool:(.+)$/);
+      if (!m || m[1] === "*") continue;
+      if (p.effect === "allow") allowed.push(m[1]);
+      else if (p.effect === "deny") denied.push(m[1]);
+    }
+    return { allowed, denied };
+  };
 
   const mcpByKey = useMemo(() => {
     const m = new Map<string, BundleMcp>();
@@ -280,6 +317,8 @@ export function BundleInstallWizard({
     dispatch({ type: "toggleGlobalMcp", key, on });
   const toggleAgentMcp = (agentKey: string, mcpKey: string, on: boolean) =>
     dispatch({ type: "toggleAgentMcp", agentKey, mcpKey, on });
+  const toggleChannel = (key: string, on: boolean) =>
+    dispatch({ type: "toggleChannel", key, on });
   const toggleAuto = (key: string, on: boolean) => dispatch({ type: "toggleAuto", key, on });
   const togglePolicyInclude = (key: string, on: boolean) =>
     dispatch({ type: "togglePolicyInclude", key, on });
@@ -308,7 +347,10 @@ export function BundleInstallWizard({
         }));
       const keptAgentKeys = new Set(finalAgents.map((a) => a.key));
       const finalMcps: BundleMcp[] = mcps.filter((m) => installedMcpKeys.has(m.key));
-      // Drop automations whose target agent is no longer being installed.
+      // Drop channels/automations whose target agent is no longer being installed.
+      const finalChannels: BundleChannel[] = channels
+        .filter((c) => keptAgentKeys.has(c.agent))
+        .map((c) => ({ ...c, enabled: channelEnabled[c.key] ?? false }));
       const finalAutomations: BundleAutomation[] = automations
         .filter((a) => keptAgentKeys.has(a.agent))
         .map((a) => ({ ...a, enabled: autoEnabled[a.key] ?? false }));
@@ -320,6 +362,7 @@ export function BundleInstallWizard({
         ...preview.bundle,
         agents: finalAgents,
         mcps: finalMcps,
+        channels: finalChannels,
         automations: finalAutomations,
         policies: finalPolicies,
       };
@@ -480,6 +523,71 @@ export function BundleInstallWizard({
                           })}
                         </div>
                       )}
+                      {included &&
+                        (() => {
+                          const { allowed, denied } = toolScope(a.key);
+                          if (allowed.length === 0 && denied.length === 0) return null;
+                          return (
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                              {allowed.length > 0 ? (
+                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
+                                  Tools locked to:{" "}
+                                  <span className="font-medium">{allowed.join(", ")}</span> — all
+                                  others blocked
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-amber-700 dark:text-amber-300">
+                                  Blocked tools:{" "}
+                                  <span className="font-medium">{denied.join(", ")}</span>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
+          {/* Channels */}
+          {channels.length > 0 && (
+            <Section title="Channels" count={channels.length}>
+              <p className="mb-2 text-xs text-muted-foreground">
+                The agent receives and replies to messages here. Off by default — enable once
+                the bot token is set and the bot points at the webhook URL shown after install.
+              </p>
+              <div className="space-y-2">
+                {channels.map((c) => {
+                  const secretLabels = Object.values(c.bindings ?? {})
+                    .map((ref) => setupRefKey(ref))
+                    .filter((k): k is string => Boolean(k))
+                    .map((k) => setup.find((f) => f.key === k)?.label ?? k);
+                  return (
+                    <div
+                      key={c.key}
+                      className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
+                    >
+                      <Send className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {c.name}{" "}
+                          <span className="font-normal capitalize text-muted-foreground">
+                            · {c.type}
+                          </span>
+                        </p>
+                        {secretLabels.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Needs: {secretLabels.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <Switch
+                        checked={channelEnabled[c.key] ?? false}
+                        onCheckedChange={(on) => toggleChannel(c.key, on)}
+                      />
                     </div>
                   );
                 })}

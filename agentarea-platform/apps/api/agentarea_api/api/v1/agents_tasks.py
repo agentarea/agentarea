@@ -333,12 +333,7 @@ async def _tail_task_events_sse(
     a fast task whose events land before the reader attaches loses nothing
     (the old reason this used DB polling) — without the 0.25s poll.
     """
-    from agentarea_api.api.deps.database import get_db_session
-    from agentarea_common.broker.redis_streams import RedisStreamsBroker
-    from agentarea_common.config import get_settings
-    from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream
-    from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_event_feed
-    from sqlalchemy import text
+    from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
     if emit_connected:
         yield _format_sse_event(
@@ -352,48 +347,21 @@ async def _tail_task_events_sse(
             },
         )
 
-    async def _snapshot() -> list[TaskEventEnvelope]:
-        async with get_db_session() as session:
-            rows = (
-                await session.execute(
-                    text(
-                        "SELECT id, event_type, timestamp, data "
-                        "FROM task_events "
-                        "WHERE task_id = :task_id "
-                        "ORDER BY timestamp ASC"
-                    ),
-                    {"task_id": str(task_id)},
-                )
-            ).fetchall()
-        return [
-            TaskEventEnvelope(
-                event_type=row.event_type,
-                event_id=str(row.id),
-                timestamp=row.timestamp.isoformat() if row.timestamp else None,
-                data=dict(row.data or {}),
-            )
-            for row in rows
-        ]
-
-    redis_url = getattr(get_settings().broker, "REDIS_URL", "redis://localhost:6379")
-    broker = RedisStreamsBroker(redis_url)
-    stream = RedisStreamsEventStream(broker)
-    try:
-        async for env in iter_task_event_feed(
-            stream=stream,
-            task_id=str(task_id),
-            snapshot=_snapshot,
-            terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
-        ):
-            sse_event = {
-                "event_type": env.event_type,
-                "event_id": env.event_id,
-                "timestamp": env.timestamp,
-                "data": _filter_domain_fields(dict(env.data)),
-            }
-            yield _format_sse_event(env.event_type, sse_event)
-    finally:
-        await broker.aclose()
+    # Exclude high-volume incremental chunks: this SSE historically carried only
+    # DB-persisted events (chunks are stream-only). Flip this to surface live
+    # tokens in the UI as a deliberate, separately-verified change.
+    async for env in open_task_event_feed(
+        task_id,
+        terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
+        exclude_types=frozenset({"LLMCallChunk"}),
+    ):
+        sse_event = {
+            "event_type": env.event_type,
+            "event_id": env.event_id,
+            "timestamp": env.timestamp,
+            "data": _filter_domain_fields(dict(env.data)),
+        }
+        yield _format_sse_event(env.event_type, sse_event)
 
 
 @router.post("/")
@@ -1251,14 +1219,14 @@ async def send_task_command(
                     status_code=400, detail="model_instance_id is required for change_model"
                 )
             resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "change_model", resolved
             )
 
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "queue_message", {"message": payload.message}
             )
 
@@ -1267,17 +1235,28 @@ async def send_task_command(
                 raise HTTPException(
                     status_code=400, detail="message_id is required for remove_message"
                 )
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "remove_message", {"message_id": payload.message_id}
             )
 
         elif payload.command == "update_budget":
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "update_budget", {"budget_usd": payload.budget_usd}
             )
 
         else:
             raise HTTPException(status_code=400, detail=f"Unknown command: {payload.command}")
+
+        # send_workflow_command returns False when the signal could not be
+        # delivered — most commonly because the task's workflow is no longer
+        # running (completed / timed out / terminated). Surface that as a real
+        # error instead of a misleading 200, so the UI doesn't claim a change
+        # (e.g. a model switch) that never actually happened.
+        if not delivered:
+            raise HTTPException(
+                status_code=409,
+                detail="Task is not running; the command could not be delivered to its workflow.",
+            )
 
         return {"status": "accepted", "command": payload.command}
 

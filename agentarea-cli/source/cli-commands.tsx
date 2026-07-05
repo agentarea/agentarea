@@ -12,6 +12,8 @@ interface CliOptions {
 	apiUrl?: string;
 	scope?: string;
 	name?: string;
+	client?: string;
+	target?: string;
 }
 
 export async function handleCliCommand(
@@ -71,6 +73,35 @@ export async function handleCliCommand(
 			token: authToken,
 			scope: options.scope,
 			name: options.name,
+		});
+	}
+
+	if (command === 'mcp' && subcommand === 'sync') {
+		if (!options.client) {
+			console.error('Usage: agentarea-cli mcp sync --client=<id> [--target=codex|claude]');
+			return false;
+		}
+		const target = options.target || 'claude';
+		const apiUrl = options.apiUrl || 'http://localhost:8000';
+		// Record which harness this client was synced for so the UI reflects it.
+		try {
+			await fetch(`${apiUrl}/v1/clients/${options.client}`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${authToken}`,
+				},
+				body: JSON.stringify({kind: target}),
+			});
+		} catch {
+			// Non-fatal: the connection still works without the kind label.
+		}
+		return connectClient(target, {
+			apiUrl,
+			token: authToken,
+			scope: options.scope,
+			name: options.name,
+			clientId: options.client,
 		});
 	}
 

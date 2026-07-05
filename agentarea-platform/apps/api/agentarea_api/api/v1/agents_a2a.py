@@ -22,7 +22,6 @@ from uuid import UUID, uuid4
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import (
     get_agent_service,
-    get_event_stream_service,
     get_secret_manager,
     get_task_service,
 )
@@ -31,9 +30,9 @@ from agentarea_api.api.v1.a2a_auth import (
     allow_public_access,
     require_a2a_execute_auth,
 )
+from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
-from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.a2a_push import (
     delete_push_config,
@@ -461,7 +460,8 @@ def extract_text_from_event_data(event_data: dict[str, Any]) -> str:
     return ""
 
 
-# Real workflow terminal event types (prefixed by EventStreamService as ``workflow.*``).
+# Real workflow terminal event types. The feed yields unprefixed types (as
+# stored in task_events); the ``workflow.*`` forms are kept for back-compat.
 _TERMINAL_EVENT_STATES = {
     "workflow.WorkflowCompleted": TaskState.COMPLETED,
     "workflow.WorkflowFailed": TaskState.FAILED,
@@ -472,6 +472,9 @@ _TERMINAL_EVENT_STATES = {
 }
 # Incremental output event types.
 _CHUNK_EVENT_TYPES = {"workflow.LLMCallChunk", "LLMCallChunk"}
+# Terminal task event types the feed watches to end an A2A stream (unprefixed,
+# as stored in task_events and emitted on the per-task stream).
+_A2A_TERMINAL_TYPES = frozenset({"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"})
 
 
 def _sse(response: JSONRPCResponse) -> str:
@@ -876,7 +879,6 @@ async def handle_message_stream_sse(
     agent_id,
     auth_context,
     agent_service,
-    event_stream_service,
     secret_manager=None,
 ) -> JSONRPCResponse | Response:
     """Handle A2A message/stream method with proper TaskService integration.
@@ -979,13 +981,17 @@ async def handle_message_stream_sse(
                 yield f"data: {initial.model_dump_json(by_alias=True)}\n\n"
                 event_count += 1
 
-                # 2. Stream workflow events, mapping each to A2A SSE frames
-                async for event in event_stream_service.stream_events_for_task(
-                    created_task.id, event_patterns=["workflow.*"]
+                # 2. Stream task events (catch-up + live), mapping each to A2A
+                # SSE frames. Chunks are included so A2A streams live tokens.
+                async for env in open_task_event_feed(
+                    created_task.id, terminal_types=_A2A_TERMINAL_TYPES
                 ):
                     event_count += 1
                     frames, is_terminal = map_workflow_event_to_sse(
-                        event, request_id, str(created_task.id), task_context_id
+                        {"event_type": env.event_type, "event_data": env.data},
+                        request_id,
+                        str(created_task.id),
+                        task_context_id,
                     )
                     for frame in frames:
                         yield frame
@@ -1312,7 +1318,7 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
 
 
 async def handle_task_resubscribe(
-    request, request_id, params, task_service, agent_id, auth_context, event_stream_service
+    request, request_id, params, task_service, agent_id, auth_context
 ):
     """Handle tasks/resubscribe — re-attach to SSE stream for an existing task."""
     time.time()
@@ -1368,13 +1374,16 @@ async def handle_task_resubscribe(
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
-        # Stream live events for active task
+        # Stream task events (catch-up + live) for active task
         async def event_stream():
-            async for event in event_stream_service.stream_events_for_task(
-                task_id, event_patterns=["workflow.*"]
+            async for env in open_task_event_feed(
+                task_id, terminal_types=_A2A_TERMINAL_TYPES
             ):
                 frames, is_terminal = map_workflow_event_to_sse(
-                    event, request_id, str(task_id), context_id
+                    {"event_type": env.event_type, "event_data": env.data},
+                    request_id,
+                    str(task_id),
+                    context_id,
                 )
                 for frame in frames:
                     yield frame
@@ -1693,7 +1702,6 @@ async def _dispatch_rpc_method(
     agent_service,
     agent_id,
     auth_context,
-    event_stream_service,
     secret_manager,
 ):
     """Dispatch A2A RPC method calls with proper error handling."""
@@ -1710,7 +1718,6 @@ async def _dispatch_rpc_method(
             agent_id,
             auth_context,
             agent_service,
-            event_stream_service,
             secret_manager,
         ),
         "GetTask": lambda: handle_task_get(
@@ -1720,7 +1727,7 @@ async def _dispatch_rpc_method(
             request_id, params, task_service, agent_id, auth_context
         ),
         "SubscribeToTask": lambda: handle_task_resubscribe(
-            request, request_id, params, task_service, agent_id, auth_context, event_stream_service
+            request, request_id, params, task_service, agent_id, auth_context
         ),
         "ListTasks": lambda: handle_task_list(
             request_id, params, task_service, agent_id, auth_context
@@ -1764,7 +1771,6 @@ async def handle_agent_jsonrpc(
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
     secret_manager: BaseSecretManager = Depends(get_secret_manager),
 ) -> JSONRPCResponse | Response:
     """Handle A2A JSON-RPC requests with comprehensive error handling and validation."""
@@ -1872,7 +1878,6 @@ async def handle_agent_jsonrpc(
             agent_service=agent_service,
             agent_id=agent_id,
             auth_context=auth_context,
-            event_stream_service=event_stream_service,
             secret_manager=secret_manager,
         )
 

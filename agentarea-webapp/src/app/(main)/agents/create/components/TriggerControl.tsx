@@ -1,5 +1,5 @@
 import { Edit, Trash2 } from "lucide-react";
-import { Control, Path, useWatch } from "react-hook-form";
+import { Control, useWatch } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
 import type { AgentFormValues, MCPToolConfig } from "../types";
@@ -50,8 +50,8 @@ export const TriggerControl = ({
   control,
   removeEvent,
   editEvent,
-  name: _name,
-  enabledName: _enabledName,
+  name,
+  enabledName,
   selectedMethods = {},
   onMethodToggle,
   allowedToolsFieldName,
@@ -60,7 +60,7 @@ export const TriggerControl = ({
   // Reactively watch allowed_tools so checkboxes update on change
   const allowedTools: MCPToolConfig[] = useWatch({
     control,
-    name: allowedToolsFieldName as Path<AgentFormValues>,
+    name: allowedToolsFieldName as any,
     defaultValue: [],
   }) || [];
 

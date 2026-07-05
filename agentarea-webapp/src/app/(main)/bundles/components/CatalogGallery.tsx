@@ -25,6 +25,7 @@ import {
   Puzzle,
   Rows3,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Star,
@@ -669,8 +670,8 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   // Setup reuses the existing "create instance from spec" page — the catalog
   // never configures inline. Each catalog connection links to an MCP spec.
   const connectHref = entry.installEntityId
-    ? `/mcp-servers/create/${entry.installEntityId}`
-    : "/mcp-servers/add";
+    ? `/connections/create/${entry.installEntityId}`
+    : "/connections/add";
 
   useEffect(() => {
     // Reset only when the selected item changes.
@@ -1059,15 +1060,24 @@ function BundleContents({ spec }: { spec: RawSpec }) {
   const agents = arr(spec.agents);
   const skills = arr(spec.skills);
   const mcps = arr(spec.mcps);
+  const channels = arr(spec.channels);
   const setup = arr(spec.setup);
   const automations = arr(spec.automations);
   const policies = arr(spec.policies);
   const capabilities = bundleCapabilities(spec);
 
+  // Tool-scoping surfaced from governance policies (allow/deny on `tool:X`).
+  const agentAllowedTools = (agentKey: string) =>
+    policies
+      .filter((p) => str(p.subject) === agentKey && str(p.effect) === "allow")
+      .map((p) => str(p.target)?.match(/^tool:(.+)$/)?.[1])
+      .filter((t): t is string => Boolean(t) && t !== "*");
+
   const total =
     agents.length +
     skills.length +
     mcps.length +
+    channels.length +
     automations.length +
     policies.length +
     capabilities.length;
@@ -1130,6 +1140,16 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                   ))}
                 </div>
               )}
+              {(() => {
+                const allowed = agentAllowedTools(String(a.key ?? ""));
+                if (allowed.length === 0) return null;
+                return (
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                    Tools locked to <span className="font-medium">{allowed.join(", ")}</span>
+                  </p>
+                );
+              })()}
             </div>
           );
         })}
@@ -1200,6 +1220,16 @@ function BundleContents({ spec }: { spec: RawSpec }) {
         })}
       </BundleSection>
 
+      <Inside
+        icon={Send}
+        label="Channels"
+        rows={channels.map((c) => {
+          const name = String(c.name ?? c.key ?? "channel");
+          const type = str(c.type);
+          return type ? `${name} · ${type}` : name;
+        })}
+        hint="Chat with the agent here — connect after install"
+      />
       <Inside
         icon={Clock}
         label="Automations"

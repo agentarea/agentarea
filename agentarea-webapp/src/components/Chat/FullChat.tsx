@@ -8,6 +8,7 @@ import { useMentions } from "@/hooks/useMentions";
 import {
   pauseAgentTaskAction as pauseAgentTask,
   resolveEscalationAction as resolveEscalation,
+  submitTaskInputAction as submitTaskInput,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
@@ -239,6 +240,24 @@ export default function FullChat({
       const tid = currentTaskId || taskId;
       if (!tid) return;
       await resolveEscalation(agent.id, tid, escalationId, approved, comment);
+    },
+    [agent.id, currentTaskId, taskId]
+  );
+
+  // Callback for submitting structured user input (incl. secrets → vault)
+  const handleSubmitInput = React.useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, { value: string; secret_name?: string }>
+    ) => {
+      const tid = currentTaskId || taskId;
+      if (!tid) return;
+      await submitTaskInput(agent.id, tid, {
+        input_request_id: inputRequestId,
+        answers,
+        secrets,
+      });
     },
     [agent.id, currentTaskId, taskId]
   );
@@ -573,6 +592,7 @@ export default function FullChat({
                   agent_name={agent.name}
                   onA2UIAction={dispatchA2UIAction}
                   onResolveEscalation={handleResolveEscalation}
+                  onSubmitInput={handleSubmitInput}
                 />
               );
             } else if (message.role === "user") {

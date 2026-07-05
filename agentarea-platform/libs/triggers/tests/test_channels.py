@@ -1,4 +1,4 @@
-"""Tests for channel adapters and router."""
+"""Tests for channel adapters."""
 
 import json
 from unittest.mock import AsyncMock, patch
@@ -19,7 +19,6 @@ from agentarea_triggers.channels.email import (
     _html_to_plain,
     create_email_adapter,
 )
-from agentarea_triggers.channels.router import ChannelRouter
 from agentarea_triggers.channels.telegram import (
     TelegramAdapter,
     _escape_md,
@@ -125,6 +124,23 @@ class TestComposedTelegramAdapter:
 
         assert "Working on it\\.\\.\\." in msg
 
+    def test_command_received_seeds_working_frame_in_concise(self):
+        """Per-turn WorkflowCommandReceived renders the same '⏳ Working on it...'
+        frame as WorkflowStarted. On persistent conversational channels the
+        workflow lives across turns (WorkflowStarted fires once ever), so this
+        is what seeds the live message before the result edits it in place.
+        """
+        formatter = make_formatter(TELEGRAM_MD)
+
+        msg = formatter({"event_type": "WorkflowCommandReceived", "data": {}}, "concise")
+
+        assert "Working on it\\.\\.\\." in msg
+
+    def test_command_received_visible_in_concise(self):
+        from agentarea_execution.workflows.visibility import PresentationMode, is_visible
+
+        assert is_visible("WorkflowCommandReceived", PresentationMode.CONCISE)
+
     def test_strip_markdown_for_plain_text_fallback(self):
         assert _strip_markdown(r"\*Done\* with value\_1") == "Done with value1"
 
@@ -197,77 +213,82 @@ class TestEmailAdapter:
         html = "<p>Hello <strong>world</strong></p>"
         assert "Hello world" in _html_to_plain(html)
 
-
-class TestChannelRouter:
-    """Test channel router dispatch."""
-
-    @pytest.fixture
-    def emitter(self):
-        # Router now submits to a stream emitter instead of calling adapter.send
-        # directly — the consumer drives delivery in a separate loop.
-        e = AsyncMock()
-        e.submit = AsyncMock(return_value="msg-id-1")
-        return e
+    # --- send(): failures must be raised (loud), never swallowed ---------------
+    # The delivery consumer classifies on these types: FatalError -> DLQ,
+    # RetryableError -> redeliver. Silently returning would make a dead channel
+    # look like a successful delivery.
 
     @pytest.fixture
-    def router(self, emitter):
-        return ChannelRouter(emitter=emitter)
+    def creds(self):
+        return json.dumps(
+            {
+                "smtp_host": "mailpit",
+                "smtp_port": 1025,
+                "from_address": "agent@agentarea.local",
+            }
+        )
 
     @pytest.mark.asyncio
-    async def test_no_channel_origin_skips(self, router, emitter):
-        """Events without channel_origin are ignored (webUI handles them)."""
-        event = {"event_type": "WorkflowCompleted", "data": {}}
-        await router.on_task_event(event)
-        emitter.submit.assert_not_called()
+    async def test_send_no_reply_to_raises_fatal(self):
+        from agentarea_triggers.channels.exceptions import FatalError
+
+        adapter = EmailAdapter(secret_manager=AsyncMock())
+        with pytest.raises(FatalError, match="reply_to"):
+            await adapter.send({"trigger_id": "t1"}, "<p>hi</p>")
 
     @pytest.mark.asyncio
-    async def test_invisible_event_skipped(self, router, emitter):
-        """Events not visible in the presentation mode are skipped."""
-        event = {
-            "event_type": "LLMCallChunk",  # Internal — not visible in concise
-            "data": {},
-            "channel_origin": {"type": "telegram", "chat_id": "123", "presentation": "concise"},
-        }
-        await router.on_task_event(event)
-        emitter.submit.assert_not_called()
+    async def test_send_unresolvable_credentials_raises_fatal(self):
+        from agentarea_triggers.channels.exceptions import FatalError
+
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=None)
+        adapter = EmailAdapter(secret_manager=sm)
+        with pytest.raises(FatalError, match="credentials not found"):
+            await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
 
     @pytest.mark.asyncio
-    async def test_dispatches_to_registered_adapter(self, router, emitter):
-        """Events are formatted by the adapter and submitted to the emitter."""
-        from unittest.mock import MagicMock
-        mock_adapter = MagicMock()
-        # format is sync, returns the message string
-        mock_adapter.format = MagicMock(return_value="formatted message")
-        # send is async — would be called by the consumer, not by the router
-        mock_adapter.send = AsyncMock()
-        register_adapter("test_channel", mock_adapter)
-
-        event = {
-            "event_type": "WorkflowCompleted",
-            "data": {"result": "done"},
-            "channel_origin": {"type": "test_channel", "chat_id": "123", "presentation": "concise"},
-        }
-
-        await router.on_task_event(event)
-
-        mock_adapter.format.assert_called_once()
-        # send is NOT called by the router anymore — the consumer does that.
-        mock_adapter.send.assert_not_called()
-        emitter.submit.assert_called_once()
-        kwargs = emitter.submit.await_args.kwargs
-        assert kwargs["channel_type"] == "test_channel"
-        assert kwargs["message"] == "formatted message"
+    async def test_send_success_invokes_smtp(self, creds):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        adapter = EmailAdapter(secret_manager=sm)
+        with patch(
+            "agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()
+        ) as send:
+            await adapter.send(
+                {"trigger_id": "t1", "reply_to": "u@x.io", "subject": "Hi"},
+                "<p>hi</p>",
+            )
+        send.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_missing_adapter_logs_warning(self, router, emitter):
-        """Missing adapter logs a warning but doesn't raise or submit."""
-        event = {
-            "event_type": "WorkflowCompleted",
-            "data": {},
-            "channel_origin": {"type": "nonexistent_channel", "chat_id": "123"},
-        }
-        await router.on_task_event(event)
-        emitter.submit.assert_not_called()
+    async def test_send_transient_smtp_error_raises_retryable(self, creds):
+        import aiosmtplib
+        from agentarea_triggers.channels.exceptions import RetryableError
+
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        adapter = EmailAdapter(secret_manager=sm)
+        with patch(
+            "agentarea_triggers.channels.email.aiosmtplib.send",
+            new=AsyncMock(side_effect=aiosmtplib.SMTPConnectError("refused")),
+        ):
+            with pytest.raises(RetryableError):
+                await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
+
+    @pytest.mark.asyncio
+    async def test_send_auth_error_raises_fatal(self, creds):
+        import aiosmtplib
+        from agentarea_triggers.channels.exceptions import FatalError
+
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        adapter = EmailAdapter(secret_manager=sm)
+        with patch(
+            "agentarea_triggers.channels.email.aiosmtplib.send",
+            new=AsyncMock(side_effect=aiosmtplib.SMTPAuthenticationError(535, "bad creds")),
+        ):
+            with pytest.raises(FatalError, match="authentication"):
+                await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
 
 
 class TestAdapterRegistry:

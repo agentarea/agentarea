@@ -10,7 +10,12 @@ binary content mode: envelope attributes become ``ce_*`` fields, the payload is
 a JSON string under ``data``. This is language-neutral — a Go/other consumer
 reads the same fields without any FastStream framing.
 
-``EventStream`` (read side for SSE/A2A) is added in a later increment.
+Two delivery patterns share the same wire format but use different primitives:
+
+- ``RedisStreamsEventBus`` — Competing Consumers (consumer group, ACK, retry,
+  at-least-once). For durable work that must be processed exactly once.
+- ``RedisStreamsEventStream`` — Publish-Subscribe Channel (broadcast tail, no
+  group, no ACK, at-most-once). The CQRS read side: catch-up then live tail.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -179,3 +185,39 @@ class RedisStreamsEventBus:
             logger.exception("Handler failed for %s on %s; will redeliver", msg.id, stream)
             return
         await self._broker.ack(stream, group, msg.id)
+
+
+class RedisStreamsEventStream:
+    """``EventStream`` (CQRS read side) over a ``BrokerClient`` broadcast tail.
+
+    Publish-Subscribe Channel semantics: every reader gets every event
+    independently (XREAD, no consumer group, no ACK). ``from_offset="0"``
+    replays the stream from the start (catch-up) and then keeps yielding live
+    entries; ``"$"`` tails live only. Delivery is at-most-once — suitable for
+    ephemeral notifications and live UI tailing, NOT for work that must not be
+    lost (use ``RedisStreamsEventBus`` for that).
+
+    Bounded retention is the producer's responsibility (XADD MAXLEN); a reader
+    starting from ``"0"`` only sees what retention has kept.
+    """
+
+    def __init__(self, broker: BrokerClient, *, block_ms: int = 5000) -> None:
+        self._broker = broker
+        self._block_ms = block_ms
+
+    async def read(
+        self, *, stream: str, from_offset: str = "0"
+    ) -> AsyncIterator[IntegrationEvent]:
+        physical = topic_for(stream)
+        cursor = from_offset
+        while True:
+            cursor, msgs = await self._broker.tail(
+                physical, last_id=cursor, block_ms=self._block_ms
+            )
+            for msg in msgs:
+                try:
+                    yield decode(msg.fields)
+                except Exception:
+                    logger.exception(
+                        "Undecodable stream message %s on %s; skipping", msg.id, physical
+                    )

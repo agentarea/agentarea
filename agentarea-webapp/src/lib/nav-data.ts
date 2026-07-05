@@ -17,7 +17,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import type { LucideIcon, LucideProps } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 
 export type NavSection = {
   id: string;
@@ -29,7 +29,7 @@ export type NavSection = {
     title: string;
     titleKey?: string;
     url: string;
-    icon?: LucideIcon;
+    icon?: any;
   }[];
 };
 
@@ -65,8 +65,12 @@ export const navData = {
           url: "/tasks",
           icon: ClipboardList,
         },
-        // Projects nav item hidden until the feature is fully working.
-        // Tracked in GitHub: finish the Projects feature before re-enabling.
+        {
+          title: "Projects",
+          titleKey: "projects",
+          url: "/projects",
+          icon: GalleryVerticalEnd,
+        },
       ],
     },
     {
@@ -107,6 +111,12 @@ export const navData = {
           title: "Connections",
           titleKey: "connections",
           url: "/connections",
+          icon: Plug,
+        },
+        {
+          title: "Clients",
+          titleKey: "clients",
+          url: "/clients",
           icon: Plug,
         },
         {

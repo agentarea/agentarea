@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ClientResponse } from "@/api/client/types.gen";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Bot, Terminal, Plug, type LucideIcon } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
@@ -12,6 +12,53 @@ import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
+
+// Harness kinds a client can represent. `kind` is set at creation and updated by
+// `agentarea mcp sync --target=<harness>`.
+const HARNESSES: Record<string, { label: string; icon: LucideIcon }> = {
+  claude: { label: "Claude Code", icon: Bot },
+  "claude-code": { label: "Claude Code", icon: Bot },
+  codex: { label: "Codex", icon: Terminal },
+  harness: { label: "Generic", icon: Plug },
+};
+
+function harnessOf(kind?: string | null) {
+  return HARNESSES[kind ?? ""] ?? { label: kind || "Generic", icon: Plug };
+}
+
+function HarnessBadge({ kind }: { kind?: string | null }) {
+  const { label, icon: Icon } = harnessOf(kind);
+  return (
+    <Badge variant="outline" className="gap-1 text-xs">
+      <Icon className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
+}
+
+function NameChips({
+  items,
+}: {
+  items?: { id: string; name: string }[] | null;
+}) {
+  const list = items ?? [];
+  if (!list.length)
+    return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {list.slice(0, 3).map((i) => (
+        <Badge key={i.id} variant="secondary" className="max-w-[120px] truncate text-[10px]">
+          {i.name}
+        </Badge>
+      ))}
+      {list.length > 3 && (
+        <span className="text-[10px] text-muted-foreground">
+          +{list.length - 3}
+        </span>
+      )}
+    </div>
+  );
+}
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +81,7 @@ export default function ClientsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [kind, setKind] = useState("harness");
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
@@ -54,7 +102,7 @@ export default function ClientsPage() {
     if (!name.trim()) return;
     setCreating(true);
     try {
-      const { error } = await createClientAction({ name: name.trim(), description: description || null });
+      const { error } = await createClientAction({ name: name.trim(), description: description || null, kind });
       if (error) {
         toast({ title: "Error", description: "Failed to create client", variant: "destructive" });
         return;
@@ -62,6 +110,7 @@ export default function ClientsPage() {
       setShowCreate(false);
       setName("");
       setDescription("");
+      setKind("harness");
       await load();
     } finally {
       setCreating(false);
@@ -87,28 +136,21 @@ export default function ClientsPage() {
       ),
     },
     {
-      header: "Kind",
+      header: "Harness",
       accessor: "kind",
-      render: (value: string) =>
-        value ? (
-          <Badge variant="outline" className="text-xs">
-            {value}
-          </Badge>
-        ) : null,
+      render: (value: string) => <HarnessBadge kind={value} />,
     },
     {
       header: "MCP",
       accessor: "mcp_instances",
       render: (value: ClientResponse["mcp_instances"]) => (
-        <span className="text-xs text-muted-foreground">{value?.length ?? 0}</span>
+        <NameChips items={value} />
       ),
     },
     {
       header: "Skills",
       accessor: "skills",
-      render: (value: ClientResponse["skills"]) => (
-        <span className="text-xs text-muted-foreground">{value?.length ?? 0}</span>
-      ),
+      render: (value: ClientResponse["skills"]) => <NameChips items={value} />,
     },
   ];
 
@@ -164,11 +206,9 @@ export default function ClientsPage() {
                     <SkillIcon className="h-3.5 w-3.5" />
                     {client.skills?.length ?? 0}
                   </span>
-                  {client.kind && (
-                    <Badge variant="outline" className="ml-auto text-xs">
-                      {client.kind}
-                    </Badge>
-                  )}
+                  <span className="ml-auto">
+                    <HarnessBadge kind={client.kind} />
+                  </span>
                 </div>
               </div>
             )}
@@ -194,6 +234,18 @@ export default function ClientsPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Harness</label>
+              <select
+                className="w-full rounded border bg-background px-3 py-2 text-sm"
+                value={kind}
+                onChange={(e) => setKind(e.target.value)}
+              >
+                <option value="harness">Generic</option>
+                <option value="claude">Claude Code</option>
+                <option value="codex">Codex</option>
+              </select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>

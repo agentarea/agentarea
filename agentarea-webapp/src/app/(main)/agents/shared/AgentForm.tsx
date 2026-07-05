@@ -1,6 +1,6 @@
 "use client";
 
-import type { McpServerInstanceResponse, McpServerResponse, ModelInstanceResponse, ToolResponse } from "@/api/client/types.gen";
+import type { McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -27,7 +27,6 @@ import {
   SkillsConfig,
   ToolConfig,
 } from "../create/components";
-import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import { useChat } from "./ChatContext";
 
@@ -37,15 +36,15 @@ type LLMModelInstance = ModelInstanceResponse;
 interface AgentFormProps {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
-  mcpInstanceList: McpServerInstanceResponse[];
-  builtinTools: ToolResponse[];
+  mcpInstanceList: any[];
+  builtinTools: any[];
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
-  onSubmit: (data: AgentFormValues) => Promise<AddAgentFormState>;
+  onSubmit: (data: AgentFormValues) => Promise<any>;
   submitButtonText?: string;
   submitButtonLoadingText?: string;
-  onSuccess?: (result: AddAgentFormState) => void;
-  onError?: (error: unknown) => void;
+  onSuccess?: (result: any) => void;
+  onError?: (error: any) => void;
   isLoading?: boolean;
   className?: string;
   placeholder?: string;
@@ -61,8 +60,8 @@ export default function AgentForm({
   initialData,
   agentId,
   onSubmit,
-  submitButtonText: _submitButtonText = "Save Agent",
-  submitButtonLoadingText: _submitButtonLoadingText = "Saving...",
+  submitButtonText = "Save Agent",
+  submitButtonLoadingText = "Saving...",
   onSuccess,
   onError,
   isLoading = false,
@@ -185,7 +184,7 @@ export default function AgentForm({
 
           if (onSuccess) {
             // Check if this is a creation (has id in result) - keep submitting state until navigation
-            const createdId = result.fieldValues?.id;
+            const createdId = (result.fieldValues as any)?.id;
             if (createdId) {
               shouldKeepSubmitting = true;
             }

@@ -52,13 +52,13 @@ const TYPE_CONFIG = {
     icon: Plug,
     label: "MCP server",
     color: "text-emerald-500",
-    href: (id: string) => `/mcp-servers/${id}`,
+    href: (id: string) => `/connections/${id}`,
   },
   openapi_connection: {
     icon: Globe,
     label: "OpenAPI",
     color: "text-rose-500",
-    href: (id: string) => `/mcp-servers/openapi/${id}`,
+    href: (id: string) => `/connections/openapi/${id}`,
   },
   skill: {
     icon: Sparkles,

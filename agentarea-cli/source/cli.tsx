@@ -15,12 +15,15 @@ const cli = meow(
 	  agents list     List all agents
 	  connect codex   Connect Codex to Agentarea MCP
 	  connect claude  Connect Claude Code to Agentarea MCP
+	  mcp sync        Connect a harness to a client-scoped MCP bundle
 
 	Options
 	  --token         JWT authentication token (or use AGENTAREA_TOKEN env var)
 	  --api-url       API server URL (default: http://localhost:8000)
 	  --name          Local Agentarea target name (default: default)
 	  --scope         Connection scope: project or user (default: project)
+	  --client        Client (agent-proxy) id for 'mcp sync'
+	  --target        Harness for 'mcp sync': codex or claude (default: claude)
 
 	Examples
 	  $ agentarea-cli --token=eyJ...
@@ -45,6 +48,12 @@ const cli = meow(
 				type: 'string',
 				default: 'default',
 			},
+			client: {
+				type: 'string',
+			},
+			target: {
+				type: 'string',
+			},
 		},
 	},
 );
@@ -60,6 +69,8 @@ if (command) {
 		apiUrl: cli.flags.apiUrl,
 		scope: cli.flags.scope,
 		name: cli.flags.name,
+		client: cli.flags.client,
+		target: cli.flags.target,
 	}).catch(error => {
 		console.error('CLI command failed:', error);
 		process.exit(1);

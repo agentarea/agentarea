@@ -28,6 +28,7 @@ const KIND_LABELS: Record<EntityKind, string> = {
   mcp: "MCP Servers",
   skill: "Skills",
   agent: "Agents",
+  channel: "Channels",
   automation: "Automations",
   policy: "Policies",
 };

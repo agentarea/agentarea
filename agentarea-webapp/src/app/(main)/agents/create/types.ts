@@ -1,3 +1,4 @@
+import type { AgentCreate } from "@/api/client/types.gen";
 import type { AddAgentFormState } from "./actions";
 
 /**

@@ -29,8 +29,31 @@ tuples:
   - user: User:u4
     relation: callers
     object: ToolResource:ws1/github.create_issue~args~abc
+  - user: User:cu1
+    relation: owners
+    object: Client:c1
+  - user: User:cu2
+    relation: users
+    object: Client:c1
 
 tests:
+  - name: client owner may use and manage; member may only use; others denied
+    check:
+      - user: User:cu1
+        object: Client:c1
+        assertions:
+          use: true
+          manage: true
+      - user: User:cu2
+        object: Client:c1
+        assertions:
+          use: true
+          manage: false
+      - user: User:u1
+        object: Client:c1
+        assertions:
+          use: false
+          manage: false
   - name: tool grant requires workspace membership
     check:
       - user: User:u1

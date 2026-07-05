@@ -281,6 +281,9 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
+      # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more
+      # than the 120s default before a container is declared unhealthy.
+      STARTUP_TIMEOUT: 300s
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"

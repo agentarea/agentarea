@@ -139,6 +139,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     n("agents", "agent");
     n("skills", "skill");
     n("mcps", "connection");
+    n("channels", "channel");
     n("automations", "automation");
     return {
       ...base,

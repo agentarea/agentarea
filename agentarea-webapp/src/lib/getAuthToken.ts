@@ -37,6 +37,8 @@ async function getAuthTokenImpl(): Promise<string | null> {
       return null;
     }
 
+    console.debug("[getAuthToken] Calling Kratos whoami endpoint");
+
     // Call Kratos directly to tokenize the session into an agentarea JWT
     const response = await fetch(
       `${env.ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`,
@@ -52,9 +54,12 @@ async function getAuthTokenImpl(): Promise<string | null> {
       }
     );
 
+    console.log("[getAuthToken] Kratos response status:", response.status);
+
     if (response.ok) {
       const data = await response.json();
       if (data.tokenized) {
+        console.log("[getAuthToken] JWT token received successfully");
         return data.tokenized;
       }
       console.warn("[getAuthToken] No tokenized field in response");
@@ -67,7 +72,7 @@ async function getAuthTokenImpl(): Promise<string | null> {
       response.statusText
     );
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[getAuthToken] Error getting JWT token from Kratos:", error);
     // Return null if authentication fails; callers treat null as "no session".
     return null;

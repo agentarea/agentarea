@@ -3,7 +3,6 @@ import React, { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
-  Control,
   Controller,
   FieldErrors,
   UseFormRegister,
@@ -24,7 +23,7 @@ type LLMModelInstance = ModelInstanceResponse;
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
-  control: Control<AgentFormValues>;
+  control: any;
   errors: FieldErrors<AgentFormValues>;
   setValue: UseFormSetValue<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
@@ -36,9 +35,9 @@ const BasicInformation = ({
   register,
   control,
   errors,
-  setValue: _setValue,
+  setValue,
   llmModelInstances,
-  onOpenConfigSheet: _onOpenConfigSheet,
+  onOpenConfigSheet,
   onRefreshModels,
 }: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
@@ -60,7 +59,7 @@ const BasicInformation = ({
     setSearchableSelectOpen(false);
   };
 
-  const handleAfterSubmit = (_config: unknown) => {
+  const handleAfterSubmit = (config: any) => {
     // Обновить список моделей после создания конфигурации
     onRefreshModels?.();
     // Закрыть sheet после успешного создания

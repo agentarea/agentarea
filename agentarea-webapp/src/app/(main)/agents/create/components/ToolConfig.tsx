@@ -21,13 +21,13 @@ import {
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
 import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
-import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 import {
   McpAvailableTool,
   McpInstance,
   resolveMcpRef,
 } from "@/lib/mcp/resolveMcpRef";
-import type { OpenAPIConnection } from "@/app/(main)/mcp-servers/types";
+import type { OpenAPIConnection } from "@/app/(main)/connections/types";
 import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { getNestedErrorMessage } from "../utils/formUtils";
@@ -357,7 +357,7 @@ const ToolConfig = ({
       disabled_methods: field.disabled_methods || {},
     })) || [];
 
-  // Resolve a connection icon the same way the /mcp-servers page does: the icon
+  // Resolve a connection icon the same way the /connections page does: the icon
   // usually lives on the server spec, so pair the instance with its spec.
   const instanceIconSrc = (instance: McpInstance): string | undefined => {
     const serverSpec = instance.server_spec_id
@@ -839,7 +839,7 @@ const ToolConfig = ({
                       trigger={{
                         id: builtinTool.name,
                         name: displayName,
-                        description,
+                        description: description,
                         icon: IconComponent,
                         available_methods: builtinTool.available_methods,
                       }}

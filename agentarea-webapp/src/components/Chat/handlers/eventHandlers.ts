@@ -33,6 +33,7 @@ import {
   EVENT_A2UI_DELETE_SURFACE,
   EVENT_HUMAN_APPROVAL_RECEIVED,
   EVENT_HUMAN_APPROVAL_DENIED,
+  EVENT_HUMAN_INPUT_RECEIVED,
 } from "../constants/eventTypes";
 
 export interface SSEEventHandlerOptions {
@@ -154,6 +155,31 @@ export function createSSEEventHandler(
                   approved: cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED,
                   deny_comment: event.data?.comment || event.data?.original_data?.comment,
                 },
+              };
+            }
+            return msg;
+          })
+        );
+      }
+      return;
+    }
+
+    // Structured input resolution — mark the existing input_request message resolved.
+    // The submitted secret values never come back over SSE; only the request id does.
+    if (cleanEventType === EVENT_HUMAN_INPUT_RECEIVED) {
+      const inputRequestId =
+        event.data?.input_request_id || event.data?.original_data?.input_request_id;
+      if (inputRequestId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (
+              "type" in msg &&
+              msg.type === "input_request" &&
+              (msg as any).data.input_request_id === inputRequestId
+            ) {
+              return {
+                ...msg,
+                data: { ...(msg as any).data, resolved: true },
               };
             }
             return msg;

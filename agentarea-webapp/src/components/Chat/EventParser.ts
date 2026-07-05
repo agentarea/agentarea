@@ -355,6 +355,30 @@ export const parseEventToMessage = (
       };
     }
 
+    case "HumanInputRequested": {
+      const originalData = eventData.original_data || eventData;
+      const rawQuestions = originalData.questions ?? eventData.questions;
+      const questions = Array.isArray(rawQuestions) ? rawQuestions : [];
+
+      return {
+        type: "input_request",
+        data: {
+          ...baseData,
+          input_request_id:
+            originalData.input_request_id || eventData.input_request_id,
+          tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
+          question: originalData.question || eventData.question || "",
+          questions,
+          allow_custom_response:
+            originalData.allow_custom_response ??
+            eventData.allow_custom_response ??
+            true,
+          input_mode: originalData.input_mode || eventData.input_mode,
+          resolved: eventData.resolved ?? originalData.resolved ?? false,
+        },
+      };
+    }
+
     case "MessageQueued": {
       const originalData = eventData.original_data || eventData;
       const content = originalData.content || eventData.content || eventData.message;
@@ -376,6 +400,7 @@ export const parseEventToMessage = (
     case "A2UIDeleteSurface":
     case "HumanApprovalDenied":
     case "HumanApprovalReceived":
+    case "HumanInputReceived":
       // These update existing messages, handled in eventHandlers
       return null;
 
@@ -462,6 +487,7 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "A2UIUpdateDataModel",
     "A2UIDeleteSurface",
     "HumanApprovalRequested",
+    "HumanInputRequested",
     "MessageQueued",
   ];
 

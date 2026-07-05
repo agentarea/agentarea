@@ -1,6 +1,7 @@
 import React from "react";
 import A2UIMessage from "./componets/A2UIMessage";
 import ApprovalRequestMessage from "./componets/ApprovalRequestMessage";
+import HumanInputMessage from "./componets/HumanInputMessage";
 import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
 import LLMResponseMessage from "./componets/LLMResponseMessage";
@@ -25,7 +26,12 @@ export const MessageRenderer: React.FC<{
     sourceComponentId: string,
   ) => void;
   onResolveEscalation?: (escalationId: string, approved: boolean, comment: string) => void;
-}> = ({ message, agent_name, onA2UIAction, onResolveEscalation }) => {
+  onSubmitInput?: (
+    inputRequestId: string,
+    answers: Record<string, unknown>,
+    secrets: Record<string, { value: string; secret_name?: string }>,
+  ) => void;
+}> = ({ message, agent_name, onA2UIAction, onResolveEscalation, onSubmitInput }) => {
   switch (message.type) {
     case "llm_response":
       return (
@@ -80,6 +86,13 @@ export const MessageRenderer: React.FC<{
       return (
         <ApprovalRequestMessage
           data={{...message.data, _onResolve: onResolveEscalation}}
+          key={message.data.id}
+        />
+      );
+    case "input_request":
+      return (
+        <HumanInputMessage
+          data={{ ...message.data, _onSubmit: onSubmitInput }}
           key={message.data.id}
         />
       );

@@ -3,19 +3,25 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Bot,
+  Check,
   Clock,
   Pause,
   Play,
   Square,
 } from "lucide-react";
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import AgentChat from "@/components/Chat/AgentChat";
+import type { ChatMessage } from "@/components/Chat/hooks/useChatMessages";
 import { Button } from "@/components/ui/button";
+import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTaskStatusPresentation } from "@/lib/status";
 import {
   cancelTask,
+  changeTaskModel,
   getTaskMessages,
   getTaskStatus,
+  listTaskModelOptions,
   pauseTask,
   resumeTask,
 } from "./actions";
@@ -55,8 +61,17 @@ interface Props {
 
 export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
+    []
+  );
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
+    undefined
+  );
+  const [changingModel, setChangingModel] = useState(false);
+  const [modelApplied, setModelApplied] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const loadTaskData = useCallback(async () => {
     setLoading(true);
@@ -71,12 +86,12 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
       try {
         const messagesResponse = await getTaskMessages(agent.id, taskId);
         if (messagesResponse.data) {
-          setMessages(messagesResponse.data);
+          setMessages(messagesResponse.data as ChatMessage[]);
         }
-      } catch (error) {
+      } catch {
         // Messages endpoint might not exist yet, that's okay
       }
-    } catch (error) {
+    } catch {
       // Failed to load task data
     } finally {
       setLoading(false);
@@ -86,6 +101,45 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   useEffect(() => {
     loadTaskData();
   }, [loadTaskData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await listTaskModelOptions();
+        if (!cancelled && data) {
+          setModelInstances(data as ModelInstanceResponse[]);
+        }
+      } catch {
+        // Model list is optional for the page; ignore load failures.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChangeModel = async (modelInstanceId: string) => {
+    setSelectedModelId(modelInstanceId);
+    setChangingModel(true);
+    setModelApplied(false);
+    setModelError(null);
+    try {
+      const result = await changeTaskModel(agent.id, taskId, modelInstanceId);
+      if (result.error) {
+        setModelError(
+          "Couldn't switch model — the task isn't running anymore."
+        );
+      } else {
+        setModelApplied(true);
+      }
+    } catch (error) {
+      console.error("Failed to change task model:", error);
+      setModelError("Couldn't switch model — please try again.");
+    } finally {
+      setChangingModel(false);
+    }
+  };
 
   const handleTaskAction = async (action: "pause" | "resume" | "cancel") => {
     try {
@@ -129,6 +183,14 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const isActiveTask = ["running", "paused", "blocked"].includes(
     task?.status || taskStatus?.status || ""
   );
+
+  // The model-switch signal only lands on a live workflow. A conversational
+  // task (e.g. Telegram) writes "completed" to the DB after each reply but
+  // stays alive in its follow-up window — where the live Temporal status is
+  // still "running" and the model CAN be switched. Gate the switcher on that
+  // live workflow status, not the DB task status, so it's available exactly
+  // when it works and hidden once the workflow has actually closed.
+  const isWorkflowLive = taskStatus?.status === "running";
 
   if (loading) {
     return (
@@ -195,6 +257,41 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
             )}
           </div>
         </div>
+
+        {/* On-the-fly model switch — only while the workflow is actually live
+            (running, incl. the follow-up window), so the signal can land. */}
+        {isWorkflowLive && modelInstances.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/40">
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+              Model
+            </span>
+            <div className="w-64">
+              <ProviderModelSelector
+                modelInstances={modelInstances}
+                value={selectedModelId}
+                onValueChange={handleChangeModel}
+                disabled={changingModel}
+                placeholder="Switch model on the fly"
+              />
+            </div>
+            {changingModel && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Applying…
+              </span>
+            )}
+            {!changingModel && modelApplied && !modelError && (
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <Check className="h-3.5 w-3.5" />
+                Applied — takes effect on the next step
+              </span>
+            )}
+            {!changingModel && modelError && (
+              <span className="text-xs text-red-600 dark:text-red-400">
+                {modelError}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Task Details */}
         {task && (

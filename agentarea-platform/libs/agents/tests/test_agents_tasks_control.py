@@ -397,3 +397,70 @@ class TestTemporalWorkflowServiceControl:
         mock_execution_service.resume_execution.assert_called_once_with(execution_id)
 
 
+class TestSendWorkflowCommandDelivery:
+    """The orchestrator must distinguish "workflow not running" from real
+    failures.
+
+    On-the-fly control commands (e.g. the per-task model switch) are signals
+    to a live workflow. When the workflow has already closed (completed /
+    timed out / history evicted) the signal can't land — that is an expected
+    "not delivered" outcome the API maps to 409, NOT a fake success. Any
+    other error must propagate so it can't masquerade as "task not running".
+    """
+
+    def _orchestrator(self):
+        from agentarea_agents.infrastructure.temporal_orchestrator import (
+            TemporalWorkflowOrchestrator,
+        )
+
+        return TemporalWorkflowOrchestrator(
+            temporal_address="localhost:7233",
+            task_queue="test-queue",
+            max_concurrent_activities=1,
+            max_concurrent_workflows=1,
+        )
+
+    def _client_with_signal(self, *, side_effect=None):
+        handle = MagicMock()
+        handle.signal = AsyncMock(side_effect=side_effect)
+        client = MagicMock()
+        client.get_workflow_handle = MagicMock(return_value=handle)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_signal_delivered_returns_true(self):
+        orch = self._orchestrator()
+        orch._client = self._client_with_signal()
+
+        ok = await orch.send_workflow_command(
+            "task-1", "change_model", {"model_id": "m"}
+        )
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_workflow_not_running_returns_false(self):
+        orch = self._orchestrator()
+        orch._client = self._client_with_signal(
+            side_effect=RuntimeError("workflow not found for ID: task-1")
+        )
+
+        ok = await orch.send_workflow_command(
+            "task-1", "change_model", {"model_id": "m"}
+        )
+        # Not running -> False (API turns this into a 409, not a silent 200).
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_real_error_propagates(self):
+        orch = self._orchestrator()
+        orch._client = self._client_with_signal(
+            side_effect=RuntimeError("temporal connection reset by peer")
+        )
+
+        # A genuine failure must NOT be swallowed into "not running".
+        with pytest.raises(RuntimeError, match="connection reset"):
+            await orch.send_workflow_command(
+                "task-1", "change_model", {"model_id": "m"}
+            )
+
+

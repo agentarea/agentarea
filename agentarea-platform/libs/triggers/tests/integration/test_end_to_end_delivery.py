@@ -1,34 +1,28 @@
-"""End-to-end smoke: synthetic workflow event → pub/sub bridge → router →
-outbound stream → delivery consumer → adapter.
+"""End-to-end smoke: workflow event → emit_channel_delivery → outbound
+stream → delivery consumer → adapter.
 
 Simulates "as if a Telegram message came in and a workflow replied" without
 needing a real Telegram bot or a running workflow — proves the full
-production pipeline path executes and lands the message at the adapter.
+production delivery pipeline (the in-activity emitter + durable stream +
+consumer) executes and lands the message at the adapter.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import uuid
 
 import pytest
 import pytest_asyncio
-import redis.asyncio as redis
 from agentarea_common.broker import DedupCache, RedisStreamsBroker
 from agentarea_triggers.channels import register_adapter
-from agentarea_triggers.channels.delivery_consumer import (
-    ChannelDeliveryConsumer,
-    ChannelDeliveryEmitter,
-)
-from agentarea_triggers.channels.router import ChannelRouter
-from agentarea_triggers.channels.subscriber import ChannelEventSubscriber
+from agentarea_triggers.channels.activity_emit import emit_channel_delivery
+from agentarea_triggers.channels.delivery_consumer import ChannelDeliveryConsumer
 
 pytestmark = pytest.mark.asyncio
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-WORKFLOW_CHANNEL = "agentarea.events.workflow.WorkflowCompleted"
 
 
 class CapturingTelegramAdapter:
@@ -45,15 +39,32 @@ class CapturingTelegramAdapter:
         self.sent.append((channel_config, message))
 
 
+def _make_event(event_id: str, task_id: str, result: str) -> dict:
+    """Workflow event as seen by emit_channel_delivery inside the activity."""
+    return {
+        "event_type": "WorkflowCompleted",
+        "task_id": task_id,
+        "event_id": event_id,
+        "data": {"result": result},
+    }
+
+
+def _origin() -> dict:
+    return {
+        "type": "telegram",
+        "chat_id": "12345",
+        "presentation": "concise",
+        "trigger_id": str(uuid.uuid4()),
+    }
+
+
 @pytest_asyncio.fixture()
 async def pipeline():
-    """Spin up the entire production pipeline rooted at unique streams."""
+    """Spin up the production delivery pipeline rooted at unique streams."""
     test_id = uuid.uuid4().hex[:8]
     stream = f"e2e:outbound:{test_id}"
     group = "delivery"
     dlq = f"e2e:outbound:dlq:{test_id}"
-
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
     broker = RedisStreamsBroker(REDIS_URL)
     dedup = DedupCache(REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
@@ -65,9 +76,6 @@ async def pipeline():
     adapter = CapturingTelegramAdapter()
     register_adapter("telegram", adapter)
 
-    emitter = ChannelDeliveryEmitter(broker, stream=stream)
-    router = ChannelRouter(emitter=emitter, task_lookup=None)
-    subscriber = ChannelEventSubscriber(router=router, redis_url=REDIS_URL)
     consumer = ChannelDeliveryConsumer(
         broker=broker,
         dedup=dedup,
@@ -79,48 +87,26 @@ async def pipeline():
         block_ms=200,
     )
 
-    await subscriber.start()
     await consumer.start()
-    # Pub/sub drops messages with no subscribers — wait for psubscribe to land.
-    await asyncio.sleep(0.3)
 
-    yield adapter, redis_client
+    yield adapter, broker, stream
 
-    await subscriber.stop()
     await consumer.stop()
     await broker.aclose()
     await dedup.aclose()
-    await redis_client.aclose()
 
 
 async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
-    adapter, redis_client = pipeline
+    adapter, broker, stream = pipeline
 
     task_id = str(uuid.uuid4())
-    # Realistic CloudEvents envelope as published by RedisEventBroker:
-    # event_id lives at root ("id"), NOT inside data. The subscriber +
-    # router must pull it from the root for dedup to work in production.
-    envelope = {
-        "specversion": "1.0",
-        "type": "workflow.WorkflowCompleted",
-        "source": "agentarea-api",
-        "id": str(uuid.uuid4()),
-        "aggregate_id": task_id,
-        "data": {
-            "task_id": task_id,
-            "original_data": {
-                "result": "Hello from agent",
-            },
-            "channel_origin": {
-                "type": "telegram",
-                "chat_id": "12345",
-                "presentation": "concise",
-                "trigger_id": str(uuid.uuid4()),
-            },
-        },
-    }
-
-    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(envelope))
+    submitted = await emit_channel_delivery(
+        event=_make_event(str(uuid.uuid4()), task_id, "Hello from agent"),
+        channel_origin=_origin(),
+        broker=broker,
+        stream=stream,
+    )
+    assert submitted is True
 
     for _ in range(60):
         if adapter.sent:
@@ -133,67 +119,41 @@ async def test_workflow_completed_event_lands_at_telegram_adapter(pipeline):
     assert msg == "Hello from agent"
 
 
-async def test_duplicate_publish_results_in_single_delivery(pipeline):
-    adapter, redis_client = pipeline
+async def test_duplicate_emit_results_in_single_delivery(pipeline):
+    adapter, broker, stream = pipeline
 
     task_id = str(uuid.uuid4())
-    event_id = str(uuid.uuid4())
-    envelope = {
-        "specversion": "1.0",
-        "type": "workflow.WorkflowCompleted",
-        "source": "agentarea-api",
-        "id": event_id,
-        "aggregate_id": task_id,
-        "data": {
-            "task_id": task_id,
-            "original_data": {"result": "dedup test"},
-            "channel_origin": {
-                "type": "telegram",
-                "chat_id": "999",
-                "presentation": "concise",
-                "trigger_id": str(uuid.uuid4()),
-            },
-        },
-    }
+    event = _make_event(str(uuid.uuid4()), task_id, "dedup test")
+    origin = _origin()
 
-    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(envelope))
-    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(envelope))
+    # Same event emitted twice → identical dedup_key → single delivery.
+    await emit_channel_delivery(event=event, channel_origin=origin, broker=broker, stream=stream)
+    await emit_channel_delivery(event=event, channel_origin=origin, broker=broker, stream=stream)
 
     await asyncio.sleep(2.0)
     assert len(adapter.sent) == 1
 
 
 async def test_two_distinct_events_same_task_both_deliver(pipeline):
-    """Regression for the bug where event_id was looked up inside `data`
-    instead of the envelope root: two distinct events on the same task
-    used to dedup-collapse to one delivery. With event_id at root, each
-    event has its own dedup slot and both go through.
+    """Two distinct events on the same task each get their own dedup slot
+    (dedup_key = task_id:event_type:event_id), so both are delivered.
     """
-    adapter, redis_client = pipeline
+    adapter, broker, stream = pipeline
 
     task_id = str(uuid.uuid4())
 
-    def make_envelope(event_id: str, body: str) -> dict:
-        return {
-            "specversion": "1.0",
-            "type": "workflow.WorkflowCompleted",
-            "source": "agentarea-api",
-            "id": event_id,
-            "aggregate_id": task_id,
-            "data": {
-                "task_id": task_id,
-                "original_data": {"result": body},
-                "channel_origin": {
-                    "type": "telegram",
-                    "chat_id": "555",
-                    "presentation": "concise",
-                    "trigger_id": str(uuid.uuid4()),
-                },
-            },
-        }
-
-    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(make_envelope(str(uuid.uuid4()), "first")))
-    await redis_client.publish(WORKFLOW_CHANNEL, json.dumps(make_envelope(str(uuid.uuid4()), "second")))
+    await emit_channel_delivery(
+        event=_make_event(str(uuid.uuid4()), task_id, "first"),
+        channel_origin=_origin(),
+        broker=broker,
+        stream=stream,
+    )
+    await emit_channel_delivery(
+        event=_make_event(str(uuid.uuid4()), task_id, "second"),
+        channel_origin=_origin(),
+        broker=broker,
+        stream=stream,
+    )
 
     for _ in range(60):
         if len(adapter.sent) >= 2:

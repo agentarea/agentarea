@@ -681,7 +681,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # Create event publisher if we have task context
             event_publisher = None
             if request.task_id:
-                event_publisher = create_event_publisher(dependencies.event_broker, request.task_id)
+                event_publisher = create_event_publisher(
+                    dependencies.event_broker,
+                    request.task_id,
+                    broker_client=dependencies.broker_client,
+                )
 
             # Stream the response and collect chunks
             async for chunk_response in llm_model.ainvoke_stream(llm_request):
@@ -1317,6 +1321,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             from uuid import uuid4
 
             from agentarea_common.events.base_events import DomainEvent
+            from agentarea_common.events.task_stream import publish_task_event
 
             from ..handlers import handle_llm_error_event
             from .event_publisher import resolve_event_broker
@@ -1428,11 +1433,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             workspace_id=workspace_id,
                         )
 
+                        persisted_event = None
                         async with ActivityContext(container, user_context) as ctx:
                             task_event_service = await ctx.get_task_event_service()
 
                             # Create event using service - workspace_id and created_by are provided
-                            await task_event_service.create_workflow_event(
+                            persisted_event = await task_event_service.create_workflow_event(
                                 task_id=UUID(task_id),
                                 event_type=event["event_type"],
                                 data=event["data"],
@@ -1443,6 +1449,22 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             # Commit is handled by the service
                             logger.debug(
                                 f"Stored event using service: {event['event_type']} for task {task_id}"
+                            )
+
+                        # Publish to the per-task live stream AFTER the DB commit,
+                        # using the persisted row id so the read-side dedups the
+                        # snapshot(DB) vs live(stream) overlap (ADR-0018). Durable
+                        # history stays in task_events; this is the live tail.
+                        if persisted_event is not None and dependencies.broker_client is not None:
+                            await publish_task_event(
+                                dependencies.broker_client,
+                                task_id=str(persisted_event.task_id),
+                                event_type=persisted_event.event_type,
+                                data=persisted_event.data,
+                                event_id=str(persisted_event.id),
+                                timestamp=persisted_event.timestamp.isoformat()
+                                if persisted_event.timestamp
+                                else None,
                             )
 
                     except Exception as db_error:

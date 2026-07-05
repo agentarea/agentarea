@@ -16,6 +16,7 @@ Key endpoints:
 - GET /triggers/{trigger_id}/status - Get trigger status and schedule info
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -393,6 +394,7 @@ async def create_trigger(
 
 @router.get("/", response_model=list[TriggerResponse])
 async def list_triggers(
+    secret_manager: BaseSecretManagerDep,
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
@@ -410,6 +412,7 @@ async def list_triggers(
         All users in the same workspace can see all workspace triggers.
 
     Args:
+        secret_manager: Injected secret manager (to resolve credential presence)
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
@@ -451,7 +454,15 @@ async def list_triggers(
 
         logger.info(f"Listed {len(triggers)} triggers")
 
-        return [TriggerResponse.from_domain_model(trigger) for trigger in triggers]
+        # Resolve credential presence per trigger concurrently so the flag is
+        # correct on the list path too (not just create/update).
+        creds_flags = await asyncio.gather(
+            *(_has_credentials(secret_manager, trigger, trigger.id) for trigger in triggers)
+        )
+        return [
+            TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
+            for trigger, has_creds in zip(triggers, creds_flags, strict=True)
+        ]
 
     except HTTPException:
         raise
@@ -506,6 +517,7 @@ async def triggers_health_check(
 @router.get("/{trigger_id}", response_model=TriggerResponse)
 async def get_trigger(
     trigger_id: UUID,
+    secret_manager: BaseSecretManagerDep,
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
@@ -513,6 +525,7 @@ async def get_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
+        secret_manager: Injected secret manager (to resolve credential presence)
         user_context: Authentication context
         trigger_service: Injected trigger service
 
@@ -530,7 +543,8 @@ async def get_trigger(
         if not trigger:
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
-        return TriggerResponse.from_domain_model(trigger)
+        has_creds = await _has_credentials(secret_manager, trigger, trigger_id)
+        return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
     except HTTPException:
         raise

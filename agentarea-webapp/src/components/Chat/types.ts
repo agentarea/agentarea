@@ -33,7 +33,7 @@ export interface LLMResponseData extends BaseMessageData {
 export interface ToolCallStartedData extends BaseMessageData {
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, unknown>;
+  arguments: Record<string, any>;
   /** MCP server that owns this tool (absent for built-in/sandbox tools). */
   server_name?: string;
   server_icon?: string;
@@ -43,10 +43,10 @@ export interface ToolCallStartedData extends BaseMessageData {
 export interface ToolResultData extends BaseMessageData {
   tool_name: string;
   tool_call_id: string;
-  result: unknown;
+  result: any;
   success: boolean;
   execution_time?: string;
-  arguments?: Record<string, unknown>;
+  arguments?: Record<string, any>;
   /** MCP server that owns this tool (absent for built-in/sandbox tools). */
   server_name?: string;
   server_icon?: string;
@@ -73,7 +73,7 @@ export interface ErrorData extends BaseMessageData {
   is_network_error?: boolean;
   retryable?: boolean;
   tool_name?: string;
-  arguments?: Record<string, unknown>;
+  arguments?: Record<string, any>;
 }
 
 // Workflow Result Message
@@ -119,7 +119,7 @@ export type DynamicStringList = string[] | { path: string };
 // A2UI Action (what happens when a user interacts)
 export interface A2UIAction {
   event?: { name: string; context?: Record<string, DynamicString> };
-  functionCall?: { call: string; args?: Record<string, unknown> };
+  functionCall?: { call: string; args?: Record<string, any> };
 }
 
 // Flat adjacency-list component node (children are ID strings, not nested objects)
@@ -134,19 +134,19 @@ export interface A2UIComponent {
   accessibility?: { label?: string; description?: string };
   weight?: number;
   // Per-component props (open-ended to support all catalog props)
-  [key: string]: unknown;
+  [key: string]: any;
 }
 
 // A2UI surface state — accumulated from lifecycle events
 export interface A2UISurface {
   surfaceId: string;
   catalogId: string;
-  theme?: Record<string, unknown>;
+  theme?: Record<string, any>;
   sendDataModel?: boolean;
   /** Flat map of component id → component node */
   components: Record<string, A2UIComponent>;
   /** JSON data model for data bindings */
-  dataModel: Record<string, unknown>;
+  dataModel: Record<string, any>;
 }
 
 // The chat message type for a live A2UI surface
@@ -166,7 +166,7 @@ export interface ApprovalRequestData extends BaseMessageData {
   escalation_id: string;
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, unknown>;
+  arguments: Record<string, any>;
   message: string;
   resolved?: boolean;
   approved?: boolean;
@@ -179,14 +179,57 @@ export interface UserMessageData extends BaseMessageData {
   content: string;
 }
 
+// A single field in a structured user-input request (request_user_input tool)
+export type HumanInputFieldType =
+  | "text"
+  | "textarea"
+  | "select"
+  | "multiselect"
+  | "boolean"
+  | "number"
+  | "secret";
+
+export interface HumanInputField {
+  id: string;
+  question: string;
+  type: HumanInputFieldType;
+  required?: boolean;
+  options?: string[];
+  /** Suggested workspace secret name for `secret` fields. */
+  secret_name?: string;
+}
+
+// Secret values are routed to the vault at the API boundary; the agent only ever
+// receives a `secret_ref`, never the raw value.
+export interface HumanInputSecretValue {
+  value: string;
+  secret_name?: string;
+}
+
+// Structured user-input request message (paired update event: HumanInputReceived)
+export interface HumanInputRequestData extends BaseMessageData {
+  input_request_id: string;
+  tool_call_id?: string;
+  question: string;
+  questions: HumanInputField[];
+  allow_custom_response?: boolean;
+  input_mode?: string;
+  resolved?: boolean;
+  _onSubmit?: (
+    inputRequestId: string,
+    answers: Record<string, unknown>,
+    secrets: Record<string, HumanInputSecretValue>
+  ) => void;
+}
+
 // Tool Call Group Message (groups consecutive tool calls/results into one block)
 export interface ToolCallGroupData extends BaseMessageData {
   tools: Array<{
     tool_name: string;
     tool_call_id: string;
-    result: unknown;
+    result: any;
     success: boolean;
-    arguments?: Record<string, unknown>;
+    arguments?: Record<string, any>;
     execution_time?: string;
     pending?: boolean; // true if still in "calling..." state
     server_name?: string;
@@ -206,6 +249,7 @@ export type MessageComponentType =
   | { type: "system"; data: SystemData }
   | { type: "a2ui_surface"; data: A2UISurfaceData }
   | { type: "approval_request"; data: ApprovalRequestData }
+  | { type: "input_request"; data: HumanInputRequestData }
   | { type: "user_message"; data: UserMessageData };
 
 // Chat Message Types

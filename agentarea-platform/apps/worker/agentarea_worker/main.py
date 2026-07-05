@@ -336,7 +336,8 @@ class AgentAreaWorker:
         # Register adapters; they raise typed Retryable/Fatal errors that the
         # delivery consumer translates into ACK / requeue / DLQ.
         secret_reader = LazySecretReader(dependencies.secret_manager_factory)
-        register_all_adapters(secret_reader)
+        # redis_url enables the Telegram streaming (edit-in-place) sender.
+        register_all_adapters(secret_reader, redis_url)
 
         self.delivery_consumer = ChannelDeliveryConsumer(
             broker=self._broker,

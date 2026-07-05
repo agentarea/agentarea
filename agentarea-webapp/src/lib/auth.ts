@@ -43,7 +43,7 @@ export async function getCurrentUser() {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting current user:", error);
     return null;
   }
