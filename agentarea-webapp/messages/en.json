@@ -649,7 +649,8 @@
       },
       "actions": {
         "start": "Start",
-        "stop": "Stop"
+        "stop": "Stop",
+        "connectOAuth": "Connect"
       },
       "status": {
         "stopped": "Stopped",

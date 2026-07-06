@@ -15,6 +15,7 @@ import {
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
   zGetAgentV1AgentsAgentIdGetResponse,
+  zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse,
   zGetSkillContentV1SkillsSkillIdContentGetResponse,
   zInstallAgentV1AgentsAgentIdInstallPostResponse,
   zInstallBundleV1BundlesInstallPostBody,
@@ -30,6 +31,7 @@ import {
 import {
   analyzeBundle,
   getAgent,
+  getCatalogItem,
   getSkillContent,
   getSkillFile,
   getSkillFiles,
@@ -114,6 +116,16 @@ export async function fetchCatalogPageAction(
   );
 
   return lists.flat();
+}
+
+export async function fetchCatalogItemAction(
+  itemId: string
+): Promise<RegistryItemResponse> {
+  const { data, error } = await getCatalogItem(itemId);
+  if (error || !data) {
+    throw new Error(errorMessage(error, "Failed to load catalog item"));
+  }
+  return zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse.parse(data);
 }
 
 export async function analyzeBundleAction(

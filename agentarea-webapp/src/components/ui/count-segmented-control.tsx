@@ -10,10 +10,35 @@ export interface CountSegmentedControlItem<T extends string = string> {
   count?: ReactNode;
 }
 
+// Active-pill palette by role. Pick via the `variant` prop; the per-instance
+// className props below still win (twMerge) for one-off tweaks.
+export type CountSegmentedControlVariant = "subtle" | "solid";
+
+const VARIANTS: Record<
+  CountSegmentedControlVariant,
+  { pill: string; activeText: string; activeCount: string }
+> = {
+  // Quiet secondary filter (e.g. inbox status filter): light raised pill.
+  subtle: {
+    pill: "bg-zinc-100 dark:bg-zinc-900",
+    activeText: "text-foreground",
+    activeCount: "text-muted-foreground dark:text-zinc-300",
+  },
+  // Primary page-level navigation (e.g. explore type switcher): solid pill
+  // with inverted text. Theme-aware via foreground/background tokens, so it
+  // flips to a light pill + dark text in dark mode.
+  solid: {
+    pill: "bg-foreground dark:bg-foreground",
+    activeText: "text-background",
+    activeCount: "text-background/70",
+  },
+};
+
 interface CountSegmentedControlProps<T extends string = string> {
   items: CountSegmentedControlItem<T>[];
   value: T;
   onChange: (value: T) => void;
+  variant?: CountSegmentedControlVariant;
   className?: string;
   itemClassName?: string;
   activePillClassName?: string;
@@ -28,6 +53,7 @@ export function CountSegmentedControl<T extends string = string>({
   items,
   value,
   onChange,
+  variant = "subtle",
   className,
   itemClassName,
   activePillClassName,
@@ -37,6 +63,7 @@ export function CountSegmentedControl<T extends string = string>({
   activeCountClassName,
   layoutId = "count-segmented-control",
 }: CountSegmentedControlProps<T>) {
+  const styles = VARIANTS[variant];
   return (
     <div
       className={cn(
@@ -55,7 +82,7 @@ export function CountSegmentedControl<T extends string = string>({
             className={cn(
               "relative inline-flex h-7 shrink-0 items-center gap-2 rounded-[10px] px-3 text-[12.5px] font-normal tracking-normal transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
-                ? "text-foreground"
+                ? styles.activeText
                 : "text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100",
               itemClassName,
               isActive ? activeItemClassName : inactiveItemClassName
@@ -65,7 +92,8 @@ export function CountSegmentedControl<T extends string = string>({
               <motion.span
                 layoutId={`${layoutId}-active-pill`}
                 className={cn(
-                  "absolute inset-0 rounded-[8px] bg-zinc-100 ring-0 shadow-none dark:bg-zinc-900",
+                  "absolute inset-0 rounded-[8px] ring-0 shadow-none",
+                  styles.pill,
                   activePillClassName
                 )}
                 initial={false}
@@ -83,7 +111,7 @@ export function CountSegmentedControl<T extends string = string>({
                 className={cn(
                   "relative z-10 text-[11px] font-normal text-muted-foreground/80 transition-colors dark:text-zinc-500",
                   countClassName,
-                  isActive && "text-muted-foreground dark:text-zinc-300",
+                  isActive && styles.activeCount,
                   isActive && activeCountClassName
                 )}
               >

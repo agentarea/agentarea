@@ -18,6 +18,12 @@ export const PAGE = 96;
 export const ALL = "__all__";
 export const FEATURED_TAG = "featured";
 
+// Per-path cookie that persists the grid/table choice across navigation. Lives
+// here (not in the "use client" gallery) so the Server Components — explore
+// page.tsx + loading.tsx — import the real string, not a client-reference proxy.
+// Same `${param}_${path}` convention as HeaderTabs.
+export const EXPLORE_VIEW_COOKIE = "view_explore";
+
 export type RawSpec = Record<string, unknown>;
 
 export type RegistryItem = {

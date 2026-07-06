@@ -232,6 +232,15 @@ export const listRegistryItems = async (
   return { data, error };
 };
 
+export const getCatalogItem = async (itemId: string) => {
+  const { data, error } =
+    await sdk.getCatalogItemV1RegistriesCatalogItemsItemIdGet({
+      client: serverClient,
+      path: { item_id: itemId },
+    });
+  return { data, error };
+};
+
 export const analyzeBundle = async (body: AnalyzeRequest) => {
   const { data, error } = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
