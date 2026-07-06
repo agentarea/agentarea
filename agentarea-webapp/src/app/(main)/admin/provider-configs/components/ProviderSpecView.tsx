@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
-import ModelsList from "./ModelsList";
+import ModelsList, { type ModelEntry } from "./ModelsList";
 import { ProviderSpecCard } from "./ProviderItem";
 import { ProviderSpec } from "./types";
 
@@ -31,7 +31,7 @@ export default function ProviderSpecView({
     {
       accessor: "name",
       header: t("name"),
-      render: (value: string, item: any) => (
+      render: (value: string, item: ProviderSpec) => (
         <div className="flex items-center gap-2">
           {item.icon_url && (
             <Image
@@ -58,7 +58,7 @@ export default function ProviderSpecView({
     {
       accessor: "models",
       header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
+      render: (value: unknown) => <ModelsList models={(value as ModelEntry[]) || []} />,
     },
   ];
 

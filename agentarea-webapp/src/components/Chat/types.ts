@@ -133,6 +133,31 @@ export interface A2UIComponent {
   // Common props
   accessibility?: { label?: string; description?: string };
   weight?: number;
+  action?: A2UIAction;
+  align?: string;
+  alt?: DynamicString;
+  axis?: "horizontal" | "vertical";
+  content?: string;
+  description?: DynamicString;
+  direction?: "horizontal" | "vertical";
+  disabled?: boolean;
+  displayStyle?: string;
+  enableDate?: boolean;
+  enableTime?: boolean;
+  fit?: "contain" | "cover" | "fill" | "none" | "scale-down";
+  justify?: string;
+  label?: DynamicString;
+  max?: DynamicString | DynamicNumber;
+  min?: DynamicString | DynamicNumber;
+  name?: DynamicString;
+  options?: Array<{ label: string; value: string }>;
+  placeholder?: DynamicString;
+  tabs?: Array<{ title: string; child: string }>;
+  text?: DynamicString;
+  trigger?: string;
+  url?: DynamicString;
+  value?: DynamicString | DynamicNumber | DynamicBoolean;
+  variant?: string;
   // Per-component props (open-ended to support all catalog props)
   [key: string]: unknown;
 }
@@ -171,7 +196,11 @@ export interface ApprovalRequestData extends BaseMessageData {
   resolved?: boolean;
   approved?: boolean;
   deny_comment?: string;
-  _onResolve?: (escalationId: string, approved: boolean, comment: string) => void;
+  _onResolve?: (
+    escalationId: string,
+    approved: boolean,
+    comment: string
+  ) => void;
 }
 
 // User message from follow-up (MessageQueued event)
@@ -270,7 +299,10 @@ export interface WelcomeMessage {
 }
 
 // Unified Chat Message Type
-export type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
+export type ChatMessage =
+  | UserChatMessage
+  | WelcomeMessage
+  | MessageComponentType;
 
 // Raw SSE event payload shape — covers all event types parsed in EventParser.ts.
 // Uses an open index signature so it accepts any backend-emitted event without `any`.

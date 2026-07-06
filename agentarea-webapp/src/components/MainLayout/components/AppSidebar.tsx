@@ -20,7 +20,12 @@ import { NavMain } from "./NavMain";
 import { NavUser } from "./NavUser";
 import { TeamSwitcher } from "./TeamSwitcher";
 
-export function AppSidebarContent({ data }: { data: any }) {
+interface AppSidebarData {
+  workspaces: React.ComponentProps<typeof TeamSwitcher>["teams"];
+  navSections: React.ComponentProps<typeof NavMain>["sections"];
+}
+
+export function AppSidebarContent({ data }: { data: AppSidebarData }) {
   const { open } = useSidebar();
 
   const openQuickTask = React.useCallback(() => {

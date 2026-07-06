@@ -4,7 +4,7 @@ const config: OryClientConfiguration = {
   sdk: {
     url:
       typeof window !== "undefined"
-        ? (window as any).__ENV__?.CLIENT_ORY_SDK_URL
+        ? (window as Window & { __ENV__?: { CLIENT_ORY_SDK_URL?: string } }).__ENV__?.CLIENT_ORY_SDK_URL
         : process.env.ORY_SDK_URL,
   },
   project: {

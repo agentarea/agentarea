@@ -3,6 +3,7 @@ import { getAgents } from "@/components/actions";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { WorkplaceOnboarding } from "@/components/Chat/WorkplaceOnboarding";
 import { getProvidersAndConfigs, listPolicies, listProjects } from "@/lib/api";
+import type { AgentResponse, PolicyRuleResponse, ProjectResponse } from "@/api/client/types.gen";
 
 /**
  * Server data loader for the workplace, isolated behind a <Suspense> boundary in
@@ -53,8 +54,9 @@ export async function WorkplaceData() {
     );
   }
 
+  type AgentWithDisplay = AgentResponse & { icon?: string | null; color_token?: string | null };
   const agents =
-    agentsData?.map((agent: any) => ({
+    (agentsData as AgentWithDisplay[] | undefined)?.map((agent) => ({
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
@@ -63,14 +65,14 @@ export async function WorkplaceData() {
     })) || [];
 
   const projects =
-    projectsData?.map((project: any) => ({
+    (projectsData as ProjectResponse[] | undefined)?.map((project) => ({
       id: String(project.id),
       name: project.name,
       description: project.description,
     })) || [];
 
   const taskPolicies =
-    policiesData?.map((policy: any) => ({
+    (policiesData as PolicyRuleResponse[] | undefined)?.map((policy) => ({
       id: String(policy.id),
       name: formatPolicyName(policy),
       description: formatPolicyDescription(policy),
@@ -83,7 +85,7 @@ export async function WorkplaceData() {
     })) || [];
 
   const defaultAgent = agents.length > 0 ? agents[0] : null;
-  const hasProviders = (providersData?.providerConfigs?.length ?? 0) > 0;
+  const hasProviders = ((providersData as unknown as { providerConfigs?: unknown[] })?.providerConfigs?.length ?? 0) > 0;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -108,13 +110,13 @@ export async function WorkplaceData() {
   );
 }
 
-function formatPolicyName(policy: any) {
+function formatPolicyName(policy: PolicyRuleResponse) {
   const effect = String(policy.effect ?? "policy");
   const target = String(policy.target ?? "*");
   return `${effect} ${target}`;
 }
 
-function formatPolicyDescription(policy: any) {
+function formatPolicyDescription(policy: PolicyRuleResponse) {
   const subjectType = String(policy.subject_type ?? "workspace");
   const priority = Number.isFinite(policy.priority) ? policy.priority : 0;
   return `${subjectType} - priority ${priority}`;

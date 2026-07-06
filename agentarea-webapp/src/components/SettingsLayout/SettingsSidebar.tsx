@@ -85,7 +85,7 @@ export function SettingsSidebarContent() {
                     isActive={isActive(item.href)}
                     tooltip={item.title}
                   >
-                    <Link href={item.href as any}>
+                    <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>

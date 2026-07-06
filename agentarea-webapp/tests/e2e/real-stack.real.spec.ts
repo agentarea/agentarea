@@ -112,7 +112,7 @@ test.describe("real stack smoke", () => {
         expect(members.ok()).toBeTruthy();
         const memberPayload = await members.json();
         expect(
-          memberPayload.some((member: any) => member.user_id === bob.identityId)
+          memberPayload.some((member: { user_id: string }) => member.user_id === bob.identityId)
         ).toBe(true);
       } finally {
         await deleteKratosUser(bob.identityId);

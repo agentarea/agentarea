@@ -102,10 +102,10 @@ async function handleRequest(
         "Content-Type": "application/json",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Proxy Error:", error);
     return NextResponse.json(
-      { error: "Proxy request failed", message: error.message },
+      { error: "Proxy request failed", message: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
+import type { ArtifactEvent } from "@/components/files/file-viewer";
 import {
   listProjectFilesAction,
   uploadProjectFileAction,
@@ -26,7 +27,7 @@ export default function ProjectFilesPage() {
 
   const fetchFiles = useCallback(async () => {
     const { data } = await listProjectFilesAction(projectId);
-    setFiles((data as any)?.files || []);
+    setFiles((data as { files?: BrowsedFile[] } | undefined)?.files || []);
   }, [projectId]);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function ProjectFilesPage() {
       if (error) {
         toast({
           title: "Upload failed",
-          description: (error as any)?.detail || "Upload failed",
+          description: (error as { detail?: string })?.detail || "Upload failed",
           variant: "destructive",
         });
         return;
@@ -67,9 +68,10 @@ export default function ProjectFilesPage() {
   const fetchUrl = useCallback(
     async (path: string) => {
       const { data } = await downloadProjectFileAction(projectId, path);
-      if (!data?.url) return null;
+      const fileData = data as { url?: string } | undefined;
+      if (!fileData?.url) return null;
       try {
-        const { pathname } = new URL(data.url);
+        const { pathname } = new URL(fileData.url);
         return `/api/proxy${pathname}`;
       } catch {
         return null;
@@ -83,7 +85,7 @@ export default function ProjectFilesPage() {
       const { data } = await workspaceFileHistoryAction(
         `projects/${projectId}/${path}`
       );
-      return (data as any)?.events ?? [];
+      return (data as { events?: ArtifactEvent[] } | undefined)?.events ?? [];
     },
     [projectId]
   );

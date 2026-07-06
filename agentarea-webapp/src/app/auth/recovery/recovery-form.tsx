@@ -3,9 +3,10 @@
 import { Recovery } from "@ory/elements-react/theme";
 import Link from "next/link";
 import { OryClientConfiguration } from "@ory/elements-react";
+import type { RecoveryFlow } from "@ory/client-fetch";
 
 interface RecoveryFormProps {
-  flow: any;
+  flow: RecoveryFlow;
   config: OryClientConfiguration;
 }
 

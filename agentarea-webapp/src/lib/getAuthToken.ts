@@ -67,7 +67,7 @@ async function getAuthTokenImpl(): Promise<string | null> {
       response.statusText
     );
     return null;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[getAuthToken] Error getting JWT token from Kratos:", error);
     // Return null if authentication fails; callers treat null as "no session".
     return null;

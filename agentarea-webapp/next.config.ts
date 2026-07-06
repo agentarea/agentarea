@@ -62,8 +62,13 @@ const nextConfig: NextConfig = {
     // its SVG imports need SVGR treatment to become React components.
     // Previously tsup + esbuild-plugin-svgr handled this; now webpack does it.
 
+    interface WebpackRule {
+      oneOf?: WebpackRule[];
+      test?: RegExp;
+      exclude?: RegExp | RegExp[];
+    }
     // Remove SVGs from the default static-asset rule so our loader takes over
-    const rules: any[] = config.module.rules;
+    const rules = (config.module?.rules ?? []) as WebpackRule[];
     for (const rule of rules) {
       if (rule && typeof rule === "object" && rule.oneOf) {
         for (const oneOfRule of rule.oneOf) {

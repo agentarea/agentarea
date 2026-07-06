@@ -1,12 +1,12 @@
 "use client";
 
-import type { McpServerResponse } from "@/api/client/types.gen";
 import React from "react";
-import { Info, Server, FileText, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { FileText, Info, Server, ShieldCheck } from "lucide-react";
+import type { McpServerResponse } from "@/api/client/types.gen";
+import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import FormLabel from "@/components/FormLabel/FormLabel";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
@@ -17,6 +17,13 @@ import {
 import { cn } from "@/lib/utils";
 
 type MCPServer = McpServerResponse;
+type EnvSchemaItem = {
+  default?: string;
+  description?: string;
+  isSecret?: boolean;
+  name?: string;
+  required?: boolean;
+};
 
 export interface MCPInstanceConfigFormProps {
   server: MCPServer;
@@ -89,7 +96,9 @@ export default function MCPInstanceConfigForm({
   renderAsForm = true,
 }: MCPInstanceConfigFormProps) {
   const t = useTranslations("MCPServersPage.instanceForm");
-  const envSchema = Array.isArray(server?.env_schema) ? server.env_schema : [];
+  const envSchema: EnvSchemaItem[] = Array.isArray(server?.env_schema)
+    ? server.env_schema
+    : [];
 
   const getErrorText = (key: string): string | undefined => {
     const err = errors?.[key];
@@ -165,18 +174,16 @@ export default function MCPInstanceConfigForm({
             </TooltipProvider>
           </div>
           <div className="grid gap-4">
-            {envSchema.map((envVar: { [key: string]: unknown }) => {
-              const envName = (envVar?.name as string) || "";
+            {envSchema.map((envVar) => {
+              const envName = envVar.name || "";
               if (!envName) return null;
               const isRequired = Boolean(envVar?.required);
-              const description = (envVar?.description as string) || "";
+              const description = envVar.description || "";
               const errorKey = `env_${envName}`;
               return (
                 <div key={envName} className="grid gap-2">
                   <div className="flex items-center gap-2">
-                    <FormLabel htmlFor={`env_${envName}`}>
-                      {envName}
-                    </FormLabel>
+                    <FormLabel htmlFor={`env_${envName}`}>{envName}</FormLabel>
                     {isRequired && (
                       <span className="rounded bg-red-100 px-1 text-[10px] text-red-700">
                         {t("required")}
@@ -187,7 +194,10 @@ export default function MCPInstanceConfigForm({
                     id={`env_${envName}`}
                     name={`env_${envName}`}
                     type={envVar?.isSecret ? "password" : "text"}
-                    placeholder={envVar?.default || t("envVarPlaceholder", { name: envName })}
+                    placeholder={
+                      envVar?.default ||
+                      t("envVarPlaceholder", { name: envName })
+                    }
                     value={envVars[envName] || ""}
                     onChange={(e) => onChangeEnvVar(envName, e.target.value)}
                     disabled={disabled}
@@ -199,9 +209,7 @@ export default function MCPInstanceConfigForm({
                         : ""
                     }
                   />
-                  {description && (
-                    <p className="note">{description}</p>
-                  )}
+                  {description && <p className="note">{description}</p>}
                   {getErrorText(errorKey) && (
                     <p className="form-error">{getErrorText(errorKey)}</p>
                   )}
@@ -279,7 +287,12 @@ export default function MCPInstanceConfigForm({
 
   if (renderAsForm) {
     return (
-      <form id={formId} action={formAction} onSubmit={onSubmit} className={className}>
+      <form
+        id={formId}
+        action={formAction}
+        onSubmit={onSubmit}
+        className={className}
+      >
         {Content}
       </form>
     );

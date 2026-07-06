@@ -87,11 +87,12 @@ test.describe("PROBE real LLM end-to-end", () => {
     console.log("PROBE taskId:", taskId);
 
     // Confirm final state via the durable record (not stream-only).
-    let last: any = null;
+    interface TaskResult { status?: string; total_cost?: number; result?: unknown }
+    let last: TaskResult | undefined;
     const deadline = Date.now() + 90_000;
     while (taskId && Date.now() < deadline) {
       const got = await authedRequest(request, user, "get", `/v1/agents/${agentId}/tasks/${taskId}`);
-      last = await got.json();
+      last = (await got.json()) as TaskResult;
       console.log(`PROBE status=${last.status} cost=${last.total_cost ?? "?"}`);
       if (["completed", "failed", "cancelled", "error"].includes(String(last.status))) break;
       await new Promise((r) => setTimeout(r, 2500));

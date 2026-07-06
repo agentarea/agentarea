@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createMcpServerConnectionV1McpServerInstancesWithSpecPost } from "@/api/client/sdk.gen";
 import type {
   McpServerConnectionCreateRequest,
   McpServerCreate,
@@ -101,7 +102,9 @@ function splitEnvRows(env: MCPServerFormValues["env"]): {
   return { envSchema, environment };
 }
 
-function fieldValues(input: MCPServerFormValues): MCPServerFormState["fieldValues"] {
+function fieldValues(
+  input: MCPServerFormValues
+): MCPServerFormState["fieldValues"] {
   return {
     type: input.type || "docker",
     name: input.name,
@@ -210,7 +213,8 @@ function mapGeneratedErrors(
     const path = issue.path.join(".");
     if (path.includes("name")) errors.name = [issue.message];
     else if (path.includes("description")) errors.description = [issue.message];
-    else if (path.includes("docker_image_url")) errors.dockerImageUrl = [issue.message];
+    else if (path.includes("docker_image_url"))
+      errors.dockerImageUrl = [issue.message];
     else if (path.includes("remote_url")) errors.endpointUrl = [issue.message];
     else if (path.includes("cmd")) errors.command = [issue.message];
     else (errors._form ??= []).push(issue.message);
@@ -263,7 +267,8 @@ export async function addMCPServer(
   let response;
   try {
     const client = getServerClient();
-    response = await client.POST("/v1/mcp-server-instances/with-spec", {
+    response = await createMcpServerConnectionV1McpServerInstancesWithSpecPost({
+      client,
       body: validated.data,
     });
 

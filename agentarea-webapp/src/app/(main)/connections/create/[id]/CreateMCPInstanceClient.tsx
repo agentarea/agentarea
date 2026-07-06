@@ -1,26 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { ExternalLink, Github, Globe, Key } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ToolsTable } from "../../components/ToolsTable";
-import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
-  validateConnectionAction,
-  probeInstanceAuthAction,
   oauthAuthorizeAction,
+  probeInstanceAuthAction,
+  validateConnectionAction,
 } from "@/lib/server-actions";
-import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
-import { getConnectionType, MCP_CONSTANTS } from "../../utils";
+import { ToolsTable } from "../../components/ToolsTable";
 import { VerifyingModal } from "../../components/VerifyingModal";
+import type { MCPServer } from "../../types";
+import { getConnectionType, MCP_CONSTANTS } from "../../utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,7 +117,9 @@ function SpecHeader({ server }: { server: MCPServer }) {
       <div className="space-y-1">
         <h3 className="text-lg font-semibold">{title}</h3>
         {server.description && (
-          <p className="mt-1 text-sm text-muted-foreground max-w-lg">{server.description}</p>
+          <p className="mt-1 text-sm text-muted-foreground max-w-lg">
+            {server.description}
+          </p>
         )}
         {(repoUrl || websiteUrl) && (
           <div className="flex items-center justify-center gap-3 pt-1">
@@ -128,7 +130,11 @@ function SpecHeader({ server }: { server: MCPServer }) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                {repoSource === "github" ? <Github className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+                {repoSource === "github" ? (
+                  <Github className="h-3 w-3" />
+                ) : (
+                  <Globe className="h-3 w-3" />
+                )}
                 {repoSource === "github" ? "GitHub" : "Repository"}
               </a>
             )}
@@ -174,10 +180,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     defaultFieldValues[h.name] = h.default || "";
   }
 
-  const {
-    register,
-    getValues,
-  } = useForm<UrlFormValues>({
+  const { register, getValues } = useForm<UrlFormValues>({
     defaultValues: {
       instanceName: getTitle(server),
       fields: defaultFieldValues,
@@ -188,9 +191,14 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [probeState, setProbeState] = useState<ProbeState>("idle");
   const [authTab, setAuthTab] = useState<"oauth" | "manual">("manual");
-  const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
+  const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(
+    null
+  );
   const [isWorking, setIsWorking] = useState(false);
-  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
+  const [verifyingInstance, setVerifyingInstance] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Build headers dict from form field values
   const buildHeaders = (): Record<string, string> => {
@@ -210,7 +218,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
     try {
       if (hasFields) {
-        const result = await validateConnectionAction(endpointUrl, buildHeaders());
+        const result = await validateConnectionAction(
+          endpointUrl,
+          buildHeaders()
+        );
 
         if (result.error) {
           setError(result.error);
@@ -250,6 +261,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       }
 
       const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create instance");
+      }
       setCreatedInstanceId(created.id);
 
       const probeResult = await probeInstanceAuthAction(created.id);
@@ -261,7 +275,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       if (probeResult.data?.status === "auth_required") {
         const methods = probeResult.data.methods || [];
         if (methods.includes("oauth")) {
-          setProbeState(methods.includes("credentials") ? "needs_both" : "needs_oauth");
+          setProbeState(
+            methods.includes("credentials") ? "needs_both" : "needs_oauth"
+          );
           setAuthTab("oauth");
           return;
         }
@@ -306,6 +322,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       }
 
       const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create instance");
+      }
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         const { instanceName } = getValues();
@@ -314,7 +333,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         router.push(`/connections/${created.id}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create connection");
+      setError(
+        err instanceof Error ? err.message : "Failed to create connection"
+      );
     } finally {
       setIsWorking(false);
     }
@@ -328,7 +349,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     try {
       const result = await oauthAuthorizeAction(createdInstanceId);
       if (result.error || !result.data?.authorize_url) {
-        setError(result.error || "OAuth discovery failed — this server may not support OAuth");
+        setError(
+          result.error ||
+            "OAuth discovery failed — this server may not support OAuth"
+        );
         return;
       }
       window.location.href = result.data.authorize_url;
@@ -353,180 +377,193 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
           }}
         />
       )}
-    <div className="mx-auto w-full max-w-4xl space-y-6 py-8">
-      <SpecHeader server={server} />
+      <div className="mx-auto w-full max-w-4xl space-y-6 py-8">
+        <SpecHeader server={server} />
 
-      {/* Instance name */}
-      <div className="space-y-1.5">
-        <Label htmlFor="instance-name">Name</Label>
-        <Input id="instance-name" {...register("instanceName", { required: true })} />
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-          {error}
+        {/* Instance name */}
+        <div className="space-y-1.5">
+          <Label htmlFor="instance-name">Name</Label>
+          <Input
+            id="instance-name"
+            {...register("instanceName", { required: true })}
+          />
         </div>
-      )}
 
-      {/* Spec fields */}
-      {hasFields && probeState === "idle" && (
-        <div className="space-y-4">
-          {remoteHeaders.map((field) => (
-            <div key={field.name} className="space-y-1.5">
-              <Label htmlFor={`field-${field.name}`}>
-                {field.name}
-                {field.isRequired !== false && (
-                  <span className="ml-1 text-destructive">*</span>
+        {/* Error */}
+        {error && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {/* Spec fields */}
+        {hasFields && probeState === "idle" && (
+          <div className="space-y-4">
+            {remoteHeaders.map((field) => (
+              <div key={field.name} className="space-y-1.5">
+                <Label htmlFor={`field-${field.name}`}>
+                  {field.name}
+                  {field.isRequired !== false && (
+                    <span className="ml-1 text-destructive">*</span>
+                  )}
+                </Label>
+                {field.description && (
+                  <p className="text-xs text-muted-foreground">
+                    {field.description}
+                  </p>
                 )}
-              </Label>
-              {field.description && (
-                <p className="text-xs text-muted-foreground">{field.description}</p>
-              )}
-              {field.choices && field.choices.length > 0 ? (
-                <select
-                  id={`field-${field.name}`}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  {...register(`fields.${field.name}`)}
-                >
-                  <option value="">Select...</option>
-                  {field.choices.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Input
-                  id={`field-${field.name}`}
-                  type={field.isSecret ? "password" : "text"}
-                  placeholder={field.placeholder || ""}
-                  {...register(`fields.${field.name}`)}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+                {field.choices && field.choices.length > 0 ? (
+                  <select
+                    id={`field-${field.name}`}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    {...register(`fields.${field.name}`)}
+                  >
+                    <option value="">Select...</option>
+                    {field.choices.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id={`field-${field.name}`}
+                    type={field.isSecret ? "password" : "text"}
+                    placeholder={field.placeholder || ""}
+                    {...register(`fields.${field.name}`)}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Validation success — tools table + create button */}
-      {validation?.status === "ok" && (
-        <div className="space-y-4">
-          {validation.tools && validation.tools.length > 0 && (
-            <ToolsTable tools={validation.tools} label={`${validation.tools.length} tools found`} />
-          )}
+        {/* Validation success — tools table + create button */}
+        {validation?.status === "ok" && (
+          <div className="space-y-4">
+            {validation.tools && validation.tools.length > 0 && (
+              <ToolsTable
+                tools={validation.tools}
+                label={`${validation.tools.length} tools found`}
+              />
+            )}
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleCreate}
+              isLoading={isWorking}
+              disabled={isWorking}
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Create Connection
+            </Button>
+          </div>
+        )}
+
+        {/* Connect button — initial state */}
+        {!validation && probeState === "idle" && (
           <Button
             className="w-full"
             size="lg"
-            onClick={handleCreate}
+            onClick={handleValidate}
             isLoading={isWorking}
             disabled={isWorking}
           >
             <ExternalLink className="mr-2 h-4 w-4" />
-            Create Connection
+            {isWorking ? "Connecting..." : "Connect"}
           </Button>
-        </div>
-      )}
+        )}
 
-      {/* Connect button — initial state */}
-      {!validation && probeState === "idle" && (
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={handleValidate}
-          isLoading={isWorking}
-          disabled={isWorking}
-        >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          {isWorking ? "Connecting..." : "Connect"}
-        </Button>
-      )}
-
-      {/* OAuth/Manual switcher (probe detected auth) */}
-      {(probeState === "needs_oauth" || probeState === "needs_both") && (
-        <div className="space-y-4">
-          {probeState === "needs_both" && (
-            <div className="mx-auto flex w-fit rounded-lg border p-0.5">
-              <button
-                type="button"
-                className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "oauth" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => setAuthTab("oauth")}
-              >
-                OAuth
-              </button>
-              <button
-                type="button"
-                className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => setAuthTab("manual")}
-              >
-                Manual
-              </button>
-            </div>
-          )}
-
-          {(authTab === "oauth" || probeState === "needs_oauth") && (
-            <div className="space-y-3">
-              <p className="text-center text-sm text-muted-foreground">
-                This server supports OAuth authorization.
-              </p>
-              <Button className="w-full" size="lg" onClick={handleOAuth} isLoading={isWorking}>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Authorize with OAuth
-              </Button>
-              {probeState === "needs_oauth" && (
+        {/* OAuth/Manual switcher (probe detected auth) */}
+        {(probeState === "needs_oauth" || probeState === "needs_both") && (
+          <div className="space-y-4">
+            {probeState === "needs_both" && (
+              <div className="mx-auto flex w-fit rounded-lg border p-0.5">
                 <button
                   type="button"
-                  className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={() => {
-                    setProbeState("needs_both");
-                    setAuthTab("manual");
-                  }}
+                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "oauth" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setAuthTab("oauth")}
                 >
-                  Have credentials? Enter manually instead
+                  OAuth
                 </button>
-              )}
-            </div>
-          )}
-
-          {authTab === "manual" && probeState === "needs_both" && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="manual-header">Authorization</Label>
-                <Input
-                  id="manual-header"
-                  placeholder="Bearer your-token"
-                  {...register("fields.Authorization")}
-                />
+                <button
+                  type="button"
+                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setAuthTab("manual")}
+                >
+                  Manual
+                </button>
               </div>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={handleCreate}
-                isLoading={isWorking}
-                disabled={isWorking}
-              >
-                <Key className="mr-2 h-4 w-4" />
-                Connect
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* Retry on error */}
-      {error && (
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => {
-            setError(null);
-            setValidation(null);
-          }}
-        >
-          Try Again
-        </Button>
-      )}
-    </div>
+            {(authTab === "oauth" || probeState === "needs_oauth") && (
+              <div className="space-y-3">
+                <p className="text-center text-sm text-muted-foreground">
+                  This server supports OAuth authorization.
+                </p>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handleOAuth}
+                  isLoading={isWorking}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Authorize with OAuth
+                </Button>
+                {probeState === "needs_oauth" && (
+                  <button
+                    type="button"
+                    className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => {
+                      setProbeState("needs_both");
+                      setAuthTab("manual");
+                    }}
+                  >
+                    Have credentials? Enter manually instead
+                  </button>
+                )}
+              </div>
+            )}
+
+            {authTab === "manual" && probeState === "needs_both" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="manual-header">Authorization</Label>
+                  <Input
+                    id="manual-header"
+                    placeholder="Bearer your-token"
+                    {...register("fields.Authorization")}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handleCreate}
+                  isLoading={isWorking}
+                  disabled={isWorking}
+                >
+                  <Key className="mr-2 h-4 w-4" />
+                  Connect
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Retry on error */}
+        {error && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setError(null);
+              setValidation(null);
+            }}
+          >
+            Try Again
+          </Button>
+        )}
+      </div>
     </>
   );
 }
@@ -540,7 +577,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   const t = useTranslations("MCPServersPage.createInstance");
 
   const [instanceName, setInstanceName] = useState(getTitle(server));
-  const [instanceDescription, setInstanceDescription] = useState(server.description);
+  const [instanceDescription, setInstanceDescription] = useState(
+    server.description
+  );
   const [envVars, setEnvVars] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     server.env_schema?.forEach((envVar) => {
@@ -550,7 +589,10 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
+  const [verifyingInstance, setVerifyingInstance] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
     errors: string[];
@@ -586,6 +628,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
       }
 
       const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create MCP instance");
+      }
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         setVerifyingInstance({ id: created.id, name: instanceName });
@@ -669,7 +714,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
             !instanceName.trim() ||
             (validationResult ? !validationResult.valid : false)
           }
-          submitLabel={isCreating ? t("actions.creating") : t("actions.createInstance")}
+          submitLabel={
+            isCreating ? t("actions.creating") : t("actions.createInstance")
+          }
           showContainerSummary
           containerImage={server.docker_image_url ?? undefined}
           containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}

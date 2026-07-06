@@ -364,14 +364,75 @@ export default function MCPInstanceDetail({
     effectiveVerificationStatus
   );
 
+  const specJson = serverSpec?.json_spec as McpServerJsonSpec | undefined;
+  const specIcon = specJson?.icons?.[0]?.src as string | undefined;
+  const repoUrl = specJson?.repository?.url as string | undefined;
+  const repoSource = specJson?.repository?.source as string | undefined;
+  const websiteUrl = specJson?.websiteUrl as string | undefined;
+  const displayDescription = instance.description || serverSpec?.description;
+
   return (
     <div className="relative h-full overflow-auto px-4 py-5">
       <div className="mx-auto w-full max-w-5xl space-y-6">
-            {/* Details — folded in from the former sidebar panel. */}
-            <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("details.title")}
+            {/* Connection identity — the primary "what am I looking at" block:
+                name, spec, status, and the connect URL clients need. */}
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  {specIcon && (
+                    <Image
+                      src={specIcon}
+                      alt=""
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 shrink-0 rounded object-contain"
+                    />
+                  )}
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-semibold text-foreground">
+                        {instance.name || t("header.untitled")}
+                      </h2>
+                      {serverSpec?.version && (
+                        <span className="note">v{serverSpec.version}</span>
+                      )}
+                    </div>
+                    {displayDescription && (
+                      <p className="text-sm text-muted-foreground">
+                        {displayDescription}
+                      </p>
+                    )}
+                    {(repoUrl || websiteUrl) && (
+                      <div className="flex items-center gap-3 pt-0.5">
+                        {repoUrl && (
+                          <a
+                            href={repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            {repoSource === "github" ? (
+                              <Github className="h-3.5 w-3.5" />
+                            ) : (
+                              <Globe className="h-3.5 w-3.5" />
+                            )}
+                            {repoSource === "github" ? "GitHub" : "Repository"}
+                          </a>
+                        )}
+                        {websiteUrl && (
+                          <a
+                            href={websiteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Website
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <StatusIndicator
                   size="sm"
@@ -381,50 +442,20 @@ export default function MCPInstanceDetail({
                   {verificationPresentation.label}
                 </StatusIndicator>
               </div>
-              {instance.description && (
-                <p className="text-sm text-foreground">{instance.description}</p>
-              )}
-              <div className="grid gap-3 text-xs sm:grid-cols-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
-                    <Hash className="h-3 w-3" />
-                    {t("details.id")}
-                  </div>
-                  <div className="break-all font-mono">{instance.id}</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
-                    <Clock className="h-3 w-3 text-primary" />
-                    {t("details.created")}
-                  </div>
-                  <div className="font-medium text-foreground">
-                    {new Date(instance.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    {t("details.updated")}
-                  </div>
-                  <div className="font-medium text-foreground">
-                    {new Date(instance.updated_at).toLocaleString()}
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Connect bar — proxy URL for outbound MCP clients. Rendered as
-                plain wrapping text (not an input) so the full URL stays visible
-                and never overflows the column. */}
-            <div className="flex items-start gap-2">
-              <div className="mt-1 flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <LinkIcon className="h-3.5 w-3.5" />
-                <span>Connect URL</span>
+              {/* Connect URL — proxy URL for outbound MCP clients. Rendered as
+                  plain wrapping text (not an input) so the full URL stays visible
+                  and never overflows the column. */}
+              <div className="flex items-start gap-2 border-t border-border/50 pt-3">
+                <div className="mt-1 flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <LinkIcon className="h-3.5 w-3.5" />
+                  <span>Connect URL</span>
+                </div>
+                <code className="min-w-0 flex-1 break-all rounded bg-muted/40 px-2 py-1 font-mono text-xs">
+                  {agentareaProxyUrl}
+                </code>
+                <CopyButton text={agentareaProxyUrl} label="Connect URL" />
               </div>
-              <code className="min-w-0 flex-1 break-all rounded bg-muted/40 px-2 py-1 font-mono text-xs">
-                {agentareaProxyUrl}
-              </code>
-              <CopyButton text={agentareaProxyUrl} label="Connect URL" />
             </div>
 
             {/* Stuck verification banner */}
@@ -494,78 +525,6 @@ export default function MCPInstanceDetail({
                 </div>
               </div>
             )}
-
-            {/* Spec info — repo, website, description from server spec */}
-            {serverSpec &&
-              (() => {
-                const spec = serverSpec.json_spec as
-                  | McpServerJsonSpec
-                  | undefined;
-                const repoUrl = spec?.repository?.url as string | undefined;
-                const repoSource = spec?.repository?.source as
-                  | string
-                  | undefined;
-                const websiteUrl = spec?.websiteUrl as string | undefined;
-                const specTitle = spec?.title || serverSpec.name;
-                const specIcon = spec?.icons?.[0]?.src as string | undefined;
-                const specDesc = serverSpec.description;
-
-                if (!repoUrl && !websiteUrl && !specDesc) return null;
-
-                return (
-                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
-                    <div className="flex items-center gap-3">
-                      {specIcon && (
-                        <Image
-                          src={specIcon}
-                          alt=""
-                          width={32}
-                          height={32}
-                          className="h-8 w-8 rounded object-contain shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-sm">{specTitle}</div>
-                        {specDesc && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {specDesc}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {(repoUrl || websiteUrl) && (
-                      <div className="flex items-center gap-3 pt-1">
-                        {repoUrl && (
-                          <a
-                            href={repoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {repoSource === "github" ? (
-                              <Github className="h-3.5 w-3.5" />
-                            ) : (
-                              <Globe className="h-3.5 w-3.5" />
-                            )}
-                            {repoSource === "github" ? "GitHub" : "Repository"}
-                          </a>
-                        )}
-                        {websiteUrl && (
-                          <a
-                            href={websiteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Website
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
 
             {/* Connection URL — only shown for non-URL types since URL-type
                 shows its endpoint inside the External Server card below. */}
@@ -912,6 +871,25 @@ export default function MCPInstanceDetail({
                 />
               </div>
             )}
+
+            {/* Reference metadata — low-priority, kept at the bottom. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/50 pt-4 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Hash className="h-3 w-3" />
+                <span className="font-mono">{instance.id}</span>
+                <CopyButton text={instance.id} label={t("details.id")} />
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />
+                {t("details.created")}:{" "}
+                {new Date(instance.created_at).toLocaleString()}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />
+                {t("details.updated")}:{" "}
+                {new Date(instance.updated_at).toLocaleString()}
+              </span>
+            </div>
       </div>
     </div>
   );

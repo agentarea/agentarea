@@ -16,16 +16,31 @@ interface ServerInfo {
   id?: string;
 }
 
+interface RawEventPayload {
+  tool_call_id?: string;
+  server_name?: string;
+  mcp_server_name?: string;
+  server_icon?: string;
+  mcp_server_icon?: string;
+  server_instance_id?: string;
+  server_id?: string;
+  original_data?: RawEventPayload;
+}
+
+interface RawEvent {
+  data?: RawEventPayload;
+}
+
 interface ToolUse {
   name: string;
   success: boolean;
-  args?: Record<string, any>;
+  args?: Record<string, unknown>;
   result?: unknown;
   executionTime?: string;
   toolCallId?: string;
 }
 
-function skillNameFromArgs(args?: Record<string, any>): string {
+function skillNameFromArgs(args?: Record<string, unknown>): string {
   if (!args) return SKILL_TOOL;
   const candidate = args.skill || args.name || args.skill_name || args.skill_id;
   if (typeof candidate === "string" && candidate) return candidate;
@@ -33,7 +48,7 @@ function skillNameFromArgs(args?: Record<string, any>): string {
   return (firstString as string) || SKILL_TOOL;
 }
 
-function delegationTarget(name: string, args?: Record<string, any>): string | null {
+function delegationTarget(name: string, args?: Record<string, unknown>): string | null {
   const n = name.toLowerCase();
   if (n.startsWith("delegate_to_")) {
     const raw = name.slice("delegate_to_".length).replace(/[_-]+/g, " ").trim();
@@ -65,10 +80,10 @@ function extractFilesFromText(text: string, into: Set<string>) {
  * MCP tool names aren't self-describing, so server attribution comes from the
  * event payload (server_name / server_icon / server_instance_id).
  */
-function buildServerMap(rawEvents: any[]): Map<string, ServerInfo> {
+function buildServerMap(rawEvents: RawEvent[]): Map<string, ServerInfo> {
   const map = new Map<string, ServerInfo>();
   for (const ev of rawEvents || []) {
-    const d = ev?.data?.original_data ?? ev?.data ?? {};
+    const d: RawEventPayload = ev?.data?.original_data ?? ev?.data ?? {};
     const id = d.tool_call_id ?? ev?.data?.tool_call_id;
     const name = d.server_name ?? d.mcp_server_name;
     const icon = d.server_icon ?? d.mcp_server_icon;
@@ -146,7 +161,7 @@ function addToolToGroup(group: ServiceGroup, use: ToolUse) {
 export function buildActivitySummary(
   messages: MessageComponentType[],
   eventCount: number,
-  rawEvents: any[] = []
+  rawEvents: RawEvent[] = []
 ): TaskActivitySummary {
   const uses = collectToolUses(messages);
   const serverMap = buildServerMap(rawEvents);

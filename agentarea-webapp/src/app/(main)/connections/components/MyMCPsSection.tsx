@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
@@ -10,11 +10,11 @@ import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
+import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
   getMcpHealthStatusPresentation,
   getOpenApiConnectionDisplayStatus,
 } from "@/lib/status";
-import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
   HealthCheck,
   HealthStatus,
@@ -290,7 +290,9 @@ export function MyMCPsSection({
         const healthStatus =
           item._type === "openapi" && item._connection
             ? getOpenAPIHealthStatus(item._connection)
-            : getHealthStatus(item._instance || item);
+            : item._instance
+              ? getHealthStatus(item._instance)
+              : "unknown";
         return getStatusIndicator(healthStatus);
       },
     },
@@ -362,7 +364,13 @@ export function MyMCPsSection({
             {value === "OpenAPI" ? (
               <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
             ) : (
-              <Image src="/mcp.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" />
+              <Image
+                src="/mcp.svg"
+                alt=""
+                width={14}
+                height={14}
+                className="h-3.5 w-3.5"
+              />
             )}
             {value}
           </Badge>

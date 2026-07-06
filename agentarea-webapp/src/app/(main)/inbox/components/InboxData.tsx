@@ -16,7 +16,7 @@ export async function InboxData() {
     if (res.error) {
       error = "Failed to load inbox";
     } else {
-      items = ((res.data as any)?.items ?? []) as TaskWithAgent[];
+      items = ((res.data as { items?: TaskWithAgent[] } | undefined)?.items ?? []);
     }
   } catch {
     error = "Failed to load inbox";

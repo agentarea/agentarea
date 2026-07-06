@@ -93,12 +93,12 @@ test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", (
   test("Alice's agent does not appear in Bob's agent list", async ({ request }) => {
     const ownerList = await authedRequest(request, alice, "get", "/v1/agents/");
     expect(ownerList.ok()).toBeTruthy();
-    const ownerIds = (await ownerList.json()).map((a: any) => a.id);
+    const ownerIds = (await ownerList.json()).map((a: { id: string }) => a.id);
     expect(ownerIds, "Alice's list should contain her agent").toContain(agent.id);
 
     const strangerList = await authedRequest(request, bob, "get", "/v1/agents/");
     expect(strangerList.ok()).toBeTruthy();
-    const strangerIds = (await strangerList.json()).map((a: any) => a.id);
+    const strangerIds = (await strangerList.json()).map((a: { id: string }) => a.id);
     expect(strangerIds, "Bob's list must not leak Alice's agent").not.toContain(
       agent.id
     );
@@ -161,7 +161,7 @@ test.describe("Cross-tenant isolation - workspace B cannot touch workspace A", (
     // /v1/mcp-servers/ is paginated ({ items, total, ... }), unlike the bare
     // array from /v1/agents/.
     const strangerIds = ((await strangerList.json()).items ?? []).map(
-      (m: any) => m.id
+      (m: { id: string }) => m.id
     );
     expect(
       strangerIds,

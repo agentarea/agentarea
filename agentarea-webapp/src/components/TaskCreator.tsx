@@ -19,11 +19,7 @@ interface Agent {
   id: string;
   name: string;
   description?: string;
-  events_config?: unknown;
-  instruction?: string | null;
   model_id?: string | null;
-  planning?: boolean | null;
-  tools_config?: unknown;
 }
 
 export default function TaskCreator() {
@@ -52,14 +48,10 @@ export default function TaskCreator() {
         console.error("Failed to load agents:", error);
         setResult({ success: false, message: "Failed to load agents" });
       } else {
-        const transformedAgents = (agentsData || []).map((agent: Agent) => ({
+        const transformedAgents = (agentsData || []).map((agent) => ({
           ...agent,
-          description: agent.description || undefined,
-          instruction: agent.instruction || undefined,
-          model_id: agent.model_id || undefined,
-          tools_config: (agent as any).tools_config || undefined,
-          events_config: agent.events_config || undefined,
-          planning: agent.planning ?? undefined,
+          description: agent.description ?? undefined,
+          model_id: agent.model_id ?? undefined,
         }));
         setAgents(transformedAgents);
         if (transformedAgents.length > 0) {

@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
 import {
   authedRequest,
   responseBody,
@@ -79,7 +79,7 @@ export async function expectRedirectedAwayFrom(
     .toBe("redirected");
 }
 
-async function expectOk(response: any, label: string) {
+async function expectOk(response: APIResponse, label: string) {
   if (!response.ok()) {
     throw new Error(
       `${label} failed: ${response.status()} ${JSON.stringify(await responseBody(response))}`

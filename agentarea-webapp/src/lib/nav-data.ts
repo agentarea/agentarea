@@ -29,7 +29,7 @@ export type NavSection = {
     title: string;
     titleKey?: string;
     url: string;
-    icon?: any;
+    icon?: React.ElementType;
   }[];
 };
 

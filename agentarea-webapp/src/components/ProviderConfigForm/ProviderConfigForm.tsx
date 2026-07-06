@@ -124,7 +124,7 @@ export default function ProviderConfigForm({
             is_active: model.is_active,
             created_at: model.created_at,
             updated_at: model.updated_at,
-            default_context_strategy: (model as any).default_context_strategy ?? null,
+            default_context_strategy: (model as { default_context_strategy?: string | null }).default_context_strategy ?? null,
           }))
       );
 

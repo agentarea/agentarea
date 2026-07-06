@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
+import type { PaymentRecordResponse } from "@/api/client/types.gen";
 import {
   Check,
   ChevronLeft,
@@ -139,7 +140,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
     {
       header: t("table.recipient"),
       accessor: "recipient",
-      render: (value: string, _item: any) => (
+      render: (value: string, _item: PaymentRecordResponse) => (
         <div className="flex items-center">
           <span className="font-mono text-xs text-foreground">
             {truncateAddress(value)}
@@ -158,9 +159,9 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
     {
       header: t("table.txHash"),
       accessor: "tx_hash",
-      render: (value: string, item: any) => {
+      render: (value: string, item: PaymentRecordResponse) => {
         const explorerUrl = value
-          ? getExplorerUrl(item.protocol, value, item.protocol_metadata)
+          ? getExplorerUrl(item.protocol, value, item.protocol_metadata ?? undefined)
           : null;
         return explorerUrl ? (
           <div className="flex items-center">

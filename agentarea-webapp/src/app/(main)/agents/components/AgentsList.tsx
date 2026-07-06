@@ -7,7 +7,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
-import { Agent, agentPath } from "@/types";
+import { Agent, agentPath, type ModelInfo } from "@/types";
 import { AgentToolIcon } from "@/utils/agentToolIcons";
 import { AGENT_COLUMNS, AGENTS_GRID_CLASS } from "./agentColumns";
 import { AgentToolIcons } from "./AgentToolIcons";
@@ -29,10 +29,7 @@ export default function AgentsList({
 
   // Cell renderers keyed by accessor. The column order, labels, and widths come
   // from the shared `AGENT_COLUMNS` meta (also used by the table skeleton).
-  const renderers: Record<
-    string,
-    (value: any, item: AgentWithToolIcons) => React.ReactNode
-  > = {
+  const renderers = {
     name: (value: string, item: Agent) => (
       <div className="flex items-center gap-2">
         <AgentAvatar agent={item} size="xs" />
@@ -44,7 +41,7 @@ export default function AgentsList({
         {value || "-"}
       </span>
     ),
-    model_info: (value: any) => (
+    model_info: (value: ModelInfo | null | undefined) => (
       <ModelBadge
         providerName={value?.provider_name}
         iconUrl={value?.provider_icon_url}
@@ -60,7 +57,7 @@ export default function AgentsList({
       ) : (
         <span className="text-xs text-muted-foreground">—</span>
       ),
-    tools_config: (_value: any, item: AgentWithToolIcons) => {
+    tools_config: (_value: unknown, item: AgentWithToolIcons) => {
       const toolIcons = item.tool_icons ?? [];
 
       if (toolIcons.length === 0) {
@@ -82,7 +79,7 @@ export default function AgentsList({
     accessor: column.accessor,
     header: t(column.labelKey),
     cellClassName: column.cellClassName,
-    render: renderers[column.accessor],
+    render: renderers[column.accessor as keyof typeof renderers],
   }));
 
   // Render table view

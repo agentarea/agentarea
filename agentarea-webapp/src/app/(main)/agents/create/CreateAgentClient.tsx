@@ -1,10 +1,10 @@
 "use client";
 
-import type { McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
+import type { McpServerResponse, McpServerInstanceResponse, ModelInstanceResponse } from "@/api/client/types.gen";
 import React from "react";
 import { useRouter } from "next/navigation";
 import AgentForm from "../shared/AgentForm";
-import { addAgent } from "./actions";
+import { addAgent, type AddAgentFormState } from "./actions";
 import type { AgentFormValues } from "./types";
 import { generateAgentName } from "./utils/agentNameGenerator";
 
@@ -19,8 +19,8 @@ export default function CreateAgentClient({
 }: {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
-  mcpInstanceList: any[];
-  builtinTools: any[];
+  mcpInstanceList: McpServerInstanceResponse[];
+  builtinTools: unknown[];
 }) {
   const router = useRouter();
 
@@ -30,9 +30,8 @@ export default function CreateAgentClient({
     return await addAgent(data);
   };
 
-  const handleSuccess = (result: any) => {
-    const created = result.fieldValues as any;
-    const createdRef = created?.slug || created?.id;
+  const handleSuccess = (result: AddAgentFormState) => {
+    const createdRef = result.fieldValues?.id;
     if (createdRef) {
       router.push(`/agents/${createdRef}`);
     }

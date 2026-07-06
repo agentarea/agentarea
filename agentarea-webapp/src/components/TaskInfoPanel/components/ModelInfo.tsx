@@ -17,6 +17,14 @@ import ExpandableText from "./ExpandableText";
 import ModelPicker from "./ModelPicker";
 import Section from "./Section";
 
+interface Trigger {
+  id?: string;
+  name?: string;
+  trigger_type?: string;
+  is_active?: boolean;
+  description?: string;
+}
+
 interface ModelInfoProps {
   task?: Task | null;
   agentId?: string;
@@ -38,7 +46,7 @@ export default function ModelInfo({
 }: ModelInfoProps) {
   const t = useTranslations("TaskInfoPanel");
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [triggers, setTriggers] = useState<any[]>([]);
+  const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(true);
 
   const targetAgentId = task?.agent_id || agentId;
@@ -58,7 +66,8 @@ export default function ModelInfo({
             try {
               const { data: instances } = await listModelInstances();
               const model = instances?.find(
-                (m: any) => m.id === agentData.model_id
+                (m: unknown) =>
+                  (m as { id?: unknown }).id === agentData.model_id
               );
 
               if (model) {
@@ -86,8 +95,7 @@ export default function ModelInfo({
       if (!targetAgentId) return;
       try {
         const { data } = await listTriggers({ agent_id: targetAgentId });
-        const items = Array.isArray(data) ? data : (data as any)?.items || [];
-        setTriggers(Array.isArray(items) ? items : []);
+        setTriggers(data ?? []);
       } catch (error) {
         console.warn("Failed to fetch triggers", error);
         setTriggers([]);
@@ -193,7 +201,7 @@ export default function ModelInfo({
             {t("triggers")}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {validTriggers.map((tr: any, index: number) => (
+            {validTriggers.map((tr, index) => (
               <Badge
                 key={tr.id ?? index}
                 variant="outline"

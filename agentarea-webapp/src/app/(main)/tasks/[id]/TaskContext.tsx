@@ -48,25 +48,26 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-function parseTaskData(raw: any): TaskData | null {
-  if (!raw) return null;
+function parseTaskData(raw: unknown): TaskData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
   return {
-    id: String(raw.id),
-    agent_id: String(raw.agent_id),
-    description: raw.description,
-    status: raw.status,
-    created_at: raw.created_at,
-    execution_id: raw.execution_id || undefined,
-    agent_name: raw.agent_name,
-    agent_description: raw.agent_description || undefined,
-    result: typeof raw.result === "object" && raw.result !== null ? raw.result as Record<string, unknown> : undefined,
-    parameters: typeof raw.parameters === "object" && raw.parameters !== null ? raw.parameters as Record<string, unknown> : undefined,
+    id: String(r.id),
+    agent_id: String(r.agent_id),
+    description: r.description as string | undefined,
+    status: r.status as string,
+    created_at: r.created_at as string | undefined,
+    execution_id: r.execution_id ? String(r.execution_id) : undefined,
+    agent_name: r.agent_name as string | undefined,
+    agent_description: r.agent_description ? String(r.agent_description) : undefined,
+    result: typeof r.result === "object" && r.result !== null ? r.result as Record<string, unknown> : undefined,
+    parameters: typeof r.parameters === "object" && r.parameters !== null ? r.parameters as Record<string, unknown> : undefined,
   };
 }
 
 interface TaskProviderProps {
   taskId: string;
-  initialTask?: any;
+  initialTask?: unknown;
   initialError?: string | null;
   children: React.ReactNode;
 }

@@ -1,6 +1,6 @@
 import ModelBadge from "@/components/ui/model-badge";
 
-interface ModelEntry {
+export interface ModelEntry {
   provider_name?: string | null;
   provider_icon_url?: string | null;
   model_display_name?: string | null;

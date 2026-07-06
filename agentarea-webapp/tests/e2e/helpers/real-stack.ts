@@ -89,7 +89,7 @@ export async function createKratosUser(prefix: string): Promise<AuthedUser> {
   });
   expect(flow.response.ok).toBeTruthy();
   const csrfToken = flow.json.ui.nodes.find(
-    (node: any) => node.attributes?.name === "csrf_token"
+    (node: { attributes?: { name?: string; value?: string } }) => node.attributes?.name === "csrf_token"
   )?.attributes?.value;
   expect(csrfToken).toBeTruthy();
   const csrfCookie = parseSetCookie(flow.response.headers.get("set-cookie"));
@@ -242,10 +242,10 @@ export async function waitForMailpitMessage(
     const response = await fetch(`${mailpitURL}/api/v1/messages`);
     expect(response.ok).toBeTruthy();
     const payload = await response.json();
-    const message = (payload.messages ?? []).find((item: any) => {
+    const message = (payload.messages ?? []).find((item: { To?: { Address: string }[]; Subject?: string }) => {
       const recipients = item.To ?? [];
       return (
-        recipients.some((to: any) => to.Address === email) &&
+        recipients.some((to) => to.Address === email) &&
         subjectPattern.test(item.Subject ?? "")
       );
     });

@@ -58,10 +58,10 @@ export function useMentions({
         }
 
         if (data && Array.isArray(data)) {
-          const formattedAgents: Agent[] = data.map((agent: any) => ({
+          const formattedAgents: Agent[] = data.map((agent) => ({
             id: agent.id,
             name: agent.name,
-            avatar: agent.avatar || undefined,
+            avatar: undefined,
           }));
           setAgents(formattedAgents);
         } else {
@@ -159,12 +159,6 @@ export function useMentions({
                 newCursorPosition
               );
               (textareaRef.current as HTMLTextAreaElement).focus();
-            } else if ('setSelectionRange' in textareaRef.current) {
-              (textareaRef.current as any).setSelectionRange(
-                newCursorPosition,
-                newCursorPosition
-              );
-              (textareaRef.current as any).focus();
             }
           }
         }, 0);

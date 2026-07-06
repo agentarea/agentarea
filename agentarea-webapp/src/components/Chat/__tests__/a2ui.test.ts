@@ -122,7 +122,7 @@ function applyJsonPointer(
 }
 
 {
-  const obj: Record<string, unknown> = {};
+  const obj: Record<string, { name?: string }> = {};
   applyJsonPointer(obj, "/user/name", "Jane");
   assertEqual(obj.user.name, "Jane", "sets nested path /user/name");
 }
@@ -134,7 +134,9 @@ function applyJsonPointer(
 }
 
 {
-  const obj: Record<string, unknown> = { user: { name: "Jane", age: 30 } };
+  const obj: Record<string, { name?: string; age?: number }> = {
+    user: { name: "Jane", age: 30 },
+  };
   applyJsonPointer(obj, "/user/name", undefined);
   assertEqual(obj.user.name, undefined, "undefined value deletes key");
   assertEqual(obj.user.age, 30, "sibling key preserved after delete");
@@ -173,7 +175,7 @@ interface AnyMessage {
   data: {
     id?: string;
     surfaceId?: string;
-    surface?: A2UISurface;
+    surface: A2UISurface;
   };
 }
 
@@ -325,22 +327,25 @@ function deleteA2UISurface(
   ];
 
   const result = updateA2UIDataModel(msgs, "s1", "/user/name", "Jane");
-  assertEqual(
-    result[0].data.surface.dataModel.user.name,
-    "Jane",
-    "updateDataModel sets nested path"
-  );
+  const user = result[0].data.surface.dataModel.user as { name?: string };
+  assertEqual(user.name, "Jane", "updateDataModel sets nested path");
 }
 
 // Test: delete surface
 {
   const msgs: AnyMessage[] = [
-    { type: "llm_response", data: { id: "1" } },
+    {
+      type: "llm_response",
+      data: { id: "1", surface: { components: {}, dataModel: {} } },
+    },
     {
       type: "a2ui_surface",
       data: { surfaceId: "s1", surface: { components: {}, dataModel: {} } },
     },
-    { type: "llm_response", data: { id: "2" } },
+    {
+      type: "llm_response",
+      data: { id: "2", surface: { components: {}, dataModel: {} } },
+    },
   ];
 
   const result = deleteA2UISurface(msgs, "s1");
@@ -420,11 +425,7 @@ section("Recursion guard");
   const MAX_DEPTH = 50;
   let renderCount = 0;
 
-  function fakeRender(
-    id: string,
-    depth: number,
-    visited: Set<string>
-  ): void {
+  function fakeRender(id: string, depth: number, visited: Set<string>): void {
     if (depth > MAX_DEPTH || visited.has(id)) return;
     const node = components[id];
     if (!node) return;
@@ -437,14 +438,21 @@ section("Recursion guard");
   }
 
   fakeRender("a", 0, new Set());
-  assertEqual(renderCount, 2, "cycle detected — renders a and b, stops at second a");
+  assertEqual(
+    renderCount,
+    2,
+    "cycle detected — renders a and b, stops at second a"
+  );
 }
 
 {
   // Deep nesting beyond MAX_DEPTH
   const components: Record<string, { id: string; children?: string[] }> = {};
   for (let i = 0; i < 100; i++) {
-    components[`n${i}`] = { id: `n${i}`, children: i < 99 ? [`n${i + 1}`] : [] };
+    components[`n${i}`] = {
+      id: `n${i}`,
+      children: i < 99 ? [`n${i + 1}`] : [],
+    };
   }
 
   const MAX_DEPTH = 50;
@@ -467,7 +475,10 @@ section("Recursion guard");
   }
 
   fakeRenderDeep("n0", 0, new Set());
-  assert(maxReached <= MAX_DEPTH, `deep nesting capped at depth ${maxReached} <= ${MAX_DEPTH}`);
+  assert(
+    maxReached <= MAX_DEPTH,
+    `deep nesting capped at depth ${maxReached} <= ${MAX_DEPTH}`
+  );
 }
 
 // ── Results ─────────────────────────────────────────────────────────────────

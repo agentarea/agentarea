@@ -9,7 +9,7 @@ import { describeToolCall } from "../utils/describeToolCall";
 interface ToolCallStartedData {
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   server_icon?: string;
 }
 
