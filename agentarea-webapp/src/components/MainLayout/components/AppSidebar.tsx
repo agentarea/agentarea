@@ -9,6 +9,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
@@ -84,9 +85,7 @@ export function AppSidebarContent({ data }: { data: any }) {
               {open && (
                 <>
                   <span className="flex-1 truncate text-left">New task</span>
-                  <kbd className="pointer-events-none ml-auto hidden h-[18px] select-none items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1 font-mono text-[10px] font-medium text-muted-foreground/70 sm:flex">
-                    <span className="text-[11px] leading-none">&#8984;</span>J
-                  </kbd>
+                  <Kbd keys={["⌘", "J"]} className="ml-auto hidden sm:inline-flex" />
                 </>
               )}
             </Button>

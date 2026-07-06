@@ -131,6 +131,11 @@ export interface ChatInputAreaProps {
   showSendButton?: boolean;
 
   /**
+   * Show the attach-file button (default true)
+   */
+  showAttachButton?: boolean;
+
+  /**
    * Send button icon variant
    */
   sendButtonIcon?: "arrow" | "send";
@@ -292,6 +297,7 @@ export function ChatInputArea({
   containerRef,
   variant = "default",
   showSendButton = true,
+  showAttachButton = true,
   sendButtonIcon = "arrow",
   rows = 3,
   className,
@@ -451,16 +457,18 @@ export function ChatInputArea({
 
             {/* Action Buttons */}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onOpenFileDialog}
-                disabled={isLoading}
-                className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+              {showAttachButton && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onOpenFileDialog}
+                  disabled={isLoading}
+                  className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              )}
 
               {showSendButton && (
                 <>
