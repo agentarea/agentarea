@@ -115,7 +115,7 @@ export function useCreateWallet(agentId: string) {
   const createWallet = async (data: Record<string, unknown>): Promise<AgentWallet> => {
     setLoading(true);
     try {
-      const { data: result, error } = await createAgentWalletAction(agentId, data as any);
+      const { data: result, error } = await createAgentWalletAction(agentId, data);
       if (error) throw new Error("Failed to create wallet");
       if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
       return result;
@@ -133,7 +133,7 @@ export function useUpdateWallet(agentId: string) {
   const updateWallet = async (data: Record<string, unknown>): Promise<AgentWallet> => {
     setLoading(true);
     try {
-      const { data: result, error } = await updateAgentWalletAction(agentId, data as any);
+      const { data: result, error } = await updateAgentWalletAction(agentId, data);
       if (error) throw new Error("Failed to update wallet");
       if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
       return result;

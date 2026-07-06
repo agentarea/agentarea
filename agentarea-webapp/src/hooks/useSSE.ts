@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface SSEEvent {
   type: string;
-  data: any;
+  data: unknown;
 }
 
 interface UseSSEOptions {
