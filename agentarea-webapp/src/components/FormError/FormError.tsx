@@ -63,6 +63,9 @@ export default function FormError({ children, className }: FormErrorProps) {
       variant="destructive"
       className={cn(
         "relative flex gap-3 border-destructive/30 bg-destructive/5",
+        // Dark `--destructive` is a dim 30%-lightness red — barely visible on the
+        // near-black bg. Use bright red utilities in dark for real contrast.
+        "dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300",
         overflowing && "pr-10",
         className
       )}
@@ -88,7 +91,7 @@ export default function FormError({ children, className }: FormErrorProps) {
         >
           <p
             className={cn(
-              "break-words text-xs leading-4 text-destructive",
+              "break-words text-xs leading-4 text-destructive dark:text-red-300",
               overflowing && !expanded && "line-clamp-2"
             )}
           >
@@ -103,7 +106,7 @@ export default function FormError({ children, className }: FormErrorProps) {
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-label={expanded ? "Collapse error" : "Expand error"}
-          className="absolute right-2 top-2.5 grid h-6 w-6 place-items-center rounded-md text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className="absolute right-2 top-2.5 grid h-6 w-6 place-items-center rounded-md text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive dark:text-red-300/70 dark:hover:bg-red-500/15 dark:hover:text-red-200"
         >
           <ChevronDown
             className={cn(
