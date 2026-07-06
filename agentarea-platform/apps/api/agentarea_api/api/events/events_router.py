@@ -49,9 +49,7 @@ async def _consume_mcp_status(stream: RedisStreamsEventStream) -> None:
     """
     while True:
         try:
-            async for event in stream.read(
-                stream=MCP_STATUS_CHANGED_TYPE, from_offset="$"
-            ):
+            async for event in stream.read(stream=MCP_STATUS_CHANGED_TYPE, from_offset="$"):
                 try:
                     await handle_mcp_status_changed(event)
                 except Exception:

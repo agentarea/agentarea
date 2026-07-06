@@ -88,9 +88,7 @@ class MCPAggregatorProxy:
             return name.lower().replace(" ", "_").replace("-", "_")
         return str(member.mcp_instance_id)[:8]
 
-    async def _discover_member_tools(
-        self, member: AggregatedMember
-    ) -> list[dict[str, Any]]:
+    async def _discover_member_tools(self, member: AggregatedMember) -> list[dict[str, Any]]:
         instance_id = str(member.mcp_instance_id)
         mcp_url = self.instance_urls.get(instance_id)
         if not mcp_url:
@@ -202,7 +200,9 @@ class MCPAggregatorProxy:
             instance_name = self.instance_names.get(str(member.mcp_instance_id), "unknown")
             for tool in tools:
                 namespaced_name = f"{namespace}{NS_SEP}{tool['name']}"
-                handler = self._make_proxy_handler(member, tool["name"], tool.get("inputSchema", {}))
+                handler = self._make_proxy_handler(
+                    member, tool["name"], tool.get("inputSchema", {})
+                )
                 server.add_tool(
                     handler,
                     name=namespaced_name,
@@ -235,9 +235,7 @@ class MCPAggregatorProxy:
                 )
         return aggregated
 
-    async def call_namespaced_tool(
-        self, namespaced_name: str, arguments: dict[str, Any]
-    ) -> Any:
+    async def call_namespaced_tool(self, namespaced_name: str, arguments: dict[str, Any]) -> Any:
         """Route a namespaced tool call to the owning member instance."""
         for member in self.members:
             namespace = self._get_namespace(member)

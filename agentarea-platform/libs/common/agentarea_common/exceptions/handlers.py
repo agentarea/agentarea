@@ -155,9 +155,7 @@ async def validation_exception_handler(
     return _json_problem(body, status.HTTP_422_UNPROCESSABLE_ENTITY, _get_workspace_headers())
 
 
-async def http_exception_handler(
-    request: Request, exc: StarletteHTTPException
-) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Render Starlette/FastAPI ``HTTPException`` as problem+json."""
     _log_error(exc, request, exc.status_code, with_traceback=False)
     detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)

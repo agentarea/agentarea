@@ -24,18 +24,14 @@ class ClientService:
             source_project_id=payload.source_project_id,
         )
 
-    async def update_client(
-        self, client_id: UUID | str, payload: ClientUpdate
-    ) -> Client | None:
+    async def update_client(self, client_id: UUID | str, payload: ClientUpdate) -> Client | None:
         patch = payload.model_dump(exclude_unset=True)
         return await self.repository.update(client_id, **patch)
 
     async def get(self, client_id: UUID | str) -> Client | None:
         return await self.repository.get_by_id(client_id)
 
-    async def list(
-        self, limit: int | None = None, offset: int | None = None
-    ) -> list[Client]:
+    async def list(self, limit: int | None = None, offset: int | None = None) -> list[Client]:
         return await self.repository.list_all(limit=limit, offset=offset)
 
     async def delete(self, client_id: UUID | str) -> bool:
@@ -66,7 +62,5 @@ class ClientService:
     ) -> None:
         await self.repository.add_mcp_instance(client_id, mcp_instance_id, namespace_prefix)
 
-    async def remove_mcp_instance(
-        self, client_id: UUID | str, mcp_instance_id: UUID | str
-    ) -> None:
+    async def remove_mcp_instance(self, client_id: UUID | str, mcp_instance_id: UUID | str) -> None:
         await self.repository.remove_mcp_instance(client_id, mcp_instance_id)

@@ -1745,7 +1745,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     model_instance_service = await ctx.get_model_instance_service()
                     model_instance = await model_instance_service.get(model_uuid)
                     if not model_instance:
-                        raise ModelInstanceNotFoundError(f"Model instance {request.model_id} not found")
+                        raise ModelInstanceNotFoundError(
+                            f"Model instance {request.model_id} not found"
+                        )
 
                     provider_type = model_instance.provider_config.provider_spec.provider_type
                     model_name = model_instance.model_spec.model_name

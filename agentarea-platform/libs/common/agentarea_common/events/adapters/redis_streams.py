@@ -129,9 +129,7 @@ class RedisStreamsEventBus:
     async def publish(self, event: IntegrationEvent) -> None:
         await self._broker.submit(topic_for(event.type), encode(event))
 
-    async def subscribe(
-        self, *, topic: str, group: str, handler: Handler
-    ) -> Subscription:
+    async def subscribe(self, *, topic: str, group: str, handler: Handler) -> Subscription:
         stream = topic_for(topic)
         # Create from "$": the group only gets messages published after it
         # exists. Once created the group is durable, so consumer downtime is
@@ -162,9 +160,7 @@ class RedisStreamsEventBus:
                 logger.exception("Event consume loop error on stream %s", stream)
                 await asyncio.sleep(1)
 
-    async def _handle(
-        self, stream: str, group: str, msg: BrokerMessage, handler: Handler
-    ) -> None:
+    async def _handle(self, stream: str, group: str, msg: BrokerMessage, handler: Handler) -> None:
         if msg.delivery_count > self._max_delivery:
             logger.error(
                 "Dropping poison message %s on %s after %d deliveries",
@@ -207,9 +203,7 @@ class RedisStreamsEventStream:
         self._broker = broker
         self._block_ms = block_ms
 
-    async def read(
-        self, *, stream: str, from_offset: str = "0"
-    ) -> AsyncIterator[IntegrationEvent]:
+    async def read(self, *, stream: str, from_offset: str = "0") -> AsyncIterator[IntegrationEvent]:
         physical = topic_for(stream)
         cursor = from_offset
         while True:

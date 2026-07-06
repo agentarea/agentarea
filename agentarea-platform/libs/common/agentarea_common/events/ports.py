@@ -86,9 +86,7 @@ class EventSubscriber(Protocol):
     ``handler`` must be idempotent because delivery is at-least-once.
     """
 
-    async def subscribe(
-        self, *, topic: str, group: str, handler: Handler
-    ) -> Subscription:
+    async def subscribe(self, *, topic: str, group: str, handler: Handler) -> Subscription:
         raise NotImplementedError
 
 
@@ -102,7 +100,5 @@ class EventStream(Protocol):
     "subscriber attached after start, lost early events" race without polling.
     """
 
-    def read(
-        self, *, stream: str, from_offset: str = "0"
-    ) -> AsyncIterator[IntegrationEvent]:
+    def read(self, *, stream: str, from_offset: str = "0") -> AsyncIterator[IntegrationEvent]:
         raise NotImplementedError

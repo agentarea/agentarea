@@ -105,9 +105,7 @@ class MCPAuthService:
             return {"Authorization": f"Bearer {token}"}
 
         if config.auth_type == AUTH_TYPE_OAUTH2:
-            access_token = await self._get_oauth2_token(
-                config, creds, force_refresh=force_refresh
-            )
+            access_token = await self._get_oauth2_token(config, creds, force_refresh=force_refresh)
             return {"Authorization": f"Bearer {access_token}"}
 
         return {}

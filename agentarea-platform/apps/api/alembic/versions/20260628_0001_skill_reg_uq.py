@@ -45,9 +45,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # 1. Drop the retired platform-workspace skill rows (and their install records).
     #    agent_skills / skill_members rows are removed via ON DELETE CASCADE.
-    op.execute(
-        sa.text("DELETE FROM registry_item_installs WHERE workspace_id = 'platform'")
-    )
+    op.execute(sa.text("DELETE FROM registry_item_installs WHERE workspace_id = 'platform'"))
     op.execute(sa.text("DELETE FROM skills WHERE workspace_id = 'platform'"))
 
     # 2. Re-scope provenance uniqueness from global to per-workspace.

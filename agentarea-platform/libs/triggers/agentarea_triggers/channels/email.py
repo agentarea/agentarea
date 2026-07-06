@@ -157,9 +157,7 @@ class EmailAdapter:
 
         logger.info("Email sent to %s: %s", reply_to, subject)
 
-    async def _resolve_smtp_credentials(
-        self, channel_config: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _resolve_smtp_credentials(self, channel_config: dict[str, Any]) -> dict[str, Any]:
         """Resolve SMTP credentials from the secret store.
 
         Secret name is derived: channel_cred:{type}:{trigger_id}

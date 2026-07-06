@@ -250,9 +250,7 @@ async def _list_tools(
     if result is None:
         # Declared streamable-http with no SSE fallback and it failed — surface
         # the real transport error rather than a confusing None.
-        raise last_streamable_err or RuntimeError(
-            f"No usable MCP transport for {endpoint_url}"
-        )
+        raise last_streamable_err or RuntimeError(f"No usable MCP transport for {endpoint_url}")
 
     return [serialize_mcp_tool(t) for t in result.tools]
 
@@ -498,9 +496,7 @@ async def verify(
             try:
                 async with asyncio.timeout(_LIST_TOOLS_ATTEMPT_TIMEOUT):
                     if _list_tools_fn is None:
-                        tools = await _list_tools(
-                            endpoint_url, headers or None, remote_transport
-                        )
+                        tools = await _list_tools(endpoint_url, headers or None, remote_transport)
                     else:
                         tools = await _list_tools_fn(endpoint_url, headers or None)
 
@@ -576,10 +572,7 @@ async def verify(
                         leaf,
                         extra={"instance_id": instance_id, "delay": _LIST_TOOLS_RETRY_DELAY},
                     )
-                    if (
-                        asyncio.get_event_loop().time() + _LIST_TOOLS_RETRY_DELAY
-                        > deadline
-                    ):
+                    if asyncio.get_event_loop().time() + _LIST_TOOLS_RETRY_DELAY > deadline:
                         break
                     await asyncio.sleep(_LIST_TOOLS_RETRY_DELAY)
                     continue

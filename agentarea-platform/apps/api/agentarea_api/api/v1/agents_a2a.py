@@ -1376,9 +1376,7 @@ async def handle_task_resubscribe(
 
         # Stream task events (catch-up + live) for active task
         async def event_stream():
-            async for env in open_task_event_feed(
-                task_id, terminal_types=_A2A_TERMINAL_TYPES
-            ):
+            async for env in open_task_event_feed(task_id, terminal_types=_A2A_TERMINAL_TYPES):
                 frames, is_terminal = map_workflow_event_to_sse(
                     {"event_type": env.event_type, "event_data": env.data},
                     request_id,

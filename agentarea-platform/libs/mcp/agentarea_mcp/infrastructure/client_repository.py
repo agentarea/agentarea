@@ -98,9 +98,7 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         await self.session.execute(stmt)
         await self.session.commit()
 
-    async def remove_mcp_instance(
-        self, client_id: UUID | str, mcp_instance_id: UUID | str
-    ) -> None:
+    async def remove_mcp_instance(self, client_id: UUID | str, mcp_instance_id: UUID | str) -> None:
         stmt = delete(client_mcp_instances).where(
             client_mcp_instances.c.client_id == str(client_id),
             client_mcp_instances.c.mcp_instance_id == str(mcp_instance_id),

@@ -150,9 +150,7 @@ class Database:
             # Reuse the write engine's pool via a lightweight execution-options
             # variant — reads still run in AUTOCOMMIT (no transactions), they
             # just share the primary's connections.
-            self.read_engine = self.engine.execution_options(
-                isolation_level="AUTOCOMMIT"
-            )
+            self.read_engine = self.engine.execution_options(isolation_level="AUTOCOMMIT")
 
     def _setup_session_factories(self) -> None:
         """Setup session factories for async (write/read) and sync sessions."""
