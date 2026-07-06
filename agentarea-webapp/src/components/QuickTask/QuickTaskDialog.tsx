@@ -158,8 +158,10 @@ export default function QuickTaskDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         data-quick-task-dialog
+        closeClassName="right-2 top-2"
         className={cn(
-          "top-[24%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-2xl border bg-background p-3 shadow-2xl",
+          // extra top padding gives the close button its own strip above the composer
+          "top-[24%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-2xl border bg-background px-3 pb-3 pt-7 shadow-2xl",
           "data-[state=closed]:slide-out-to-top-[20%] data-[state=open]:slide-in-from-top-[20%]"
         )}
       >
