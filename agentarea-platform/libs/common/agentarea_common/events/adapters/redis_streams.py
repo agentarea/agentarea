@@ -104,6 +104,8 @@ class _StreamSubscription:
         try:
             await self._task
         except asyncio.CancelledError:
+            # Expected: awaiting a task we just cancelled re-raises the
+            # cancellation here. Swallow it so stop() completes cleanly.
             pass
 
 

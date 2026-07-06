@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from agentarea_agents.domain.skill_models import Skill
+
     from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 client_skills = sa.Table(

@@ -66,14 +66,16 @@ Handler = Callable[[IntegrationEvent], Awaitable[None]]
 class Subscription(Protocol):
     """Handle to a running subscription."""
 
-    async def stop(self) -> None: ...
+    async def stop(self) -> None:
+        raise NotImplementedError
 
 
 @runtime_checkable
 class EventPublisher(Protocol):
     """Write side: publish an integration event to its topic."""
 
-    async def publish(self, event: IntegrationEvent) -> None: ...
+    async def publish(self, event: IntegrationEvent) -> None:
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -86,7 +88,8 @@ class EventSubscriber(Protocol):
 
     async def subscribe(
         self, *, topic: str, group: str, handler: Handler
-    ) -> Subscription: ...
+    ) -> Subscription:
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -101,4 +104,5 @@ class EventStream(Protocol):
 
     def read(
         self, *, stream: str, from_offset: str = "0"
-    ) -> AsyncIterator[IntegrationEvent]: ...
+    ) -> AsyncIterator[IntegrationEvent]:
+        raise NotImplementedError

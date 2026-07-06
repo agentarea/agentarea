@@ -71,6 +71,14 @@ export interface MCPServerFormState {
   };
 }
 
+// Guard user-supplied keys (env var / header names) before using them as
+// object property names, so a crafted "__proto__"/"constructor"/"prototype"
+// entry can't pollute the record's prototype.
+const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+function isSafeKey(key: string): boolean {
+  return !UNSAFE_KEYS.has(key);
+}
+
 // Split the editable env rows into the two artifacts the API expects:
 //   - env_schema: the *field* definitions, stored on the reusable spec
 //     (every named variable, with its secret flag). No values here.
@@ -96,7 +104,7 @@ function splitEnvRows(env: MCPServerFormValues["env"]): {
 
   const environment: Record<string, string> = {};
   for (const e of rows) {
-    if (e.value !== "") environment[e.key] = e.value;
+    if (e.value !== "" && isSafeKey(e.key)) environment[e.key] = e.value;
   }
 
   return { envSchema, environment };
@@ -164,7 +172,7 @@ function toServerConnectionCreate(
   } else {
     const headersObject: Record<string, string> = {};
     for (const header of input.headers || []) {
-      headersObject[header.key] = header.value;
+      if (isSafeKey(header.key)) headersObject[header.key] = header.value;
     }
 
     server = {
