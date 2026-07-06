@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Bot, ExternalLink, Github, Globe, Key, Lock } from "lucide-react";
+import { ExternalLink, Github, Globe, Key, Lock, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge, badgeVariants } from "@/components/ui/badge";
@@ -479,7 +479,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
         {/* Instance name */}
         <div className="flex flex-col gap-2">
-          <FormLabel htmlFor="instance-name" icon={Bot} required>
+          <FormLabel htmlFor="instance-name" icon={Tag} required>
             Name
           </FormLabel>
           <Input
