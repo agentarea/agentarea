@@ -386,50 +386,50 @@ import type {
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses,
-  HandleWebhookWebhooksWebhookIdPatch2Data,
-  HandleWebhookWebhooksWebhookIdPatch2Errors,
-  HandleWebhookWebhooksWebhookIdPatch2Responses,
-  HandleWebhookWebhooksWebhookIdPatch3Data,
-  HandleWebhookWebhooksWebhookIdPatch3Errors,
-  HandleWebhookWebhooksWebhookIdPatch3Responses,
-  HandleWebhookWebhooksWebhookIdPatch4Data,
-  HandleWebhookWebhooksWebhookIdPatch4Errors,
-  HandleWebhookWebhooksWebhookIdPatch4Responses,
-  HandleWebhookWebhooksWebhookIdPatch5Data,
-  HandleWebhookWebhooksWebhookIdPatch5Errors,
-  HandleWebhookWebhooksWebhookIdPatch5Responses,
-  HandleWebhookWebhooksWebhookIdPatch6Data,
-  HandleWebhookWebhooksWebhookIdPatch6Errors,
-  HandleWebhookWebhooksWebhookIdPatch6Responses,
-  HandleWebhookWebhooksWebhookIdPatch7Data,
-  HandleWebhookWebhooksWebhookIdPatch7Errors,
-  HandleWebhookWebhooksWebhookIdPatch7Responses,
+  HandleWebhookWebhooksWebhookIdDeleteData,
+  HandleWebhookWebhooksWebhookIdDeleteErrors,
+  HandleWebhookWebhooksWebhookIdDeleteResponses,
+  HandleWebhookWebhooksWebhookIdGetData,
+  HandleWebhookWebhooksWebhookIdGetErrors,
+  HandleWebhookWebhooksWebhookIdGetResponses,
+  HandleWebhookWebhooksWebhookIdHeadData,
+  HandleWebhookWebhooksWebhookIdHeadErrors,
+  HandleWebhookWebhooksWebhookIdHeadResponses,
+  HandleWebhookWebhooksWebhookIdOptionsData,
+  HandleWebhookWebhooksWebhookIdOptionsErrors,
+  HandleWebhookWebhooksWebhookIdOptionsResponses,
   HandleWebhookWebhooksWebhookIdPatchData,
   HandleWebhookWebhooksWebhookIdPatchErrors,
   HandleWebhookWebhooksWebhookIdPatchResponses,
-  HealthCheckHealthGetData,
-  HealthCheckHealthGetResponses,
+  HandleWebhookWebhooksWebhookIdPostData,
+  HandleWebhookWebhooksWebhookIdPostErrors,
+  HandleWebhookWebhooksWebhookIdPostResponses,
+  HandleWebhookWebhooksWebhookIdPutData,
+  HandleWebhookWebhooksWebhookIdPutErrors,
+  HandleWebhookWebhooksWebhookIdPutResponses,
+  HealthHealthGetData,
+  HealthHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
   HydraAuthRedirectOauth2AuthGetResponses,
   HydraDcrProxyOauth2RegisterPostData,
   HydraDcrProxyOauth2RegisterPostResponses,
   HydraJwksProxyWellKnownJwksJsonGetData,
   HydraJwksProxyWellKnownJwksJsonGetResponses,
-  HydraOauth2ProxyOauth2PathPatch2Data,
-  HydraOauth2ProxyOauth2PathPatch2Errors,
-  HydraOauth2ProxyOauth2PathPatch2Responses,
-  HydraOauth2ProxyOauth2PathPatch3Data,
-  HydraOauth2ProxyOauth2PathPatch3Errors,
-  HydraOauth2ProxyOauth2PathPatch3Responses,
-  HydraOauth2ProxyOauth2PathPatch4Data,
-  HydraOauth2ProxyOauth2PathPatch4Errors,
-  HydraOauth2ProxyOauth2PathPatch4Responses,
-  HydraOauth2ProxyOauth2PathPatch5Data,
-  HydraOauth2ProxyOauth2PathPatch5Errors,
-  HydraOauth2ProxyOauth2PathPatch5Responses,
+  HydraOauth2ProxyOauth2PathDeleteData,
+  HydraOauth2ProxyOauth2PathDeleteErrors,
+  HydraOauth2ProxyOauth2PathDeleteResponses,
+  HydraOauth2ProxyOauth2PathGetData,
+  HydraOauth2ProxyOauth2PathGetErrors,
+  HydraOauth2ProxyOauth2PathGetResponses,
   HydraOauth2ProxyOauth2PathPatchData,
   HydraOauth2ProxyOauth2PathPatchErrors,
   HydraOauth2ProxyOauth2PathPatchResponses,
+  HydraOauth2ProxyOauth2PathPostData,
+  HydraOauth2ProxyOauth2PathPostErrors,
+  HydraOauth2ProxyOauth2PathPostResponses,
+  HydraOauth2ProxyOauth2PathPutData,
+  HydraOauth2ProxyOauth2PathPutErrors,
+  HydraOauth2ProxyOauth2PathPutResponses,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
@@ -569,12 +569,12 @@ import type {
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
   ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
-  ProxyInstanceV1McpInstanceIdMcpPost2Data,
-  ProxyInstanceV1McpInstanceIdMcpPost2Errors,
-  ProxyInstanceV1McpInstanceIdMcpPost2Responses,
-  ProxyInstanceV1McpInstanceIdMcpPost3Data,
-  ProxyInstanceV1McpInstanceIdMcpPost3Errors,
-  ProxyInstanceV1McpInstanceIdMcpPost3Responses,
+  ProxyInstanceV1McpInstanceIdMcpDeleteData,
+  ProxyInstanceV1McpInstanceIdMcpDeleteErrors,
+  ProxyInstanceV1McpInstanceIdMcpDeleteResponses,
+  ProxyInstanceV1McpInstanceIdMcpGetData,
+  ProxyInstanceV1McpInstanceIdMcpGetErrors,
+  ProxyInstanceV1McpInstanceIdMcpGetResponses,
   ProxyInstanceV1McpInstanceIdMcpPostData,
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ProxyInstanceV1McpInstanceIdMcpPostResponses,
@@ -626,8 +626,6 @@ import type {
   RevokeToolAccessV1ToolAccessGrantsDeleteData,
   RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
   RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
-  RootGetData,
-  RootGetResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -763,36 +761,34 @@ export type Options<
 };
 
 /**
- * Oauth Protected Resource Metadata
+ * Hydra Jwks Proxy
  *
- * RFC 9728: point clients at our own API as the AS base URL.
+ * Proxy JWKS so token verification works against our API URL.
  */
-export const oauthProtectedResourceMetadataWellKnownOauthProtectedResourceGet =
-  <ThrowOnError extends boolean = false>(
-    options?: Options<
-      OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResponses,
+export const hydraJwksProxyWellKnownJwksJsonGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<HydraJwksProxyWellKnownJwksJsonGetData, ThrowOnError>
+): RequestResult<
+  HydraJwksProxyWellKnownJwksJsonGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    HydraJwksProxyWellKnownJwksJsonGetResponses,
     unknown,
     ThrowOnError
-  > =>
-    (options?.client ?? client).get<
-      OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResponses,
-      unknown,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "bearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/.well-known/oauth-protected-resource",
-      ...options,
-    });
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/.well-known/jwks.json",
+    ...options,
+  });
 
 /**
  * Oauth Authorization Server Metadata
@@ -829,6 +825,62 @@ export const oauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGe
       url: "/.well-known/oauth-authorization-server",
       ...options,
     });
+
+/**
+ * Oauth Protected Resource Metadata
+ *
+ * RFC 9728: point clients at our own API as the AS base URL.
+ */
+export const oauthProtectedResourceMetadataWellKnownOauthProtectedResourceGet =
+  <ThrowOnError extends boolean = false>(
+    options?: Options<
+      OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResponses,
+    unknown,
+    ThrowOnError
+  > =>
+    (options?.client ?? client).get<
+      OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResponses,
+      unknown,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "bearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/.well-known/oauth-protected-resource",
+      ...options,
+    });
+
+/**
+ * Health
+ *
+ * Health check endpoint.
+ */
+export const healthHealthGet = <ThrowOnError extends boolean = false>(
+  options?: Options<HealthHealthGetData, ThrowOnError>
+): RequestResult<HealthHealthGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    HealthHealthGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/health",
+    ...options,
+  });
 
 /**
  * Hydra Auth Redirect
@@ -908,6 +960,66 @@ export const hydraDcrProxyOauth2RegisterPost = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
+export const hydraOauth2ProxyOauth2PathDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HydraOauth2ProxyOauth2PathDeleteData, ThrowOnError>
+): RequestResult<
+  HydraOauth2ProxyOauth2PathDeleteResponses,
+  HydraOauth2ProxyOauth2PathDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    HydraOauth2ProxyOauth2PathDeleteResponses,
+    HydraOauth2ProxyOauth2PathDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/oauth2/{path}",
+    ...options,
+  });
+
+/**
+ * Hydra Oauth2 Proxy
+ *
+ * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
+ */
+export const hydraOauth2ProxyOauth2PathGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HydraOauth2ProxyOauth2PathGetData, ThrowOnError>
+): RequestResult<
+  HydraOauth2ProxyOauth2PathGetResponses,
+  HydraOauth2ProxyOauth2PathGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    HydraOauth2ProxyOauth2PathGetResponses,
+    HydraOauth2ProxyOauth2PathGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/oauth2/{path}",
+    ...options,
+  });
+
+/**
+ * Hydra Oauth2 Proxy
+ *
+ * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
+ */
 export const hydraOauth2ProxyOauth2PathPatch = <
   ThrowOnError extends boolean = false,
 >(
@@ -917,7 +1029,7 @@ export const hydraOauth2ProxyOauth2PathPatch = <
   HydraOauth2ProxyOauth2PathPatchErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).delete<
+  (options.client ?? client).patch<
     HydraOauth2ProxyOauth2PathPatchResponses,
     HydraOauth2ProxyOauth2PathPatchErrors,
     ThrowOnError
@@ -938,78 +1050,18 @@ export const hydraOauth2ProxyOauth2PathPatch = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPatch2 = <
+export const hydraOauth2ProxyOauth2PathPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPatch2Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPostData, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPatch2Responses,
-  HydraOauth2ProxyOauth2PathPatch2Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    HydraOauth2ProxyOauth2PathPatch2Responses,
-    HydraOauth2ProxyOauth2PathPatch2Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/oauth2/{path}",
-    ...options,
-  });
-
-/**
- * Hydra Oauth2 Proxy
- *
- * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
- */
-export const hydraOauth2ProxyOauth2PathPatch3 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HydraOauth2ProxyOauth2PathPatch3Data, ThrowOnError>
-): RequestResult<
-  HydraOauth2ProxyOauth2PathPatch3Responses,
-  HydraOauth2ProxyOauth2PathPatch3Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    HydraOauth2ProxyOauth2PathPatch3Responses,
-    HydraOauth2ProxyOauth2PathPatch3Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/oauth2/{path}",
-    ...options,
-  });
-
-/**
- * Hydra Oauth2 Proxy
- *
- * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
- */
-export const hydraOauth2ProxyOauth2PathPatch4 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HydraOauth2ProxyOauth2PathPatch4Data, ThrowOnError>
-): RequestResult<
-  HydraOauth2ProxyOauth2PathPatch4Responses,
-  HydraOauth2ProxyOauth2PathPatch4Errors,
+  HydraOauth2ProxyOauth2PathPostResponses,
+  HydraOauth2ProxyOauth2PathPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    HydraOauth2ProxyOauth2PathPatch4Responses,
-    HydraOauth2ProxyOauth2PathPatch4Errors,
+    HydraOauth2ProxyOauth2PathPostResponses,
+    HydraOauth2ProxyOauth2PathPostErrors,
     ThrowOnError
   >({
     security: [
@@ -1028,18 +1080,18 @@ export const hydraOauth2ProxyOauth2PathPatch4 = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPatch5 = <
+export const hydraOauth2ProxyOauth2PathPut = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPatch5Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPutData, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPatch5Responses,
-  HydraOauth2ProxyOauth2PathPatch5Errors,
+  HydraOauth2ProxyOauth2PathPutResponses,
+  HydraOauth2ProxyOauth2PathPutErrors,
   ThrowOnError
 > =>
   (options.client ?? client).put<
-    HydraOauth2ProxyOauth2PathPatch5Responses,
-    HydraOauth2ProxyOauth2PathPatch5Errors,
+    HydraOauth2ProxyOauth2PathPutResponses,
+    HydraOauth2ProxyOauth2PathPutErrors,
     ThrowOnError
   >({
     security: [
@@ -1054,344 +1106,22 @@ export const hydraOauth2ProxyOauth2PathPatch5 = <
   });
 
 /**
- * Hydra Jwks Proxy
+ * Check Permission
  *
- * Proxy JWKS so token verification works against our API URL.
+ * Check whether a subject has a relation on an object.
  */
-export const hydraJwksProxyWellKnownJwksJsonGet = <
+export const checkPermissionV1AccessControlCheckPost = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<HydraJwksProxyWellKnownJwksJsonGetData, ThrowOnError>
+  options: Options<CheckPermissionV1AccessControlCheckPostData, ThrowOnError>
 ): RequestResult<
-  HydraJwksProxyWellKnownJwksJsonGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    HydraJwksProxyWellKnownJwksJsonGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/.well-known/jwks.json",
-    ...options,
-  });
-
-/**
- * Webhook Health Check
- *
- * Health check endpoint for webhook system.
- */
-export const webhookHealthCheckWebhooksHealthGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<WebhookHealthCheckWebhooksHealthGetData, ThrowOnError>
-): RequestResult<
-  WebhookHealthCheckWebhooksHealthGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    WebhookHealthCheckWebhooksHealthGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/health",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatchData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatchResponses,
-  HandleWebhookWebhooksWebhookIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    HandleWebhookWebhooksWebhookIdPatchResponses,
-    HandleWebhookWebhooksWebhookIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch2 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch2Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch2Responses,
-  HandleWebhookWebhooksWebhookIdPatch2Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    HandleWebhookWebhooksWebhookIdPatch2Responses,
-    HandleWebhookWebhooksWebhookIdPatch2Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch3 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch3Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch3Responses,
-  HandleWebhookWebhooksWebhookIdPatch3Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).head<
-    HandleWebhookWebhooksWebhookIdPatch3Responses,
-    HandleWebhookWebhooksWebhookIdPatch3Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch4 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch4Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch4Responses,
-  HandleWebhookWebhooksWebhookIdPatch4Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).options<
-    HandleWebhookWebhooksWebhookIdPatch4Responses,
-    HandleWebhookWebhooksWebhookIdPatch4Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch5 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch5Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch5Responses,
-  HandleWebhookWebhooksWebhookIdPatch5Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    HandleWebhookWebhooksWebhookIdPatch5Responses,
-    HandleWebhookWebhooksWebhookIdPatch5Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch6 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch6Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch6Responses,
-  HandleWebhookWebhooksWebhookIdPatch6Errors,
+  CheckPermissionV1AccessControlCheckPostResponses,
+  CheckPermissionV1AccessControlCheckPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    HandleWebhookWebhooksWebhookIdPatch6Responses,
-    HandleWebhookWebhooksWebhookIdPatch6Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Process incoming webhook requests for registered triggers
- */
-export const handleWebhookWebhooksWebhookIdPatch7 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatch7Data, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatch7Responses,
-  HandleWebhookWebhooksWebhookIdPatch7Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    HandleWebhookWebhooksWebhookIdPatch7Responses,
-    HandleWebhookWebhooksWebhookIdPatch7Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Oauth Callback
- *
- * OAuth callback — exchange code for token and store in MCPAuthConfig.
- *
- * This endpoint does NOT require auth (the user is mid-redirect from the
- * remote AS). The state token proves the flow was initiated by our /authorize.
- */
-export const oauthCallbackV1McpOauthCallbackGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<OauthCallbackV1McpOauthCallbackGetData, ThrowOnError>
-): RequestResult<
-  OauthCallbackV1McpOauthCallbackGetResponses,
-  OauthCallbackV1McpOauthCallbackGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    OauthCallbackV1McpOauthCallbackGetResponses,
-    OauthCallbackV1McpOauthCallbackGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-oauth/callback",
-    ...options,
-  });
-
-/**
- * Execute Trigger
- *
- * Execute a trigger with the provided event data.
- *
- * Called by the Go event service when a polling channel receives new messages.
- * Builds trigger data from the events and channel origin, then creates and
- * submits a task for agent execution.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * request: Events and channel origin data
- * http_request: Raw request, used to verify the internal service token
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Execution result with task ID
- *
- * Raises:
- * HTTPException: If trigger not found or execution fails
- */
-export const executeTriggerV1TriggersTriggerIdExecutePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ExecuteTriggerV1TriggersTriggerIdExecutePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ExecuteTriggerV1TriggersTriggerIdExecutePostResponses,
-  ExecuteTriggerV1TriggersTriggerIdExecutePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ExecuteTriggerV1TriggersTriggerIdExecutePostResponses,
-    ExecuteTriggerV1TriggersTriggerIdExecutePostErrors,
+    CheckPermissionV1AccessControlCheckPostResponses,
+    CheckPermissionV1AccessControlCheckPostErrors,
     ThrowOnError
   >({
     security: [
@@ -1401,7 +1131,7 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <
         type: "http",
       },
     ],
-    url: "/v1/triggers/{trigger_id}/execute",
+    url: "/v1/access-control/check",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -1410,34 +1140,22 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <
   });
 
 /**
- * Get Agent Well Known Card
+ * Get Graph
  *
- * Agent-specific well-known discovery endpoint.
- *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
- *
- * This allows each agent to have its own well-known endpoint, which is A2A compliant.
- * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ * Return the full authorization graph for the current workspace.
  */
-export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
+export const getGraphV1AccessControlGraphGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData,
-    ThrowOnError
-  >
+  options?: Options<GetGraphV1AccessControlGraphGetData, ThrowOnError>
 ): RequestResult<
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
+  GetGraphV1AccessControlGraphGetResponses,
+  unknown,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
+  (options?.client ?? client).get<
+    GetGraphV1AccessControlGraphGetResponses,
+    unknown,
     ThrowOnError
   >({
     security: [
@@ -1447,39 +1165,30 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/.well-known/agent-card.json",
+    url: "/v1/access-control/graph",
     ...options,
   });
 
 /**
- * Get Agent Well Known Card
+ * Delete Relationship
  *
- * Agent-specific well-known discovery endpoint.
- *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
- *
- * This allows each agent to have its own well-known endpoint, which is A2A compliant.
- * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ * Delete an authorization relationship from the configured graph backend.
  */
-export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGet = <
+export const deleteRelationshipV1AccessControlRelationshipsDelete = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
+    DeleteRelationshipV1AccessControlRelationshipsDeleteData,
     ThrowOnError
   >
 ): RequestResult<
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
+  DeleteRelationshipV1AccessControlRelationshipsDeleteResponses,
+  DeleteRelationshipV1AccessControlRelationshipsDeleteErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
+  (options.client ?? client).delete<
+    DeleteRelationshipV1AccessControlRelationshipsDeleteResponses,
+    DeleteRelationshipV1AccessControlRelationshipsDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -1489,32 +1198,67 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/.well-known/agent.json",
+    url: "/v1/access-control/relationships",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Relationships
+ *
+ * List authorization relationships enriched with display names.
+ */
+export const listRelationshipsV1AccessControlRelationshipsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListRelationshipsV1AccessControlRelationshipsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListRelationshipsV1AccessControlRelationshipsGetResponses,
+  ListRelationshipsV1AccessControlRelationshipsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListRelationshipsV1AccessControlRelationshipsGetResponses,
+    ListRelationshipsV1AccessControlRelationshipsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/access-control/relationships",
     ...options,
   });
 
 /**
- * Get Agent A2A Info
+ * Create Relationship
  *
- * Agent-specific A2A protocol information.
- *
- * Provides A2A protocol information specific to this agent.
+ * Write an authorization relationship to the configured graph backend.
  */
-export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
+export const createRelationshipV1AccessControlRelationshipsPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetData,
+    CreateRelationshipV1AccessControlRelationshipsPostData,
     ThrowOnError
   >
 ): RequestResult<
-  GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses,
-  GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors,
+  CreateRelationshipV1AccessControlRelationshipsPostResponses,
+  CreateRelationshipV1AccessControlRelationshipsPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses,
-    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors,
+  (options.client ?? client).post<
+    CreateRelationshipV1AccessControlRelationshipsPostResponses,
+    CreateRelationshipV1AccessControlRelationshipsPostErrors,
     ThrowOnError
   >({
     security: [
@@ -1524,30 +1268,34 @@ export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/.well-known/a2a-info.json",
+    url: "/v1/access-control/relationships",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
- * Get Agent Well Known Index
+ * Resolve Access
  *
- * Agent-specific well-known endpoints index.
+ * Resolve why (and how) a subject can access a resource.
+ *
+ * ``allowed`` is computed via the graph backend; ``paths`` are derived by
+ * traversing workspace relationships directly so the UI can render the derivation.
  */
-export const getAgentWellKnownIndexV1AgentsAgentIdWellKnownGet = <
+export const resolveAccessV1AccessControlResolvePost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData,
-    ThrowOnError
-  >
+  options: Options<ResolveAccessV1AccessControlResolvePostData, ThrowOnError>
 ): RequestResult<
-  GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
-  GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
+  ResolveAccessV1AccessControlResolvePostResponses,
+  ResolveAccessV1AccessControlResolvePostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
-    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
+  (options.client ?? client).post<
+    ResolveAccessV1AccessControlResolvePostResponses,
+    ResolveAccessV1AccessControlResolvePostErrors,
     ThrowOnError
   >({
     security: [
@@ -1557,7 +1305,48 @@ export const getAgentWellKnownIndexV1AgentsAgentIdWellKnownGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/.well-known/",
+    url: "/v1/access-control/resolve",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Sync Grants
+ *
+ * Mirror existing grants into the graph backend and seed a starter collection.
+ *
+ * Idempotent: safe to call repeatedly. Steps:
+ * 1. Mirror workspace members into the graph.
+ * 2. If no collections exist, create "All skills" containing every workspace
+ * skill and grant workspace-member access to the collection.
+ * 3. Mirror each collection membership relationship.
+ * 4. Mirror each direct agent-to-skill grant.
+ */
+export const syncGrantsV1AccessControlSyncPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<SyncGrantsV1AccessControlSyncPostData, ThrowOnError>
+): RequestResult<
+  SyncGrantsV1AccessControlSyncPostResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).post<
+    SyncGrantsV1AccessControlSyncPostResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/access-control/sync",
     ...options,
   });
 
@@ -1578,6 +1367,37 @@ export const listAgentsV1AgentsGet = <ThrowOnError extends boolean = false>(
 ): RequestResult<ListAgentsV1AgentsGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<
     ListAgentsV1AgentsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents",
+    ...options,
+  });
+
+/**
+ * List Agents
+ *
+ * List all workspace agents.
+ *
+ * Access Control:
+ * Returns all agents within the current user's workspace (workspace isolation).
+ * All users in the same workspace can see all workspace agents.
+ *
+ * Note: User-level access control should be implemented via authorization
+ * layer (future access-control) rather than query parameters.
+ */
+export const listAgentsV1AgentsGet2 = <ThrowOnError extends boolean = false>(
+  options?: Options<ListAgentsV1AgentsGet2Data, ThrowOnError>
+): RequestResult<ListAgentsV1AgentsGet2Responses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListAgentsV1AgentsGet2Responses,
     unknown,
     ThrowOnError
   >({
@@ -1762,25 +1582,25 @@ export const updateAgentV1AgentsAgentIdPatch = <
   });
 
 /**
- * Install Agent
+ * Get Agent Well Known Index
  *
- * Add a built-in catalog agent to the workspace (copy-on-write fork).
- *
- * Resolves a catalog agent by UUID or slug and materializes a tenant copy.
- * Idempotent: returns the existing workspace copy if already installed.
+ * Agent-specific well-known endpoints index.
  */
-export const installAgentV1AgentsAgentIdInstallPost = <
+export const getAgentWellKnownIndexV1AgentsAgentIdWellKnownGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<InstallAgentV1AgentsAgentIdInstallPostData, ThrowOnError>
+  options: Options<
+    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData,
+    ThrowOnError
+  >
 ): RequestResult<
-  InstallAgentV1AgentsAgentIdInstallPostResponses,
-  InstallAgentV1AgentsAgentIdInstallPostErrors,
+  GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
+  GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).post<
-    InstallAgentV1AgentsAgentIdInstallPostResponses,
-    InstallAgentV1AgentsAgentIdInstallPostErrors,
+  (options.client ?? client).get<
+    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
+    GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
     ThrowOnError
   >({
     security: [
@@ -1790,28 +1610,32 @@ export const installAgentV1AgentsAgentIdInstallPost = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/install",
+    url: "/v1/agents/{agent_id}/.well-known/",
     ...options,
   });
 
 /**
- * List Agents
+ * Get Agent A2A Info
  *
- * List all workspace agents.
+ * Agent-specific A2A protocol information.
  *
- * Access Control:
- * Returns all agents within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace agents.
- *
- * Note: User-level access control should be implemented via authorization
- * layer (future access-control) rather than query parameters.
+ * Provides A2A protocol information specific to this agent.
  */
-export const listAgentsV1AgentsGet2 = <ThrowOnError extends boolean = false>(
-  options?: Options<ListAgentsV1AgentsGet2Data, ThrowOnError>
-): RequestResult<ListAgentsV1AgentsGet2Responses, unknown, ThrowOnError> =>
-  (options?.client ?? client).get<
-    ListAgentsV1AgentsGet2Responses,
-    unknown,
+export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses,
+  GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses,
+    GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors,
     ThrowOnError
   >({
     security: [
@@ -1821,7 +1645,91 @@ export const listAgentsV1AgentsGet2 = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/v1/agents",
+    url: "/v1/agents/{agent_id}/.well-known/a2a-info.json",
+    ...options,
+  });
+
+/**
+ * Get Agent Well Known Card
+ *
+ * Agent-specific well-known discovery endpoint.
+ *
+ * Returns the agent card for this specific agent.
+ * This endpoint can be accessed at:
+ * - /v1/agents/{agent_id}/.well-known/agent-card.json
+ * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+ *
+ * This allows each agent to have its own well-known endpoint, which is A2A compliant.
+ * Later, this can be proxied to subdomains:
+ * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ */
+export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
+  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/.well-known/agent-card.json",
+    ...options,
+  });
+
+/**
+ * Get Agent Well Known Card
+ *
+ * Agent-specific well-known discovery endpoint.
+ *
+ * Returns the agent card for this specific agent.
+ * This endpoint can be accessed at:
+ * - /v1/agents/{agent_id}/.well-known/agent-card.json
+ * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+ *
+ * This allows each agent to have its own well-known endpoint, which is A2A compliant.
+ * Later, this can be proxied to subdomains:
+ * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ */
+export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
+  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
+    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/.well-known/agent.json",
     ...options,
   });
 
@@ -1892,82 +1800,25 @@ export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
   });
 
 /**
- * Delete Wallet
+ * Install Agent
  *
- * Delete wallet and associated credentials.
+ * Add a built-in catalog agent to the workspace (copy-on-write fork).
+ *
+ * Resolves a catalog agent by UUID or slug and materializes a tenant copy.
+ * Idempotent: returns the existing workspace copy if already installed.
  */
-export const deleteWalletV1AgentsAgentIdWalletDelete = <
+export const installAgentV1AgentsAgentIdInstallPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<DeleteWalletV1AgentsAgentIdWalletDeleteData, ThrowOnError>
+  options: Options<InstallAgentV1AgentsAgentIdInstallPostData, ThrowOnError>
 ): RequestResult<
-  DeleteWalletV1AgentsAgentIdWalletDeleteResponses,
-  DeleteWalletV1AgentsAgentIdWalletDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteWalletV1AgentsAgentIdWalletDeleteResponses,
-    DeleteWalletV1AgentsAgentIdWalletDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/wallet",
-    ...options,
-  });
-
-/**
- * Get Wallet
- *
- * Get wallet configuration for an agent (no decrypted credentials).
- */
-export const getWalletV1AgentsAgentIdWalletGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetWalletV1AgentsAgentIdWalletGetData, ThrowOnError>
-): RequestResult<
-  GetWalletV1AgentsAgentIdWalletGetResponses,
-  GetWalletV1AgentsAgentIdWalletGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetWalletV1AgentsAgentIdWalletGetResponses,
-    GetWalletV1AgentsAgentIdWalletGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/wallet",
-    ...options,
-  });
-
-/**
- * Create Wallet
- *
- * Create a wallet for an agent.
- */
-export const createWalletV1AgentsAgentIdWalletPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateWalletV1AgentsAgentIdWalletPostData, ThrowOnError>
-): RequestResult<
-  CreateWalletV1AgentsAgentIdWalletPostResponses,
-  CreateWalletV1AgentsAgentIdWalletPostErrors,
+  InstallAgentV1AgentsAgentIdInstallPostResponses,
+  InstallAgentV1AgentsAgentIdInstallPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateWalletV1AgentsAgentIdWalletPostResponses,
-    CreateWalletV1AgentsAgentIdWalletPostErrors,
+    InstallAgentV1AgentsAgentIdInstallPostResponses,
+    InstallAgentV1AgentsAgentIdInstallPostErrors,
     ThrowOnError
   >({
     security: [
@@ -1977,68 +1828,27 @@ export const createWalletV1AgentsAgentIdWalletPost = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/wallet",
+    url: "/v1/agents/{agent_id}/install",
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**
- * Update Wallet
+ * Get Agent Overview
  *
- * Update wallet configuration.
+ * Aggregate stats + upcoming work for one agent.
  */
-export const updateWalletV1AgentsAgentIdWalletPut = <
+export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<UpdateWalletV1AgentsAgentIdWalletPutData, ThrowOnError>
+  options: Options<GetAgentOverviewV1AgentsAgentIdOverviewGetData, ThrowOnError>
 ): RequestResult<
-  UpdateWalletV1AgentsAgentIdWalletPutResponses,
-  UpdateWalletV1AgentsAgentIdWalletPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    UpdateWalletV1AgentsAgentIdWalletPutResponses,
-    UpdateWalletV1AgentsAgentIdWalletPutErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/wallet",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Get Wallet Balance
- *
- * Get current service budget status.
- */
-export const getWalletBalanceV1AgentsAgentIdWalletBalanceGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses,
-  GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors,
+  GetAgentOverviewV1AgentsAgentIdOverviewGetResponses,
+  GetAgentOverviewV1AgentsAgentIdOverviewGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses,
-    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors,
+    GetAgentOverviewV1AgentsAgentIdOverviewGetResponses,
+    GetAgentOverviewV1AgentsAgentIdOverviewGetErrors,
     ThrowOnError
   >({
     security: [
@@ -2048,75 +1858,8 @@ export const getWalletBalanceV1AgentsAgentIdWalletBalanceGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/wallet/balance",
+    url: "/v1/agents/{agent_id}/overview",
     ...options,
-  });
-
-/**
- * Get Payment History
- *
- * Get paginated payment history for an agent.
- */
-export const getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses,
-  GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses,
-    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/wallet/payments",
-    ...options,
-  });
-
-/**
- * Fund Wallet
- *
- * Update the service budget amount.
- */
-export const fundWalletV1AgentsAgentIdWalletFundPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<FundWalletV1AgentsAgentIdWalletFundPostData, ThrowOnError>
-): RequestResult<
-  FundWalletV1AgentsAgentIdWalletFundPostResponses,
-  FundWalletV1AgentsAgentIdWalletFundPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    FundWalletV1AgentsAgentIdWalletFundPostResponses,
-    FundWalletV1AgentsAgentIdWalletFundPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/wallet/fund",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**
@@ -2291,25 +2034,25 @@ export const getAgentTaskV1AgentsAgentIdTasksTaskIdGet = <
   });
 
 /**
- * Get Agent Task Status
+ * Send A2Ui Action
  *
- * Get the execution status of a specific task workflow.
+ * Send an A2UI user action to a running task workflow.
  */
-export const getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet = <
+export const sendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetData,
+    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostData,
     ThrowOnError
   >
 ): RequestResult<
-  GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses,
-  GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors,
+  SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses,
+  SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses,
-    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors,
+  (options.client ?? client).post<
+    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses,
+    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors,
     ThrowOnError
   >({
     security: [
@@ -2319,8 +2062,12 @@ export const getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet = <
         type: "http",
       },
     ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/status",
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -2394,186 +2141,6 @@ export const downloadTaskArtifactV1AgentsAgentIdTasksTaskIdArtifactsFilesArtifac
     });
 
 /**
- * Get Task Summary
- *
- * Per-task rollup derived from the event log via the ``task_summary`` view.
- *
- * Workspace-scoped: the row must belong to the caller's workspace and
- * the agent must match, or we return 404 (same shape as other task
- * endpoints — no information leak).
- */
-export const getTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses,
-  GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses,
-    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/summary",
-    ...options,
-  });
-
-/**
- * Pause Agent Task
- *
- * Pause a specific task workflow for the specified agent.
- */
-export const pauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
-  PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
-    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/pause",
-    ...options,
-  });
-
-/**
- * Resume Agent Task
- *
- * Resume a paused task workflow for the specified agent.
- */
-export const resumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
-  ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
-    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/resume",
-    ...options,
-  });
-
-/**
- * Send A2Ui Action
- *
- * Send an A2UI user action to a running task workflow.
- */
-export const sendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses,
-  SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses,
-    SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Submit Task Input
- *
- * Submit structured user input to a workflow waiting on request_user_input.
- *
- * Secret values are written to the workspace secret manager at the API boundary.
- * Only secret refs are sent to Temporal/LLM context.
- */
-export const submitTaskInputV1AgentsAgentIdTasksTaskIdInputPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses,
-  SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses,
-    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/tasks/{task_id}/input",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
  * Send Task Command
  *
  * Send a command to a running task workflow.
@@ -2609,42 +2176,6 @@ export const sendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPost = <
       ...options.headers,
     },
   });
-
-/**
- * Resolve Task Escalation
- *
- * Resolve a tool escalation for the specified task workflow.
- */
-export const resolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPost =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
-    ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).post<
-      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
-      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation",
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
 
 /**
  * Get Task Events
@@ -2713,233 +2244,28 @@ export const streamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGet = <
   });
 
 /**
- * Get All Tasks
+ * Submit Task Input
  *
- * Get all workspace tasks across all agents.
+ * Submit structured user input to a workflow waiting on request_user_input.
  *
- * Access Control:
- * Returns all tasks within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace tasks.
+ * Secret values are written to the workspace secret manager at the API boundary.
+ * Only secret refs are sent to Temporal/LLM context.
  */
-export const getAllTasksV1TasksGet = <ThrowOnError extends boolean = false>(
-  options?: Options<GetAllTasksV1TasksGetData, ThrowOnError>
-): RequestResult<
-  GetAllTasksV1TasksGetResponses,
-  GetAllTasksV1TasksGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetAllTasksV1TasksGetResponses,
-    GetAllTasksV1TasksGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/tasks/",
-    ...options,
-  });
-
-/**
- * Get Task By Id
- *
- * Get a single task by ID across all agents.
- */
-export const getTaskByIdV1TasksTaskIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetTaskByIdV1TasksTaskIdGetData, ThrowOnError>
-): RequestResult<
-  GetTaskByIdV1TasksTaskIdGetResponses,
-  GetTaskByIdV1TasksTaskIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetTaskByIdV1TasksTaskIdGetResponses,
-    GetTaskByIdV1TasksTaskIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/tasks/{task_id}",
-    ...options,
-  });
-
-/**
- * List Mcp Servers
- */
-export const listMcpServersV1McpServersGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListMcpServersV1McpServersGetData, ThrowOnError>
-): RequestResult<
-  ListMcpServersV1McpServersGetResponses,
-  ListMcpServersV1McpServersGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListMcpServersV1McpServersGetResponses,
-    ListMcpServersV1McpServersGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-servers/",
-    ...options,
-  });
-
-/**
- * Create Mcp Server
- */
-export const createMcpServerV1McpServersPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateMcpServerV1McpServersPostData, ThrowOnError>
-): RequestResult<
-  CreateMcpServerV1McpServersPostResponses,
-  CreateMcpServerV1McpServersPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateMcpServerV1McpServersPostResponses,
-    CreateMcpServerV1McpServersPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-servers/",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Mcp Server
- */
-export const deleteMcpServerV1McpServersServerIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeleteMcpServerV1McpServersServerIdDeleteData, ThrowOnError>
-): RequestResult<
-  DeleteMcpServerV1McpServersServerIdDeleteResponses,
-  DeleteMcpServerV1McpServersServerIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteMcpServerV1McpServersServerIdDeleteResponses,
-    DeleteMcpServerV1McpServersServerIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-servers/{server_id}",
-    ...options,
-  });
-
-/**
- * Get Mcp Server
- */
-export const getMcpServerV1McpServersServerIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetMcpServerV1McpServersServerIdGetData, ThrowOnError>
-): RequestResult<
-  GetMcpServerV1McpServersServerIdGetResponses,
-  GetMcpServerV1McpServersServerIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetMcpServerV1McpServersServerIdGetResponses,
-    GetMcpServerV1McpServersServerIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-servers/{server_id}",
-    ...options,
-  });
-
-/**
- * Update Mcp Server
- */
-export const updateMcpServerV1McpServersServerIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpdateMcpServerV1McpServersServerIdPatchData, ThrowOnError>
-): RequestResult<
-  UpdateMcpServerV1McpServersServerIdPatchResponses,
-  UpdateMcpServerV1McpServersServerIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    UpdateMcpServerV1McpServersServerIdPatchResponses,
-    UpdateMcpServerV1McpServersServerIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-servers/{server_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Deploy Mcp Server
- */
-export const deployMcpServerV1McpServersServerIdDeployPost = <
+export const submitTaskInputV1AgentsAgentIdTasksTaskIdInputPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    DeployMcpServerV1McpServersServerIdDeployPostData,
+    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostData,
     ThrowOnError
   >
 ): RequestResult<
-  DeployMcpServerV1McpServersServerIdDeployPostResponses,
-  DeployMcpServerV1McpServersServerIdDeployPostErrors,
+  SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses,
+  SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    DeployMcpServerV1McpServersServerIdDeployPostResponses,
-    DeployMcpServerV1McpServersServerIdDeployPostErrors,
+    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses,
+    SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors,
     ThrowOnError
   >({
     security: [
@@ -2949,40 +2275,7 @@ export const deployMcpServerV1McpServersServerIdDeployPost = <
         type: "http",
       },
     ],
-    url: "/v1/mcp-servers/{server_id}/deploy",
-    ...options,
-  });
-
-/**
- * Validate Instance Spec
- *
- * Stateless spec validation. For type=url, probes with list_tools (3s budget).
- */
-export const validateInstanceSpecV1McpServerInstancesValidatePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ValidateInstanceSpecV1McpServerInstancesValidatePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ValidateInstanceSpecV1McpServerInstancesValidatePostResponses,
-  ValidateInstanceSpecV1McpServerInstancesValidatePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ValidateInstanceSpecV1McpServerInstancesValidatePostResponses,
-    ValidateInstanceSpecV1McpServerInstancesValidatePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/validate",
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/input",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -2991,61 +2284,25 @@ export const validateInstanceSpecV1McpServerInstancesValidatePost = <
   });
 
 /**
- * List Mcp Server Instances
+ * Pause Agent Task
  *
- * List all MCP server instances in the workspace.
+ * Pause a specific task workflow for the specified agent.
  */
-export const listMcpServerInstancesV1McpServerInstancesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    ListMcpServerInstancesV1McpServerInstancesGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListMcpServerInstancesV1McpServerInstancesGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListMcpServerInstancesV1McpServerInstancesGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/",
-    ...options,
-  });
-
-/**
- * Create Mcp Server Instance
- *
- * Create a new MCP server instance.
- *
- * Returns 201 for url (synchronous verification completed).
- * Returns 202 for docker/command (background verification in progress).
- */
-export const createMcpServerInstanceV1McpServerInstancesPost = <
+export const pauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    CreateMcpServerInstanceV1McpServerInstancesPostData,
+    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData,
     ThrowOnError
   >
 ): RequestResult<
-  CreateMcpServerInstanceV1McpServerInstancesPostResponses,
-  CreateMcpServerInstanceV1McpServerInstancesPostErrors,
+  PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
+  PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateMcpServerInstanceV1McpServerInstancesPostResponses,
-    CreateMcpServerInstanceV1McpServerInstancesPostErrors,
+    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses,
+    PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors,
     ThrowOnError
   >({
     security: [
@@ -3055,107 +2312,29 @@ export const createMcpServerInstanceV1McpServerInstancesPost = <
         type: "http",
       },
     ],
-    url: "/v1/mcp-server-instances/",
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/pause",
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**
- * Create Mcp Server Connection
+ * Resolve Task Escalation
  *
- * Create an MCP server spec and instance in one transaction.
+ * Resolve a tool escalation for the specified task workflow.
  */
-export const createMcpServerConnectionV1McpServerInstancesWithSpecPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses,
-  CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses,
-    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/with-spec",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Validate Connection
- *
- * Test a connection to an MCP server without creating an instance.
- */
-export const validateConnectionV1McpServerInstancesValidateConnectionPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ValidateConnectionV1McpServerInstancesValidateConnectionPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses,
-  ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses,
-    ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/validate-connection",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Check Mcp Server Instance Configuration
- *
- * Check if an MCP server instance configuration is valid via the Go manager.
- */
-export const checkMcpServerInstanceConfigurationV1McpServerInstancesCheckPost =
+export const resolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPost =
   <ThrowOnError extends boolean = false>(
     options: Options<
-      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostData,
+      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
       ThrowOnError
     >
   ): RequestResult<
-    CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses,
-    CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors,
+    ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
+    ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
     ThrowOnError
   > =>
     (options.client ?? client).post<
-      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses,
-      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors,
+      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
+      ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
       ThrowOnError
     >({
       security: [
@@ -3165,7 +2344,7 @@ export const checkMcpServerInstanceConfigurationV1McpServerInstancesCheckPost =
           type: "http",
         },
       ],
-      url: "/v1/mcp-server-instances/check",
+      url: "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation",
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -3174,53 +2353,125 @@ export const checkMcpServerInstanceConfigurationV1McpServerInstancesCheckPost =
     });
 
 /**
- * Get Instance Environment
+ * Resume Agent Task
+ *
+ * Resume a paused task workflow for the specified agent.
  */
-export const getInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGet =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses,
-    GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).get<
-      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses,
-      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/mcp-server-instances/{instance_id}/environment",
-      ...options,
-    });
-
-/**
- * Delete Mcp Server Instance
- */
-export const deleteMcpServerInstanceV1McpServerInstancesInstanceIdDelete = <
+export const resumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteData,
+    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData,
     ThrowOnError
   >
 ): RequestResult<
-  DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses,
-  DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors,
+  ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
+  ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
+    ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/resume",
+    ...options,
+  });
+
+/**
+ * Get Agent Task Status
+ *
+ * Get the execution status of a specific task workflow.
+ */
+export const getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses,
+  GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses,
+    GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/status",
+    ...options,
+  });
+
+/**
+ * Get Task Summary
+ *
+ * Per-task rollup derived from the event log via the ``task_summary`` view.
+ *
+ * Workspace-scoped: the row must belong to the caller's workspace and
+ * the agent must match, or we return 404 (same shape as other task
+ * endpoints — no information leak).
+ */
+export const getTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses,
+  GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses,
+    GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/summary",
+    ...options,
+  });
+
+/**
+ * Delete Wallet
+ *
+ * Delete wallet and associated credentials.
+ */
+export const deleteWalletV1AgentsAgentIdWalletDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteWalletV1AgentsAgentIdWalletDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteWalletV1AgentsAgentIdWalletDeleteResponses,
+  DeleteWalletV1AgentsAgentIdWalletDeleteErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses,
-    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors,
+    DeleteWalletV1AgentsAgentIdWalletDeleteResponses,
+    DeleteWalletV1AgentsAgentIdWalletDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -3230,28 +2481,27 @@ export const deleteMcpServerInstanceV1McpServerInstancesInstanceIdDelete = <
         type: "http",
       },
     ],
-    url: "/v1/mcp-server-instances/{instance_id}",
+    url: "/v1/agents/{agent_id}/wallet",
     ...options,
   });
 
 /**
- * Get Mcp Server Instance
+ * Get Wallet
+ *
+ * Get wallet configuration for an agent (no decrypted credentials).
  */
-export const getMcpServerInstanceV1McpServerInstancesInstanceIdGet = <
+export const getWalletV1AgentsAgentIdWalletGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData,
-    ThrowOnError
-  >
+  options: Options<GetWalletV1AgentsAgentIdWalletGetData, ThrowOnError>
 ): RequestResult<
-  GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
-  GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
+  GetWalletV1AgentsAgentIdWalletGetResponses,
+  GetWalletV1AgentsAgentIdWalletGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
-    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
+    GetWalletV1AgentsAgentIdWalletGetResponses,
+    GetWalletV1AgentsAgentIdWalletGetErrors,
     ThrowOnError
   >({
     security: [
@@ -3261,28 +2511,27 @@ export const getMcpServerInstanceV1McpServerInstancesInstanceIdGet = <
         type: "http",
       },
     ],
-    url: "/v1/mcp-server-instances/{instance_id}",
+    url: "/v1/agents/{agent_id}/wallet",
     ...options,
   });
 
 /**
- * Update Mcp Server Instance
+ * Create Wallet
+ *
+ * Create a wallet for an agent.
  */
-export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
+export const createWalletV1AgentsAgentIdWalletPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchData,
-    ThrowOnError
-  >
+  options: Options<CreateWalletV1AgentsAgentIdWalletPostData, ThrowOnError>
 ): RequestResult<
-  UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses,
-  UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors,
+  CreateWalletV1AgentsAgentIdWalletPostResponses,
+  CreateWalletV1AgentsAgentIdWalletPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).patch<
-    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses,
-    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors,
+  (options.client ?? client).post<
+    CreateWalletV1AgentsAgentIdWalletPostResponses,
+    CreateWalletV1AgentsAgentIdWalletPostErrors,
     ThrowOnError
   >({
     security: [
@@ -3292,7 +2541,7 @@ export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
         type: "http",
       },
     ],
-    url: "/v1/mcp-server-instances/{instance_id}",
+    url: "/v1/agents/{agent_id}/wallet",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -3301,627 +2550,22 @@ export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
   });
 
 /**
- * Verify Mcp Server Instance
+ * Update Wallet
  *
- * Run verification on an MCP server instance and return the fresh result synchronously.
- *
- * HTTP 200 regardless of verification outcome — the call itself succeeded.
- * Check verification.status in the response to determine success/failure.
+ * Update wallet configuration.
  */
-export const verifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPost = <
+export const updateWalletV1AgentsAgentIdWalletPut = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData,
-    ThrowOnError
-  >
+  options: Options<UpdateWalletV1AgentsAgentIdWalletPutData, ThrowOnError>
 ): RequestResult<
-  VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses,
-  VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses,
-    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/{instance_id}/verify",
-    ...options,
-  });
-
-/**
- * Discover Mcp Server Instance Tools
- *
- * Re-discover the tools exposed by an MCP server instance.
- *
- * Re-runs verification (which calls list_tools on the server using any
- * OAuth/API-key credentials linked via auth_config_id) and persists the
- * refreshed tool list. Returns {tools, verification}.
- */
-export const discoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPost =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses,
-    DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).post<
-      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses,
-      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/mcp-server-instances/{instance_id}/discover-tools",
-      ...options,
-    });
-
-/**
- * Get Containers Health
- *
- * Get health status of all MCP containers by proxying to the Go manager.
- */
-export const getContainersHealthV1McpServerInstancesHealthContainersGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    GetContainersHealthV1McpServerInstancesHealthContainersGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetContainersHealthV1McpServerInstancesHealthContainersGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetContainersHealthV1McpServerInstancesHealthContainersGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/health/containers",
-    ...options,
-  });
-
-/**
- * Probe Instance Auth
- *
- * Probe a URL-type MCP instance to detect its auth requirements.
- */
-export const probeInstanceAuthV1McpServerInstancesInstanceIdProbePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
-  ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
-    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/{instance_id}/probe",
-    ...options,
-  });
-
-/**
- * Run Test Auth
- *
- * Test the authentication configuration attached to an MCP server instance.
- */
-export const runTestAuthV1McpServerInstancesInstanceIdTestAuthPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
-  RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
-    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/{instance_id}/test-auth",
-    ...options,
-  });
-
-/**
- * Create Oauth Link
- */
-export const createOauthLinkV1McpServerInstancesInstanceIdOauthLinkPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses,
-  CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses,
-    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/{instance_id}/oauth-link",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Oauth Links
- */
-export const listOauthLinksV1McpServerInstancesInstanceIdOauthLinksGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
-  ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
-    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp-server-instances/{instance_id}/oauth-links",
-    ...options,
-  });
-
-/**
- * List Provider Specs
- *
- * List all provider specifications.
- */
-export const listProviderSpecsV1ProviderSpecsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListProviderSpecsV1ProviderSpecsGetData, ThrowOnError>
-): RequestResult<
-  ListProviderSpecsV1ProviderSpecsGetResponses,
-  ListProviderSpecsV1ProviderSpecsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListProviderSpecsV1ProviderSpecsGetResponses,
-    ListProviderSpecsV1ProviderSpecsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-specs/",
-    ...options,
-  });
-
-/**
- * List Provider Specs With Models
- *
- * List all provider specifications with their available models.
- */
-export const listProviderSpecsWithModelsV1ProviderSpecsWithModelsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses,
-  ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses,
-    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-specs/with-models",
-    ...options,
-  });
-
-/**
- * Get Provider Spec
- *
- * Get a specific provider specification with its models.
- */
-export const getProviderSpecV1ProviderSpecsProviderSpecIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetProviderSpecV1ProviderSpecsProviderSpecIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses,
-  GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses,
-    GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-specs/{provider_spec_id}",
-    ...options,
-  });
-
-/**
- * Get Provider Spec By Key
- *
- * Get a provider specification by its key (e.g., 'openai', 'anthropic').
- */
-export const getProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses,
-  GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses,
-    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-specs/by-key/{provider_key}",
-    ...options,
-  });
-
-/**
- * List Provider Configs
- *
- * List provider configurations.
- */
-export const listProviderConfigsV1ProviderConfigsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListProviderConfigsV1ProviderConfigsGetData, ThrowOnError>
-): RequestResult<
-  ListProviderConfigsV1ProviderConfigsGetResponses,
-  ListProviderConfigsV1ProviderConfigsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListProviderConfigsV1ProviderConfigsGetResponses,
-    ListProviderConfigsV1ProviderConfigsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/",
-    ...options,
-  });
-
-/**
- * Create Provider Config
- *
- * Create a new provider configuration.
- */
-export const createProviderConfigV1ProviderConfigsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateProviderConfigV1ProviderConfigsPostData, ThrowOnError>
-): RequestResult<
-  CreateProviderConfigV1ProviderConfigsPostResponses,
-  CreateProviderConfigV1ProviderConfigsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateProviderConfigV1ProviderConfigsPostResponses,
-    CreateProviderConfigV1ProviderConfigsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Provider Configs With Instances
- *
- * List provider configurations with their model instances.
- */
-export const listProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGet =
-  <ThrowOnError extends boolean = false>(
-    options?: Options<
-      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses,
-    ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors,
-    ThrowOnError
-  > =>
-    (options?.client ?? client).get<
-      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses,
-      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/provider-configs/with-instances",
-      ...options,
-    });
-
-/**
- * Discover Models Preview
- *
- * Discover models from a provider API using the provided API key, without requiring a saved config.
- */
-export const discoverModelsPreviewV1ProviderConfigsDiscoverPreviewPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses,
-  DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses,
-    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/discover-preview",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Provider Config
- *
- * Delete a provider configuration.
- */
-export const deleteProviderConfigV1ProviderConfigsConfigIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses,
-  DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses,
-    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/{config_id}",
-    ...options,
-  });
-
-/**
- * Get Provider Config
- *
- * Get a specific provider configuration.
- */
-export const getProviderConfigV1ProviderConfigsConfigIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetProviderConfigV1ProviderConfigsConfigIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetProviderConfigV1ProviderConfigsConfigIdGetResponses,
-  GetProviderConfigV1ProviderConfigsConfigIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetProviderConfigV1ProviderConfigsConfigIdGetResponses,
-    GetProviderConfigV1ProviderConfigsConfigIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/{config_id}",
-    ...options,
-  });
-
-/**
- * Patch Provider Config
- *
- * Partially update a provider configuration.
- */
-export const patchProviderConfigV1ProviderConfigsConfigIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PatchProviderConfigV1ProviderConfigsConfigIdPatchData,
-    ThrowOnError
-  >
-): RequestResult<
-  PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses,
-  PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses,
-    PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/{config_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Update Provider Config
- *
- * Update a provider configuration (full replace via PUT).
- */
-export const updateProviderConfigV1ProviderConfigsConfigIdPut = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    UpdateProviderConfigV1ProviderConfigsConfigIdPutData,
-    ThrowOnError
-  >
-): RequestResult<
-  UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses,
-  UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors,
+  UpdateWalletV1AgentsAgentIdWalletPutResponses,
+  UpdateWalletV1AgentsAgentIdWalletPutErrors,
   ThrowOnError
 > =>
   (options.client ?? client).put<
-    UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses,
-    UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors,
+    UpdateWalletV1AgentsAgentIdWalletPutResponses,
+    UpdateWalletV1AgentsAgentIdWalletPutErrors,
     ThrowOnError
   >({
     security: [
@@ -3931,7 +2575,7 @@ export const updateProviderConfigV1ProviderConfigsConfigIdPut = <
         type: "http",
       },
     ],
-    url: "/v1/provider-configs/{config_id}",
+    url: "/v1/agents/{agent_id}/wallet",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -3940,58 +2584,25 @@ export const updateProviderConfigV1ProviderConfigsConfigIdPut = <
   });
 
 /**
- * Discover Models
+ * Get Wallet Balance
  *
- * Discover available models from the provider API and sync to model specs.
+ * Get current service budget status.
  */
-export const discoverModelsV1ProviderConfigsConfigIdDiscoverPost = <
+export const getWalletBalanceV1AgentsAgentIdWalletBalanceGet = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostData,
+    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetData,
     ThrowOnError
   >
 ): RequestResult<
-  DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses,
-  DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses,
-    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/provider-configs/{config_id}/discover",
-    ...options,
-  });
-
-/**
- * Get Provider Logo
- *
- * Get provider logo via admin route pattern.
- */
-export const getProviderLogoV1ProviderConfigsAdminProviderKeyLogoGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses,
-  GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors,
+  GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses,
+  GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses,
-    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors,
+    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses,
+    GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors,
     ThrowOnError
   >({
     security: [
@@ -4001,500 +2612,87 @@ export const getProviderLogoV1ProviderConfigsAdminProviderKeyLogoGet = <
         type: "http",
       },
     ],
-    url: "/v1/provider-configs/admin/{provider_key}/logo",
+    url: "/v1/agents/{agent_id}/wallet/balance",
     ...options,
   });
 
 /**
- * List Model Specs
+ * Fund Wallet
  *
- * List model specifications with optional filtering.
+ * Update the service budget amount.
  */
-export const listModelSpecsV1ModelSpecsGet = <
+export const fundWalletV1AgentsAgentIdWalletFundPost = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<ListModelSpecsV1ModelSpecsGetData, ThrowOnError>
+  options: Options<FundWalletV1AgentsAgentIdWalletFundPostData, ThrowOnError>
 ): RequestResult<
-  ListModelSpecsV1ModelSpecsGetResponses,
-  ListModelSpecsV1ModelSpecsGetErrors,
+  FundWalletV1AgentsAgentIdWalletFundPostResponses,
+  FundWalletV1AgentsAgentIdWalletFundPostErrors,
   ThrowOnError
 > =>
+  (options.client ?? client).post<
+    FundWalletV1AgentsAgentIdWalletFundPostResponses,
+    FundWalletV1AgentsAgentIdWalletFundPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/wallet/fund",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Payment History
+ *
+ * Get paginated payment history for an agent.
+ */
+export const getPaymentHistoryV1AgentsAgentIdWalletPaymentsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses,
+  GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses,
+    GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/wallet/payments",
+    ...options,
+  });
+
+/**
+ * List Api Keys
+ *
+ * List all API keys for the current workspace.
+ */
+export const listApiKeysV1ApiKeysGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListApiKeysV1ApiKeysGetData, ThrowOnError>
+): RequestResult<ListApiKeysV1ApiKeysGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<
-    ListModelSpecsV1ModelSpecsGetResponses,
-    ListModelSpecsV1ModelSpecsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/",
-    ...options,
-  });
-
-/**
- * Create Model Spec
- *
- * Create a new model specification.
- */
-export const createModelSpecV1ModelSpecsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateModelSpecV1ModelSpecsPostData, ThrowOnError>
-): RequestResult<
-  CreateModelSpecV1ModelSpecsPostResponses,
-  CreateModelSpecV1ModelSpecsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateModelSpecV1ModelSpecsPostResponses,
-    CreateModelSpecV1ModelSpecsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Model Specs By Provider
- *
- * List all model specifications for a specific provider.
- */
-export const listModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses,
-  ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses,
-    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/by-provider/{provider_spec_id}",
-    ...options,
-  });
-
-/**
- * Get Model Spec By Provider And Name
- *
- * Get a specific model specification by provider and model name.
- */
-export const getModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGet =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses,
-    GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).get<
-      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses,
-      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/model-specs/by-provider/{provider_spec_id}/{model_name}",
-      ...options,
-    });
-
-/**
- * Delete Model Spec
- *
- * Delete a model specification.
- */
-export const deleteModelSpecV1ModelSpecsModelSpecIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses,
-  DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses,
-    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/{model_spec_id}",
-    ...options,
-  });
-
-/**
- * Get Model Spec
- *
- * Get a specific model specification by ID.
- */
-export const getModelSpecV1ModelSpecsModelSpecIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetModelSpecV1ModelSpecsModelSpecIdGetData, ThrowOnError>
-): RequestResult<
-  GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
-  GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
-    GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/{model_spec_id}",
-    ...options,
-  });
-
-/**
- * Update Model Spec
- *
- * Update a model specification.
- */
-export const updateModelSpecV1ModelSpecsModelSpecIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    UpdateModelSpecV1ModelSpecsModelSpecIdPatchData,
-    ThrowOnError
-  >
-): RequestResult<
-  UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses,
-  UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses,
-    UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/{model_spec_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Upsert Model Spec
- *
- * Create or update a model specification by provider and model name.
- *
- * This endpoint is useful for bulk operations and bootstrapping.
- */
-export const upsertModelSpecV1ModelSpecsUpsertPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpsertModelSpecV1ModelSpecsUpsertPostData, ThrowOnError>
-): RequestResult<
-  UpsertModelSpecV1ModelSpecsUpsertPostResponses,
-  UpsertModelSpecV1ModelSpecsUpsertPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    UpsertModelSpecV1ModelSpecsUpsertPostResponses,
-    UpsertModelSpecV1ModelSpecsUpsertPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-specs/upsert",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Model Instances
- *
- * List model instances.
- */
-export const listModelInstancesV1ModelInstancesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListModelInstancesV1ModelInstancesGetData, ThrowOnError>
-): RequestResult<
-  ListModelInstancesV1ModelInstancesGetResponses,
-  ListModelInstancesV1ModelInstancesGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListModelInstancesV1ModelInstancesGetResponses,
-    ListModelInstancesV1ModelInstancesGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/",
-    ...options,
-  });
-
-/**
- * Create Model Instance
- *
- * Create a new model instance.
- */
-export const createModelInstanceV1ModelInstancesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateModelInstanceV1ModelInstancesPostData, ThrowOnError>
-): RequestResult<
-  CreateModelInstanceV1ModelInstancesPostResponses,
-  CreateModelInstanceV1ModelInstancesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateModelInstanceV1ModelInstancesPostResponses,
-    CreateModelInstanceV1ModelInstancesPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Create Model Instances Bulk
- *
- * Create many model instances in a single request.
- *
- * Partial-success semantics: each item is created independently and per-item
- * failures are returned in `failed` rather than aborting the whole batch.
- * Use this from UIs that let users select N models from a discovered list to
- * avoid N HTTP round-trips.
- */
-export const createModelInstancesBulkV1ModelInstancesBulkPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    CreateModelInstancesBulkV1ModelInstancesBulkPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  CreateModelInstancesBulkV1ModelInstancesBulkPostResponses,
-  CreateModelInstancesBulkV1ModelInstancesBulkPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateModelInstancesBulkV1ModelInstancesBulkPostResponses,
-    CreateModelInstancesBulkV1ModelInstancesBulkPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/bulk",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Model Instance
- *
- * Delete a model instance.
- */
-export const deleteModelInstanceV1ModelInstancesInstanceIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses,
-  DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses,
-    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/{instance_id}",
-    ...options,
-  });
-
-/**
- * Get Model Instance
- *
- * Get a specific model instance.
- */
-export const getModelInstanceV1ModelInstancesInstanceIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetModelInstanceV1ModelInstancesInstanceIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetModelInstanceV1ModelInstancesInstanceIdGetResponses,
-  GetModelInstanceV1ModelInstancesInstanceIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetModelInstanceV1ModelInstancesInstanceIdGetResponses,
-    GetModelInstanceV1ModelInstancesInstanceIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/{instance_id}",
-    ...options,
-  });
-
-/**
- * Validate Model Instance
- *
- * Test a model instance configuration before creating it.
- */
-export const validateModelInstanceV1ModelInstancesTestPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ValidateModelInstanceV1ModelInstancesTestPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ValidateModelInstanceV1ModelInstancesTestPostResponses,
-  ValidateModelInstanceV1ModelInstancesTestPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ValidateModelInstanceV1ModelInstancesTestPostResponses,
-    ValidateModelInstanceV1ModelInstancesTestPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/model-instances/test",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Get Catalog
- *
- * Get the trigger catalog — available trigger types with metadata and events.
- */
-export const getCatalogV1TriggersCatalogGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<GetCatalogV1TriggersCatalogGetData, ThrowOnError>
-): RequestResult<
-  GetCatalogV1TriggersCatalogGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetCatalogV1TriggersCatalogGetResponses,
+    ListApiKeysV1ApiKeysGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -4505,126 +2703,25 @@ export const getCatalogV1TriggersCatalogGet = <
         type: "http",
       },
     ],
-    url: "/v1/triggers/catalog",
+    url: "/v1/api-keys/",
     ...options,
   });
 
 /**
- * Get Channel Events
+ * Create Api Key
  *
- * Get supported event types for all channels.
- * Returns a mapping of channel type to list of event types.
+ * Create a new API key. The raw ``token`` value is returned once — store it securely.
  */
-export const getChannelEventsV1TriggersChannelsEventsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    GetChannelEventsV1TriggersChannelsEventsGetData,
-    ThrowOnError
-  >
+export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
+  options: Options<CreateApiKeyV1ApiKeysPostData, ThrowOnError>
 ): RequestResult<
-  GetChannelEventsV1TriggersChannelsEventsGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetChannelEventsV1TriggersChannelsEventsGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/channels/events",
-    ...options,
-  });
-
-/**
- * List Triggers
- *
- * List triggers with optional filtering.
- *
- * Returns a list of triggers that match the specified criteria. Supports
- * filtering by agent ID, trigger type, and active status.
- *
- * Access Control:
- * Returns all triggers within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace triggers.
- *
- * Args:
- * secret_manager: Injected secret manager (to resolve credential presence)
- * agent_id: Optional agent ID filter
- * trigger_type: Optional trigger type filter
- * active_only: Whether to only return active triggers
- * limit: Maximum number of triggers to return
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * List of triggers matching the criteria
- */
-export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
-  options?: Options<ListTriggersV1TriggersGetData, ThrowOnError>
-): RequestResult<
-  ListTriggersV1TriggersGetResponses,
-  ListTriggersV1TriggersGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListTriggersV1TriggersGetResponses,
-    ListTriggersV1TriggersGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/",
-    ...options,
-  });
-
-/**
- * Create Trigger
- *
- * Create a new trigger.
- *
- * Creates a new trigger with the specified configuration. The trigger will be
- * validated and, if it's a cron trigger, automatically scheduled.
- *
- * If channel_credentials are provided, they are stored encrypted in the secret
- * store under key ``channel_cred:{webhook_type}:{trigger_id}``.
- *
- * Args:
- * payload: Trigger creation DTO (single source of truth shared with MCP toolset).
- * user_context: Authentication context.
- * trigger_service: Injected trigger service.
- * secret_manager: Injected secret manager for credential storage.
- *
- * Returns:
- * The created trigger.
- *
- * Raises:
- * HTTPException: If validation fails or creation errors occur.
- */
-export const createTriggerV1TriggersPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateTriggerV1TriggersPostData, ThrowOnError>
-): RequestResult<
-  CreateTriggerV1TriggersPostResponses,
-  CreateTriggerV1TriggersPostErrors,
+  CreateApiKeyV1ApiKeysPostResponses,
+  CreateApiKeyV1ApiKeysPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateTriggerV1TriggersPostResponses,
-    CreateTriggerV1TriggersPostErrors,
+    CreateApiKeyV1ApiKeysPostResponses,
+    CreateApiKeyV1ApiKeysPostErrors,
     ThrowOnError
   >({
     security: [
@@ -4634,7 +2731,7 @@ export const createTriggerV1TriggersPost = <
         type: "http",
       },
     ],
-    url: "/v1/triggers/",
+    url: "/v1/api-keys/",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -4643,72 +2740,22 @@ export const createTriggerV1TriggersPost = <
   });
 
 /**
- * Triggers Health Check
+ * Revoke Api Key
  *
- * Comprehensive health check endpoint for trigger system.
- *
- * Checks all trigger system components including:
- * - Database connectivity
- * - Temporal schedule manager
- * - Webhook manager
- * - Execution metrics
- *
- * Returns:
- * Dictionary with detailed health status information
+ * Immediately revoke an API key.
  */
-export const triggersHealthCheckV1TriggersHealthGet = <
+export const revokeApiKeyV1ApiKeysTokenIdDelete = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<TriggersHealthCheckV1TriggersHealthGetData, ThrowOnError>
+  options: Options<RevokeApiKeyV1ApiKeysTokenIdDeleteData, ThrowOnError>
 ): RequestResult<
-  TriggersHealthCheckV1TriggersHealthGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    TriggersHealthCheckV1TriggersHealthGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/health",
-    ...options,
-  });
-
-/**
- * Delete Trigger
- *
- * Delete a trigger.
- *
- * Permanently deletes the specified trigger and all its execution history.
- * If it's a cron trigger, the schedule will also be removed.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const deleteTriggerV1TriggersTriggerIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeleteTriggerV1TriggersTriggerIdDeleteData, ThrowOnError>
-): RequestResult<
-  DeleteTriggerV1TriggersTriggerIdDeleteResponses,
-  DeleteTriggerV1TriggersTriggerIdDeleteErrors,
+  RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
+  RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    DeleteTriggerV1TriggersTriggerIdDeleteResponses,
-    DeleteTriggerV1TriggersTriggerIdDeleteErrors,
+    RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
+    RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -4718,39 +2765,27 @@ export const deleteTriggerV1TriggersTriggerIdDelete = <
         type: "http",
       },
     ],
-    url: "/v1/triggers/{trigger_id}",
+    url: "/v1/api-keys/{token_id}",
     ...options,
   });
 
 /**
- * Get Trigger
+ * Get Api Key
  *
- * Get a specific trigger by ID.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * secret_manager: Injected secret manager (to resolve credential presence)
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * The trigger data
- *
- * Raises:
- * HTTPException: If trigger not found
+ * Get a single API key by ID.
  */
-export const getTriggerV1TriggersTriggerIdGet = <
+export const getApiKeyV1ApiKeysTokenIdGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<GetTriggerV1TriggersTriggerIdGetData, ThrowOnError>
+  options: Options<GetApiKeyV1ApiKeysTokenIdGetData, ThrowOnError>
 ): RequestResult<
-  GetTriggerV1TriggersTriggerIdGetResponses,
-  GetTriggerV1TriggersTriggerIdGetErrors,
+  GetApiKeyV1ApiKeysTokenIdGetResponses,
+  GetApiKeyV1ApiKeysTokenIdGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetTriggerV1TriggersTriggerIdGetResponses,
-    GetTriggerV1TriggersTriggerIdGetErrors,
+    GetApiKeyV1ApiKeysTokenIdGetResponses,
+    GetApiKeyV1ApiKeysTokenIdGetErrors,
     ThrowOnError
   >({
     security: [
@@ -4760,540 +2795,27 @@ export const getTriggerV1TriggersTriggerIdGet = <
         type: "http",
       },
     ],
-    url: "/v1/triggers/{trigger_id}",
+    url: "/v1/api-keys/{token_id}",
     ...options,
   });
 
 /**
- * Update Trigger
+ * List Audit Logs
  *
- * Update an existing trigger.
- *
- * Updates the specified trigger with the provided data. Only non-null fields
- * in the request will be updated. If channel_credentials are provided,
- * they replace the existing credentials in the secret store.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger.
- * payload: Trigger update DTO (single source of truth shared with MCP toolset).
- * user_context: Authentication context.
- * trigger_service: Injected trigger service.
- * secret_manager: Injected secret manager for credential storage.
- *
- * Returns:
- * The updated trigger.
- *
- * Raises:
- * HTTPException: If trigger not found or validation fails.
+ * List audit events for the current workspace.
  */
-export const updateTriggerV1TriggersTriggerIdPut = <
+export const listAuditLogsV1AuditLogsGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<UpdateTriggerV1TriggersTriggerIdPutData, ThrowOnError>
+  options?: Options<ListAuditLogsV1AuditLogsGetData, ThrowOnError>
 ): RequestResult<
-  UpdateTriggerV1TriggersTriggerIdPutResponses,
-  UpdateTriggerV1TriggersTriggerIdPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    UpdateTriggerV1TriggersTriggerIdPutResponses,
-    UpdateTriggerV1TriggersTriggerIdPutErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Enable Trigger
- *
- * Enable a trigger.
- *
- * Enables the specified trigger, allowing it to execute when conditions are met.
- * For cron triggers, this will resume the schedule.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Success status
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const enableTriggerV1TriggersTriggerIdEnablePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<EnableTriggerV1TriggersTriggerIdEnablePostData, ThrowOnError>
-): RequestResult<
-  EnableTriggerV1TriggersTriggerIdEnablePostResponses,
-  EnableTriggerV1TriggersTriggerIdEnablePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    EnableTriggerV1TriggersTriggerIdEnablePostResponses,
-    EnableTriggerV1TriggersTriggerIdEnablePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/enable",
-    ...options,
-  });
-
-/**
- * Disable Trigger
- *
- * Disable a trigger.
- *
- * Disables the specified trigger, preventing it from executing.
- * For cron triggers, this will pause the schedule.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Success status
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const disableTriggerV1TriggersTriggerIdDisablePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    DisableTriggerV1TriggersTriggerIdDisablePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  DisableTriggerV1TriggersTriggerIdDisablePostResponses,
-  DisableTriggerV1TriggersTriggerIdDisablePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    DisableTriggerV1TriggersTriggerIdDisablePostResponses,
-    DisableTriggerV1TriggersTriggerIdDisablePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/disable",
-    ...options,
-  });
-
-/**
- * Get Execution History
- *
- * Get execution history for a trigger with filtering and pagination.
- *
- * Returns paginated execution history for the specified trigger, including
- * success/failure status, execution times, and error messages. Supports
- * filtering by status and time range.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * page: Page number for pagination
- * page_size: Number of executions per page
- * status: Optional status filter (success, failed, timeout)
- * start_time: Optional start time filter
- * end_time: Optional end time filter
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Paginated execution history
- *
- * Raises:
- * HTTPException: If trigger not found or invalid parameters
- */
-export const getExecutionHistoryV1TriggersTriggerIdExecutionsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses,
-  GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses,
-    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/executions",
-    ...options,
-  });
-
-/**
- * Get Trigger Status
- *
- * Get trigger status and schedule information.
- *
- * Returns detailed status information about the trigger, including execution
- * status, rate limiting, and schedule information for cron triggers.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Trigger status information
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const getTriggerStatusV1TriggersTriggerIdStatusGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetTriggerStatusV1TriggersTriggerIdStatusGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetTriggerStatusV1TriggersTriggerIdStatusGetResponses,
-  GetTriggerStatusV1TriggersTriggerIdStatusGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetTriggerStatusV1TriggersTriggerIdStatusGetResponses,
-    GetTriggerStatusV1TriggersTriggerIdStatusGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/status",
-    ...options,
-  });
-
-/**
- * Get Execution Metrics
- *
- * Get execution metrics for a trigger.
- *
- * Returns aggregated metrics including success rate, average execution time,
- * and failure counts for the specified time period.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * hours: Time period in hours to analyze (default 24, max 168)
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Execution metrics for the trigger
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const getExecutionMetricsV1TriggersTriggerIdMetricsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetExecutionMetricsV1TriggersTriggerIdMetricsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses,
-  GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses,
-    GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/metrics",
-    ...options,
-  });
-
-/**
- * Get Execution Timeline
- *
- * Get execution timeline for a trigger.
- *
- * Returns time-bucketed execution counts and success rates for visualization
- * and trend analysis.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * hours: Time period in hours to analyze (default 24, max 168)
- * bucket_size_minutes: Size of time buckets in minutes (default 60)
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Execution timeline data
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetExecutionTimelineV1TriggersTriggerIdTimelineGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses,
-  GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses,
-    GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/timeline",
-    ...options,
-  });
-
-/**
- * Get Execution Correlations
- *
- * Get execution correlation data for a trigger.
- *
- * Returns execution data with correlation information to created tasks
- * and workflows for debugging and monitoring purposes.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * page: Page number for pagination
- * page_size: Number of executions per page
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * Execution correlation data
- *
- * Raises:
- * HTTPException: If trigger not found
- */
-export const getExecutionCorrelationsV1TriggersTriggerIdCorrelationsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses,
-  GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses,
-    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/triggers/{trigger_id}/correlations",
-    ...options,
-  });
-
-/**
- * Import Workspace Config
- *
- * Import workspace configuration from YAML.
- *
- * This endpoint creates agents, MCP instances, and provider configs
- * in the current workspace based on the provided YAML configuration.
- *
- * **Important Notes:**
- * - All resources are created in the current workspace
- * - Secrets (API keys, passwords) must be provided as they cannot be exported
- * - References to MCP servers and provider specs must exist in the system
- * - Import is atomic - if any resource fails, all changes are rolled back
- *
- * **Example YAML:**
- * ```yaml
- * agents:
- * - name: "My Assistant"
- * description: "Helpful assistant"
- * instruction: "You are a helpful AI assistant"
- * tools:
- * - type: code
- * name: agentarea/math
- * - type: mcp
- * name: my-filesystem
- * settings:
- * allowed_tools: [read_file, write_file]
- * planning: false
- *
- * mcp_instances:
- * - name: "My Filesystem"
- * description: "Local file access"
- * server_spec_id: "a1b2c3d4-..."
- * env_vars:
- * FILESYSTEM_ROOT: "/workspace"
- *
- * provider_configs:
- * - name: "My OpenAI"
- * provider_spec_id: "932f3839-..."
- * api_key_placeholder: "sk-..."
- * ```
- */
-export const importWorkspaceConfigV1WorkspaceImportPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ImportWorkspaceConfigV1WorkspaceImportPostData, ThrowOnError>
-): RequestResult<
-  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-    ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Import Workspace Config File
- *
- * Import workspace configuration from uploaded YAML file.
- *
- * Same as /import but accepts a file upload instead of raw YAML content.
- */
-export const importWorkspaceConfigFileV1WorkspaceImportFilePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import/file",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
-  });
-
-/**
- * Export Workspace Config
- *
- * Export current workspace configuration as YAML.
- *
- * This endpoint exports all workspace-scoped resources:
- * - Agents (excluding system default agent)
- * - MCP server instances
- * - Provider configurations
- *
- * **Important Notes:**
- * - Secrets (API keys, passwords) are replaced with placeholders
- * - Built-in/catalog resources (carrying registry_item_id) are excluded
- * - Only resources in the current workspace are exported
- * - References to specs are included (server_spec_id, provider_spec_id)
- *
- * **Returns:**
- * YAML file content that can be saved and later imported
- */
-export const exportWorkspaceConfigV1WorkspaceExportGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ExportWorkspaceConfigV1WorkspaceExportGetData, ThrowOnError>
-): RequestResult<
-  ExportWorkspaceConfigV1WorkspaceExportGetResponses,
-  unknown,
+  ListAuditLogsV1AuditLogsGetResponses,
+  ListAuditLogsV1AuditLogsGetErrors,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    ExportWorkspaceConfigV1WorkspaceExportGetResponses,
-    unknown,
+    ListAuditLogsV1AuditLogsGetResponses,
+    ListAuditLogsV1AuditLogsGetErrors,
     ThrowOnError
   >({
     security: [
@@ -5303,727 +2825,7 @@ export const exportWorkspaceConfigV1WorkspaceExportGet = <
         type: "http",
       },
     ],
-    url: "/v1/workspace/export",
-    ...options,
-  });
-
-/**
- * List Invitations
- *
- * List pending invitations for the workspace. Tokens are NOT returned.
- */
-export const listInvitationsV1WorkspacesWorkspaceIdInvitationsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses,
-  ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses,
-    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace_id}/invitations",
-    ...options,
-  });
-
-/**
- * Create Invitation
- *
- * Create an invitation link for the given workspace.
- *
- * The plaintext ``token`` is returned exactly once in the response.
- * The caller delivers it however they want (link, email, Slack).
- */
-export const createInvitationV1WorkspacesWorkspaceIdInvitationsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses,
-  CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses,
-    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace_id}/invitations",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Revoke Invitation
- *
- * Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops.
- */
-export const revokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDelete =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses,
-    RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).delete<
-      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses,
-      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/workspaces/{workspace_id}/invitations/{invitation_id}",
-      ...options,
-    });
-
-/**
- * Accept Invitation
- *
- * Accept an invitation as the authenticated user.
- *
- * Idempotent for the same acceptor.
- */
-export const acceptInvitationV1InvitationsAcceptPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<AcceptInvitationV1InvitationsAcceptPostData, ThrowOnError>
-): RequestResult<
-  AcceptInvitationV1InvitationsAcceptPostResponses,
-  AcceptInvitationV1InvitationsAcceptPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    AcceptInvitationV1InvitationsAcceptPostResponses,
-    AcceptInvitationV1InvitationsAcceptPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/invitations/accept",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Members
- */
-export const listMembersV1WorkspacesWorkspaceIdMembersGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ListMembersV1WorkspacesWorkspaceIdMembersGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListMembersV1WorkspacesWorkspaceIdMembersGetResponses,
-  ListMembersV1WorkspacesWorkspaceIdMembersGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListMembersV1WorkspacesWorkspaceIdMembersGetResponses,
-    ListMembersV1WorkspacesWorkspaceIdMembersGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace_id}/members",
-    ...options,
-  });
-
-/**
- * Remove Member
- *
- * Remove a member from the workspace.
- */
-export const removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses,
-  RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses,
-    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace_id}/members/{user_id}",
-    ...options,
-  });
-
-/**
- * List Workspaces
- *
- * List every workspace the current user can reach (personal + joined).
- *
- * Provisions the caller's personal workspace on first call, so a brand
- * new user always gets at least one entry. Baseline governance policies are
- * seeded by the workspace-creation hook (see ``get_workspace_service``).
- */
-export const listWorkspacesV1WorkspacesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListWorkspacesV1WorkspacesGetData, ThrowOnError>
-): RequestResult<
-  ListWorkspacesV1WorkspacesGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListWorkspacesV1WorkspacesGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces",
-    ...options,
-  });
-
-/**
- * Create Workspace
- *
- * Create a new shared workspace owned by the current user.
- *
- * Provisions the workspace row (baseline governance policies are seeded by
- * the creation hook in ``get_workspace_service``) and grants the creator
- * membership in the relationship graph so the workspace immediately shows up
- * in their accessible list and the switcher.
- */
-export const createWorkspaceV1WorkspacesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateWorkspaceV1WorkspacesPostData, ThrowOnError>
-): RequestResult<
-  CreateWorkspaceV1WorkspacesPostResponses,
-  CreateWorkspaceV1WorkspacesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateWorkspaceV1WorkspacesPostResponses,
-    CreateWorkspaceV1WorkspacesPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Skills
- *
- * List skills in the workspace.
- */
-export const listSkillsV1SkillsGet = <ThrowOnError extends boolean = false>(
-  options?: Options<ListSkillsV1SkillsGetData, ThrowOnError>
-): RequestResult<
-  ListSkillsV1SkillsGetResponses,
-  ListSkillsV1SkillsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListSkillsV1SkillsGetResponses,
-    ListSkillsV1SkillsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills",
-    ...options,
-  });
-
-/**
- * Create Skill
- *
- * Create a new skill from content or GitHub URL.
- */
-export const createSkillV1SkillsPost = <ThrowOnError extends boolean = false>(
-  options: Options<CreateSkillV1SkillsPostData, ThrowOnError>
-): RequestResult<
-  CreateSkillV1SkillsPostResponses,
-  CreateSkillV1SkillsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateSkillV1SkillsPostResponses,
-    CreateSkillV1SkillsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Upload Skill
- *
- * Upload a skill package as a ZIP file.
- */
-export const uploadSkillV1SkillsUploadPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UploadSkillV1SkillsUploadPostData, ThrowOnError>
-): RequestResult<
-  UploadSkillV1SkillsUploadPostResponses,
-  UploadSkillV1SkillsUploadPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    UploadSkillV1SkillsUploadPostResponses,
-    UploadSkillV1SkillsUploadPostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/upload",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Skill
- *
- * Delete a skill.
- */
-export const deleteSkillV1SkillsSkillIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeleteSkillV1SkillsSkillIdDeleteData, ThrowOnError>
-): RequestResult<
-  DeleteSkillV1SkillsSkillIdDeleteResponses,
-  DeleteSkillV1SkillsSkillIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteSkillV1SkillsSkillIdDeleteResponses,
-    DeleteSkillV1SkillsSkillIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}",
-    ...options,
-  });
-
-/**
- * Get Skill
- *
- * Get a skill by ID (tenant or catalog).
- */
-export const getSkillV1SkillsSkillIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetSkillV1SkillsSkillIdGetData, ThrowOnError>
-): RequestResult<
-  GetSkillV1SkillsSkillIdGetResponses,
-  GetSkillV1SkillsSkillIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetSkillV1SkillsSkillIdGetResponses,
-    GetSkillV1SkillsSkillIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}",
-    ...options,
-  });
-
-/**
- * Update Skill
- *
- * Update a skill.
- */
-export const updateSkillV1SkillsSkillIdPut = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpdateSkillV1SkillsSkillIdPutData, ThrowOnError>
-): RequestResult<
-  UpdateSkillV1SkillsSkillIdPutResponses,
-  UpdateSkillV1SkillsSkillIdPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    UpdateSkillV1SkillsSkillIdPutResponses,
-    UpdateSkillV1SkillsSkillIdPutErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Install Skill
- *
- * Add a built-in catalog skill to the workspace.
- */
-export const installSkillV1SkillsSkillIdInstallPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<InstallSkillV1SkillsSkillIdInstallPostData, ThrowOnError>
-): RequestResult<
-  InstallSkillV1SkillsSkillIdInstallPostResponses,
-  InstallSkillV1SkillsSkillIdInstallPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    InstallSkillV1SkillsSkillIdInstallPostResponses,
-    InstallSkillV1SkillsSkillIdInstallPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/install",
-    ...options,
-  });
-
-/**
- * Get Skill Content
- *
- * Get the main markdown content of a skill (tenant or catalog).
- */
-export const getSkillContentV1SkillsSkillIdContentGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetSkillContentV1SkillsSkillIdContentGetData, ThrowOnError>
-): RequestResult<
-  GetSkillContentV1SkillsSkillIdContentGetResponses,
-  GetSkillContentV1SkillsSkillIdContentGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetSkillContentV1SkillsSkillIdContentGetResponses,
-    GetSkillContentV1SkillsSkillIdContentGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/content",
-    ...options,
-  });
-
-/**
- * List Skill Files
- *
- * List all files in a skill package.
- */
-export const listSkillFilesV1SkillsSkillIdFilesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ListSkillFilesV1SkillsSkillIdFilesGetData, ThrowOnError>
-): RequestResult<
-  ListSkillFilesV1SkillsSkillIdFilesGetResponses,
-  ListSkillFilesV1SkillsSkillIdFilesGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListSkillFilesV1SkillsSkillIdFilesGetResponses,
-    ListSkillFilesV1SkillsSkillIdFilesGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/files",
-    ...options,
-  });
-
-/**
- * Get Skill File
- *
- * Get a file from a skill package.
- *
- * By default, returns a redirect to a presigned URL.
- * Set redirect=false to get the presigned URL in the response body.
- */
-export const getSkillFileV1SkillsSkillIdFilesPathGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetSkillFileV1SkillsSkillIdFilesPathGetData, ThrowOnError>
-): RequestResult<
-  GetSkillFileV1SkillsSkillIdFilesPathGetResponses,
-  GetSkillFileV1SkillsSkillIdFilesPathGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetSkillFileV1SkillsSkillIdFilesPathGetResponses,
-    GetSkillFileV1SkillsSkillIdFilesPathGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/files/{path}",
-    ...options,
-  });
-
-/**
- * List Skill Members
- *
- * List all child skills of a parent skill bundle.
- */
-export const listSkillMembersV1SkillsSkillIdMembersGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ListSkillMembersV1SkillsSkillIdMembersGetData, ThrowOnError>
-): RequestResult<
-  ListSkillMembersV1SkillsSkillIdMembersGetResponses,
-  ListSkillMembersV1SkillsSkillIdMembersGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListSkillMembersV1SkillsSkillIdMembersGetResponses,
-    ListSkillMembersV1SkillsSkillIdMembersGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/members",
-    ...options,
-  });
-
-/**
- * Add Skill Member
- *
- * Add a child skill to a parent skill bundle.
- */
-export const addSkillMemberV1SkillsSkillIdMembersPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<AddSkillMemberV1SkillsSkillIdMembersPostData, ThrowOnError>
-): RequestResult<
-  AddSkillMemberV1SkillsSkillIdMembersPostResponses,
-  AddSkillMemberV1SkillsSkillIdMembersPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    AddSkillMemberV1SkillsSkillIdMembersPostResponses,
-    AddSkillMemberV1SkillsSkillIdMembersPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/members",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Remove Skill Member
- *
- * Remove a child skill from a parent skill bundle.
- */
-export const removeSkillMemberV1SkillsSkillIdMembersChildSkillIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses,
-  RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses,
-    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/members/{child_skill_id}",
-    ...options,
-  });
-
-/**
- * Flatten Skill Members
- *
- * Return child skill IDs in topological execution order.
- */
-export const flattenSkillMembersV1SkillsSkillIdFlattenGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    FlattenSkillMembersV1SkillsSkillIdFlattenGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses,
-  FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses,
-    FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/skills/{skill_id}/flatten",
+    url: "/v1/audit-logs/",
     ...options,
   });
 
@@ -6096,22 +2898,18 @@ export const installBundleV1BundlesInstallPost = <
   });
 
 /**
- * List Collections
- *
- * List collections in the current workspace with skill counts.
+ * List Clients
  */
-export const listCollectionsV1SkillCollectionsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListCollectionsV1SkillCollectionsGetData, ThrowOnError>
+export const listClientsV1ClientsGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListClientsV1ClientsGetData, ThrowOnError>
 ): RequestResult<
-  ListCollectionsV1SkillCollectionsGetResponses,
-  unknown,
+  ListClientsV1ClientsGetResponses,
+  ListClientsV1ClientsGetErrors,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    ListCollectionsV1SkillCollectionsGetResponses,
-    unknown,
+    ListClientsV1ClientsGetResponses,
+    ListClientsV1ClientsGetErrors,
     ThrowOnError
   >({
     security: [
@@ -6121,27 +2919,23 @@ export const listCollectionsV1SkillCollectionsGet = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/",
+    url: "/v1/clients/",
     ...options,
   });
 
 /**
- * Create Collection
- *
- * Create a new collection in the current workspace.
+ * Create Client
  */
-export const createCollectionV1SkillCollectionsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateCollectionV1SkillCollectionsPostData, ThrowOnError>
+export const createClientV1ClientsPost = <ThrowOnError extends boolean = false>(
+  options: Options<CreateClientV1ClientsPostData, ThrowOnError>
 ): RequestResult<
-  CreateCollectionV1SkillCollectionsPostResponses,
-  CreateCollectionV1SkillCollectionsPostErrors,
+  CreateClientV1ClientsPostResponses,
+  CreateClientV1ClientsPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateCollectionV1SkillCollectionsPostResponses,
-    CreateCollectionV1SkillCollectionsPostErrors,
+    CreateClientV1ClientsPostResponses,
+    CreateClientV1ClientsPostErrors,
     ThrowOnError
   >({
     security: [
@@ -6151,7 +2945,7 @@ export const createCollectionV1SkillCollectionsPost = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/",
+    url: "/v1/clients/",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6160,25 +2954,20 @@ export const createCollectionV1SkillCollectionsPost = <
   });
 
 /**
- * Delete Collection
- *
- * Delete a collection from the current workspace.
+ * Delete Client
  */
-export const deleteCollectionV1SkillCollectionsCollectionIdDelete = <
+export const deleteClientV1ClientsClientIdDelete = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    DeleteCollectionV1SkillCollectionsCollectionIdDeleteData,
-    ThrowOnError
-  >
+  options: Options<DeleteClientV1ClientsClientIdDeleteData, ThrowOnError>
 ): RequestResult<
-  DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses,
-  DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors,
+  DeleteClientV1ClientsClientIdDeleteResponses,
+  DeleteClientV1ClientsClientIdDeleteErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses,
-    DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors,
+    DeleteClientV1ClientsClientIdDeleteResponses,
+    DeleteClientV1ClientsClientIdDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -6188,30 +2977,25 @@ export const deleteCollectionV1SkillCollectionsCollectionIdDelete = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/{collection_id}",
+    url: "/v1/clients/{client_id}",
     ...options,
   });
 
 /**
- * Get Collection
- *
- * Read one collection with its skills.
+ * Get Client
  */
-export const getCollectionV1SkillCollectionsCollectionIdGet = <
+export const getClientV1ClientsClientIdGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    GetCollectionV1SkillCollectionsCollectionIdGetData,
-    ThrowOnError
-  >
+  options: Options<GetClientV1ClientsClientIdGetData, ThrowOnError>
 ): RequestResult<
-  GetCollectionV1SkillCollectionsCollectionIdGetResponses,
-  GetCollectionV1SkillCollectionsCollectionIdGetErrors,
+  GetClientV1ClientsClientIdGetResponses,
+  GetClientV1ClientsClientIdGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetCollectionV1SkillCollectionsCollectionIdGetResponses,
-    GetCollectionV1SkillCollectionsCollectionIdGetErrors,
+    GetClientV1ClientsClientIdGetResponses,
+    GetClientV1ClientsClientIdGetErrors,
     ThrowOnError
   >({
     security: [
@@ -6221,30 +3005,25 @@ export const getCollectionV1SkillCollectionsCollectionIdGet = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/{collection_id}",
+    url: "/v1/clients/{client_id}",
     ...options,
   });
 
 /**
- * Update Collection
- *
- * Update a collection's name and/or description.
+ * Update Client
  */
-export const updateCollectionV1SkillCollectionsCollectionIdPut = <
+export const updateClientV1ClientsClientIdPatch = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    UpdateCollectionV1SkillCollectionsCollectionIdPutData,
-    ThrowOnError
-  >
+  options: Options<UpdateClientV1ClientsClientIdPatchData, ThrowOnError>
 ): RequestResult<
-  UpdateCollectionV1SkillCollectionsCollectionIdPutResponses,
-  UpdateCollectionV1SkillCollectionsCollectionIdPutErrors,
+  UpdateClientV1ClientsClientIdPatchResponses,
+  UpdateClientV1ClientsClientIdPatchErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).put<
-    UpdateCollectionV1SkillCollectionsCollectionIdPutResponses,
-    UpdateCollectionV1SkillCollectionsCollectionIdPutErrors,
+  (options.client ?? client).patch<
+    UpdateClientV1ClientsClientIdPatchResponses,
+    UpdateClientV1ClientsClientIdPatchErrors,
     ThrowOnError
   >({
     security: [
@@ -6254,7 +3033,7 @@ export const updateCollectionV1SkillCollectionsCollectionIdPut = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/{collection_id}",
+    url: "/v1/clients/{client_id}",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6263,25 +3042,23 @@ export const updateCollectionV1SkillCollectionsCollectionIdPut = <
   });
 
 /**
- * Add Skill To Collection
- *
- * Add a skill to a collection and mirror the membership into the graph.
+ * Add Mcp Instance To Client
  */
-export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
+export const addMcpInstanceToClientV1ClientsClientIdMcpInstancesPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostData,
+    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData,
     ThrowOnError
   >
 ): RequestResult<
-  AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses,
-  AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors,
+  AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses,
+  AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses,
-    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors,
+    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses,
+    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors,
     ThrowOnError
   >({
     security: [
@@ -6291,7 +3068,7 @@ export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
         type: "http",
       },
     ],
-    url: "/v1/skill-collections/{collection_id}/skills",
+    url: "/v1/clients/{client_id}/mcp-instances",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6300,24 +3077,22 @@ export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
   });
 
 /**
- * Remove Skill From Collection
- *
- * Remove a skill from a collection and delete the graph membership.
+ * Remove Mcp Instance From Client
  */
-export const removeSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDelete =
+export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDelete =
   <ThrowOnError extends boolean = false>(
     options: Options<
-      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteData,
+      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteData,
       ThrowOnError
     >
   ): RequestResult<
-    RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses,
-    RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors,
+    RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses,
+    RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors,
     ThrowOnError
   > =>
     (options.client ?? client).delete<
-      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses,
-      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors,
+      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses,
+      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors,
       ThrowOnError
     >({
       security: [
@@ -6327,60 +3102,28 @@ export const removeSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillI
           type: "http",
         },
       ],
-      url: "/v1/skill-collections/{collection_id}/skills/{skill_id}",
+      url: "/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}",
       ...options,
     });
 
 /**
- * Get Graph
- *
- * Return the full authorization graph for the current workspace.
+ * Pull From Project
  */
-export const getGraphV1AccessControlGraphGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<GetGraphV1AccessControlGraphGetData, ThrowOnError>
-): RequestResult<
-  GetGraphV1AccessControlGraphGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetGraphV1AccessControlGraphGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/access-control/graph",
-    ...options,
-  });
-
-/**
- * Delete Relationship
- *
- * Delete an authorization relationship from the configured graph backend.
- */
-export const deleteRelationshipV1AccessControlRelationshipsDelete = <
+export const pullFromProjectV1ClientsClientIdPullFromProjectPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    DeleteRelationshipV1AccessControlRelationshipsDeleteData,
+    PullFromProjectV1ClientsClientIdPullFromProjectPostData,
     ThrowOnError
   >
 ): RequestResult<
-  DeleteRelationshipV1AccessControlRelationshipsDeleteResponses,
-  DeleteRelationshipV1AccessControlRelationshipsDeleteErrors,
+  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
+  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).delete<
-    DeleteRelationshipV1AccessControlRelationshipsDeleteResponses,
-    DeleteRelationshipV1AccessControlRelationshipsDeleteErrors,
+  (options.client ?? client).post<
+    PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
+    PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
     ThrowOnError
   >({
     security: [
@@ -6390,7 +3133,7 @@ export const deleteRelationshipV1AccessControlRelationshipsDelete = <
         type: "http",
       },
     ],
-    url: "/v1/access-control/relationships",
+    url: "/v1/clients/{client_id}/pull-from-project",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6399,58 +3142,23 @@ export const deleteRelationshipV1AccessControlRelationshipsDelete = <
   });
 
 /**
- * List Relationships
- *
- * List authorization relationships enriched with display names.
+ * Add Skill To Client
  */
-export const listRelationshipsV1AccessControlRelationshipsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    ListRelationshipsV1AccessControlRelationshipsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListRelationshipsV1AccessControlRelationshipsGetResponses,
-  ListRelationshipsV1AccessControlRelationshipsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListRelationshipsV1AccessControlRelationshipsGetResponses,
-    ListRelationshipsV1AccessControlRelationshipsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/access-control/relationships",
-    ...options,
-  });
-
-/**
- * Create Relationship
- *
- * Write an authorization relationship to the configured graph backend.
- */
-export const createRelationshipV1AccessControlRelationshipsPost = <
+export const addSkillToClientV1ClientsClientIdSkillsPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    CreateRelationshipV1AccessControlRelationshipsPostData,
+    AddSkillToClientV1ClientsClientIdSkillsPostData,
     ThrowOnError
   >
 ): RequestResult<
-  CreateRelationshipV1AccessControlRelationshipsPostResponses,
-  CreateRelationshipV1AccessControlRelationshipsPostErrors,
+  AddSkillToClientV1ClientsClientIdSkillsPostResponses,
+  AddSkillToClientV1ClientsClientIdSkillsPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateRelationshipV1AccessControlRelationshipsPostResponses,
-    CreateRelationshipV1AccessControlRelationshipsPostErrors,
+    AddSkillToClientV1ClientsClientIdSkillsPostResponses,
+    AddSkillToClientV1ClientsClientIdSkillsPostErrors,
     ThrowOnError
   >({
     security: [
@@ -6460,7 +3168,7 @@ export const createRelationshipV1AccessControlRelationshipsPost = <
         type: "http",
       },
     ],
-    url: "/v1/access-control/relationships",
+    url: "/v1/clients/{client_id}/skills",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6469,130 +3177,23 @@ export const createRelationshipV1AccessControlRelationshipsPost = <
   });
 
 /**
- * Check Permission
- *
- * Check whether a subject has a relation on an object.
+ * Remove Skill From Client
  */
-export const checkPermissionV1AccessControlCheckPost = <
+export const removeSkillFromClientV1ClientsClientIdSkillsSkillIdDelete = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<CheckPermissionV1AccessControlCheckPostData, ThrowOnError>
-): RequestResult<
-  CheckPermissionV1AccessControlCheckPostResponses,
-  CheckPermissionV1AccessControlCheckPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CheckPermissionV1AccessControlCheckPostResponses,
-    CheckPermissionV1AccessControlCheckPostErrors,
+  options: Options<
+    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteData,
     ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/access-control/check",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Resolve Access
- *
- * Resolve why (and how) a subject can access a resource.
- *
- * ``allowed`` is computed via the graph backend; ``paths`` are derived by
- * traversing workspace relationships directly so the UI can render the derivation.
- */
-export const resolveAccessV1AccessControlResolvePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ResolveAccessV1AccessControlResolvePostData, ThrowOnError>
+  >
 ): RequestResult<
-  ResolveAccessV1AccessControlResolvePostResponses,
-  ResolveAccessV1AccessControlResolvePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ResolveAccessV1AccessControlResolvePostResponses,
-    ResolveAccessV1AccessControlResolvePostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/access-control/resolve",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Sync Grants
- *
- * Mirror existing grants into the graph backend and seed a starter collection.
- *
- * Idempotent: safe to call repeatedly. Steps:
- * 1. Mirror workspace members into the graph.
- * 2. If no collections exist, create "All skills" containing every workspace
- * skill and grant workspace-member access to the collection.
- * 3. Mirror each collection membership relationship.
- * 4. Mirror each direct agent-to-skill grant.
- */
-export const syncGrantsV1AccessControlSyncPost = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<SyncGrantsV1AccessControlSyncPostData, ThrowOnError>
-): RequestResult<
-  SyncGrantsV1AccessControlSyncPostResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).post<
-    SyncGrantsV1AccessControlSyncPostResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/access-control/sync",
-    ...options,
-  });
-
-/**
- * Revoke Tool Access
- *
- * Revoke a whole-tool or exact-arguments grant.
- */
-export const revokeToolAccessV1ToolAccessGrantsDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<RevokeToolAccessV1ToolAccessGrantsDeleteData, ThrowOnError>
-): RequestResult<
-  RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
-  RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
+  RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses,
+  RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
-    RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
+    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses,
+    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -6602,30 +3203,24 @@ export const revokeToolAccessV1ToolAccessGrantsDelete = <
         type: "http",
       },
     ],
-    url: "/v1/tool-access/grants",
+    url: "/v1/clients/{client_id}/skills/{skill_id}",
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**
- * List Tool Access Grants
- *
- * List tool access grants in the configured graph backend.
+ * List Workspace Files
  */
-export const listToolAccessGrantsV1ToolAccessGrantsGet = <
+export const listWorkspaceFilesV1FilesGet = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<ListToolAccessGrantsV1ToolAccessGrantsGetData, ThrowOnError>
+  options?: Options<ListWorkspaceFilesV1FilesGetData, ThrowOnError>
 ): RequestResult<
-  ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
+  ListWorkspaceFilesV1FilesGetResponses,
   unknown,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
+    ListWorkspaceFilesV1FilesGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -6636,27 +3231,65 @@ export const listToolAccessGrantsV1ToolAccessGrantsGet = <
         type: "http",
       },
     ],
-    url: "/v1/tool-access/grants",
+    url: "/v1/files",
     ...options,
   });
 
 /**
- * Grant Tool Access
+ * Upload Workspace File
  *
- * Grant a user access to a whole tool, or to an exact argument set.
+ * Upload a file to the workspace's artifact root.
  */
-export const grantToolAccessV1ToolAccessGrantsPost = <
+export const uploadWorkspaceFileV1FilesPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<GrantToolAccessV1ToolAccessGrantsPostData, ThrowOnError>
+  options: Options<UploadWorkspaceFileV1FilesPostData, ThrowOnError>
 ): RequestResult<
-  GrantToolAccessV1ToolAccessGrantsPostResponses,
-  GrantToolAccessV1ToolAccessGrantsPostErrors,
+  UploadWorkspaceFileV1FilesPostResponses,
+  UploadWorkspaceFileV1FilesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    GrantToolAccessV1ToolAccessGrantsPostResponses,
-    GrantToolAccessV1ToolAccessGrantsPostErrors,
+    UploadWorkspaceFileV1FilesPostResponses,
+    UploadWorkspaceFileV1FilesPostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Stream Workspace File
+ *
+ * Stream a workspace file through the AgentArea API.
+ */
+export const streamWorkspaceFileV1FilesDownloadFilePathGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StreamWorkspaceFileV1FilesDownloadFilePathGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
+  StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
+    StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
     ThrowOnError
   >({
     security: [
@@ -6666,7 +3299,101 @@ export const grantToolAccessV1ToolAccessGrantsPost = <
         type: "http",
       },
     ],
-    url: "/v1/tool-access/grants",
+    url: "/v1/files/download/{file_path}",
+    ...options,
+  });
+
+/**
+ * Workspace File History
+ *
+ * Return the provenance trail for a workspace file, newest event first.
+ */
+export const workspaceFileHistoryV1FilesHistoryGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<WorkspaceFileHistoryV1FilesHistoryGetData, ThrowOnError>
+): RequestResult<
+  WorkspaceFileHistoryV1FilesHistoryGetResponses,
+  WorkspaceFileHistoryV1FilesHistoryGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    WorkspaceFileHistoryV1FilesHistoryGetResponses,
+    WorkspaceFileHistoryV1FilesHistoryGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/history",
+    ...options,
+  });
+
+/**
+ * Download Workspace File
+ */
+export const downloadWorkspaceFileV1FilesFilePathGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DownloadWorkspaceFileV1FilesFilePathGetData, ThrowOnError>
+): RequestResult<
+  DownloadWorkspaceFileV1FilesFilePathGetResponses,
+  DownloadWorkspaceFileV1FilesFilePathGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    DownloadWorkspaceFileV1FilesFilePathGetResponses,
+    DownloadWorkspaceFileV1FilesFilePathGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/{file_path}",
+    ...options,
+  });
+
+/**
+ * Preview Effective Policy
+ *
+ * Compute effective policy from rules without persisting a snapshot.
+ *
+ * Useful for UIs that need to show the merged workspace/agent/task ceiling
+ * before the user commits a task creation.
+ */
+export const previewEffectivePolicyV1GovernanceEffectivePolicyPreviewPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
+  PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
+    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/governance/effective-policy/preview",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -6675,25 +3402,28 @@ export const grantToolAccessV1ToolAccessGrantsPost = <
   });
 
 /**
- * Check Tool Access
+ * Get Task Policy Snapshot
  *
- * Check whether a user can call a tool.
+ * Read the effective governance policy for a task.
  *
- * Omitting ``arguments`` checks a whole-tool grant. Passing ``arguments``
- * checks the concrete invocation path used by runtime tool execution.
+ * The effective policy is no longer persisted; it is served on demand by
+ * querying the task's Temporal workflow, where it lives in workflow state.
  */
-export const checkToolAccessV1ToolAccessChecksPost = <
+export const getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<CheckToolAccessV1ToolAccessChecksPostData, ThrowOnError>
+  options: Options<
+    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetData,
+    ThrowOnError
+  >
 ): RequestResult<
-  CheckToolAccessV1ToolAccessChecksPostResponses,
-  CheckToolAccessV1ToolAccessChecksPostErrors,
+  GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses,
+  GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).post<
-    CheckToolAccessV1ToolAccessChecksPostResponses,
-    CheckToolAccessV1ToolAccessChecksPostErrors,
+  (options.client ?? client).get<
+    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses,
+    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors,
     ThrowOnError
   >({
     security: [
@@ -6703,7 +3433,70 @@ export const checkToolAccessV1ToolAccessChecksPost = <
         type: "http",
       },
     ],
-    url: "/v1/tool-access/checks",
+    url: "/v1/governance/task-policy-snapshots/{task_id}",
+    ...options,
+  });
+
+/**
+ * Get Inbox Items
+ *
+ * List tasks requiring user attention.
+ *
+ * Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
+ * ordered by most recently updated first. Includes total count for badge/pagination.
+ */
+export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
+  options?: Options<GetInboxItemsV1InboxGetData, ThrowOnError>
+): RequestResult<
+  GetInboxItemsV1InboxGetResponses,
+  GetInboxItemsV1InboxGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetInboxItemsV1InboxGetResponses,
+    GetInboxItemsV1InboxGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/inbox/",
+    ...options,
+  });
+
+/**
+ * Accept Invitation
+ *
+ * Accept an invitation as the authenticated user.
+ *
+ * Idempotent for the same acceptor.
+ */
+export const acceptInvitationV1InvitationsAcceptPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<AcceptInvitationV1InvitationsAcceptPostData, ThrowOnError>
+): RequestResult<
+  AcceptInvitationV1InvitationsAcceptPostResponses,
+  AcceptInvitationV1InvitationsAcceptPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AcceptInvitationV1InvitationsAcceptPostResponses,
+    AcceptInvitationV1InvitationsAcceptPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/invitations/accept",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -7034,15 +3827,57 @@ export const oauthAuthorizeV1McpOauthAuthorizeGet = <
   });
 
 /**
- * List Api Keys
+ * Oauth Callback
  *
- * List all API keys for the current workspace.
+ * OAuth callback — exchange code for token and store in MCPAuthConfig.
+ *
+ * This endpoint does NOT require auth (the user is mid-redirect from the
+ * remote AS). The state token proves the flow was initiated by our /authorize.
  */
-export const listApiKeysV1ApiKeysGet = <ThrowOnError extends boolean = false>(
-  options?: Options<ListApiKeysV1ApiKeysGetData, ThrowOnError>
-): RequestResult<ListApiKeysV1ApiKeysGetResponses, unknown, ThrowOnError> =>
+export const oauthCallbackV1McpOauthCallbackGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<OauthCallbackV1McpOauthCallbackGetData, ThrowOnError>
+): RequestResult<
+  OauthCallbackV1McpOauthCallbackGetResponses,
+  OauthCallbackV1McpOauthCallbackGetErrors,
+  ThrowOnError
+> =>
   (options?.client ?? client).get<
-    ListApiKeysV1ApiKeysGetResponses,
+    OauthCallbackV1McpOauthCallbackGetResponses,
+    OauthCallbackV1McpOauthCallbackGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-oauth/callback",
+    ...options,
+  });
+
+/**
+ * List Mcp Server Instances
+ *
+ * List all MCP server instances in the workspace.
+ */
+export const listMcpServerInstancesV1McpServerInstancesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListMcpServerInstancesV1McpServerInstancesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListMcpServerInstancesV1McpServerInstancesGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListMcpServerInstancesV1McpServerInstancesGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -7053,25 +3888,33 @@ export const listApiKeysV1ApiKeysGet = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/v1/api-keys/",
+    url: "/v1/mcp-server-instances/",
     ...options,
   });
 
 /**
- * Create Api Key
+ * Create Mcp Server Instance
  *
- * Create a new API key. The raw ``token`` value is returned once — store it securely.
+ * Create a new MCP server instance.
+ *
+ * Returns 201 for url (synchronous verification completed).
+ * Returns 202 for docker/command (background verification in progress).
  */
-export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
-  options: Options<CreateApiKeyV1ApiKeysPostData, ThrowOnError>
+export const createMcpServerInstanceV1McpServerInstancesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateMcpServerInstanceV1McpServerInstancesPostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  CreateApiKeyV1ApiKeysPostResponses,
-  CreateApiKeyV1ApiKeysPostErrors,
+  CreateMcpServerInstanceV1McpServerInstancesPostResponses,
+  CreateMcpServerInstanceV1McpServerInstancesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateApiKeyV1ApiKeysPostResponses,
-    CreateApiKeyV1ApiKeysPostErrors,
+    CreateMcpServerInstanceV1McpServerInstancesPostResponses,
+    CreateMcpServerInstanceV1McpServerInstancesPostErrors,
     ThrowOnError
   >({
     security: [
@@ -7081,7 +3924,7 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/v1/api-keys/",
+    url: "/v1/mcp-server-instances/",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -7090,22 +3933,61 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Revoke Api Key
+ * Check Mcp Server Instance Configuration
  *
- * Immediately revoke an API key.
+ * Check if an MCP server instance configuration is valid via the Go manager.
  */
-export const revokeApiKeyV1ApiKeysTokenIdDelete = <
+export const checkMcpServerInstanceConfigurationV1McpServerInstancesCheckPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses,
+    CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses,
+      CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/mcp-server-instances/check",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+/**
+ * Get Containers Health
+ *
+ * Get health status of all MCP containers by proxying to the Go manager.
+ */
+export const getContainersHealthV1McpServerInstancesHealthContainersGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<RevokeApiKeyV1ApiKeysTokenIdDeleteData, ThrowOnError>
+  options?: Options<
+    GetContainersHealthV1McpServerInstancesHealthContainersGetData,
+    ThrowOnError
+  >
 ): RequestResult<
-  RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
-  RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
+  GetContainersHealthV1McpServerInstancesHealthContainersGetResponses,
+  unknown,
   ThrowOnError
 > =>
-  (options.client ?? client).delete<
-    RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
-    RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
+  (options?.client ?? client).get<
+    GetContainersHealthV1McpServerInstancesHealthContainersGetResponses,
+    unknown,
     ThrowOnError
   >({
     security: [
@@ -7115,27 +3997,30 @@ export const revokeApiKeyV1ApiKeysTokenIdDelete = <
         type: "http",
       },
     ],
-    url: "/v1/api-keys/{token_id}",
+    url: "/v1/mcp-server-instances/health/containers",
     ...options,
   });
 
 /**
- * Get Api Key
+ * Validate Instance Spec
  *
- * Get a single API key by ID.
+ * Stateless spec validation. For type=url, probes with list_tools (3s budget).
  */
-export const getApiKeyV1ApiKeysTokenIdGet = <
+export const validateInstanceSpecV1McpServerInstancesValidatePost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<GetApiKeyV1ApiKeysTokenIdGetData, ThrowOnError>
+  options: Options<
+    ValidateInstanceSpecV1McpServerInstancesValidatePostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  GetApiKeyV1ApiKeysTokenIdGetResponses,
-  GetApiKeyV1ApiKeysTokenIdGetErrors,
+  ValidateInstanceSpecV1McpServerInstancesValidatePostResponses,
+  ValidateInstanceSpecV1McpServerInstancesValidatePostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    GetApiKeyV1ApiKeysTokenIdGetResponses,
-    GetApiKeyV1ApiKeysTokenIdGetErrors,
+  (options.client ?? client).post<
+    ValidateInstanceSpecV1McpServerInstancesValidatePostResponses,
+    ValidateInstanceSpecV1McpServerInstancesValidatePostErrors,
     ThrowOnError
   >({
     security: [
@@ -7145,7 +4030,655 @@ export const getApiKeyV1ApiKeysTokenIdGet = <
         type: "http",
       },
     ],
-    url: "/v1/api-keys/{token_id}",
+    url: "/v1/mcp-server-instances/validate",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Validate Connection
+ *
+ * Test a connection to an MCP server without creating an instance.
+ */
+export const validateConnectionV1McpServerInstancesValidateConnectionPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ValidateConnectionV1McpServerInstancesValidateConnectionPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses,
+  ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses,
+    ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/validate-connection",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Create Mcp Server Connection
+ *
+ * Create an MCP server spec and instance in one transaction.
+ */
+export const createMcpServerConnectionV1McpServerInstancesWithSpecPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses,
+  CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses,
+    CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/with-spec",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Mcp Server Instance
+ */
+export const deleteMcpServerInstanceV1McpServerInstancesInstanceIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses,
+  DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses,
+    DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}",
+    ...options,
+  });
+
+/**
+ * Get Mcp Server Instance
+ */
+export const getMcpServerInstanceV1McpServerInstancesInstanceIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
+  GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
+    GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}",
+    ...options,
+  });
+
+/**
+ * Update Mcp Server Instance
+ */
+export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses,
+  UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses,
+    UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Discover Mcp Server Instance Tools
+ *
+ * Re-discover the tools exposed by an MCP server instance.
+ *
+ * Re-runs verification (which calls list_tools on the server using any
+ * OAuth/API-key credentials linked via auth_config_id) and persists the
+ * refreshed tool list. Returns {tools, verification}.
+ */
+export const discoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses,
+    DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses,
+      DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/mcp-server-instances/{instance_id}/discover-tools",
+      ...options,
+    });
+
+/**
+ * Get Instance Environment
+ */
+export const getInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses,
+    GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses,
+      GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/mcp-server-instances/{instance_id}/environment",
+      ...options,
+    });
+
+/**
+ * Create Oauth Link
+ */
+export const createOauthLinkV1McpServerInstancesInstanceIdOauthLinkPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses,
+  CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses,
+    CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}/oauth-link",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Oauth Links
+ */
+export const listOauthLinksV1McpServerInstancesInstanceIdOauthLinksGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
+  ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
+    ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}/oauth-links",
+    ...options,
+  });
+
+/**
+ * Probe Instance Auth
+ *
+ * Probe a URL-type MCP instance to detect its auth requirements.
+ */
+export const probeInstanceAuthV1McpServerInstancesInstanceIdProbePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
+  ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses,
+    ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}/probe",
+    ...options,
+  });
+
+/**
+ * Run Test Auth
+ *
+ * Test the authentication configuration attached to an MCP server instance.
+ */
+export const runTestAuthV1McpServerInstancesInstanceIdTestAuthPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
+  RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
+    RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}/test-auth",
+    ...options,
+  });
+
+/**
+ * Verify Mcp Server Instance
+ *
+ * Run verification on an MCP server instance and return the fresh result synchronously.
+ *
+ * HTTP 200 regardless of verification outcome — the call itself succeeded.
+ * Check verification.status in the response to determine success/failure.
+ */
+export const verifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses,
+  VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses,
+    VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-server-instances/{instance_id}/verify",
+    ...options,
+  });
+
+/**
+ * List Mcp Servers
+ */
+export const listMcpServersV1McpServersGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListMcpServersV1McpServersGetData, ThrowOnError>
+): RequestResult<
+  ListMcpServersV1McpServersGetResponses,
+  ListMcpServersV1McpServersGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListMcpServersV1McpServersGetResponses,
+    ListMcpServersV1McpServersGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/",
+    ...options,
+  });
+
+/**
+ * Create Mcp Server
+ */
+export const createMcpServerV1McpServersPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateMcpServerV1McpServersPostData, ThrowOnError>
+): RequestResult<
+  CreateMcpServerV1McpServersPostResponses,
+  CreateMcpServerV1McpServersPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateMcpServerV1McpServersPostResponses,
+    CreateMcpServerV1McpServersPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Mcp Server
+ */
+export const deleteMcpServerV1McpServersServerIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteMcpServerV1McpServersServerIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteMcpServerV1McpServersServerIdDeleteResponses,
+  DeleteMcpServerV1McpServersServerIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteMcpServerV1McpServersServerIdDeleteResponses,
+    DeleteMcpServerV1McpServersServerIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/{server_id}",
+    ...options,
+  });
+
+/**
+ * Get Mcp Server
+ */
+export const getMcpServerV1McpServersServerIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetMcpServerV1McpServersServerIdGetData, ThrowOnError>
+): RequestResult<
+  GetMcpServerV1McpServersServerIdGetResponses,
+  GetMcpServerV1McpServersServerIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetMcpServerV1McpServersServerIdGetResponses,
+    GetMcpServerV1McpServersServerIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/{server_id}",
+    ...options,
+  });
+
+/**
+ * Update Mcp Server
+ */
+export const updateMcpServerV1McpServersServerIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateMcpServerV1McpServersServerIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdateMcpServerV1McpServersServerIdPatchResponses,
+  UpdateMcpServerV1McpServersServerIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateMcpServerV1McpServersServerIdPatchResponses,
+    UpdateMcpServerV1McpServersServerIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/{server_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Deploy Mcp Server
+ */
+export const deployMcpServerV1McpServersServerIdDeployPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeployMcpServerV1McpServersServerIdDeployPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeployMcpServerV1McpServersServerIdDeployPostResponses,
+  DeployMcpServerV1McpServersServerIdDeployPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DeployMcpServerV1McpServersServerIdDeployPostResponses,
+    DeployMcpServerV1McpServersServerIdDeployPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-servers/{server_id}/deploy",
+    ...options,
+  });
+
+/**
+ * Proxy Instance
+ *
+ * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ */
+export const proxyInstanceV1McpInstanceIdMcpDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ProxyInstanceV1McpInstanceIdMcpDeleteData, ThrowOnError>
+): RequestResult<
+  ProxyInstanceV1McpInstanceIdMcpDeleteResponses,
+  ProxyInstanceV1McpInstanceIdMcpDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    ProxyInstanceV1McpInstanceIdMcpDeleteResponses,
+    ProxyInstanceV1McpInstanceIdMcpDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp/{instance_id}/mcp",
+    ...options,
+  });
+
+/**
+ * Proxy Instance
+ *
+ * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ */
+export const proxyInstanceV1McpInstanceIdMcpGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ProxyInstanceV1McpInstanceIdMcpGetData, ThrowOnError>
+): RequestResult<
+  ProxyInstanceV1McpInstanceIdMcpGetResponses,
+  ProxyInstanceV1McpInstanceIdMcpGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ProxyInstanceV1McpInstanceIdMcpGetResponses,
+    ProxyInstanceV1McpInstanceIdMcpGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp/{instance_id}/mcp",
     ...options,
   });
 
@@ -7163,7 +4696,7 @@ export const proxyInstanceV1McpInstanceIdMcpPost = <
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).delete<
+  (options.client ?? client).post<
     ProxyInstanceV1McpInstanceIdMcpPostResponses,
     ProxyInstanceV1McpInstanceIdMcpPostErrors,
     ThrowOnError
@@ -7180,80 +4713,22 @@ export const proxyInstanceV1McpInstanceIdMcpPost = <
   });
 
 /**
- * Proxy Instance
+ * List Model Instances
  *
- * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
+ * List model instances.
  */
-export const proxyInstanceV1McpInstanceIdMcpPost2 = <
+export const listModelInstancesV1ModelInstancesGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<ProxyInstanceV1McpInstanceIdMcpPost2Data, ThrowOnError>
+  options?: Options<ListModelInstancesV1ModelInstancesGetData, ThrowOnError>
 ): RequestResult<
-  ProxyInstanceV1McpInstanceIdMcpPost2Responses,
-  ProxyInstanceV1McpInstanceIdMcpPost2Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ProxyInstanceV1McpInstanceIdMcpPost2Responses,
-    ProxyInstanceV1McpInstanceIdMcpPost2Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp/{instance_id}/mcp",
-    ...options,
-  });
-
-/**
- * Proxy Instance
- *
- * Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.
- */
-export const proxyInstanceV1McpInstanceIdMcpPost3 = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ProxyInstanceV1McpInstanceIdMcpPost3Data, ThrowOnError>
-): RequestResult<
-  ProxyInstanceV1McpInstanceIdMcpPost3Responses,
-  ProxyInstanceV1McpInstanceIdMcpPost3Errors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ProxyInstanceV1McpInstanceIdMcpPost3Responses,
-    ProxyInstanceV1McpInstanceIdMcpPost3Errors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/mcp/{instance_id}/mcp",
-    ...options,
-  });
-
-/**
- * List Registries
- */
-export const listRegistriesV1RegistriesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListRegistriesV1RegistriesGetData, ThrowOnError>
-): RequestResult<
-  ListRegistriesV1RegistriesGetResponses,
-  ListRegistriesV1RegistriesGetErrors,
+  ListModelInstancesV1ModelInstancesGetResponses,
+  ListModelInstancesV1ModelInstancesGetErrors,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    ListRegistriesV1RegistriesGetResponses,
-    ListRegistriesV1RegistriesGetErrors,
+    ListModelInstancesV1ModelInstancesGetResponses,
+    ListModelInstancesV1ModelInstancesGetErrors,
     ThrowOnError
   >({
     security: [
@@ -7263,25 +4738,27 @@ export const listRegistriesV1RegistriesGet = <
         type: "http",
       },
     ],
-    url: "/v1/registries/",
+    url: "/v1/model-instances/",
     ...options,
   });
 
 /**
- * Create Registry
+ * Create Model Instance
+ *
+ * Create a new model instance.
  */
-export const createRegistryV1RegistriesPost = <
+export const createModelInstanceV1ModelInstancesPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<CreateRegistryV1RegistriesPostData, ThrowOnError>
+  options: Options<CreateModelInstanceV1ModelInstancesPostData, ThrowOnError>
 ): RequestResult<
-  CreateRegistryV1RegistriesPostResponses,
-  CreateRegistryV1RegistriesPostErrors,
+  CreateModelInstanceV1ModelInstancesPostResponses,
+  CreateModelInstanceV1ModelInstancesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateRegistryV1RegistriesPostResponses,
-    CreateRegistryV1RegistriesPostErrors,
+    CreateModelInstanceV1ModelInstancesPostResponses,
+    CreateModelInstanceV1ModelInstancesPostErrors,
     ThrowOnError
   >({
     security: [
@@ -7291,7 +4768,7 @@ export const createRegistryV1RegistriesPost = <
         type: "http",
       },
     ],
-    url: "/v1/registries/",
+    url: "/v1/model-instances/",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -7300,22 +4777,30 @@ export const createRegistryV1RegistriesPost = <
   });
 
 /**
- * Search Catalog
+ * Create Model Instances Bulk
  *
- * Search across all registry catalogs in the workspace.
+ * Create many model instances in a single request.
+ *
+ * Partial-success semantics: each item is created independently and per-item
+ * failures are returned in `failed` rather than aborting the whole batch.
+ * Use this from UIs that let users select N models from a discovered list to
+ * avoid N HTTP round-trips.
  */
-export const searchCatalogV1RegistriesCatalogSearchGet = <
+export const createModelInstancesBulkV1ModelInstancesBulkPost = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<SearchCatalogV1RegistriesCatalogSearchGetData, ThrowOnError>
+  options: Options<
+    CreateModelInstancesBulkV1ModelInstancesBulkPostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  SearchCatalogV1RegistriesCatalogSearchGetResponses,
-  SearchCatalogV1RegistriesCatalogSearchGetErrors,
+  CreateModelInstancesBulkV1ModelInstancesBulkPostResponses,
+  CreateModelInstancesBulkV1ModelInstancesBulkPostErrors,
   ThrowOnError
 > =>
-  (options?.client ?? client).get<
-    SearchCatalogV1RegistriesCatalogSearchGetResponses,
-    SearchCatalogV1RegistriesCatalogSearchGetErrors,
+  (options.client ?? client).post<
+    CreateModelInstancesBulkV1ModelInstancesBulkPostResponses,
+    CreateModelInstancesBulkV1ModelInstancesBulkPostErrors,
     ThrowOnError
   >({
     security: [
@@ -7325,25 +4810,71 @@ export const searchCatalogV1RegistriesCatalogSearchGet = <
         type: "http",
       },
     ],
-    url: "/v1/registries/catalog/search",
+    url: "/v1/model-instances/bulk",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
- * Delete Registry
+ * Validate Model Instance
+ *
+ * Test a model instance configuration before creating it.
  */
-export const deleteRegistryV1RegistriesRegistryIdDelete = <
+export const validateModelInstanceV1ModelInstancesTestPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<DeleteRegistryV1RegistriesRegistryIdDeleteData, ThrowOnError>
+  options: Options<
+    ValidateModelInstanceV1ModelInstancesTestPostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  DeleteRegistryV1RegistriesRegistryIdDeleteResponses,
-  DeleteRegistryV1RegistriesRegistryIdDeleteErrors,
+  ValidateModelInstanceV1ModelInstancesTestPostResponses,
+  ValidateModelInstanceV1ModelInstancesTestPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ValidateModelInstanceV1ModelInstancesTestPostResponses,
+    ValidateModelInstanceV1ModelInstancesTestPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-instances/test",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Model Instance
+ *
+ * Delete a model instance.
+ */
+export const deleteModelInstanceV1ModelInstancesInstanceIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses,
+  DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    DeleteRegistryV1RegistriesRegistryIdDeleteResponses,
-    DeleteRegistryV1RegistriesRegistryIdDeleteErrors,
+    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses,
+    DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -7353,25 +4884,30 @@ export const deleteRegistryV1RegistriesRegistryIdDelete = <
         type: "http",
       },
     ],
-    url: "/v1/registries/{registry_id}",
+    url: "/v1/model-instances/{instance_id}",
     ...options,
   });
 
 /**
- * Get Registry
+ * Get Model Instance
+ *
+ * Get a specific model instance.
  */
-export const getRegistryV1RegistriesRegistryIdGet = <
+export const getModelInstanceV1ModelInstancesInstanceIdGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<GetRegistryV1RegistriesRegistryIdGetData, ThrowOnError>
+  options: Options<
+    GetModelInstanceV1ModelInstancesInstanceIdGetData,
+    ThrowOnError
+  >
 ): RequestResult<
-  GetRegistryV1RegistriesRegistryIdGetResponses,
-  GetRegistryV1RegistriesRegistryIdGetErrors,
+  GetModelInstanceV1ModelInstancesInstanceIdGetResponses,
+  GetModelInstanceV1ModelInstancesInstanceIdGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    GetRegistryV1RegistriesRegistryIdGetResponses,
-    GetRegistryV1RegistriesRegistryIdGetErrors,
+    GetModelInstanceV1ModelInstancesInstanceIdGetResponses,
+    GetModelInstanceV1ModelInstancesInstanceIdGetErrors,
     ThrowOnError
   >({
     security: [
@@ -7381,25 +4917,258 @@ export const getRegistryV1RegistriesRegistryIdGet = <
         type: "http",
       },
     ],
-    url: "/v1/registries/{registry_id}",
+    url: "/v1/model-instances/{instance_id}",
     ...options,
   });
 
 /**
- * Update Registry
+ * List Model Specs
+ *
+ * List model specifications with optional filtering.
  */
-export const updateRegistryV1RegistriesRegistryIdPatch = <
+export const listModelSpecsV1ModelSpecsGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<UpdateRegistryV1RegistriesRegistryIdPatchData, ThrowOnError>
+  options?: Options<ListModelSpecsV1ModelSpecsGetData, ThrowOnError>
 ): RequestResult<
-  UpdateRegistryV1RegistriesRegistryIdPatchResponses,
-  UpdateRegistryV1RegistriesRegistryIdPatchErrors,
+  ListModelSpecsV1ModelSpecsGetResponses,
+  ListModelSpecsV1ModelSpecsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListModelSpecsV1ModelSpecsGetResponses,
+    ListModelSpecsV1ModelSpecsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/",
+    ...options,
+  });
+
+/**
+ * Create Model Spec
+ *
+ * Create a new model specification.
+ */
+export const createModelSpecV1ModelSpecsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateModelSpecV1ModelSpecsPostData, ThrowOnError>
+): RequestResult<
+  CreateModelSpecV1ModelSpecsPostResponses,
+  CreateModelSpecV1ModelSpecsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateModelSpecV1ModelSpecsPostResponses,
+    CreateModelSpecV1ModelSpecsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Model Specs By Provider
+ *
+ * List all model specifications for a specific provider.
+ */
+export const listModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses,
+  ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses,
+    ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/by-provider/{provider_spec_id}",
+    ...options,
+  });
+
+/**
+ * Get Model Spec By Provider And Name
+ *
+ * Get a specific model specification by provider and model name.
+ */
+export const getModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses,
+    GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses,
+      GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/model-specs/by-provider/{provider_spec_id}/{model_name}",
+      ...options,
+    });
+
+/**
+ * Upsert Model Spec
+ *
+ * Create or update a model specification by provider and model name.
+ *
+ * This endpoint is useful for bulk operations and bootstrapping.
+ */
+export const upsertModelSpecV1ModelSpecsUpsertPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpsertModelSpecV1ModelSpecsUpsertPostData, ThrowOnError>
+): RequestResult<
+  UpsertModelSpecV1ModelSpecsUpsertPostResponses,
+  UpsertModelSpecV1ModelSpecsUpsertPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UpsertModelSpecV1ModelSpecsUpsertPostResponses,
+    UpsertModelSpecV1ModelSpecsUpsertPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/upsert",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Model Spec
+ *
+ * Delete a model specification.
+ */
+export const deleteModelSpecV1ModelSpecsModelSpecIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses,
+  DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses,
+    DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/{model_spec_id}",
+    ...options,
+  });
+
+/**
+ * Get Model Spec
+ *
+ * Get a specific model specification by ID.
+ */
+export const getModelSpecV1ModelSpecsModelSpecIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetModelSpecV1ModelSpecsModelSpecIdGetData, ThrowOnError>
+): RequestResult<
+  GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
+  GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
+    GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/model-specs/{model_spec_id}",
+    ...options,
+  });
+
+/**
+ * Update Model Spec
+ *
+ * Update a model specification.
+ */
+export const updateModelSpecV1ModelSpecsModelSpecIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateModelSpecV1ModelSpecsModelSpecIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses,
+  UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors,
   ThrowOnError
 > =>
   (options.client ?? client).patch<
-    UpdateRegistryV1RegistriesRegistryIdPatchResponses,
-    UpdateRegistryV1RegistriesRegistryIdPatchErrors,
+    UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses,
+    UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors,
     ThrowOnError
   >({
     security: [
@@ -7409,7 +5178,7 @@ export const updateRegistryV1RegistriesRegistryIdPatch = <
         type: "http",
       },
     ],
-    url: "/v1/registries/{registry_id}",
+    url: "/v1/model-specs/{model_spec_id}",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -7418,117 +5187,29 @@ export const updateRegistryV1RegistriesRegistryIdPatch = <
   });
 
 /**
- * Sync Registry
+ * Get Network Topology
  *
- * Sync: fetch source, auto-create entities for new items, flag version updates.
- */
-export const syncRegistryV1RegistriesRegistryIdSyncPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<SyncRegistryV1RegistriesRegistryIdSyncPostData, ThrowOnError>
-): RequestResult<
-  SyncRegistryV1RegistriesRegistryIdSyncPostResponses,
-  SyncRegistryV1RegistriesRegistryIdSyncPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    SyncRegistryV1RegistriesRegistryIdSyncPostResponses,
-    SyncRegistryV1RegistriesRegistryIdSyncPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/registries/{registry_id}/sync",
-    ...options,
-  });
-
-/**
- * List Registry Items
- */
-export const listRegistryItemsV1RegistriesRegistryIdItemsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ListRegistryItemsV1RegistriesRegistryIdItemsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses,
-  ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses,
-    ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/registries/{registry_id}/items",
-    ...options,
-  });
-
-/**
- * Get Catalog Item
- */
-export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
-  GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
-    GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/registries/catalog/items/{item_id}",
-    ...options,
-  });
-
-/**
- * Update Item Spec
+ * Get the full network topology for the current workspace.
  *
- * Apply the latest registry version to this item's entity.
+ * Returns all agents, skills, MCP instances, and triggers as nodes,
+ * with edges representing their relationships.
+ *
+ * Each entity type is fetched in its own DB session so the four queries
+ * can run concurrently via ``asyncio.gather`` without sharing a single
+ * async session (which is not safe for concurrent use).
  */
-export const updateItemSpecV1RegistriesCatalogItemsItemIdUpdatePost = <
+export const getNetworkTopologyV1NetworkTopologyGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<
-    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData,
-    ThrowOnError
-  >
+  options?: Options<GetNetworkTopologyV1NetworkTopologyGetData, ThrowOnError>
 ): RequestResult<
-  UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses,
-  UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors,
+  GetNetworkTopologyV1NetworkTopologyGetResponses,
+  unknown,
   ThrowOnError
 > =>
-  (options.client ?? client).post<
-    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses,
-    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors,
+  (options?.client ?? client).get<
+    GetNetworkTopologyV1NetworkTopologyGetResponses,
+    unknown,
     ThrowOnError
   >({
     security: [
@@ -7538,80 +5219,8 @@ export const updateItemSpecV1RegistriesCatalogItemsItemIdUpdatePost = <
         type: "http",
       },
     ],
-    url: "/v1/registries/catalog/items/{item_id}/update",
+    url: "/v1/network/topology",
     ...options,
-  });
-
-/**
- * Update All Specs
- *
- * Bulk-update all items with pending version updates.
- */
-export const updateAllSpecsV1RegistriesRegistryIdUpdateAllPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
-  UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
-    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/registries/{registry_id}/update-all",
-    ...options,
-  });
-
-/**
- * Preview Spec
- *
- * Fetch/parse an OpenAPI spec and return metadata + tools without creating a connection.
- *
- * The service dependency ensures authentication is enforced.
- */
-export const previewSpecV1OpenapiConnectionsPreviewSpecPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PreviewSpecV1OpenapiConnectionsPreviewSpecPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
-  PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
-    PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/openapi-connections/preview-spec",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 
 /**
@@ -7667,6 +5276,45 @@ export const createConnectionV1OpenapiConnectionsPost = <
       },
     ],
     url: "/v1/openapi-connections/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Preview Spec
+ *
+ * Fetch/parse an OpenAPI spec and return metadata + tools without creating a connection.
+ *
+ * The service dependency ensures authentication is enforced.
+ */
+export const previewSpecV1OpenapiConnectionsPreviewSpecPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PreviewSpecV1OpenapiConnectionsPreviewSpecPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
+  PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
+    PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/openapi-connections/preview-spec",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -7803,29 +5451,22 @@ export const discoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPost = <
   });
 
 /**
- * Get Network Topology
+ * List Policy Rules
  *
- * Get the full network topology for the current workspace.
- *
- * Returns all agents, skills, MCP instances, and triggers as nodes,
- * with edges representing their relationships.
- *
- * Each entity type is fetched in its own DB session so the four queries
- * can run concurrently via ``asyncio.gather`` without sharing a single
- * async session (which is not safe for concurrent use).
+ * List policy rules in the current workspace.
  */
-export const getNetworkTopologyV1NetworkTopologyGet = <
+export const listPolicyRulesV1PoliciesGet = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<GetNetworkTopologyV1NetworkTopologyGetData, ThrowOnError>
+  options?: Options<ListPolicyRulesV1PoliciesGetData, ThrowOnError>
 ): RequestResult<
-  GetNetworkTopologyV1NetworkTopologyGetResponses,
-  unknown,
+  ListPolicyRulesV1PoliciesGetResponses,
+  ListPolicyRulesV1PoliciesGetErrors,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    GetNetworkTopologyV1NetworkTopologyGetResponses,
-    unknown,
+    ListPolicyRulesV1PoliciesGetResponses,
+    ListPolicyRulesV1PoliciesGetErrors,
     ThrowOnError
   >({
     security: [
@@ -7835,8 +5476,136 @@ export const getNetworkTopologyV1NetworkTopologyGet = <
         type: "http",
       },
     ],
-    url: "/v1/network/topology",
+    url: "/v1/policies",
     ...options,
+  });
+
+/**
+ * Create Policy Rule
+ *
+ * Create a policy rule in the current workspace.
+ */
+export const createPolicyRuleV1PoliciesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreatePolicyRuleV1PoliciesPostData, ThrowOnError>
+): RequestResult<
+  CreatePolicyRuleV1PoliciesPostResponses,
+  CreatePolicyRuleV1PoliciesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreatePolicyRuleV1PoliciesPostResponses,
+    CreatePolicyRuleV1PoliciesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/policies",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Policy Rule
+ *
+ * Delete a policy rule.
+ */
+export const deletePolicyRuleV1PoliciesRuleIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeletePolicyRuleV1PoliciesRuleIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
+  DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
+    DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/policies/{rule_id}",
+    ...options,
+  });
+
+/**
+ * Get Policy Rule
+ *
+ * Read one policy rule in the current workspace.
+ */
+export const getPolicyRuleV1PoliciesRuleIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetPolicyRuleV1PoliciesRuleIdGetData, ThrowOnError>
+): RequestResult<
+  GetPolicyRuleV1PoliciesRuleIdGetResponses,
+  GetPolicyRuleV1PoliciesRuleIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetPolicyRuleV1PoliciesRuleIdGetResponses,
+    GetPolicyRuleV1PoliciesRuleIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/policies/{rule_id}",
+    ...options,
+  });
+
+/**
+ * Update Policy Rule
+ *
+ * Partially update a policy rule.
+ */
+export const updatePolicyRuleV1PoliciesRuleIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdatePolicyRuleV1PoliciesRuleIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
+  UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
+    UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/policies/{rule_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -7994,145 +5763,6 @@ export const updateProjectV1ProjectsProjectIdPatch = <
       ...options.headers,
     },
   });
-
-/**
- * Add Skill To Project
- *
- * Add a skill to a project.
- */
-export const addSkillToProjectV1ProjectsProjectIdSkillsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    AddSkillToProjectV1ProjectsProjectIdSkillsPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses,
-  AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses,
-    AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/projects/{project_id}/skills",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Remove Skill From Project
- *
- * Remove a skill from a project.
- */
-export const removeSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses,
-  RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses,
-    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/projects/{project_id}/skills/{skill_id}",
-    ...options,
-  });
-
-/**
- * Add Mcp Instance To Project
- *
- * Add an MCP server instance to a project.
- */
-export const addMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
-  AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
-    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/projects/{project_id}/mcp-instances",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Remove Mcp Instance From Project
- *
- * Remove an MCP server instance from a project.
- */
-export const removeMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDelete =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses,
-    RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).delete<
-      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses,
-      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors,
-      ThrowOnError
-    >({
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}",
-      ...options,
-    });
 
 /**
  * Add Agent To Project
@@ -8375,167 +6005,25 @@ export const downloadProjectFileV1ProjectsProjectIdFilesFilePathGet = <
   });
 
 /**
- * List Clients
+ * Add Mcp Instance To Project
+ *
+ * Add an MCP server instance to a project.
  */
-export const listClientsV1ClientsGet = <ThrowOnError extends boolean = false>(
-  options?: Options<ListClientsV1ClientsGetData, ThrowOnError>
-): RequestResult<
-  ListClientsV1ClientsGetResponses,
-  ListClientsV1ClientsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListClientsV1ClientsGetResponses,
-    ListClientsV1ClientsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/",
-    ...options,
-  });
-
-/**
- * Create Client
- */
-export const createClientV1ClientsPost = <ThrowOnError extends boolean = false>(
-  options: Options<CreateClientV1ClientsPostData, ThrowOnError>
-): RequestResult<
-  CreateClientV1ClientsPostResponses,
-  CreateClientV1ClientsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateClientV1ClientsPostResponses,
-    CreateClientV1ClientsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Client
- */
-export const deleteClientV1ClientsClientIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeleteClientV1ClientsClientIdDeleteData, ThrowOnError>
-): RequestResult<
-  DeleteClientV1ClientsClientIdDeleteResponses,
-  DeleteClientV1ClientsClientIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteClientV1ClientsClientIdDeleteResponses,
-    DeleteClientV1ClientsClientIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}",
-    ...options,
-  });
-
-/**
- * Get Client
- */
-export const getClientV1ClientsClientIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetClientV1ClientsClientIdGetData, ThrowOnError>
-): RequestResult<
-  GetClientV1ClientsClientIdGetResponses,
-  GetClientV1ClientsClientIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetClientV1ClientsClientIdGetResponses,
-    GetClientV1ClientsClientIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}",
-    ...options,
-  });
-
-/**
- * Update Client
- */
-export const updateClientV1ClientsClientIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpdateClientV1ClientsClientIdPatchData, ThrowOnError>
-): RequestResult<
-  UpdateClientV1ClientsClientIdPatchResponses,
-  UpdateClientV1ClientsClientIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    UpdateClientV1ClientsClientIdPatchResponses,
-    UpdateClientV1ClientsClientIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Add Skill To Client
- */
-export const addSkillToClientV1ClientsClientIdSkillsPost = <
+export const addMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    AddSkillToClientV1ClientsClientIdSkillsPostData,
+    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData,
     ThrowOnError
   >
 ): RequestResult<
-  AddSkillToClientV1ClientsClientIdSkillsPostResponses,
-  AddSkillToClientV1ClientsClientIdSkillsPostErrors,
+  AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
+  AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    AddSkillToClientV1ClientsClientIdSkillsPostResponses,
-    AddSkillToClientV1ClientsClientIdSkillsPostErrors,
+    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
+    AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
     ThrowOnError
   >({
     security: [
@@ -8545,7 +6033,7 @@ export const addSkillToClientV1ClientsClientIdSkillsPost = <
         type: "http",
       },
     ],
-    url: "/v1/clients/{client_id}/skills",
+    url: "/v1/projects/{project_id}/mcp-instances",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -8554,88 +6042,24 @@ export const addSkillToClientV1ClientsClientIdSkillsPost = <
   });
 
 /**
- * Remove Skill From Client
+ * Remove Mcp Instance From Project
+ *
+ * Remove an MCP server instance from a project.
  */
-export const removeSkillFromClientV1ClientsClientIdSkillsSkillIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteData,
-    ThrowOnError
-  >
-): RequestResult<
-  RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses,
-  RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses,
-    RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}/skills/{skill_id}",
-    ...options,
-  });
-
-/**
- * Add Mcp Instance To Client
- */
-export const addMcpInstanceToClientV1ClientsClientIdMcpInstancesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses,
-  AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses,
-    AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}/mcp-instances",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Remove Mcp Instance From Client
- */
-export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDelete =
+export const removeMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDelete =
   <ThrowOnError extends boolean = false>(
     options: Options<
-      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteData,
+      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteData,
       ThrowOnError
     >
   ): RequestResult<
-    RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses,
-    RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors,
+    RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses,
+    RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors,
     ThrowOnError
   > =>
     (options.client ?? client).delete<
-      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses,
-      RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors,
+      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses,
+      RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors,
       ThrowOnError
     >({
       security: [
@@ -8645,28 +6069,30 @@ export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstance
           type: "http",
         },
       ],
-      url: "/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}",
+      url: "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}",
       ...options,
     });
 
 /**
- * Pull From Project
+ * Add Skill To Project
+ *
+ * Add a skill to a project.
  */
-export const pullFromProjectV1ClientsClientIdPullFromProjectPost = <
+export const addSkillToProjectV1ProjectsProjectIdSkillsPost = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    PullFromProjectV1ClientsClientIdPullFromProjectPostData,
+    AddSkillToProjectV1ProjectsProjectIdSkillsPostData,
     ThrowOnError
   >
 ): RequestResult<
-  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
-  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
+  AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses,
+  AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
-    PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
+    AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses,
+    AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors,
     ThrowOnError
   >({
     security: [
@@ -8676,7 +6102,7 @@ export const pullFromProjectV1ClientsClientIdPullFromProjectPost = <
         type: "http",
       },
     ],
-    url: "/v1/clients/{client_id}/pull-from-project",
+    url: "/v1/projects/{project_id}/skills",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -8685,22 +6111,25 @@ export const pullFromProjectV1ClientsClientIdPullFromProjectPost = <
   });
 
 /**
- * List Audit Logs
+ * Remove Skill From Project
  *
- * List audit events for the current workspace.
+ * Remove a skill from a project.
  */
-export const listAuditLogsV1AuditLogsGet = <
+export const removeSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDelete = <
   ThrowOnError extends boolean = false,
 >(
-  options?: Options<ListAuditLogsV1AuditLogsGetData, ThrowOnError>
+  options: Options<
+    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteData,
+    ThrowOnError
+  >
 ): RequestResult<
-  ListAuditLogsV1AuditLogsGetResponses,
-  ListAuditLogsV1AuditLogsGetErrors,
+  RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses,
+  RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors,
   ThrowOnError
 > =>
-  (options?.client ?? client).get<
-    ListAuditLogsV1AuditLogsGetResponses,
-    ListAuditLogsV1AuditLogsGetErrors,
+  (options.client ?? client).delete<
+    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses,
+    RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors,
     ThrowOnError
   >({
     security: [
@@ -8710,7 +6139,2412 @@ export const listAuditLogsV1AuditLogsGet = <
         type: "http",
       },
     ],
-    url: "/v1/audit-logs/",
+    url: "/v1/projects/{project_id}/skills/{skill_id}",
+    ...options,
+  });
+
+/**
+ * List Provider Configs
+ *
+ * List provider configurations.
+ */
+export const listProviderConfigsV1ProviderConfigsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListProviderConfigsV1ProviderConfigsGetData, ThrowOnError>
+): RequestResult<
+  ListProviderConfigsV1ProviderConfigsGetResponses,
+  ListProviderConfigsV1ProviderConfigsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListProviderConfigsV1ProviderConfigsGetResponses,
+    ListProviderConfigsV1ProviderConfigsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/",
+    ...options,
+  });
+
+/**
+ * Create Provider Config
+ *
+ * Create a new provider configuration.
+ */
+export const createProviderConfigV1ProviderConfigsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateProviderConfigV1ProviderConfigsPostData, ThrowOnError>
+): RequestResult<
+  CreateProviderConfigV1ProviderConfigsPostResponses,
+  CreateProviderConfigV1ProviderConfigsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateProviderConfigV1ProviderConfigsPostResponses,
+    CreateProviderConfigV1ProviderConfigsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Provider Logo
+ *
+ * Get provider logo via admin route pattern.
+ */
+export const getProviderLogoV1ProviderConfigsAdminProviderKeyLogoGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses,
+  GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses,
+    GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/admin/{provider_key}/logo",
+    ...options,
+  });
+
+/**
+ * Discover Models Preview
+ *
+ * Discover models from a provider API using the provided API key, without requiring a saved config.
+ */
+export const discoverModelsPreviewV1ProviderConfigsDiscoverPreviewPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses,
+  DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses,
+    DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/discover-preview",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Provider Configs With Instances
+ *
+ * List provider configurations with their model instances.
+ */
+export const listProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGet =
+  <ThrowOnError extends boolean = false>(
+    options?: Options<
+      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses,
+    ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors,
+    ThrowOnError
+  > =>
+    (options?.client ?? client).get<
+      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses,
+      ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/provider-configs/with-instances",
+      ...options,
+    });
+
+/**
+ * Delete Provider Config
+ *
+ * Delete a provider configuration.
+ */
+export const deleteProviderConfigV1ProviderConfigsConfigIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses,
+  DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses,
+    DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/{config_id}",
+    ...options,
+  });
+
+/**
+ * Get Provider Config
+ *
+ * Get a specific provider configuration.
+ */
+export const getProviderConfigV1ProviderConfigsConfigIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetProviderConfigV1ProviderConfigsConfigIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetProviderConfigV1ProviderConfigsConfigIdGetResponses,
+  GetProviderConfigV1ProviderConfigsConfigIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetProviderConfigV1ProviderConfigsConfigIdGetResponses,
+    GetProviderConfigV1ProviderConfigsConfigIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/{config_id}",
+    ...options,
+  });
+
+/**
+ * Patch Provider Config
+ *
+ * Partially update a provider configuration.
+ */
+export const patchProviderConfigV1ProviderConfigsConfigIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    PatchProviderConfigV1ProviderConfigsConfigIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses,
+  PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses,
+    PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/{config_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Update Provider Config
+ *
+ * Update a provider configuration (full replace via PUT).
+ */
+export const updateProviderConfigV1ProviderConfigsConfigIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateProviderConfigV1ProviderConfigsConfigIdPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses,
+  UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses,
+    UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/{config_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Discover Models
+ *
+ * Discover available models from the provider API and sync to model specs.
+ */
+export const discoverModelsV1ProviderConfigsConfigIdDiscoverPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses,
+  DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses,
+    DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-configs/{config_id}/discover",
+    ...options,
+  });
+
+/**
+ * List Provider Specs
+ *
+ * List all provider specifications.
+ */
+export const listProviderSpecsV1ProviderSpecsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListProviderSpecsV1ProviderSpecsGetData, ThrowOnError>
+): RequestResult<
+  ListProviderSpecsV1ProviderSpecsGetResponses,
+  ListProviderSpecsV1ProviderSpecsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListProviderSpecsV1ProviderSpecsGetResponses,
+    ListProviderSpecsV1ProviderSpecsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-specs/",
+    ...options,
+  });
+
+/**
+ * Get Provider Spec By Key
+ *
+ * Get a provider specification by its key (e.g., 'openai', 'anthropic').
+ */
+export const getProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses,
+  GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses,
+    GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-specs/by-key/{provider_key}",
+    ...options,
+  });
+
+/**
+ * List Provider Specs With Models
+ *
+ * List all provider specifications with their available models.
+ */
+export const listProviderSpecsWithModelsV1ProviderSpecsWithModelsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses,
+  ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses,
+    ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-specs/with-models",
+    ...options,
+  });
+
+/**
+ * Get Provider Spec
+ *
+ * Get a specific provider specification with its models.
+ */
+export const getProviderSpecV1ProviderSpecsProviderSpecIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetProviderSpecV1ProviderSpecsProviderSpecIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses,
+  GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses,
+    GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/provider-specs/{provider_spec_id}",
+    ...options,
+  });
+
+/**
+ * List Registries
+ */
+export const listRegistriesV1RegistriesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListRegistriesV1RegistriesGetData, ThrowOnError>
+): RequestResult<
+  ListRegistriesV1RegistriesGetResponses,
+  ListRegistriesV1RegistriesGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListRegistriesV1RegistriesGetResponses,
+    ListRegistriesV1RegistriesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/",
+    ...options,
+  });
+
+/**
+ * Create Registry
+ */
+export const createRegistryV1RegistriesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateRegistryV1RegistriesPostData, ThrowOnError>
+): RequestResult<
+  CreateRegistryV1RegistriesPostResponses,
+  CreateRegistryV1RegistriesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateRegistryV1RegistriesPostResponses,
+    CreateRegistryV1RegistriesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Catalog Item
+ */
+export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
+  GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
+    GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}",
+    ...options,
+  });
+
+/**
+ * Update Item Spec
+ *
+ * Apply the latest registry version to this item's entity.
+ */
+export const updateItemSpecV1RegistriesCatalogItemsItemIdUpdatePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses,
+  UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses,
+    UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}/update",
+    ...options,
+  });
+
+/**
+ * Search Catalog
+ *
+ * Search across all registry catalogs in the workspace.
+ */
+export const searchCatalogV1RegistriesCatalogSearchGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<SearchCatalogV1RegistriesCatalogSearchGetData, ThrowOnError>
+): RequestResult<
+  SearchCatalogV1RegistriesCatalogSearchGetResponses,
+  SearchCatalogV1RegistriesCatalogSearchGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    SearchCatalogV1RegistriesCatalogSearchGetResponses,
+    SearchCatalogV1RegistriesCatalogSearchGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/search",
+    ...options,
+  });
+
+/**
+ * Delete Registry
+ */
+export const deleteRegistryV1RegistriesRegistryIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteRegistryV1RegistriesRegistryIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteRegistryV1RegistriesRegistryIdDeleteResponses,
+  DeleteRegistryV1RegistriesRegistryIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteRegistryV1RegistriesRegistryIdDeleteResponses,
+    DeleteRegistryV1RegistriesRegistryIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}",
+    ...options,
+  });
+
+/**
+ * Get Registry
+ */
+export const getRegistryV1RegistriesRegistryIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetRegistryV1RegistriesRegistryIdGetData, ThrowOnError>
+): RequestResult<
+  GetRegistryV1RegistriesRegistryIdGetResponses,
+  GetRegistryV1RegistriesRegistryIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetRegistryV1RegistriesRegistryIdGetResponses,
+    GetRegistryV1RegistriesRegistryIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}",
+    ...options,
+  });
+
+/**
+ * Update Registry
+ */
+export const updateRegistryV1RegistriesRegistryIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateRegistryV1RegistriesRegistryIdPatchData, ThrowOnError>
+): RequestResult<
+  UpdateRegistryV1RegistriesRegistryIdPatchResponses,
+  UpdateRegistryV1RegistriesRegistryIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateRegistryV1RegistriesRegistryIdPatchResponses,
+    UpdateRegistryV1RegistriesRegistryIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Registry Items
+ */
+export const listRegistryItemsV1RegistriesRegistryIdItemsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListRegistryItemsV1RegistriesRegistryIdItemsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses,
+  ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses,
+    ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}/items",
+    ...options,
+  });
+
+/**
+ * Sync Registry
+ *
+ * Sync: fetch source, auto-create entities for new items, flag version updates.
+ */
+export const syncRegistryV1RegistriesRegistryIdSyncPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<SyncRegistryV1RegistriesRegistryIdSyncPostData, ThrowOnError>
+): RequestResult<
+  SyncRegistryV1RegistriesRegistryIdSyncPostResponses,
+  SyncRegistryV1RegistriesRegistryIdSyncPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    SyncRegistryV1RegistriesRegistryIdSyncPostResponses,
+    SyncRegistryV1RegistriesRegistryIdSyncPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}/sync",
+    ...options,
+  });
+
+/**
+ * Update All Specs
+ *
+ * Bulk-update all items with pending version updates.
+ */
+export const updateAllSpecsV1RegistriesRegistryIdUpdateAllPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
+  UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
+    UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}/update-all",
+    ...options,
+  });
+
+/**
+ * List Collections
+ *
+ * List collections in the current workspace with skill counts.
+ */
+export const listCollectionsV1SkillCollectionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListCollectionsV1SkillCollectionsGetData, ThrowOnError>
+): RequestResult<
+  ListCollectionsV1SkillCollectionsGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListCollectionsV1SkillCollectionsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/",
+    ...options,
+  });
+
+/**
+ * Create Collection
+ *
+ * Create a new collection in the current workspace.
+ */
+export const createCollectionV1SkillCollectionsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateCollectionV1SkillCollectionsPostData, ThrowOnError>
+): RequestResult<
+  CreateCollectionV1SkillCollectionsPostResponses,
+  CreateCollectionV1SkillCollectionsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateCollectionV1SkillCollectionsPostResponses,
+    CreateCollectionV1SkillCollectionsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Collection
+ *
+ * Delete a collection from the current workspace.
+ */
+export const deleteCollectionV1SkillCollectionsCollectionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteCollectionV1SkillCollectionsCollectionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses,
+  DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses,
+    DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/{collection_id}",
+    ...options,
+  });
+
+/**
+ * Get Collection
+ *
+ * Read one collection with its skills.
+ */
+export const getCollectionV1SkillCollectionsCollectionIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetCollectionV1SkillCollectionsCollectionIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetCollectionV1SkillCollectionsCollectionIdGetResponses,
+  GetCollectionV1SkillCollectionsCollectionIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetCollectionV1SkillCollectionsCollectionIdGetResponses,
+    GetCollectionV1SkillCollectionsCollectionIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/{collection_id}",
+    ...options,
+  });
+
+/**
+ * Update Collection
+ *
+ * Update a collection's name and/or description.
+ */
+export const updateCollectionV1SkillCollectionsCollectionIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateCollectionV1SkillCollectionsCollectionIdPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateCollectionV1SkillCollectionsCollectionIdPutResponses,
+  UpdateCollectionV1SkillCollectionsCollectionIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateCollectionV1SkillCollectionsCollectionIdPutResponses,
+    UpdateCollectionV1SkillCollectionsCollectionIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/{collection_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Skill To Collection
+ *
+ * Add a skill to a collection and mirror the membership into the graph.
+ */
+export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses,
+  AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses,
+    AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skill-collections/{collection_id}/skills",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Skill From Collection
+ *
+ * Remove a skill from a collection and delete the graph membership.
+ */
+export const removeSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDelete =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses,
+    RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).delete<
+      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses,
+      RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/skill-collections/{collection_id}/skills/{skill_id}",
+      ...options,
+    });
+
+/**
+ * List Skills
+ *
+ * List skills in the workspace.
+ */
+export const listSkillsV1SkillsGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListSkillsV1SkillsGetData, ThrowOnError>
+): RequestResult<
+  ListSkillsV1SkillsGetResponses,
+  ListSkillsV1SkillsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListSkillsV1SkillsGetResponses,
+    ListSkillsV1SkillsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills",
+    ...options,
+  });
+
+/**
+ * Create Skill
+ *
+ * Create a new skill from content or GitHub URL.
+ */
+export const createSkillV1SkillsPost = <ThrowOnError extends boolean = false>(
+  options: Options<CreateSkillV1SkillsPostData, ThrowOnError>
+): RequestResult<
+  CreateSkillV1SkillsPostResponses,
+  CreateSkillV1SkillsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateSkillV1SkillsPostResponses,
+    CreateSkillV1SkillsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Upload Skill
+ *
+ * Upload a skill package as a ZIP file.
+ */
+export const uploadSkillV1SkillsUploadPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UploadSkillV1SkillsUploadPostData, ThrowOnError>
+): RequestResult<
+  UploadSkillV1SkillsUploadPostResponses,
+  UploadSkillV1SkillsUploadPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UploadSkillV1SkillsUploadPostResponses,
+    UploadSkillV1SkillsUploadPostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/upload",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Skill
+ *
+ * Delete a skill.
+ */
+export const deleteSkillV1SkillsSkillIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteSkillV1SkillsSkillIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteSkillV1SkillsSkillIdDeleteResponses,
+  DeleteSkillV1SkillsSkillIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteSkillV1SkillsSkillIdDeleteResponses,
+    DeleteSkillV1SkillsSkillIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}",
+    ...options,
+  });
+
+/**
+ * Get Skill
+ *
+ * Get a skill by ID (tenant or catalog).
+ */
+export const getSkillV1SkillsSkillIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetSkillV1SkillsSkillIdGetData, ThrowOnError>
+): RequestResult<
+  GetSkillV1SkillsSkillIdGetResponses,
+  GetSkillV1SkillsSkillIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetSkillV1SkillsSkillIdGetResponses,
+    GetSkillV1SkillsSkillIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}",
+    ...options,
+  });
+
+/**
+ * Update Skill
+ *
+ * Update a skill.
+ */
+export const updateSkillV1SkillsSkillIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateSkillV1SkillsSkillIdPutData, ThrowOnError>
+): RequestResult<
+  UpdateSkillV1SkillsSkillIdPutResponses,
+  UpdateSkillV1SkillsSkillIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateSkillV1SkillsSkillIdPutResponses,
+    UpdateSkillV1SkillsSkillIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Skill Content
+ *
+ * Get the main markdown content of a skill (tenant or catalog).
+ */
+export const getSkillContentV1SkillsSkillIdContentGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetSkillContentV1SkillsSkillIdContentGetData, ThrowOnError>
+): RequestResult<
+  GetSkillContentV1SkillsSkillIdContentGetResponses,
+  GetSkillContentV1SkillsSkillIdContentGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetSkillContentV1SkillsSkillIdContentGetResponses,
+    GetSkillContentV1SkillsSkillIdContentGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/content",
+    ...options,
+  });
+
+/**
+ * List Skill Files
+ *
+ * List all files in a skill package.
+ */
+export const listSkillFilesV1SkillsSkillIdFilesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListSkillFilesV1SkillsSkillIdFilesGetData, ThrowOnError>
+): RequestResult<
+  ListSkillFilesV1SkillsSkillIdFilesGetResponses,
+  ListSkillFilesV1SkillsSkillIdFilesGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListSkillFilesV1SkillsSkillIdFilesGetResponses,
+    ListSkillFilesV1SkillsSkillIdFilesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/files",
+    ...options,
+  });
+
+/**
+ * Get Skill File
+ *
+ * Get a file from a skill package.
+ *
+ * By default, returns a redirect to a presigned URL.
+ * Set redirect=false to get the presigned URL in the response body.
+ */
+export const getSkillFileV1SkillsSkillIdFilesPathGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetSkillFileV1SkillsSkillIdFilesPathGetData, ThrowOnError>
+): RequestResult<
+  GetSkillFileV1SkillsSkillIdFilesPathGetResponses,
+  GetSkillFileV1SkillsSkillIdFilesPathGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetSkillFileV1SkillsSkillIdFilesPathGetResponses,
+    GetSkillFileV1SkillsSkillIdFilesPathGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/files/{path}",
+    ...options,
+  });
+
+/**
+ * Flatten Skill Members
+ *
+ * Return child skill IDs in topological execution order.
+ */
+export const flattenSkillMembersV1SkillsSkillIdFlattenGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    FlattenSkillMembersV1SkillsSkillIdFlattenGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses,
+  FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses,
+    FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/flatten",
+    ...options,
+  });
+
+/**
+ * Install Skill
+ *
+ * Add a built-in catalog skill to the workspace.
+ */
+export const installSkillV1SkillsSkillIdInstallPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<InstallSkillV1SkillsSkillIdInstallPostData, ThrowOnError>
+): RequestResult<
+  InstallSkillV1SkillsSkillIdInstallPostResponses,
+  InstallSkillV1SkillsSkillIdInstallPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    InstallSkillV1SkillsSkillIdInstallPostResponses,
+    InstallSkillV1SkillsSkillIdInstallPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/install",
+    ...options,
+  });
+
+/**
+ * List Skill Members
+ *
+ * List all child skills of a parent skill bundle.
+ */
+export const listSkillMembersV1SkillsSkillIdMembersGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ListSkillMembersV1SkillsSkillIdMembersGetData, ThrowOnError>
+): RequestResult<
+  ListSkillMembersV1SkillsSkillIdMembersGetResponses,
+  ListSkillMembersV1SkillsSkillIdMembersGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListSkillMembersV1SkillsSkillIdMembersGetResponses,
+    ListSkillMembersV1SkillsSkillIdMembersGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/members",
+    ...options,
+  });
+
+/**
+ * Add Skill Member
+ *
+ * Add a child skill to a parent skill bundle.
+ */
+export const addSkillMemberV1SkillsSkillIdMembersPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<AddSkillMemberV1SkillsSkillIdMembersPostData, ThrowOnError>
+): RequestResult<
+  AddSkillMemberV1SkillsSkillIdMembersPostResponses,
+  AddSkillMemberV1SkillsSkillIdMembersPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddSkillMemberV1SkillsSkillIdMembersPostResponses,
+    AddSkillMemberV1SkillsSkillIdMembersPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/members",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Skill Member
+ *
+ * Remove a child skill from a parent skill bundle.
+ */
+export const removeSkillMemberV1SkillsSkillIdMembersChildSkillIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses,
+  RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses,
+    RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/skills/{skill_id}/members/{child_skill_id}",
+    ...options,
+  });
+
+/**
+ * Get All Tasks
+ *
+ * Get all workspace tasks across all agents.
+ *
+ * Access Control:
+ * Returns all tasks within the current user's workspace (workspace isolation).
+ * All users in the same workspace can see all workspace tasks.
+ */
+export const getAllTasksV1TasksGet = <ThrowOnError extends boolean = false>(
+  options?: Options<GetAllTasksV1TasksGetData, ThrowOnError>
+): RequestResult<
+  GetAllTasksV1TasksGetResponses,
+  GetAllTasksV1TasksGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetAllTasksV1TasksGetResponses,
+    GetAllTasksV1TasksGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tasks/",
+    ...options,
+  });
+
+/**
+ * Get Task By Id
+ *
+ * Get a single task by ID across all agents.
+ */
+export const getTaskByIdV1TasksTaskIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetTaskByIdV1TasksTaskIdGetData, ThrowOnError>
+): RequestResult<
+  GetTaskByIdV1TasksTaskIdGetResponses,
+  GetTaskByIdV1TasksTaskIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTaskByIdV1TasksTaskIdGetResponses,
+    GetTaskByIdV1TasksTaskIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tasks/{task_id}",
+    ...options,
+  });
+
+/**
+ * Check Tool Access
+ *
+ * Check whether a user can call a tool.
+ *
+ * Omitting ``arguments`` checks a whole-tool grant. Passing ``arguments``
+ * checks the concrete invocation path used by runtime tool execution.
+ */
+export const checkToolAccessV1ToolAccessChecksPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CheckToolAccessV1ToolAccessChecksPostData, ThrowOnError>
+): RequestResult<
+  CheckToolAccessV1ToolAccessChecksPostResponses,
+  CheckToolAccessV1ToolAccessChecksPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CheckToolAccessV1ToolAccessChecksPostResponses,
+    CheckToolAccessV1ToolAccessChecksPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tool-access/checks",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revoke Tool Access
+ *
+ * Revoke a whole-tool or exact-arguments grant.
+ */
+export const revokeToolAccessV1ToolAccessGrantsDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RevokeToolAccessV1ToolAccessGrantsDeleteData, ThrowOnError>
+): RequestResult<
+  RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
+  RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
+    RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tool-access/grants",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Tool Access Grants
+ *
+ * List tool access grants in the configured graph backend.
+ */
+export const listToolAccessGrantsV1ToolAccessGrantsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListToolAccessGrantsV1ToolAccessGrantsGetData, ThrowOnError>
+): RequestResult<
+  ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tool-access/grants",
+    ...options,
+  });
+
+/**
+ * Grant Tool Access
+ *
+ * Grant a user access to a whole tool, or to an exact argument set.
+ */
+export const grantToolAccessV1ToolAccessGrantsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GrantToolAccessV1ToolAccessGrantsPostData, ThrowOnError>
+): RequestResult<
+  GrantToolAccessV1ToolAccessGrantsPostResponses,
+  GrantToolAccessV1ToolAccessGrantsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    GrantToolAccessV1ToolAccessGrantsPostResponses,
+    GrantToolAccessV1ToolAccessGrantsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/tool-access/grants",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Triggers
+ *
+ * List triggers with optional filtering.
+ *
+ * Returns a list of triggers that match the specified criteria. Supports
+ * filtering by agent ID, trigger type, and active status.
+ *
+ * Access Control:
+ * Returns all triggers within the current user's workspace (workspace isolation).
+ * All users in the same workspace can see all workspace triggers.
+ *
+ * Args:
+ * secret_manager: Injected secret manager (to resolve credential presence)
+ * agent_id: Optional agent ID filter
+ * trigger_type: Optional trigger type filter
+ * active_only: Whether to only return active triggers
+ * limit: Maximum number of triggers to return
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * List of triggers matching the criteria
+ */
+export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListTriggersV1TriggersGetData, ThrowOnError>
+): RequestResult<
+  ListTriggersV1TriggersGetResponses,
+  ListTriggersV1TriggersGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListTriggersV1TriggersGetResponses,
+    ListTriggersV1TriggersGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/",
+    ...options,
+  });
+
+/**
+ * Create Trigger
+ *
+ * Create a new trigger.
+ *
+ * Creates a new trigger with the specified configuration. The trigger will be
+ * validated and, if it's a cron trigger, automatically scheduled.
+ *
+ * If channel_credentials are provided, they are stored encrypted in the secret
+ * store under key ``channel_cred:{webhook_type}:{trigger_id}``.
+ *
+ * Args:
+ * payload: Trigger creation DTO (single source of truth shared with MCP toolset).
+ * user_context: Authentication context.
+ * trigger_service: Injected trigger service.
+ * secret_manager: Injected secret manager for credential storage.
+ *
+ * Returns:
+ * The created trigger.
+ *
+ * Raises:
+ * HTTPException: If validation fails or creation errors occur.
+ */
+export const createTriggerV1TriggersPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateTriggerV1TriggersPostData, ThrowOnError>
+): RequestResult<
+  CreateTriggerV1TriggersPostResponses,
+  CreateTriggerV1TriggersPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateTriggerV1TriggersPostResponses,
+    CreateTriggerV1TriggersPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Catalog
+ *
+ * Get the trigger catalog — available trigger types with metadata and events.
+ */
+export const getCatalogV1TriggersCatalogGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<GetCatalogV1TriggersCatalogGetData, ThrowOnError>
+): RequestResult<
+  GetCatalogV1TriggersCatalogGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetCatalogV1TriggersCatalogGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/catalog",
+    ...options,
+  });
+
+/**
+ * Get Channel Events
+ *
+ * Get supported event types for all channels.
+ * Returns a mapping of channel type to list of event types.
+ */
+export const getChannelEventsV1TriggersChannelsEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    GetChannelEventsV1TriggersChannelsEventsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetChannelEventsV1TriggersChannelsEventsGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetChannelEventsV1TriggersChannelsEventsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/channels/events",
+    ...options,
+  });
+
+/**
+ * Triggers Health Check
+ *
+ * Comprehensive health check endpoint for trigger system.
+ *
+ * Checks all trigger system components including:
+ * - Database connectivity
+ * - Temporal schedule manager
+ * - Webhook manager
+ * - Execution metrics
+ *
+ * Returns:
+ * Dictionary with detailed health status information
+ */
+export const triggersHealthCheckV1TriggersHealthGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<TriggersHealthCheckV1TriggersHealthGetData, ThrowOnError>
+): RequestResult<
+  TriggersHealthCheckV1TriggersHealthGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    TriggersHealthCheckV1TriggersHealthGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/health",
+    ...options,
+  });
+
+/**
+ * Delete Trigger
+ *
+ * Delete a trigger.
+ *
+ * Permanently deletes the specified trigger and all its execution history.
+ * If it's a cron trigger, the schedule will also be removed.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const deleteTriggerV1TriggersTriggerIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteTriggerV1TriggersTriggerIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteTriggerV1TriggersTriggerIdDeleteResponses,
+  DeleteTriggerV1TriggersTriggerIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteTriggerV1TriggersTriggerIdDeleteResponses,
+    DeleteTriggerV1TriggersTriggerIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}",
+    ...options,
+  });
+
+/**
+ * Get Trigger
+ *
+ * Get a specific trigger by ID.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * secret_manager: Injected secret manager (to resolve credential presence)
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * The trigger data
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const getTriggerV1TriggersTriggerIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetTriggerV1TriggersTriggerIdGetData, ThrowOnError>
+): RequestResult<
+  GetTriggerV1TriggersTriggerIdGetResponses,
+  GetTriggerV1TriggersTriggerIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTriggerV1TriggersTriggerIdGetResponses,
+    GetTriggerV1TriggersTriggerIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}",
+    ...options,
+  });
+
+/**
+ * Update Trigger
+ *
+ * Update an existing trigger.
+ *
+ * Updates the specified trigger with the provided data. Only non-null fields
+ * in the request will be updated. If channel_credentials are provided,
+ * they replace the existing credentials in the secret store.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger.
+ * payload: Trigger update DTO (single source of truth shared with MCP toolset).
+ * user_context: Authentication context.
+ * trigger_service: Injected trigger service.
+ * secret_manager: Injected secret manager for credential storage.
+ *
+ * Returns:
+ * The updated trigger.
+ *
+ * Raises:
+ * HTTPException: If trigger not found or validation fails.
+ */
+export const updateTriggerV1TriggersTriggerIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UpdateTriggerV1TriggersTriggerIdPutData, ThrowOnError>
+): RequestResult<
+  UpdateTriggerV1TriggersTriggerIdPutResponses,
+  UpdateTriggerV1TriggersTriggerIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateTriggerV1TriggersTriggerIdPutResponses,
+    UpdateTriggerV1TriggersTriggerIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Execution Correlations
+ *
+ * Get execution correlation data for a trigger.
+ *
+ * Returns execution data with correlation information to created tasks
+ * and workflows for debugging and monitoring purposes.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * page: Page number for pagination
+ * page_size: Number of executions per page
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Execution correlation data
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const getExecutionCorrelationsV1TriggersTriggerIdCorrelationsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses,
+  GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses,
+    GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/correlations",
+    ...options,
+  });
+
+/**
+ * Disable Trigger
+ *
+ * Disable a trigger.
+ *
+ * Disables the specified trigger, preventing it from executing.
+ * For cron triggers, this will pause the schedule.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Success status
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const disableTriggerV1TriggersTriggerIdDisablePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DisableTriggerV1TriggersTriggerIdDisablePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  DisableTriggerV1TriggersTriggerIdDisablePostResponses,
+  DisableTriggerV1TriggersTriggerIdDisablePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DisableTriggerV1TriggersTriggerIdDisablePostResponses,
+    DisableTriggerV1TriggersTriggerIdDisablePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/disable",
+    ...options,
+  });
+
+/**
+ * Enable Trigger
+ *
+ * Enable a trigger.
+ *
+ * Enables the specified trigger, allowing it to execute when conditions are met.
+ * For cron triggers, this will resume the schedule.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Success status
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const enableTriggerV1TriggersTriggerIdEnablePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<EnableTriggerV1TriggersTriggerIdEnablePostData, ThrowOnError>
+): RequestResult<
+  EnableTriggerV1TriggersTriggerIdEnablePostResponses,
+  EnableTriggerV1TriggersTriggerIdEnablePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    EnableTriggerV1TriggersTriggerIdEnablePostResponses,
+    EnableTriggerV1TriggersTriggerIdEnablePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/enable",
+    ...options,
+  });
+
+/**
+ * Execute Trigger
+ *
+ * Execute a trigger with the provided event data.
+ *
+ * Called by the Go event service when a polling channel receives new messages.
+ * Builds trigger data from the events and channel origin, then creates and
+ * submits a task for agent execution.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * request: Events and channel origin data
+ * http_request: Raw request, used to verify the internal service token
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Execution result with task ID
+ *
+ * Raises:
+ * HTTPException: If trigger not found or execution fails
+ */
+export const executeTriggerV1TriggersTriggerIdExecutePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ExecuteTriggerV1TriggersTriggerIdExecutePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ExecuteTriggerV1TriggersTriggerIdExecutePostResponses,
+  ExecuteTriggerV1TriggersTriggerIdExecutePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ExecuteTriggerV1TriggersTriggerIdExecutePostResponses,
+    ExecuteTriggerV1TriggersTriggerIdExecutePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/execute",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Execution History
+ *
+ * Get execution history for a trigger with filtering and pagination.
+ *
+ * Returns paginated execution history for the specified trigger, including
+ * success/failure status, execution times, and error messages. Supports
+ * filtering by status and time range.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * page: Page number for pagination
+ * page_size: Number of executions per page
+ * status: Optional status filter (success, failed, timeout)
+ * start_time: Optional start time filter
+ * end_time: Optional end time filter
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Paginated execution history
+ *
+ * Raises:
+ * HTTPException: If trigger not found or invalid parameters
+ */
+export const getExecutionHistoryV1TriggersTriggerIdExecutionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses,
+  GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses,
+    GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/executions",
+    ...options,
+  });
+
+/**
+ * Get Execution Metrics
+ *
+ * Get execution metrics for a trigger.
+ *
+ * Returns aggregated metrics including success rate, average execution time,
+ * and failure counts for the specified time period.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * hours: Time period in hours to analyze (default 24, max 168)
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Execution metrics for the trigger
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const getExecutionMetricsV1TriggersTriggerIdMetricsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetExecutionMetricsV1TriggersTriggerIdMetricsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses,
+  GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses,
+    GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/metrics",
+    ...options,
+  });
+
+/**
+ * Get Trigger Status
+ *
+ * Get trigger status and schedule information.
+ *
+ * Returns detailed status information about the trigger, including execution
+ * status, rate limiting, and schedule information for cron triggers.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Trigger status information
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const getTriggerStatusV1TriggersTriggerIdStatusGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetTriggerStatusV1TriggersTriggerIdStatusGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetTriggerStatusV1TriggersTriggerIdStatusGetResponses,
+  GetTriggerStatusV1TriggersTriggerIdStatusGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTriggerStatusV1TriggersTriggerIdStatusGetResponses,
+    GetTriggerStatusV1TriggersTriggerIdStatusGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/status",
+    ...options,
+  });
+
+/**
+ * Get Execution Timeline
+ *
+ * Get execution timeline for a trigger.
+ *
+ * Returns time-bucketed execution counts and success rates for visualization
+ * and trend analysis.
+ *
+ * Args:
+ * trigger_id: The unique identifier of the trigger
+ * hours: Time period in hours to analyze (default 24, max 168)
+ * bucket_size_minutes: Size of time buckets in minutes (default 60)
+ * user_context: Authentication context
+ * trigger_service: Injected trigger service
+ *
+ * Returns:
+ * Execution timeline data
+ *
+ * Raises:
+ * HTTPException: If trigger not found
+ */
+export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetExecutionTimelineV1TriggersTriggerIdTimelineGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses,
+  GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses,
+    GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/timeline",
     ...options,
   });
 
@@ -8742,6 +8576,161 @@ export const getDashboardV1WorkspaceDashboardGet = <
     ],
     url: "/v1/workspace/dashboard",
     ...options,
+  });
+
+/**
+ * Export Workspace Config
+ *
+ * Export current workspace configuration as YAML.
+ *
+ * This endpoint exports all workspace-scoped resources:
+ * - Agents (excluding system default agent)
+ * - MCP server instances
+ * - Provider configurations
+ *
+ * **Important Notes:**
+ * - Secrets (API keys, passwords) are replaced with placeholders
+ * - Built-in/catalog resources (carrying registry_item_id) are excluded
+ * - Only resources in the current workspace are exported
+ * - References to specs are included (server_spec_id, provider_spec_id)
+ *
+ * **Returns:**
+ * YAML file content that can be saved and later imported
+ */
+export const exportWorkspaceConfigV1WorkspaceExportGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ExportWorkspaceConfigV1WorkspaceExportGetData, ThrowOnError>
+): RequestResult<
+  ExportWorkspaceConfigV1WorkspaceExportGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ExportWorkspaceConfigV1WorkspaceExportGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspace/export",
+    ...options,
+  });
+
+/**
+ * Import Workspace Config
+ *
+ * Import workspace configuration from YAML.
+ *
+ * This endpoint creates agents, MCP instances, and provider configs
+ * in the current workspace based on the provided YAML configuration.
+ *
+ * **Important Notes:**
+ * - All resources are created in the current workspace
+ * - Secrets (API keys, passwords) must be provided as they cannot be exported
+ * - References to MCP servers and provider specs must exist in the system
+ * - Import is atomic - if any resource fails, all changes are rolled back
+ *
+ * **Example YAML:**
+ * ```yaml
+ * agents:
+ * - name: "My Assistant"
+ * description: "Helpful assistant"
+ * instruction: "You are a helpful AI assistant"
+ * tools:
+ * - type: code
+ * name: agentarea/math
+ * - type: mcp
+ * name: my-filesystem
+ * settings:
+ * allowed_tools: [read_file, write_file]
+ * planning: false
+ *
+ * mcp_instances:
+ * - name: "My Filesystem"
+ * description: "Local file access"
+ * server_spec_id: "a1b2c3d4-..."
+ * env_vars:
+ * FILESYSTEM_ROOT: "/workspace"
+ *
+ * provider_configs:
+ * - name: "My OpenAI"
+ * provider_spec_id: "932f3839-..."
+ * api_key_placeholder: "sk-..."
+ * ```
+ */
+export const importWorkspaceConfigV1WorkspaceImportPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<ImportWorkspaceConfigV1WorkspaceImportPostData, ThrowOnError>
+): RequestResult<
+  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
+  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ImportWorkspaceConfigV1WorkspaceImportPostResponses,
+    ImportWorkspaceConfigV1WorkspaceImportPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspace/import",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Import Workspace Config File
+ *
+ * Import workspace configuration from uploaded YAML file.
+ *
+ * Same as /import but accepts a file upload instead of raw YAML content.
+ */
+export const importWorkspaceConfigFileV1WorkspaceImportFilePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
+  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
+    ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspace/import/file",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
   });
 
 /**
@@ -8815,314 +8804,25 @@ export const updateWorkspaceSettingsV1WorkspaceSettingsPut = <
   });
 
 /**
- * Get Agent Overview
+ * List Workspaces
  *
- * Aggregate stats + upcoming work for one agent.
+ * List every workspace the current user can reach (personal + joined).
+ *
+ * Provisions the caller's personal workspace on first call, so a brand
+ * new user always gets at least one entry. Baseline governance policies are
+ * seeded by the workspace-creation hook (see ``get_workspace_service``).
  */
-export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
+export const listWorkspacesV1WorkspacesGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<GetAgentOverviewV1AgentsAgentIdOverviewGetData, ThrowOnError>
+  options?: Options<ListWorkspacesV1WorkspacesGetData, ThrowOnError>
 ): RequestResult<
-  GetAgentOverviewV1AgentsAgentIdOverviewGetResponses,
-  GetAgentOverviewV1AgentsAgentIdOverviewGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetAgentOverviewV1AgentsAgentIdOverviewGetResponses,
-    GetAgentOverviewV1AgentsAgentIdOverviewGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/overview",
-    ...options,
-  });
-
-/**
- * Preview Effective Policy
- *
- * Compute effective policy from rules without persisting a snapshot.
- *
- * Useful for UIs that need to show the merged workspace/agent/task ceiling
- * before the user commits a task creation.
- */
-export const previewEffectivePolicyV1GovernanceEffectivePolicyPreviewPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
-  PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
-    PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/governance/effective-policy/preview",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Get Task Policy Snapshot
- *
- * Read the effective governance policy for a task.
- *
- * The effective policy is no longer persisted; it is served on demand by
- * querying the task's Temporal workflow, where it lives in workflow state.
- */
-export const getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses,
-  GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses,
-    GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/governance/task-policy-snapshots/{task_id}",
-    ...options,
-  });
-
-/**
- * List Policy Rules
- *
- * List policy rules in the current workspace.
- */
-export const listPolicyRulesV1PoliciesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListPolicyRulesV1PoliciesGetData, ThrowOnError>
-): RequestResult<
-  ListPolicyRulesV1PoliciesGetResponses,
-  ListPolicyRulesV1PoliciesGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListPolicyRulesV1PoliciesGetResponses,
-    ListPolicyRulesV1PoliciesGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/policies",
-    ...options,
-  });
-
-/**
- * Create Policy Rule
- *
- * Create a policy rule in the current workspace.
- */
-export const createPolicyRuleV1PoliciesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreatePolicyRuleV1PoliciesPostData, ThrowOnError>
-): RequestResult<
-  CreatePolicyRuleV1PoliciesPostResponses,
-  CreatePolicyRuleV1PoliciesPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreatePolicyRuleV1PoliciesPostResponses,
-    CreatePolicyRuleV1PoliciesPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/policies",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Policy Rule
- *
- * Delete a policy rule.
- */
-export const deletePolicyRuleV1PoliciesRuleIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeletePolicyRuleV1PoliciesRuleIdDeleteData, ThrowOnError>
-): RequestResult<
-  DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
-  DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
-    DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/policies/{rule_id}",
-    ...options,
-  });
-
-/**
- * Get Policy Rule
- *
- * Read one policy rule in the current workspace.
- */
-export const getPolicyRuleV1PoliciesRuleIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GetPolicyRuleV1PoliciesRuleIdGetData, ThrowOnError>
-): RequestResult<
-  GetPolicyRuleV1PoliciesRuleIdGetResponses,
-  GetPolicyRuleV1PoliciesRuleIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetPolicyRuleV1PoliciesRuleIdGetResponses,
-    GetPolicyRuleV1PoliciesRuleIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/policies/{rule_id}",
-    ...options,
-  });
-
-/**
- * Update Policy Rule
- *
- * Partially update a policy rule.
- */
-export const updatePolicyRuleV1PoliciesRuleIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpdatePolicyRuleV1PoliciesRuleIdPatchData, ThrowOnError>
-): RequestResult<
-  UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
-  UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
-    UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/policies/{rule_id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Get Inbox Items
- *
- * List tasks requiring user attention.
- *
- * Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
- * ordered by most recently updated first. Includes total count for badge/pagination.
- */
-export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
-  options?: Options<GetInboxItemsV1InboxGetData, ThrowOnError>
-): RequestResult<
-  GetInboxItemsV1InboxGetResponses,
-  GetInboxItemsV1InboxGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetInboxItemsV1InboxGetResponses,
-    GetInboxItemsV1InboxGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/inbox/",
-    ...options,
-  });
-
-/**
- * List Workspace Files
- */
-export const listWorkspaceFilesV1FilesGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListWorkspaceFilesV1FilesGetData, ThrowOnError>
-): RequestResult<
-  ListWorkspaceFilesV1FilesGetResponses,
+  ListWorkspacesV1WorkspacesGetResponses,
   unknown,
   ThrowOnError
 > =>
   (options?.client ?? client).get<
-    ListWorkspaceFilesV1FilesGetResponses,
+    ListWorkspacesV1WorkspacesGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -9133,30 +8833,34 @@ export const listWorkspaceFilesV1FilesGet = <
         type: "http",
       },
     ],
-    url: "/v1/files",
+    url: "/v1/workspaces",
     ...options,
   });
 
 /**
- * Upload Workspace File
+ * Create Workspace
  *
- * Upload a file to the workspace's artifact root.
+ * Create a new shared workspace owned by the current user.
+ *
+ * Provisions the workspace row (baseline governance policies are seeded by
+ * the creation hook in ``get_workspace_service``) and grants the creator
+ * membership in the relationship graph so the workspace immediately shows up
+ * in their accessible list and the switcher.
  */
-export const uploadWorkspaceFileV1FilesPost = <
+export const createWorkspaceV1WorkspacesPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<UploadWorkspaceFileV1FilesPostData, ThrowOnError>
+  options: Options<CreateWorkspaceV1WorkspacesPostData, ThrowOnError>
 ): RequestResult<
-  UploadWorkspaceFileV1FilesPostResponses,
-  UploadWorkspaceFileV1FilesPostErrors,
+  CreateWorkspaceV1WorkspacesPostResponses,
+  CreateWorkspaceV1WorkspacesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    UploadWorkspaceFileV1FilesPostResponses,
-    UploadWorkspaceFileV1FilesPostErrors,
+    CreateWorkspaceV1WorkspacesPostResponses,
+    CreateWorkspaceV1WorkspacesPostErrors,
     ThrowOnError
   >({
-    ...formDataBodySerializer,
     security: [
       {
         key: "HTTPBearer",
@@ -9164,64 +8868,34 @@ export const uploadWorkspaceFileV1FilesPost = <
         type: "http",
       },
     ],
-    url: "/v1/files",
+    url: "/v1/workspaces",
     ...options,
     headers: {
-      "Content-Type": null,
+      "Content-Type": "application/json",
       ...options.headers,
     },
   });
 
 /**
- * Workspace File History
+ * List Invitations
  *
- * Return the provenance trail for a workspace file, newest event first.
+ * List pending invitations for the workspace. Tokens are NOT returned.
  */
-export const workspaceFileHistoryV1FilesHistoryGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<WorkspaceFileHistoryV1FilesHistoryGetData, ThrowOnError>
-): RequestResult<
-  WorkspaceFileHistoryV1FilesHistoryGetResponses,
-  WorkspaceFileHistoryV1FilesHistoryGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    WorkspaceFileHistoryV1FilesHistoryGetResponses,
-    WorkspaceFileHistoryV1FilesHistoryGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/files/history",
-    ...options,
-  });
-
-/**
- * Stream Workspace File
- *
- * Stream a workspace file through the AgentArea API.
- */
-export const streamWorkspaceFileV1FilesDownloadFilePathGet = <
+export const listInvitationsV1WorkspacesWorkspaceIdInvitationsGet = <
   ThrowOnError extends boolean = false,
 >(
   options: Options<
-    StreamWorkspaceFileV1FilesDownloadFilePathGetData,
+    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetData,
     ThrowOnError
   >
 ): RequestResult<
-  StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
-  StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
+  ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses,
+  ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
-    StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
+    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses,
+    ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors,
     ThrowOnError
   >({
     security: [
@@ -9231,25 +8905,33 @@ export const streamWorkspaceFileV1FilesDownloadFilePathGet = <
         type: "http",
       },
     ],
-    url: "/v1/files/download/{file_path}",
+    url: "/v1/workspaces/{workspace_id}/invitations",
     ...options,
   });
 
 /**
- * Download Workspace File
+ * Create Invitation
+ *
+ * Create an invitation link for the given workspace.
+ *
+ * The plaintext ``token`` is returned exactly once in the response.
+ * The caller delivers it however they want (link, email, Slack).
  */
-export const downloadWorkspaceFileV1FilesFilePathGet = <
+export const createInvitationV1WorkspacesWorkspaceIdInvitationsPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<DownloadWorkspaceFileV1FilesFilePathGetData, ThrowOnError>
+  options: Options<
+    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  DownloadWorkspaceFileV1FilesFilePathGetResponses,
-  DownloadWorkspaceFileV1FilesFilePathGetErrors,
+  CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses,
+  CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    DownloadWorkspaceFileV1FilesFilePathGetResponses,
-    DownloadWorkspaceFileV1FilesFilePathGetErrors,
+  (options.client ?? client).post<
+    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses,
+    CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors,
     ThrowOnError
   >({
     security: [
@@ -9259,20 +8941,126 @@ export const downloadWorkspaceFileV1FilesFilePathGet = <
         type: "http",
       },
     ],
-    url: "/v1/files/{file_path}",
+    url: "/v1/workspaces/{workspace_id}/invitations",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revoke Invitation
+ *
+ * Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops.
+ */
+export const revokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDelete =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses,
+    RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).delete<
+      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses,
+      RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace_id}/invitations/{invitation_id}",
+      ...options,
+    });
+
+/**
+ * List Members
+ */
+export const listMembersV1WorkspacesWorkspaceIdMembersGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListMembersV1WorkspacesWorkspaceIdMembersGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListMembersV1WorkspacesWorkspaceIdMembersGetResponses,
+  ListMembersV1WorkspacesWorkspaceIdMembersGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListMembersV1WorkspacesWorkspaceIdMembersGetResponses,
+    ListMembersV1WorkspacesWorkspaceIdMembersGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace_id}/members",
     ...options,
   });
 
 /**
- * Health Check
+ * Remove Member
  *
- * Health check endpoint for the main application.
+ * Remove a member from the workspace.
  */
-export const healthCheckHealthGet = <ThrowOnError extends boolean = false>(
-  options?: Options<HealthCheckHealthGetData, ThrowOnError>
-): RequestResult<HealthCheckHealthGetResponses, unknown, ThrowOnError> =>
+export const removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses,
+  RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses,
+    RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace_id}/members/{user_id}",
+    ...options,
+  });
+
+/**
+ * Webhook Health Check
+ *
+ * Health check endpoint for webhook system.
+ */
+export const webhookHealthCheckWebhooksHealthGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<WebhookHealthCheckWebhooksHealthGetData, ThrowOnError>
+): RequestResult<
+  WebhookHealthCheckWebhooksHealthGetResponses,
+  unknown,
+  ThrowOnError
+> =>
   (options?.client ?? client).get<
-    HealthCheckHealthGetResponses,
+    WebhookHealthCheckWebhooksHealthGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -9283,19 +9071,29 @@ export const healthCheckHealthGet = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/health",
+    url: "/webhooks/health",
     ...options,
   });
 
 /**
- * Root
+ * Handle webhook requests
  *
- * Root endpoint.
+ * Process incoming webhook requests for registered triggers
  */
-export const rootGet = <ThrowOnError extends boolean = false>(
-  options?: Options<RootGetData, ThrowOnError>
-): RequestResult<RootGetResponses, unknown, ThrowOnError> =>
-  (options?.client ?? client).get<RootGetResponses, unknown, ThrowOnError>({
+export const handleWebhookWebhooksWebhookIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdDeleteData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdDeleteResponses,
+  HandleWebhookWebhooksWebhookIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    HandleWebhookWebhooksWebhookIdDeleteResponses,
+    HandleWebhookWebhooksWebhookIdDeleteErrors,
+    ThrowOnError
+  >({
     security: [
       {
         key: "bearer",
@@ -9303,6 +9101,186 @@ export const rootGet = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/",
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdGetData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdGetResponses,
+  HandleWebhookWebhooksWebhookIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    HandleWebhookWebhooksWebhookIdGetResponses,
+    HandleWebhookWebhooksWebhookIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdHead = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdHeadData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdHeadResponses,
+  HandleWebhookWebhooksWebhookIdHeadErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).head<
+    HandleWebhookWebhooksWebhookIdHeadResponses,
+    HandleWebhookWebhooksWebhookIdHeadErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdOptions = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdOptionsData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdOptionsResponses,
+  HandleWebhookWebhooksWebhookIdOptionsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).options<
+    HandleWebhookWebhooksWebhookIdOptionsResponses,
+    HandleWebhookWebhooksWebhookIdOptionsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdPatchData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdPatchResponses,
+  HandleWebhookWebhooksWebhookIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    HandleWebhookWebhooksWebhookIdPatchResponses,
+    HandleWebhookWebhooksWebhookIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdPostData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdPostResponses,
+  HandleWebhookWebhooksWebhookIdPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    HandleWebhookWebhooksWebhookIdPostResponses,
+    HandleWebhookWebhooksWebhookIdPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
+    ...options,
+  });
+
+/**
+ * Handle webhook requests
+ *
+ * Process incoming webhook requests for registered triggers
+ */
+export const handleWebhookWebhooksWebhookIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<HandleWebhookWebhooksWebhookIdPutData, ThrowOnError>
+): RequestResult<
+  HandleWebhookWebhooksWebhookIdPutResponses,
+  HandleWebhookWebhooksWebhookIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    HandleWebhookWebhooksWebhookIdPutResponses,
+    HandleWebhookWebhooksWebhookIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/webhooks/{webhook_id}",
     ...options,
   });

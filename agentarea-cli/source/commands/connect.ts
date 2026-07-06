@@ -158,7 +158,11 @@ function codexBlockEnd(name: string): string {
 	return `# <<< agentarea-cli managed: ${mcpServerName(name)} MCP`;
 }
 
-function codexManagedBlock(apiUrl: string, name: string, clientId?: string): string {
+function codexManagedBlock(
+	apiUrl: string,
+	name: string,
+	clientId?: string,
+): string {
 	return [
 		codexBlockStart(name),
 		`[mcp_servers.${mcpServerName(name)}]`,
@@ -304,7 +308,7 @@ export async function connectClient(
 					options.token,
 					name,
 					options.clientId,
-				);
+			  );
 
 	console.log(output);
 	console.log('');

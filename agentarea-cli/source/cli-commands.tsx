@@ -78,7 +78,9 @@ export async function handleCliCommand(
 
 	if (command === 'mcp' && subcommand === 'sync') {
 		if (!options.client) {
-			console.error('Usage: agentarea-cli mcp sync --client=<id> [--target=codex|claude]');
+			console.error(
+				'Usage: agentarea-cli mcp sync --client=<id> [--target=codex|claude]',
+			);
 			return false;
 		}
 		const target = options.target || 'claude';
