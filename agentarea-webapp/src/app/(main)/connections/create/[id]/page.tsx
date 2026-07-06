@@ -25,7 +25,7 @@ export default async function CreateMCPInstancePage({
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: t("title"), href: "/mcp-servers" },
+          { label: t("title"), href: "/connections" },
           {
             label: mcpServer
               ? t("createInstance.breadcrumbWithName", { serverName: mcpServer.name })
@@ -35,7 +35,7 @@ export default async function CreateMCPInstancePage({
         description: mcpServer?.description,
         backLink: {
           label: t("createInstance.back"),
-          href: "/mcp-servers",
+          href: "/connections",
         },
         controls: <MCPCreateHeaderControls />,
       }}

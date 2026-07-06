@@ -59,7 +59,7 @@ function subjectOf(
   return { label: `${kind} · ${policy.subject_id}`, isWorkspace: false };
 }
 
-// Reuses the shared <Table> (same as /mcp-servers): one row per policy rule.
+// Reuses the shared <Table> (same as /connections): one row per policy rule.
 export default function PoliciesList({
   policies,
   agents,

@@ -53,7 +53,7 @@ export default async function MCPInstancePage({ params }: Props) {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: t("title"), href: "/mcp-servers" },
+          { label: t("title"), href: "/connections" },
           { label: instance.name },
         ],
         controls: (

@@ -574,7 +574,13 @@ function CatalogTable({
               >
                 <td className="w-10 py-2 pl-3 pr-0">
                   {e.iconUrl ? (
-                    <BrandLogo src={e.iconUrl} alt={e.title} fallback={TypeIcon} small />
+                    <BrandLogo
+                      src={e.iconUrl}
+                      alt={e.title}
+                      fallback={TypeIcon}
+                      small
+                      cover={e.type === "mcp_servers"}
+                    />
                   ) : (
                     <span className="flex h-6 w-6 items-center justify-center rounded border border-border/60 bg-white dark:bg-zinc-800">
                       <TypeIcon className="h-3.5 w-3.5 text-zinc-400" />
@@ -690,18 +696,28 @@ function BrandLogo({
   alt,
   fallback: Fallback,
   small = false,
+  bare = false,
+  cover = false,
 }: {
   src: string;
   alt: string;
   fallback: LucideIcon;
   small?: boolean;
+  // `bare` drops the framed tile (no bg/border/shadow).
+  bare?: boolean;
+  // `cover` fills the icon edge-to-edge (object-cover, no padding).
+  cover?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const frame = bare
+    ? ""
+    : "border border-border/60 bg-white shadow-sm dark:bg-zinc-800";
   if (failed) {
     return (
       <span
         className={cn(
-          "flex items-center justify-center rounded-lg border border-border/60 bg-white shadow-sm dark:bg-zinc-800",
+          "flex items-center justify-center rounded-lg",
+          frame,
           small ? "h-6 w-6" : "h-9 w-9"
         )}
       >
@@ -712,15 +728,17 @@ function BrandLogo({
   return (
     <span
       className={cn(
-        "flex items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-white shadow-sm dark:bg-zinc-800",
-        small ? "h-6 w-6 p-0.5" : "h-10 w-10 p-1.5"
+        "flex items-center justify-center overflow-hidden rounded-lg",
+        frame,
+        small ? "h-6 w-6" : "h-10 w-10",
+        !cover && (small ? "p-0.5" : "p-1.5")
       )}
     >
       <img
         src={src}
         alt={alt}
         loading="lazy"
-        className="h-full w-full object-contain"
+        className={cn("h-full w-full", cover ? "object-cover" : "object-contain")}
         onError={() => setFailed(true)}
       />
     </span>
@@ -751,7 +769,12 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
           </span>
         ) : null}
         {entry.iconUrl ? (
-          <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
+          <BrandLogo
+            src={entry.iconUrl}
+            alt={entry.title}
+            fallback={TypeIcon}
+            cover={entry.type === "mcp_servers"}
+          />
         ) : entry.integrations.length > 0 ? (
           entry.integrations.slice(0, 4).map((name) => (
             <span
@@ -832,8 +855,8 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
   // Setup reuses the existing "create instance from spec" page — the catalog
   // never configures inline. Each catalog connection links to an MCP spec.
   const connectHref = entry.installEntityId
-    ? `/mcp-servers/create/${entry.installEntityId}`
-    : "/mcp-servers/add";
+    ? `/connections/create/${entry.installEntityId}`
+    : "/connections/add";
 
   useEffect(() => {
     // Reset only when the selected item changes.
@@ -916,7 +939,13 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-4">
           {entry.iconUrl ? (
-            <BrandLogo src={entry.iconUrl} alt={entry.title} fallback={TypeIcon} />
+            <BrandLogo
+              src={entry.iconUrl}
+              alt={entry.title}
+              fallback={TypeIcon}
+              bare={entry.type === "mcp_servers"}
+              cover={entry.type === "mcp_servers"}
+            />
           ) : (
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
               <TypeIcon className="h-5 w-5 text-zinc-400" />

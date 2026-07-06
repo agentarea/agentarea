@@ -4,12 +4,12 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import SearchInput from "@/components/SearchInput";
-import { AddConnectionDropdown } from "../mcp-servers/components/AddConnectionDropdown";
-import MCPHeaderTabs from "../mcp-servers/components/MCPHeaderTabs";
-import MCPServersContent from "../mcp-servers/components/MCPServersContent";
+import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
+import MCPHeaderTabs from "./components/MCPHeaderTabs";
+import MCPServersContent from "./components/MCPServersContent";
 import MCPSkeleton, {
   mcpSkeletonColumns,
-} from "../mcp-servers/components/MCPSkeleton";
+} from "./components/MCPSkeleton";
 
 export const metadata: Metadata = {
   title: "Connections",

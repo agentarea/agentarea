@@ -362,9 +362,9 @@ export function MyMCPsSection({
         columns={unifiedColumns}
         onRowClick={(row) => {
           if (row._type === "openapi") {
-            router.push(`/mcp-servers/openapi/${row.id}`);
+            router.push(`/connections/openapi/${row.id}`);
           } else {
-            router.push(`/mcp-servers/${row.id}`);
+            router.push(`/connections/${row.id}`);
           }
         }}
       />

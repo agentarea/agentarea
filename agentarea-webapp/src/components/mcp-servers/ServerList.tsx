@@ -103,11 +103,11 @@ export default function ServerList({
             iconsType="mcp"
             action={{
               label: "Refresh Catalog",
-              href: "/mcp-servers",
+              href: "/connections",
             }}
           />
         }
-        routeChange="/mcp-servers"
+        routeChange="/connections"
         cardContent={(item: any) => (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-[16px] font-[500]">

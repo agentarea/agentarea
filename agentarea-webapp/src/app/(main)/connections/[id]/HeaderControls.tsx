@@ -61,7 +61,7 @@ export default function MCPInstanceHeaderControls({
         itemId={instanceId}
         itemName={instanceName}
         onDelete={deleteInstance}
-        redirectPath="/mcp-servers"
+        redirectPath="/connections"
         title={t("confirm.deleteTitle")}
         description={t("confirm.deleteDescription", { instanceName })}
         successMessage={t("success.deleted", { instanceName })}

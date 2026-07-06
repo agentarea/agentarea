@@ -132,7 +132,7 @@ export default function OpenAPIConnectionDetailPage() {
         setDeleting(false);
         return;
       }
-      router.push("/mcp-servers");
+      router.push("/connections");
       router.refresh();
     } catch (err) {
       console.error("Failed to delete connection", err);
@@ -170,11 +170,11 @@ export default function OpenAPIConnectionDetailPage() {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Connections", href: "/mcp-servers" },
+          { label: "Connections", href: "/connections" },
           { label: connection.name },
         ],
         description: connection.description || connection.base_url,
-        backLink: { label: "Back to Connections", href: "/mcp-servers" },
+        backLink: { label: "Back to Connections", href: "/connections" },
         controls: (
           <div className="flex gap-2">
             {connection.spec_url && (

@@ -196,11 +196,11 @@ export default function MCPInstanceDetail({
     const oauthResult = searchParams.get("oauth");
     if (oauthResult === "success") {
       toast.success(t("oauth.connectSuccess"));
-      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+      router.replace(`/connections/${instance.id}`, { scroll: false });
     } else if (oauthResult === "error") {
       const reason = searchParams.get("reason") || "unknown";
       toast.error(t("oauth.connectError", { reason }));
-      router.replace(`/mcp-servers/${instance.id}`, { scroll: false });
+      router.replace(`/connections/${instance.id}`, { scroll: false });
     }
   }, [searchParams, instance.id, router, t]);
 
@@ -737,7 +737,7 @@ export default function MCPInstanceDetail({
                   {bundleMembers.map((memberId: string) => (
                     <Link
                       key={memberId}
-                      href={`/mcp-servers/${memberId}`}
+                      href={`/connections/${memberId}`}
                       className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Server className="h-3.5 w-3.5 shrink-0" />
