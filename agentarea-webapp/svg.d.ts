@@ -7,13 +7,12 @@
 // ambient declaration is never loaded and the imports fail with TS2307.
 //
 // The webapp itself does not import `.svg` files, so declaring the module here
-// (matching elements-react's `SVGIcon` shape) is safe and resolves the imports
-// during type-check without pulling the excluded `packages/` tree back in.
+// is safe. The type is intentionally loose (`any`): elements-react uses these
+// imports both as components (`<Icon />`) and, in a couple of files, unwrapped
+// via `.default`. A precise component type makes `typeof x === "object"`
+// narrow to `never` under strict TS, breaking the `.default` path
+// (settings-oidc.tsx), so `any` mirrors the loose typing the package assumes.
 declare module "*.svg" {
-  import type { ComponentProps, FunctionComponent } from "react";
-
-  const ReactComponent: FunctionComponent<
-    ComponentProps<"svg"> & { size?: number }
-  >;
-  export default ReactComponent;
+  const content: any;
+  export default content;
 }
