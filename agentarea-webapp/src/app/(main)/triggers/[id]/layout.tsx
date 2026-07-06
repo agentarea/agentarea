@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import type { TriggerResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getTrigger } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
@@ -14,20 +15,20 @@ export default async function TriggerLayout({ params, children }: Props) {
   const { id } = await params;
   const t = await getTranslations("TriggersPage");
 
-  const trigger = requireApiData(await getTrigger(id), "trigger");
+  const trigger = requireApiData(await getTrigger(id), "trigger") as TriggerResponse;
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [
           { label: t("title"), href: "/triggers" },
-          { label: (trigger as any).name },
+          { label: trigger.name },
         ],
         controls: (
           <TriggerHeaderControls
             triggerId={id}
-            triggerName={(trigger as any).name}
-            isActive={(trigger as any).is_active}
+            triggerName={trigger.name}
+            isActive={trigger.is_active}
           />
         ),
       }}

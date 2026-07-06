@@ -27,7 +27,7 @@ export default function ServerList({
     {
       header: "Provider",
       accessor: "name",
-      render: (_: any, server: MCPServer) => (
+      render: (_: unknown, server: MCPServer) => (
         <div className="flex items-center gap-2">
           <Server className="h-4 w-4 text-primary" />
           <div>
@@ -59,7 +59,7 @@ export default function ServerList({
     {
       header: "Type",
       accessor: "docker_image_url",
-      render: (value: string, server: MCPServer) => {
+      render: (value: string, _server: MCPServer) => {
         const isExternalServer = value?.includes("http") || false;
         return (
           <Badge
@@ -108,7 +108,7 @@ export default function ServerList({
           />
         }
         routeChange="/connections"
-        cardContent={(item: any) => (
+        cardContent={(item: MCPServer) => (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-[16px] font-[500]">
               <Server className="h-4 w-4 text-primary" />

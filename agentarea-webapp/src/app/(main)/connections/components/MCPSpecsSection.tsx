@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
 import { getMCPServerCategory, getCategoryColorClasses, getConnectionType } from "../utils";
+import type { PaginatedResponseMcpServerResponse } from "@/api/client/types.gen";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { listMCPServersAction as listMCPServers } from "@/lib/server-actions";
 
@@ -37,7 +39,7 @@ export function MCPSpecsSection({
         page_size: params.page_size,
         search: params.search,
       });
-      const data = response.data as any;
+      const data = response.data as PaginatedResponseMcpServerResponse | null;
       return {
         items: (data?.items || []) as MCPServer[],
         total: data?.total || 0,
@@ -87,12 +89,12 @@ export function MCPSpecsSection({
       header: t("name"),
       render: (value: string, item: MCPServer) => {
         const category = getMCPServerCategory(item.tags || []);
-        const iconSrc = (item as any).json_spec?.icons?.[0]?.src as string | undefined;
-        const title = (item as any).json_spec?.title || value;
+        const iconSrc = (item.json_spec?.['icons'] as Array<{ src: string }> | undefined)?.[0]?.src;
+        const title = (item.json_spec?.['title'] as string | undefined) || value;
         return (
           <div className="flex items-center gap-2">
             {iconSrc && (
-              <img src={iconSrc} alt="" className="h-5 w-5 rounded object-contain shrink-0" />
+              <Image src={iconSrc} alt="" width={20} height={20} className="h-5 w-5 rounded object-contain shrink-0" />
             )}
             <span className="truncate font-semibold">{title}</span>
             {!item.is_public && (

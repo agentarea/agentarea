@@ -1,6 +1,6 @@
 "use server";
 
-import type { TriggerCreate } from "@/api/client/types.gen";
+import type { HttpValidationError, TriggerCreate } from "@/api/client/types.gen";
 import {
   zGetCatalogV1TriggersCatalogGetResponse,
   zTriggerCreate,
@@ -49,7 +49,7 @@ export async function listTriggerCatalogAction(): Promise<TriggerCatalogEntry[]>
 }
 
 function parseTaskParameters(raw: string | null): {
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   error?: TriggerFormState;
 } {
   if (!raw || !raw.trim()) {
@@ -216,10 +216,10 @@ export async function createTriggerAction(
   }
 
   try {
-    const { data, error } = await createTrigger(validated.data as any);
+    const { data, error } = await createTrigger(validated.data as unknown as Parameters<typeof createTrigger>[0]);
 
     if (error) {
-      const errorMessage = (error as any)?.detail?.[0]?.msg || "Unknown error";
+      const errorMessage = (error as HttpValidationError | undefined)?.detail?.[0]?.msg ?? "Unknown error";
       return {
         message: "Failed to create trigger",
         errors: { _form: [`API error: ${errorMessage}`] },
@@ -276,7 +276,13 @@ export async function updateTriggerAction(
     : undefined;
 
   // Build flat update body matching TriggerUpdateRequest schema
-  const updateBody: Record<string, any> = { name };
+  const updateBody: {
+    name: string;
+    cron_expression?: string;
+    timezone?: string;
+    task_parameters?: Record<string, unknown>;
+    failure_threshold?: number;
+  } = { name };
 
   if (trigger_type === "cron") {
     const cronExpr = formData.get("cron_expression") as string;
@@ -294,13 +300,10 @@ export async function updateTriggerAction(
     const { data, error } = await updateTrigger(id, updateBody);
 
     if (error) {
-      const detail = (error as any)?.detail;
-      const errorMessage =
-        typeof detail === "string"
-          ? detail
-          : Array.isArray(detail)
-            ? detail[0]?.msg || JSON.stringify(detail)
-            : "Unknown error";
+      const detail = (error as HttpValidationError | undefined)?.detail;
+      const errorMessage = detail
+        ? (detail[0]?.msg || JSON.stringify(detail))
+        : "Unknown error";
       return {
         message: "Failed to update trigger",
         errors: { _form: [`API error: ${errorMessage}`] },

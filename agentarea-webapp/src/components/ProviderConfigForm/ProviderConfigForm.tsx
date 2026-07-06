@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -82,7 +82,7 @@ export default function ProviderConfigForm({
   // Load provider specs and model specs.
   // Pass { silent: true } to refresh without unmounting the form (used after
   // Discover Models so the child component keeps its local UI state).
-  const loadData = async (opts?: { silent?: boolean }) => {
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     try {
       if (!opts?.silent) setIsLoading(true);
       const [providerSpecsResponse, providerSpecsWithModelsResponse] =
@@ -138,11 +138,11 @@ export default function ProviderConfigForm({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Initialize react-hook-form
   const {
@@ -225,11 +225,6 @@ export default function ProviderConfigForm({
   useEffect(() => {
     if (isEdit && existingModelInstances.length > 0 && modelSpecs.length > 0) {
       const existingModels = existingModelInstances.map((instance) => {
-        // Find the corresponding model spec
-        const modelSpec = modelSpecs.find(
-          (spec) => spec.id === instance.model_spec_id
-        );
-
         return {
           modelSpecId: instance.model_spec_id,
           instanceName: instance.name,
@@ -268,17 +263,6 @@ export default function ProviderConfigForm({
     setValue("name", `${providerName} Config - ${randomNumber}`);
 
     setSelectedModels([]); // Reset selected models when provider changes
-  };
-
-  const updateSelectedModel = (
-    modelSpecId: string,
-    updates: Partial<SelectedModel>
-  ) => {
-    setSelectedModels((prev) =>
-      prev.map((model) =>
-        model.modelSpecId === modelSpecId ? { ...model, ...updates } : model
-      )
-    );
   };
 
   const onSubmit = async (data: ProviderConfigFormData) => {

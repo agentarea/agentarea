@@ -153,7 +153,7 @@ export default function AuditLogClient({
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [resourceFilter, setResourceFilter] = useState("all");
+  const [resourceFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 

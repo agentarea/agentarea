@@ -77,6 +77,6 @@ test.describe("Scenario 16 MP - use the CLI external interface", () => {
         },
       }
     );
-    expect(`${stdout}\n${stderr}`).toContain(agent!.id);
+    expect(`${stdout}\n${stderr}`).toContain(agent?.id ?? "");
   });
 });

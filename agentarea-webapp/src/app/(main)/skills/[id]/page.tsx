@@ -34,7 +34,12 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/hooks/use-toast";
-import type { Skill, SkillContent, SkillFile } from "@/lib/api";
+import type {
+  Skill,
+  SkillContent,
+  SkillFile,
+  SkillUpdateRequest,
+} from "@/lib/api";
 import { formatApiError, isApiNotFound } from "@/lib/api-errors";
 import {
   addSkillMemberAction as addSkillMember,
@@ -102,8 +107,8 @@ export default function SkillDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
 
   // Child skills state
-  const [childSkills, setChildSkills] = useState<any[]>([]);
-  const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [childSkills, setChildSkills] = useState<Skill[]>([]);
+  const [allSkills, setAllSkills] = useState<Skill[]>([]);
   const [showAddChildDialog, setShowAddChildDialog] = useState(false);
   const [addingChildId, setAddingChildId] = useState<string>("");
   const [isAddingChild, setIsAddingChild] = useState(false);
@@ -146,8 +151,8 @@ export default function SkillDetailPage() {
         setSkill(skillData);
         setContent(contentData);
         setFiles(filesData);
-        setChildSkills((membersRes.data as any) || []);
-        setAllSkills((allSkillsRes.data as any) || []);
+        setChildSkills((membersRes.data as Skill[]) || []);
+        setAllSkills((allSkillsRes.data as Skill[]) || []);
 
         setEditName(skillData.name);
         setEditDescription(skillData.description || "");
@@ -215,7 +220,7 @@ export default function SkillDetailPage() {
 
     setSaving(true);
     try {
-      const updateData: any = {
+      const updateData: SkillUpdateRequest = {
         name: editName,
         description: editDescription || null,
       };
@@ -311,7 +316,7 @@ export default function SkillDetailPage() {
         return;
       }
       const { data } = await listSkillMembers(skillId);
-      setChildSkills((data as any) || []);
+      setChildSkills((data as Skill[]) || []);
       setShowAddChildDialog(false);
       setAddingChildId("");
       toast({ title: "Child skill added" });
@@ -332,9 +337,7 @@ export default function SkillDetailPage() {
         });
         return;
       }
-      setChildSkills((prev: any[]) =>
-        prev.filter((s: any) => s.id !== childId)
-      );
+      setChildSkills((prev) => prev.filter((s) => s.id !== childId));
       toast({ title: "Child skill removed" });
     } finally {
       setRemovingChildId(null);
@@ -558,7 +561,7 @@ export default function SkillDetailPage() {
                         contentClassName="p-4"
                       >
                         <pre className="text-xs font-mono whitespace-pre-wrap text-foreground">
-                          {parsed!.rawFrontmatter}
+                          {parsed?.rawFrontmatter}
                         </pre>
                       </Section>
                     )}
@@ -609,7 +612,7 @@ export default function SkillDetailPage() {
             </p>
           ) : (
             <ul className="space-y-1">
-              {childSkills.map((child: any) => (
+              {childSkills.map((child) => (
                 <li
                   key={child.id}
                   className="flex items-center justify-between rounded border px-3 py-2 text-sm"
@@ -649,11 +652,11 @@ export default function SkillDetailPage() {
               <option value="">Select a skill...</option>
               {allSkills
                 .filter(
-                  (s: any) =>
+                  (s) =>
                     s.id !== skillId &&
-                    !childSkills.some((c: any) => c.id === s.id)
+                    !childSkills.some((c) => c.id === s.id)
                 )
-                .map((s: any) => (
+                .map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>

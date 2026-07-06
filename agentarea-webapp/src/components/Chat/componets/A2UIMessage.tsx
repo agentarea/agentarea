@@ -7,6 +7,7 @@
  * DynamicString values are resolved against the surface data model.
  */
 import React from "react";
+import Image from "next/image";
 import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
 
 // ── DynamicString resolution ──────────────────────────────────────────────────
@@ -15,20 +16,26 @@ type DynamicString = string | { path: string } | null | undefined;
 
 function resolveString(
   value: DynamicString,
-  dataModel: Record<string, any>
+  dataModel: Record<string, unknown>
 ): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
   // JSON Pointer (RFC 6901) lookup
-  return resolvePointer(dataModel, value.path) ?? "";
+  return (resolvePointer(dataModel, value.path) ?? "") as string;
 }
 
-function resolvePointer(obj: any, pointer: string): any {
+function resolvePointer(obj: unknown, pointer: string): unknown {
   const parts = (pointer || "/")
     .replace(/^\//, "")
     .split("/")
     .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
-  return parts.reduce((cur, key) => (cur != null ? cur[key] : undefined), obj);
+  return parts.reduce(
+    (cur: unknown, key): unknown =>
+      cur != null && typeof cur === "object"
+        ? (cur as Record<string, unknown>)[key]
+        : undefined,
+    obj
+  );
 }
 
 // ── URL sanitization ─────────────────────────────────────────────────────────
@@ -50,7 +57,7 @@ const MAX_RENDER_DEPTH = 50;
 
 interface RenderCtx {
   components: Record<string, A2UIComponent>;
-  dataModel: Record<string, any>;
+  dataModel: Record<string, unknown>;
   surfaceId: string;
   onAction?: (action: A2UIAction, sourceComponentId: string) => void;
 }
@@ -159,9 +166,11 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
 
     case "Image":
       return (
-        <img
+        <Image
           src={sanitizeMediaUrl(resolveString(node.url, dm))}
           alt={resolveString(node.alt, dm) || ""}
+          width={800}
+          height={600}
           className="max-w-full rounded-md"
           style={{ objectFit: node.fit ?? "contain" }}
         />

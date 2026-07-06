@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
 import { Streamdown } from "streamdown";
+import type { Components } from "streamdown";
 import { cn } from "@/lib/utils";
 import { stripA2UIFromStreamingContent } from "../utils/messageAccumulator";
 import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
@@ -67,7 +68,7 @@ const LLMChunkMessage: React.FC<{
 
         {hasThinking && (
           <ThinkingBlock
-            content={data.thinking!}
+            content={data.thinking ?? ""}
             isStreaming={!data.chunk && !data.is_final}
           />
         )}
@@ -76,7 +77,7 @@ const LLMChunkMessage: React.FC<{
           <Streamdown
             parseIncompleteMarkdown
             className="prose prose-sm mt-1 max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
-            components={fileAwareMarkdownComponents as any}
+            components={fileAwareMarkdownComponents as Components}
             linkSafety={{ enabled: false }}
           >
             {preprocessFileLinks(stripA2UIFromStreamingContent(data.chunk))}

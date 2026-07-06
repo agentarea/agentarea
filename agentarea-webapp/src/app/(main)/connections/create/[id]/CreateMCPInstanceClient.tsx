@@ -49,35 +49,46 @@ type ProbeState = "idle" | "needs_oauth" | "needs_both";
 // Helpers
 // ---------------------------------------------------------------------------
 
+interface McpJsonSpec {
+  icons?: Array<{ src: string }>;
+  title?: string;
+  remotes?: Array<{ headers?: FieldSpec[] }>;
+  repository?: { url?: string; source?: string };
+  websiteUrl?: string;
+}
+
+function getSpec(server: MCPServer): McpJsonSpec {
+  return (server.json_spec ?? {}) as unknown as McpJsonSpec;
+}
+
 function getIcon(server: MCPServer): string | null {
-  const icons = (server as any).json_spec?.icons as
-    | Array<{ src: string }>
-    | undefined;
-  return icons?.[0]?.src ?? null;
+  return getSpec(server).icons?.[0]?.src ?? null;
 }
 
 function getTitle(server: MCPServer): string {
-  return (server as any).json_spec?.title || server.name;
+  return getSpec(server).title || server.name;
 }
 
 function getRemoteHeaders(server: MCPServer): FieldSpec[] {
   return (
-    (server as any).json_spec?.remotes?.[0]?.headers ||
-    (server.env_schema as any[] | undefined)?.filter((e: any) => e.name) ||
+    getSpec(server).remotes?.[0]?.headers ||
+    (server.env_schema as unknown as FieldSpec[] | undefined)?.filter(
+      (e) => e.name
+    ) ||
     []
   );
 }
 
 function getRepoUrl(server: MCPServer): string | null {
-  return (server as any).json_spec?.repository?.url ?? null;
+  return getSpec(server).repository?.url ?? null;
 }
 
 function getWebsiteUrl(server: MCPServer): string | null {
-  return (server as any).json_spec?.websiteUrl ?? null;
+  return getSpec(server).websiteUrl ?? null;
 }
 
 function getRepoSource(server: MCPServer): string | null {
-  return (server as any).json_spec?.repository?.source ?? null;
+  return getSpec(server).repository?.source ?? null;
 }
 
 function SpecHeader({ server }: { server: MCPServer }) {
@@ -238,7 +249,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         );
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
       setCreatedInstanceId(created.id);
 
       const probeResult = await probeInstanceAuthAction(created.id);
@@ -294,7 +305,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         );
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         const { instanceName } = getValues();
@@ -574,7 +585,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
         throw new Error(errorMessage);
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         setVerifyingInstance({ id: created.id, name: instanceName });
@@ -609,7 +620,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
           className="h-full overflow-auto"
           hideSubmitButton
           hideForceCreateButton
-          server={server as any}
+          server={server}
           instanceName={instanceName}
           instanceDescription={instanceDescription}
           envVars={envVars}
@@ -630,7 +641,13 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
                 },
               });
               if (!checkResult.error) {
-                setValidationResult(checkResult.data as any);
+                setValidationResult(
+                  checkResult.data as {
+                    valid: boolean;
+                    errors: string[];
+                    warnings: string[];
+                  }
+                );
               }
             } catch (error) {
               console.error("Validation error:", error);

@@ -11,7 +11,24 @@ import { normalizeEventType } from "./eventNormalizer";
 interface RawEvent {
   type: string;
   timestamp: Date | string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
+}
+
+interface EventPayload {
+  chunk?: string;
+  chunk_type?: string;
+  is_final?: boolean;
+  tool_call_id?: string;
+  content?: string;
+  thinking?: string;
+  [key: string]: unknown;
+}
+
+interface EventData extends EventPayload {
+  task_id?: string;
+  agent_id?: string;
+  timestamp?: string;
+  original_data?: EventPayload;
 }
 
 interface ProcessEventsOptions {
@@ -39,7 +56,7 @@ export function processEventsToMessages(
     const eventType = normalizeEventType(event.type);
     if (!shouldDisplayEvent(eventType)) continue;
 
-    const eventData: Record<string, any> = {
+    const eventData: EventData = {
       ...(event.data || {}),
       task_id: options.taskId,
       agent_id: options.agentId,
@@ -124,7 +141,7 @@ export function processEventsToMessages(
       const startedIndex = messages.findLastIndex(
         (msg) =>
           msg.type === "tool_call_started" &&
-          (msg.data as any).tool_call_id === toolCallId
+          msg.data.tool_call_id === toolCallId
       );
       const message = parseEventToMessage(eventType, eventData);
       if (message) {
@@ -144,7 +161,7 @@ export function processEventsToMessages(
         const lastMsg = messages[messages.length - 1];
         if (
           lastMsg?.type === "error" &&
-          (lastMsg.data as any).error === (message.data as any).error
+          lastMsg.data.error === message.data.error
         ) {
           // Same error repeated — skip duplicate
           continue;

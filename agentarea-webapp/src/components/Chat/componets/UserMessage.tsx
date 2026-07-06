@@ -14,7 +14,7 @@ interface UserMessageProps {
 }
 
 export const UserMessage: React.FC<UserMessageProps> = ({
-  id,
+  id: _id,
   content,
   timestamp,
   files,

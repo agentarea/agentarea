@@ -19,7 +19,7 @@ export default async function EditTriggerPage({ params }: Props) {
   return (
     <div className="p-6">
       <CreateTriggerForm
-        agents={(agentsResponse.data as any[]) || []}
+        agents={agentsResponse.data ?? []}
         initialData={trigger}
       />
     </div>

@@ -15,7 +15,6 @@ import type {
   EntityStatus,
   InstallAction,
   PreviewEntity,
-  PreviewIssue,
   InstalledEntity,
   SetupField as ApiSetupField,
 } from "@/api/client/types.gen";

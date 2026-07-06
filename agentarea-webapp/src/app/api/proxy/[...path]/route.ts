@@ -65,7 +65,7 @@ async function handleRequest(
       try {
         const requestBody = await request.json();
         body = JSON.stringify(requestBody);
-      } catch (e) {
+      } catch (_e) {
         // No body or invalid JSON
       }
     }
@@ -92,7 +92,7 @@ async function handleRequest(
     let jsonData;
     try {
       jsonData = JSON.parse(responseData);
-    } catch (e) {
+    } catch (_e) {
       jsonData = responseData;
     }
 

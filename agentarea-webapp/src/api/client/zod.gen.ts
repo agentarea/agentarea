@@ -298,6 +298,13 @@ export const zBodyUploadSkillV1SkillsUploadPost = z.object({
 });
 
 /**
+ * Body_upload_workspace_file_v1_files_post
+ */
+export const zBodyUploadWorkspaceFileV1FilesPost = z.object({
+  file: z.string(),
+});
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -2943,23 +2950,23 @@ export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   total: z.number().int(),
 });
 
-export const zHydraOauth2ProxyOauth2PathPutPath = z.object({
+export const zHydraOauth2ProxyOauth2PathPatchPath = z.object({
   path: z.string(),
 });
 
-export const zHydraOauth2ProxyOauth2PathPut2Path = z.object({
+export const zHydraOauth2ProxyOauth2PathPatch2Path = z.object({
   path: z.string(),
 });
 
-export const zHydraOauth2ProxyOauth2PathPut3Path = z.object({
+export const zHydraOauth2ProxyOauth2PathPatch3Path = z.object({
   path: z.string(),
 });
 
-export const zHydraOauth2ProxyOauth2PathPut4Path = z.object({
+export const zHydraOauth2ProxyOauth2PathPatch4Path = z.object({
   path: z.string(),
 });
 
-export const zHydraOauth2ProxyOauth2PathPut5Path = z.object({
+export const zHydraOauth2ProxyOauth2PathPatch5Path = z.object({
   path: z.string(),
 });
 
@@ -2972,31 +2979,31 @@ export const zWebhookHealthCheckWebhooksHealthGetResponse = z.record(
   z.unknown()
 );
 
-export const zHandleWebhookWebhooksWebhookIdPutPath = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatchPath = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut2Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch2Path = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut3Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch3Path = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut4Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch4Path = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut5Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch5Path = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut6Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch6Path = z.object({
   webhook_id: z.string(),
 });
 
-export const zHandleWebhookWebhooksWebhookIdPut7Path = z.object({
+export const zHandleWebhookWebhooksWebhookIdPatch7Path = z.object({
   webhook_id: z.string(),
 });
 
@@ -5266,6 +5273,14 @@ export const zGetInboxItemsV1InboxGetResponse = zInboxResponse;
  * Successful Response
  */
 export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
+
+export const zUploadWorkspaceFileV1FilesPostBody =
+  zBodyUploadWorkspaceFileV1FilesPost;
+
+/**
+ * Successful Response
+ */
+export const zUploadWorkspaceFileV1FilesPostResponse = z.void();
 
 export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
   path: z.string(),

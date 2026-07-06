@@ -5,7 +5,6 @@ import { CheckCircle, Loader2, Send } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -98,7 +97,7 @@ export default function TaskCreator() {
         requires_human_approval: null,
       };
 
-      const { data: task, error } = await createTask(selectedAgentId, taskData);
+      const { error } = await createTask(selectedAgentId, taskData);
 
       if (error) {
         setResult({

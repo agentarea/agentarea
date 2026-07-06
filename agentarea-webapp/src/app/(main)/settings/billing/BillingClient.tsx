@@ -722,8 +722,8 @@ function UsageCard({ item }: { item: BillingUsageItem }) {
 
   const isUnlimited = item.limit === null;
   const percentage =
-    !isUnlimited && item.limit! > 0
-      ? Math.min((item.used / item.limit!) * 100, 100)
+    !isUnlimited && (item.limit ?? 0) > 0
+      ? Math.min((item.used / (item.limit ?? 0)) * 100, 100)
       : 0;
   const isNearLimit = !isUnlimited && percentage >= 80;
 
@@ -749,7 +749,7 @@ function UsageCard({ item }: { item: BillingUsageItem }) {
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
             {item.used.toLocaleString()} /{" "}
-            {isUnlimited ? t("usage.unlimited") : item.limit!.toLocaleString()}
+            {isUnlimited ? t("usage.unlimited") : (item.limit ?? 0).toLocaleString()}
           </span>
         </div>
         <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">

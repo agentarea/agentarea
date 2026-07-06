@@ -1,6 +1,11 @@
 "use client";
 
-import type { McpServerResponse, ModelInstanceResponse } from "@/api/client/types.gen";
+import type {
+  AgentUpdate,
+  McpServerInstanceResponse,
+  McpServerResponse,
+  ModelInstanceResponse,
+} from "@/api/client/types.gen";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
@@ -18,8 +23,8 @@ interface AgentEditClientProps {
   agentName: string;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
-  mcpInstanceList: any[];
-  builtinTools: any[];
+  mcpInstanceList: McpServerInstanceResponse[];
+  builtinTools: unknown[];
   initialData: Partial<AgentFormValues>;
 }
 
@@ -38,11 +43,11 @@ export default function AgentEditClient({
     try {
       // Call server action instead of direct API call
       // Transform form tools_config into backend tools format
-      const tools: any[] = [];
+      const tools: NonNullable<AgentUpdate["tools"]> = [];
 
       // MCP tools — preserve per-tool approval settings
       for (const mcpConfig of formData.tools_config.mcp_server_configs || []) {
-        const allowedTools = (mcpConfig.allowed_tools || []).map((t: any) => ({
+        const allowedTools = (mcpConfig.allowed_tools || []).map((t) => ({
           tool_name: t.tool_name,
           requires_user_confirmation: t.requires_user_confirmation || false,
         }));
@@ -51,7 +56,6 @@ export default function AgentEditClient({
           type: "mcp",
           name: mcpConfig.mcp_server_id,
           settings: {
-            mcp_server_id: mcpConfig.mcp_server_id,
             allowed_tools: allowedTools.length > 0 ? allowedTools : null,
           },
         });
@@ -61,19 +65,19 @@ export default function AgentEditClient({
       // Mirrors the MCP pattern (`name: mcp_server_id`). ToolConfig.tsx resolves the
       // display name at render time by looking up openapi_connection_id in the live
       // connections list.
-      for (const openapiConfig of (formData.tools_config as any).openapi_configs || []) {
+      for (const openapiConfig of formData.tools_config.openapi_configs || []) {
         tools.push({
           type: "openapi",
           name: openapiConfig.openapi_connection_id,
           settings: {
             openapi_connection_id: openapiConfig.openapi_connection_id,
-            allowed_tools: openapiConfig.allowed_tools?.length > 0 ? openapiConfig.allowed_tools : null,
+            allowed_tools: openapiConfig.allowed_tools?.length ? openapiConfig.allowed_tools : null,
           },
         });
       }
 
       // Builtin tools
-      for (const bt of (formData.tools_config as any).builtin_tools || []) {
+      for (const bt of formData.tools_config.builtin_tools || []) {
         const disabledMethods = bt.disabled_methods
           ? Object.entries(bt.disabled_methods)
               .filter(([, v]) => v === false)
@@ -90,7 +94,7 @@ export default function AgentEditClient({
         });
       }
 
-      const updateData: any = {
+      const updateData: AgentUpdate = {
         name: formData.name,
         description: formData.description || undefined,
         instruction: formData.instruction,

@@ -154,6 +154,16 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
       command.shortcut.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleCommand = useCallback(
+    (url: string) => {
+      setIsOpen(false);
+      setSearch("");
+      setSelectedIndex(0);
+      router.push(url);
+    },
+    [router]
+  );
+
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -193,7 +203,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
           break;
       }
     },
-    [isOpen, filteredCommands, selectedIndex]
+    [isOpen, filteredCommands, selectedIndex, handleCommand]
   );
 
   useEffect(() => {
@@ -209,13 +219,6 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
   useEffect(() => {
     setSelectedIndex(0);
   }, [search]);
-
-  const handleCommand = (url: string) => {
-    setIsOpen(false);
-    setSearch("");
-    setSelectedIndex(0);
-    router.push(url);
-  };
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -298,7 +301,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
                       <div className="px-3 py-1 text-xs font-medium text-muted-foreground/70">
                         {getCategoryTitle(category)}
                       </div>
-                      {categoryCommands.map((command, categoryIndex) => {
+                      {categoryCommands.map((command, _categoryIndex) => {
                         const globalIndex = filteredCommands.findIndex(
                           (c) => c.id === command.id
                         );

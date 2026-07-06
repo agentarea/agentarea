@@ -94,7 +94,8 @@ function FileRow({
   onSelect: (file: BrowsedFile) => void;
   selectedPath: string | null;
 }) {
-  const file = node.file!;
+  const file = node.file;
+  if (!file) return null;
   const isSelected = selectedPath === file.path;
   return (
     <button

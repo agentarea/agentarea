@@ -884,6 +884,16 @@ export type BodyUploadSkillV1SkillsUploadPost = {
 };
 
 /**
+ * Body_upload_workspace_file_v1_files_post
+ */
+export type BodyUploadWorkspaceFileV1FilesPost = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * BudgetPolicy
  *
  * Budget-related ceilings.
@@ -6914,7 +6924,7 @@ export type HydraDcrProxyOauth2RegisterPostResponses = {
   200: unknown;
 };
 
-export type HydraOauth2ProxyOauth2PathPutData = {
+export type HydraOauth2ProxyOauth2PathPatchData = {
   body?: never;
   path: {
     /**
@@ -6926,24 +6936,24 @@ export type HydraOauth2ProxyOauth2PathPutData = {
   url: "/oauth2/{path}";
 };
 
-export type HydraOauth2ProxyOauth2PathPutErrors = {
+export type HydraOauth2ProxyOauth2PathPatchErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HydraOauth2ProxyOauth2PathPutError =
-  HydraOauth2ProxyOauth2PathPutErrors[keyof HydraOauth2ProxyOauth2PathPutErrors];
+export type HydraOauth2ProxyOauth2PathPatchError =
+  HydraOauth2ProxyOauth2PathPatchErrors[keyof HydraOauth2ProxyOauth2PathPatchErrors];
 
-export type HydraOauth2ProxyOauth2PathPutResponses = {
+export type HydraOauth2ProxyOauth2PathPatchResponses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HydraOauth2ProxyOauth2PathPut2Data = {
+export type HydraOauth2ProxyOauth2PathPatch2Data = {
   body?: never;
   path: {
     /**
@@ -6955,24 +6965,24 @@ export type HydraOauth2ProxyOauth2PathPut2Data = {
   url: "/oauth2/{path}";
 };
 
-export type HydraOauth2ProxyOauth2PathPut2Errors = {
+export type HydraOauth2ProxyOauth2PathPatch2Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HydraOauth2ProxyOauth2PathPut2Error =
-  HydraOauth2ProxyOauth2PathPut2Errors[keyof HydraOauth2ProxyOauth2PathPut2Errors];
+export type HydraOauth2ProxyOauth2PathPatch2Error =
+  HydraOauth2ProxyOauth2PathPatch2Errors[keyof HydraOauth2ProxyOauth2PathPatch2Errors];
 
-export type HydraOauth2ProxyOauth2PathPut2Responses = {
+export type HydraOauth2ProxyOauth2PathPatch2Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HydraOauth2ProxyOauth2PathPut3Data = {
+export type HydraOauth2ProxyOauth2PathPatch3Data = {
   body?: never;
   path: {
     /**
@@ -6984,24 +6994,24 @@ export type HydraOauth2ProxyOauth2PathPut3Data = {
   url: "/oauth2/{path}";
 };
 
-export type HydraOauth2ProxyOauth2PathPut3Errors = {
+export type HydraOauth2ProxyOauth2PathPatch3Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HydraOauth2ProxyOauth2PathPut3Error =
-  HydraOauth2ProxyOauth2PathPut3Errors[keyof HydraOauth2ProxyOauth2PathPut3Errors];
+export type HydraOauth2ProxyOauth2PathPatch3Error =
+  HydraOauth2ProxyOauth2PathPatch3Errors[keyof HydraOauth2ProxyOauth2PathPatch3Errors];
 
-export type HydraOauth2ProxyOauth2PathPut3Responses = {
+export type HydraOauth2ProxyOauth2PathPatch3Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HydraOauth2ProxyOauth2PathPut4Data = {
+export type HydraOauth2ProxyOauth2PathPatch4Data = {
   body?: never;
   path: {
     /**
@@ -7013,24 +7023,24 @@ export type HydraOauth2ProxyOauth2PathPut4Data = {
   url: "/oauth2/{path}";
 };
 
-export type HydraOauth2ProxyOauth2PathPut4Errors = {
+export type HydraOauth2ProxyOauth2PathPatch4Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HydraOauth2ProxyOauth2PathPut4Error =
-  HydraOauth2ProxyOauth2PathPut4Errors[keyof HydraOauth2ProxyOauth2PathPut4Errors];
+export type HydraOauth2ProxyOauth2PathPatch4Error =
+  HydraOauth2ProxyOauth2PathPatch4Errors[keyof HydraOauth2ProxyOauth2PathPatch4Errors];
 
-export type HydraOauth2ProxyOauth2PathPut4Responses = {
+export type HydraOauth2ProxyOauth2PathPatch4Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HydraOauth2ProxyOauth2PathPut5Data = {
+export type HydraOauth2ProxyOauth2PathPatch5Data = {
   body?: never;
   path: {
     /**
@@ -7042,17 +7052,17 @@ export type HydraOauth2ProxyOauth2PathPut5Data = {
   url: "/oauth2/{path}";
 };
 
-export type HydraOauth2ProxyOauth2PathPut5Errors = {
+export type HydraOauth2ProxyOauth2PathPatch5Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HydraOauth2ProxyOauth2PathPut5Error =
-  HydraOauth2ProxyOauth2PathPut5Errors[keyof HydraOauth2ProxyOauth2PathPut5Errors];
+export type HydraOauth2ProxyOauth2PathPatch5Error =
+  HydraOauth2ProxyOauth2PathPatch5Errors[keyof HydraOauth2ProxyOauth2PathPatch5Errors];
 
-export type HydraOauth2ProxyOauth2PathPut5Responses = {
+export type HydraOauth2ProxyOauth2PathPatch5Responses = {
   /**
    * Successful Response
    */
@@ -7094,7 +7104,7 @@ export type WebhookHealthCheckWebhooksHealthGetResponses = {
 export type WebhookHealthCheckWebhooksHealthGetResponse =
   WebhookHealthCheckWebhooksHealthGetResponses[keyof WebhookHealthCheckWebhooksHealthGetResponses];
 
-export type HandleWebhookWebhooksWebhookIdPutData = {
+export type HandleWebhookWebhooksWebhookIdPatchData = {
   body?: never;
   path: {
     /**
@@ -7106,24 +7116,24 @@ export type HandleWebhookWebhooksWebhookIdPutData = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPutErrors = {
+export type HandleWebhookWebhooksWebhookIdPatchErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPutError =
-  HandleWebhookWebhooksWebhookIdPutErrors[keyof HandleWebhookWebhooksWebhookIdPutErrors];
+export type HandleWebhookWebhooksWebhookIdPatchError =
+  HandleWebhookWebhooksWebhookIdPatchErrors[keyof HandleWebhookWebhooksWebhookIdPatchErrors];
 
-export type HandleWebhookWebhooksWebhookIdPutResponses = {
+export type HandleWebhookWebhooksWebhookIdPatchResponses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut2Data = {
+export type HandleWebhookWebhooksWebhookIdPatch2Data = {
   body?: never;
   path: {
     /**
@@ -7135,24 +7145,24 @@ export type HandleWebhookWebhooksWebhookIdPut2Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut2Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch2Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut2Error =
-  HandleWebhookWebhooksWebhookIdPut2Errors[keyof HandleWebhookWebhooksWebhookIdPut2Errors];
+export type HandleWebhookWebhooksWebhookIdPatch2Error =
+  HandleWebhookWebhooksWebhookIdPatch2Errors[keyof HandleWebhookWebhooksWebhookIdPatch2Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut2Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch2Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut3Data = {
+export type HandleWebhookWebhooksWebhookIdPatch3Data = {
   body?: never;
   path: {
     /**
@@ -7164,24 +7174,24 @@ export type HandleWebhookWebhooksWebhookIdPut3Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut3Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch3Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut3Error =
-  HandleWebhookWebhooksWebhookIdPut3Errors[keyof HandleWebhookWebhooksWebhookIdPut3Errors];
+export type HandleWebhookWebhooksWebhookIdPatch3Error =
+  HandleWebhookWebhooksWebhookIdPatch3Errors[keyof HandleWebhookWebhooksWebhookIdPatch3Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut3Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch3Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut4Data = {
+export type HandleWebhookWebhooksWebhookIdPatch4Data = {
   body?: never;
   path: {
     /**
@@ -7193,24 +7203,24 @@ export type HandleWebhookWebhooksWebhookIdPut4Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut4Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch4Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut4Error =
-  HandleWebhookWebhooksWebhookIdPut4Errors[keyof HandleWebhookWebhooksWebhookIdPut4Errors];
+export type HandleWebhookWebhooksWebhookIdPatch4Error =
+  HandleWebhookWebhooksWebhookIdPatch4Errors[keyof HandleWebhookWebhooksWebhookIdPatch4Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut4Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch4Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut5Data = {
+export type HandleWebhookWebhooksWebhookIdPatch5Data = {
   body?: never;
   path: {
     /**
@@ -7222,24 +7232,24 @@ export type HandleWebhookWebhooksWebhookIdPut5Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut5Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch5Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut5Error =
-  HandleWebhookWebhooksWebhookIdPut5Errors[keyof HandleWebhookWebhooksWebhookIdPut5Errors];
+export type HandleWebhookWebhooksWebhookIdPatch5Error =
+  HandleWebhookWebhooksWebhookIdPatch5Errors[keyof HandleWebhookWebhooksWebhookIdPatch5Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut5Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch5Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut6Data = {
+export type HandleWebhookWebhooksWebhookIdPatch6Data = {
   body?: never;
   path: {
     /**
@@ -7251,24 +7261,24 @@ export type HandleWebhookWebhooksWebhookIdPut6Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut6Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch6Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut6Error =
-  HandleWebhookWebhooksWebhookIdPut6Errors[keyof HandleWebhookWebhooksWebhookIdPut6Errors];
+export type HandleWebhookWebhooksWebhookIdPatch6Error =
+  HandleWebhookWebhooksWebhookIdPatch6Errors[keyof HandleWebhookWebhooksWebhookIdPatch6Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut6Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch6Responses = {
   /**
    * Successful Response
    */
   200: unknown;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut7Data = {
+export type HandleWebhookWebhooksWebhookIdPatch7Data = {
   body?: never;
   path: {
     /**
@@ -7280,17 +7290,17 @@ export type HandleWebhookWebhooksWebhookIdPut7Data = {
   url: "/webhooks/{webhook_id}";
 };
 
-export type HandleWebhookWebhooksWebhookIdPut7Errors = {
+export type HandleWebhookWebhooksWebhookIdPatch7Errors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type HandleWebhookWebhooksWebhookIdPut7Error =
-  HandleWebhookWebhooksWebhookIdPut7Errors[keyof HandleWebhookWebhooksWebhookIdPut7Errors];
+export type HandleWebhookWebhooksWebhookIdPatch7Error =
+  HandleWebhookWebhooksWebhookIdPatch7Errors[keyof HandleWebhookWebhooksWebhookIdPatch7Errors];
 
-export type HandleWebhookWebhooksWebhookIdPut7Responses = {
+export type HandleWebhookWebhooksWebhookIdPatch7Responses = {
   /**
    * Successful Response
    */
@@ -14739,6 +14749,33 @@ export type ListWorkspaceFilesV1FilesGetResponses = {
 
 export type ListWorkspaceFilesV1FilesGetResponse =
   ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
+
+export type UploadWorkspaceFileV1FilesPostData = {
+  body: BodyUploadWorkspaceFileV1FilesPost;
+  path?: never;
+  query?: never;
+  url: "/v1/files";
+};
+
+export type UploadWorkspaceFileV1FilesPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UploadWorkspaceFileV1FilesPostError =
+  UploadWorkspaceFileV1FilesPostErrors[keyof UploadWorkspaceFileV1FilesPostErrors];
+
+export type UploadWorkspaceFileV1FilesPostResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UploadWorkspaceFileV1FilesPostResponse =
+  UploadWorkspaceFileV1FilesPostResponses[keyof UploadWorkspaceFileV1FilesPostResponses];
 
 export type WorkspaceFileHistoryV1FilesHistoryGetData = {
   body?: never;

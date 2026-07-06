@@ -70,7 +70,7 @@ test.describe("Scenario 02 MP - create an agent and set its configuration", () =
       .fill("Answer briefly.");
     // Model picker is a Radix combobox; option text carries the instance name.
     await page.getByRole("combobox").first().click();
-    await page.getByText(modelChain!.modelInstanceName).click();
+    await page.getByText(modelChain?.modelInstanceName ?? "").click();
     await page.getByRole("button", { name: "Create Agent" }).click();
 
     // Success leaves /agents/create and lands on /agents/<slug|id>. Use the

@@ -52,16 +52,16 @@ export function VerifyingModal({
         const { data } = await getMCPServerInstance(instanceId);
         if (!data || cancelled) return;
 
-        const verification = (data as any).verification as {
+        const verification = data.verification as {
           status: string;
           error?: { message: string; code?: string | null } | null;
         } | null | undefined;
 
         if (verification?.status === "succeeded") {
-          clearInterval(timerRef.current!);
+          if (timerRef.current !== null) clearInterval(timerRef.current);
           onSuccess(instanceId);
         } else if (verification?.status === "failed") {
-          clearInterval(timerRef.current!);
+          if (timerRef.current !== null) clearInterval(timerRef.current);
           setErrorMessage(verification.error?.message ?? "Verification failed");
           setErrorCode(verification.error?.code ?? null);
           setPhase("failed");

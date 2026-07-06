@@ -41,7 +41,7 @@ export interface MCPInstanceConfigFormProps {
   // Optional extra actions (e.g., Cancel)
   extraActions?: React.ReactNode;
   // Form handling
-  formAction?: any; // server action binding
+  formAction?: string | ((formData: FormData) => void | Promise<void>);
   onSubmit?: (e?: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
   formId?: string;
   className?: string;
@@ -165,7 +165,7 @@ export default function MCPInstanceConfigForm({
             </TooltipProvider>
           </div>
           <div className="grid gap-4">
-            {envSchema.map((envVar: any) => {
+            {envSchema.map((envVar: { [key: string]: unknown }) => {
               const envName = (envVar?.name as string) || "";
               if (!envName) return null;
               const isRequired = Boolean(envVar?.required);

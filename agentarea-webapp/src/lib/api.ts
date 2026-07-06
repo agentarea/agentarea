@@ -268,22 +268,30 @@ export const {
 } = api;
 
 // Convenience helpers built on top of the generated API
+interface TaskEventRecord {
+  id: string;
+  event_type: string;
+  timestamp: string;
+  data?: { content?: string; result?: string } | null;
+}
+
 export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   // Build message history from task events
   const { data: events, error } = await getAgentTaskEvents(agentId, taskId, {
     page_size: 100,
-  } as any);
+  });
   if (error || !events) {
     return { data: [], error };
   }
 
-  const messages = (events as any).events
-    .filter((event: any) =>
+  const eventList = (events as { events: TaskEventRecord[] }).events;
+  const messages = eventList
+    .filter((event) =>
       ["LLMCallCompleted", "ToolCallCompleted", "WorkflowCompleted"].includes(
         event.event_type
       )
     )
-    .map((event: any) => ({
+    .map((event) => ({
       id: event.id,
       content: event.data?.content || event.data?.result || "",
       role: event.event_type === "LLMCallCompleted" ? "assistant" : "system",
@@ -307,20 +315,18 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   if (configsResponse.error || !configsResponse.data) {
     return { configs: configsResponse, specs: providersResponse };
   }
-  const configs = configsResponse.data || [];
-  const specsWithModels = providersResponse.data || [];
-  const specsById = Object.fromEntries(
-    specsWithModels.map((s: any) => [s.id, s])
-  );
-  const configsWithModels = configs.map((config: any) => ({
+  const configs = (configsResponse.data ?? []) as ProviderConfigResponse[];
+  const specsWithModels = (providersResponse.data ??
+    []) as ProviderSpecWithModelsResponse[];
+  const specsById: Record<string, ProviderSpecWithModelsResponse> =
+    Object.fromEntries(specsWithModels.map((s) => [s.id, s]));
+  const configsWithModels = configs.map((config) => ({
     ...config,
-    models_list: config.model_instance_ids
-      .map((modelSpecId: string) => {
+    models_list: (config.model_instance_ids ?? [])
+      .map((modelSpecId) => {
         const providerSpec = specsById[config.provider_spec_id];
         if (!providerSpec) return null;
-        return (
-          providerSpec.models.find((m: any) => m.id === modelSpecId) || null
-        );
+        return providerSpec.models.find((m) => m.id === modelSpecId) || null;
       })
       .filter(Boolean),
   }));
@@ -381,7 +387,7 @@ export type ModelSpec =
 export type ModelInstance = ModelInstanceResponse;
 export type ChatAgent = AgentResponse;
 export type ChatResponse = { task_id: string; status: string };
-export type ConversationResponse = any;
+export type ConversationResponse = unknown;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {

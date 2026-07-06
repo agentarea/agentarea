@@ -49,7 +49,7 @@ export default function OpenAPIConnectionDetailPage() {
               : `Failed to load connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
           );
         } else {
-          setConnection(result.data as any);
+          setConnection(result.data as OpenAPIConnection);
         }
       } catch (err) {
         console.error("Failed to load OpenAPI connection", err);
@@ -69,7 +69,7 @@ export default function OpenAPIConnectionDetailPage() {
     try {
       const { error: discoverError } = await discoverOpenAPITools(connectionId);
       if (discoverError) {
-        setError((discoverError as any)?.detail || "Failed to discover tools");
+        setError(formatApiError(discoverError));
         return;
       }
       const result = await getOpenAPIConnection(connectionId);
@@ -80,7 +80,7 @@ export default function OpenAPIConnectionDetailPage() {
             : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
         );
       } else {
-        setConnection(result.data as any);
+        setConnection(result.data as OpenAPIConnection);
       }
     } catch (err) {
       console.error("Failed to discover tools", err);
@@ -98,7 +98,7 @@ export default function OpenAPIConnectionDetailPage() {
         custom_headers: rows,
       });
       if (saveError) {
-        setError((saveError as any)?.detail || "Failed to save headers");
+        setError(formatApiError(saveError));
         return;
       }
       const result = await getOpenAPIConnection(connectionId);
@@ -109,7 +109,7 @@ export default function OpenAPIConnectionDetailPage() {
             : `Failed to reload connection${result.status ? ` (${result.status})` : ""}: ${formatApiError(result)}`
         );
       } else {
-        setConnection(result.data as any);
+        setConnection(result.data as OpenAPIConnection);
         setEditingHeaders(false);
       }
     } catch (err) {
@@ -128,7 +128,7 @@ export default function OpenAPIConnectionDetailPage() {
       const { error: deleteError } =
         await deleteOpenAPIConnection(connectionId);
       if (deleteError) {
-        setError((deleteError as any)?.detail || "Failed to delete connection");
+        setError(formatApiError(deleteError));
         setDeleting(false);
         return;
       }

@@ -26,7 +26,6 @@ async function addAuthToken(request: Request) {
     const authToken = await getAuthToken();
     if (authToken) {
       request.headers.set("Authorization", `Bearer ${authToken}`);
-      console.log(`[Server Client] ${method} ${url} - Auth token added`);
     } else {
       console.warn(
         `[Server Client] ${method} ${url} - No auth token available`
@@ -53,7 +52,6 @@ export const createClientConfig: CreateClientConfig = (config) => ({
     await addWorkspaceSlug(request);
 
     const response = await fetch(request);
-    console.log(`[Server Client] Response: ${response.status} ${response.url}`);
 
     if (response.status === 403) {
       console.error("[Server Client] 403 Forbidden details:", {

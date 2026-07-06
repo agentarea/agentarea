@@ -443,8 +443,13 @@ def make_telegram_streaming_sender(
                     feed = []
             msg_id = state.get("message_id")
 
-        # Accumulate: skip empties and consecutive duplicates.
-        if line and (not feed or feed[-1] != line):
+        # Accumulate progress lines while the task runs. On a terminal event,
+        # collapse the whole feed into just the final result — the
+        # "⏳ Working on it..." and tool-call lines were interim status, not
+        # the answer, so we replace them rather than pin them above the result.
+        if event_type in _terminal:
+            feed = [line] if line else ["✅ Done"]
+        elif line and (not feed or feed[-1] != line):
             feed.append(line)
         text = "\n".join(feed) if feed else line
         if not text:

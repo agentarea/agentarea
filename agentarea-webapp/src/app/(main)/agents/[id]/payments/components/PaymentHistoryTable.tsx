@@ -139,7 +139,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
     {
       header: t("table.recipient"),
       accessor: "recipient",
-      render: (value: string, item: any) => (
+      render: (value: string, _item: any) => (
         <div className="flex items-center">
           <span className="font-mono text-xs text-foreground">
             {truncateAddress(value)}

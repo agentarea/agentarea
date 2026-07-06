@@ -107,7 +107,6 @@ import {
   updateProject,
   updateProviderConfig,
   updateSkill,
-  uploadProjectFile,
   workspaceFileHistory,
 } from "@/lib/api";
 import {
@@ -175,7 +174,7 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 export async function sendTaskCommandAction(
   agentId: string,
   taskId: string,
-  payload: { command: string; [key: string]: any }
+  payload: { command: string; [key: string]: unknown }
 ) {
   return await sendTaskCommand(agentId, taskId, payload);
 }
@@ -240,7 +239,7 @@ export async function getMCPHealthStatusAction() {
 }
 
 export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
-  json_spec: Record<string, any>;
+  json_spec: Record<string, unknown>;
 }) {
   return await checkMCPServerInstanceConfiguration(checkRequest);
 }
@@ -362,8 +361,8 @@ export async function createMCPAuthConfigAction(body: {
   name: string;
   description?: string;
   auth_type: string;
-  config?: Record<string, any>;
-  credentials?: Record<string, any>;
+  config?: Record<string, unknown>;
+  credentials?: Record<string, unknown>;
 }) {
   return await createMCPAuthConfig(body);
 }
@@ -626,14 +625,14 @@ export async function createClientAction(payload: {
   kind?: string;
   source_project_id?: string | null;
 }) {
-  return await createClient(payload as any);
+  return await createClient(payload);
 }
 
 export async function updateClientAction(
   clientId: string,
   payload: { name?: string; description?: string | null; source_project_id?: string | null }
 ) {
-  return await updateClient(clientId, payload as any);
+  return await updateClient(clientId, payload);
 }
 
 export async function deleteClientAction(clientId: string) {
@@ -684,7 +683,7 @@ export async function createProjectAction(project: {
   description?: string | null;
   instructions?: string | null;
 }) {
-  return await createProject(project as any);
+  return await createProject(project);
 }
 
 export async function updateProjectAction(
@@ -695,7 +694,7 @@ export async function updateProjectAction(
     instructions?: string | null;
   }
 ) {
-  return await updateProject(projectId, project as any);
+  return await updateProject(projectId, project);
 }
 
 export async function deleteProjectAction(projectId: string) {
@@ -799,6 +798,29 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
+export async function uploadWorkspaceFileAction(formData: FormData) {
+  const authToken = await getAuthToken();
+  const uploadUrl = `${env.API_URL}/v1/files`;
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({
+      detail: "Upload failed",
+    }));
+    return { data: null, error: errorData };
+  }
+
+  // 204 No Content — no JSON body to parse
+  return { data: { ok: true }, error: null };
+}
+
 export async function downloadWorkspaceFileAction(filePath: string) {
   return await downloadWorkspaceFile(filePath);
 }
@@ -852,11 +874,11 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-export async function createAgentWalletAction(agentId: string, body: any) {
+export async function createAgentWalletAction(agentId: string, body: unknown) {
   return await createAgentWallet(agentId, body);
 }
 
-export async function updateAgentWalletAction(agentId: string, body: any) {
+export async function updateAgentWalletAction(agentId: string, body: unknown) {
   return await updateAgentWallet(agentId, body);
 }
 
@@ -880,7 +902,7 @@ export async function getAgentWalletPaymentsAction(
   return await getAgentWalletPayments(agentId, params);
 }
 
-export async function fundAgentWalletAction(agentId: string, body: any) {
+export async function fundAgentWalletAction(agentId: string, body: unknown) {
   return await fundAgentWallet(agentId, body);
 }
 

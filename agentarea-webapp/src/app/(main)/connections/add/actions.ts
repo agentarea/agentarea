@@ -129,14 +129,14 @@ function toServerConnectionCreate(
     server = {
       name: input.name,
       description: input.description,
-      docker_image_url: input.dockerImageUrl!,
+      docker_image_url: input.dockerImageUrl ?? "",
       version: input.version || "1.0.0",
       tags,
       is_public: input.isPublic,
       env_schema: envSchema,
       json_spec: {
         type: "docker",
-        image: input.dockerImageUrl!,
+        image: input.dockerImageUrl ?? "",
       },
     };
     instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
@@ -150,10 +150,10 @@ function toServerConnectionCreate(
       tags,
       is_public: input.isPublic,
       env_schema: envSchema,
-      cmd: [input.command!, ...argsArray],
+      cmd: [input.command ?? "", ...argsArray],
       json_spec: {
         type: "command",
-        command: input.command!,
+        command: input.command ?? "",
         args: argsArray,
       },
     };
@@ -167,7 +167,7 @@ function toServerConnectionCreate(
     server = {
       name: input.name,
       description: input.description,
-      remote_url: input.endpointUrl!,
+      remote_url: input.endpointUrl ?? "",
       version: input.version || "1.0.0",
       tags,
       is_public: input.isPublic,
@@ -181,7 +181,7 @@ function toServerConnectionCreate(
       })),
       json_spec: {
         type: "url",
-        endpoint_url: input.endpointUrl!,
+        endpoint_url: input.endpointUrl ?? "",
       },
     };
     instanceJsonSpec = Object.keys(headersObject).length
@@ -263,9 +263,9 @@ export async function addMCPServer(
   let response;
   try {
     const client = getServerClient();
-    response = await client.POST("/v1/mcp-server-instances/with-spec" as any, {
+    response = await client.POST("/v1/mcp-server-instances/with-spec", {
       body: validated.data,
-    } as any);
+    });
 
     if (response.data) {
       revalidatePath("/connections");

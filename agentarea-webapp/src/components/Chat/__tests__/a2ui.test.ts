@@ -24,7 +24,7 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-function assertEqual(actual: any, expected: any, message: string) {
+function assertEqual(actual: unknown, expected: unknown, message: string) {
   const a = JSON.stringify(actual);
   const e = JSON.stringify(expected);
   if (a !== e) {
@@ -96,9 +96,9 @@ assertEqual(key, "a2uicreatesurface", "regex preserves digit 2 in A2UI");
 section("JSON Pointer (RFC 6901)");
 
 function applyJsonPointer(
-  obj: Record<string, any>,
+  obj: Record<string, unknown>,
   pointer: string,
-  value: any
+  value: unknown
 ): void {
   if (pointer === "/" || pointer === "") {
     Object.assign(obj, value ?? {});
@@ -111,7 +111,7 @@ function applyJsonPointer(
   let target = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     if (target[parts[i]] == null) target[parts[i]] = {};
-    target = target[parts[i]];
+    target = target[parts[i]] as Record<string, unknown>;
   }
   const last = parts[parts.length - 1];
   if (value === undefined) {
@@ -122,32 +122,32 @@ function applyJsonPointer(
 }
 
 {
-  const obj: any = {};
+  const obj: Record<string, unknown> = {};
   applyJsonPointer(obj, "/user/name", "Jane");
   assertEqual(obj.user.name, "Jane", "sets nested path /user/name");
 }
 
 {
-  const obj: any = {};
+  const obj: Record<string, unknown> = {};
   applyJsonPointer(obj, "/", { foo: "bar" });
   assertEqual(obj.foo, "bar", "root path merges object");
 }
 
 {
-  const obj: any = { user: { name: "Jane", age: 30 } };
+  const obj: Record<string, unknown> = { user: { name: "Jane", age: 30 } };
   applyJsonPointer(obj, "/user/name", undefined);
   assertEqual(obj.user.name, undefined, "undefined value deletes key");
   assertEqual(obj.user.age, 30, "sibling key preserved after delete");
 }
 
 {
-  const obj: any = {};
+  const obj: Record<string, unknown> = {};
   applyJsonPointer(obj, "/a~1b", "escaped-slash");
   assertEqual(obj["a/b"], "escaped-slash", "handles ~1 escape (/)");
 }
 
 {
-  const obj: any = {};
+  const obj: Record<string, unknown> = {};
   applyJsonPointer(obj, "/a~0b", "escaped-tilde");
   assertEqual(obj["a~b"], "escaped-tilde", "handles ~0 escape (~)");
 }
@@ -156,14 +156,33 @@ function applyJsonPointer(
 
 section("Surface message accumulator");
 
-type AnyMessage = any;
+interface A2UIComponent {
+  id: string;
+  component?: string;
+  children?: string[];
+  text?: string;
+}
+
+interface A2UISurface {
+  components: Record<string, A2UIComponent>;
+  dataModel: Record<string, unknown>;
+}
+
+interface AnyMessage {
+  type: string;
+  data: {
+    id?: string;
+    surfaceId?: string;
+    surface?: A2UISurface;
+  };
+}
 
 function upsertA2UIComponents(
   messages: AnyMessage[],
   surfaceId: string,
-  components: any[]
+  components: A2UIComponent[]
 ): AnyMessage[] {
-  return messages.map((msg: any) => {
+  return messages.map((msg) => {
     if (msg.type !== "a2ui_surface") return msg;
     if (msg.data.surfaceId !== surfaceId) return msg;
     const updated = { ...msg.data.surface.components };
@@ -184,9 +203,9 @@ function updateA2UIDataModel(
   messages: AnyMessage[],
   surfaceId: string,
   path: string,
-  value: any
+  value: unknown
 ): AnyMessage[] {
-  return messages.map((msg: any) => {
+  return messages.map((msg) => {
     if (msg.type !== "a2ui_surface") return msg;
     if (msg.data.surfaceId !== surfaceId) return msg;
     const currentModel = { ...msg.data.surface.dataModel };
@@ -206,13 +225,13 @@ function deleteA2UISurface(
   surfaceId: string
 ): AnyMessage[] {
   return messages.filter(
-    (msg: any) => msg.type !== "a2ui_surface" || msg.data.surfaceId !== surfaceId
+    (msg) => msg.type !== "a2ui_surface" || msg.data.surfaceId !== surfaceId
   );
 }
 
 // Test: upsert components
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     {
       type: "a2ui_surface",
       data: {
@@ -241,7 +260,7 @@ function deleteA2UISurface(
 
 // Test: upsert overwrites existing
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     {
       type: "a2ui_surface",
       data: {
@@ -269,7 +288,7 @@ function deleteA2UISurface(
 
 // Test: upsert ignores other surfaces
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     {
       type: "a2ui_surface",
       data: { surfaceId: "s1", surface: { components: {}, dataModel: {} } },
@@ -298,7 +317,7 @@ function deleteA2UISurface(
 
 // Test: update data model
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     {
       type: "a2ui_surface",
       data: { surfaceId: "s1", surface: { components: {}, dataModel: {} } },
@@ -315,7 +334,7 @@ function deleteA2UISurface(
 
 // Test: delete surface
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     { type: "llm_response", data: { id: "1" } },
     {
       type: "a2ui_surface",
@@ -327,14 +346,14 @@ function deleteA2UISurface(
   const result = deleteA2UISurface(msgs, "s1");
   assertEqual(result.length, 2, "deleteSurface removes surface message");
   assert(
-    result.every((m: any) => m.type !== "a2ui_surface"),
+    result.every((m) => m.type !== "a2ui_surface"),
     "no a2ui_surface remains"
   );
 }
 
 // Test: delete surface leaves other surfaces
 {
-  const msgs: any[] = [
+  const msgs: AnyMessage[] = [
     {
       type: "a2ui_surface",
       data: { surfaceId: "s1", surface: { components: {}, dataModel: {} } },

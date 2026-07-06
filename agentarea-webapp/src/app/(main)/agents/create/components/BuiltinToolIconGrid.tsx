@@ -165,7 +165,7 @@ export const BuiltinToolIconGrid = ({
           const hasMethodSelection =
             tool.available_methods && tool.available_methods.length > 0;
           const enabledMethodsCount = hasMethodSelection
-            ? tool.available_methods!.filter((method) =>
+            ? (tool.available_methods ?? []).filter((method) =>
                 isMethodEnabled(tool.name, method.name)
               ).length
             : 0;
@@ -218,7 +218,7 @@ export const BuiltinToolIconGrid = ({
                         {isSelected && hasMethodSelection && (
                           <span className="rounded-full bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
                             {enabledMethodsCount}/
-                            {tool.available_methods!.length}
+                            {tool.available_methods?.length ?? 0}
                           </span>
                         )}
 
@@ -264,7 +264,7 @@ export const BuiltinToolIconGrid = ({
                     </p>
 
                     <div className="space-y-1.5">
-                      {tool.available_methods!.map((method) => {
+                      {(tool.available_methods ?? []).map((method) => {
                         const isEnabled = isMethodEnabled(
                           tool.name,
                           method.name

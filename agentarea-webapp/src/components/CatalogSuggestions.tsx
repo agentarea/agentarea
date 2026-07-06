@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,9 +71,11 @@ export default function CatalogSuggestions({
                   className="flex items-center gap-2 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm transition-shadow hover:shadow-sm dark:bg-zinc-900"
                 >
                   {icon ? (
-                    <img
+                    <Image
                       src={icon}
                       alt=""
+                      width={20}
+                      height={20}
                       className="h-5 w-5 shrink-0 rounded object-contain"
                     />
                   ) : (

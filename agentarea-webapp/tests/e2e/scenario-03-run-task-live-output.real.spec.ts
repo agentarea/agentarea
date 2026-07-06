@@ -52,8 +52,8 @@ test.describe("Scenario 03 MP - run a task and watch live output", () => {
     const marker = `s03-${Date.now()}`;
     const prompt = `Reply with one short sentence and include the token ${marker}.`;
 
-    await gotoCommitted(page, `/agents/${agent!.id}/new-task`);
-    const input = page.getByPlaceholder(new RegExp(agent!.name, "i"));
+    await gotoCommitted(page, `/agents/${agent?.id ?? ""}/new-task`);
+    const input = page.getByPlaceholder(new RegExp(agent?.name ?? "", "i"));
     await input.fill(prompt);
     await input.press("Enter");
 

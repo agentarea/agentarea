@@ -5,6 +5,12 @@ import path from "path";
 import "./src/env";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "**" },
+    ],
+  },
   /* config options here */
   // eslint: {
   //   // Do not fail the build on ESLint warnings; errors are handled via lint script

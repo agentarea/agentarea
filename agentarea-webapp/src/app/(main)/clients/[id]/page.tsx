@@ -6,6 +6,12 @@ import { DetailSkeleton } from "@/components/Skeleton";
 import ContentBlock from "@/components/ContentBlock";
 import { AssociationSection } from "../../projects/[id]/components/AssociationSection";
 import { useToast } from "@/hooks/use-toast";
+import type {
+  ClientResponse,
+  SkillResponse,
+  McpServerInstanceResponse,
+  ProjectResponse,
+} from "@/api/client";
 import {
   getClientAction,
   addSkillToClientAction,
@@ -23,11 +29,11 @@ export default function ClientDetailPage() {
   const clientId = params.id as string;
   const { toast } = useToast();
 
-  const [client, setClient] = useState<any>(null);
+  const [client, setClient] = useState<ClientResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allSkills, setAllSkills] = useState<any[]>([]);
-  const [allMcp, setAllMcp] = useState<any[]>([]);
-  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [allSkills, setAllSkills] = useState<SkillResponse[]>([]);
+  const [allMcp, setAllMcp] = useState<McpServerInstanceResponse[]>([]);
+  const [allProjects, setAllProjects] = useState<ProjectResponse[]>([]);
 
   const fetchClient = async () => {
     const { data } = await getClientAction(clientId);
@@ -45,9 +51,9 @@ export default function ClientDetailPage() {
           listProjectsAction(),
         ]);
         if (clientRes.data) setClient(clientRes.data);
-        setAllSkills((skillsRes.data as any[]) || []);
-        setAllMcp((mcpRes.data as any[]) || []);
-        setAllProjects((projectsRes.data as any[]) || []);
+        setAllSkills((skillsRes.data as SkillResponse[]) || []);
+        setAllMcp(mcpRes.data || []);
+        setAllProjects(projectsRes.data || []);
       } finally {
         setLoading(false);
       }

@@ -36,6 +36,28 @@ import {
   EVENT_HUMAN_INPUT_RECEIVED,
 } from "../constants/eventTypes";
 
+interface SSEEventData {
+  event_type?: string;
+  original_event_type?: string;
+  escalation_id?: string;
+  input_request_id?: string;
+  comment?: string;
+  error?: string;
+  message?: string;
+  result?: { error?: string };
+  original_data?: {
+    escalation_id?: string;
+    input_request_id?: string;
+    comment?: string;
+  };
+  [key: string]: unknown;
+}
+
+export interface SSEEvent {
+  type: string;
+  data: SSEEventData;
+}
+
 export interface SSEEventHandlerOptions {
   /**
    * Current task ID (can be null)
@@ -107,7 +129,7 @@ export interface SSEEventHandlerOptions {
  */
 export function createSSEEventHandler(
   options: SSEEventHandlerOptions
-): (event: { type: string; data: any }) => void {
+): (event: SSEEvent) => void {
   const {
     currentTaskId,
     setMessages,
@@ -119,7 +141,7 @@ export function createSSEEventHandler(
     onTaskFinished,
   } = options;
 
-  return (event: { type: string; data: any }) => {
+  return (event: SSEEvent) => {
     // Get the actual event type from the data if available
     const actualEventType =
       event.data?.event_type || event.data?.original_event_type || event.type;
@@ -145,12 +167,12 @@ export function createSSEEventHandler(
             if (
               "type" in msg &&
               msg.type === "approval_request" &&
-              (msg as any).data.escalation_id === escalationId
+              msg.data.escalation_id === escalationId
             ) {
               return {
                 ...msg,
                 data: {
-                  ...(msg as any).data,
+                  ...msg.data,
                   resolved: true,
                   approved: cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED,
                   deny_comment: event.data?.comment || event.data?.original_data?.comment,
@@ -175,11 +197,11 @@ export function createSSEEventHandler(
             if (
               "type" in msg &&
               msg.type === "input_request" &&
-              (msg as any).data.input_request_id === inputRequestId
+              msg.data.input_request_id === inputRequestId
             ) {
               return {
                 ...msg,
-                data: { ...(msg as any).data, resolved: true },
+                data: { ...msg.data, resolved: true },
               };
             }
             return msg;

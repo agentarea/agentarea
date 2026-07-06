@@ -137,7 +137,7 @@ export async function createKratosUser(prefix: string): Promise<AuthedUser> {
     identityId,
     email,
     jwt: whoami.json.tokenized,
-    sessionCookie: { name: "ory_kratos_session", value: sessionCookieValue! },
+    sessionCookie: { name: "ory_kratos_session", value: sessionCookieValue ?? "" },
   };
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Github, SquarePen } from "lucide-react";
 import { QUICK_TASK_OPEN_EVENT } from "@/components/QuickTask/QuickTaskDialog";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ import { TeamSwitcher } from "./TeamSwitcher";
 
 export function AppSidebarContent({ data }: { data: any }) {
   const { open } = useSidebar();
-  const router = useRouter();
 
   const openQuickTask = React.useCallback(() => {
     if (typeof window === "undefined") return;

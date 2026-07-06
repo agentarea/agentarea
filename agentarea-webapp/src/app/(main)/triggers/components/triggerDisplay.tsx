@@ -10,21 +10,34 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import type { TriggerResponse } from "@/api/client/types.gen";
 
 export interface TriggerCatalogEntry {
   id?: string;
   name?: string;
   icon?: string;
+  description?: string;
+  kind?: string;
   webhook_type?: string;
   data_extractor?: string;
 }
 
+export type EnrichedTrigger = TriggerResponse & {
+  agent_name?: string;
+  next_run_at?: string | null;
+};
+
 export interface TriggerLike {
   trigger_type?: string;
-  webhook_type?: string;
-  data_extractor?: string;
+  webhook_type?: string | null;
+  data_extractor?: string | null;
+  cron_expression?: string | null;
+  is_active?: boolean;
+  consecutive_failures?: number;
+  failure_threshold?: number;
   config?: {
-    webhook_type?: string;
+    webhook_type?: string | null;
+    cron_expression?: string | null;
   } | null;
 }
 
@@ -196,7 +209,7 @@ const WEBHOOK_SCHEDULE_LABEL: Record<string, string> = {
 };
 
 /** Human description of when a trigger fires, shown in the listing. */
-export function describeTriggerSchedule(trigger: any): string {
+export function describeTriggerSchedule(trigger: TriggerLike): string {
   if (trigger?.trigger_type === "cron") {
     return describeCronExpression(
       trigger.cron_expression ?? trigger.config?.cron_expression
@@ -219,7 +232,7 @@ export type TriggerHealth = "active" | "paused" | "error";
  * Derive the listing status pill. A trigger that has hit its failure threshold
  * reads as "error"; otherwise it's "active" or "paused" by its enabled flag.
  */
-export function getTriggerHealth(trigger: any): TriggerHealth {
+export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
   const failures = Number(trigger?.consecutive_failures ?? 0);
   const threshold = Number(trigger?.failure_threshold ?? 0);
   if (threshold > 0 && failures >= threshold) return "error";

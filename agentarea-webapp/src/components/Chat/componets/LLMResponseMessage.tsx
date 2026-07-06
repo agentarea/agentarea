@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
 import { Streamdown } from "streamdown";
+import type { Components } from "streamdown";
 import { cn } from "@/lib/utils";
 import { useFormatTimestamp } from "../../../utils/dateUtils";
 import { LLMResponseData } from "../types";
@@ -52,7 +53,7 @@ export const LLMResponseMessage: React.FC<{
 
         <Streamdown
           className="prose prose-sm mt-1 max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
-          components={fileAwareMarkdownComponents as any}
+          components={fileAwareMarkdownComponents as Components}
           linkSafety={{ enabled: false }}
         >
           {preprocessFileLinks(data.content)}

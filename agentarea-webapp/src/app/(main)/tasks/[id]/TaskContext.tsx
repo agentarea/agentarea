@@ -6,7 +6,6 @@ import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskPolicySnapshotAction as getTaskPolicySnapshot,
 } from "@/lib/server-actions";
-import type { TaskWithAgent } from "@/lib/api";
 import type { EffectivePolicy, EffectivePolicyResponse } from "@/types/policies";
 
 interface TaskData {

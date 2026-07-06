@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
@@ -33,9 +34,11 @@ export default function ProviderConfigsView({
       render: (value: string, item: ProviderConfig) => (
         <div className="flex items-center gap-2">
           {item.spec?.icon_url && (
-            <img
+            <Image
               src={item.spec.icon_url}
               alt={`${item.spec.name} icon`}
+              width={20}
+              height={20}
               className="h-5 w-5 flex-shrink-0 rounded dark:invert"
             />
           )}

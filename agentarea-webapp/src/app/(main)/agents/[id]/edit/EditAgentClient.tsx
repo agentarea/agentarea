@@ -12,6 +12,7 @@ import {
 } from "../../create/components";
 import { initialState as agentInitialState } from "../../create/types";
 import type { AgentFormValues, EventConfig } from "../../create/types";
+import type { Method } from "../../create/components/MethodsList";
 import { updateAgent } from "./actions";
 import SkillsSection from "./components/SkillsSection";
 import type { Skill } from "@/lib/api";
@@ -20,6 +21,14 @@ type MCPServer = McpServerResponse;
 type LLMModelInstance = ModelInstanceResponse;
 type Agent = AgentResponse;
 type MCPInstance = McpServerInstanceResponse;
+
+interface BuiltinTool {
+  name: string;
+  display_name?: string;
+  category?: string;
+  description?: string;
+  available_methods?: Method[];
+}
 
 interface AgentSkill {
   id: string;
@@ -33,13 +42,12 @@ export default function EditAgentClient({
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
-  availableSkills,
 }: {
   agent: Agent;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: MCPInstance[];
-  builtinTools: any[];
+  builtinTools: BuiltinTool[];
   availableSkills: Skill[];
 }) {
   const [state, formAction] = useActionState(updateAgent, agentInitialState);
@@ -47,12 +55,17 @@ export default function EditAgentClient({
   // Skills state (managed separately from react-hook-form for simplicity)
   // Note: agent.skills comes from the API but TypeScript schema may not include it yet
   const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
-    ((agent as any).skills || []).map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
+    (agent.skills ?? []).map((s) => ({
+      id: String(s.id),
+      name: String(s.name),
+      description: (s.description as string | null | undefined) ?? null,
     }))
   );
+
+  const agentDefaults = agent as unknown as {
+    tools_config?: AgentFormValues["tools_config"];
+    events_config?: AgentFormValues["events_config"];
+  };
 
   const {
     register,
@@ -66,8 +79,8 @@ export default function EditAgentClient({
       description: agent.description || "",
       instruction: agent.instruction || "",
       model_id: agent.model_id || "",
-      tools_config: (agent as any).tools_config || { mcp_server_configs: [] },
-      events_config: (agent as any).events_config || { events: [] },
+      tools_config: agentDefaults.tools_config || { mcp_server_configs: [] },
+      events_config: agentDefaults.events_config || { events: [] },
       planning: agent.planning || false,
     },
   });

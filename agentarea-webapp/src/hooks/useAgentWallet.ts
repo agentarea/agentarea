@@ -172,17 +172,27 @@ export function useWalletPayments(
   const [data, setData] = useState<PaginatedPayments | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const protocol = filters?.protocol;
+  const status = filters?.status;
+  const page = filters?.page;
+  const page_size = filters?.page_size;
+
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const { data: result } = await getAgentWalletPaymentsAction(agentId, filters);
+      const { data: result } = await getAgentWalletPaymentsAction(agentId, {
+        protocol,
+        status,
+        page,
+        page_size,
+      });
       if (isPaginatedPayments(result)) {
         setData(result);
       }
     } finally {
       setLoading(false);
     }
-  }, [agentId, filters?.protocol, filters?.status, filters?.page, filters?.page_size]);
+  }, [agentId, protocol, status, page, page_size]);
 
   useEffect(() => {
     fetchPayments();

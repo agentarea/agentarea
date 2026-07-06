@@ -48,7 +48,7 @@ export default function AgentChat({
   initialMessages = [],
   onTaskCreated,
   className = "",
-  height = "600px",
+  height: _height = "600px",
 }: AgentChatProps) {
   // Hooks for state management
   const { messages, setMessages, addUserMessage } = useChatMessages({
@@ -138,15 +138,16 @@ export default function AgentChat({
   };
 
   // SSE message handler
-  const handleSSEMessage = React.useCallback(
-    createSSEEventHandler({
-      currentTaskId,
-      setMessages,
-      setIsLoading,
-      setCurrentTaskId,
-      onTaskCreated: callbacks.onTaskCreated.current,
-    }),
-    [currentTaskId, callbacks]
+  const handleSSEMessage = React.useMemo(
+    () =>
+      createSSEEventHandler({
+        currentTaskId,
+        setMessages,
+        setIsLoading,
+        setCurrentTaskId,
+        onTaskCreated: callbacks.onTaskCreated.current,
+      }),
+    [currentTaskId, setMessages, setCurrentTaskId, callbacks]
   );
 
   // Send message handler

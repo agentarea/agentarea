@@ -58,7 +58,7 @@ test.describe("Scenario 06 MP - create cron and webhook triggers", () => {
     // Agent is a Radix Select with a stable trigger id (not a positional
     // combobox — the form has several Selects: timezone, skills, MCP).
     await page.locator("#agent_id").click();
-    await page.getByRole("option", { name: new RegExp(agent!.name) }).click();
+    await page.getByRole("option", { name: new RegExp(agent?.name ?? "") }).click();
 
     // The free-form cron input (placeholder "0 9 * * 1-5") only exists in the
     // "Custom" frequency mode; the default is "Daily" with dropdowns. Switch to
@@ -88,6 +88,6 @@ test.describe("Scenario 06 MP - create cron and webhook triggers", () => {
     triggerId = new URL(page.url()).pathname.split("/").pop();
     // The agent name renders in more than one place on the detail page
     // (header + body) — assert on the first match.
-    await expect(page.getByText(agent!.name, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(agent?.name ?? "", { exact: false }).first()).toBeVisible();
   });
 });

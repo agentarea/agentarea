@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 _client_id_var: ContextVar[str | None] = ContextVar("client_mcp_client_id", default=None)
 
 
-class ClientAccessDenied(Exception):
+class ClientAccessDeniedError(Exception):
     """Raised when the authenticated principal lacks `use` on the target client."""
 
 
@@ -32,18 +32,17 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
 
     A client-credentials principal (token subject IS the client) is trusted for
     its own bundle; any other principal must hold the `use` relation in the
-    access-control graph. Raises ``ClientAccessDenied`` otherwise.
+    access-control graph. Raises ``ClientAccessDeniedError`` otherwise.
     """
     if getattr(user_ctx, "client_id", None) == client_id:
         return
     from agentarea_common.auth.permission import PermissionService
     from agentarea_common.di.container import resolve
 
-    allowed = await resolve(PermissionService).check(
-        user_ctx.user_id, "use", "client", client_id
-    )
+    allowed = await resolve(PermissionService).check(user_ctx.user_id, "use", "client", client_id)
     if not allowed:
-        raise ClientAccessDenied(client_id)
+        raise ClientAccessDeniedError(client_id)
+
 
 client_mcp_server = FastMCP(
     name="AgentArea Client",
@@ -161,7 +160,7 @@ async def _list_tools() -> list[Tool]:
         return []
     try:
         proxy, skill_registry = await _resolve_client_scope(client_id)
-    except ClientAccessDenied:
+    except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
     if proxy is None:
         return []
@@ -181,7 +180,7 @@ async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
         raise ValueError("No client scope on request")
     try:
         proxy, skill_registry = await _resolve_client_scope(client_id)
-    except ClientAccessDenied:
+    except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
     if proxy is None:
         raise ValueError("Client not found")

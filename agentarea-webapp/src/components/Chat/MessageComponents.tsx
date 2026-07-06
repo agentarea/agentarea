@@ -25,8 +25,12 @@ export const MessageRenderer: React.FC<{
     surfaceId: string,
     sourceComponentId: string,
   ) => void;
-  onResolveEscalation?: (escalationId: string, approved: boolean, comment: string) => void;
-  onSubmitInput?: (
+  // Required: any surface rendering task messages can receive an approval
+  // (approval_request) or a structured input (input_request) message, so it
+  // MUST be able to answer both. Making these optional is how /tasks/[id]
+  // silently shipped a dead "submit" button.
+  onResolveEscalation: (escalationId: string, approved: boolean, comment: string) => void;
+  onSubmitInput: (
     inputRequestId: string,
     answers: Record<string, unknown>,
     secrets: Record<string, { value: string; secret_name?: string }>,

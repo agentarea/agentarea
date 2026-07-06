@@ -44,7 +44,31 @@ function isSecretHeader(name: string) {
   return !SAFE_HEADERS.has(name.toLowerCase().trim());
 }
 
-function extractFromSpec(spec: Record<string, any>) {
+function errorDetail(err: unknown): string | undefined {
+  if (err && typeof err === "object" && "detail" in err) {
+    const detail = (err as { detail?: unknown }).detail;
+    if (typeof detail === "string") return detail;
+  }
+  return undefined;
+}
+
+interface OpenAPIOperation {
+  operationId?: string;
+  summary?: string;
+  description?: string;
+}
+
+interface OpenAPISpec {
+  openapi?: string;
+  info?: { title?: string; description?: string; version?: string };
+  servers?: Array<{ url?: string }>;
+  paths?: Record<
+    string,
+    Record<string, OpenAPIOperation | undefined> | null | undefined
+  >;
+}
+
+function extractFromSpec(spec: OpenAPISpec) {
   const info = spec.info || {};
   const servers = spec.servers || [];
   const tools: PreviewTool[] = [];
@@ -63,7 +87,7 @@ function extractFromSpec(spec: Record<string, any>) {
     for (const [path, pathItem] of Object.entries(paths)) {
       if (!pathItem || typeof pathItem !== "object") continue;
       for (const method of methods) {
-        const op = (pathItem as any)[method];
+        const op = pathItem[method];
         if (!op) continue;
         tools.push({
           name:
@@ -180,11 +204,18 @@ export function AddOpenAPIForm() {
             spec_url: url,
           });
           if (fetchErr) {
-            setPreviewError(
-              (fetchErr as any)?.detail || t("failedToFetchSpec")
-            );
+            setPreviewError(errorDetail(fetchErr) || t("failedToFetchSpec"));
           } else if (data) {
-            applyPreview(data as any);
+            applyPreview({
+              title: data.title,
+              description: data.description,
+              base_url: data.base_url,
+              version: data.version,
+              tools: (data.tools ?? []).map((tool) => ({
+                name: tool.name ?? "",
+                description: tool.description ?? "",
+              })),
+            });
           }
         } catch {
           setPreviewError(t("failedToFetchSpec"));
@@ -253,7 +284,7 @@ export function AddOpenAPIForm() {
       });
 
       if (createError) {
-        setError((createError as any)?.detail || t("failedToCreate"));
+        setError(errorDetail(createError) || t("failedToCreate"));
         return;
       }
 

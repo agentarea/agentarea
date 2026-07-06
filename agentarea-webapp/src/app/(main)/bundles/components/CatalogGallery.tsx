@@ -8,6 +8,7 @@ import React, {
   useState,
   useTransition,
 } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -551,9 +552,11 @@ function BrandLogo({
         small ? "h-6 w-6 p-0.5" : "h-10 w-10 p-1.5"
       )}
     >
-      <img
+      <Image
         src={src}
         alt={alt}
+        width={40}
+        height={40}
         loading="lazy"
         className="h-full w-full object-contain"
         onError={() => setFailed(true)}

@@ -180,6 +180,67 @@ class TestComposedTelegramAdapter:
             assert retry_payload["text"] == "⏳ Working on it..."
             assert retry_payload["reply_to_message_id"] == 99
 
+    @pytest.mark.asyncio
+    async def test_streaming_sender_collapses_feed_to_result_on_terminal(
+        self, secret_manager
+    ):
+        """The live message accumulates progress while the task runs, but a
+        terminal event replaces the '⏳ Working on it...' feed with just the
+        final result — no stale status line pinned above the answer.
+        """
+        from agentarea_triggers.channels.adapters import make_telegram_streaming_sender
+
+        store: dict = {}
+        fake_redis = AsyncMock()
+        fake_redis.hgetall = AsyncMock(side_effect=lambda k: dict(store.get(k, {})))
+        fake_redis.hset = AsyncMock(
+            side_effect=lambda k, mapping: store.setdefault(k, {}).update(mapping)
+        )
+        fake_redis.expire = AsyncMock(return_value=True)
+        fake_redis.delete = AsyncMock(side_effect=lambda k: store.pop(k, None))
+
+        posts: list = []
+
+        async def _post(url, **kw):
+            posts.append((url, kw.get("json")))
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"message_id": 555}},
+                request=httpx.Request("POST", url),
+            )
+
+        with patch("redis.asyncio.from_url", return_value=fake_redis):
+            sender = make_telegram_streaming_sender(secret_manager, "redis://x")
+
+        with patch("agentarea_triggers.channels.adapters.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=_post)
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            base = {
+                "type": "telegram",
+                "trigger_id": "t1",
+                "chat_id": "42",
+                "task_id": "task-1",
+            }
+            await sender(
+                {**base, "event_type": "WorkflowStarted"}, r"⏳ Working on it\.\.\."
+            )
+            await sender(
+                {**base, "event_type": "WorkflowCompleted"}, "Report ready"
+            )
+
+        assert "sendMessage" in posts[0][0]
+        assert "Working on it" in posts[0][1]["text"]
+
+        edit_url, edit_payload = posts[-1]
+        assert "editMessageText" in edit_url
+        assert edit_payload["text"] == "Report ready"
+        assert "Working on it" not in edit_payload["text"]
+
+        assert store == {}
+
 
 class TestEmailAdapter:
     """Test Email outbound adapter."""

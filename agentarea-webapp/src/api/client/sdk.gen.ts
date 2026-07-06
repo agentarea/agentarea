@@ -386,27 +386,27 @@ import type {
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses,
-  HandleWebhookWebhooksWebhookIdPut2Data,
-  HandleWebhookWebhooksWebhookIdPut2Errors,
-  HandleWebhookWebhooksWebhookIdPut2Responses,
-  HandleWebhookWebhooksWebhookIdPut3Data,
-  HandleWebhookWebhooksWebhookIdPut3Errors,
-  HandleWebhookWebhooksWebhookIdPut3Responses,
-  HandleWebhookWebhooksWebhookIdPut4Data,
-  HandleWebhookWebhooksWebhookIdPut4Errors,
-  HandleWebhookWebhooksWebhookIdPut4Responses,
-  HandleWebhookWebhooksWebhookIdPut5Data,
-  HandleWebhookWebhooksWebhookIdPut5Errors,
-  HandleWebhookWebhooksWebhookIdPut5Responses,
-  HandleWebhookWebhooksWebhookIdPut6Data,
-  HandleWebhookWebhooksWebhookIdPut6Errors,
-  HandleWebhookWebhooksWebhookIdPut6Responses,
-  HandleWebhookWebhooksWebhookIdPut7Data,
-  HandleWebhookWebhooksWebhookIdPut7Errors,
-  HandleWebhookWebhooksWebhookIdPut7Responses,
-  HandleWebhookWebhooksWebhookIdPutData,
-  HandleWebhookWebhooksWebhookIdPutErrors,
-  HandleWebhookWebhooksWebhookIdPutResponses,
+  HandleWebhookWebhooksWebhookIdPatch2Data,
+  HandleWebhookWebhooksWebhookIdPatch2Errors,
+  HandleWebhookWebhooksWebhookIdPatch2Responses,
+  HandleWebhookWebhooksWebhookIdPatch3Data,
+  HandleWebhookWebhooksWebhookIdPatch3Errors,
+  HandleWebhookWebhooksWebhookIdPatch3Responses,
+  HandleWebhookWebhooksWebhookIdPatch4Data,
+  HandleWebhookWebhooksWebhookIdPatch4Errors,
+  HandleWebhookWebhooksWebhookIdPatch4Responses,
+  HandleWebhookWebhooksWebhookIdPatch5Data,
+  HandleWebhookWebhooksWebhookIdPatch5Errors,
+  HandleWebhookWebhooksWebhookIdPatch5Responses,
+  HandleWebhookWebhooksWebhookIdPatch6Data,
+  HandleWebhookWebhooksWebhookIdPatch6Errors,
+  HandleWebhookWebhooksWebhookIdPatch6Responses,
+  HandleWebhookWebhooksWebhookIdPatch7Data,
+  HandleWebhookWebhooksWebhookIdPatch7Errors,
+  HandleWebhookWebhooksWebhookIdPatch7Responses,
+  HandleWebhookWebhooksWebhookIdPatchData,
+  HandleWebhookWebhooksWebhookIdPatchErrors,
+  HandleWebhookWebhooksWebhookIdPatchResponses,
   HealthCheckHealthGetData,
   HealthCheckHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
@@ -415,21 +415,21 @@ import type {
   HydraDcrProxyOauth2RegisterPostResponses,
   HydraJwksProxyWellKnownJwksJsonGetData,
   HydraJwksProxyWellKnownJwksJsonGetResponses,
-  HydraOauth2ProxyOauth2PathPut2Data,
-  HydraOauth2ProxyOauth2PathPut2Errors,
-  HydraOauth2ProxyOauth2PathPut2Responses,
-  HydraOauth2ProxyOauth2PathPut3Data,
-  HydraOauth2ProxyOauth2PathPut3Errors,
-  HydraOauth2ProxyOauth2PathPut3Responses,
-  HydraOauth2ProxyOauth2PathPut4Data,
-  HydraOauth2ProxyOauth2PathPut4Errors,
-  HydraOauth2ProxyOauth2PathPut4Responses,
-  HydraOauth2ProxyOauth2PathPut5Data,
-  HydraOauth2ProxyOauth2PathPut5Errors,
-  HydraOauth2ProxyOauth2PathPut5Responses,
-  HydraOauth2ProxyOauth2PathPutData,
-  HydraOauth2ProxyOauth2PathPutErrors,
-  HydraOauth2ProxyOauth2PathPutResponses,
+  HydraOauth2ProxyOauth2PathPatch2Data,
+  HydraOauth2ProxyOauth2PathPatch2Errors,
+  HydraOauth2ProxyOauth2PathPatch2Responses,
+  HydraOauth2ProxyOauth2PathPatch3Data,
+  HydraOauth2ProxyOauth2PathPatch3Errors,
+  HydraOauth2ProxyOauth2PathPatch3Responses,
+  HydraOauth2ProxyOauth2PathPatch4Data,
+  HydraOauth2ProxyOauth2PathPatch4Errors,
+  HydraOauth2ProxyOauth2PathPatch4Responses,
+  HydraOauth2ProxyOauth2PathPatch5Data,
+  HydraOauth2ProxyOauth2PathPatch5Errors,
+  HydraOauth2ProxyOauth2PathPatch5Responses,
+  HydraOauth2ProxyOauth2PathPatchData,
+  HydraOauth2ProxyOauth2PathPatchErrors,
+  HydraOauth2ProxyOauth2PathPatchResponses,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
   ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
@@ -719,6 +719,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadWorkspaceFileV1FilesPostData,
+  UploadWorkspaceFileV1FilesPostErrors,
+  UploadWorkspaceFileV1FilesPostResponses,
   UpsertModelSpecV1ModelSpecsUpsertPostData,
   UpsertModelSpecV1ModelSpecsUpsertPostErrors,
   UpsertModelSpecV1ModelSpecsUpsertPostResponses,
@@ -905,18 +908,18 @@ export const hydraDcrProxyOauth2RegisterPost = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPut = <
+export const hydraOauth2ProxyOauth2PathPatch = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPutData, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPatchData, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPutResponses,
-  HydraOauth2ProxyOauth2PathPutErrors,
+  HydraOauth2ProxyOauth2PathPatchResponses,
+  HydraOauth2ProxyOauth2PathPatchErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    HydraOauth2ProxyOauth2PathPutResponses,
-    HydraOauth2ProxyOauth2PathPutErrors,
+    HydraOauth2ProxyOauth2PathPatchResponses,
+    HydraOauth2ProxyOauth2PathPatchErrors,
     ThrowOnError
   >({
     security: [
@@ -935,18 +938,18 @@ export const hydraOauth2ProxyOauth2PathPut = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPut2 = <
+export const hydraOauth2ProxyOauth2PathPatch2 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPut2Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPatch2Data, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPut2Responses,
-  HydraOauth2ProxyOauth2PathPut2Errors,
+  HydraOauth2ProxyOauth2PathPatch2Responses,
+  HydraOauth2ProxyOauth2PathPatch2Errors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    HydraOauth2ProxyOauth2PathPut2Responses,
-    HydraOauth2ProxyOauth2PathPut2Errors,
+    HydraOauth2ProxyOauth2PathPatch2Responses,
+    HydraOauth2ProxyOauth2PathPatch2Errors,
     ThrowOnError
   >({
     security: [
@@ -965,18 +968,18 @@ export const hydraOauth2ProxyOauth2PathPut2 = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPut3 = <
+export const hydraOauth2ProxyOauth2PathPatch3 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPut3Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPatch3Data, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPut3Responses,
-  HydraOauth2ProxyOauth2PathPut3Errors,
+  HydraOauth2ProxyOauth2PathPatch3Responses,
+  HydraOauth2ProxyOauth2PathPatch3Errors,
   ThrowOnError
 > =>
   (options.client ?? client).patch<
-    HydraOauth2ProxyOauth2PathPut3Responses,
-    HydraOauth2ProxyOauth2PathPut3Errors,
+    HydraOauth2ProxyOauth2PathPatch3Responses,
+    HydraOauth2ProxyOauth2PathPatch3Errors,
     ThrowOnError
   >({
     security: [
@@ -995,18 +998,18 @@ export const hydraOauth2ProxyOauth2PathPut3 = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPut4 = <
+export const hydraOauth2ProxyOauth2PathPatch4 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPut4Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPatch4Data, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPut4Responses,
-  HydraOauth2ProxyOauth2PathPut4Errors,
+  HydraOauth2ProxyOauth2PathPatch4Responses,
+  HydraOauth2ProxyOauth2PathPatch4Errors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    HydraOauth2ProxyOauth2PathPut4Responses,
-    HydraOauth2ProxyOauth2PathPut4Errors,
+    HydraOauth2ProxyOauth2PathPatch4Responses,
+    HydraOauth2ProxyOauth2PathPatch4Errors,
     ThrowOnError
   >({
     security: [
@@ -1025,18 +1028,18 @@ export const hydraOauth2ProxyOauth2PathPut4 = <
  *
  * Proxy all /oauth2* requests through to Hydra (excluding /register handled above).
  */
-export const hydraOauth2ProxyOauth2PathPut5 = <
+export const hydraOauth2ProxyOauth2PathPatch5 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HydraOauth2ProxyOauth2PathPut5Data, ThrowOnError>
+  options: Options<HydraOauth2ProxyOauth2PathPatch5Data, ThrowOnError>
 ): RequestResult<
-  HydraOauth2ProxyOauth2PathPut5Responses,
-  HydraOauth2ProxyOauth2PathPut5Errors,
+  HydraOauth2ProxyOauth2PathPatch5Responses,
+  HydraOauth2ProxyOauth2PathPatch5Errors,
   ThrowOnError
 > =>
   (options.client ?? client).put<
-    HydraOauth2ProxyOauth2PathPut5Responses,
-    HydraOauth2ProxyOauth2PathPut5Errors,
+    HydraOauth2ProxyOauth2PathPatch5Responses,
+    HydraOauth2ProxyOauth2PathPatch5Errors,
     ThrowOnError
   >({
     security: [
@@ -1115,18 +1118,18 @@ export const webhookHealthCheckWebhooksHealthGet = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut = <
+export const handleWebhookWebhooksWebhookIdPatch = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPutData, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatchData, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPutResponses,
-  HandleWebhookWebhooksWebhookIdPutErrors,
+  HandleWebhookWebhooksWebhookIdPatchResponses,
+  HandleWebhookWebhooksWebhookIdPatchErrors,
   ThrowOnError
 > =>
   (options.client ?? client).delete<
-    HandleWebhookWebhooksWebhookIdPutResponses,
-    HandleWebhookWebhooksWebhookIdPutErrors,
+    HandleWebhookWebhooksWebhookIdPatchResponses,
+    HandleWebhookWebhooksWebhookIdPatchErrors,
     ThrowOnError
   >({
     security: [
@@ -1145,18 +1148,18 @@ export const handleWebhookWebhooksWebhookIdPut = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut2 = <
+export const handleWebhookWebhooksWebhookIdPatch2 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut2Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch2Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut2Responses,
-  HandleWebhookWebhooksWebhookIdPut2Errors,
+  HandleWebhookWebhooksWebhookIdPatch2Responses,
+  HandleWebhookWebhooksWebhookIdPatch2Errors,
   ThrowOnError
 > =>
   (options.client ?? client).get<
-    HandleWebhookWebhooksWebhookIdPut2Responses,
-    HandleWebhookWebhooksWebhookIdPut2Errors,
+    HandleWebhookWebhooksWebhookIdPatch2Responses,
+    HandleWebhookWebhooksWebhookIdPatch2Errors,
     ThrowOnError
   >({
     security: [
@@ -1175,18 +1178,18 @@ export const handleWebhookWebhooksWebhookIdPut2 = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut3 = <
+export const handleWebhookWebhooksWebhookIdPatch3 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut3Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch3Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut3Responses,
-  HandleWebhookWebhooksWebhookIdPut3Errors,
+  HandleWebhookWebhooksWebhookIdPatch3Responses,
+  HandleWebhookWebhooksWebhookIdPatch3Errors,
   ThrowOnError
 > =>
   (options.client ?? client).head<
-    HandleWebhookWebhooksWebhookIdPut3Responses,
-    HandleWebhookWebhooksWebhookIdPut3Errors,
+    HandleWebhookWebhooksWebhookIdPatch3Responses,
+    HandleWebhookWebhooksWebhookIdPatch3Errors,
     ThrowOnError
   >({
     security: [
@@ -1205,18 +1208,18 @@ export const handleWebhookWebhooksWebhookIdPut3 = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut4 = <
+export const handleWebhookWebhooksWebhookIdPatch4 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut4Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch4Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut4Responses,
-  HandleWebhookWebhooksWebhookIdPut4Errors,
+  HandleWebhookWebhooksWebhookIdPatch4Responses,
+  HandleWebhookWebhooksWebhookIdPatch4Errors,
   ThrowOnError
 > =>
   (options.client ?? client).options<
-    HandleWebhookWebhooksWebhookIdPut4Responses,
-    HandleWebhookWebhooksWebhookIdPut4Errors,
+    HandleWebhookWebhooksWebhookIdPatch4Responses,
+    HandleWebhookWebhooksWebhookIdPatch4Errors,
     ThrowOnError
   >({
     security: [
@@ -1235,18 +1238,18 @@ export const handleWebhookWebhooksWebhookIdPut4 = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut5 = <
+export const handleWebhookWebhooksWebhookIdPatch5 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut5Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch5Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut5Responses,
-  HandleWebhookWebhooksWebhookIdPut5Errors,
+  HandleWebhookWebhooksWebhookIdPatch5Responses,
+  HandleWebhookWebhooksWebhookIdPatch5Errors,
   ThrowOnError
 > =>
   (options.client ?? client).patch<
-    HandleWebhookWebhooksWebhookIdPut5Responses,
-    HandleWebhookWebhooksWebhookIdPut5Errors,
+    HandleWebhookWebhooksWebhookIdPatch5Responses,
+    HandleWebhookWebhooksWebhookIdPatch5Errors,
     ThrowOnError
   >({
     security: [
@@ -1265,18 +1268,18 @@ export const handleWebhookWebhooksWebhookIdPut5 = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut6 = <
+export const handleWebhookWebhooksWebhookIdPatch6 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut6Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch6Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut6Responses,
-  HandleWebhookWebhooksWebhookIdPut6Errors,
+  HandleWebhookWebhooksWebhookIdPatch6Responses,
+  HandleWebhookWebhooksWebhookIdPatch6Errors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    HandleWebhookWebhooksWebhookIdPut6Responses,
-    HandleWebhookWebhooksWebhookIdPut6Errors,
+    HandleWebhookWebhooksWebhookIdPatch6Responses,
+    HandleWebhookWebhooksWebhookIdPatch6Errors,
     ThrowOnError
   >({
     security: [
@@ -1295,18 +1298,18 @@ export const handleWebhookWebhooksWebhookIdPut6 = <
  *
  * Process incoming webhook requests for registered triggers
  */
-export const handleWebhookWebhooksWebhookIdPut7 = <
+export const handleWebhookWebhooksWebhookIdPatch7 = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<HandleWebhookWebhooksWebhookIdPut7Data, ThrowOnError>
+  options: Options<HandleWebhookWebhooksWebhookIdPatch7Data, ThrowOnError>
 ): RequestResult<
-  HandleWebhookWebhooksWebhookIdPut7Responses,
-  HandleWebhookWebhooksWebhookIdPut7Errors,
+  HandleWebhookWebhooksWebhookIdPatch7Responses,
+  HandleWebhookWebhooksWebhookIdPatch7Errors,
   ThrowOnError
 > =>
   (options.client ?? client).put<
-    HandleWebhookWebhooksWebhookIdPut7Responses,
-    HandleWebhookWebhooksWebhookIdPut7Errors,
+    HandleWebhookWebhooksWebhookIdPatch7Responses,
+    HandleWebhookWebhooksWebhookIdPatch7Errors,
     ThrowOnError
   >({
     security: [
@@ -9132,6 +9135,41 @@ export const listWorkspaceFilesV1FilesGet = <
     ],
     url: "/v1/files",
     ...options,
+  });
+
+/**
+ * Upload Workspace File
+ *
+ * Upload a file to the workspace's artifact root.
+ */
+export const uploadWorkspaceFileV1FilesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UploadWorkspaceFileV1FilesPostData, ThrowOnError>
+): RequestResult<
+  UploadWorkspaceFileV1FilesPostResponses,
+  UploadWorkspaceFileV1FilesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UploadWorkspaceFileV1FilesPostResponses,
+    UploadWorkspaceFileV1FilesPostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
   });
 
 /**

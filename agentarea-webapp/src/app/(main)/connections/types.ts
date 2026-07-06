@@ -34,7 +34,7 @@ export interface OpenAPIConnection {
   description?: string | null;
   spec_url?: string | null;
   auth_config_id?: string | null;
-  available_tools: Array<{ name: string; description: string; inputSchema?: any }>;
+  available_tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
   custom_headers?: Array<{ name: string; secret: boolean; value: string | null }> | null;
   status: string;
   created_at: string;

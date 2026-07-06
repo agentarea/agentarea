@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Check,
+  Clock,
   Container,
   Copy,
   ExternalLink,
   Github,
   Globe,
+  Hash,
   Link as LinkIcon,
   Pencil,
   RefreshCw,
@@ -20,12 +23,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Table from "@/components/Table/Table";
-import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { getMcpRuntimeHealthStatusPresentation } from "@/lib/status";
+import {
+  getMcpRuntimeHealthStatusPresentation,
+  getMcpVerificationStatusPresentation,
+} from "@/lib/status";
 import { getMCPInstanceHealth } from "@/lib/api";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
@@ -35,7 +40,6 @@ import { ToolsTable } from "../components/ToolsTable";
 import { MCPInstance, MCPServer } from "../types";
 import { getEffectiveMCPVerificationStatus } from "../utils";
 import { verifyInstance } from "./actions";
-import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
   instance: MCPInstance;
@@ -49,6 +53,22 @@ const MCP_TRANSPORT = {
   command: "command",
   docker: "docker",
 } as const;
+
+interface McpHeaderField {
+  name: string;
+  description?: string;
+  isSecret?: boolean;
+  placeholder?: string;
+}
+
+interface McpServerJsonSpec {
+  type?: string;
+  remotes?: Array<{ url?: string; headers?: McpHeaderField[] }>;
+  repository?: { url?: string; source?: string };
+  websiteUrl?: string;
+  title?: string;
+  icons?: Array<{ src?: string }>;
+}
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -94,7 +114,7 @@ export default function MCPInstanceDetail({
   } | null>(null);
 
   // Stuck detection: in_progress verification older than 30s
-  const verification = (instance as any).verification as
+  const verification = instance.verification as
     | {
         status: string;
         at?: string | null;
@@ -237,11 +257,9 @@ export default function MCPInstanceDetail({
     const fromInstance = instance.json_spec?.type as string | undefined;
     if (fromInstance) return fromInstance;
     if (serverSpec?.remote_url) return MCP_TRANSPORT.url;
-    const specJson = (serverSpec as any)?.json_spec as
-      | Record<string, any>
-      | undefined;
-    if (specJson?.type) return specJson.type as string;
-    if ((serverSpec as any)?.cmd) return MCP_TRANSPORT.command;
+    const specJson = serverSpec?.json_spec as McpServerJsonSpec | undefined;
+    if (specJson?.type) return specJson.type;
+    if (serverSpec?.cmd) return MCP_TRANSPORT.command;
     return MCP_TRANSPORT.docker;
   })();
   const jsonSpecType = derivedTransportType;
@@ -288,7 +306,7 @@ export default function MCPInstanceDetail({
   }
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
-  const tools = ((instance as any).tools ??
+  const tools = (instance.tools ??
     instance.json_spec?.available_tools ??
     []) as Array<{ name: string; description: string }>;
 
@@ -308,7 +326,8 @@ export default function MCPInstanceDetail({
   // the instance json_spec — fall back so the External Server card isn't empty.
   const endpointUrl = (instance.json_spec?.endpoint_url ||
     serverSpec?.remote_url ||
-    (serverSpec as any)?.json_spec?.remotes?.[0]?.url) as string | undefined;
+    (serverSpec?.json_spec as McpServerJsonSpec | undefined)?.remotes?.[0]
+      ?.url) as string | undefined;
   const customHeaders = (instance.json_spec?.headers ?? {}) as Record<
     string,
     string
@@ -330,7 +349,8 @@ export default function MCPInstanceDetail({
   // Rendered as a compact top-row so it stays discoverable without dominating the layout.
   const apiBaseUrl =
     typeof window !== "undefined"
-      ? (window as any).__ENV__?.CLIENT_API_URL || ""
+      ? (window as unknown as { __ENV__?: { CLIENT_API_URL?: string } })
+          .__ENV__?.CLIENT_API_URL || ""
       : "";
   const agentareaProxyUrl = `${apiBaseUrl}/v1/mcp/${instance.id}/mcp`;
 
@@ -340,11 +360,59 @@ export default function MCPInstanceDetail({
     value,
   }));
 
+  const verificationPresentation = getMcpVerificationStatusPresentation(
+    effectiveVerificationStatus
+  );
+
   return (
-    <div className="flex h-full w-full">
-      <div className="flex-1">
-        <div className="relative h-full overflow-auto px-4 py-5">
-          <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="relative h-full overflow-auto px-4 py-5">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Details — folded in from the former sidebar panel. */}
+            <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("details.title")}
+                </div>
+                <StatusIndicator
+                  size="sm"
+                  tone={verificationPresentation.tone}
+                  pulse={verificationPresentation.pulse}
+                >
+                  {verificationPresentation.label}
+                </StatusIndicator>
+              </div>
+              {instance.description && (
+                <p className="text-sm text-foreground">{instance.description}</p>
+              )}
+              <div className="grid gap-3 text-xs sm:grid-cols-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
+                    <Hash className="h-3 w-3" />
+                    {t("details.id")}
+                  </div>
+                  <div className="break-all font-mono">{instance.id}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
+                    <Clock className="h-3 w-3 text-primary" />
+                    {t("details.created")}
+                  </div>
+                  <div className="font-medium text-foreground">
+                    {new Date(instance.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 uppercase tracking-wide text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {t("details.updated")}
+                  </div>
+                  <div className="font-medium text-foreground">
+                    {new Date(instance.updated_at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Connect bar — proxy URL for outbound MCP clients. Rendered as
                 plain wrapping text (not an input) so the full URL stays visible
                 and never overflows the column. */}
@@ -430,8 +498,8 @@ export default function MCPInstanceDetail({
             {/* Spec info — repo, website, description from server spec */}
             {serverSpec &&
               (() => {
-                const spec = (serverSpec as any).json_spec as
-                  | Record<string, any>
+                const spec = serverSpec.json_spec as
+                  | McpServerJsonSpec
                   | undefined;
                 const repoUrl = spec?.repository?.url as string | undefined;
                 const repoSource = spec?.repository?.source as
@@ -448,9 +516,11 @@ export default function MCPInstanceDetail({
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40 space-y-2">
                     <div className="flex items-center gap-3">
                       {specIcon && (
-                        <img
+                        <Image
                           src={specIcon}
                           alt=""
+                          width={32}
+                          height={32}
                           className="h-8 w-8 rounded object-contain shrink-0"
                         />
                       )}
@@ -664,11 +734,11 @@ export default function MCPInstanceDetail({
                     <div className="space-y-3">
                       {Object.entries(editHeaders).map(([key, val]) => {
                         const fieldMeta = (
-                          (serverSpec as any)?.json_spec?.remotes?.[0]
-                            ?.headers ||
-                          (serverSpec?.env_schema as any[]) ||
+                          (serverSpec?.json_spec as McpServerJsonSpec | undefined)
+                            ?.remotes?.[0]?.headers ||
+                          (serverSpec?.env_schema as McpHeaderField[] | undefined) ||
                           []
-                        ).find((h: any) => h.name === key);
+                        ).find((h) => h.name === key);
                         return (
                           <div key={key} className="space-y-1">
                             <label className="text-xs font-medium">{key}</label>
@@ -842,14 +912,7 @@ export default function MCPInstanceDetail({
                 />
               </div>
             )}
-          </div>
-        </div>
       </div>
-
-      <TaskInfoPanelDock
-        storageKey="mcp-instance-panel"
-        panel={<MCPInstancePanel instance={instance} serverSpec={serverSpec} />}
-      />
     </div>
   );
 }

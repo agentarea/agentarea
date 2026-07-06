@@ -43,6 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
+import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { useToast } from "@/hooks/use-toast";
 import {
   listMCPServerInstancesAction as listMCPServerInstances,
@@ -63,9 +64,18 @@ import {
   type TaskParameterRef,
 } from "../components/taskParameters";
 
+type TriggerInitialData = TriggerResponse & {
+  config?: {
+    webhook_type?: string;
+    allowed_methods?: string[];
+    cron_expression?: string;
+    timezone?: string;
+  };
+};
+
 interface CreateTriggerFormProps {
-  agents: any[];
-  initialData?: any;
+  agents: AgentResponse[];
+  initialData?: TriggerInitialData;
 }
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
@@ -89,7 +99,7 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-function resolveInitialId(catalog: TriggerCatalogEntry[], initialData?: any): string {
+function resolveInitialId(catalog: TriggerCatalogEntry[], initialData?: TriggerInitialData): string {
   if (!initialData) return "";
   if (initialData.trigger_type === "cron") return "cron";
   const wt = initialData.config?.webhook_type;
@@ -173,15 +183,22 @@ export function CreateTriggerForm({
 
       if (cancelled) return;
 
+      const skillsData = Array.isArray(skillsResponse.data)
+        ? skillsResponse.data
+        : [];
+      const mcpsData = Array.isArray(mcpsResponse.data)
+        ? mcpsResponse.data
+        : [];
+
       setAvailableSkills(
-        (((skillsResponse as any).data as any[]) || []).map((skill) => ({
+        skillsData.map((skill) => ({
           id: skill.id,
           name: skill.name,
           description: skill.description,
         }))
       );
       setAvailableMcps(
-        (((mcpsResponse as any).data as any[]) || []).map((mcp) => ({
+        mcpsData.map((mcp) => ({
           id: mcp.id,
           name: mcp.name,
           description: mcp.description,

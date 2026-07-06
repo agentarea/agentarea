@@ -2,13 +2,13 @@
 
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import * as React from "react";
+import Image from "next/image";
 import { Bot, Check, ChevronDown, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
@@ -179,9 +179,11 @@ export function ProviderModelSelector({
   ) => {
     if (iconUrl) {
       return (
-        <img
+        <Image
           src={iconUrl}
           alt={providerName}
+          width={16}
+          height={16}
           className="h-4 w-4 rounded dark:invert"
           onError={(e) => {
             e.currentTarget.style.display = "none";

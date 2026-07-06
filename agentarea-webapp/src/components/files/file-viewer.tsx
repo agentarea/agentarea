@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Bot, Download, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BrowsedFile } from "./file-tree";
@@ -233,7 +234,7 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "image" && (
           <div className="flex h-full items-center justify-center p-4">
-            <img src={url} alt={fileName} className="max-h-full max-w-full object-contain" />
+            <Image src={url} alt={fileName} width={1920} height={1080} className="max-h-full max-w-full object-contain" />
           </div>
         )}
 

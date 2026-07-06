@@ -1,12 +1,13 @@
+import type { APIRequestContext, APIResponse } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
   apiBaseURL,
-  authedFetch,
   authedRequest,
   createKratosUser,
   deleteKratosUser,
   responseBody,
   uniqueLabel,
+  type AuthedUser,
 } from "./helpers/real-stack";
 import { requirementTitle } from "./requirements";
 
@@ -27,13 +28,13 @@ const openApiSpec = {
   },
 };
 
-async function expectOk(response: any) {
+async function expectOk(response: APIResponse) {
   if (!response.ok()) {
     throw new Error(`${response.status()} ${JSON.stringify(await responseBody(response))}`);
   }
 }
 
-async function createAgent(request: any, user: any, prefix = "pw-agent") {
+async function createAgent(request: APIRequestContext, user: AuthedUser, prefix = "pw-agent") {
   const name = uniqueLabel(prefix);
   const response = await authedRequest(request, user, "post", "/v1/agents/", {
     data: {
@@ -50,7 +51,7 @@ async function createAgent(request: any, user: any, prefix = "pw-agent") {
   return response.json();
 }
 
-async function deleteAgent(request: any, user: any, agentId?: string) {
+async function deleteAgent(request: APIRequestContext, user: AuthedUser, agentId?: string) {
   if (agentId) {
     await authedRequest(request, user, "delete", `/v1/agents/${agentId}`).catch(() => undefined);
   }
@@ -85,7 +86,7 @@ test.describe("must functional requirements real stack", () => {
 
         const list = await authedRequest(request, user, "get", "/v1/agents/");
         await expectOk(list);
-        expect((await list.json()).some((item: any) => item.id === agentId)).toBe(true);
+        expect((await list.json()).some((item: { id: string }) => item.id === agentId)).toBe(true);
 
         const deleted = await authedRequest(request, user, "delete", `/v1/agents/${agentId}`);
         await expectOk(deleted);
@@ -170,7 +171,9 @@ test.describe("must functional requirements real stack", () => {
 
         const list = await authedRequest(request, user, "get", "/v1/model-instances/");
         await expectOk(list);
-        expect((await list.json()).some((item: any) => item.id === modelInstanceId)).toBe(true);
+        expect((await list.json()).some((item: { id: string }) => item.id === modelInstanceId)).toBe(
+          true
+        );
       } finally {
         if (modelInstanceId) {
           await authedRequest(request, user, "delete", `/v1/model-instances/${modelInstanceId}`).catch(
@@ -219,11 +222,15 @@ test.describe("must functional requirements real stack", () => {
 
         const agentTasks = await authedRequest(request, user, "get", `/v1/agents/${agentId}/tasks/`);
         await expectOk(agentTasks);
-        expect((await agentTasks.json()).some((item: any) => item.id === taskPayload.id)).toBe(true);
+        expect(
+          (await agentTasks.json()).some((item: { id: string }) => item.id === taskPayload.id)
+        ).toBe(true);
 
         const globalTasks = await authedRequest(request, user, "get", "/v1/tasks/");
         await expectOk(globalTasks);
-        expect((await globalTasks.json()).some((item: any) => item.id === taskPayload.id)).toBe(true);
+        expect(
+          (await globalTasks.json()).some((item: { id: string }) => item.id === taskPayload.id)
+        ).toBe(true);
       } finally {
         await deleteAgent(request, user, agentId);
         await deleteKratosUser(user.identityId);
@@ -257,10 +264,13 @@ test.describe("must functional requirements real stack", () => {
         expect(response.ok).toBeTruthy();
         const reader = response.body?.getReader();
         expect(reader).toBeTruthy();
+        if (!reader) {
+          throw new Error("Expected a readable SSE stream body");
+        }
 
         let text = "";
         while (!text.includes("event: task_created") && !text.includes("event: error")) {
-          const chunk = await reader!.read();
+          const chunk = await reader.read();
           if (chunk.done) break;
           text += new TextDecoder().decode(chunk.value);
         }
@@ -362,7 +372,9 @@ test.describe("must functional requirements real stack", () => {
         await expectOk(preview);
         const previewPayload = await preview.json();
         expect(previewPayload.title).toBe("Playwright Pets API");
-        expect(previewPayload.tools.some((tool: any) => tool.name === "listPets")).toBe(true);
+        expect(previewPayload.tools.some((tool: { name: string }) => tool.name === "listPets")).toBe(
+          true
+        );
 
         const invalid = await authedRequest(
           request,
@@ -385,9 +397,9 @@ test.describe("must functional requirements real stack", () => {
         expect(connection.status()).toBe(201);
         const connectionPayload = await connection.json();
         connectionId = connectionPayload.id;
-        expect(connectionPayload.available_tools.some((tool: any) => tool.name === "listPets")).toBe(
-          true
-        );
+        expect(
+          connectionPayload.available_tools.some((tool: { name: string }) => tool.name === "listPets")
+        ).toBe(true);
         expect(JSON.stringify(connectionPayload)).not.toContain("secret-value");
 
         const agent = await authedRequest(request, user, "post", "/v1/agents/", {
@@ -402,7 +414,7 @@ test.describe("must functional requirements real stack", () => {
         await expectOk(agent);
         const agentPayload = await agent.json();
         agentId = agentPayload.id;
-        expect(agentPayload.tools.some((tool: any) => tool.type === "openapi")).toBe(true);
+        expect(agentPayload.tools.some((tool: { type: string }) => tool.type === "openapi")).toBe(true);
       } finally {
         await deleteAgent(request, user, agentId);
         if (connectionId) {

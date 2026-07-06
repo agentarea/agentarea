@@ -409,7 +409,7 @@ export const mapSSEToDisplayEvent = (
             ? JSON.parse(toolCall.arguments)
             : toolCall.arguments;
         description = `Task completed: ${args.summary || args.result || "Success"}`;
-      } catch (e) {
+      } catch {
         description = `Task completed with ${toolCall.name}`;
       }
     } else {

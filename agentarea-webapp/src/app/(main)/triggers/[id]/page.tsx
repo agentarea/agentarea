@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { getTrigger, listAgents, listTriggerCatalog } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import TriggerDetail from "./TriggerDetail";
@@ -9,8 +10,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const trigger = requireApiData(await getTrigger(id), "trigger");
-  return { title: (trigger as any)?.name ?? "Trigger" };
+  const trigger = requireApiData<TriggerResponse>(await getTrigger(id), "trigger");
+  return { title: trigger.name ?? "Trigger" };
 }
 
 export default async function TriggerPage({ params }: Props) {
@@ -22,21 +23,20 @@ export default async function TriggerPage({ params }: Props) {
     listTriggerCatalog(),
   ]);
 
-  const trigger = requireApiData(triggerResponse, "trigger");
+  const trigger = requireApiData<TriggerResponse>(triggerResponse, "trigger");
 
-  const agents = (agentsResponse.data as any[]) || [];
+  const agents: AgentResponse[] = agentsResponse.data ?? [];
   const agentName =
-    agents.find((a: any) => a.id === (trigger as any).agent_id)?.name ||
-    "Unknown Agent";
+    agents.find((a) => a.id === trigger.agent_id)?.name || "Unknown Agent";
 
-  const catalog = (catalogResponse.data as any[]) || [];
+  const catalog: Array<Record<string, unknown>> = catalogResponse.data ?? [];
 
   // Match catalog entry: check data_extractor first, then cron/webhook type
-  const triggerType = (trigger as any).trigger_type;
-  const webhookType = (trigger as any).webhook_type;
-  const dataExtractor = (trigger as any).data_extractor;
+  const triggerType = trigger.trigger_type;
+  const webhookType = trigger.webhook_type;
+  const dataExtractor = trigger.data_extractor;
   const catalogEntry =
-    catalog.find((c: any) => {
+    catalog.find((c) => {
       if (dataExtractor) return c.data_extractor === dataExtractor;
       if (triggerType === "cron") return c.id === "cron";
       return c.webhook_type === webhookType;
@@ -44,7 +44,7 @@ export default async function TriggerPage({ params }: Props) {
 
   return (
     <TriggerDetail
-      trigger={trigger as any}
+      trigger={trigger}
       agentName={agentName}
       catalogEntry={catalogEntry}
     />

@@ -1,31 +1,31 @@
 "use client";
 
-import { type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { Plug } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import type { NetworkFlowNodeData } from "../../types";
 import NodeCard from "./NodeCard";
 
-export default function MCPNode({ data }: NodeProps) {
-  const d = data as Record<string, any>;
-  const scope: string = d.metadata?.network_scope || "private";
+export default function MCPNode({ data }: NodeProps<Node<NetworkFlowNodeData>>) {
+  const scope = (data.metadata.network_scope as string | undefined) ?? "private";
   const isEgress = scope === "egress";
   const subtitle = isEgress ? "MCP · Egress" : "MCP Server";
 
   return (
     <NodeCard
       icon={<Plug className="h-6 w-6" />}
-      label={d.label}
+      label={data.label}
       subtitle={subtitle}
       color={isEgress ? "green" : "neutral"}
-      dimmed={d._dimmed}
-      highlighted={d._highlighted}
+      dimmed={data._dimmed}
+      highlighted={data._highlighted}
       badge={
-        d.status ? (
+        data.status ? (
           <Badge
-            variant={d.status === "running" ? "default" : "secondary"}
+            variant={data.status === "running" ? "default" : "secondary"}
             className="h-3.5 px-1 py-0 text-[9px] font-normal"
           >
-            {d.status}
+            {data.status}
           </Badge>
         ) : null
       }

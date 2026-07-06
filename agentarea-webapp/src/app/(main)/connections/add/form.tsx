@@ -136,8 +136,8 @@ export function AddMCPServerForm() {
       const fd = new window.FormData(formEl);
       const authType = fd.get("newAuthType") as string;
 
-      let config: Record<string, any> = {};
-      let credentials: Record<string, any> = {};
+      let config: Record<string, unknown> = {};
+      let credentials: Record<string, unknown> = {};
 
       if (authType === "api_key") {
         config = { header_name: (fd.get("headerName") as string) || "Authorization" };
@@ -163,7 +163,7 @@ export function AddMCPServerForm() {
 
       if (data) {
         await fetchAuthConfigs();
-        setSelectedAuthConfigId((data as any).id);
+        setSelectedAuthConfigId((data as { id: string }).id);
         setShowNewAuthForm(false);
         setNewAuthName("");
         setNewAuthType("api_key");
@@ -254,9 +254,9 @@ export function AddMCPServerForm() {
       if (result) {
         setState(result);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Next.js redirect throws — let it propagate
-      if (e?.digest?.startsWith("NEXT_REDIRECT")) {
+      if ((e as { digest?: string } | null)?.digest?.startsWith("NEXT_REDIRECT")) {
         throw e;
       }
       setState({

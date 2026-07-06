@@ -114,7 +114,7 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
                   label="Built-in"
                   count={builtinTools.length}
                   items={builtinTools.map((t) =>
-                    String((t as any).tool_name ?? "tool")
+                    String(t.tool_name ?? "tool")
                   )}
                 />
               )}
@@ -124,8 +124,8 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
                   label="MCP"
                   count={mcpConfigs.length}
                   items={mcpConfigs.map((c) => {
-                    const id = String((c as any).server_id ?? "").slice(0, 8);
-                    const tools = (c as any).tools as string[] | undefined;
+                    const id = String(c.server_id ?? "").slice(0, 8);
+                    const tools = c.tools;
                     return tools && tools.length > 0
                       ? `${id} · ${tools.length}`
                       : id;
@@ -139,11 +139,9 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
                   count={openapiConfigs.length}
                   items={openapiConfigs.map((c) => {
                     const id = String(
-                      (c as any).openapi_connection_id ?? ""
+                      c.openapi_connection_id ?? ""
                     ).slice(0, 8);
-                    const allowed = (c as any).allowed_tools as
-                      | string[]
-                      | undefined;
+                    const allowed = c.allowed_tools;
                     return allowed && allowed.length > 0
                       ? `${id} · ${allowed.length}`
                       : id;

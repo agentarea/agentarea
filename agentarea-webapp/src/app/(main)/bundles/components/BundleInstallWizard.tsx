@@ -13,6 +13,7 @@
 // the analyzed bundle in place and send the result.
 
 import React, { useEffect, useMemo, useReducer, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -393,7 +394,7 @@ export function BundleInstallWizard({
       <div className="flex items-center gap-3">
         {iconUrl ? (
           <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-white p-1.5 dark:bg-zinc-800">
-            <img src={iconUrl} alt={title} className="h-full w-full object-contain" />
+            <Image src={iconUrl} alt={title} width={40} height={40} className="h-full w-full object-contain" />
           </span>
         ) : null}
         <div>
@@ -870,9 +871,11 @@ function ModelPicker({
             {selected ? (
               <span className="flex min-w-0 items-center gap-2">
                 {selected.provider_icon_url && (
-                  <img
+                  <Image
                     src={selected.provider_icon_url}
                     alt=""
+                    width={16}
+                    height={16}
                     className="h-4 w-4 rounded-sm"
                   />
                 )}
@@ -919,7 +922,7 @@ function ModelPicker({
                     }}
                   >
                     {m.provider_icon_url && (
-                      <img src={m.provider_icon_url} alt="" className="mr-2 h-4 w-4 rounded-sm" />
+                      <Image src={m.provider_icon_url} alt="" width={16} height={16} className="mr-2 h-4 w-4 rounded-sm" />
                     )}
                     <span className="min-w-0 flex-1 truncate">
                       {m.model_display_name || m.model_name}

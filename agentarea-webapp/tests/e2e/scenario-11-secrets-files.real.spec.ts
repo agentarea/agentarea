@@ -37,7 +37,7 @@ test.describe("Scenario 11 MP - manage secrets and view workspace files", () => 
 
     await gotoCommitted(page, "/secrets");
     await expect(page.getByText("Connection name")).toBeVisible();
-    await expect(page.getByText(mcp!.name, { exact: false })).toBeVisible();
+    await expect(page.getByText(mcp?.name ?? "", { exact: false })).toBeVisible();
     await expect(page.getByText("pw-secret-value", { exact: false })).toHaveCount(
       0
     );

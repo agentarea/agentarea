@@ -47,13 +47,13 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await expect(page.getByRole("button", { name: /access graph/i })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(agent!.name, { exact: false })).toBeVisible({
+    await expect(page.getByText(agent?.name ?? "", { exact: false })).toBeVisible({
       timeout: 15_000,
     });
 
     await gotoCommitted(page, "/dashboard");
     await gotoCommitted(page, "/network");
-    await expect(page.getByText(agent!.name, { exact: false })).toBeVisible({
+    await expect(page.getByText(agent?.name ?? "", { exact: false })).toBeVisible({
       timeout: 15_000,
     });
   });
