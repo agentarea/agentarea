@@ -17,7 +17,8 @@ export function AgentsList() {
 				setAgents(agentList.agents);
 				logger.info(`Loaded ${agentList.agents.length} agents`);
 			} catch (err) {
-				const message = err instanceof Error ? err.message : 'Failed to load agents';
+				const message =
+					err instanceof Error ? err.message : 'Failed to load agents';
 				setError(message);
 				logger.warn('Failed to load agents');
 			} finally {

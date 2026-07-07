@@ -99,7 +99,9 @@ export async function handleCliCommand(
 
 	// Task submit/watch wrap streaming + SSE, not a plain request/response.
 	if (command === 'tasks' && subcommand === 'submit') {
-		await flushAndExit(await runTasksSubmit(pathArgs[0], pathArgs[1], options.data));
+		await flushAndExit(
+			await runTasksSubmit(pathArgs[0], pathArgs[1], options.data),
+		);
 	}
 
 	if (command === 'tasks' && subcommand === 'watch') {

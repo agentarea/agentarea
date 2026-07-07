@@ -29,7 +29,9 @@ export class AgentService {
 
 		if (error || !data) {
 			logger.error('Failed to fetch agents:', error);
-			throw new NetworkError(`Failed to fetch agents: ${JSON.stringify(error)}`);
+			throw new NetworkError(
+				`Failed to fetch agents: ${JSON.stringify(error)}`,
+			);
 		}
 
 		let agents = data.map(toAgent);

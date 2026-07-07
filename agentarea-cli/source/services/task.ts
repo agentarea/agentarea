@@ -51,7 +51,9 @@ export class TaskService {
 
 			if (error || !data) {
 				logger.error('Failed to list tasks:', error);
-				throw new NetworkError(`Failed to list tasks: ${JSON.stringify(error)}`);
+				throw new NetworkError(
+					`Failed to list tasks: ${JSON.stringify(error)}`,
+				);
 			}
 
 			return data;
@@ -77,7 +79,9 @@ export class TaskService {
 
 			if (error || !data) {
 				logger.error(`Failed to fetch task ${taskId}:`, error);
-				throw new NetworkError(`Failed to fetch task: ${JSON.stringify(error)}`);
+				throw new NetworkError(
+					`Failed to fetch task: ${JSON.stringify(error)}`,
+				);
 			}
 
 			return data;

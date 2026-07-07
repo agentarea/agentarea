@@ -75,7 +75,9 @@ export async function runTasksSubmit(
 	paramsJson?: string,
 ): Promise<number> {
 	if (!agentId || !description) {
-		console.error('Usage: agentarea tasks submit <agentId> <description> [--data <json>]');
+		console.error(
+			'Usage: agentarea tasks submit <agentId> <description> [--data <json>]',
+		);
 		return 1;
 	}
 

@@ -24,10 +24,7 @@ const RESERVED = new Set([
 	'version',
 ]);
 
-export function findSpec(
-	noun: string,
-	verb: string,
-): CommandSpec | undefined {
+export function findSpec(noun: string, verb: string): CommandSpec | undefined {
 	return registry.find(
 		spec =>
 			spec.noun === noun &&
