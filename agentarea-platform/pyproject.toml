@@ -35,7 +35,6 @@ members = [
     "libs/wallet",
     "libs/payment",
     "libs/execution",
-    "libs/context",
     "libs/triggers",
     "libs/governance",
     "libs/openapi",
@@ -68,7 +67,6 @@ agentarea-secrets = { workspace = true }
 agentarea-wallet = { workspace = true }
 agentarea-payment = { workspace = true }
 agentarea-execution = { workspace = true }
-agentarea-context = { workspace = true }
 agentarea-triggers = { workspace = true }
 agentarea-governance = { workspace = true }
 agentarea-openapi = { workspace = true }
@@ -97,7 +95,6 @@ dev = [
     "agentarea-wallet",
     "agentarea-payment",
     "agentarea-execution",
-    "agentarea-context[faiss]",
     "agentarea-triggers",
     "agentarea-api",
     "agentarea-worker",
@@ -208,7 +205,6 @@ addopts = [
     "--cov=agentarea_secrets",
     "--cov=agentarea_wallet",
     "--cov=agentarea_payment",
-    "--cov=agentarea_context",
     "--cov=agentarea_triggers",
     "--cov-report=term-missing",
     "--cov-report=html",
@@ -256,7 +252,6 @@ source = [
     "libs/wallet/agentarea_wallet",
     "libs/payment/agentarea_payment",
     "libs/execution/agentarea_execution",
-    "libs/context/agentarea_context",
     "libs/triggers/agentarea_triggers",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
