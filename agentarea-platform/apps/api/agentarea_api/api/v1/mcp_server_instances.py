@@ -2,7 +2,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_mcp_server_instance_service
+from agentarea_api.api.deps.services import AgentServiceDep, get_mcp_server_instance_service
 from agentarea_api.api.v1.mcp_oauth_links import (
     MCPOAuthLinkService,
     OAuthLinkResponse,
@@ -346,6 +346,80 @@ async def get_mcp_server_instance(
         return MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
 
     return MCPServerInstanceResponse.from_domain(instance)
+
+
+class MCPInstanceConsumer(BaseModel):
+    """An agent that has this MCP instance attached, and which of its tools it enabled."""
+
+    agent_id: UUID
+    agent_name: str
+    agent_slug: str | None = None
+    # None means the agent allows every tool the server exposes (no subset filter).
+    enabled_tools: list[str] | None = None
+    # Subset of enabled_tools that additionally require human confirmation per call.
+    confirm_tools: list[str] = Field(default_factory=list)
+
+
+def _mcp_config_matches(tool_config: dict[str, Any], instance: MCPServerInstance) -> bool:
+    """A raw agent tool-config dict references this instance by UUID or by name."""
+    if tool_config.get("type") != "mcp":
+        return False
+    ref = tool_config.get("name")
+    if not ref:
+        return False
+    return str(ref) == str(instance.id) or str(ref) == instance.name
+
+
+@router.get("/{instance_id}/consumers", response_model=list[MCPInstanceConsumer])
+async def list_mcp_server_instance_consumers(
+    instance_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentServiceDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """List agents in the workspace that attach this MCP instance, with their enabled tools.
+
+    A read-only reverse lookup over the agents' ``tools`` JSON — no separate store.
+    """
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+
+    consumers: list[MCPInstanceConsumer] = []
+    for agent in await agent_service.list():
+        tools = agent.tools
+        if not isinstance(tools, list):
+            continue
+        for tc in tools:
+            if not isinstance(tc, dict) or not _mcp_config_matches(tc, instance):
+                continue
+            settings = tc.get("settings") or {}
+            allowed = settings.get("allowed_tools")
+            enabled_tools: list[str] | None = None
+            confirm_tools: list[str] = []
+            if isinstance(allowed, list):
+                enabled_tools = []
+                for perm in allowed:
+                    if isinstance(perm, dict):
+                        name = perm.get("tool_name")
+                        if name:
+                            enabled_tools.append(str(name))
+                            if perm.get("requires_user_confirmation"):
+                                confirm_tools.append(str(name))
+                    elif isinstance(perm, str):
+                        enabled_tools.append(perm)
+            consumers.append(
+                MCPInstanceConsumer(
+                    agent_id=agent.id,
+                    agent_name=agent.name,
+                    agent_slug=getattr(agent, "slug", None),
+                    enabled_tools=enabled_tools,
+                    confirm_tools=confirm_tools,
+                )
+            )
+            break
+
+    return consumers
 
 
 @router.patch("/{instance_id}", response_model=MCPServerInstanceResponse)
