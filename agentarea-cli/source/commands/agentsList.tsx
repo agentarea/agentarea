@@ -1,16 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
-import {apiClient} from '../services/apiClient.js';
+import {agentService} from '../services/agent.js';
 import {logger} from '../utils/logger.js';
-import {type AxiosError} from 'axios';
-
-interface Agent {
-	id: string;
-	name: string;
-	description?: string;
-	status?: string;
-	created_at?: string;
-}
+import {type Agent} from '../types/index.js';
 
 export function AgentsList() {
 	const [agents, setAgents] = useState<Agent[]>([]);
@@ -21,37 +13,11 @@ export function AgentsList() {
 		const fetchAgents = async () => {
 			try {
 				setLoading(true);
-				const response = await apiClient.getClient().get('/v1/agents', {
-					headers: {
-						'X-Workspace-ID': 'default',
-					},
-				});
-				setAgents(response.data.data || response.data || []);
-				logger.info(
-					`Loaded ${(response.data.data || response.data).length} agents`,
-				);
+				const agentList = await agentService.fetchAgents(0, 100);
+				setAgents(agentList.agents);
+				logger.info(`Loaded ${agentList.agents.length} agents`);
 			} catch (err) {
-				let message = 'Failed to load agents';
-				const axiosError = err as AxiosError;
-
-				if (axiosError?.response?.status === 401) {
-					message =
-						'Authentication failed. Your token may have expired. Please provide a new token.';
-				} else if (axiosError?.response?.status === 403) {
-					message = 'Access denied. You do not have permission to list agents.';
-				} else if (axiosError?.code === 'ECONNREFUSED') {
-					message =
-						'Could not connect to API server at http://localhost:8000. Is it running?';
-				} else if (axiosError?.code === 'ETIMEDOUT') {
-					message =
-						'API request timed out. The server may be slow or unreachable.';
-				} else if (axiosError?.code === 'EPERM') {
-					message =
-						'Could not connect to API server. Check that it is running on http://localhost:8000';
-				} else if (err instanceof Error) {
-					message = err.message;
-				}
-
+				const message = err instanceof Error ? err.message : 'Failed to load agents';
 				setError(message);
 				logger.warn('Failed to load agents');
 			} finally {

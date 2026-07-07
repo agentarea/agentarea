@@ -1,45 +1,40 @@
-import {apiClient} from './apiClient.js';
+import {
+	createTaskForAgentWithStreamV1AgentsAgentIdTasksPost,
+	listAgentTasksV1AgentsAgentIdTasksGet,
+	getAllTasksV1TasksGet,
+	getAgentTaskV1AgentsAgentIdTasksTaskIdGet,
+	getTaskByIdV1TasksTaskIdGet,
+	cancelAgentTaskV1AgentsAgentIdTasksTaskIdDelete,
+} from '@agentarea/api-client';
 import {logger} from '../utils/logger.js';
 import {NetworkError, ValidationError} from '../utils/error.js';
-import {
-	type Task,
-	type TaskSubmissionRequest,
-	type TaskResponse,
-	type TaskStatus,
-} from '../types/index.js';
+import {type TaskStatus, type TaskSubmissionRequest} from '../types/index.js';
 
 export class TaskService {
-	async submitTask(request: TaskSubmissionRequest): Promise<TaskResponse> {
-		try {
-			// Validate required fields
-			if (!request.agentId || !request.title) {
-				throw new ValidationError('agentId and title are required');
-			}
-
-			if (request.title.trim().length === 0) {
-				throw new ValidationError('Task title cannot be empty');
-			}
-
-			// AgentArea API uses /v1/agents/{agent_id}/tasks endpoint
-			const response = await apiClient
-				.getClient()
-				.post<TaskResponse>(`/v1/agents/${request.agentId}/tasks`, {
-					description: request.title, // AgentArea uses 'description' instead of 'title'
-					parameters: request.parameters || {},
-				});
-
-			logger.info(
-				`Task submitted: ${
-					(response.data as any).taskId || (response.data as any).id
-				}`,
-			);
-			return response.data;
-		} catch (error) {
-			logger.error('Failed to submit task:', error);
-			throw error instanceof ValidationError
-				? error
-				: new NetworkError(`Failed to submit task: ${error}`);
+	async submitTask(request: TaskSubmissionRequest): Promise<unknown> {
+		if (!request.agentId || !request.title) {
+			throw new ValidationError('agentId and title are required');
 		}
+
+		if (request.title.trim().length === 0) {
+			throw new ValidationError('Task title cannot be empty');
+		}
+
+		const {data, error} =
+			await createTaskForAgentWithStreamV1AgentsAgentIdTasksPost({
+				path: {agent_id: request.agentId},
+				body: {
+					description: request.title,
+					parameters: request.parameters ?? {},
+				},
+			});
+
+		if (error || !data) {
+			logger.error('Failed to submit task:', error);
+			throw new NetworkError(`Failed to submit task: ${JSON.stringify(error)}`);
+		}
+
+		return data;
 	}
 
 	async listTasks(
@@ -47,62 +42,70 @@ export class TaskService {
 		status?: TaskStatus,
 		skip = 0,
 		limit = 50,
-	): Promise<{tasks: Task[]; total: number}> {
-		try {
-			// AgentArea uses /v1/tasks endpoint for global task listing
-			const params = new URLSearchParams();
-			params.append('skip', String(skip));
-			params.append('limit', String(limit));
+	): Promise<unknown> {
+		if (agentId) {
+			const {data, error} = await listAgentTasksV1AgentsAgentIdTasksGet({
+				path: {agent_id: agentId},
+				query: status ? {status} : undefined,
+			});
 
-			if (status) {
-				params.append('status', status);
+			if (error || !data) {
+				logger.error('Failed to list tasks:', error);
+				throw new NetworkError(`Failed to list tasks: ${JSON.stringify(error)}`);
 			}
 
-			const response = await apiClient
-				.getClient()
-				.get<{tasks: Task[] | any[]; total: number}>(
-					`/v1/tasks?${params.toString()}`,
-				);
+			return data;
+		}
 
-			logger.debug(`Fetched ${response.data.tasks.length} tasks`);
-			return response.data as {tasks: Task[]; total: number};
-		} catch (error) {
+		const {data, error} = await getAllTasksV1TasksGet({
+			query: {status: status ?? null, limit, offset: skip},
+		});
+
+		if (error || !data) {
 			logger.error('Failed to list tasks:', error);
-			throw new NetworkError(`Failed to list tasks: ${error}`);
+			throw new NetworkError(`Failed to list tasks: ${JSON.stringify(error)}`);
 		}
+
+		return data;
 	}
 
-	async getTask(taskId: string, agentId?: string): Promise<Task> {
-		try {
-			// AgentArea uses /v1/agents/{agent_id}/tasks/{task_id} or /v1/tasks/{task_id}
-			const endpoint = agentId
-				? `/v1/agents/${agentId}/tasks/${taskId}`
-				: `/v1/tasks/${taskId}`;
+	async getTask(taskId: string, agentId?: string): Promise<unknown> {
+		if (agentId) {
+			const {data, error} = await getAgentTaskV1AgentsAgentIdTasksTaskIdGet({
+				path: {agent_id: agentId, task_id: taskId},
+			});
 
-			const response = await apiClient.getClient().get<Task>(endpoint);
+			if (error || !data) {
+				logger.error(`Failed to fetch task ${taskId}:`, error);
+				throw new NetworkError(`Failed to fetch task: ${JSON.stringify(error)}`);
+			}
 
-			logger.debug(`Fetched task ${taskId}`);
-			return response.data;
-		} catch (error) {
+			return data;
+		}
+
+		const {data, error} = await getTaskByIdV1TasksTaskIdGet({
+			path: {task_id: taskId},
+		});
+
+		if (error || !data) {
 			logger.error(`Failed to fetch task ${taskId}:`, error);
-			throw new NetworkError(`Failed to fetch task: ${error}`);
+			throw new NetworkError(`Failed to fetch task: ${JSON.stringify(error)}`);
 		}
+
+		return data;
 	}
 
-	async cancelTask(taskId: string, agentId?: string): Promise<void> {
-		try {
-			// AgentArea uses DELETE on task endpoint
-			const endpoint = agentId
-				? `/v1/agents/${agentId}/tasks/${taskId}`
-				: `/v1/tasks/${taskId}`;
+	async cancelTask(taskId: string, agentId: string): Promise<void> {
+		const {error} = await cancelAgentTaskV1AgentsAgentIdTasksTaskIdDelete({
+			path: {agent_id: agentId, task_id: taskId},
+		});
 
-			await apiClient.getClient().delete(endpoint);
-
-			logger.info(`Task cancelled: ${taskId}`);
-		} catch (error) {
+		if (error) {
 			logger.error(`Failed to cancel task ${taskId}:`, error);
-			throw new NetworkError(`Failed to cancel task: ${error}`);
+			throw new NetworkError(`Failed to cancel task: ${JSON.stringify(error)}`);
 		}
+
+		logger.info(`Task cancelled: ${taskId}`);
 	}
 
 	validateTaskParameters(parameters?: Record<string, unknown>): boolean {
@@ -111,7 +114,6 @@ export class TaskService {
 		}
 
 		try {
-			// Verify that all parameters are serializable to JSON
 			JSON.stringify(parameters);
 			return true;
 		} catch (error) {
@@ -130,10 +132,6 @@ export class TaskService {
 		};
 
 		return statusMap[status] || status;
-	}
-
-	getSSEStreamUrl(taskId: string): string {
-		return `/sse/tasks/${taskId}`;
 	}
 }
 
