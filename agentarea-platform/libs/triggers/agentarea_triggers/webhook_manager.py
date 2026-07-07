@@ -59,7 +59,7 @@ def _execution_status_value(execution: object) -> str:
     status = getattr(execution, "status", None)
     if status is None and isinstance(execution, dict):
         status = execution.get("status")
-    if hasattr(status, "value"):
+    if status is not None and hasattr(status, "value"):
         return str(status.value)
     if status is not None:
         return str(status)

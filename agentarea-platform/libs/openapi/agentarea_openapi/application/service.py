@@ -320,7 +320,6 @@ class OpenAPIConnectionService:
         tools = parse_openapi_spec(spec)
 
         await self._repo.update(str(conn.id), available_tools=tools, spec_content=spec)
-        conn = await self._repo.get_by_id(str(conn.id))
 
         return {
             "connection_id": str(conn.id),

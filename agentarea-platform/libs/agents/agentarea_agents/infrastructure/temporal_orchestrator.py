@@ -174,7 +174,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             description = await handle.describe()
-            temporal_status = description.status.name.lower()
+            status = description.status
+            temporal_status = status.name.lower() if status is not None else "unknown"
 
             status_map = {
                 "running": "running",

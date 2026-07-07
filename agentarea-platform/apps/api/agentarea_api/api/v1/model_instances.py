@@ -256,6 +256,8 @@ async def validate_model_instance(
 
         # Extract configuration details
         provider_type = provider_config.provider_spec.provider_type
+        if not provider_type:
+            raise HTTPException(status_code=400, detail="Provider type is not configured")
         model_name = model_spec.model_name
         endpoint_url = getattr(model_spec, "endpoint_url", None)
 

@@ -281,6 +281,8 @@ class LLMModel:
         OpenAI-compatible /v1/chat/completions endpoint (Ollama, vLLM, etc.).
         """
         base_url = self._get_base_url()
+        if not base_url:
+            raise ValueError("No base URL configured for direct HTTP completion call")
         # OpenAI-SDK convention is that the base URL ends in /v1 (e.g.
         # https://api.openai.com/v1, http://localhost:1234/v1). Tolerate both
         # forms — endpoint_url with or without a trailing /v1 — so users can

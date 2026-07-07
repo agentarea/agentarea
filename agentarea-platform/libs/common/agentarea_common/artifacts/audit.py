@@ -93,7 +93,7 @@ class DbArtifactEventRecorder:
         action: str,
         actor: ArtifactActor,
     ) -> None:
-        from agentarea_common.config.database import db
+        from agentarea_common.config.database import get_database
 
         event = ArtifactEvent(
             workspace_id=workspace_id,
@@ -104,5 +104,5 @@ class DbArtifactEventRecorder:
             agent_id=actor.agent_id,
             task_id=actor.task_id,
         )
-        async with db.session() as session:
+        async with get_database().session() as session:
             session.add(event)

@@ -52,10 +52,10 @@ class TemporalScheduleManager:
         self._task_queue = task_queue
         self._connected = temporal_client is not None
 
-    async def _ensure_client(self) -> None:
+    async def _ensure_client(self) -> Client:
         """Lazily connect to Temporal if not already connected."""
-        if self._connected:
-            return
+        if self._connected and self.client is not None:
+            return self.client
         from agentarea_common.config import get_settings
 
         settings = get_settings()
@@ -73,6 +73,7 @@ class TemporalScheduleManager:
             data_converter=pydantic_data_converter,
         )
         self._connected = True
+        return self.client
 
     async def is_healthy(self) -> bool:
         """Return whether Temporal schedule operations can reach a client."""
@@ -217,12 +218,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule update fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Update the schedule
             await handle.update(
@@ -265,12 +266,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule deletion fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Delete the schedule
             await handle.delete()
@@ -296,12 +297,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule pause fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Pause the schedule
             await handle.pause(note=f"Trigger {trigger_id} disabled")
@@ -321,12 +322,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule unpause fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Unpause the schedule
             await handle.unpause(note=f"Trigger {trigger_id} enabled")
@@ -360,6 +361,8 @@ class TemporalScheduleManager:
         # Action args come back as raw payloads from a real server, but already
         # decoded (e.g. a plain dict) from mocked tests -- handle both.
         if not isinstance(payload, dict):
+            if self.client is None:
+                return []
             try:
                 payload = self.client.data_converter.payload_converter.from_payloads([payload])[0]
             except Exception:
@@ -380,12 +383,12 @@ class TemporalScheduleManager:
         Returns:
             Dictionary containing schedule information, or None if not found
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Get schedule description
             description = await handle.describe()
@@ -402,11 +405,11 @@ class TemporalScheduleManager:
                 ],
                 "recent_actions": [
                     {
-                        "scheduled_time": getattr(action, "scheduled_time", None).isoformat()
-                        if getattr(action, "scheduled_time", None)
+                        "scheduled_time": scheduled.isoformat()
+                        if (scheduled := getattr(action, "scheduled_time", None))
                         else None,
-                        "actual_time": getattr(action, "actual_time", None).isoformat()
-                        if getattr(action, "actual_time", None)
+                        "actual_time": actual.isoformat()
+                        if (actual := getattr(action, "actual_time", None))
                         else None,
                         "start_workflow_result": str(getattr(action, "start_workflow_result", ""))
                         if getattr(action, "start_workflow_result", None)

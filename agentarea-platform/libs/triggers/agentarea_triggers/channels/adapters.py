@@ -415,7 +415,9 @@ def make_telegram_streaming_sender(
     """
     import redis.asyncio as aioredis
 
-    _redis = aioredis.from_url(redis_url, decode_responses=True)
+    # redis-py types async command results as ResponseT (Awaitable[T] | T), so a
+    # precise annotation makes pyright reject the awaits; keep the client loose.
+    _redis: Any = aioredis.from_url(redis_url, decode_responses=True)
     _terminal = {"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"}
 
     def _api(token: str, method: str) -> str:

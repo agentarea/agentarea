@@ -149,7 +149,11 @@ class MCPAggregatorProxy:
                         await session.initialize()
                         result = await session.call_tool(tool_name, arguments)
                         if result.content:
-                            texts = [b.text for b in result.content if hasattr(b, "text")]
+                            texts = [
+                                text
+                                for b in result.content
+                                if isinstance((text := getattr(b, "text", None)), str)
+                            ]
                             return "\n".join(texts) if texts else str(result.content)
                         return ""
             except Exception as e:

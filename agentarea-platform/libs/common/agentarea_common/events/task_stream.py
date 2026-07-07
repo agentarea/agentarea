@@ -24,7 +24,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from .adapters.redis_streams import encode, topic_for
 from .ports import EventStream, IntegrationEvent
@@ -89,7 +89,7 @@ async def publish_task_event(
             occurred_at = datetime.now(UTC)
 
         event = IntegrationEvent(
-            id=event_id or str(uuid4()),
+            id=UUID(event_id) if event_id else uuid4(),
             type=event_type,
             source=_SOURCE,
             subject=task_id,

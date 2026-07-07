@@ -543,9 +543,9 @@ async def get_public_webhook_manager(
                 }
 
             # Create a FRESH session for the execution phase to avoid greenlet reuse issues
-            from agentarea_common.config.database import db
+            from agentarea_common.config.database import get_database
 
-            async with db.session() as fresh_session:
+            async with get_database().session() as fresh_session:
                 workspace_id = trigger.workspace_id or "system"
                 created_by = trigger.created_by or "system"
                 ctx = UserContext(
