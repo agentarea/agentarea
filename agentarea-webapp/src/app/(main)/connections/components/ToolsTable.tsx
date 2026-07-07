@@ -117,6 +117,7 @@ function prettyGroup(key: string): string {
 interface Row {
   id: string;
   name: string;
+  title?: string;
   description: string;
   method?: string;
   path?: string;
@@ -125,16 +126,21 @@ interface Row {
 
 function MCPToolRow({
   name,
+  title,
   description,
   annotations,
 }: {
   name: string;
+  title?: string;
   description: string;
   annotations?: ToolAnnotations;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasDescription = !!description;
   const canExpand = hasDescription;
+  // Per MCP spec, prefer the human-facing title; fall back to annotations.title,
+  // then the raw tool name. Show the raw name underneath when a title exists.
+  const displayName = title || annotations?.title;
 
   return (
     <div
@@ -144,7 +150,16 @@ function MCPToolRow({
       onClick={() => canExpand && setExpanded((v) => !v)}
     >
       <div className="flex flex-col gap-1 pt-0.5 min-w-0">
-        <span className="font-mono text-xs font-medium break-all">{name}</span>
+        {displayName ? (
+          <>
+            <span className="text-xs font-medium break-words">{displayName}</span>
+            <span className="font-mono text-[10px] text-muted-foreground/70 break-all">
+              {name}
+            </span>
+          </>
+        ) : (
+          <span className="font-mono text-xs font-medium break-all">{name}</span>
+        )}
         <AnnotationBadges annotations={annotations} />
       </div>
       <div className="min-w-0">
@@ -252,6 +267,7 @@ export function ToolsTable({ tools, label }: { tools: Tool[]; label?: string }) 
     const rows: Row[] = tools.map((t) => ({
       id: t.name,
       name: t.name,
+      title: t.title,
       description: t.description,
       annotations: t.annotations,
     }));
@@ -278,6 +294,7 @@ export function ToolsTable({ tools, label }: { tools: Tool[]; label?: string }) 
             <MCPToolRow
               key={row.id}
               name={row.name}
+              title={row.title}
               description={row.description}
               annotations={row.annotations}
             />

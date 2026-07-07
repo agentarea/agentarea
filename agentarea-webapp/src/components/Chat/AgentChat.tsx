@@ -11,10 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import {
-  resolveEscalationAction as resolveEscalation,
-  submitTaskInputAction as submitTaskInput,
-} from "@/lib/server-actions";
+import { useTaskActions } from "@/hooks/useTaskActions";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { MessageRenderer } from "./MessageComponents";
@@ -87,33 +84,9 @@ export default function AgentChat({
     clearFiles,
   } = useFileUpload();
 
-  // Callback for resolving tool escalations (approve/deny)
-  const handleResolveEscalation = React.useCallback(
-    async (escalationId: string, approved: boolean, comment: string) => {
-      const tid = currentTaskId || taskId;
-      if (!tid) return;
-      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
-    },
-    [agent.id, currentTaskId, taskId]
-  );
-
-  // Callback for submitting structured user input (incl. secrets → vault)
-  const handleSubmitInput = React.useCallback(
-    async (
-      inputRequestId: string,
-      answers: Record<string, unknown>,
-      secrets: Record<string, { value: string; secret_name?: string }>
-    ) => {
-      const tid = currentTaskId || taskId;
-      if (!tid) return;
-      await submitTaskInput(agent.id, tid, {
-        input_request_id: inputRequestId,
-        answers,
-        secrets,
-      });
-    },
-    [agent.id, currentTaskId, taskId]
-  );
+  // Single centralized action layer for this task (resolve escalation, submit
+  // structured input incl. secrets → vault). Same layer every task surface uses.
+  const actions = useTaskActions(agent.id, currentTaskId || taskId || null);
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
@@ -251,8 +224,8 @@ export default function AgentChat({
                   message={message}
                   agent_name={agent.name}
                   onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={handleResolveEscalation}
-                  onSubmitInput={handleSubmitInput}
+                  onResolveEscalation={actions.resolveEscalation}
+                  onSubmitInput={actions.submitInput}
                 />
               );
             } else if (message.role === "user") {

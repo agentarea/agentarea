@@ -963,6 +963,33 @@ export const getMCPInstanceHealth = async (
   }
 };
 
+export interface MCPInstanceConsumer {
+  agent_id: string;
+  agent_name: string;
+  agent_slug: string | null;
+  // null → the agent allows every tool the server exposes.
+  enabled_tools: string[] | null;
+  confirm_tools: string[];
+}
+
+// Hand-rolled until `pnpm generate:api` picks up the new
+// GET /v1/mcp-server-instances/{id}/consumers endpoint.
+export const getMCPInstanceConsumers = async (
+  instanceId: string
+): Promise<MCPInstanceConsumer[]> => {
+  try {
+    const { data, error } = await serverClient.request<MCPInstanceConsumer[]>({
+      method: "GET",
+      url: `/v1/mcp-server-instances/${instanceId}/consumers`,
+    });
+    if (error || !data) return [];
+    return data;
+  } catch (error) {
+    console.warn("Failed to fetch MCP instance consumers:", error);
+    return [];
+  }
+};
+
 type ListSkillsOptions = {
   page?: number;
   page_size?: number;

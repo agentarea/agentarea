@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { DetailSkeleton } from "@/components/Skeleton";
 import ContentBlock from "@/components/ContentBlock";
-import { AssociationSection } from "../../projects/[id]/components/AssociationSection";
+import { SelectableList } from "@/components/SelectableList";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 import { useToast } from "@/hooks/use-toast";
 import type {
   ClientResponse,
@@ -69,11 +71,32 @@ export default function ClientDetailPage() {
       const { error } = await fn(id);
       if (error) {
         toast({ title: "Error", description: fail, variant: "destructive" });
-        throw error;
+        return;
       }
       toast({ title: ok });
       await fetchClient();
     };
+
+  const mcpAdd = wrap(
+    (id) => addMcpInstanceToClientAction(clientId, id),
+    "MCP instance added",
+    "Failed to add MCP instance"
+  );
+  const mcpRemove = wrap(
+    (id) => removeMcpInstanceFromClientAction(clientId, id),
+    "MCP instance removed",
+    "Failed to remove MCP instance"
+  );
+  const skillAdd = wrap(
+    (id) => addSkillToClientAction(clientId, id),
+    "Skill added",
+    "Failed to add skill"
+  );
+  const skillRemove = wrap(
+    (id) => removeSkillFromClientAction(clientId, id),
+    "Skill removed",
+    "Failed to remove skill"
+  );
 
   const handlePull = async (projectId: string) => {
     const { error } = await pullClientFromProjectAction(clientId, projectId || null);
@@ -129,40 +152,61 @@ export default function ClientDetailPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <AssociationSection
-            title="MCP Instances"
-            items={client.mcp_instances || []}
-            allItems={allMcp}
-            onAdd={wrap(
-              (id) => addMcpInstanceToClientAction(clientId, id),
-              "MCP instance added",
-              "Failed to add MCP instance"
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">
+              MCP Instances ({(client.mcp_instances || []).length})
+            </h3>
+            {allMcp.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No MCP instances available.</p>
+            ) : (
+              <SelectableList
+                items={allMcp}
+                prefix="mcp"
+                selectedIds={(client.mcp_instances || []).map((m) => m.id)}
+                extractIconSrc={(mcp) => getMCPConnectionIconSrc(mcp) ?? "/Icon.svg"}
+                extractTitle={(mcp) => (
+                  <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
+                    <h3 className="truncate text-sm font-medium">{mcp.name}</h3>
+                  </div>
+                )}
+                onAdd={(mcp) => mcpAdd(mcp.id)}
+                onRemove={(mcp) => mcpRemove(mcp.id)}
+                renderContent={(mcp) =>
+                  mcp.description ? (
+                    <p className="p-2 text-xs text-muted-foreground">{mcp.description}</p>
+                  ) : null
+                }
+              />
             )}
-            onRemove={wrap(
-              (id) => removeMcpInstanceFromClientAction(clientId, id),
-              "MCP instance removed",
-              "Failed to remove MCP instance"
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">
+              Skills ({(client.skills || []).length})
+            </h3>
+            {allSkills.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No skills available.</p>
+            ) : (
+              <SelectableList
+                items={allSkills}
+                prefix="skill"
+                selectedIds={(client.skills || []).map((s) => s.id)}
+                extractTitle={(skill) => (
+                  <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
+                    <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <h3 className="truncate text-sm font-medium">{skill.name}</h3>
+                  </div>
+                )}
+                onAdd={(skill) => skillAdd(skill.id)}
+                onRemove={(skill) => skillRemove(skill.id)}
+                renderContent={(skill) =>
+                  skill.description ? (
+                    <p className="p-2 text-xs text-muted-foreground">{skill.description}</p>
+                  ) : null
+                }
+              />
             )}
-            addLabel="Add MCP Instance"
-            selectPlaceholder="Select an MCP instance..."
-          />
-          <AssociationSection
-            title="Skills"
-            items={client.skills || []}
-            allItems={allSkills}
-            onAdd={wrap(
-              (id) => addSkillToClientAction(clientId, id),
-              "Skill added",
-              "Failed to add skill"
-            )}
-            onRemove={wrap(
-              (id) => removeSkillFromClientAction(clientId, id),
-              "Skill removed",
-              "Failed to remove skill"
-            )}
-            addLabel="Add Skill"
-            selectPlaceholder="Select a skill..."
-          />
+          </div>
         </div>
       </div>
     </ContentBlock>

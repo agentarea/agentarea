@@ -37,7 +37,7 @@ import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
 import { MethodsList } from "./MethodsList";
 import type { Method } from "./MethodsList";
-import { SelectableList } from "./SelectableList";
+import { SelectableList } from "@/components/SelectableList";
 import { TriggerControl } from "./TriggerControl";
 
 type MCPServer = McpServerResponse;
