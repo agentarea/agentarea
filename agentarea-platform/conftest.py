@@ -242,6 +242,9 @@ def pytest_collection_modifyitems(config, items):
 
 
 # SQLite-backed Temporal server fixtures (see module docstring for when to use).
+# Register cross-dialect compilation shims (JSONB/INET -> SQLite) so tests that
+# create the schema on in-memory SQLite don't fail on Postgres-only column types.
+from agentarea_common.testing import sqlite_compat  # noqa: E402, F401
 from agentarea_common.testing.temporal import (  # noqa: E402, F401
     temporal_sqlite_client,
     temporal_sqlite_env,
