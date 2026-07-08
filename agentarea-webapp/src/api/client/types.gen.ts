@@ -2705,6 +2705,34 @@ export type McpAuthConfigUpdateRequest = {
 };
 
 /**
+ * MCPInstanceConsumer
+ *
+ * An agent that has this MCP instance attached, and which of its tools it enabled.
+ */
+export type McpInstanceConsumer = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Agent Name
+   */
+  agent_name: string;
+  /**
+   * Agent Slug
+   */
+  agent_slug?: string | null;
+  /**
+   * Confirm Tools
+   */
+  confirm_tools?: Array<string>;
+  /**
+   * Enabled Tools
+   */
+  enabled_tools?: Array<string> | null;
+};
+
+/**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
@@ -10090,6 +10118,43 @@ export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses 
 
 export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponse =
   UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses[keyof UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses];
+
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Instance Id
+       */
+      instance_id: string;
+    };
+    query?: never;
+    url: "/v1/mcp-server-instances/{instance_id}/consumers";
+  };
+
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetError =
+  ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors[keyof ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors];
+
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses =
+  {
+    /**
+     * Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get
+     *
+     * Successful Response
+     */
+    200: Array<McpInstanceConsumer>;
+  };
+
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponse =
+  ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses[keyof ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses];
 
 export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostData =
   {

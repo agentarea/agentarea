@@ -987,6 +987,19 @@ export const zMcpAuthConfigUpdateRequest = z.object({
 });
 
 /**
+ * MCPInstanceConsumer
+ *
+ * An agent that has this MCP instance attached, and which of its tools it enabled.
+ */
+export const zMcpInstanceConsumer = z.object({
+  agent_id: z.string().uuid(),
+  agent_name: z.string(),
+  agent_slug: z.string().nullish(),
+  confirm_tools: z.array(z.string()).optional(),
+  enabled_tools: z.array(z.string()).nullish(),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -3841,6 +3854,19 @@ export const zUpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchPath =
  */
 export const zUpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponse =
   zMcpServerInstanceResponse;
+
+export const zListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetPath =
+  z.object({
+    instance_id: z.string().uuid(),
+  });
+
+/**
+ * Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get
+ *
+ * Successful Response
+ */
+export const zListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponse =
+  z.array(zMcpInstanceConsumer);
 
 export const zDiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostPath =
   z.object({

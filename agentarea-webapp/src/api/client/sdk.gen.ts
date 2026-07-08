@@ -470,6 +470,9 @@ import type {
   ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses,
   ListMcpAuthConfigsV1McpAuthConfigsGetData,
   ListMcpAuthConfigsV1McpAuthConfigsGetResponses,
+  ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetData,
+  ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors,
+  ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses,
   ListMcpServerInstancesV1McpServerInstancesGetData,
   ListMcpServerInstancesV1McpServerInstancesGetResponses,
   ListMcpServersV1McpServersGetData,
@@ -4208,6 +4211,40 @@ export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
       ...options.headers,
     },
   });
+
+/**
+ * List Mcp Server Instance Consumers
+ *
+ * List agents in the workspace that attach this MCP instance, with their enabled tools.
+ *
+ * A read-only reverse lookup over the agents' ``tools`` JSON — no separate store.
+ */
+export const listMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses,
+    ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses,
+      ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/mcp-server-instances/{instance_id}/consumers",
+      ...options,
+    });
 
 /**
  * Discover Mcp Server Instance Tools
