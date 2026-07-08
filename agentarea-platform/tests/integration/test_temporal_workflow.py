@@ -40,6 +40,9 @@ async def test_temporal_workflow():
         task_repository = TaskRepository(db_session, user_context)
         task_manager = TemporalTaskManager(task_repository)
 
+        # Persist the task first: submit_task only updates an existing row's status.
+        await task_repository.create_task(task_manager._agent_task_to_task(task))
+
         # Submit task
         logger.info("Submitting task to Temporal...")
         submitted_task = await task_manager.submit_task(task)
