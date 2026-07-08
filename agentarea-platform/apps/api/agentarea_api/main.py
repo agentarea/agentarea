@@ -15,6 +15,7 @@ for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", 
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_error_handlers
+from agentarea_common.logging import setup_logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -23,6 +24,10 @@ from fastapi.staticfiles import StaticFiles
 
 from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
+
+# Configure structured (JSON) logging once at import time. The noisy third-party
+# loggers above keep their WARNING level (disable_existing_loggers is False).
+setup_logging(enable_structured_logging=True)
 
 logger = logging.getLogger(__name__)
 container = get_container()

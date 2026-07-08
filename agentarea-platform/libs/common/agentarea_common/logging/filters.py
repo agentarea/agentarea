@@ -1,8 +1,38 @@
 """Logging filters for workspace context."""
 
 import logging
+import re
 
 from ..auth.context import UserContext
+
+# Control characters that could forge log lines when logs are rendered as plain
+# text: CR/LF and the other C0 control chars (keep tab \x09).
+_CONTROL_CHARS = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+class LogSanitizerFilter(logging.Filter):
+    """Strip CR/LF and control characters from the rendered log message.
+
+    Prevents log-forging: untrusted values (user ids, provider keys, queries)
+    reach log calls throughout the codebase, and an embedded newline could
+    otherwise inject a fake log line. Structured JSON output already escapes
+    these, so this is defense-in-depth for any plain-text handler.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:
+            # Never drop a record because sanitization failed.
+            return True
+
+        sanitized = _CONTROL_CHARS.sub(" ", message)
+        if sanitized != message:
+            # getMessage() already applied args; collapse to the sanitized text.
+            record.msg = sanitized
+            record.args = ()
+
+        return True
 
 
 class WorkspaceContextFilter(logging.Filter):

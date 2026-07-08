@@ -17,6 +17,7 @@ import dotenv
 from agentarea_agents.infrastructure.di_container import initialize_di_container
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
+from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
@@ -33,10 +34,10 @@ from temporalio.worker import Worker
 # Load environment variables
 dotenv.load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure structured (JSON) logging. Routing every record through
+# WorkspaceContextFormatter escapes newlines, so untrusted values in log
+# messages can't forge log lines (see LogSanitizerFilter for the plain-text path).
+setup_logging(level="DEBUG", enable_structured_logging=True)
 logger = logging.getLogger(__name__)
 
 
