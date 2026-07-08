@@ -355,6 +355,10 @@ jobs:
         run: |
           docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
             logs --tail=300 app || true
+          # Capture the supporting services too: rustfs has crashed at boot on
+          # the runner before, and the app can only be as healthy as its deps.
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=200 rustfs db app_migrations || true
 
       - name: Tear down
         if: always()

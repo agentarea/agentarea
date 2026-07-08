@@ -1,12 +1,17 @@
 # CI overlay for docker-compose.yaml — used by the OpenAPI fuzz job.
 #
-# Two things differ from local dev:
+# Three things differ from local dev:
 #   1. The API image is BUILT from the PR source in the job and tagged
 #      `agentarea/agentarea-api:latest`, so we must NOT re-pull it from the
 #      registry (the base file sets `pull_policy: always`).
 #   2. The fuzz harness mints ephemeral Kratos identities from the GitHub
 #      runner host, which needs the Kratos ADMIN API (4434) published — the
 #      base file only exposes the public API (4433).
+#   3. rustfs is pinned to the glibc build. The base `rustfs/rustfs:latest`
+#      is a musl static binary that exits(1) within seconds on the GitHub
+#      amd64 runner (crashing `app`'s service_healthy dependency), while it
+#      boots fine locally. The `-glibc` variant of the same version is the
+#      compatible build for that environment.
 #
 # Usage: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d app kratos temporal
 services:
@@ -14,6 +19,8 @@ services:
     pull_policy: never
   app_migrations:
     pull_policy: never
+  rustfs:
+    image: rustfs/rustfs:1.0.0-beta.8-glibc
   kratos:
     ports:
       - "4434:4434" # admin API — additive to the base 4433 (public)
