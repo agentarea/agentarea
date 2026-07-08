@@ -57,51 +57,64 @@ type ProbeState = "idle" | "needs_oauth" | "needs_both";
 // Tags that describe the connection transport, not a functional category.
 const TRANSPORT_TAGS = new Set(["url", "docker", "command", "remote", "mcp"]);
 
+interface McpJsonSpec {
+  icons?: Array<{ src: string }>;
+  title?: string;
+  version?: string;
+  remotes?: Array<{ headers?: FieldSpec[] }>;
+  repository?: { url?: string; source?: string };
+  websiteUrl?: string;
+  available_tools?: unknown[];
+}
+
+function getSpec(server: MCPServer): McpJsonSpec {
+  return (server.json_spec ?? {}) as unknown as McpJsonSpec;
+}
+
 function getIcon(server: MCPServer): string | null {
-  const icons = (server as any).json_spec?.icons as
-    | Array<{ src: string }>
-    | undefined;
-  return icons?.[0]?.src ?? null;
+  return getSpec(server).icons?.[0]?.src ?? null;
 }
 
 function getTitle(server: MCPServer): string {
-  return (server as any).json_spec?.title || server.name;
+  return getSpec(server).title || server.name;
 }
 
 function getRemoteHeaders(server: MCPServer): FieldSpec[] {
   return (
-    (server as any).json_spec?.remotes?.[0]?.headers ||
-    (server.env_schema as any[] | undefined)?.filter((e: any) => e.name) ||
+    getSpec(server).remotes?.[0]?.headers ||
+    (server.env_schema as unknown as FieldSpec[] | undefined)?.filter(
+      (e) => e.name
+    ) ||
     []
   );
 }
 
 function getRepoUrl(server: MCPServer): string | null {
-  return (server as any).json_spec?.repository?.url ?? null;
+  return getSpec(server).repository?.url ?? null;
 }
 
 function getWebsiteUrl(server: MCPServer): string | null {
-  return (server as any).json_spec?.websiteUrl ?? null;
+  return getSpec(server).websiteUrl ?? null;
 }
 
 function getRepoSource(server: MCPServer): string | null {
-  return (server as any).json_spec?.repository?.source ?? null;
+  return getSpec(server).repository?.source ?? null;
 }
 
 function getVersion(server: MCPServer): string | null {
-  return (server as any).version || (server as any).json_spec?.version || null;
+  return server.version || getSpec(server).version || null;
 }
 
 function getCategories(server: MCPServer): string[] {
-  const tags = (server as any).tags as string[] | undefined;
+  const tags = server.tags;
   if (!Array.isArray(tags)) return [];
   return tags
-    .filter((t) => typeof t === "string" && t && !TRANSPORT_TAGS.has(t.toLowerCase()))
+    .filter((t) => t && !TRANSPORT_TAGS.has(t.toLowerCase()))
     .slice(0, 4);
 }
 
 function getToolCount(server: MCPServer): number {
-  const tools = (server as any).json_spec?.available_tools;
+  const tools = getSpec(server).available_tools;
   return Array.isArray(tools) ? tools.length : 0;
 }
 
@@ -253,11 +266,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     defaultFieldValues[h.name] = h.default || "";
   }
 
-  const {
-    register,
-    getValues,
-    watch,
-  } = useForm<UrlFormValues>({
+  const { register, getValues, watch } = useForm<UrlFormValues>({
     defaultValues: {
       instanceName: getTitle(server),
       fields: defaultFieldValues,
@@ -268,9 +277,14 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [probeState, setProbeState] = useState<ProbeState>("idle");
   const [authTab, setAuthTab] = useState<"oauth" | "manual">("manual");
-  const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
+  const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(
+    null
+  );
   const [isWorking, setIsWorking] = useState(false);
-  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
+  const [verifyingInstance, setVerifyingInstance] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Build headers dict from form field values
   const buildHeaders = (): Record<string, string> => {
@@ -290,7 +304,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
     try {
       if (hasFields) {
-        const result = await validateConnectionAction(endpointUrl, buildHeaders());
+        const result = await validateConnectionAction(
+          endpointUrl,
+          buildHeaders()
+        );
 
         if (result.error) {
           setError(result.error);
@@ -329,7 +346,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         );
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create instance");
+      }
       setCreatedInstanceId(created.id);
 
       const probeResult = await probeInstanceAuthAction(created.id);
@@ -341,7 +361,9 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
       if (probeResult.data?.status === "auth_required") {
         const methods = probeResult.data.methods || [];
         if (methods.includes("oauth")) {
-          setProbeState(methods.includes("credentials") ? "needs_both" : "needs_oauth");
+          setProbeState(
+            methods.includes("credentials") ? "needs_both" : "needs_oauth"
+          );
           setAuthTab("oauth");
           return;
         }
@@ -385,16 +407,20 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         );
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create instance");
+      }
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
-        const { instanceName } = getValues();
         setVerifyingInstance({ id: created.id, name: instanceName });
       } else {
         router.push(`/connections/${created.id}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create connection");
+      setError(
+        err instanceof Error ? err.message : "Failed to create connection"
+      );
     } finally {
       setIsWorking(false);
     }
@@ -408,7 +434,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     try {
       const result = await oauthAuthorizeAction(createdInstanceId);
       if (result.error || !result.data?.authorize_url) {
-        setError(result.error || "OAuth discovery failed — this server may not support OAuth");
+        setError(
+          result.error ||
+            "OAuth discovery failed — this server may not support OAuth"
+        );
         return;
       }
       window.location.href = result.data.authorize_url;
@@ -440,7 +469,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   useEffect(() => {
     document.dispatchEvent(
       new CustomEvent("mcp-create-state", {
-        detail: { createEnabled: canCreate, forceEnabled: canForce, creating: isWorking },
+        detail: {
+          createEnabled: canCreate,
+          forceEnabled: canForce,
+          creating: isWorking,
+        },
       })
     );
   }, [canCreate, canForce, isWorking]);
@@ -675,7 +708,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   const t = useTranslations("MCPServersPage.createInstance");
 
   const [instanceName, setInstanceName] = useState(getTitle(server));
-  const [instanceDescription, setInstanceDescription] = useState(server.description);
+  const [instanceDescription, setInstanceDescription] = useState(
+    server.description
+  );
   const [envVars, setEnvVars] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     server.env_schema?.forEach((envVar) => {
@@ -685,7 +720,10 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-  const [verifyingInstance, setVerifyingInstance] = useState<{ id: string; name: string } | null>(null);
+  const [verifyingInstance, setVerifyingInstance] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
     errors: string[];
@@ -720,7 +758,10 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
         throw new Error(errorMessage);
       }
 
-      const created = instanceResult.data as any;
+      const created = instanceResult.data;
+      if (!created) {
+        throw new Error("Failed to create MCP instance");
+      }
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         setVerifyingInstance({ id: created.id, name: instanceName });
@@ -756,7 +797,7 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
           className="h-full overflow-auto"
           hideSubmitButton
           hideForceCreateButton
-          server={server as any}
+          server={server}
           instanceName={instanceName}
           instanceDescription={instanceDescription}
           envVars={envVars}
@@ -777,7 +818,13 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
                 },
               });
               if (!checkResult.error) {
-                setValidationResult(checkResult.data as any);
+                setValidationResult(
+                  checkResult.data as {
+                    valid: boolean;
+                    errors: string[];
+                    warnings: string[];
+                  }
+                );
               }
             } catch (error) {
               console.error("Validation error:", error);
@@ -799,7 +846,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
             !instanceName.trim() ||
             (validationResult ? !validationResult.valid : false)
           }
-          submitLabel={isCreating ? t("actions.creating") : t("actions.createInstance")}
+          submitLabel={
+            isCreating ? t("actions.creating") : t("actions.createInstance")
+          }
           showContainerSummary
           containerImage={server.docker_image_url ?? undefined}
           containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}

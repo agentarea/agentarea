@@ -6,7 +6,7 @@ import logging.config
 from typing import Any, cast
 
 from ..auth.context import UserContext
-from .filters import WorkspaceContextFilter
+from .filters import LogSanitizerFilter, WorkspaceContextFilter
 
 
 class WorkspaceContextFormatter(logging.Formatter):
@@ -98,14 +98,17 @@ def setup_logging(
             "workspace_context": {
                 "()": WorkspaceContextFilter,
                 "user_context": user_context,
-            }
+            },
+            "sanitize": {
+                "()": LogSanitizerFilter,
+            },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "level": level,
                 "formatter": "structured" if enable_structured_logging else "standard",
-                "filters": ["workspace_context"] if user_context else [],
+                "filters": (["workspace_context"] if user_context else []) + ["sanitize"],
                 "stream": "ext://sys.stdout",
             }
         },

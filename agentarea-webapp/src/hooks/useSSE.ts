@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface SSEEvent {
   type: string;
-  data: any;
+  data: unknown;
 }
 
 interface UseSSEOptions {
@@ -29,7 +29,32 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
     reconnectInterval = 3000,
   } = options;
 
-  const connect = () => {
+  // Keep latest callbacks in refs so connect/disconnect stay stable across renders
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    setIsConnected(false);
+    onCloseRef.current?.();
+  }, []);
+
+  const connect = useCallback(() => {
     if (!url || eventSourceRef.current) return;
 
     try {
@@ -39,13 +64,13 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
       eventSource.onopen = () => {
         setIsConnected(true);
         setError(null);
-        onOpen?.();
+        onOpenRef.current?.();
       };
 
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          onMessage?.({ type: event.type || "message", data });
+          onMessageRef.current?.({ type: event.type || "message", data });
         } catch (e) {
           console.error("Failed to parse SSE message:", e);
         }
@@ -92,11 +117,11 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
           if (raw == null) return;
           try {
             const data = JSON.parse(raw);
-            onMessage?.({ type: eventType, data });
+            onMessageRef.current?.({ type: eventType, data });
           } catch (e) {
             console.error(`Failed to parse ${eventType} event:`, e);
             // Try to send raw data if JSON parsing fails
-            onMessage?.({ type: eventType, data: raw });
+            onMessageRef.current?.({ type: eventType, data: raw });
           }
         });
       });
@@ -104,7 +129,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
       eventSource.onerror = (event) => {
         setIsConnected(false);
         setError("Connection error");
-        onError?.(event);
+        onErrorRef.current?.(event);
 
         // Auto-reconnect if enabled
         if (reconnect && eventSource.readyState === EventSource.CLOSED) {
@@ -118,22 +143,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
       setError(`Failed to connect: ${e}`);
       console.error("SSE connection error:", e);
     }
-  };
-
-  const disconnect = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-
-    setIsConnected(false);
-    onClose?.();
-  };
+  }, [url, reconnect, reconnectInterval, disconnect]);
 
   useEffect(() => {
     if (url) {
@@ -143,7 +153,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
     return () => {
       disconnect();
     };
-  }, [url]);
+  }, [url, connect, disconnect]);
 
   return {
     isConnected,

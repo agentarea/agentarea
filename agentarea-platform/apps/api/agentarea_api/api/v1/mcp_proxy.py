@@ -96,7 +96,8 @@ def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
             continue
         if message.get("method") != "tools/call":
             continue
-        params = message.get("params") if isinstance(message.get("params"), dict) else {}
+        raw_params = message.get("params")
+        params = raw_params if isinstance(raw_params, dict) else {}
         tool_name = params.get("name")
         if not isinstance(tool_name, str) or not tool_name:
             continue

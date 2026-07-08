@@ -20,10 +20,12 @@ export default async function ProvidersData({
   const { specs: specsResponse, configs: configsResponse } =
     await listProviderConfigsWithModelInstances();
 
+  type ApiError = { detail?: Array<{ msg: string }> };
+
   // Handle API errors
   if (specsResponse.error || configsResponse.error) {
-    const specsError = specsResponse.error as any;
-    const configsError = configsResponse.error as any;
+    const specsError = specsResponse.error as ApiError;
+    const configsError = configsResponse.error as ApiError;
 
     return (
       <div className="py-10 text-center">
@@ -41,17 +43,18 @@ export default async function ProvidersData({
   const providerConfigs = (configsResponse.data || []) as ProviderConfig[];
 
   // Normalize configs to ensure model_instances is populated (fallback to models_list from API helper)
-  const normalizedConfigs = (providerConfigs as any[]).map((config) => ({
+  type RawConfig = ProviderConfig & { models_list?: ProviderConfig["model_instances"] };
+  const normalizedConfigs = (providerConfigs as RawConfig[]).map((config) => ({
     ...config,
     model_instances:
-      config.model_instances ?? (config as any).models_list ?? [],
+      config.model_instances ?? config.models_list ?? [],
   }));
 
   // Create a map of provider specs for easy lookup
   const specsMap = new Map(providerSpecs.map((spec) => [spec.id, spec]));
 
   // Enhance configs with spec information
-  const enhancedConfigs: ProviderConfig[] = normalizedConfigs.map((config: any) => ({
+  const enhancedConfigs: ProviderConfig[] = normalizedConfigs.map((config) => ({
     ...config,
     spec: specsMap.get(config.provider_spec_id),
   }));

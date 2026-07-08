@@ -314,6 +314,19 @@ class TestParseDefaultAgents:
         assert len(tools) == 2
         assert tools[0]["type"] == "mcp"
 
+    def test_preferred_models_carried_into_spec(self):
+        data = {"agents": [{"name": "A", "preferred_models": ["gpt-4o", "o3"]}]}
+        items = RegistryService._parse_agents(data)
+        spec = items[0]["spec"]
+        assert spec["preferred_models"] == ["gpt-4o", "o3"]
+        # The catalog never carries a runnable instance UUID under model_id.
+        assert "model_id" not in spec
+
+    def test_legacy_model_id_slug_becomes_preferred_model(self):
+        data = {"agents": [{"name": "A", "model_id": "gpt-4o"}]}
+        items = RegistryService._parse_agents(data)
+        assert items[0]["spec"]["preferred_models"] == ["gpt-4o"]
+
 
 class TestParseBundles:
     def _bundle(self, **over):

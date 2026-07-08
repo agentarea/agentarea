@@ -122,7 +122,7 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
             return f"{e['check']} {esc('Approval received, continuing...')}"
 
         if presentation == "concise":
-            if et == "WorkflowStarted":
+            if et in ("WorkflowStarted", "WorkflowCommandReceived"):
                 return f"{e['hourglass']} {esc('Working on it...')}"
             if et == "ToolCallStarted":
                 tool = d.get("tool_name", "tool")
@@ -399,18 +399,138 @@ def make_a2a_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
 # ── Registration ──────────────────────────────────────────────────
 
 
-def register_all_adapters(secret_reader: SecretReader) -> None:
+def make_telegram_streaming_sender(
+    secret_reader: SecretReader,
+    redis_url: str,
+) -> Callable[[dict[str, Any], str], Awaitable[None]]:
+    """Telegram sender that streams progress into ONE live message.
+
+    Instead of a fresh message per workflow event (spammy), the first event
+    sends a message and every later event EDITs it, accumulating a Hermes-style
+    activity feed (⏳ working → 🔧 tool calls → final answer). Per-task state
+    (the live message_id + accumulated lines) lives in Redis keyed by task_id,
+    so it survives across independent delivery jobs and worker restarts.
+
+    Falls back to a plain one-shot send when there is no task_id in the config.
+    """
+    import redis.asyncio as aioredis
+
+    # redis-py types async command results as ResponseT (Awaitable[T] | T), so a
+    # precise annotation makes pyright reject the awaits; keep the client loose.
+    _redis: Any = aioredis.from_url(redis_url, decode_responses=True)
+    _terminal = {"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"}
+
+    def _api(token: str, method: str) -> str:
+        return f"https://api.telegram.org/bot{token}/{method}"
+
+    async def send(channel_config: dict[str, Any], message: str) -> None:
+        token = await _resolve_token(secret_reader, channel_config)
+        if not token:
+            raise FatalError("missing channel credentials")
+
+        chat_id = channel_config.get("chat_id")
+        task_id = channel_config.get("task_id")
+        event_type = channel_config.get("event_type", "")
+        line = (message or "").strip()
+
+        key = f"tg:live:{task_id}" if task_id else None
+        feed: list[str] = []
+        msg_id: str | None = None
+        if key:
+            state = await _redis.hgetall(key)
+            if state.get("feed"):
+                try:
+                    feed = json.loads(state["feed"])
+                except json.JSONDecodeError:
+                    feed = []
+            msg_id = state.get("message_id")
+
+        # Accumulate progress lines while the task runs. On a terminal event,
+        # collapse the whole feed into just the final result — the
+        # "⏳ Working on it..." and tool-call lines were interim status, not
+        # the answer, so we replace them rather than pin them above the result.
+        if event_type in _terminal:
+            feed = [line] if line else ["✅ Done"]
+        elif line and (not feed or feed[-1] != line):
+            feed.append(line)
+        text = "\n".join(feed) if feed else line
+        if not text:
+            return
+        if len(text) > 4096:
+            text = "…\n" + text[-4093:]
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if not msg_id:
+                    payload: dict[str, Any] = {
+                        "chat_id": chat_id,
+                        "text": text,
+                        "parse_mode": "MarkdownV2",
+                    }
+                    reply_to = channel_config.get("message_id")
+                    if reply_to:
+                        # allow_sending_without_reply: a stale/deleted message_id
+                        # must never fail the whole delivery.
+                        payload["reply_to_message_id"] = reply_to
+                        payload["allow_sending_without_reply"] = True
+                    resp = await client.post(_api(token, "sendMessage"), json=payload)
+                    if resp.status_code == 400 and "parse" in resp.text.lower():
+                        payload["text"] = _strip_markdown(text)
+                        payload.pop("parse_mode", None)
+                        resp = await client.post(_api(token, "sendMessage"), json=payload)
+                    if not resp.is_success:
+                        _raise_for_response(resp)
+                    new_id = (resp.json().get("result") or {}).get("message_id")
+                    if key and new_id:
+                        await _redis.hset(
+                            key, mapping={"message_id": str(new_id), "feed": json.dumps(feed)}
+                        )
+                        await _redis.expire(key, 3600)
+                else:
+                    payload = {
+                        "chat_id": chat_id,
+                        "message_id": int(msg_id),
+                        "text": text,
+                        "parse_mode": "MarkdownV2",
+                    }
+                    resp = await client.post(_api(token, "editMessageText"), json=payload)
+                    body = resp.text.lower()
+                    if resp.status_code == 400 and "not modified" in body:
+                        resp = None  # identical text — nothing to do
+                    elif resp.status_code == 400 and "parse" in body:
+                        payload["text"] = _strip_markdown(text)
+                        payload.pop("parse_mode", None)
+                        resp = await client.post(_api(token, "editMessageText"), json=payload)
+                    if resp is not None and not resp.is_success:
+                        _raise_for_response(resp)
+                    if key:
+                        await _redis.hset(key, mapping={"feed": json.dumps(feed)})
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as exc:
+            raise RetryableError(f"network: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise RetryableError(f"http error: {exc}") from exc
+
+        if key and event_type in _terminal:
+            await _redis.delete(key)
+
+    return send
+
+
+def register_all_adapters(secret_reader: SecretReader, redis_url: str | None = None) -> None:
     """Register all HTTP-based channel adapters.
 
     `secret_reader` is required — channel delivery without a credential
     store would silently no-op, which is exactly the bug class this whole
     pipeline rewrite was built to remove. Missing the dep is a boot
     failure, not a runtime fallback.
+
+    `redis_url`, when provided, switches Telegram to the streaming
+    edit-in-place sender (one live message per task). Without it Telegram
+    falls back to the plain per-event sender.
     """
     channels = {
         "slack": (SLACK_MD, SLACK_SENDER),
         "discord": (DISCORD_MD, DISCORD_SENDER),
-        "telegram": (TELEGRAM_MD, TELEGRAM_SENDER),
     }
     for name, (flavor, sender_cfg) in channels.items():
         adapter = _ComposedAdapter(
@@ -418,6 +538,16 @@ def register_all_adapters(secret_reader: SecretReader) -> None:
             sender=make_http_sender(sender_cfg, secret_reader),
         )
         register_adapter(name, adapter)
+
+    telegram_sender = (
+        make_telegram_streaming_sender(secret_reader, redis_url)
+        if redis_url
+        else make_http_sender(TELEGRAM_SENDER, secret_reader)
+    )
+    register_adapter(
+        "telegram",
+        _ComposedAdapter(formatter=make_formatter(TELEGRAM_MD), sender=telegram_sender),
+    )
 
     # A2A push notifications: client-supplied webhooks, delivered as A2A events.
     register_adapter("a2a_webhook", make_a2a_webhook_adapter(secret_reader))

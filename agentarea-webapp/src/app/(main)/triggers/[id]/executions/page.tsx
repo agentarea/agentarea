@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
 import { getTriggerExecutions } from "@/lib/api";
 import ExecutionsTable from "./ExecutionsTable";
 
@@ -33,7 +34,7 @@ export default async function TriggerExecutionsPage({
     );
   }
 
-  const executions = (data as any)?.executions || (data as any[]) || [];
+  const executions = (data as ExecutionHistoryResponse).executions;
 
   if (executions.length === 0) {
     return (

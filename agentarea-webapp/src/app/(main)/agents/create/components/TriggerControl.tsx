@@ -1,5 +1,5 @@
 import { Edit, Trash2 } from "lucide-react";
-import { Control, useWatch } from "react-hook-form";
+import { Control, useWatch, type Path } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
 import type { AgentFormValues, MCPToolConfig } from "../types";
@@ -50,19 +50,22 @@ export const TriggerControl = ({
   control,
   removeEvent,
   editEvent,
-  name,
-  enabledName,
+  name: _name,
+  enabledName: _enabledName,
   selectedMethods = {},
   onMethodToggle,
   allowedToolsFieldName,
   onToolStateChange,
 }: TriggerControlProps) => {
   // Reactively watch allowed_tools so checkboxes update on change
-  const allowedTools: MCPToolConfig[] = useWatch({
+  const watchedAllowedTools = useWatch({
     control,
-    name: allowedToolsFieldName as any,
+    name: allowedToolsFieldName as Path<AgentFormValues>,
     defaultValue: [],
-  }) || [];
+  });
+  const allowedTools: MCPToolConfig[] = Array.isArray(watchedAllowedTools)
+    ? watchedAllowedTools
+    : [];
 
   if (!trigger) {
     return (
@@ -81,9 +84,10 @@ export const TriggerControl = ({
   const hasToolControl = !!onToolStateChange;
 
   // Compute selected counts for badge
-  const selectedMethodCount = hasMethods && hasMethodToggle
-    ? availableMethods.filter((m) => selectedMethods[m.name] === true).length
-    : 0;
+  const selectedMethodCount =
+    hasMethods && hasMethodToggle
+      ? availableMethods.filter((m) => selectedMethods[m.name] === true).length
+      : 0;
 
   const getToolEnabled = (toolName: string): boolean => {
     if (!allowedTools || allowedTools.length === 0) return true;
@@ -96,9 +100,10 @@ export const TriggerControl = ({
     return config?.requires_user_confirmation ?? false;
   };
 
-  const enabledToolCount = hasTools && hasToolControl
-    ? availableTools.filter((t) => getToolEnabled(t.name)).length
-    : availableTools.length;
+  const enabledToolCount =
+    hasTools && hasToolControl
+      ? availableTools.filter((t) => getToolEnabled(t.name)).length
+      : availableTools.length;
 
   // Build selectedMethods-style map for tools
   const toolSelectionMap: Record<string, boolean> = {};
@@ -118,9 +123,15 @@ export const TriggerControl = ({
     onToolStateChange(toolName, checked ? "enabled" : "disabled");
   };
 
-  const handleToolApprovalToggle = (toolName: string, requiresApproval: boolean) => {
+  const handleToolApprovalToggle = (
+    toolName: string,
+    requiresApproval: boolean
+  ) => {
     if (!onToolStateChange) return;
-    onToolStateChange(toolName, requiresApproval ? "approval_required" : "enabled");
+    onToolStateChange(
+      toolName,
+      requiresApproval ? "approval_required" : "enabled"
+    );
   };
 
   const handleSelectAllTools = (checked: boolean) => {
@@ -162,11 +173,12 @@ export const TriggerControl = ({
     );
   };
 
-  const badgeCount = hasMethods && hasMethodToggle
-    ? `${selectedMethodCount}/${availableMethods.length}`
-    : hasTools && hasToolControl
-      ? `${enabledToolCount}/${availableTools.length}`
-      : null;
+  const badgeCount =
+    hasMethods && hasMethodToggle
+      ? `${selectedMethodCount}/${availableMethods.length}`
+      : hasTools && hasToolControl
+        ? `${enabledToolCount}/${availableTools.length}`
+        : null;
 
   const controls = (
     <div className="flex flex-row items-center gap-3">
@@ -210,7 +222,13 @@ export const TriggerControl = ({
         {hasMethods && (
           <MethodsList
             methods={availableMethods}
-            selectedMethods={hasMethodToggle ? selectedMethods : Object.fromEntries(availableMethods.map((m) => [m.name, true]))}
+            selectedMethods={
+              hasMethodToggle
+                ? selectedMethods
+                : Object.fromEntries(
+                    availableMethods.map((m) => [m.name, true])
+                  )
+            }
             onMethodToggle={onMethodToggle || (() => {})}
             toolName={trigger.name || trigger.id || `trigger-${index}`}
             showSelectAll={hasMethodToggle}
@@ -229,7 +247,9 @@ export const TriggerControl = ({
             showSelectAll={hasToolControl}
             onSelectAll={hasToolControl ? handleSelectAllTools : undefined}
             approvalStates={hasToolControl ? toolApprovalMap : undefined}
-            onApprovalToggle={hasToolControl ? handleToolApprovalToggle : undefined}
+            onApprovalToggle={
+              hasToolControl ? handleToolApprovalToggle : undefined
+            }
             label={`Available Tools (${enabledToolCount}/${availableTools.length}):`}
           />
         )}

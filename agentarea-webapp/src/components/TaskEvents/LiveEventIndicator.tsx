@@ -2,7 +2,7 @@
 
 import { Activity, AlertCircle, CheckCircle2, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { DisplayEvent, EventLevel } from "@/types/events";
+import { DisplayEvent } from "@/types/events";
 
 interface LiveEventIndicatorProps {
   connected: boolean;

@@ -8,12 +8,13 @@
 
 import { useCallback } from "react";
 import { A2UIAction } from "../types";
+import { sendA2UIActionAction } from "./actions";
 
 export interface A2UIActionPayload {
   name: string;
   surface_id: string;
   source_component_id: string;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
 }
 
 export function useA2UIActions(agentId: string, taskId: string | null) {
@@ -22,18 +23,7 @@ export function useA2UIActions(agentId: string, taskId: string | null) {
       if (!taskId) return;
 
       try {
-        const res = await fetch(
-          `/api/proxy/v1/agents/${agentId}/tasks/${taskId}/a2ui/action`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        if (!res.ok) {
-          console.error("A2UI action failed:", res.status, await res.text());
-        }
+        await sendA2UIActionAction(agentId, taskId, payload);
       } catch (err) {
         console.error("A2UI action error:", err);
       }
@@ -47,7 +37,7 @@ export function useA2UIActions(agentId: string, taskId: string | null) {
       action: A2UIAction,
       surfaceId: string,
       sourceComponentId: string,
-      resolvedContext?: Record<string, any>
+      resolvedContext?: Record<string, unknown>
     ) => {
       if (!action.event) return;
 

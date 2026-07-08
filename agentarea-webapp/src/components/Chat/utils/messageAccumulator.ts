@@ -122,8 +122,8 @@ export function hasToolCallStarted(
     (msg) =>
       "type" in msg &&
       msg.type === "tool_call_started" &&
-      (msg.data as any).tool_name === toolName &&
-      (msg.data as any).tool_call_id === toolCallId
+      msg.data.tool_name === toolName &&
+      msg.data.tool_call_id === toolCallId
   );
 }
 
@@ -139,8 +139,8 @@ export function hasToolCallCompleted(
     (msg) =>
       "type" in msg &&
       msg.type === "tool_result" &&
-      (msg.data as any).tool_name === toolName &&
-      (msg.data as any).tool_call_id === toolCallId
+      msg.data.tool_name === toolName &&
+      msg.data.tool_call_id === toolCallId
   );
 }
 
@@ -166,8 +166,8 @@ export function replaceToolCallStarted(
     (msg) =>
       "type" in msg &&
       msg.type === "tool_call_started" &&
-      (msg.data as any).tool_name === toolData.toolName &&
-      (msg.data as any).tool_call_id === toolData.toolCallId
+      msg.data.tool_name === toolData.toolName &&
+      msg.data.tool_call_id === toolData.toolCallId
   );
 
   if (lastToolCallIndex !== -1) {
@@ -192,9 +192,9 @@ export function upsertA2UIComponents(
 ): AnyMessage[] {
   return messages.map((msg) => {
     if (!("type" in msg) || msg.type !== "a2ui_surface") return msg;
-    if ((msg.data as any).surfaceId !== surfaceId) return msg;
+    if (msg.data.surfaceId !== surfaceId) return msg;
 
-    const updated = { ...(msg.data as any).surface.components };
+    const updated = { ...msg.data.surface.components };
     for (const c of components) {
       updated[c.id] = c;
     }
@@ -203,7 +203,7 @@ export function upsertA2UIComponents(
       ...msg,
       data: {
         ...msg.data,
-        surface: { ...(msg.data as any).surface, components: updated },
+        surface: { ...msg.data.surface, components: updated },
       },
     } as MessageComponentType;
   });
@@ -217,20 +217,20 @@ export function updateA2UIDataModel(
   messages: AnyMessage[],
   surfaceId: string,
   path: string,
-  value: any
+  value: unknown
 ): AnyMessage[] {
   return messages.map((msg) => {
     if (!("type" in msg) || msg.type !== "a2ui_surface") return msg;
-    if ((msg.data as any).surfaceId !== surfaceId) return msg;
+    if (msg.data.surfaceId !== surfaceId) return msg;
 
-    const currentModel = { ...(msg.data as any).surface.dataModel };
+    const currentModel = { ...msg.data.surface.dataModel };
     applyJsonPointer(currentModel, path, value);
 
     return {
       ...msg,
       data: {
         ...msg.data,
-        surface: { ...(msg.data as any).surface, dataModel: currentModel },
+        surface: { ...msg.data.surface, dataModel: currentModel },
       },
     } as MessageComponentType;
   });
@@ -248,7 +248,7 @@ export function deleteA2UISurface(
     (msg) =>
       !("type" in msg) ||
       msg.type !== "a2ui_surface" ||
-      (msg.data as any).surfaceId !== surfaceId
+      msg.data.surfaceId !== surfaceId
   );
 }
 
@@ -265,7 +265,11 @@ export function stripA2UIFromStreamingContent(content: string): string {
 }
 
 /** Apply a JSON Pointer (RFC 6901) write to a plain object (shallow, in-place). */
-function applyJsonPointer(obj: Record<string, any>, pointer: string, value: any): void {
+function applyJsonPointer(
+  obj: Record<string, unknown>,
+  pointer: string,
+  value: unknown
+): void {
   if (pointer === "/" || pointer === "") {
     Object.assign(obj, value ?? {});
     return;
@@ -276,8 +280,12 @@ function applyJsonPointer(obj: Record<string, any>, pointer: string, value: any)
     .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
   let target = obj;
   for (let i = 0; i < parts.length - 1; i++) {
-    if (target[parts[i]] == null) target[parts[i]] = {};
-    target = target[parts[i]];
+    let next = target[parts[i]];
+    if (next == null || typeof next !== "object") {
+      next = {};
+      target[parts[i]] = next;
+    }
+    target = next as Record<string, unknown>;
   }
   const last = parts[parts.length - 1];
   if (value === undefined) {

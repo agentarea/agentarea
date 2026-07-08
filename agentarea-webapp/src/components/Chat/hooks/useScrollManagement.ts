@@ -14,7 +14,7 @@ export interface UseScrollManagementOptions {
   /**
    * Additional dependencies to trigger scroll behavior
    */
-  dependencies?: any[];
+  dependencies?: unknown[];
 }
 
 export interface UseScrollManagementReturn {
@@ -78,7 +78,7 @@ export interface UseScrollManagementReturn {
  */
 export function useScrollManagement({
   messagesCount,
-  dependencies = [],
+  dependencies: _dependencies = [],
 }: UseScrollManagementOptions): UseScrollManagementReturn {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -162,7 +162,7 @@ export function useScrollManagement({
         });
       });
     }
-  }, [messagesCount, isAtBottom, checkIfAtBottom, ...dependencies]);
+  }, [messagesCount, isAtBottom, checkIfAtBottom]);
 
   /**
    * Check scroll position when container size changes

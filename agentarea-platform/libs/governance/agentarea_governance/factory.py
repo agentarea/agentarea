@@ -45,9 +45,11 @@ def create_governance_pipeline() -> InterceptorPipeline:
 
     # Plan entitlement gate — enterprise only, injected via ExtensionRegistry
     if ExtensionRegistry.has("entitlement_guard"):
-        entitlement_guard = ExtensionRegistry.get_factory("entitlement_guard")()
-        registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
-        logger.info("Plan entitlement guard registered (enterprise mode)")
+        entitlement_factory = ExtensionRegistry.get_factory("entitlement_guard")
+        if entitlement_factory is not None:
+            entitlement_guard = entitlement_factory()
+            registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
+            logger.info("Plan entitlement guard registered (enterprise mode)")
 
     # Capability gate
     registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)

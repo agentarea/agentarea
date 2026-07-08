@@ -113,6 +113,7 @@
     "build": "Сборка",
     "govern": "Управление",
     "connections": "Соединения",
+    "clients": "Клиенты",
     "explore": "Каталог",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",

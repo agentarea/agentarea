@@ -5,7 +5,7 @@
 
 export interface SSEEvent {
   type: string;
-  data: any;
+  data: Record<string, unknown>;
 }
 
 export interface SSEParserOptions {
@@ -83,8 +83,8 @@ async function parseBufferedSSE(
 
     try {
       const parsed = JSON.parse(dataStr);
-      const type = currentEventType || (parsed as any).type || "message";
-      const data = (parsed as any).data ?? parsed;
+      const type = currentEventType || parsed.type || "message";
+      const data = parsed.data ?? parsed;
       onEvent({ type, data });
     } catch (_err) {
       // Non-JSON payloads (e.g., heartbeats or [DONE])

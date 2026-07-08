@@ -38,8 +38,15 @@ class BrokerMessage:
 class BrokerClient(Protocol):
     """Durable stream broker."""
 
-    async def submit(self, stream: str, fields: dict[str, str]) -> str:
-        """Append a message to `stream`. Returns the broker-assigned message id."""
+    async def submit(
+        self, stream: str, fields: dict[str, str], *, maxlen: int | None = None
+    ) -> str:
+        """Append a message to `stream`. Returns the broker-assigned message id.
+
+        `maxlen` caps stream length with approximate trimming (the channel's
+        retention policy for bounded buffers, e.g. live-tail streams). `None`
+        leaves the stream unbounded (durable log).
+        """
         raise NotImplementedError
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
@@ -75,5 +82,26 @@ class BrokerClient(Protocol):
         """Reclaim messages that have been pending longer than `min_idle_ms`
         from dead consumers. Returns the reclaimed batch (now owned by
         `consumer`).
+        """
+        raise NotImplementedError
+
+    async def tail(
+        self,
+        stream: str,
+        last_id: str = "$",
+        block_ms: int = 5000,
+        count: int = 100,
+    ) -> tuple[str, list[BrokerMessage]]:
+        """Broadcast read with NO consumer group (Publish-Subscribe Channel).
+
+        Every reader sees every message independently — there is no group,
+        no ACK, and no pending-entries list. Used for the CQRS read side
+        (live tailing) where delivery is fan-out and at-most-once.
+
+        `last_id` is an opaque cursor: ``"$"`` yields only entries appended
+        after this call (live only); ``"0"`` yields from the start of the
+        stream (catch-up). Returns ``(next_cursor, messages)``; pass
+        `next_cursor` back to continue. On block timeout returns
+        ``(last_id, [])`` unchanged.
         """
         raise NotImplementedError

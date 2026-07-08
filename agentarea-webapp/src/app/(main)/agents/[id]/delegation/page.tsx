@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import {
-  getAgentAction,
-  listAgentsAction,
-} from "@/lib/server-actions";
+import { getAgentAction, listAgentsAction } from "@/lib/server-actions";
 import { DelegationConfig } from "./DelegationConfig";
 
 export const metadata: Metadata = {
@@ -31,10 +28,8 @@ export default async function AgentDelegationPage({
     (a: { id: string }) => a.id !== resolvedParams.id
   );
 
-  const connectedAgentNames = new Set(
-    (agent?.tools ?? [])
-      .filter((t: { type: string }) => t.type === "agent")
-      .map((t: { name: string }) => t.name)
+  const connectedAgentNames = new Set<string>(
+    (agent?.tools ?? []).filter((t) => t.type === "agent").map((t) => t.name)
   );
 
   return (

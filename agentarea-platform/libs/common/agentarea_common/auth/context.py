@@ -11,6 +11,9 @@ class UserContext:
     workspace_id: str
     accessible_workspaces: list[str] | None = None
     email: str | None = None
+    # Set when the principal itself is a Client (agent-proxy), e.g. an OAuth2
+    # client-credentials token; the gateway trusts it over URL scoping.
+    client_id: str | None = None
 
     def __post_init__(self):
         """Initialize default values after dataclass creation."""

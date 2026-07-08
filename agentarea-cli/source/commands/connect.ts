@@ -11,6 +11,7 @@ interface ConnectOptions {
 	token: AuthToken;
 	scope?: string;
 	name?: string;
+	clientId?: string;
 }
 
 interface ConnectionRecord {
@@ -23,6 +24,7 @@ interface ConnectionRecord {
 	tokenPrefix: string;
 	connectedAt: string;
 	updatedAt: string;
+	clientId?: string;
 }
 
 interface ConnectionState {
@@ -72,8 +74,9 @@ function tokenEnvVar(name: string): string {
 		: `AGENTAREA_${targetSuffix(name)}_TOKEN`;
 }
 
-function mcpUrl(apiUrl: string): string {
-	return `${apiUrl.replace(/\/$/, '')}/mcp`;
+function mcpUrl(apiUrl: string, clientId?: string): string {
+	const base = apiUrl.replace(/\/$/, '');
+	return clientId ? `${base}/client-mcp/${clientId}` : `${base}/mcp`;
 }
 
 function agentareaDir(): string {
@@ -125,11 +128,12 @@ async function saveConnectionState(
 		name,
 		scope,
 		apiUrl: options.apiUrl.replace(/\/$/, ''),
-		mcpUrl: mcpUrl(options.apiUrl),
+		mcpUrl: mcpUrl(options.apiUrl, options.clientId),
 		tokenEnvVar: tokenEnvVar(name),
 		tokenPrefix: tokenPrefix(options.token),
 		connectedAt: previous?.connectedAt ?? now,
 		updatedAt: now,
+		clientId: options.clientId,
 	};
 
 	state.connections[client] = {
@@ -154,11 +158,15 @@ function codexBlockEnd(name: string): string {
 	return `# <<< agentarea-cli managed: ${mcpServerName(name)} MCP`;
 }
 
-function codexManagedBlock(apiUrl: string, name: string): string {
+function codexManagedBlock(
+	apiUrl: string,
+	name: string,
+	clientId?: string,
+): string {
 	return [
 		codexBlockStart(name),
 		`[mcp_servers.${mcpServerName(name)}]`,
-		`url = "${mcpUrl(apiUrl)}"`,
+		`url = "${mcpUrl(apiUrl, clientId)}"`,
 		`bearer_token_env_var = "${tokenEnvVar(name)}"`,
 		'startup_timeout_sec = 10',
 		'tool_timeout_sec = 60',
@@ -170,6 +178,7 @@ async function writeCodexConfig(
 	apiUrl: string,
 	scope: Scope,
 	name: string,
+	clientId?: string,
 ): Promise<string> {
 	const configPath = codexConfigPath(scope);
 	let existing = '';
@@ -186,7 +195,7 @@ async function writeCodexConfig(
 		`${codexBlockStart(name)}[\\s\\S]*?${codexBlockEnd(name)}`,
 		'm',
 	);
-	const nextBlock = codexManagedBlock(apiUrl, name);
+	const nextBlock = codexManagedBlock(apiUrl, name, clientId);
 	let nextConfig: string;
 
 	if (managedPattern.test(existing)) {
@@ -237,6 +246,7 @@ function claudeInstructions(
 	scope: Scope,
 	token: AuthToken,
 	name: string,
+	clientId?: string,
 ): string {
 	const tokenPlaceholder = token.accessToken
 		? '<stored-agentarea-token>'
@@ -255,6 +265,7 @@ function claudeInstructions(
 			name,
 		)} --scope ${scope} ${mcpUrl(
 			apiUrl,
+			clientId,
 		)} --header "Authorization: Bearer ${tokenPlaceholder}"`,
 		'',
 		'No per-tool sync is needed. Hosted third-party MCP access changes in Agentarea policy.',
@@ -286,12 +297,18 @@ export async function connectClient(
 	const statePath = await saveConnectionState(client, scope, options);
 	const codexConfig =
 		client === 'codex'
-			? await writeCodexConfig(options.apiUrl, scope, name)
+			? await writeCodexConfig(options.apiUrl, scope, name, options.clientId)
 			: '';
 	const output =
 		client === 'codex'
 			? codexInstructions(options.apiUrl, codexConfig, name)
-			: claudeInstructions(options.apiUrl, scope, options.token, name);
+			: claudeInstructions(
+					options.apiUrl,
+					scope,
+					options.token,
+					name,
+					options.clientId,
+			  );
 
 	console.log(output);
 	console.log('');

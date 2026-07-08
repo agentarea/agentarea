@@ -90,7 +90,7 @@ class TriggerCreate(BaseModel):
     )
     data_extractor: str | None = Field(
         default=None,
-        description="Polling extractor identifier (e.g. 'mailslurper', 'imap').",
+        description="Polling extractor identifier (e.g. 'imap', 'rss').",
     )
     data_extractor_config: dict[str, Any] | None = Field(
         default=None,

@@ -22,7 +22,7 @@ from agentarea_governance.domain.policies import (
 )
 
 from .domain.base_service import BaseTaskService
-from .domain.exceptions import BudgetCapExceededError
+from .domain.exceptions import AgentModelNotConfiguredError, BudgetCapExceededError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
@@ -146,6 +146,25 @@ class TaskService(BaseTaskService):
             raise ValueError(f"Agent with ID {agent_id} does not exist")
         return agent
 
+    @staticmethod
+    def _require_agent_model(agent, agent_id: UUID, parameters: dict[str, Any] | None) -> None:
+        """Fail fast when an agent has no model to run with.
+
+        Catalog agents can be installed without a model when the workspace has
+        no matching instance (``model_id`` is left unset rather than pointing at
+        a non-existent model). Starting a run then fails deep inside the workflow
+        with an empty model name; raise a clear, client-mappable error instead.
+        A per-run ``model_override`` satisfies the requirement. ``agent`` is
+        ``None`` only in test/standalone mode (no repository wired), where the
+        check is skipped — mirroring ``_validate_agent_exists``.
+        """
+        if agent is None:
+            return
+        if (parameters or {}).get("model_override"):
+            return
+        if not getattr(agent, "model_id", None):
+            raise AgentModelNotConfiguredError(agent_id)
+
     @audited("task.create", resource_type="task")
     async def create_task_with_policy(
         self,
@@ -162,12 +181,17 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "submitted",
         task_policy: PolicyDocument | None = None,
+        require_model: bool = False,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
         Canonical persist-only entrypoint used by delegation activities, trigger
         prepare-only activities, and as the internal building block for
         ``create_and_execute_task_with_workflow``.
+
+        ``require_model`` is set by the execution path so a run is rejected up
+        front when the agent has no model configured; persist-only callers leave
+        it ``False``.
         """
         new_task_id = task_id or uuid4()
         effective_policy = await self._resolve_effective_policy(
@@ -179,6 +203,8 @@ class TaskService(BaseTaskService):
         await self._enforce_budget_cap(workspace_id, effective_policy)
 
         agent = await self._validate_agent_exists(agent_id)
+        if require_model:
+            self._require_agent_model(agent, agent_id, parameters)
         agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
 
         metadata: dict[str, Any] = {}
@@ -641,6 +667,9 @@ class TaskService(BaseTaskService):
                 return routed
 
         # Persist + resolve governance policy via the canonical persist-only path.
+        # This is the execution dispatch path, so require the agent to have a
+        # model to run with (follow-ups routed above reuse the live workflow's
+        # model and never reach here).
         stored_task = await self.create_task_with_policy(
             agent_id=agent_id,
             description=description,
@@ -654,6 +683,7 @@ class TaskService(BaseTaskService):
             metadata_overrides=metadata_overrides,
             status=status,
             task_policy=task_policy,
+            require_model=True,
         )
 
         stored_task.status = "pending"

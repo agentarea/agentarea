@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { Bot, User, Wrench } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -69,7 +70,7 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({
           )}
         >
           {iconUrl && (type === "tool-call" || type === "tool-result") ? (
-            <img src={iconUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
+            <Image src={iconUrl} alt="" width={16} height={16} className="h-4 w-4 rounded-sm object-contain" />
           ) : icon ? (
             icon
           ) : type === "error" ? (

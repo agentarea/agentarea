@@ -1,18 +1,55 @@
 """Unit tests for MCPAuthService."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
-
-from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
     AUTH_TYPE_BEARER,
     AUTH_TYPE_OAUTH2,
     MCPAuthConfig,
 )
+
+
+class _FakeResp:
+    def __init__(self, status_code: int = 200, data: dict | None = None):
+        self.status_code = status_code
+        self._data = data or {}
+
+    def json(self):
+        return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                "err", request=MagicMock(), response=MagicMock(status_code=self.status_code)
+            )
+
+
+class _FakeClient:
+    def __init__(self, resp: _FakeResp):
+        self._resp = resp
+        self.posted: dict | None = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def post(self, url, data=None, timeout=None):
+        self.posted = data
+        return self._resp
+
+
+def _oauth_config(**cfg) -> MCPAuthConfig:
+    c = _make_config(AUTH_TYPE_OAUTH2, secret_key="k")
+    c.config = {"token_url": "https://as/token", "client_id": "cid", **cfg}
+    return c
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +145,66 @@ class TestGetAuthHeaders:
         config = _make_config(AUTH_TYPE_API_KEY, config={"header_name": "X-Key"})
         headers = await svc.get_auth_headers(config)
         assert headers.get("X-Key") == ""
+
+
+# ---------------------------------------------------------------------------
+# OAuth2 token refresh / reauth
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestOAuth2Refresh:
+    async def test_valid_token_is_returned_without_refresh(self):
+        svc, _, sm = _make_service()
+        import time
+
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "still-good", "expires_at": time.time() + 3600}
+        )
+        headers = await svc.get_auth_headers(_oauth_config())
+        assert headers == {"Authorization": "Bearer still-good"}
+
+    async def test_expired_token_refreshes_via_refresh_token(self):
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "rt"}
+        )
+        client = _FakeClient(_FakeResp(200, {"access_token": "new", "expires_in": 3600}))
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            headers = await svc.get_auth_headers(_oauth_config())
+        assert headers == {"Authorization": "Bearer new"}
+        assert client.posted["grant_type"] == "refresh_token"
+        # Public client: no secret was sent.
+        assert "client_secret" not in client.posted
+        sm.set_secret.assert_called()  # persisted the rotated creds
+
+    async def test_force_refresh_refreshes_even_when_unexpired(self):
+        svc, _, sm = _make_service()
+        import time
+
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "good", "expires_at": time.time() + 3600, "refresh_token": "rt"}
+        )
+        client = _FakeClient(_FakeResp(200, {"access_token": "forced", "expires_in": 3600}))
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            headers = await svc.get_auth_headers(_oauth_config(), force_refresh=True)
+        assert headers == {"Authorization": "Bearer forced"}
+
+    async def test_no_refresh_token_and_no_secret_requires_reauth(self):
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps({"access_token": "dead", "expires_at": 0})
+        with pytest.raises(OAuthReauthRequiredError):
+            await svc.get_auth_headers(_oauth_config())
+
+    async def test_refresh_4xx_requires_reauth(self):
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps(
+            {"access_token": "old", "expires_at": 0, "refresh_token": "revoked"}
+        )
+        client = _FakeClient(_FakeResp(400, {"error": "invalid_grant"}))
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            with pytest.raises(OAuthReauthRequiredError):
+                await svc.get_auth_headers(_oauth_config())
 
 
 # ---------------------------------------------------------------------------

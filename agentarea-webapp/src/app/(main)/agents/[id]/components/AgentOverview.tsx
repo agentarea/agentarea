@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowUpRight,
@@ -6,16 +7,16 @@ import {
   ChevronRight,
   Clock,
   ListChecks,
-  Plug,
   Play,
+  Plug,
   Shield,
   Sparkles,
   Zap,
 } from "lucide-react";
-import Link from "next/link";
+import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
 import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { ProviderIcon } from "@/components/ui/provider-icon";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   agentColorVar,
   getAgentIconComponent,
@@ -27,6 +28,7 @@ import {
   listMCPServerInstances,
   listMCPServers,
   listPolicies,
+  type TaskResponse,
 } from "@/lib/api";
 import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
@@ -34,11 +36,10 @@ import {
   getAgentStatusPresentation,
   getTaskStatusPresentation,
 } from "@/lib/status";
-import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
-import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
-import type { Policy } from "@/types/policies";
-import type { Agent } from "@/types/agent";
 import { cn } from "@/lib/utils";
+import type { Agent } from "@/types/agent";
+import type { Policy } from "@/types/policies";
+import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
 import { AgentToolPills } from "../../components/AgentToolIcons";
 import { CatalogAgentPreview } from "./CatalogAgentPreview";
 
@@ -86,18 +87,24 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   // Use the resolved UUID for endpoints that require it (list_agent_tasks, etc.).
   const realId: string = agent.id;
 
-  const [overview, tasksRes, settings, mcpInstancesRes, mcpServersRes, policiesRes] =
-    await Promise.all([
-      getAgentOverview(realId).catch(() => null),
-      listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
-      getWorkspaceSettings().catch(() => null),
-      listMCPServerInstances().catch(() => ({ data: [] })),
-      listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
-      listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
-        data: [],
-      })),
-    ]);
-  const tasks = (tasksRes?.data as any[]) || [];
+  const [
+    overview,
+    tasksRes,
+    settings,
+    mcpInstancesRes,
+    mcpServersRes,
+    policiesRes,
+  ] = await Promise.all([
+    getAgentOverview(realId).catch(() => null),
+    listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
+    getWorkspaceSettings().catch(() => null),
+    listMCPServerInstances().catch(() => ({ data: [] })),
+    listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
+    listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
+      data: [],
+    })),
+  ]);
+  const tasks = (tasksRes?.data as TaskResponse[]) || [];
 
   const runningTasks = tasks.filter((t) =>
     RUNNING_STATUSES.has(String(t.status ?? ""))
@@ -338,9 +345,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
             {runningTasks.length === 0 ? (
               <EmptyRow text="Nothing running right now." />
             ) : (
-              runningTasks.map((t) => (
-                <TaskRow key={t.id} task={t} />
-              ))
+              runningTasks.map((t) => <TaskRow key={t.id} task={t} />)
             )}
           </Card>
 
@@ -392,17 +397,23 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
                     className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-bold text-white"
                     style={{ background: agentColorVar(colorToken) }}
                   >
-                    {(agent.model_info?.provider_name?.[0] ?? "M").toUpperCase()}
+                    {(
+                      agent.model_info?.provider_name?.[0] ?? "M"
+                    ).toUpperCase()}
                   </span>
                 )
               }
               title={modelLabel || "No model set"}
               sub={modelSub || "Model"}
             />
-            <ConfigSection icon={<Sparkles className="h-3.5 w-3.5" />} title="Skills" count={skills.length}>
+            <ConfigSection
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+              title="Skills"
+              count={skills.length}
+            >
               {skills.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
-                  {skills.map((s: any) => (
+                  {skills.map((s) => (
                     <span
                       key={s.id}
                       title={s.description ?? s.name}
@@ -413,14 +424,23 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
                   ))}
                 </div>
               ) : (
-                <p className="text-[11.5px] text-muted-foreground">None granted</p>
+                <p className="text-[11.5px] text-muted-foreground">
+                  None granted
+                </p>
               )}
             </ConfigSection>
-            <ConfigSection icon={<Plug className="h-3.5 w-3.5" />} title="Tools" count={toolIcons.length} last>
+            <ConfigSection
+              icon={<Plug className="h-3.5 w-3.5" />}
+              title="Tools"
+              count={toolIcons.length}
+              last
+            >
               {toolIcons.length > 0 ? (
                 <AgentToolPills tools={toolIcons} />
               ) : (
-                <p className="text-[11.5px] text-muted-foreground">None connected</p>
+                <p className="text-[11.5px] text-muted-foreground">
+                  None connected
+                </p>
               )}
             </ConfigSection>
           </Card>
@@ -436,7 +456,10 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
               />
               <div className="flex flex-col gap-2 px-[15px] py-3">
                 {policyRules.map((r) => (
-                  <div key={r.id} className="flex items-start justify-between gap-3">
+                  <div
+                    key={r.id}
+                    className="flex items-start justify-between gap-3"
+                  >
                     <div className="min-w-0">
                       <div className="text-[12px] font-medium text-foreground/90">
                         {r.label}
@@ -547,7 +570,9 @@ function HeroMeta({ children }: { children: React.ReactNode }) {
   );
 }
 function HeroDot() {
-  return <span className="h-[3px] w-[3px] rounded-full bg-muted-foreground/40" />;
+  return (
+    <span className="h-[3px] w-[3px] rounded-full bg-muted-foreground/40" />
+  );
 }
 
 type StatDelta = {
@@ -564,7 +589,15 @@ type StatCardProps = {
   tone?: string;
   delta?: StatDelta;
 };
-function StatCard({ icon, label, value, unit, sub, tone, delta }: StatCardProps) {
+function StatCard({
+  icon,
+  label,
+  value,
+  unit,
+  sub,
+  tone,
+  delta,
+}: StatCardProps) {
   const showDelta = delta && delta.pct != null && delta.direction !== "flat";
   return (
     <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
@@ -639,12 +672,16 @@ function CardHead({
   );
 }
 
-function TaskRow({ task }: { task: any }) {
+function TaskRow({ task }: { task: TaskResponse }) {
   const status = String(task.status ?? "unknown");
   const presentation = getTaskStatusPresentation(status);
-  const cost = Number(task.result?.total_cost ?? 0);
-  const when = relTime(task.created_at ?? task.started_at);
-  const title = task.description || task.title || task.id;
+  const resultCost =
+    task.result && typeof task.result === "object"
+      ? task.result.total_cost
+      : undefined;
+  const cost = Number(task.total_cost ?? resultCost ?? 0);
+  const when = relTime(task.created_at);
+  const title = task.description || task.id;
 
   return (
     <Link
@@ -727,9 +764,7 @@ function ConfigSection({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn("px-[15px] py-3", !last && "border-b border-border/60")}
-    >
+    <div className={cn("px-[15px] py-3", !last && "border-b border-border/60")}>
       <div className="mb-2 flex items-center gap-2.5">
         <GlanceTile icon={icon} />
         <span className="flex-1 text-[12.5px] font-medium">{title}</span>

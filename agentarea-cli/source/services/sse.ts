@@ -1,5 +1,5 @@
 import EventSource from 'eventsource';
-import {apiClient} from './apiClient.js';
+import {getApiBaseUrl, resolveToken} from './apiRuntime.js';
 import {logger} from '../utils/logger.js';
 import {SSEError} from '../utils/error.js';
 import {type TaskOutputEvent} from '../types/index.js';
@@ -7,27 +7,39 @@ import {type TaskOutputEvent} from '../types/index.js';
 export type SSEEventHandler = (event: TaskOutputEvent) => void;
 export type SSEErrorHandler = (error: Error) => void;
 
+interface SSEHandlers {
+	agentId: string;
+	onMessage: SSEEventHandler;
+	onError: SSEErrorHandler;
+}
+
+const TASK_EVENT_TYPES = [
+	'task-started',
+	'output',
+	'status-update',
+	'progress',
+	'task-completed',
+	'task-error',
+];
+
 export class SSEService {
 	private eventSources: Map<string, EventSource> = new Map();
-	private handlers: Map<
-		string,
-		{onMessage: SSEEventHandler; onError: SSEErrorHandler}
-	> = new Map();
+	private handlers: Map<string, SSEHandlers> = new Map();
 	private reconnectAttempts: Map<string, number> = new Map();
 	private maxReconnectAttempts = 5;
 	private reconnectDelay = 1000; // milliseconds
 
 	async connect(
+		agentId: string,
 		taskId: string,
 		onMessage: SSEEventHandler,
 		onError: SSEErrorHandler,
 		token?: string,
 	): Promise<void> {
 		try {
-			// Close existing connection if any
 			this.disconnect(taskId);
 
-			const token_ = token || apiClient.getToken()?.accessToken;
+			const token_ = token ?? (await resolveToken());
 
 			if (!token_) {
 				throw new SSEError(
@@ -35,10 +47,8 @@ export class SSEService {
 				);
 			}
 
-			// AgentArea uses /v1/tasks/{taskId}/stream or similar endpoint for streaming
-			// Adjust based on actual AgentArea streaming endpoint structure
-			const baseUrl = apiClient.getClient().defaults.baseURL || '';
-			const url = `${baseUrl}/v1/tasks/${taskId}/stream`;
+			const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+			const url = `${baseUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
 
 			const eventSource = new EventSource(url, {
 				headers: {
@@ -46,51 +56,24 @@ export class SSEService {
 				},
 			});
 
-			// Register event handlers
-			eventSource.addEventListener('task-started', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-			});
+			for (const type of TASK_EVENT_TYPES) {
+				eventSource.addEventListener(type, (event: Event) => {
+					const messageEvent = event as MessageEvent;
+					const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
+					onMessage(data);
 
-			eventSource.addEventListener('output', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-			});
-
-			eventSource.addEventListener('status-update', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-			});
-
-			eventSource.addEventListener('progress', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-			});
-
-			eventSource.addEventListener('task-completed', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-				this.disconnect(taskId);
-			});
-
-			eventSource.addEventListener('task-error', (event: Event) => {
-				const messageEvent = event as MessageEvent;
-				const data = JSON.parse(messageEvent.data) as TaskOutputEvent;
-				onMessage(data);
-				this.disconnect(taskId);
-			});
+					if (type === 'task-completed' || type === 'task-error') {
+						this.disconnect(taskId);
+					}
+				});
+			}
 
 			eventSource.onerror = () => {
 				this.handleConnectionError(taskId, onError);
 			};
 
 			this.eventSources.set(taskId, eventSource);
-			this.handlers.set(taskId, {onMessage, onError});
+			this.handlers.set(taskId, {agentId, onMessage, onError});
 			this.reconnectAttempts.set(taskId, 0);
 
 			logger.info(`SSE connection established for task ${taskId}`);
@@ -128,11 +111,14 @@ export class SSEService {
 		setTimeout(() => {
 			const handlers = this.handlers.get(taskId);
 			if (handlers) {
-				this.connect(taskId, handlers.onMessage, handlers.onError).catch(
-					error => {
-						logger.error('Reconnection failed:', error);
-					},
-				);
+				this.connect(
+					handlers.agentId,
+					taskId,
+					handlers.onMessage,
+					handlers.onError,
+				).catch(error => {
+					logger.error('Reconnection failed:', error);
+				});
 			}
 		}, delay);
 	}

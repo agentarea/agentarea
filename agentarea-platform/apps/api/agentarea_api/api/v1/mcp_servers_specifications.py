@@ -1,5 +1,4 @@
 from contextlib import suppress
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -7,6 +6,7 @@ from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
@@ -33,8 +33,8 @@ class MCPServerResponse(BaseModel):
     json_spec: dict[str, Any] | None = None
     registry_url: str | None = None
     status: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(cls, server: MCPServer) -> "MCPServerResponse":

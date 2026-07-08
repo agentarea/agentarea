@@ -1,8 +1,11 @@
-import { components } from "@/api/schema";
+import type {
+  TaskEvent as ApiTaskEvent,
+  TaskEventResponse as ApiTaskEventResponse,
+} from "@/api/client/types.gen";
 
 // Base types from API schema
-export type TaskEvent = components["schemas"]["TaskEvent"];
-export type TaskEventResponse = components["schemas"]["TaskEventResponse"];
+export type TaskEvent = ApiTaskEvent;
+export type TaskEventResponse = ApiTaskEventResponse;
 
 // Extended SSE event types
 export interface SSEEvent {
@@ -406,7 +409,7 @@ export const mapSSEToDisplayEvent = (
             ? JSON.parse(toolCall.arguments)
             : toolCall.arguments;
         description = `Task completed: ${args.summary || args.result || "Success"}`;
-      } catch (e) {
+      } catch {
         description = `Task completed with ${toolCall.name}`;
       }
     } else {

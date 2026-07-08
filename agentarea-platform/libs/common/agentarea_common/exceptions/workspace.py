@@ -1,12 +1,31 @@
-"""Workspace-related exception classes."""
+"""Workspace-related exception classes.
+
+These are :class:`AppError` subclasses, so they render as RFC 9457 problem+json
+through the unified handler. The ``detail`` surfaced to the client is a *safe*,
+generic message (e.g. cross-workspace access returns a 404 "does not exist" to
+avoid leaking resource existence); the verbose context (workspace_id, user_id,
+resource_id) lives on the instance and in ``__str__`` for server-side logging
+only.
+"""
+
+from __future__ import annotations
+
+from fastapi import status
+
+from .errors import AppError
 
 
-class WorkspaceError(Exception):
+class WorkspaceError(AppError):
     """Base exception for workspace-related errors.
 
-    This is the base class for all workspace-related exceptions.
-    It includes workspace context information for better error tracking.
+    Carries workspace context for logging while exposing only a generic,
+    client-safe ``detail`` in the response body.
     """
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    code = "workspace_error"
+    # Client-safe detail; subclasses override (or set per-instance).
+    safe_detail = "An unexpected workspace-related error occurred"
 
     def __init__(
         self,
@@ -18,19 +37,19 @@ class WorkspaceError(Exception):
         """Initialize workspace error.
 
         Args:
-            message: Error message
+            message: Verbose internal message (logged, never sent to the client).
             workspace_id: ID of the workspace where error occurred
             user_id: ID of the user who triggered the error
             resource_id: ID of the resource that caused the error
         """
-        super().__init__(message)
         self.workspace_id = workspace_id
         self.user_id = user_id
         self.resource_id = resource_id
         self.message = message
+        super().__init__(detail=self.safe_detail)
 
     def __str__(self) -> str:
-        """Return string representation with context."""
+        """Return verbose representation with context (for logging)."""
         context_parts = []
         if self.workspace_id:
             context_parts.append(f"workspace_id={self.workspace_id}")
@@ -48,9 +67,13 @@ class WorkspaceError(Exception):
 class WorkspaceAccessDenied(WorkspaceError):  # noqa: N818
     """Raised when user tries to access resource from different workspace.
 
-    This exception is raised when a user attempts to access a resource
-    that belongs to a different workspace than their current context.
+    Rendered as 404 (not 403) with a generic message so existence of resources
+    in other workspaces is not leaked.
     """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "not_found"
+    safe_detail = "The requested resource does not exist or you don't have access to it"
 
     def __init__(
         self,
@@ -93,11 +116,10 @@ class WorkspaceAccessDenied(WorkspaceError):  # noqa: N818
 
 
 class MissingWorkspaceContext(WorkspaceError):  # noqa: N818
-    """Raised when workspace context is missing from request.
+    """Raised when workspace context is missing from request."""
 
-    This exception is raised when a request lacks the required
-    user and workspace context information.
-    """
+    status_code = status.HTTP_400_BAD_REQUEST
+    code = "missing_context"
 
     def __init__(self, missing_field: str, user_id: str | None = None):
         """Initialize missing workspace context error.
@@ -107,16 +129,17 @@ class MissingWorkspaceContext(WorkspaceError):  # noqa: N818
             user_id: ID of the user if available
         """
         message = f"Missing required context field: {missing_field}"
+        self.safe_detail = f"Request must include valid {missing_field} information"
         super().__init__(message=message, user_id=user_id)
         self.missing_field = missing_field
 
 
 class InvalidJWTToken(WorkspaceError):  # noqa: N818
-    """Raised when JWT token is invalid or missing required claims.
+    """Raised when JWT token is invalid or missing required claims."""
 
-    This exception is raised when JWT token validation fails or
-    when the token lacks required claims for workspace context.
-    """
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "authentication_failed"
+    safe_detail = "Invalid or missing authentication token"
 
     def __init__(self, reason: str, token_present: bool = False):
         """Initialize invalid JWT token error.
@@ -138,10 +161,12 @@ class InvalidJWTToken(WorkspaceError):  # noqa: N818
 class WorkspaceResourceNotFound(WorkspaceError):  # noqa: N818
     """Raised when a resource is not found in the current workspace.
 
-    This exception is used instead of generic NotFound errors to provide
-    workspace context and ensure proper 404 responses for cross-workspace
-    access attempts.
+    Used instead of generic NotFound errors so cross-workspace access attempts
+    return a workspace-scoped 404.
     """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "not_found"
 
     def __init__(
         self, resource_type: str, resource_id: str, workspace_id: str, user_id: str | None = None
@@ -155,6 +180,7 @@ class WorkspaceResourceNotFound(WorkspaceError):  # noqa: N818
             user_id: ID of the user making the request
         """
         message = f"{resource_type.title()} '{resource_id}' not found in workspace '{workspace_id}'"
+        self.safe_detail = f"The requested {resource_type} does not exist"
         super().__init__(
             message=message, workspace_id=workspace_id, user_id=user_id, resource_id=resource_id
         )

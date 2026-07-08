@@ -58,7 +58,7 @@ global:
     name: "agentarea"  # Changed from 'database' to 'name' per v2.0
     # SSL configuration
     ssl: false
-    sslMode: "prefer"
+    sslMode: "disable"
     # Connection pool settings
     maxConnections: 100
     connectionTimeout: 30s
@@ -149,10 +149,6 @@ global:
       enabled: false
       headerName: ""
       headerValue: ""
-    # Rate limiting
-    rateLimit:
-      enabled: true
-      requestsPerMinute: 1000
 
   # Web application configuration
   webapp:
@@ -968,7 +964,7 @@ kratos:
     kid: "agentarea-jwt-key-1"
     jwks_b64: ""
     jwks_public_b64: ""
-    claims_mapper_b64: "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg=="
+    claims_mapper_b64: ""
     issuer: "https://agentarea.dev"
     audience: "agentarea-api"
 
@@ -1050,7 +1046,9 @@ kratos:
           exposed_headers:
             - Content-Type
             - Set-Cookie
-    dsn: ${DSN}
+    # dsn is supplied at runtime via the DSN env var, which Ory reads natively.
+    # Keeping the DB password out of the config file avoids unsafe sed
+    # substitution of values that may contain sed metacharacters (|, &, \).
     secrets:
       cookie:
         - ${KRATOS_SECRETS_COOKIE}

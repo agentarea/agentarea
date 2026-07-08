@@ -10,11 +10,13 @@ import {
   findTriggerCatalogEntry,
   getTriggerIconComponent,
   renderTriggerIcon,
+  type EnrichedTrigger,
+  type TriggerCatalogEntry,
 } from "./triggerDisplay";
 
 interface TriggerCardProps {
-  trigger: any;
-  catalog: any[];
+  trigger: EnrichedTrigger;
+  catalog: TriggerCatalogEntry[];
 }
 
 export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {

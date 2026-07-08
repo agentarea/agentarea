@@ -16,13 +16,18 @@ from typing import Annotated
 from urllib.parse import quote
 
 from agentarea_api.api.deps.database import ReadDatabaseSessionDep
-from agentarea_common.artifacts import ArtifactEvent, ArtifactService
+from agentarea_common.artifacts import (
+    ArtifactActor,
+    ArtifactEvent,
+    ArtifactService,
+    DbArtifactEventRecorder,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -105,6 +110,27 @@ async def list_workspace_files(
     projects = await project_service.list()
     directories = [f"projects/{p.id}/" for p in projects]
     return WorkspaceFileListResponse(files=files, directories=directories)
+
+
+@router.post("", status_code=204)
+async def upload_workspace_file(
+    file: UploadFile,
+    user_context: UserContextDep,
+):
+    """Upload a file to the workspace's artifact root."""
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    # Strip any directory components so an upload can't land in another prefix.
+    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
+    content = await file.read()
+    await svc.put(
+        user_context.workspace_id,
+        filename,
+        content,
+        content_type=file.content_type,
+    )
 
 
 @router.get("/history", response_model=ArtifactHistoryResponse)

@@ -129,7 +129,9 @@ class RedisEventBroker(EventBroker):
 
         # Also publish via raw Redis for non-FastStream consumers:
         # - MCP events → Go MCP Manager
-        # - Workflow events → outbound channel delivery (ChannelEventSubscriber)
+        # - Workflow events → cross-language / external subscribers
+        #   (outbound channel delivery now happens in-process from the
+        #   Temporal activity via channels.activity_emit, not off this bus)
         if self._raw_redis and (
             self._is_cross_language_channel(channel) or "workflow" in channel.lower()
         ):

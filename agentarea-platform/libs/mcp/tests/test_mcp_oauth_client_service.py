@@ -227,7 +227,50 @@ class TestDiscoverAuthServer:
         assert meta.token_endpoint == "https://as.example.com/token"
         assert meta.resource == "https://mcp.example.com/sse"
 
-    async def test_raises_when_initial_response_is_not_401(self, monkeypatch):
+    async def test_accepts_403_auth_challenge(self, monkeypatch):
+        """Vercel answers an unauthenticated request with 403, not 401 — discovery
+        must still proceed (the status is only a hint to find the metadata URL)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://mcp.vercel.com":
+                return httpx.Response(
+                    403,
+                    headers={
+                        "WWW-Authenticate": (
+                            'Bearer resource_metadata='
+                            '"https://mcp.vercel.com/.well-known/oauth-protected-resource"'
+                        )
+                    },
+                )
+            if url.endswith("/.well-known/oauth-protected-resource"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "resource": "https://mcp.vercel.com",
+                        "authorization_servers": ["https://as.vercel.com"],
+                    },
+                )
+            if url.endswith("/.well-known/oauth-authorization-server"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://as.vercel.com",
+                        "authorization_endpoint": "https://as.vercel.com/authorize",
+                        "token_endpoint": "https://as.vercel.com/token",
+                    },
+                )
+            raise AssertionError(f"unexpected request: {url}")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+
+        meta = await svc.discover_auth_server("https://mcp.vercel.com")
+
+        assert meta.token_endpoint == "https://as.vercel.com/token"
+        assert meta.resource == "https://mcp.vercel.com"
+
+    async def test_raises_when_initial_response_is_not_an_auth_challenge(self, monkeypatch):
         def handler(_request):
             return httpx.Response(200)
 
@@ -235,6 +278,23 @@ class TestDiscoverAuthServer:
         svc = MCPOAuthClientService()
         with pytest.raises(MCPOAuthDiscoveryError):
             await svc.discover_auth_server("https://mcp.example.com/sse")
+
+    async def test_metadata_403_raises_discovery_error_not_500(self, monkeypatch):
+        """Regression: a 403 on the protected-resource metadata (Vercel gates it)
+        must become MCPOAuthDiscoveryError, not an unhandled HTTPStatusError/500."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://mcp.vercel.com":
+                return httpx.Response(403)  # auth challenge, no resource_metadata hint
+            if "/.well-known/oauth-protected-resource" in url:
+                return httpx.Response(403)  # both path-specific and root are gated
+            raise AssertionError(f"unexpected request: {url}")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="protected-resource metadata"):
+            await svc.discover_auth_server("https://mcp.vercel.com")
 
     async def test_raises_when_no_authorization_servers_listed(self, monkeypatch):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -337,8 +397,23 @@ class TestBuildAuthorizeUrl:
         assert params["code_challenge"] == ["ch"]
         assert params["code_challenge_method"] == ["S256"]
         assert params["state"] == ["state-xyz"]
-        assert params["scope"] == ["read write"]
+        # offline_access is always appended so the AS issues a refresh_token.
+        assert params["scope"] == ["read write offline_access"]
         assert params["resource"] == ["https://mcp.example.com/sse"]
+
+    def test_offline_access_always_requested(self):
+        svc = MCPOAuthClientService()
+        meta = AuthServerMetadata(
+            issuer="https://as.example.com",
+            authorization_endpoint="https://as.example.com/authorize",
+            token_endpoint="https://as.example.com/token",
+        )
+        pkce = PKCEPair(verifier="v", challenge="c")
+        url = svc.build_authorize_url(
+            meta, client_id="cid", redirect_uri="https://app/cb", pkce=pkce, state="s"
+        )
+        params = parse_qs(urlparse(url).query)
+        assert params["scope"] == ["offline_access"]
 
     def test_explicit_scopes_override_metadata_scopes(self):
         svc = MCPOAuthClientService()

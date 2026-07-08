@@ -1,7 +1,22 @@
-import {apiClient} from './apiClient.js';
+import {
+	listAgentsV1AgentsGet,
+	getAgentV1AgentsAgentIdGet,
+	type AgentResponse,
+} from '@agentarea/api-client';
 import {logger} from '../utils/logger.js';
 import {NetworkError} from '../utils/error.js';
 import {type Agent, type AgentList, type AgentStatus} from '../types/index.js';
+
+function toAgent(response: AgentResponse): Agent {
+	return {
+		id: response.id,
+		name: response.name,
+		description: response.description ?? undefined,
+		status: (response.status as AgentStatus) || 'offline',
+		capabilities: [],
+		metadata: {slug: response.slug, agentType: response.agent_type},
+	};
+}
 
 export class AgentService {
 	async fetchAgents(
@@ -10,66 +25,41 @@ export class AgentService {
 		status?: AgentStatus,
 		search?: string,
 	): Promise<AgentList> {
-		try {
-			const params = new URLSearchParams();
-			params.append('skip', String(skip));
-			params.append('limit', String(limit));
+		const {data, error} = await listAgentsV1AgentsGet();
 
-			if (status) {
-				params.append('status', status);
-			}
-
-			if (search) {
-				params.append('search', search);
-			}
-
-			// AgentArea API uses /v1/agents endpoint
-			const response = await apiClient
-				.getClient()
-				.get<{agents: Agent[]; total: number; timestamp: string}>(
-					`/v1/agents?${params.toString()}`,
-				);
-
-			const agentList: AgentList = {
-				agents: response.data.agents,
-				total: response.data.total,
-				timestamp: new Date(response.data.timestamp),
-			};
-
-			logger.debug(`Fetched ${agentList.agents.length} agents`);
-			return agentList;
-		} catch (error) {
+		if (error || !data) {
 			logger.error('Failed to fetch agents:', error);
-			throw new NetworkError(`Failed to fetch agents: ${error}`);
+			throw new NetworkError(
+				`Failed to fetch agents: ${JSON.stringify(error)}`,
+			);
 		}
+
+		let agents = data.map(toAgent);
+		agents = this.filterAgents(agents, status, search);
+		const total = agents.length;
+		agents = this.paginateAgents(agents, skip, limit);
+
+		logger.debug(`Fetched ${agents.length} agents`);
+		return {agents, total, timestamp: new Date()};
 	}
 
 	async getAgent(agentId: string): Promise<Agent> {
-		try {
-			const response = await apiClient
-				.getClient()
-				.get<Agent>(`/v1/agents/${agentId}`);
+		const {data, error} = await getAgentV1AgentsAgentIdGet({
+			path: {agent_id: agentId},
+		});
 
-			logger.debug(`Fetched agent ${agentId}`);
-			return response.data;
-		} catch (error) {
+		if (error || !data) {
 			logger.error(`Failed to fetch agent ${agentId}:`, error);
-			throw new NetworkError(`Failed to fetch agent: ${error}`);
+			throw new NetworkError(`Failed to fetch agent: ${JSON.stringify(error)}`);
 		}
+
+		logger.debug(`Fetched agent ${agentId}`);
+		return toAgent(data);
 	}
 
 	async getAgentCapabilities(agentId: string): Promise<string[]> {
-		try {
-			// Get agent details which includes capabilities
-			const agent = await this.getAgent(agentId);
-			logger.debug(
-				`Fetched ${agent.capabilities.length} capabilities for agent ${agentId}`,
-			);
-			return agent.capabilities;
-		} catch (error) {
-			logger.error(`Failed to fetch capabilities for agent ${agentId}:`, error);
-			throw new NetworkError(`Failed to fetch agent capabilities: ${error}`);
-		}
+		const agent = await this.getAgent(agentId);
+		return agent.capabilities;
 	}
 
 	filterAgents(

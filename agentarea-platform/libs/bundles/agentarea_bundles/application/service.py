@@ -36,6 +36,7 @@ class BundleService:
         mcp_instance_service: Any,
         skill_service: Any,
         trigger_service: Any,
+        secret_manager: Any = None,
     ) -> None:
         self._repository_factory = repository_factory
         self._user_context = repository_factory.user_context
@@ -44,6 +45,7 @@ class BundleService:
         self._mcp_instance_service = mcp_instance_service
         self._skill_service = skill_service
         self._trigger_service = trigger_service
+        self._secret_manager = secret_manager
 
         # Repositories for existence checks / idempotency.
         from agentarea_agents.infrastructure.repository import AgentRepository
@@ -83,6 +85,7 @@ class BundleService:
             trigger_repository=self._trigger_repository,
             governance_service=self._governance_service,
             user_context=self._user_context,
+            secret_manager=self._secret_manager,
         )
         result = await installer.install(package, setup_values)
         result.installed_bundle_id = await self._record(package, result)

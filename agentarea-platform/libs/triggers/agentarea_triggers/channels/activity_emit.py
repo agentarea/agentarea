@@ -1,11 +1,12 @@
 """In-process channel-delivery dispatcher for Temporal activity callers.
 
 Workflow events emitted by `publish_workflow_events_activity` need to
-reach the outbound delivery stream durably. The old path went via Redis
-pub/sub → `ChannelEventSubscriber` → router → emitter, which had a
-lossy gap any time the subscriber wasn't running or crashed mid-handler.
+reach the outbound delivery stream durably. An earlier design routed
+them via a Redis pub/sub bridge into a separate subscriber process,
+which had a lossy gap any time that subscriber wasn't running or
+crashed mid-handler.
 
-This module runs the same routing logic — visibility filter, channel
+This module runs the routing logic — visibility filter, channel
 resolution, adapter format, dedup_key construction, broker submit —
 directly inside the Temporal activity. Activity-level at-least-once
 retry now covers the previously-lossy hop, with no pub/sub bridge in
@@ -84,7 +85,11 @@ async def emit_channel_delivery(
             stream,
             {
                 "channel_type": channel_type,
-                "channel_config": json.dumps(channel_origin),
+                # task_id + event_type ride along so streaming adapters (Telegram)
+                # accumulate one live message per task and know when it's terminal.
+                "channel_config": json.dumps(
+                    {**channel_origin, "task_id": str(task_id), "event_type": event_type}
+                ),
                 "message": message,
                 "dedup_key": dedup_key,
             },

@@ -1,0 +1,35 @@
+{
+  "name": "@agentarea/api-client",
+  "version": "0.1.0",
+  "description": "Runtime-agnostic generated AgentArea API client (fetch flavor). Shared by the CLI; webapp keeps its own Next flavor.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "types"
+  ],
+  "scripts": {
+    "generate": "openapi-ts",
+    "build:js": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node18 --outfile=dist/index.js",
+    "build:types": "tsc -p tsconfig.json",
+    "build": "pnpm run build:js && pnpm run build:types",
+    "prepare": "pnpm run generate && pnpm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@hey-api/client-fetch": "^0.13.1",
+    "@hey-api/openapi-ts": "^0.99.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.9.3"
+  }
+}

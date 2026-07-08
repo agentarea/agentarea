@@ -83,12 +83,6 @@ function sortedChildren(node: TreeNode): TreeNode[] {
   });
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function FileRow({
   node,
   depth,
@@ -100,7 +94,8 @@ function FileRow({
   onSelect: (file: BrowsedFile) => void;
   selectedPath: string | null;
 }) {
-  const file = node.file!;
+  const file = node.file;
+  if (!file) return null;
   const isSelected = selectedPath === file.path;
   return (
     <button
@@ -114,9 +109,6 @@ function FileRow({
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <span className="truncate flex-1">{node.name}</span>
-      <span className="text-xs text-muted-foreground shrink-0">
-        {formatBytes(file.size)}
-      </span>
     </button>
   );
 }

@@ -1,0 +1,19 @@
+# CI overlay for docker-compose.yaml — used by the OpenAPI fuzz job.
+#
+# Two things differ from local dev:
+#   1. The API image is BUILT from the PR source in the job and tagged
+#      `agentarea/agentarea-api:latest`, so we must NOT re-pull it from the
+#      registry (the base file sets `pull_policy: always`).
+#   2. The fuzz harness mints ephemeral Kratos identities from the GitHub
+#      runner host, which needs the Kratos ADMIN API (4434) published — the
+#      base file only exposes the public API (4433).
+#
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d app kratos temporal
+services:
+  app:
+    pull_policy: never
+  app_migrations:
+    pull_policy: never
+  kratos:
+    ports:
+      - "4434:4434" # admin API — additive to the base 4433 (public)

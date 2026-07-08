@@ -7,7 +7,7 @@ import TaskSubheader from "./components/TaskSubheader";
 interface TaskLayoutClientProps {
   taskId: string;
   tasksTitle: string;
-  initialTask?: any;
+  initialTask?: unknown;
   initialError?: string | null;
   children: React.ReactNode;
 }

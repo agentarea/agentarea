@@ -20,7 +20,10 @@ export default function DeleteProviderConfigButton({
     <DeleteButton
       itemId={configId}
       itemName={configName}
-      onDelete={deleteProviderConfig}
+      onDelete={async (configId) => {
+          const { error } = await deleteProviderConfig(configId);
+          return { error: error as { detail?: Array<{ msg?: string }> } | undefined };
+        }}
       redirectPath="/admin/provider-configs"
       title={t("deleteProviderConfiguration")}
       description={t("deleteProviderConfigurationDescription", { configName })}

@@ -3,6 +3,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { env } from "@/env";
+import { KRATOS_WHOAMI_TIMEOUT_MS } from "./server-timeouts";
 
 /**
  * Get authentication token from current session.
@@ -36,8 +37,6 @@ async function getAuthTokenImpl(): Promise<string | null> {
       return null;
     }
 
-    console.debug("[getAuthToken] Calling Kratos whoami endpoint");
-
     // Call Kratos directly to tokenize the session into an agentarea JWT
     const response = await fetch(
       `${env.ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`,
@@ -47,15 +46,15 @@ async function getAuthTokenImpl(): Promise<string | null> {
           Accept: "application/json",
           Cookie: cookieHeader,
         },
+        // Bound the call so a stalled Kratos fails fast instead of hanging the
+        // whole server render (which would never flush a first byte).
+        signal: AbortSignal.timeout(KRATOS_WHOAMI_TIMEOUT_MS),
       }
     );
-
-    console.log("[getAuthToken] Kratos response status:", response.status);
 
     if (response.ok) {
       const data = await response.json();
       if (data.tokenized) {
-        console.log("[getAuthToken] JWT token received successfully");
         return data.tokenized;
       }
       console.warn("[getAuthToken] No tokenized field in response");
@@ -68,7 +67,7 @@ async function getAuthTokenImpl(): Promise<string | null> {
       response.statusText
     );
     return null;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[getAuthToken] Error getting JWT token from Kratos:", error);
     // Return null if authentication fails; callers treat null as "no session".
     return null;

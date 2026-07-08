@@ -112,6 +112,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "clients": "Clients",
     "explore": "Explore",
     "providers": "Providers",
     "providerConfigs": "Models",

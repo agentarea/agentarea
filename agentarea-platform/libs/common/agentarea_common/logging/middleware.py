@@ -24,6 +24,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
         """
         # Try to get user context from request state
         user_context = getattr(request.state, "user_context", None)
+        logger = None
 
         if user_context:
             # Update logging context for this request
@@ -47,7 +48,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
             # Process the request
             response = await call_next(request)
 
-            if user_context:
+            if logger is not None:
                 # Log successful response
                 logger.info(
                     f"Response {response.status_code}",
@@ -61,7 +62,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
             return response
 
         except Exception as e:
-            if user_context:
+            if logger is not None:
                 # Log error response
                 logger.error(
                     f"Request failed: {e!s}",

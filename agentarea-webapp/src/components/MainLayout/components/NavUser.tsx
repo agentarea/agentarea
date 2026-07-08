@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { APP_VERSION } from "@/lib/app-version";
 
 export function NavUser() {
   const t = useTranslations("NavUser");
@@ -121,6 +122,10 @@ export function NavUser() {
               <LogOut className="mr-2 size-4" />
               {t("logout")}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1 text-[10px] text-muted-foreground/50">
+              AgentArea v{APP_VERSION}
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

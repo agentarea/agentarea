@@ -8,7 +8,7 @@ import type { AgentFormValues, EventConfig } from "../types";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
-import { SelectableList } from "./SelectableList";
+import { SelectableList } from "@/components/SelectableList";
 import { TriggerControl } from "./TriggerControl";
 import Note from "@/components/ui/note";
 

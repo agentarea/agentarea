@@ -21,7 +21,6 @@ export default function FormLabel({
   icon: IconComponent,
   required,
   optional,
-  ...props
 }: FormLabelProps) {
   const t = useTranslations("Common");
 

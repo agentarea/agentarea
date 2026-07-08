@@ -21,6 +21,13 @@ export default async function CreateMCPInstancePage({
   const { data: mcpServerData, error: serverError } = await getMCPServer(id);
   const mcpServer = mcpServerData as MCPServer | null;
 
+  const serverErr = serverError as { detail?: Array<{ msg?: string }> | string; message?: string } | null;
+  const serverErrorText = serverErr
+    ? (Array.isArray(serverErr.detail) ? serverErr.detail[0]?.msg : serverErr.detail) ||
+      serverErr.message ||
+      t("createInstance.errors.loadServersFailed")
+    : t("createInstance.errors.specNotFound");
+
   return (
     <ContentBlock
       header={{
@@ -43,12 +50,7 @@ export default async function CreateMCPInstancePage({
       {!mcpServer ? (
         <div className="py-6">
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-            {serverError
-              ? (serverError as any)?.detail?.[0]?.msg ||
-                (serverError as any)?.detail ||
-                (serverError as any)?.message ||
-                t("createInstance.errors.loadServersFailed")
-              : t("createInstance.errors.specNotFound")}{" "}
+            {serverErrorText}{" "}
             (id: {id})
           </div>
         </div>

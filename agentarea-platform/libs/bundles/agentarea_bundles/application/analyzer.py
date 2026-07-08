@@ -119,6 +119,7 @@ class BundleAnalyzer:
             package, mcp_keys, skill_keys, setup_keys, unsupported_mcp_keys, issues
         )
         await self._populate_agent_entities(package, entities)
+        self._analyze_channels(package, agent_keys, setup_keys, entities, issues)
         await self._analyze_automations(package, agent_keys, entities, issues)
         self._analyze_policies(package, agent_keys, entities, issues)
 
@@ -139,6 +140,7 @@ class BundleAnalyzer:
             ("mcp", package.mcps),
             ("skill", package.skills),
             ("agent", package.agents),
+            ("channel", package.channels),
             ("automation", package.automations),
             ("policy", package.policies),
         ):
@@ -318,6 +320,46 @@ class BundleAnalyzer:
                     name=auto.key,
                     status=EntityStatus.ALREADY_EXISTS if exists else EntityStatus.WILL_CREATE,
                     detail=f"cron '{auto.cron}' ({auto.timezone}), enabled={auto.enabled}",
+                )
+            )
+
+    def _analyze_channels(
+        self,
+        package: Bundle,
+        agent_keys: set[str],
+        setup_keys: set[str],
+        entities: list[PreviewEntity],
+        issues: list[PreviewIssue],
+    ) -> None:
+        for channel in package.channels:
+            if channel.agent not in agent_keys:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=f"channel '{channel.key}' references unknown agent '{channel.agent}'",
+                        entity_key=channel.key,
+                    )
+                )
+            for ref in channel.bindings.values():
+                for key in setup_refs(ref):
+                    if key not in setup_keys:
+                        issues.append(
+                            PreviewIssue(
+                                severity=IssueSeverity.BLOCK,
+                                message=(
+                                    f"channel '{channel.key}' binding references unknown "
+                                    f"setup field '{key}'"
+                                ),
+                                entity_key=channel.key,
+                            )
+                        )
+            entities.append(
+                PreviewEntity(
+                    kind=EntityKind.CHANNEL,
+                    key=channel.key,
+                    name=channel.name,
+                    status=EntityStatus.WILL_CREATE,
+                    detail=f"{channel.type}, enabled={channel.enabled}",
                 )
             )
 

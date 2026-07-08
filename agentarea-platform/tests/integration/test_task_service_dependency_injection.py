@@ -89,7 +89,7 @@ class TestTaskServiceDependencyInjectionIntegration:
 
         # This test verifies that the dependency injection chain works with real components
         # We'll mock the database session but use real service instantiation
-        with patch("agentarea_common.infrastructure.database.get_db_session") as mock_get_session:
+        with patch("agentarea_common.config.database.get_db_session") as mock_get_session:
             mock_session = AsyncMock()
             mock_get_session.return_value = mock_session
 
@@ -123,7 +123,7 @@ class TestTaskServiceDependencyInjectionIntegration:
         # This test verifies that the dependency injection chain works correctly
         # by testing that we can instantiate the service and access its methods
 
-        with patch("agentarea_common.infrastructure.database.get_db_session") as mock_get_session:
+        with patch("agentarea_common.config.database.get_db_session") as mock_get_session:
             mock_session = AsyncMock()
             mock_get_session.return_value = mock_session
 

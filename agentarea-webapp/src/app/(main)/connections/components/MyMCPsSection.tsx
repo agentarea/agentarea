@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
@@ -9,11 +10,11 @@ import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
+import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
   getMcpHealthStatusPresentation,
   getOpenApiConnectionDisplayStatus,
 } from "@/lib/status";
-import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
   HealthCheck,
   HealthStatus,
@@ -176,8 +177,20 @@ export function MyMCPsSection({
     );
   };
 
+  type TableRow = {
+    id: string;
+    name: string;
+    description: string | null | undefined;
+    endpoint_url: string | null | undefined;
+    type: "MCP" | "OpenAPI";
+    _type: "mcp" | "openapi";
+    _instance: MCPInstance | null;
+    _serverSpec: MCPServer | undefined;
+    _connection: OpenAPIConnection | null;
+  };
+
   // Subtitle under the connection name — transport for MCP, host for OpenAPI.
-  const rowSubtitle = (item: any): string => {
+  const rowSubtitle = (item: TableRow): string => {
     if (item._type === "openapi" && item._connection) {
       return hostOf(item._connection.base_url) || "OpenAPI";
     }
@@ -193,7 +206,7 @@ export function MyMCPsSection({
     {
       accessor: "name",
       header: t("table.name"),
-      render: (value: string, item: any) => {
+      render: (value: string, item: TableRow) => {
         const providerIcon =
           item._type === "mcp" && item._instance
             ? getMCPConnectionIconSrc(item._instance, item._serverSpec)
@@ -208,10 +221,12 @@ export function MyMCPsSection({
             ) : (
               <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-800">
                 {providerIcon ? (
-                  <img
+                  <Image
                     src={providerIcon}
                     alt=""
                     aria-hidden="true"
+                    width={18}
+                    height={18}
                     className="h-[18px] w-[18px] object-contain"
                   />
                 ) : (
@@ -254,7 +269,7 @@ export function MyMCPsSection({
     {
       accessor: "tools",
       header: "Tools",
-      render: (_: unknown, item: any) => {
+      render: (_: unknown, item: TableRow) => {
         const count =
           item._type === "openapi" && item._connection
             ? item._connection.available_tools.length
@@ -271,11 +286,13 @@ export function MyMCPsSection({
     {
       accessor: "status",
       header: t("table.status"),
-      render: (_: string, item: any) => {
+      render: (_: string, item: TableRow) => {
         const healthStatus =
           item._type === "openapi" && item._connection
             ? getOpenAPIHealthStatus(item._connection)
-            : getHealthStatus(item._instance || item);
+            : item._instance
+              ? getHealthStatus(item._instance)
+              : "unknown";
         return getStatusIndicator(healthStatus);
       },
     },
@@ -347,7 +364,13 @@ export function MyMCPsSection({
             {value === "OpenAPI" ? (
               <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
             ) : (
-              <img src="/mcp.svg" alt="" className="h-3.5 w-3.5" />
+              <Image
+                src="/mcp.svg"
+                alt=""
+                width={14}
+                height={14}
+                className="h-3.5 w-3.5"
+              />
             )}
             {value}
           </Badge>

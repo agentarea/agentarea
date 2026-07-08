@@ -483,6 +483,75 @@ async def test_workflow_command_queue_message_publishes_event():
 
 
 @pytest.mark.asyncio
+async def test_workflow_command_change_model_swaps_model_and_publishes_event():
+    """``workflow_command("change_model", ...)`` swaps the workflow's cached
+    resolved model on the fly and publishes a ``ModelChanged`` event.
+
+    This is the mechanism behind the per-task "switch model on the fly" UI:
+    the API ``/command`` endpoint resolves a model_instance into this payload
+    and forwards it as a signal; the running workflow updates
+    ``state.resolved_model`` so the next LLM call uses the new model — no
+    workflow restart, no new task.
+    """
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            worker = Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=_ALL_ACTIVITIES,
+                activity_executor=executor,
+            )
+            async with worker:
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(hours=1),
+                )
+
+                await _wait_until_initialized(handle)
+
+                new_model_id = "11111111-1111-1111-1111-111111111111"
+                new_model_name = "nvidia/nemotron-3-ultra-550b-a55b:free"
+                await handle.signal(
+                    AgentExecutionWorkflow.workflow_command,
+                    args=[
+                        "change_model",
+                        {
+                            "model_id": new_model_id,
+                            "provider_type": "openrouter",
+                            "model_name": new_model_name,
+                            "endpoint_url": "https://openrouter.ai/api/v1",
+                            "context_window": 1000000,
+                        },
+                    ],
+                )
+
+                # Release the LLM so the workflow finishes and flushes its
+                # pending events (ModelChanged rides along the same batch).
+                _llm_release.set()
+                await handle.result()
+
+                published_types = {e.get("event_type") for e in _published}
+                assert "ModelChanged" in published_types, published_types
+                assert "WorkflowCommandReceived" in published_types, published_types
+
+                # The ModelChanged event carries the new model identity.
+                changed = next(
+                    e for e in _published if e.get("event_type") == "ModelChanged"
+                )
+                serialized = json.dumps(changed)
+                assert new_model_name in serialized, changed
+                assert new_model_id in serialized, changed
+
+
+@pytest.mark.asyncio
 async def test_unknown_workflow_command_is_ignored_no_event():
     """Unknown commands don't emit ``WORKFLOW_COMMAND_RECEIVED``.
 

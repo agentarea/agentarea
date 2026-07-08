@@ -1,14 +1,80 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Info } from "lucide-react";
 import { Streamdown } from "streamdown";
 import Table from "@/components/Table/Table";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+// Untrusted safety hints supplied by the MCP server (per the MCP spec, clients
+// must not rely on these for security — we surface them for labeling only).
+interface ToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
 
 interface Tool {
   name: string;
   description: string;
   method?: string;
   path?: string;
+  title?: string;
+  annotations?: ToolAnnotations;
+}
+
+// Map each server hint to a badge. Only hints the server explicitly set reach
+// the frontend (None-valued ones are dropped on the backend), so presence of
+// the key is enough to decide whether to render.
+const HINT_BADGES: {
+  key: keyof ToolAnnotations;
+  label: string;
+  variant: ComponentProps<typeof Badge>["variant"];
+}[] = [
+  { key: "readOnlyHint", label: "read-only", variant: "success" },
+  { key: "destructiveHint", label: "destructive", variant: "rose" },
+  { key: "idempotentHint", label: "idempotent", variant: "slate" },
+  { key: "openWorldHint", label: "open-world", variant: "amber" },
+];
+
+function AnnotationBadges({ annotations }: { annotations?: ToolAnnotations }) {
+  const hintBadges = HINT_BADGES.filter((b) => annotations?.[b.key] === true);
+  if (!hintBadges.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {hintBadges.map((b) => (
+        <Badge key={b.key} variant={b.variant} size="sm">
+          {b.label}
+        </Badge>
+      ))}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex text-muted-foreground/60 hover:text-muted-foreground"
+              aria-label="About these hints"
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[240px]">
+            Safety hints reported by the MCP server. Not verified by AgentArea —
+            informational only.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
 }
 
 const METHOD_STYLES: Record<string, string> = {
@@ -51,15 +117,30 @@ function prettyGroup(key: string): string {
 interface Row {
   id: string;
   name: string;
+  title?: string;
   description: string;
   method?: string;
   path?: string;
+  annotations?: ToolAnnotations;
 }
 
-function MCPToolRow({ name, description }: { name: string; description: string }) {
+function MCPToolRow({
+  name,
+  title,
+  description,
+  annotations,
+}: {
+  name: string;
+  title?: string;
+  description: string;
+  annotations?: ToolAnnotations;
+}) {
   const [expanded, setExpanded] = useState(false);
   const hasDescription = !!description;
   const canExpand = hasDescription;
+  // Per MCP spec, prefer the human-facing title; fall back to annotations.title,
+  // then the raw tool name. Show the raw name underneath when a title exists.
+  const displayName = title || annotations?.title;
 
   return (
     <div
@@ -68,7 +149,19 @@ function MCPToolRow({ name, description }: { name: string; description: string }
       }`}
       onClick={() => canExpand && setExpanded((v) => !v)}
     >
-      <span className="font-mono text-xs font-medium break-all pt-0.5">{name}</span>
+      <div className="flex flex-col gap-1 pt-0.5 min-w-0">
+        {displayName ? (
+          <>
+            <span className="text-xs font-medium break-words">{displayName}</span>
+            <span className="font-mono text-[10px] text-muted-foreground/70 break-all">
+              {name}
+            </span>
+          </>
+        ) : (
+          <span className="font-mono text-xs font-medium break-all">{name}</span>
+        )}
+        <AnnotationBadges annotations={annotations} />
+      </div>
       <div className="min-w-0">
         {hasDescription ? (
           expanded ? (
@@ -174,7 +267,9 @@ export function ToolsTable({ tools, label }: { tools: Tool[]; label?: string }) 
     const rows: Row[] = tools.map((t) => ({
       id: t.name,
       name: t.name,
+      title: t.title,
       description: t.description,
+      annotations: t.annotations,
     }));
     rows.sort((a, b) =>
       (a.description || a.name).toLowerCase().localeCompare(
@@ -196,7 +291,13 @@ export function ToolsTable({ tools, label }: { tools: Tool[]; label?: string }) 
             <span className="w-3.5" />
           </div>
           {rows.map((row) => (
-            <MCPToolRow key={row.id} name={row.name} description={row.description} />
+            <MCPToolRow
+              key={row.id}
+              name={row.name}
+              title={row.title}
+              description={row.description}
+              annotations={row.annotations}
+            />
           ))}
         </div>
       </div>

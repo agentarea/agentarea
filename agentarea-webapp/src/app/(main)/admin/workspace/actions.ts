@@ -4,8 +4,9 @@ import { exportWorkspace as exportWorkspaceAPI, importWorkspace as importWorkspa
 
 export async function exportWorkspaceAction() {
   const { data, error } = await exportWorkspaceAPI();
+  type ApiError = { detail?: Array<{ msg: string }> };
   if (error) {
-    return { error: (error as any).detail?.[0]?.msg || "Failed to export workspace" };
+    return { error: (error as ApiError).detail?.[0]?.msg || "Failed to export workspace" };
   }
   return { data };
 }
@@ -25,8 +26,9 @@ export async function importWorkspaceAction(formData: FormData) {
     override_existing: overrideExisting,
   });
 
+  type ApiError = { detail?: Array<{ msg: string }> };
   if (error) {
-    return { error: (error as any).detail?.[0]?.msg || "Failed to import workspace" };
+    return { error: (error as ApiError).detail?.[0]?.msg || "Failed to import workspace" };
   }
 
   return { data };

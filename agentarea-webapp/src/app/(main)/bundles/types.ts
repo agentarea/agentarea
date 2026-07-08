@@ -1,5 +1,5 @@
-// TODO: replace with generated components['schemas'] after running npm run generate:schema
-// (requires the backend API running on :8000 — run `npm run generate:schema` post-deploy)
+// TODO: replace with the generated types from @/api/client/types.gen
+// (regenerate with `pnpm generate:api` while the backend runs on :8000)
 
 export type SetupFieldType = "secret" | "string" | "number" | "boolean" | "select";
 

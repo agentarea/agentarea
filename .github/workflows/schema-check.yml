@@ -1,4 +1,12 @@
-name: Schema Drift Check
+name: OpenAPI Drift Check
+
+# Guards that the committed agentarea-webapp/src/api/openapi.json (the source of
+# truth for the frontend's generated hey-api client) stays in sync with what the
+# FastAPI backend actually produces. Triggers on backend changes so a backend
+# edit that forgets to refresh the committed spec fails here.
+#
+# The complementary check — that the GENERATED client matches this openapi.json —
+# lives in frontend-integration.yml (cheap, frontend-only, no backend needed).
 
 on:
   pull_request:
@@ -6,7 +14,7 @@ on:
     paths:
       - 'agentarea-platform/apps/api/**'
       - 'agentarea-platform/libs/**'
-      - 'agentarea-webapp/src/api/schema.d.ts'
+      - 'agentarea-webapp/src/api/openapi.json'
 
 permissions:
   contents: read
@@ -15,7 +23,7 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
-  schema-check:
+  openapi-drift:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,26 +49,22 @@ jobs:
           WORKFLOW__TEMPORAL_NAMESPACE: default
           WORKFLOW__TEMPORAL_TASK_QUEUE: agent-tasks
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Generate schema.d.ts from exported spec
-        run: npx openapi-typescript /tmp/openapi.json -o /tmp/schema.d.ts
-
-      - name: Check for schema drift
+      - name: Check for spec drift
         run: |
-          if ! diff -q agentarea-webapp/src/api/schema.d.ts /tmp/schema.d.ts > /dev/null 2>&1; then
-            echo "::error::schema.d.ts is out of date with the backend API."
+          # Normalize key ordering on both sides so the diff only reflects real
+          # schema changes, not serialization noise.
+          jq -S . agentarea-webapp/src/api/openapi.json > /tmp/committed.json
+          jq -S . /tmp/openapi.json > /tmp/exported.json
+          if ! diff -q /tmp/committed.json /tmp/exported.json > /dev/null 2>&1; then
+            echo "::error::agentarea-webapp/src/api/openapi.json is out of date with the backend API."
             echo ""
-            echo "The committed schema.d.ts does not match what the backend produces."
-            echo "Run this locally to fix:"
+            echo "The committed OpenAPI spec does not match what the backend produces."
+            echo "Run this locally with the backend on :8000 to fix:"
             echo ""
-            echo "  cd agentarea-webapp && pnpm generate:schema"
+            echo "  cd agentarea-webapp && pnpm generate:api"
             echo ""
-            echo "Diff:"
-            diff --unified=3 agentarea-webapp/src/api/schema.d.ts /tmp/schema.d.ts | head -100
+            echo "Diff (committed vs backend):"
+            diff --unified=3 /tmp/committed.json /tmp/exported.json | head -100
             exit 1
           fi
-          echo "✅ schema.d.ts is up to date"
+          echo "openapi.json is up to date with the backend"

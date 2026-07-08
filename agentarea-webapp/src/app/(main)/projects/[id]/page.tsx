@@ -5,6 +5,12 @@ import { useParams } from "next/navigation";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { AssociationSection } from "./components/AssociationSection";
 import { useToast } from "@/hooks/use-toast";
+import type {
+  AgentResponse,
+  SkillResponse,
+  McpServerInstanceResponse,
+  ProjectResponse,
+} from "@/api/client";
 import {
   getProjectAction,
   addAgentToProjectAction,
@@ -23,11 +29,11 @@ export default function ProjectOverviewPage() {
   const projectId = params.id as string;
   const { toast } = useToast();
 
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allAgents, setAllAgents] = useState<any[]>([]);
-  const [allSkills, setAllSkills] = useState<any[]>([]);
-  const [allMcpInstances, setAllMcpInstances] = useState<any[]>([]);
+  const [allAgents, setAllAgents] = useState<AgentResponse[]>([]);
+  const [allSkills, setAllSkills] = useState<SkillResponse[]>([]);
+  const [allMcpInstances, setAllMcpInstances] = useState<McpServerInstanceResponse[]>([]);
 
   const fetchProject = async () => {
     const { data } = await getProjectAction(projectId);
@@ -45,9 +51,9 @@ export default function ProjectOverviewPage() {
           listMCPServerInstancesAction(),
         ]);
         if (projectRes.data) setProject(projectRes.data);
-        setAllAgents((agentsRes.data as any[]) || []);
-        setAllSkills((skillsRes.data as any[]) || []);
-        setAllMcpInstances((mcpRes.data as any[]) || []);
+        setAllAgents(agentsRes.data || []);
+        setAllSkills((skillsRes.data as SkillResponse[]) || []);
+        setAllMcpInstances(mcpRes.data || []);
       } finally {
         setLoading(false);
       }

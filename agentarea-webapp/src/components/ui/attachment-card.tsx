@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Image from "next/image";
 import { Download, X } from "lucide-react";
 import { getFileTypeInfo, isImageFile } from "@/utils/fileUtils";
 import { Button } from "./button";
@@ -51,9 +52,11 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
           {imageLoading ? (
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
           ) : imagePreview && !imageError ? (
-            <img
+            <Image
               src={imagePreview}
               alt={file.name}
+              width={48}
+              height={48}
               className="h-full w-full rounded-lg object-cover"
               onError={() => setImageError(true)}
             />

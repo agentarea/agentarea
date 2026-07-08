@@ -51,7 +51,7 @@ export function AssociationSection({
       await onAdd(selectedId);
       setShowAddDialog(false);
       setSelectedId("");
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Error", description: "Failed to add item", variant: "destructive" });
     } finally {
       setIsAdding(false);
@@ -62,7 +62,7 @@ export function AssociationSection({
     setRemovingId(id);
     try {
       await onRemove(id);
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Error", description: "Failed to remove item", variant: "destructive" });
     } finally {
       setRemovingId(null);

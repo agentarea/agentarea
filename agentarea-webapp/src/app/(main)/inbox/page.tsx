@@ -1,25 +1,22 @@
 import type { Metadata } from "next";
-import { getInbox, type TaskWithAgent } from "@/lib/api";
-import { InboxClient } from "./components/InboxClient";
+import { Suspense } from "react";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { InboxData } from "./components/InboxData";
 
 export const metadata: Metadata = {
   title: "Inbox",
 };
 
-export default async function InboxPage() {
-  let items: TaskWithAgent[] = [];
-  let error: string | null = null;
-
-  try {
-    const res = await getInbox();
-    if (res.error) {
-      error = "Failed to load inbox";
-    } else {
-      items = ((res.data as any)?.items ?? []) as TaskWithAgent[];
-    }
-  } catch {
-    error = "Failed to load inbox";
-  }
-
-  return <InboxClient items={items} error={error} />;
+export default function InboxPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center py-8">
+          <LoadingSpinner />
+        </div>
+      }
+    >
+      <InboxData />
+    </Suspense>
+  );
 }

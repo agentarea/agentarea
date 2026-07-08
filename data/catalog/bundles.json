@@ -2,6 +2,134 @@
   "bundles": [
     {
       "schema_version": "0.1.0",
+      "name": "ops-pulse",
+      "display_name": "Ops Pulse",
+      "description": "A governed operations assistant: chat with it on Telegram, run a daily health check, and keep it locked to a safe, explicit set of tools.",
+      "metadata": {
+        "developer": "AgentArea",
+        "category": "operations",
+        "capabilities": [
+          "interactive",
+          "scheduled",
+          "governed"
+        ]
+      },
+      "setup": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false,
+          "default": "gpt-4o",
+          "help": "Pick a model from your workspace."
+        },
+        {
+          "key": "telegram_bot_token",
+          "label": "Telegram bot token",
+          "type": "secret",
+          "required": true,
+          "help": "From @BotFather. Used so the agent can reply in your Telegram chat."
+        }
+      ],
+      "skills": [
+        {
+          "key": "incident_triage",
+          "name": "Incident Triage",
+          "source_type": "content",
+          "content": "# Incident Triage\nClassify an incident by severity (S1-S4), summarize impact, and propose the next concrete action. Be terse and decisive.\n"
+        },
+        {
+          "key": "status_digest",
+          "name": "Status Digest",
+          "source_type": "content",
+          "content": "# Status Digest\nProduce a short daily digest: what changed, what's at risk, and what needs a human. Lead with the one thing that matters most.\n"
+        }
+      ],
+      "mcps": [
+        {
+          "key": "web",
+          "name": "Web Fetch",
+          "json_spec": {
+            "type": "command",
+            "command": "npx",
+            "args": [
+              "-y",
+              "@modelcontextprotocol/server-fetch"
+            ]
+          },
+          "bindings": {}
+        }
+      ],
+      "agents": [
+        {
+          "key": "watcher",
+          "name": "Ops Pulse Watcher",
+          "model": "${setup.model}",
+          "instruction": "You are an operations watcher. Triage incidents, fetch status pages when asked, and produce crisp digests. Never take destructive actions; if something looks risky, ask for human approval.",
+          "mcps": [
+            "web"
+          ],
+          "skills": [
+            "incident_triage",
+            "status_digest"
+          ]
+        }
+      ],
+      "channels": [
+        {
+          "key": "telegram_inbox",
+          "type": "telegram",
+          "name": "Telegram inbox",
+          "agent": "watcher",
+          "bindings": {
+            "bot_token": "${setup.telegram_bot_token}"
+          },
+          "prompt": "Handle the incoming Telegram message: {{ message_text }}",
+          "enabled": false
+        }
+      ],
+      "automations": [
+        {
+          "key": "daily_health_check",
+          "type": "cron",
+          "cron": "0 9 * * *",
+          "timezone": "UTC",
+          "agent": "watcher",
+          "prompt": "Run the daily health check: review overnight status, fetch any referenced status pages, and write a Status Digest.",
+          "enabled": false
+        }
+      ],
+      "policies": [
+        {
+          "key": "scope_tools",
+          "subject": "watcher",
+          "target": "tool:fetch",
+          "effect": "allow",
+          "message": "Ops Pulse may only use the Web Fetch tool."
+        },
+        {
+          "key": "spend_cap",
+          "subject": "workspace",
+          "target": "spend",
+          "effect": "cap",
+          "params": {
+            "amount_usd": 10,
+            "period": "day"
+          },
+          "message": "Capped at $10/day."
+        },
+        {
+          "key": "approve_writes",
+          "subject": "watcher",
+          "target": "tool:fetch",
+          "effect": "approval",
+          "condition": null,
+          "message": "Ask a human before fetching external URLs."
+        }
+      ]
+    },
+    {
+      "schema_version": "0.1.0",
       "name": "productivity-lite",
       "display_name": "Productivity Lite",
       "description": "A lightweight assistant that plans your day and triages tasks.",

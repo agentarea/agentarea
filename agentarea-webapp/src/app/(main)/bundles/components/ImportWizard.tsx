@@ -15,9 +15,11 @@ import type {
   EntityStatus,
   InstallAction,
   PreviewEntity,
-  PreviewIssue,
   InstalledEntity,
-} from "@/app/(main)/bundles/types";
+  SetupField as ApiSetupField,
+} from "@/api/client/types.gen";
+import type { SetupField } from "@/app/(main)/bundles/types";
+import { analyzeBundleAction, installBundleAction } from "./actions";
 
 type WizardStep = "source" | "review" | "result";
 
@@ -25,10 +27,12 @@ const KIND_LABELS: Record<EntityKind, string> = {
   mcp: "MCP Servers",
   skill: "Skills",
   agent: "Agents",
+  channel: "Channels",
   automation: "Automations",
+  policy: "Policies",
 };
 
-const ENTITY_ORDER: EntityKind[] = ["agent", "skill", "mcp", "automation"];
+const ENTITY_ORDER: EntityKind[] = ["agent", "skill", "mcp", "automation", "policy"];
 
 function EntityStatusChip({ status }: { status: EntityStatus }) {
   if (status === "will_create") {
@@ -123,7 +127,7 @@ function groupInstalledByKind(entities: InstalledEntity[]): Map<EntityKind, Inst
 }
 
 function hasRequiredEmpty(
-  schema: ImportPreview["setup"],
+  schema: SetupField[],
   values: Record<string, string | number | boolean>
 ): boolean {
   return schema.some((field) => {
@@ -135,35 +139,26 @@ function hasRequiredEmpty(
   });
 }
 
-async function callProxy<T>(
-  path: string,
-  body: unknown
-): Promise<{ data: T | null; error: string | null }> {
-  try {
-    const response = await fetch(`/api/proxy/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+function isSetupValue(value: unknown): value is string | number | boolean {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
 
-    const json = await response.json();
-
-    if (!response.ok) {
-      const detail = json?.detail;
-      if (typeof detail === "string") {
-        return { data: null, error: detail };
-      }
-      if (typeof detail?.message === "string") {
-        return { data: null, error: detail.message };
-      }
-      return { data: null, error: `Request failed (${response.status})` };
-    }
-
-    return { data: json as T, error: null };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Network error";
-    return { data: null, error: message };
-  }
+function setupFields(fields: ApiSetupField[] | undefined): SetupField[] {
+  return (fields ?? []).map((field) => ({
+    key: field.key,
+    label: field.label,
+    type: field.type ?? "string",
+    required: field.required ?? false,
+    help: field.help,
+    default: isSetupValue(field.default) ? field.default : null,
+    options: field.options,
+    min: field.min,
+    max: field.max,
+  }));
 }
 
 export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {}) {
@@ -186,8 +181,8 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
 
   function initSetupValues(preview: ImportPreview) {
     const initial: Record<string, string | number | boolean> = {};
-    for (const field of preview.setup) {
-      if (field.default !== undefined && field.default !== null) {
+    for (const field of preview.setup ?? []) {
+      if (isSetupValue(field.default)) {
         initial[field.key] = field.default;
       }
     }
@@ -199,21 +194,18 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
       setAnalyzeLoading(true);
       setAnalyzeError(null);
 
-      const { data, error } = await callProxy<ImportPreview>(
-        "v1/bundles/analyze",
-        body
-      );
-
-      setAnalyzeLoading(false);
-
-      if (error || !data) {
-        setAnalyzeError(error ?? "Failed to analyze package.");
-        return;
+      try {
+        const data = await analyzeBundleAction(body);
+        setPreview(data);
+        initSetupValues(data);
+        setStep("review");
+      } catch (error) {
+        setAnalyzeError(
+          error instanceof Error ? error.message : "Failed to analyze package."
+        );
+      } finally {
+        setAnalyzeLoading(false);
       }
-
-      setPreview(data);
-      initSetupValues(data);
-      setStep("review");
     },
     []
   );
@@ -247,20 +239,20 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
     setInstallError(null);
     setSetupErrors({});
 
-    const { data, error } = await callProxy<InstallResult>(
-      "v1/bundles/install",
-      { bundle: preview.bundle, setup_values: setupValues }
-    );
-
-    setInstallLoading(false);
-
-    if (error || !data) {
-      setInstallError(error ?? "Installation failed.");
-      return;
+    try {
+      const data = await installBundleAction({
+        bundle: preview.bundle,
+        setup_values: setupValues,
+      });
+      setResult(data);
+      setStep("result");
+    } catch (error) {
+      setInstallError(
+        error instanceof Error ? error.message : "Installation failed."
+      );
+    } finally {
+      setInstallLoading(false);
     }
-
-    setResult(data);
-    setStep("result");
   }
 
   function handleReset() {
@@ -278,7 +270,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
     !preview ||
     !preview.installable ||
     installLoading ||
-    hasRequiredEmpty(preview?.setup ?? [], setupValues);
+    hasRequiredEmpty(setupFields(preview?.setup), setupValues);
 
   if (step === "source") {
     // Deep-link in flight: show a loading panel instead of the paste box. If the
@@ -338,9 +330,12 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
   }
 
   if (step === "review" && preview) {
-    const grouped = groupEntitiesByKind(preview.entities);
-    const blockIssues = preview.issues.filter((i) => i.severity === "block");
-    const warnIssues = preview.issues.filter((i) => i.severity === "warn");
+    const entities = preview.entities ?? [];
+    const issues = preview.issues ?? [];
+    const setup = setupFields(preview.setup);
+    const grouped = groupEntitiesByKind(entities);
+    const blockIssues = issues.filter((i) => i.severity === "block");
+    const warnIssues = issues.filter((i) => i.severity === "warn");
 
     return (
       <div className="mx-auto max-w-2xl space-y-4">
@@ -364,7 +359,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         </div>
 
         {/* Entities */}
-        {preview.entities.length > 0 && (
+        {entities.length > 0 && (
           <div className="rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900">
             <div className="border-b border-border/60 px-5 py-3 dark:border-zinc-700/60">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -393,7 +388,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         )}
 
         {/* Issues */}
-        {preview.issues.length > 0 && (
+        {issues.length > 0 && (
           <div className="space-y-2">
             {blockIssues.map((issue, idx) => (
               <div
@@ -417,7 +412,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         )}
 
         {/* Setup form */}
-        {preview.setup.length > 0 && (
+        {setup.length > 0 && (
           <div className="rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900">
             <div className="border-b border-border/60 px-5 py-3 dark:border-zinc-700/60">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -426,7 +421,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
             </div>
             <div className="px-5 py-4">
               <SetupForm
-                schema={preview.setup}
+                schema={setup}
                 values={setupValues}
                 onChange={handleSetupChange}
                 errors={setupErrors}
@@ -466,7 +461,8 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
   }
 
   if (step === "result" && result) {
-    const grouped = groupInstalledByKind(result.entities);
+    const entities = result.entities ?? [];
+    const grouped = groupInstalledByKind(entities);
 
     return (
       <div className="mx-auto max-w-2xl space-y-4">
@@ -484,7 +480,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         </div>
 
         {/* Installed entities */}
-        {result.entities.length > 0 && (
+        {entities.length > 0 && (
           <div className="rounded-lg border border-border/60 bg-white dark:border-zinc-700/60 dark:bg-zinc-900">
             <div className="border-b border-border/60 px-5 py-3 dark:border-zinc-700/60">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

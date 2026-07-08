@@ -60,10 +60,10 @@ export default function QuickTaskDialog() {
     getAgents()
       .then(({ data }) => {
         if (cancelled) return;
-        const list: QuickAgent[] = (data || []).map((a: any) => ({
-          id: String(a.id),
-          name: a.name,
-        }));
+        const list: QuickAgent[] = (data || []).map((a: unknown) => {
+          const item = a as { id?: unknown; name?: unknown };
+          return { id: String(item.id ?? ""), name: String(item.name ?? "") };
+        });
         setAgents(list);
         setCurrentAgentId((prev) => prev || list[0]?.id || "");
         setAgentsLoaded(true);
@@ -95,7 +95,7 @@ export default function QuickTaskDialog() {
     try {
       const { data, error } = await createTask(currentAgentId, {
         description: trimmed,
-      } as any);
+      });
       const taskId = (data as { id?: string } | null | undefined)?.id;
       if (error || !taskId) {
         setIsLoading(false);

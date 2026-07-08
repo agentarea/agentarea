@@ -14,7 +14,7 @@ interface ApprovalRequestData {
   escalation_id: string;
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   message: string;
   resolved?: boolean;
   approved?: boolean;

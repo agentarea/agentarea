@@ -15,7 +15,12 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 _TICK_SECONDS = 30
-_ORPHAN_THRESHOLD_MINUTES = 2
+# Crash-recovery backstop: a verification stuck in `in_progress` is reaped only
+# once it is older than this. It MUST exceed the longest a healthy verify() can
+# run (verification._SAFETY_DEADLINE, 600s) so the GC never kills a verify that
+# is still legitimately waiting on a slow cold `uvx`/`npx` install — it only
+# cleans up rows orphaned by a crashed/restarted worker.
+_ORPHAN_THRESHOLD_MINUTES = 12
 _MAX_CONCURRENT_VERIFICATIONS = 5
 
 _ORPHAN_GC_SQL = """

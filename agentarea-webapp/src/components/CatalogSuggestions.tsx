@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  listCatalogSuggestionsAction,
+  type CatalogSuggestionItem,
+} from "./catalog-suggestions-actions";
 
 // A few catalog picks shown on an otherwise-empty type page, so users can add
 // something in one click instead of facing a dead-end "Browse catalog" button.
@@ -14,14 +19,6 @@ import { Button } from "@/components/ui/button";
 type CatalogType = "bundles" | "agents" | "skills" | "mcp_servers";
 
 type RawSpec = Record<string, unknown>;
-type RegistryItem = { id: string; name: string; spec?: RawSpec };
-type Registry = { id: string };
-
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`/api/proxy/${path}`, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()) as T;
-}
 
 function iconOf(spec: RawSpec | undefined): string | null {
   if (!spec) return null;
@@ -29,11 +26,6 @@ function iconOf(spec: RawSpec | undefined): string | null {
   const icons = Array.isArray(raw.icons) ? (raw.icons as RawSpec[]) : [];
   const src = icons[0]?.src;
   return typeof src === "string" && src ? src : null;
-}
-
-function isSuggested(spec: RawSpec | undefined): boolean {
-  const meta = (spec?.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
-  return meta?.["agentarea:suggested"] === true;
 }
 
 export default function CatalogSuggestions({
@@ -45,22 +37,14 @@ export default function CatalogSuggestions({
   label?: string;
   max?: number;
 }) {
-  const [items, setItems] = useState<RegistryItem[]>([]);
+  const [items, setItems] = useState<CatalogSuggestionItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const regs = await getJSON<Registry[]>(
-          `v1/registries/?registry_type=${type}&active_only=true`
-        );
-        const lists = await Promise.all(
-          regs.map((r) => getJSON<RegistryItem[]>(`v1/registries/${r.id}/items?limit=200&offset=0`))
-        );
-        const all = lists.flat();
-        const suggested = all.filter((it) => isSuggested(it.spec));
-        const pick = (suggested.length ? suggested : all).slice(0, max);
-        if (!cancelled) setItems(pick);
+        const suggestions = await listCatalogSuggestionsAction(type, max);
+        if (!cancelled) setItems(suggestions);
       } catch {
         if (!cancelled) setItems([]);
       }
@@ -87,9 +71,11 @@ export default function CatalogSuggestions({
                   className="flex items-center gap-2 rounded-lg border border-border/60 bg-white px-3 py-2 text-sm transition-shadow hover:shadow-sm dark:bg-zinc-900"
                 >
                   {icon ? (
-                    <img
+                    <Image
                       src={icon}
                       alt=""
+                      width={20}
+                      height={20}
                       className="h-5 w-5 shrink-0 rounded object-contain"
                     />
                   ) : (

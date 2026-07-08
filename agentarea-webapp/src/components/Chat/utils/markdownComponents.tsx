@@ -44,12 +44,12 @@ function childText(children: React.ReactNode): string {
  * - preserves the existing <think> styling
  */
 export const fileAwareMarkdownComponents = {
-  think: ({ children }: any) => (
-    <div className="text-xs text-gray-400 dark:text-gray-300">{children}</div>
+  think: (props: Record<string, unknown>) => (
+    <div className="text-xs text-gray-400 dark:text-gray-300">{props.children as React.ReactNode}</div>
   ),
   // Inline code that is just a filename (`leads_raw.csv`) → render as a file chip.
   // Streamdown routes only inline code here; fenced blocks keep their renderer.
-  inlineCode: ({ children, ...props }: any) => {
+  inlineCode: ({ children, ...props }: React.ComponentProps<"code">) => {
     const text = childText(children);
     if (isFileLike(text)) {
       return <FileChip name={text} />;
@@ -63,7 +63,7 @@ export const fileAwareMarkdownComponents = {
       </code>
     );
   },
-  a: ({ href, children, ...props }: any) => {
+  a: ({ href, children }: React.ComponentProps<"a">) => {
     // Only treat real web URLs as clickable; sandbox:/file: and other schemes
     // would otherwise render as dead/"blocked" links.
     const reachableHref =
@@ -71,13 +71,13 @@ export const fileAwareMarkdownComponents = {
     const text = childText(children);
 
     if (isFileLike(text) || isFileLike(href)) {
-      const name = isFileLike(text) ? text : href;
+      const name = isFileLike(text) ? text : (href ?? "");
       return <FileChip name={name} href={reachableHref} />;
     }
 
     if (!reachableHref) {
       // Non-web link with no file name — just render its text, no broken anchor.
-      return <span {...props}>{children}</span>;
+      return <span>{children}</span>;
     }
 
     const external = /^https?:\/\//.test(reachableHref);
@@ -87,7 +87,6 @@ export const fileAwareMarkdownComponents = {
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 text-primary hover:underline"
-        {...props}
       >
         {external && <Globe className="h-3 w-3 shrink-0 opacity-70" />}
         {children}

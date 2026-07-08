@@ -61,13 +61,17 @@ def test_invitation_happy_path(
     assert payload["user_id"] == bob.identity_id
     assert payload["invitation_id"] == invitation["id"]
 
-    # Now Bob can list members of Alice's workspace (he's a member)
+    # Now Bob can list members of Alice's workspace (he's a member).
+    # A member's email/display_name come from their *identity* (resolved from the
+    # caller's own auth context), NOT from the invitation — the invitation email
+    # ("bob@example.com" above) is only a delivery hint. So Bob, viewing himself,
+    # sees his real identity email.
     members = _members(bob_client, workspace)
     user_ids = {m["user_id"] for m in members}
     assert bob.identity_id in user_ids
     bob_member = next(m for m in members if m["user_id"] == bob.identity_id)
-    assert bob_member["email"] == "bob@example.com"
-    assert bob_member["display_name"] == "bob@example.com"
+    assert bob_member["email"] == bob.email
+    assert bob_member["display_name"] == bob.email
 
     # Invitation has flipped to accepted
     pending = alice_client.get(

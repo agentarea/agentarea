@@ -39,10 +39,10 @@ export default function AgentHeaderTabs({ agentId }: { agentId: string }) {
         : `/agents/${agentId}`;
       return pathname === tabPath;
     });
-    if (activeIndex !== -1 && linkRefs.current[activeIndex]) {
-      const activeLink = linkRefs.current[activeIndex]!;
+    if (activeIndex !== -1) {
+      const activeLink = linkRefs.current[activeIndex];
       const container = containerRef.current;
-      if (container) {
+      if (activeLink && container) {
         const containerRect = container.getBoundingClientRect();
         const linkRect = activeLink.getBoundingClientRect();
         setIndicatorStyle({

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Clock, Sparkles, SquareTerminal } from "lucide-react";
 import { describeToolCall } from "@/components/Chat/utils/describeToolCall";
@@ -60,9 +61,11 @@ function formatDuration(sec: number): string {
 function ServiceIcon({ service }: { service: ServiceGroup }) {
   if (service.icon) {
     return (
-      <img
+      <Image
         src={service.icon}
         alt=""
+        width={16}
+        height={16}
         className="h-4 w-4 shrink-0 rounded-sm object-contain"
       />
     );

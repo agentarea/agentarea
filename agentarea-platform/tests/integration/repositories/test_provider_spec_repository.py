@@ -48,9 +48,9 @@ async def db_session(test_engine):
 
 
 @pytest_asyncio.fixture
-async def provider_spec_repository(db_session):
+async def provider_spec_repository(db_session, user_context):
     """Provide a ProviderSpecRepository instance."""
-    return ProviderSpecRepository(db_session)
+    return ProviderSpecRepository(db_session, user_context)
 
 
 def create_test_provider_spec(**kwargs) -> ProviderSpec:
@@ -149,7 +149,7 @@ class TestProviderSpecRepository:
         await provider_spec_repository.create(custom_spec)
 
         # Act
-        builtin_specs = await provider_spec_repository.list(is_builtin=True)
+        builtin_specs = await provider_spec_repository.list_specs(is_builtin=True)
 
         # Assert
         assert len(builtin_specs) == 1

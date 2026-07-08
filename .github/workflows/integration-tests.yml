@@ -1,14 +1,30 @@
 name: Integration Tests
 
 on:
-  workflow_dispatch:  # Manual trigger only — integration tests not yet stable
+  workflow_dispatch:  # Always available manually
+  pull_request:
+    # The heavy jobs stay gated per-job by the `run-integration-tests` label
+    # (see each job's `if:`). Listing pull_request here is what lets a labelled
+    # PR trigger them; `labeled` re-runs the workflow the moment the label lands.
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 env:
+  # The app's DatabaseSettings builds the URL from POSTGRES_* (default host "db"),
+  # NOT from DATABASE_URL -- so these must be set explicitly or migrations resolve
+  # host "db" and fail. Likewise the workflow client reads WORKFLOW__TEMPORAL_SERVER_URL.
+  POSTGRES_HOST: localhost
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_DB: agentarea_test
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
   REDIS_URL: redis://localhost:6379/0
+  WORKFLOW__TEMPORAL_SERVER_URL: localhost:7233
   TEMPORAL_HOST: localhost:7233
 
 jobs:
@@ -38,23 +54,6 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      temporal:
-        image: temporalio/auto-setup:1.29.1
-        env:
-          DB: postgres12_pgx
-          DB_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PWD: postgres
-          POSTGRES_SEEDS: postgres
-          DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-        options: >-
-          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 7233:7233
-
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +63,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "latest"
 
@@ -93,6 +92,23 @@ jobs:
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
+
+      - name: Start Temporal dev server (SQLite)
+        run: |
+          curl -sSf https://temporal.download/cli.sh | sh
+          echo "$HOME/.temporalio/bin" >> "$GITHUB_PATH"
+          nohup "$HOME/.temporalio/bin/temporal" server start-dev \
+            --ip 0.0.0.0 --headless \
+            --db-filename /tmp/temporal-ci.db \
+            --log-level error > /tmp/temporal-dev.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if "$HOME/.temporalio/bin/temporal" operator cluster health \
+                --address localhost:7233 >/dev/null 2>&1; then
+              echo "Temporal dev server is healthy"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
 
       - name: Smoke test - Temporal workflows
         working-directory: ./agentarea-platform
@@ -130,22 +146,6 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      temporal:
-        image: temporalio/auto-setup:1.29.1
-        env:
-          DB: postgres12_pgx
-          DB_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PWD: postgres
-          POSTGRES_SEEDS: postgres
-        options: >-
-          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 7233:7233
-
     steps:
       - uses: actions/checkout@v4
 
@@ -155,7 +155,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "latest"
 
@@ -176,6 +176,23 @@ jobs:
           uv run --package agentarea-api agentarea-api migrate
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Start Temporal dev server (SQLite)
+        run: |
+          curl -sSf https://temporal.download/cli.sh | sh
+          echo "$HOME/.temporalio/bin" >> "$GITHUB_PATH"
+          nohup "$HOME/.temporalio/bin/temporal" server start-dev \
+            --ip 0.0.0.0 --headless \
+            --db-filename /tmp/temporal-ci.db \
+            --log-level error > /tmp/temporal-dev.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if "$HOME/.temporalio/bin/temporal" operator cluster health \
+                --address localhost:7233 >/dev/null 2>&1; then
+              echo "Temporal dev server is healthy"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Temporal dev server failed to start:" >&2; cat /tmp/temporal-dev.log >&2; exit 1
 
       - name: Run integration tests
         working-directory: ./agentarea-platform
@@ -215,7 +232,7 @@ jobs:
 
       - name: Check if module changed
         id: changed
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
         with:
           filters: |
             module:
@@ -230,7 +247,7 @@ jobs:
 
       - name: Install uv
         if: steps.changed.outputs.module == 'true'
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "latest"
 
@@ -243,3 +260,104 @@ jobs:
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
+
+  # OpenAPI contract + stateful CRUD fuzz against the FULL live stack (the PR's
+  # API image + Kratos + Postgres + Temporal, via docker compose). This is the
+  # only layer that catches persistence/constraint 5xx on real create paths
+  # (e.g. the MCP slug NOT NULL 500 that mocked/hermetic suites missed).
+  api-fuzz:
+    name: OpenAPI fuzz (live stack)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare env file
+        # .env.example is a complete, ready-to-run config (signing JWKS +
+        # encryption key filled). The compose stack reads it via the default
+        # `.env` lookup.
+        run: cp .env.example .env
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build API image from PR source
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./agentarea-platform
+          file: ./agentarea-platform/apps/api/Dockerfile
+          # Tag exactly what compose expects so `pull_policy: never` (set in the
+          # CI overlay) resolves to this freshly built image.
+          tags: agentarea/agentarea-api:latest
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start stack (db, kratos, temporal, api)
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            up -d app kratos temporal
+
+      - name: Wait for API + Kratos to be ready
+        run: |
+          ok=""
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health >/dev/null \
+               && curl -sf http://localhost:4434/admin/health/ready >/dev/null \
+               && curl -sf http://localhost:4433/health/ready >/dev/null; then
+              echo "stack healthy"; ok=1; break
+            fi
+            sleep 3
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::stack did not become healthy in time"
+            docker compose -f docker-compose.yaml -f docker-compose.ci.yaml ps
+            docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+              logs --tail=150 app app_migrations kratos db
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        with:
+          version: "latest"
+
+      - name: Cache uv
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+
+      - name: Install test deps
+        working-directory: ./agentarea-platform
+        run: uv sync --all-extras --group dev
+
+      - name: Run OpenAPI + stateful fuzz
+        working-directory: ./agentarea-platform
+        env:
+          API_URL: http://localhost:8000
+          KRATOS_ADMIN_URL: http://localhost:4434
+          KRATOS_PUBLIC_URL: http://localhost:4433
+        run: |
+          uv run python -m pytest \
+            tests/e2e/api/test_openapi_fuzz.py \
+            tests/e2e/api/test_stateful_fuzz.py \
+            -m "" -p no:cacheprovider -o addopts="" --tb=short
+
+      - name: Stack logs (always)
+        if: always()
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=300 app || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            down -v || true

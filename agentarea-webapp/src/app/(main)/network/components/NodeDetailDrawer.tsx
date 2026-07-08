@@ -20,26 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listAgentTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface NetworkEdgeData {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: NetworkEdgeData[];
-}
+import type { NetworkNodeData, TopologyResponse } from "../types";
 
 const TYPE_CONFIG = {
   agent: {
@@ -195,7 +176,7 @@ function AgentSections({ agentId }: { agentId: string }) {
     setTasks(null);
     setError(null);
     listAgentTasksAction(agentId)
-      .then((res: any) => {
+      .then((res) => {
         if (cancelled) return;
         const data = res?.data ?? res;
         setTasks(Array.isArray(data) ? data : []);

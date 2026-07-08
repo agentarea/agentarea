@@ -7,28 +7,55 @@
  * DynamicString values are resolved against the surface data model.
  */
 import React from "react";
+import Image from "next/image";
 import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
 
 // ── DynamicString resolution ──────────────────────────────────────────────────
 
 type DynamicString = string | { path: string } | null | undefined;
+type DynamicInputValue =
+  | string
+  | number
+  | boolean
+  | { path: string }
+  | null
+  | undefined;
 
 function resolveString(
   value: DynamicString,
-  dataModel: Record<string, any>
+  dataModel: Record<string, unknown>
 ): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
   // JSON Pointer (RFC 6901) lookup
-  return resolvePointer(dataModel, value.path) ?? "";
+  return (resolvePointer(dataModel, value.path) ?? "") as string;
 }
 
-function resolvePointer(obj: any, pointer: string): any {
+function resolveInputValue(
+  value: DynamicInputValue,
+  dataModel: Record<string, unknown>
+): string | number | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string" || typeof value === "number") return value;
+  if (typeof value === "boolean") return value ? "true" : "false";
+  const resolved = resolvePointer(dataModel, value.path);
+  return typeof resolved === "string" || typeof resolved === "number"
+    ? resolved
+    : undefined;
+}
+
+function resolvePointer(obj: unknown, pointer: string): unknown {
   const parts = (pointer || "/")
     .replace(/^\//, "")
     .split("/")
     .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
-  return parts.reduce((cur, key) => (cur != null ? cur[key] : undefined), obj);
+  return parts.reduce(
+    (cur: unknown, key): unknown =>
+      cur != null && typeof cur === "object"
+        ? (cur as Record<string, unknown>)[key]
+        : undefined,
+    obj
+  );
 }
 
 // ── URL sanitization ─────────────────────────────────────────────────────────
@@ -50,7 +77,7 @@ const MAX_RENDER_DEPTH = 50;
 
 interface RenderCtx {
   components: Record<string, A2UIComponent>;
-  dataModel: Record<string, any>;
+  dataModel: Record<string, unknown>;
   surfaceId: string;
   onAction?: (action: A2UIAction, sourceComponentId: string) => void;
 }
@@ -66,7 +93,9 @@ function renderById(
   if (!node) return null;
   const next = new Set(visited);
   next.add(id);
-  return <A2UINode key={id} node={node} ctx={ctx} depth={depth} visited={next} />;
+  return (
+    <A2UINode key={id} node={node} ctx={ctx} depth={depth} visited={next} />
+  );
 }
 
 function renderChildren(
@@ -78,7 +107,12 @@ function renderChildren(
   return (ids ?? []).map((id) => renderById(id, ctx, depth, visited));
 }
 
-const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({ node, ctx, depth = 0, visited = new Set() }) => {
+const A2UITabs: React.FC<{
+  node: A2UIComponent;
+  ctx: RenderCtx;
+  depth?: number;
+  visited?: Set<string>;
+}> = ({ node, ctx, depth = 0, visited = new Set() }) => {
   const tabs: Array<{ title: string; child: string }> = node.tabs ?? [];
   const [active, setActive] = React.useState(0);
   return (
@@ -98,17 +132,28 @@ const A2UITabs: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
           </button>
         ))}
       </div>
-      <div>{tabs[active] ? renderById(tabs[active].child, ctx, depth + 1, visited) : null}</div>
+      <div>
+        {tabs[active]
+          ? renderById(tabs[active].child, ctx, depth + 1, visited)
+          : null}
+      </div>
     </div>
   );
 };
 
-const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({ node, ctx, depth = 0, visited = new Set() }) => {
+const A2UIModal: React.FC<{
+  node: A2UIComponent;
+  ctx: RenderCtx;
+  depth?: number;
+  visited?: Set<string>;
+}> = ({ node, ctx, depth = 0, visited = new Set() }) => {
   const [open, setOpen] = React.useState(false);
   return (
     <>
       <div onClick={() => setOpen(true)} className="cursor-pointer">
-        {node.trigger ? renderById(node.trigger, ctx, depth + 1, visited) : null}
+        {node.trigger
+          ? renderById(node.trigger, ctx, depth + 1, visited)
+          : null}
       </div>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -119,7 +164,9 @@ const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number;
             >
               ✕
             </button>
-            {node.content ? renderById(node.content, ctx, depth + 1, visited) : null}
+            {node.content
+              ? renderById(node.content, ctx, depth + 1, visited)
+              : null}
           </div>
         </div>
       )}
@@ -127,12 +174,12 @@ const A2UIModal: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number;
   );
 };
 
-const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; visited?: Set<string> }> = ({
-  node,
-  ctx,
-  depth = 0,
-  visited = new Set(),
-}) => {
+const A2UINode: React.FC<{
+  node: A2UIComponent;
+  ctx: RenderCtx;
+  depth?: number;
+  visited?: Set<string>;
+}> = ({ node, ctx, depth = 0, visited = new Set() }) => {
   const { component: type, child, children } = node;
   const dm = ctx.dataModel;
 
@@ -159,9 +206,11 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
 
     case "Image":
       return (
-        <img
+        <Image
           src={sanitizeMediaUrl(resolveString(node.url, dm))}
           alt={resolveString(node.alt, dm) || ""}
+          width={800}
+          height={600}
           className="max-w-full rounded-md"
           style={{ objectFit: node.fit ?? "contain" }}
         />
@@ -196,7 +245,11 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
               {resolveString(node.description, dm)}
             </span>
           )}
-          <audio src={sanitizeMediaUrl(resolveString(node.url, dm))} controls className="w-full" />
+          <audio
+            src={sanitizeMediaUrl(resolveString(node.url, dm))}
+            controls
+            className="w-full"
+          />
         </div>
       );
 
@@ -278,16 +331,21 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
       );
 
     case "Tabs":
-      return <A2UITabs node={node} ctx={ctx} depth={depth + 1} visited={visited} />;
+      return (
+        <A2UITabs node={node} ctx={ctx} depth={depth + 1} visited={visited} />
+      );
 
     case "Modal":
-      return <A2UIModal node={node} ctx={ctx} depth={depth + 1} visited={visited} />;
+      return (
+        <A2UIModal node={node} ctx={ctx} depth={depth + 1} visited={visited} />
+      );
 
     // ── Interactive ──────────────────────────────────────────────────────────
 
     case "Button": {
       const variantClass: Record<string, string> = {
-        default: "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200",
+        default:
+          "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200",
         primary: "bg-blue-600 text-white hover:bg-blue-700",
         borderless: "text-blue-600 hover:underline",
       };
@@ -328,7 +386,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
             <textarea
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
               placeholder={resolveString(node.placeholder, dm)}
-              defaultValue={resolveString(node.value, dm)}
+              defaultValue={resolveInputValue(node.value, dm)}
               rows={4}
             />
           ) : (
@@ -336,7 +394,7 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
               type={inputType}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
               placeholder={resolveString(node.placeholder, dm)}
-              defaultValue={resolveString(node.value, dm)}
+              defaultValue={resolveInputValue(node.value, dm)}
             />
           )}
         </div>
@@ -356,7 +414,8 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
       );
 
     case "ChoicePicker": {
-      const options: Array<{ label: string; value: string }> = node.options ?? [];
+      const options: Array<{ label: string; value: string }> =
+        node.options ?? [];
       const isMulti = node.variant === "multipleSelection";
       const useChips = node.displayStyle === "chips";
 
@@ -405,8 +464,8 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
           )}
           <input
             type="range"
-            min={node.min ?? 0}
-            max={node.max}
+            min={resolveInputValue(node.min, dm) ?? 0}
+            max={resolveInputValue(node.max, dm)}
             defaultValue={typeof node.value === "number" ? node.value : 0}
             className="w-full"
           />
@@ -429,9 +488,9 @@ const A2UINode: React.FC<{ node: A2UIComponent; ctx: RenderCtx; depth?: number; 
                   ? "date"
                   : "time"
             }
-            defaultValue={resolveString(node.value, dm)}
-            min={node.min}
-            max={node.max}
+            defaultValue={resolveInputValue(node.value, dm)}
+            min={resolveInputValue(node.min, dm)}
+            max={resolveInputValue(node.max, dm)}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
           />
         </div>

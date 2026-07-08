@@ -20,7 +20,7 @@ export async function SecretsData() {
       console.error("Failed to fetch MCP server instances:", apiError);
       error = "Failed to load connections";
     } else {
-      instances = ((data as any) ?? []) as MCPInstance[];
+      instances = (data as MCPInstance[] | undefined) ?? [];
     }
   } catch (e) {
     console.error("Failed to load secrets data:", e);

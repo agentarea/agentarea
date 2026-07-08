@@ -23,6 +23,12 @@ class EventVisibility:
     # Progress indicators — shown on concise channels
     STATUS: Final[set[str]] = {
         "WorkflowStarted",
+        # Per-turn "working on it" marker. On persistent conversational
+        # channels (Telegram/Slack) the workflow lives across turns, so
+        # WorkflowStarted fires only once ever; WorkflowCommandReceived is
+        # the per-message signal that seeds the live "⏳ Working..." frame
+        # before the result edits it in place.
+        "WorkflowCommandReceived",
         "ToolCallStarted",
         "AgentDelegationStarted",
         "AgentDelegationCompleted",

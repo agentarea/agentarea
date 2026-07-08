@@ -12,13 +12,15 @@ import {
   describeTriggerSchedule,
   formatCompactDistance,
   getTriggerHealth,
+  type EnrichedTrigger,
+  type TriggerCatalogEntry,
 } from "./triggerDisplay";
 
 interface TriggersTableProps {
-  triggers: any[];
+  triggers: EnrichedTrigger[];
   /** Accepted for call-site compatibility; the row now derives everything it
    *  needs from the trigger itself. */
-  catalog?: any[];
+  catalog?: TriggerCatalogEntry[];
 }
 
 export default function TriggersTable({ triggers }: TriggersTableProps) {

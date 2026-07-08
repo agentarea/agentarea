@@ -11,10 +11,27 @@ import logging
 from uuid import UUID, uuid4
 
 import pytest
+from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_api.api.v1.agents_a2a import handle_task_cancel, handle_task_get
 from agentarea_tasks.domain.models import AgentTask
 
 logger = logging.getLogger(__name__)
+
+
+def _a2a_auth(agent_id: UUID) -> A2AAuthContext:
+    """Authenticated A2A context for handler calls.
+
+    The A2A handlers take ``(request_id, params, task_service, agent_id,
+    auth_context)`` after the unified edge-auth refactor; these tests exercise
+    the happy path so they pass an authenticated context.
+    """
+    return A2AAuthContext(
+        authenticated=True,
+        user_id="test-user",
+        workspace_id="test-workspace",
+        agent_id=agent_id,
+        permissions=["agent:read", "agent:write", "agent:execute"],
+    )
 
 
 class MockTaskServiceWithWorkflowStatus:
@@ -83,6 +100,7 @@ async def test_handle_task_get_with_workflow_status():
         description="Test task for workflow status",
         query="Test query",
         user_id="test-user",
+        workspace_id="test-workspace",
         agent_id=uuid4(),
         status="running",  # Database status
     )
@@ -95,7 +113,7 @@ async def test_handle_task_get_with_workflow_status():
 
     # Test handle_task_get
     params = {"id": str(task_id)}
-    response = await handle_task_get("test-request", params, task_service)
+    response = await handle_task_get("test-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify response structure
     assert response.jsonrpc == "2.0"
@@ -106,7 +124,7 @@ async def test_handle_task_get_with_workflow_status():
     a2a_task = response.result
     assert a2a_task.id == str(task_id)
     assert (
-        a2a_task.status.state.value == "completed"
+        a2a_task.status.state.value == "COMPLETED"
     )  # Should reflect workflow status, not database status
     assert "metadata" in a2a_task.metadata or a2a_task.metadata == {}
 
@@ -118,7 +136,7 @@ async def test_handle_task_get_task_not_found():
     non_existent_id = uuid4()
 
     params = {"id": str(non_existent_id)}
-    response = await handle_task_get("test-request", params, task_service)
+    response = await handle_task_get("test-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify error response
     assert response.jsonrpc == "2.0"
@@ -142,6 +160,7 @@ async def test_handle_task_cancel_success():
         description="Task that can be cancelled",
         query="Test query",
         user_id="test-user",
+        workspace_id="test-workspace",
         agent_id=uuid4(),
         status="running",
     )
@@ -149,7 +168,7 @@ async def test_handle_task_cancel_success():
 
     # Test handle_task_cancel
     params = {"id": str(task_id)}
-    response = await handle_task_cancel("cancel-request", params, task_service)
+    response = await handle_task_cancel("cancel-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify successful cancellation response
     assert response.jsonrpc == "2.0"
@@ -160,7 +179,7 @@ async def test_handle_task_cancel_success():
     cancelled_task_result = response.result
     assert cancelled_task_result.id == str(task_id)
     assert (
-        cancelled_task_result.status.state.value == "canceled"
+        cancelled_task_result.status.state.value == "CANCELED"
     )  # A2A protocol uses "canceled" (one 'l')
 
     # Verify task was actually cancelled
@@ -183,6 +202,7 @@ async def test_handle_task_cancel_already_completed():
         description="Task that is already completed",
         query="Test query",
         user_id="test-user",
+        workspace_id="test-workspace",
         agent_id=uuid4(),
         status="completed",
     )
@@ -190,7 +210,7 @@ async def test_handle_task_cancel_already_completed():
 
     # Test handle_task_cancel
     params = {"id": str(task_id)}
-    response = await handle_task_cancel("cancel-request", params, task_service)
+    response = await handle_task_cancel("cancel-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify error response
     assert response.jsonrpc == "2.0"
@@ -215,6 +235,7 @@ async def test_handle_task_cancel_with_workflow_status():
         description="Task with different workflow status",
         query="Test query",
         user_id="test-user",
+        workspace_id="test-workspace",
         agent_id=uuid4(),
         status="running",  # Database status
     )
@@ -225,7 +246,7 @@ async def test_handle_task_cancel_with_workflow_status():
 
     # Test handle_task_cancel
     params = {"id": str(task_id)}
-    response = await handle_task_cancel("cancel-request", params, task_service)
+    response = await handle_task_cancel("cancel-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify error response based on workflow status
     assert response.jsonrpc == "2.0"
@@ -243,7 +264,7 @@ async def test_handle_task_cancel_task_not_found():
     non_existent_id = uuid4()
 
     params = {"id": str(non_existent_id)}
-    response = await handle_task_cancel("cancel-request", params, task_service)
+    response = await handle_task_cancel("cancel-request", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     # Verify error response
     assert response.jsonrpc == "2.0"
@@ -267,6 +288,7 @@ async def test_task_status_reflects_workflow_state():
         description="Task to test workflow state reflection",
         query="Test query",
         user_id="test-user",
+        workspace_id="test-workspace",
         agent_id=uuid4(),
         status="submitted",  # Initial database status
     )
@@ -289,10 +311,10 @@ async def test_task_status_reflects_workflow_state():
 
     # Test 4: Verify A2A endpoint uses workflow status
     params = {"id": str(task_id)}
-    response = await handle_task_get("workflow-test", params, task_service)
+    response = await handle_task_get("workflow-test", params, task_service, (aid := uuid4()), _a2a_auth(aid))
 
     a2a_task = response.result
-    assert a2a_task.status.state.value == "completed"  # A2A response should reflect workflow status
+    assert a2a_task.status.state.value == "COMPLETED"  # A2A response should reflect workflow status
 
 
 if __name__ == "__main__":

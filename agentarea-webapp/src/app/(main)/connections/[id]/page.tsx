@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { getMCPServer, getMCPServerInstance } from "@/lib/api";
@@ -34,14 +35,14 @@ export default async function MCPInstancePage({ params }: Props) {
 
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
-  const jsonSpec = (instance as any).json_spec;
+  const jsonSpec = instance.json_spec;
   if (jsonSpec?.type === "bundle" && Array.isArray(jsonSpec.members)) {
     const results = await Promise.all(
       jsonSpec.members.map((memberId: string) => getMCPServerInstance(memberId))
     );
     for (let i = 0; i < jsonSpec.members.length; i++) {
       const memberId = jsonSpec.members[i];
-      const memberData = requireApiData<any>(
+      const memberData = requireApiData<McpServerInstanceResponse>(
         results[i],
         `MCP bundle member ${memberId}`
       );
@@ -60,16 +61,16 @@ export default async function MCPInstancePage({ params }: Props) {
           <MCPInstanceHeaderControls
             instanceId={instance.id}
             instanceName={instance.name}
-            instanceType={(instance as any).json_spec?.type}
-            hasAuthConfig={!!(instance as any).auth_config_id}
+            instanceType={instance.json_spec?.type as string | undefined}
+            hasAuthConfig={!!instance.auth_config_id}
           />
         ),
       }}
       className="p-0 overflow-hidden"
     >
       <MCPInstanceDetail
-        instance={instance as any}
-        serverSpec={serverSpec as any}
+        instance={instance}
+        serverSpec={serverSpec}
         memberNames={memberNames}
       />
     </ContentBlock>

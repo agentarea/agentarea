@@ -16,6 +16,7 @@ Key endpoints:
 - GET /triggers/{trigger_id}/status - Get trigger status and schedule info
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -28,6 +29,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
@@ -63,19 +65,19 @@ class TriggerResponse(BaseModel):
     is_active: bool
     task_parameters: dict[str, Any]
     conditions: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
     created_by: str
 
     # Business logic safety
     failure_threshold: int
     consecutive_failures: int
-    last_execution_at: datetime | None = None
+    last_execution_at: UtcDatetime | None = None
 
     # Type-specific fields (optional)
     cron_expression: str | None = None
     timezone: str | None = None
-    next_run_time: datetime | None = None
+    next_run_time: UtcDatetime | None = None
     webhook_id: str | None = None
     allowed_methods: list[str] | None = None
     webhook_type: str | None = None
@@ -83,7 +85,7 @@ class TriggerResponse(BaseModel):
     webhook_config: dict[str, Any] | None = None
     event_types: list[str] = Field(default_factory=list)
 
-    # Poll-based extractor type (e.g., "mailslurper")
+    # Poll-based extractor type (e.g., "imap")
     data_extractor: str | None = None
 
     # Channel credentials indicator (actual credentials never returned)
@@ -167,7 +169,7 @@ class TriggerExecutionResponse(BaseModel):
 
     id: UUID
     trigger_id: UUID
-    executed_at: datetime
+    executed_at: UtcDatetime
     status: str
     task_id: UUID | None = None
     execution_time_ms: int
@@ -212,7 +214,7 @@ class TriggerStatusResponse(BaseModel):
 
     trigger_id: UUID
     is_active: bool
-    last_execution_at: datetime | None = None
+    last_execution_at: UtcDatetime | None = None
     consecutive_failures: int
     should_disable_due_to_failures: bool
 
@@ -370,7 +372,7 @@ async def create_trigger(
         has_creds = False
         if payload.channel_credentials and secret_manager:
             # Channel type for secret key: use webhook_type or derive from data_extractor.
-            # Extractor names like "mailslurper" map to channel type via suffix stripping.
+            # Extractor names like "telegram_polling" map to channel type via suffix stripping.
             extractor = payload.data_extractor or ""
             channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
@@ -392,6 +394,7 @@ async def create_trigger(
 
 @router.get("/", response_model=list[TriggerResponse])
 async def list_triggers(
+    secret_manager: BaseSecretManagerDep,
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
@@ -409,6 +412,7 @@ async def list_triggers(
         All users in the same workspace can see all workspace triggers.
 
     Args:
+        secret_manager: Injected secret manager (to resolve credential presence)
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
@@ -450,7 +454,15 @@ async def list_triggers(
 
         logger.info(f"Listed {len(triggers)} triggers")
 
-        return [TriggerResponse.from_domain_model(trigger) for trigger in triggers]
+        # Resolve credential presence per trigger concurrently so the flag is
+        # correct on the list path too (not just create/update).
+        creds_flags = await asyncio.gather(
+            *(_has_credentials(secret_manager, trigger, trigger.id) for trigger in triggers)
+        )
+        return [
+            TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
+            for trigger, has_creds in zip(triggers, creds_flags, strict=True)
+        ]
 
     except HTTPException:
         raise
@@ -505,6 +517,7 @@ async def triggers_health_check(
 @router.get("/{trigger_id}", response_model=TriggerResponse)
 async def get_trigger(
     trigger_id: UUID,
+    secret_manager: BaseSecretManagerDep,
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
@@ -512,6 +525,7 @@ async def get_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
+        secret_manager: Injected secret manager (to resolve credential presence)
         user_context: Authentication context
         trigger_service: Injected trigger service
 
@@ -529,7 +543,8 @@ async def get_trigger(
         if not trigger:
             raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
 
-        return TriggerResponse.from_domain_model(trigger)
+        has_creds = await _has_credentials(secret_manager, trigger, trigger_id)
+        return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
     except HTTPException:
         raise

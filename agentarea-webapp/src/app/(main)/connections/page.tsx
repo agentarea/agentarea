@@ -4,24 +4,24 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import SearchInput from "@/components/SearchInput";
-import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
-import MCPSkeleton, {
-  mcpSkeletonColumns,
-} from "./components/MCPSkeleton";
+import MCPSkeleton, { mcpSkeletonColumns } from "./components/MCPSkeleton";
+import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 
 export const metadata: Metadata = {
   title: "Connections",
 };
 
-export default async function ConnectionsPage({
+export default async function MCPServersPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const t = await getTranslations("MCPServersPage");
   const resolvedSearchParams = await searchParams;
+
+  // Read tab from URL or fallback to cookie
   const cookieStore = await cookies();
   const cookieTab = cookieStore.get("tab_connections")?.value;
   const tab =
@@ -32,7 +32,6 @@ export default async function ConnectionsPage({
     typeof resolvedSearchParams.search === "string"
       ? resolvedSearchParams.search
       : "";
-
   return (
     <ContentBlock
       header={{
