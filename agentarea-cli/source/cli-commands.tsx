@@ -1,5 +1,3 @@
-import React from 'react';
-import {render} from 'ink';
 import {apiClient} from './services/apiClient.js';
 import {initApiClient, setRuntimeToken} from './services/apiRuntime.js';
 import {tokenStorage} from './utils/storage.js';
