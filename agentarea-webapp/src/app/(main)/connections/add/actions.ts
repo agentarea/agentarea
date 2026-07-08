@@ -74,9 +74,8 @@ export interface MCPServerFormState {
 // Guard user-supplied keys (env var / header names) before using them as
 // object property names, so a crafted "__proto__"/"constructor"/"prototype"
 // entry can't pollute the record's prototype.
-const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 function isSafeKey(key: string): boolean {
-  return !UNSAFE_KEYS.has(key);
+  return key !== "__proto__" && key !== "prototype" && key !== "constructor";
 }
 
 // Split the editable env rows into the two artifacts the API expects:
@@ -102,10 +101,11 @@ function splitEnvRows(env: MCPServerFormValues["env"]): {
     isSecret: e.secret,
   }));
 
-  const environment: Record<string, string> = {};
-  for (const e of rows) {
-    if (e.value !== "" && isSafeKey(e.key)) environment[e.key] = e.value;
-  }
+  const environment: Record<string, string> = Object.fromEntries(
+    rows
+      .filter((e) => e.value !== "" && isSafeKey(e.key))
+      .map((e) => [e.key, e.value])
+  );
 
   return { envSchema, environment };
 }
@@ -170,10 +170,11 @@ function toServerConnectionCreate(
     };
     instanceJsonSpec = Object.keys(environment).length ? { environment } : {};
   } else {
-    const headersObject: Record<string, string> = {};
-    for (const header of input.headers || []) {
-      if (isSafeKey(header.key)) headersObject[header.key] = header.value;
-    }
+    const headersObject: Record<string, string> = Object.fromEntries(
+      (input.headers || [])
+        .filter((header) => isSafeKey(header.key))
+        .map((header) => [header.key, header.value])
+    );
 
     server = {
       name: input.name,
