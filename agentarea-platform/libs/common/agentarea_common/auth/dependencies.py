@@ -403,6 +403,77 @@ async def get_user_context(
         ) from e
 
 
+async def resolve_user_context_from_token(
+    token: str | None, request: Request
+) -> UserContext | None:
+    """Resolve a UserContext from a bearer token, or None if absent/invalid.
+
+    This is the single authentication resolution shared by every edge — REST
+    optional auth and the A2A protocol both go through it, so an AgentArea API
+    key (``aat_``), a Kratos JWT, and a Hydra OAuth token are all accepted the
+    same way at every entry point. It never raises for an auth failure; it
+    returns None so the caller decides the posture (401, anonymous subject, ...).
+    """
+    if not token:
+        return None
+
+    # API key (prefix-based routing)
+    if token.startswith(_API_KEY_PREFIX):
+        user_context = await _validate_api_key(token, request)
+        if user_context is None:
+            logger.debug("API key authentication failed: invalid or expired key")
+            return None
+        await _resolve_accessible_workspaces(user_context)
+        try:
+            await _apply_workspace_selection(user_context, request)
+        except HTTPException:
+            return None
+        ContextManager.set_context(user_context)
+        return user_context
+
+    # Kratos JWT, with Hydra OAuth token as a fallback (MCP clients).
+    auth_provider = get_auth_provider()
+    try:
+        auth_result: AuthResult = await auth_provider.verify_token(token)
+
+        if not auth_result.is_authenticated or not auth_result.token:
+            hydra_context = await _try_hydra_token(token, request)
+            if hydra_context is not None:
+                await _resolve_accessible_workspaces(hydra_context)
+                try:
+                    await _apply_workspace_selection(hydra_context, request)
+                except HTTPException:
+                    return None
+                ContextManager.set_context(hydra_context)
+                return hydra_context
+            logger.debug(f"Token authentication failed: {auth_result.error}")
+            return None
+
+        # Default workspace is the user's personal workspace (= user_id).
+        # Any X-Workspace-ID override is validated against accessible_workspaces.
+        user_context = UserContext(
+            user_id=auth_result.token.user_id,
+            workspace_id=auth_result.token.user_id,
+            email=auth_result.token.email,
+        )
+        await _resolve_accessible_workspaces(user_context)
+        try:
+            await _apply_workspace_selection(user_context, request)
+        except HTTPException:
+            return None
+        ContextManager.set_context(user_context)
+        return user_context
+
+    except Exception as e:
+        hydra_context = await _try_hydra_token(token, request)
+        if hydra_context is not None:
+            await _resolve_accessible_workspaces(hydra_context)
+            ContextManager.set_context(hydra_context)
+            return hydra_context
+        logger.warning(f"Error during token resolution: {e}")
+        return None
+
+
 async def get_optional_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
@@ -410,16 +481,8 @@ async def get_optional_user(
     """Optionally authenticate user if token is provided (OPTIONAL authentication).
 
     This dependency allows endpoints to work with or without authentication.
-    Returns UserContext if a valid token is provided, None otherwise.
-
-    Does NOT raise 401 if no token provided.
-
-    Args:
-        request: FastAPI request object
-        credentials: Optional HTTP Bearer token from Authorization header
-
-    Returns:
-        Optional[UserContext]: User context if authenticated, None otherwise
+    Returns UserContext if a valid token is provided, None otherwise. Does NOT
+    raise 401 if no token provided.
 
     Example:
         @router.get("/optional")
@@ -432,61 +495,7 @@ async def get_optional_user(
         logger.debug("No authentication credentials provided (optional auth)")
         return None
 
-    token = credentials.credentials
-
-    # Check if this is an API key (prefix-based routing)
-    if token.startswith(_API_KEY_PREFIX):
-        user_context = await _validate_api_key(token, request)
-        if user_context is None:
-            logger.debug("Optional API key authentication failed: invalid or expired key")
-            return None
-        await _resolve_accessible_workspaces(user_context)
-        try:
-            await _apply_workspace_selection(user_context, request)
-        except HTTPException:
-            return None
-        ContextManager.set_context(user_context)
-        logger.debug(
-            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
-        )
-        return user_context
-
-    # Otherwise, verify as JWT
-    auth_provider = get_auth_provider()
-
-    try:
-        # Verify token using auth provider
-        auth_result: AuthResult = await auth_provider.verify_token(token)
-
-        if not auth_result.is_authenticated or not auth_result.token:
-            logger.debug(f"Optional authentication failed: {auth_result.error}")
-            return None
-
-        # Default workspace is the user's personal workspace (= user_id).
-        # See the required-auth path above for the threat model.
-        user_context = UserContext(
-            user_id=auth_result.token.user_id,
-            workspace_id=auth_result.token.user_id,
-            email=auth_result.token.email,
-        )
-
-        # Resolve accessible workspaces
-        await _resolve_accessible_workspaces(user_context)
-        try:
-            await _apply_workspace_selection(user_context, request)
-        except HTTPException:
-            return None
-
-        # Set context in ContextManager
-        ContextManager.set_context(user_context)
-
-        logger.debug(f"Optionally authenticated user: {user_context.user_id}")
-
-        return user_context
-
-    except Exception as e:
-        logger.warning(f"Error during optional authentication: {e}")
-        return None
+    return await resolve_user_context_from_token(credentials.credentials, request)
 
 
 async def verify_workspace_access(

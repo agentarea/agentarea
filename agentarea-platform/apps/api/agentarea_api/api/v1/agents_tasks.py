@@ -696,12 +696,18 @@ async def get_agent_task_status(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        task = await task_service.get_task(task_id)
+        # DB is the source of truth for the task lifecycle; Temporal only
+        # upgrades to a terminal state. The workflow may stay alive in
+        # await_follow_up after writing "completed" to the DB, so reading the
+        # raw live workflow status here would report "running" for a finished
+        # task. get_task_with_workflow_status applies the same enrichment the
+        # plain task get uses, keeping the two endpoints consistent.
+        task = await task_service.get_task_with_workflow_status(task_id)
         if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Get workflow status using the execution ID pattern
-        execution_id = f"task-{task_id}"
+        # Get workflow status for live execution detail (timing, session, etc.)
+        execution_id = task.execution_id or f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
         stored_artifacts = await _list_task_artifact_items(
             agent_id=agent_id,
@@ -716,12 +722,13 @@ async def get_agent_task_status(
             "task_id": str(task_id),
             "agent_id": str(agent_id),
             "execution_id": execution_id,
-            "status": status.get("status", "unknown"),
+            # Authoritative lifecycle status/result come from the persisted task.
+            "status": task.status,
             "start_time": status.get("start_time"),
             "end_time": status.get("end_time"),
             "execution_time": status.get("execution_time"),
             "error": status.get("error"),
-            "result": status.get("result"),
+            "result": task.result if task.result is not None else status.get("result"),
             # A2A-compatible fields for frontend
             "message": status.get("message"),
             "artifacts": status_artifacts,
