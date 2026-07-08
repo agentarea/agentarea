@@ -4494,6 +4494,58 @@
         "title": "MCPAuthConfigUpdateRequest",
         "type": "object"
       },
+      "MCPInstanceConsumer": {
+        "description": "An agent that has this MCP instance attached, and which of its tools it enabled.",
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "agent_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Slug"
+          },
+          "confirm_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Confirm Tools",
+            "type": "array"
+          },
+          "enabled_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Tools"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name"
+        ],
+        "title": "MCPInstanceConsumer",
+        "type": "object"
+      },
       "MCPServerConnectionCreateRequest": {
         "properties": {
           "instance": {
@@ -17070,6 +17122,61 @@
           }
         ],
         "summary": "Update Mcp Server Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/{instance_id}/consumers": {
+      "get": {
+        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON \u2014 no separate store.",
+        "operationId": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MCPInstanceConsumer"
+                  },
+                  "title": "Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mcp Server Instance Consumers",
         "tags": [
           "v1",
           "protected",
