@@ -234,12 +234,13 @@ jobs:
 
       - name: Run integration tests
         working-directory: ./agentarea-platform
+        # Core pool only: deterministic tests that need just postgres + valkey +
+        # the time-skipping Temporal env. External-dependency tests are tagged by
+        # tests/integration/conftest.py and deselected here; run them in a
+        # dedicated job with a real LLM / Docker / object store / API server.
         run: |
           uv run pytest tests/integration/ -v --tb=short \
-            --ignore=tests/integration/test_full_workflow_with_real_llm.py \
-            --ignore=tests/integration/test_real_llm_with_mocked_db.py \
-            --ignore=tests/integration/test_mcp_real_integration.py \
-            -m "not slow"
+            -m "not slow and not requires_llm and not requires_docker and not requires_server and not requires_s3 and not perf"
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_URL: ${{ env.REDIS_URL }}
