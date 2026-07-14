@@ -10,6 +10,8 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import get_agent_service
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.dependencies import get_optional_user
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
@@ -58,146 +60,13 @@ class A2APermissions:
     ]
 
 
-async def extract_auth_from_request(request: Request) -> dict[str, Any]:
-    """Extract authentication information from request."""
-    auth_info = {"method": None, "credentials": None, "metadata": {}}
-
-    # Check Authorization header (Bearer token)
-    auth_header = request.headers.get("authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        auth_info["method"] = "bearer"
-        auth_info["credentials"] = auth_header[7:]  # Remove "Bearer " prefix
-
-    # Check API Key header
-    api_key = request.headers.get("x-api-key")
-    if api_key:
-        auth_info["method"] = "api_key"
-        auth_info["credentials"] = api_key
-
-    # Extract additional metadata
-    auth_info["metadata"] = {
+def _a2a_metadata(request: Request, **extra: str | None) -> dict[str, Any]:
+    """Request metadata carried on the A2A auth context."""
+    return {
         "user_agent": request.headers.get("user-agent"),
         "client_ip": request.client.host if request.client else None,
-        "forwarded_for": request.headers.get("x-forwarded-for"),
+        **{k: v for k, v in extra.items() if v is not None},
     }
-
-    return auth_info
-
-
-async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
-    """Authenticate bearer token using Kratos auth provider."""
-    from agentarea_common.auth.providers.factory import AuthProviderFactory
-    from agentarea_common.config.auth import get_auth_settings
-
-    try:
-        settings = get_auth_settings()
-        auth_provider = AuthProviderFactory.create_provider(
-            "kratos",
-            config={
-                "jwks_b64": settings.KRATOS_JWKS_B64,
-                "issuer": settings.KRATOS_ISSUER,
-                "audience": settings.KRATOS_AUDIENCE,
-            },
-        )
-
-        # Verify token using Kratos provider
-        auth_result = await auth_provider.verify_token(token)
-
-        if not auth_result.is_authenticated or not auth_result.token:
-            logger.warning(f"Bearer token authentication failed: {auth_result.error}")
-            return None
-
-        # Extract user information from validated token
-        # Extract workspace_id from token claims if available
-        workspace_id = None
-        if auth_result.token.claims:
-            workspace_id = auth_result.token.claims.get("workspace_id")
-
-        if not workspace_id:
-            workspace_id = auth_result.token.user_id
-
-        return {
-            "user_id": auth_result.token.user_id,
-            "workspace_id": workspace_id,
-            "permissions": A2APermissions.USER_PERMISSIONS,
-            "valid": True,
-        }
-
-    except Exception as e:
-        logger.error(f"Error authenticating bearer token: {e}")
-        return None
-
-
-async def authenticate_api_key(api_key: str) -> dict[str, Any] | None:
-    """Authenticate API key and extract user context including workspace.
-
-    TODO: Implement proper API key authentication with database lookup.
-    API keys should be stored hashed in the database with associated user/workspace context.
-    """
-    # API key authentication not yet implemented
-    logger.warning("API key authentication attempted but not yet implemented")
-    return None
-
-
-async def get_a2a_auth_context(
-    request: Request, agent_id: UUID | None = None, required_permission: str | None = None
-) -> A2AAuthContext:
-    """Get A2A authentication context for request."""
-    # Extract authentication info
-    auth_info = await extract_auth_from_request(request)
-
-    # Initialize context with defaults
-    context = A2AAuthContext(
-        authenticated=False,
-        permissions=A2APermissions.PUBLIC_PERMISSIONS,
-        metadata=auth_info["metadata"],
-    )
-
-    # Authenticate based on method
-    auth_result = None
-
-    if auth_info["method"] == "bearer" and auth_info["credentials"]:
-        auth_result = await authenticate_bearer_token(auth_info["credentials"])
-        context.auth_method = "bearer"
-    elif auth_info["method"] == "api_key" and auth_info["credentials"]:
-        auth_result = await authenticate_api_key(auth_info["credentials"])
-        context.auth_method = "api_key"
-
-    # Update context if authenticated
-    if auth_result and auth_result.get("valid"):
-        context.authenticated = True
-        context.user_id = auth_result["user_id"]
-        workspace_id = auth_result.get("workspace_id")
-        if not workspace_id:
-            logger.warning(
-                f"Authentication result missing workspace_id for user {auth_result['user_id']}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication token missing required workspace_id claim",
-            )
-        context.workspace_id = workspace_id
-        context.permissions = auth_result["permissions"]
-        context.agent_id = agent_id
-
-        logger.info(
-            f"A2A authentication successful: user={context.user_id}, "
-            f"workspace={context.workspace_id}, method={context.auth_method}"
-        )
-    else:
-        logger.info(f"A2A authentication failed or not provided: method={auth_info['method']}")
-
-    # Check required permission
-    if required_permission and required_permission not in context.permissions:
-        logger.warning(
-            f"A2A authorization failed: user={context.user_id}, required={required_permission}"
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Insufficient permissions. Required: {required_permission}",
-        )
-
-    return context
 
 
 async def require_a2a_auth(
@@ -205,53 +74,105 @@ async def require_a2a_auth(
     agent_id: UUID,
     permission: str = A2APermissions.AGENT_READ,
     agent_service: AgentService = Depends(get_agent_service),
+    subject: UserContext | None = Depends(get_optional_user),
 ) -> A2AAuthContext:
-    """Require A2A authentication with specific permission."""
-    # Verify agent exists
+    """Authenticate + authorize an A2A request through the shared edge policy.
+
+    A2A carries no auth or permission model of its own (ADR-006). The subject
+    is resolved by the SAME dependency every optional-auth REST endpoint uses
+    (``get_optional_user`` → the shared ``HTTPBearer`` scheme, handling Kratos
+    JWT + ``aat_`` API key + Hydra OAuth), and the allow/deny decision is made
+    by the single edge authorizer (``authorize_agent_action``). An ``aat_`` key
+    that works over REST works here too; a public-execution grant is honored
+    without a key.
+    """
+    from agentarea_common.auth.access import authorize_agent_action
+
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Get auth context with required permission
-    context = await get_a2a_auth_context(request, agent_id, permission)
-
-    # Ensure user is authenticated
-    if not context.authenticated:
+    decision = await authorize_agent_action(
+        subject,
+        permission,
+        agent_workspace_id=str(agent.workspace_id),
+        agent_id=str(agent_id),
+    )
+    if not decision.allowed:
+        if subject is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        logger.warning(
+            f"A2A authorization denied: user={subject.user_id}, "
+            f"agent={agent_id}, required={permission}, reason={decision.reason}"
+        )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient permissions. Required: {permission}",
         )
 
-    # Add agent info to context
-    context.metadata["agent_name"] = agent.name
-    context.metadata["agent_status"] = agent.status
-
-    return context
+    return A2AAuthContext(
+        authenticated=subject is not None,
+        user_id=subject.user_id if subject else None,
+        workspace_id=str(subject.workspace_id) if subject else str(agent.workspace_id),
+        agent_id=agent_id,
+        permissions=[permission],
+        auth_method="bearer" if subject else "anonymous",
+        metadata=_a2a_metadata(request, agent_name=agent.name, agent_status=agent.status),
+    )
 
 
 async def require_a2a_write_auth(
-    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
+    request: Request,
+    agent_id: UUID,
+    agent_service: AgentService = Depends(get_agent_service),
+    subject: UserContext | None = Depends(get_optional_user),
 ) -> A2AAuthContext:
     """Require A2A write permission."""
-    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_WRITE, agent_service)
+    return await require_a2a_auth(
+        request, agent_id, A2APermissions.AGENT_WRITE, agent_service, subject
+    )
 
 
 async def require_a2a_execute_auth(
-    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
+    request: Request,
+    agent_id: UUID,
+    agent_service: AgentService = Depends(get_agent_service),
+    subject: UserContext | None = Depends(get_optional_user),
 ) -> A2AAuthContext:
     """Require A2A execute permission."""
-    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_EXECUTE, agent_service)
+    return await require_a2a_auth(
+        request, agent_id, A2APermissions.AGENT_EXECUTE, agent_service, subject
+    )
 
 
 async def require_a2a_stream_auth(
-    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
+    request: Request,
+    agent_id: UUID,
+    agent_service: AgentService = Depends(get_agent_service),
+    subject: UserContext | None = Depends(get_optional_user),
 ) -> A2AAuthContext:
     """Require A2A stream permission."""
-    return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_STREAM, agent_service)
+    return await require_a2a_auth(
+        request, agent_id, A2APermissions.AGENT_STREAM, agent_service, subject
+    )
 
 
-# Public dependency - no auth required
-async def allow_public_access(request: Request) -> A2AAuthContext:
-    """Allow public access (for discovery endpoints)."""
-    return await get_a2a_auth_context(request)
+async def allow_public_access(
+    request: Request,
+    subject: UserContext | None = Depends(get_optional_user),
+) -> A2AAuthContext:
+    """Public discovery endpoints: resolve the subject if a token is present,
+    but require no permission. Uses the same shared resolver — no bespoke auth.
+    """
+    return A2AAuthContext(
+        authenticated=subject is not None,
+        user_id=subject.user_id if subject else None,
+        workspace_id=str(subject.workspace_id) if subject else None,
+        permissions=[A2APermissions.AGENT_READ],
+        auth_method="bearer" if subject else "anonymous",
+        metadata=_a2a_metadata(request),
+    )
