@@ -1,12 +1,27 @@
 # CI overlay for docker-compose.yaml — used by the OpenAPI fuzz job.
 #
-# Two things differ from local dev:
+# Three things differ from local dev:
 #   1. The API image is BUILT from the PR source in the job and tagged
 #      `agentarea/agentarea-api:latest`, so we must NOT re-pull it from the
 #      registry (the base file sets `pull_policy: always`).
 #   2. The fuzz harness mints ephemeral Kratos identities from the GitHub
 #      runner host, which needs the Kratos ADMIN API (4434) published — the
 #      base file only exposes the public API (4433).
+#   3. rustfs, db and valkey use named volumes instead of the base bind
+#      mounts under ./data. Two problems the bind mounts cause on the runner
+#      that don't show locally (Docker Desktop's VM is permissive about mount
+#      ownership):
+#        - rustfs mounts ./data/rustfs; the fresh host dir is root-owned, so
+#          rustfs (non-root in-container) hits `Permission denied (os error
+#          13)` and exits(1) at boot, crashing `app`'s service_healthy dep.
+#        - db/valkey create root-owned ./data/postgres and ./data/valkey
+#          INSIDE the checkout. actions/cache's post (save) step then runs
+#          hashFiles('**/uv.lock'), which walks the workspace, can't traverse
+#          those dirs, and fails the job ("Fail to hash files under directory")
+#          even after the fuzz tests themselves passed.
+#      Named volumes are initialized by Docker with the image user's ownership
+#      (exactly what dev already does) and live outside the workspace, so both
+#      problems disappear.
 #
 # Usage: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d app kratos temporal
 services:
@@ -14,6 +29,20 @@ services:
     pull_policy: never
   app_migrations:
     pull_policy: never
+  rustfs:
+    volumes:
+      - rustfs_ci_data:/data
+  db:
+    volumes:
+      - postgres_ci_data:/var/lib/postgresql
+  valkey:
+    volumes:
+      - valkey_ci_data:/data
   kratos:
     ports:
       - "4434:4434" # admin API — additive to the base 4433 (public)
+
+volumes:
+  rustfs_ci_data:
+  postgres_ci_data:
+  valkey_ci_data:
