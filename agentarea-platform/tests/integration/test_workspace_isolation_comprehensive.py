@@ -70,46 +70,46 @@ def comprehensive_contexts():
     return {
         # Enterprise A - Multiple departments
         "enterprise_a_hr": UserContext(
-            user_id="hr_manager", workspace_id="enterprise-a-hr", roles=["manager"]
+            user_id="hr_manager", workspace_id="enterprise-a-hr"
         ),
         "enterprise_a_hr_emp": UserContext(
-            user_id="hr_employee", workspace_id="enterprise-a-hr", roles=["employee"]
+            user_id="hr_employee", workspace_id="enterprise-a-hr"
         ),
         "enterprise_a_finance": UserContext(
-            user_id="finance_manager", workspace_id="enterprise-a-finance", roles=["manager"]
+            user_id="finance_manager", workspace_id="enterprise-a-finance"
         ),
         "enterprise_a_it": UserContext(
-            user_id="it_admin", workspace_id="enterprise-a-it", roles=["admin"]
+            user_id="it_admin", workspace_id="enterprise-a-it"
         ),
         # Enterprise B - Competitor company
         "enterprise_b_hr": UserContext(
-            user_id="hr_manager_b", workspace_id="enterprise-b-hr", roles=["manager"]
+            user_id="hr_manager_b", workspace_id="enterprise-b-hr"
         ),
         "enterprise_b_finance": UserContext(
-            user_id="finance_manager_b", workspace_id="enterprise-b-finance", roles=["manager"]
+            user_id="finance_manager_b", workspace_id="enterprise-b-finance"
         ),
         # Startup C - Small company
         "startup_c_main": UserContext(
-            user_id="founder", workspace_id="startup-c-main", roles=["owner"]
+            user_id="founder", workspace_id="startup-c-main"
         ),
         "startup_c_dev": UserContext(
-            user_id="developer", workspace_id="startup-c-main", roles=["developer"]
+            user_id="developer", workspace_id="startup-c-main"
         ),
         # Government Agency
         "gov_agency_public": UserContext(
-            user_id="public_officer", workspace_id="gov-agency-public", roles=["officer"]
+            user_id="public_officer", workspace_id="gov-agency-public"
         ),
         "gov_agency_classified": UserContext(
             user_id="classified_officer",
             workspace_id="gov-agency-classified",
-            roles=["officer", "classified"],
+            
         ),
         # Malicious actors
         "external_attacker": UserContext(
-            user_id="attacker", workspace_id="attacker-workspace", roles=["user"]
+            user_id="attacker", workspace_id="attacker-workspace"
         ),
         "insider_threat": UserContext(
-            user_id="insider", workspace_id="compromised-workspace", roles=["user"]
+            user_id="insider", workspace_id="compromised-workspace"
         ),
     }
 
@@ -128,14 +128,14 @@ class TestComprehensiveWorkspaceIsolation:
             hr_token = generate_test_jwt_token(
                 user_id="hr_manager",
                 workspace_id="enterprise-a-hr",
-                roles=["manager"],
+                
                 secret_key="test-secret",
             )
 
             finance_token = generate_test_jwt_token(
                 user_id="finance_manager",
                 workspace_id="enterprise-a-finance",
-                roles=["manager"],
+                
                 secret_key="test-secret",
             )
 

@@ -21,7 +21,7 @@ class TestWorkspaceIsolation:
         token1: str = generate_jwt_token(
             user_id="user-1",
             workspace_id="workspace-1",
-            roles=["user"],
+            
         )
 
         # Create agent as user 1
@@ -42,7 +42,7 @@ class TestWorkspaceIsolation:
             token2 = generate_jwt_token(
                 user_id="user-2",
                 workspace_id="workspace-2",
-                roles=["user"],
+                
             )
 
             response = client.get(
@@ -123,7 +123,7 @@ class TestAdminAuthorization:
         token = generate_jwt_token(
             user_id="regular-user",
             workspace_id="workspace-1",
-            roles=["user"],  # No admin role
+            # No admin role
         )
 
         # Try to access admin endpoint (example)
@@ -140,7 +140,7 @@ class TestAdminAuthorization:
         token = generate_jwt_token(
             user_id="admin-user",
             workspace_id="workspace-1",
-            roles=["user", "admin"],  # Has admin role
+            # Has admin role
         )
 
         # Access admin endpoint

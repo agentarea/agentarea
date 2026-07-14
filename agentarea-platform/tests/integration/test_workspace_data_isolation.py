@@ -60,12 +60,12 @@ async def test_session_factory(test_engine):
 def user_contexts():
     """Create test user contexts for different workspaces and users."""
     return {
-        "workspace1_user1": UserContext(user_id="user1", workspace_id="workspace1", roles=["user"]),
-        "workspace1_user2": UserContext(user_id="user2", workspace_id="workspace1", roles=["user"]),
-        "workspace2_user1": UserContext(user_id="user1", workspace_id="workspace2", roles=["user"]),
-        "workspace2_user3": UserContext(user_id="user3", workspace_id="workspace2", roles=["user"]),
+        "workspace1_user1": UserContext(user_id="user1", workspace_id="workspace1"),
+        "workspace1_user2": UserContext(user_id="user2", workspace_id="workspace1"),
+        "workspace2_user1": UserContext(user_id="user1", workspace_id="workspace2"),
+        "workspace2_user3": UserContext(user_id="user3", workspace_id="workspace2"),
         "workspace3_admin": UserContext(
-            user_id="admin", workspace_id="workspace3", roles=["admin"]
+            user_id="admin", workspace_id="workspace3"
         ),
     }
 
