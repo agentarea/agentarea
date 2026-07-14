@@ -15,6 +15,7 @@ import pytest_asyncio
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 from libs.execution.agentarea_execution.models import (
     AgentExecutionRequest,
@@ -356,6 +357,7 @@ class TestAgentExecutionWorkflow:
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             request = self.create_test_request()
 
@@ -402,6 +404,7 @@ class TestAgentExecutionWorkflow:
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             # Устанавливаем низкий лимит итераций для быстрого тестирования
             request = self.create_test_request(max_iterations=3)
@@ -451,6 +454,7 @@ class TestAgentExecutionWorkflow:
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             # Устанавливаем низкий бюджет (каждый вызов стоит 3.0)
             request = self.create_test_request(budget_usd=5.0, max_iterations=10)
@@ -498,6 +502,7 @@ class TestAgentExecutionWorkflow:
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             request = self.create_test_request(max_iterations=5)
 

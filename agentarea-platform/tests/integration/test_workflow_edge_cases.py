@@ -11,6 +11,7 @@ from agentarea_execution.workflows.agent_execution_workflow import AgentExecutio
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             result = await env.client.execute_workflow(
                 AgentExecutionWorkflow.run,
@@ -237,6 +239,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             result = await env.client.execute_workflow(
                 AgentExecutionWorkflow.run,
@@ -345,6 +348,7 @@ async def test_workflow_with_empty_llm_responses():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             result = await env.client.execute_workflow(
                 AgentExecutionWorkflow.run,

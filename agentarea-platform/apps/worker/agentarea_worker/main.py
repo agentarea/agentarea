@@ -19,6 +19,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
+from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
@@ -241,6 +242,7 @@ class AgentAreaWorker:
             ],
             activities=activities + mcp_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
+            workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )
@@ -264,6 +266,7 @@ class AgentAreaWorker:
             task_queue=trigger_task_queue,
             workflows=[TriggerExecutionWorkflow],
             activities=trigger_activities,
+            workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=5,
             max_concurrent_activities=5,
         )

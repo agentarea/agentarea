@@ -11,6 +11,7 @@ from agentarea_execution.workflows.agent_execution_workflow import AgentExecutio
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ async def test_workflow_completes_with_task_complete():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             logger.info("Starting workflow execution test")
 
