@@ -10,6 +10,7 @@ from agentarea_execution.models import AgentExecutionRequest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,7 @@ class TestWorkflowCompletion:
                 task_queue="test-queue",
                 workflows=[AgentExecutionWorkflow],
                 activities=activities,
+                workflow_runner=create_workflow_runner(),
             ):
                 # Execute workflow with timeout
                 result = await env.client.execute_workflow(
@@ -229,6 +231,7 @@ class TestWorkflowCompletion:
                 task_queue="test-queue",
                 workflows=[AgentExecutionWorkflow],
                 activities=activities,
+                workflow_runner=create_workflow_runner(),
             ):
                 result = await env.client.execute_workflow(
                     AgentExecutionWorkflow.run,
@@ -359,6 +362,7 @@ class TestWorkflowCompletion:
                 task_queue="test-queue",
                 workflows=[AgentExecutionWorkflow],
                 activities=activities,
+                workflow_runner=create_workflow_runner(),
             ):
                 result = await env.client.execute_workflow(
                     AgentExecutionWorkflow.run,

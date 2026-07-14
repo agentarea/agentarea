@@ -11,6 +11,7 @@ from agentarea_execution.workflows.agent_execution_workflow import AgentExecutio
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             logger.info("Starting workflow with malformed LLM responses")
 
@@ -295,6 +297,7 @@ async def test_workflow_with_various_malformed_formats():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             result = await env.client.execute_workflow(
                 AgentExecutionWorkflow.run,

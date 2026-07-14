@@ -10,6 +10,7 @@ from agentarea_execution.models import AgentExecutionRequest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
+from agentarea_common.workflow.sandbox import create_workflow_runner
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ async def test_workflow_with_real_infrastructure_and_database():
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
             activities=activities,
+            workflow_runner=create_workflow_runner(),
         ):
             try:
                 # This will fail because we don't have the agent/model in the database
@@ -365,6 +367,7 @@ async def test_workflow_with_real_database_infrastructure():
             workflows=[AgentExecutionWorkflow],
             activities=activities,
             debug_mode=True,  # Disable sandbox for database access
+            workflow_runner=create_workflow_runner(),
         ):
             try:
                 logger.info("🚀 Starting workflow execution...")
