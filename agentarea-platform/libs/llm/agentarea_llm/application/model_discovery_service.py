@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 # Provider-specific base URLs for /v1/models discovery
 _PROVIDER_BASE_URLS: dict[str, str] = {
     "openrouter": "https://openrouter.ai/api",
-    "requesty": "https://router.requesty.ai/v1",
     "openai": "https://api.openai.com",
     "anthropic": "https://api.anthropic.com",
     "mistral": "https://api.mistral.ai",

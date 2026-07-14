@@ -1,4 +1,5 @@
-# Example: Requesty with model discovery
+# Example: Requesty through the existing OpenAI-compatible provider
+# Requesty uses the OpenAI API shape, so no dedicated ProviderSpec is required.
 # 1. Create the secret: kubectl create secret generic requesty-api-key --from-literal=api-key=$REQUESTY_API_KEY -n agentarea-staging
 # 2. Apply this: kubectl apply -f requesty.yaml
 apiVersion: agentarea.io/v1alpha1
@@ -7,7 +8,7 @@ metadata:
   name: requesty-production
   namespace: agentarea-staging
 spec:
-  providerKey: requesty
+  providerKey: openai
   name: "Requesty"
   endpointUrl: "https://router.requesty.ai/v1"
   apiKeySecretRef:
@@ -15,21 +16,3 @@ spec:
     key: api-key
   discoverModels: true
   isPublic: true
----
-# Example: Using ExternalSecrets to inject the API key
-# apiVersion: external-secrets.io/v1beta1
-# kind: ExternalSecret
-# metadata:
-#   name: requesty-api-key
-#   namespace: agentarea-staging
-# spec:
-#   secretStoreRef:
-#     name: aws-secrets-store
-#     kind: ClusterSecretStore
-#   target:
-#     name: requesty-api-key
-#   data:
-#     - secretKey: api-key
-#       remoteRef:
-#         key: agentarea/staging/requesty
-#         property: api-key

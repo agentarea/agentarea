@@ -69,7 +69,8 @@ def discover_models(
         logger.warning("No base URL for provider %s, skipping discovery", provider_key)
         return []
 
-    url = f"{base.rstrip('/')}/v1/models"
+    base = base.rstrip("/")
+    url = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     # Anthropic uses a different auth header
@@ -78,7 +79,6 @@ def discover_models(
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
         }
-        url = f"{base.rstrip('/')}/v1/models"
 
     try:
         resp = httpx.get(url, headers=headers, timeout=30)
