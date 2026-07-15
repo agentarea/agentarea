@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import {
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Kbd } from "@/components/ui/kbd";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { QUICK_TASK_OPEN_EVENT } from "@/components/QuickTask/QuickTaskDialog";
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
@@ -67,25 +69,34 @@ export function AppSidebarContent({ data }: { data: any }) {
     <>
       <SidebarHeader>
         <TeamSwitcher teams={data.workspaces} />
-        {/* Same SidebarMenuButton as the nav items; only difference is the ⌘J on the right. */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={openQuickTask}
-              tooltip="New task"
-              className="[&>svg]:text-zinc-400 dark:[&>svg]:text-zinc-500"
-            >
-              <SquarePen />
-              <span>New task</span>
-              {open && (
-                <Kbd
-                  keys={["⌘", "J"]}
-                  className="ml-auto hidden sm:inline-flex"
-                />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "group h-8 w-full justify-start gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                !open && "justify-center px-0"
               )}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+              onClick={openQuickTask}
+            >
+              <SquarePen className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
+              {open && (
+                <>
+                  <span className="flex-1 truncate text-left">New task</span>
+                  <kbd className="pointer-events-none ml-auto hidden h-[18px] select-none items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1 font-mono text-[10px] font-medium text-muted-foreground/70 sm:flex">
+                    <span className="text-[11px] leading-none">&#8984;</span>J
+                  </kbd>
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          {!open && (
+            <TooltipContent side="right">
+              New task <kbd className="ml-1 text-[10px]">&#8984;J</kbd>
+            </TooltipContent>
+          )}
+        </Tooltip>
       </SidebarHeader>
       <SidebarNavScroll>
         <NavMain sections={data.navSections} />
