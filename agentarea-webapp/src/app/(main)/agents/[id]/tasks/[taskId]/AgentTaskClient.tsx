@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import AgentChat from "@/components/Chat/AgentChat";
-import type { ChatMessage } from "@/components/Chat/hooks/useChatMessages";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -19,7 +18,6 @@ import { getTaskStatusPresentation } from "@/lib/status";
 import {
   cancelTask,
   changeTaskModel,
-  getTaskMessages,
   getTaskStatus,
   listTaskModelOptions,
   pauseTask,
@@ -61,7 +59,6 @@ interface Props {
 
 export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
     []
@@ -76,20 +73,11 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const loadTaskData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load task status
+      // Load task status. The conversation itself is streamed by AgentChat
+      // (live events), so no separate message fetch is needed here.
       const statusResponse = await getTaskStatus(agent.id, taskId);
       if (statusResponse.data) {
         setTaskStatus(statusResponse.data as TaskStatus);
-      }
-
-      // Load task messages if available
-      try {
-        const messagesResponse = await getTaskMessages(agent.id, taskId);
-        if (messagesResponse.data) {
-          setMessages(messagesResponse.data as ChatMessage[]);
-        }
-      } catch {
-        // Messages endpoint might not exist yet, that's okay
       }
     } catch {
       // Failed to load task data
@@ -344,7 +332,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
         <AgentChat
           agent={agent}
           taskId={taskId}
-          initialMessages={messages}
+          status={taskStatus?.status || task?.status}
           className="w-full border-0"
           height="600px"
         />
