@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { DashboardData } from "./components/DashboardData";
 import DashboardSkeleton from "./components/DashboardSkeleton";
+import { PeriodSelect } from "./components/PeriodSelect";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -13,13 +14,13 @@ export default async function DashboardPage() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Dashboard" }],
+        controls: <PeriodSelect />,
       }}
+      className="!p-0 lg:!overflow-hidden"
     >
-      <div className="main-content">
-        <Suspense fallback={<DashboardSkeleton />}>
-          <DashboardData />
-        </Suspense>
-      </div>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardData />
+      </Suspense>
     </ContentBlock>
   );
 }

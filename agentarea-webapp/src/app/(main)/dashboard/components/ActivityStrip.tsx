@@ -1,71 +1,102 @@
-import {
-  computeDelta,
-  DeltaBadge,
-  Sparkline,
-} from "@/components/charts/Sparkline";
+import { useTranslations } from "next-intl";
+import { Activity } from "lucide-react";
+import { BoardSectionHeader } from "@/components/board";
+import { computeDelta, DeltaBadge, Sparkline } from "@/components/charts/Sparkline";
+import { cn } from "@/lib/utils";
 import type { DailyTaskCounts } from "@/lib/api-dashboard";
 
 type Props = {
   data: DailyTaskCounts[];
 };
 
-const NEUTRAL_LINE = "hsl(var(--foreground) / 0.55)";
+const TONES = {
+  completed: { dot: "bg-emerald-500", color: "#10b981" },
+  failed: { dot: "bg-red-500", color: "#ef4444" },
+  awaiting: { dot: "bg-amber-500", color: "#f59e0b" },
+} as const;
 
 export function ActivityStrip({ data }: Props) {
+  const t = useTranslations("DashboardPage");
   const completed = data.map((d) => d.completed);
   const failed = data.map((d) => d.failed);
-  const hitl = data.map((d) => d.input_required);
+  const awaiting = data.map((d) => d.input_required);
 
   return (
-    <section>
-      <header className="flex items-baseline justify-between">
-        <h3 className="text-[13px] font-medium text-foreground">Activity</h3>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          Last 14 days · UTC
-        </span>
-      </header>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BoardSectionHeader
+        icon={<Activity />}
+        color="hsl(var(--violet))"
+        title={t("activity")}
+        meta={t("activityMeta")}
+      />
 
-      <div className="mt-3 grid grid-cols-3 gap-6">
-        <Item label="Completed" values={completed} goodDirection="up" />
-        <Item label="Failed" values={failed} goodDirection="down" />
-        <Item label="Awaiting" values={hitl} goodDirection="down" />
+      <div className="mt-2.5 flex flex-1 flex-col gap-2 sm:grid sm:grid-cols-3 lg:flex lg:flex-col lg:gap-1.5">
+        <StatCard label={t("completed")} tone="completed" values={completed} goodDirection="up" />
+        <StatCard label={t("failed")} tone="failed" values={failed} goodDirection="down" bad />
+        <StatCard label={t("awaiting")} tone="awaiting" values={awaiting} goodDirection="down" />
       </div>
-    </section>
+    </div>
   );
 }
 
-function Item({
+function StatCard({
   label,
+  tone,
   values,
   goodDirection,
+  bad = false,
 }: {
   label: string;
+  tone: keyof typeof TONES;
   values: number[];
   goodDirection: "up" | "down";
+  bad?: boolean;
 }) {
   const delta = computeDelta(values, 1);
   const today = values.at(-1) ?? 0;
+  const t = TONES[tone];
+
   return (
-    <div>
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1.5">
-        <span className="text-xl font-semibold tabular-nums tracking-tight">
+    <div
+      className={cn(
+        "flex overflow-hidden rounded-[9px] border bg-background transition-colors hover:border-muted-foreground/40",
+        "flex-row items-center gap-3.5 px-3.5 py-2",
+        "sm:flex-col sm:items-stretch sm:gap-0 sm:px-3 sm:pb-0 sm:pt-3",
+        "lg:min-h-[46px] lg:flex-1 lg:flex-row lg:items-stretch lg:gap-3.5 lg:py-2"
+      )}
+    >
+      <div className="flex min-w-0 flex-1 flex-row items-baseline gap-3 sm:flex-none sm:flex-col sm:items-start sm:gap-0 lg:min-w-[120px] lg:flex-none lg:justify-center">
+        <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
+          <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full", t.dot)} />
+          {label}
+        </div>
+        <div
+          className={cn(
+            "text-[22px] font-semibold leading-none tracking-[-0.025em] tabular-nums sm:mt-0.5",
+            bad && "text-red-500 dark:text-red-400"
+          )}
+        >
           {today}
-        </span>
+        </div>
         <DeltaBadge
           pct={delta.pct}
           direction={delta.direction}
           goodDirection={goodDirection}
         />
       </div>
-      <Sparkline
-        values={values}
-        width={160}
-        height={24}
-        stroke={NEUTRAL_LINE}
-        strokeWidth={1.25}
-        className="mt-1.5 w-full text-foreground/60"
-      />
+
+      <div className="hidden min-w-0 sm:-mx-3 sm:mt-2 sm:block sm:h-[26px] lg:mx-0 lg:mt-0 lg:-mr-3.5 lg:-my-2 lg:flex-1 lg:self-stretch">
+        <Sparkline
+          values={values}
+          width={200}
+          height={80}
+          stroke={t.color}
+          fill={t.color}
+          strokeWidth={1.8}
+          showDot={false}
+          className="h-full w-full"
+        />
+      </div>
     </div>
   );
 }

@@ -24,6 +24,11 @@ export type EntityAvatarProps = {
   lines?: boolean;
   /** Corner radius in px. Defaults to ~20% of `size` (lightly rounded square). */
   rounded?: number;
+  /**
+   * "solid" (default): white text/icon on a fully-colored tile.
+   * "soft": colored text/icon on a soft, lightly-bordered tint of `color`.
+   */
+  variant?: "solid" | "soft";
   className?: string;
 };
 
@@ -41,22 +46,31 @@ export function EntityAvatar({
   alt,
   lines = true,
   rounded,
+  variant = "solid",
   className,
 }: EntityAvatarProps) {
   const radius = rounded ?? Math.round(size * 0.2);
+  const soft = variant === "soft";
 
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden text-white",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden",
+        soft ? "border" : "text-white",
         className
       )}
       style={{
         width: size,
         height: size,
         borderRadius: radius,
-        backgroundColor: color,
-        backgroundImage: lines ? LINE_TEXTURE : undefined,
+        color: soft ? color : undefined,
+        backgroundColor: soft
+          ? `color-mix(in srgb, ${color} 12%, transparent)`
+          : color,
+        borderColor: soft
+          ? `color-mix(in srgb, ${color} 24%, transparent)`
+          : undefined,
+        backgroundImage: lines && !soft ? LINE_TEXTURE : undefined,
       }}
     >
       {src ? (

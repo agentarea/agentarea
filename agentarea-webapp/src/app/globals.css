@@ -202,6 +202,12 @@
       #f1f1f4 9px,
       #f1f1f4 10px
     );
+
+    /* board: dashed line-grid + technical registration markers */
+    --board-line: #e4e4e7;
+    --board-crop: #bcbfc5;
+    /* violet accent — spend hero chart + budget bar */
+    --violet: #5e6ad2;
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -302,6 +308,12 @@
       #212126 9px,
       #212126 10px
     );
+
+    /* board: dashed line-grid + technical registration markers (dark) */
+    --board-line: #26282c;
+    --board-crop: #4c4f56;
+    /* violet accent — spend hero chart + budget bar (dark) */
+    --violet: #8b93ff;
   }
 }
 
