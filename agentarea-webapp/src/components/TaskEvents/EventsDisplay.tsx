@@ -29,16 +29,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DisplayEvent,
   EVENT_TYPE_CONFIG,
-  EventFilters,
   EventLevel,
   EventStats,
   getEventLevelColor,
@@ -57,13 +49,7 @@ interface EventsDisplayProps {
   maxHeight?: string;
 }
 
-const EventIcon = ({
-  type,
-  level,
-}: {
-  type: WorkflowEventType;
-  level: EventLevel;
-}) => {
+const EventIcon = ({ type }: { type: WorkflowEventType }) => {
   const iconName = EVENT_TYPE_CONFIG[type]?.icon || "info";
 
   const iconMap = {
@@ -169,7 +155,6 @@ export function EventsDisplay({
   showStats = true,
   maxHeight = "600px",
 }: EventsDisplayProps) {
-  const [filters, setFilters] = useState<EventFilters>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLevels, setSelectedLevels] = useState<EventLevel[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<WorkflowEventType[]>([]);
@@ -369,7 +354,7 @@ export function EventsDisplay({
                     className={`flex items-start gap-3 rounded-lg border p-3 ${getEventLevelColor(event.level)}`}
                   >
                     <div className="mt-0.5 flex-shrink-0">
-                      <EventIcon type={event.type} level={event.level} />
+                      <EventIcon type={event.type} />
                     </div>
 
                     <div className="min-w-0 flex-1">

@@ -11,11 +11,13 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,7 +40,19 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "skills"
-    __table_args__ = (UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),
+        # Provenance uniqueness is per-workspace: a built-in catalog item is forked
+        # copy-on-write into each workspace, so the same registry_item_id may recur
+        # across workspaces but never within one (operator dedup target).
+        Index(
+            "uq_skills_registry_item",
+            "workspace_id",
+            "registry_item_id",
+            unique=True,
+            postgresql_where=text("registry_item_id IS NOT NULL"),
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Immutable, workspace-scoped human-readable identifier (derived from name at creation).

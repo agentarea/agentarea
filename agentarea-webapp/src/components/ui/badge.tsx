@@ -41,10 +41,16 @@ const badgeVariants = cva(
         default: "text-xs px-2.5 py-0.5",
         sm: "text-[10px] px-1.5 py-0.5",
       },
+      // Opt-in hover/cursor affordance for clickable badges (links, filters…).
+      interactive: {
+        true: "cursor-pointer hover:border-accent/30 hover:bg-accent/10 hover:text-accent dark:hover:bg-accent/15",
+        false: "",
+      },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
+      interactive: false,
     },
   }
 );
@@ -55,10 +61,16 @@ export interface BadgeProps
   size?: "default" | "sm";
 }
 
-function Badge({ className, variant, size = "default", ...props }: BadgeProps) {
+function Badge({
+  className,
+  variant,
+  size = "default",
+  interactive,
+  ...props
+}: BadgeProps) {
   return (
     <div
-      className={cn(badgeVariants({ variant, size }), className)}
+      className={cn(badgeVariants({ variant, size, interactive }), className)}
       {...props}
     />
   );

@@ -62,7 +62,7 @@ export function SpendCard({
           <div>{fmt(spend.today_usd)} today</div>
           {hasCap && (
             <div className={cn("font-medium", pctTone(pct))}>
-              {pct.toFixed(1)}% of {fmt(spend.cap_usd!)}
+              {pct.toFixed(1)}% of {fmt(spend.cap_usd ?? 0)}
             </div>
           )}
         </div>

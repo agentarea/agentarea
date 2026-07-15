@@ -43,6 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { cn } from "@/lib/utils";
+import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { useToast } from "@/hooks/use-toast";
 import {
   listMCPServerInstancesAction as listMCPServerInstances,
@@ -50,7 +51,9 @@ import {
 } from "@/lib/server-actions";
 import {
   createTriggerAction,
+  listTriggerCatalogAction,
   updateTriggerAction,
+  type TriggerCatalogEntry,
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
@@ -61,27 +64,22 @@ import {
   type TaskParameterRef,
 } from "../components/taskParameters";
 
-interface CatalogEntry {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  kind: "messaging" | "event" | "schedule";
-  backend_type: "cron" | "webhook";
-  webhook_type?: string;
-  default_methods?: string[];
-  default_cron?: string;
-  data_extractor?: string;
-  credential_fields?: { key: string; label: string; placeholder: string }[];
-  events?: string[];
-}
+type TriggerInitialData = TriggerResponse & {
+  config?: {
+    webhook_type?: string;
+    allowed_methods?: string[];
+    cron_expression?: string;
+    timezone?: string;
+  };
+};
 
 interface CreateTriggerFormProps {
-  agents: any[];
-  initialData?: any;
+  agents: AgentResponse[];
+  initialData?: TriggerInitialData;
 }
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+const KIND_ORDER: TriggerCatalogEntry["kind"][] = ["schedule", "messaging", "event"];
 
 type SelectableResource = TaskParameterRef;
 
@@ -101,7 +99,7 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-function resolveInitialId(catalog: CatalogEntry[], initialData?: any): string {
+function resolveInitialId(catalog: TriggerCatalogEntry[], initialData?: TriggerInitialData): string {
   if (!initialData) return "";
   if (initialData.trigger_type === "cron") return "cron";
   const wt = initialData.config?.webhook_type;
@@ -125,7 +123,7 @@ export function CreateTriggerForm({
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [catalog, setCatalog] = useState<TriggerCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("");
@@ -159,19 +157,20 @@ export function CreateTriggerForm({
 
   // Fetch catalog from backend
   useEffect(() => {
-    fetch("/api/proxy/v1/triggers/catalog")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: CatalogEntry[]) => {
+    listTriggerCatalogAction()
+      .then((data) => {
         setCatalog(data);
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
         } else {
-          const firstKind = kindOrder.find((k) => data.some((e) => e.kind === k));
+          const firstKind = KIND_ORDER.find((k) => data.some((e) => e.kind === k));
           if (firstKind) setActiveTab(firstKind);
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch((e) => {
+        console.error("Failed to load trigger catalog:", e);
+      });
+  }, [initialData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,15 +183,22 @@ export function CreateTriggerForm({
 
       if (cancelled) return;
 
+      const skillsData = Array.isArray(skillsResponse.data)
+        ? skillsResponse.data
+        : [];
+      const mcpsData = Array.isArray(mcpsResponse.data)
+        ? mcpsResponse.data
+        : [];
+
       setAvailableSkills(
-        (((skillsResponse as any).data as any[]) || []).map((skill) => ({
+        skillsData.map((skill) => ({
           id: skill.id,
           name: skill.name,
           description: skill.description,
         }))
       );
       setAvailableMcps(
-        (((mcpsResponse as any).data as any[]) || []).map((mcp) => ({
+        mcpsData.map((mcp) => ({
           id: mcp.id,
           name: mcp.name,
           description: mcp.description,
@@ -217,7 +223,7 @@ export function CreateTriggerForm({
       setSelectedMethods(selected.default_methods ?? ["POST"]);
       setSelectedEvents([]);
     }
-  }, [selectedId]);
+  }, [isEditing, selected]);
 
   const availableEvents = selected?.events ?? [];
   const credentialFields = selected?.credential_fields ?? [];
@@ -347,9 +353,8 @@ export function CreateTriggerForm({
     email: Mail,
     webhook: Webhook,
   };
-  const kindOrder: CatalogEntry["kind"][] = ["schedule", "messaging", "event"];
   const kinds = new Set(catalog.map((e) => e.kind));
-  const orderedKinds = kindOrder.filter((k) => kinds.has(k));
+  const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
 
   useEffect(() => {
     if (!activeTab || isEditing) return;
@@ -359,7 +364,7 @@ export function CreateTriggerForm({
     }
   }, [activeTab, catalog, isEditing]);
 
-  const renderCard = (entry: CatalogEntry) => {
+  const renderCard = (entry: TriggerCatalogEntry) => {
     const Icon = triggerIcons[entry.icon] ?? triggerIcons[entry.id] ?? Circle;
     const isSelected = selectedId === entry.id;
     return (

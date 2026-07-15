@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
@@ -9,6 +8,7 @@ from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
@@ -60,8 +60,8 @@ class ModelInstanceResponse(BaseModel):
     description: str | None
     is_active: bool
     is_public: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related data
     provider_name: str | None = None
@@ -241,6 +241,9 @@ async def validate_model_instance(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Test a model instance configuration before creating it."""
+    provider_type: str | None = None
+    model_name: str | None = None
+
     try:
         # Get provider config and model spec
         provider_config = await provider_service.get_provider_config(data.provider_config_id)
@@ -253,6 +256,8 @@ async def validate_model_instance(
 
         # Extract configuration details
         provider_type = provider_config.provider_spec.provider_type
+        if not provider_type:
+            raise HTTPException(status_code=400, detail="Provider type is not configured")
         model_name = model_spec.model_name
         endpoint_url = getattr(model_spec, "endpoint_url", None)
 
@@ -307,6 +312,11 @@ async def validate_model_instance(
             tokens_used=tokens_used,
         )
 
+    except HTTPException:
+        # Missing provider config / model spec raise HTTPException(404) inside
+        # this try; let them surface as real HTTP errors instead of being
+        # downgraded to a 200 {success: false} by the broad handler below.
+        raise
     except Exception as e:
         error_message = str(e)
         error_type = type(e).__name__
@@ -338,6 +348,6 @@ async def validate_model_instance(
             success=False,
             message=message,
             error_type=error_type,
-            provider_type=provider_type if "provider_type" in locals() else None,
-            model_name=model_name if "model_name" in locals() else None,
+            provider_type=provider_type,
+            model_name=model_name,
         )

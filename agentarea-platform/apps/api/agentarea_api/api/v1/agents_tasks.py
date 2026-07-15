@@ -15,7 +15,6 @@ from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     get_agent_service,
-    get_event_stream_service,
     get_model_instance_service,
     get_read_agent_service,
     get_read_task_service,
@@ -23,9 +22,10 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.events.event_stream_service import EventStreamService
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -112,7 +112,7 @@ class TaskResponse(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
 
@@ -148,7 +148,7 @@ class TaskWithAgent(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
     # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
@@ -282,7 +282,7 @@ class TaskEvent(BaseModel):
     task_id: str
     agent_id: str
     execution_id: str
-    timestamp: datetime
+    timestamp: UtcDatetime
     event_type: str
     message: str
     metadata: dict[str, Any] = {}
@@ -324,24 +324,16 @@ async def _tail_task_events_sse(
     *,
     emit_connected: bool = True,
 ) -> AsyncGenerator[str, None]:
-    """Stream a task's events as SSE by tailing the ``task_events`` table.
+    """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
-    The DB is the single source of truth: the workflow's publish activity
-    inserts events there, so this works for both live tasks (events arrive as
-    they happen) and tasks that already finished (full history is replayed).
-
-    This deliberately tails the DB instead of subscribing to Redis pub/sub: a
-    subscriber attaches only *after* the task starts, so for a fast task the
-    workflow events are published before the subscription exists and are lost
-    (pub/sub does not replay). Tailing the durable event log has no such race.
+    This is a CQRS read side (ADR-0018), not a poll of the write model. The
+    full history is replayed from the durable ``task_events`` table (catch-up),
+    then new events are tailed live from the per-task Redis stream the worker
+    XADDs to. Dedup by event id makes the catch-up->live hand-off race-free, so
+    a fast task whose events land before the reader attaches loses nothing
+    (the old reason this used DB polling) — without the 0.25s poll.
     """
-    import asyncio
-
-    from agentarea_api.api.deps.database import get_db_session
-    from sqlalchemy import text
-
-    poll_interval_seconds = 0.25
-    max_wall_time_seconds = 30 * 60
+    from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
     if emit_connected:
         yield _format_sse_event(
@@ -355,43 +347,21 @@ async def _tail_task_events_sse(
             },
         )
 
-    seen_event_ids: set[str] = set()
-    terminal_seen = False
-    deadline = asyncio.get_event_loop().time() + max_wall_time_seconds
-
-    while not terminal_seen and asyncio.get_event_loop().time() < deadline:
-        async with get_db_session() as session:
-            rows = (
-                await session.execute(
-                    text(
-                        "SELECT id, event_type, timestamp, data "
-                        "FROM task_events "
-                        "WHERE task_id = :task_id "
-                        "ORDER BY timestamp ASC"
-                    ),
-                    {"task_id": str(task_id)},
-                )
-            ).fetchall()
-
-        new_rows = [r for r in rows if str(r.id) not in seen_event_ids]
-        for row in new_rows:
-            event_id = str(row.id)
-            seen_event_ids.add(event_id)
-            event_type = row.event_type
-            row_data = dict(row.data or {})
-            sse_event = {
-                "event_type": event_type,
-                "event_id": event_id,
-                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                "data": _filter_domain_fields(row_data),
-            }
-            yield _format_sse_event(event_type, sse_event)
-            if event_type in _TERMINAL_EVENT_TYPES:
-                terminal_seen = True
-                break
-
-        if not terminal_seen:
-            await asyncio.sleep(poll_interval_seconds)
+    # Exclude high-volume incremental chunks: this SSE historically carried only
+    # DB-persisted events (chunks are stream-only). Flip this to surface live
+    # tokens in the UI as a deliberate, separately-verified change.
+    async for env in open_task_event_feed(
+        task_id,
+        terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
+        exclude_types=frozenset({"LLMCallChunk"}),
+    ):
+        sse_event = {
+            "event_type": env.event_type,
+            "event_id": env.event_id,
+            "timestamp": env.timestamp,
+            "data": _filter_domain_fields(dict(env.data)),
+        }
+        yield _format_sse_event(env.event_type, sse_event)
 
 
 @router.post("/")
@@ -401,7 +371,6 @@ async def create_task_for_agent_with_stream(
     user_context: UserContextDep,
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Create and execute a task for the specified agent with real-time SSE stream."""
     # Verify agent exists. Built-in agents live in the registry catalog (ADR-003)
@@ -489,6 +458,16 @@ async def create_task_for_agent_with_stream(
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
+        except AgentModelNotConfiguredError as e:
+            yield _format_sse_event(
+                "error",
+                {
+                    "agent_id": str(agent_id),
+                    "error": str(e),
+                    "error_type": "model_not_configured",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
         except ValueError:
             # Agent validation errors
             yield _format_sse_event(
@@ -565,6 +544,8 @@ async def create_task_for_agent_sync(
         return task_response
 
     except PolicyValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except AgentModelNotConfiguredError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
         # Agent validation errors
@@ -715,12 +696,18 @@ async def get_agent_task_status(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        task = await task_service.get_task(task_id)
+        # DB is the source of truth for the task lifecycle; Temporal only
+        # upgrades to a terminal state. The workflow may stay alive in
+        # await_follow_up after writing "completed" to the DB, so reading the
+        # raw live workflow status here would report "running" for a finished
+        # task. get_task_with_workflow_status applies the same enrichment the
+        # plain task get uses, keeping the two endpoints consistent.
+        task = await task_service.get_task_with_workflow_status(task_id)
         if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Get workflow status using the execution ID pattern
-        execution_id = f"task-{task_id}"
+        # Get workflow status for live execution detail (timing, session, etc.)
+        execution_id = task.execution_id or f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
         stored_artifacts = await _list_task_artifact_items(
             agent_id=agent_id,
@@ -735,12 +722,13 @@ async def get_agent_task_status(
             "task_id": str(task_id),
             "agent_id": str(agent_id),
             "execution_id": execution_id,
-            "status": status.get("status", "unknown"),
+            # Authoritative lifecycle status/result come from the persisted task.
+            "status": task.status,
             "start_time": status.get("start_time"),
             "end_time": status.get("end_time"),
             "execution_time": status.get("execution_time"),
             "error": status.get("error"),
-            "result": status.get("result"),
+            "result": task.result if task.result is not None else status.get("result"),
             # A2A-compatible fields for frontend
             "message": status.get("message"),
             "artifacts": status_artifacts,
@@ -864,8 +852,8 @@ class TaskSummary(BaseModel):
     agent_id: UUID
     workspace_id: str
     status: str
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
+    started_at: UtcDatetime | None = None
+    ended_at: UtcDatetime | None = None
     duration_ms: float | None = None
     iterations: int = 0
     llm_calls: int = 0
@@ -1238,14 +1226,14 @@ async def send_task_command(
                     status_code=400, detail="model_instance_id is required for change_model"
                 )
             resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "change_model", resolved
             )
 
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "queue_message", {"message": payload.message}
             )
 
@@ -1254,17 +1242,28 @@ async def send_task_command(
                 raise HTTPException(
                     status_code=400, detail="message_id is required for remove_message"
                 )
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "remove_message", {"message_id": payload.message_id}
             )
 
         elif payload.command == "update_budget":
-            await workflow_task_service.send_workflow_command(
+            delivered = await workflow_task_service.send_workflow_command(
                 execution_id, "update_budget", {"budget_usd": payload.budget_usd}
             )
 
         else:
             raise HTTPException(status_code=400, detail=f"Unknown command: {payload.command}")
+
+        # send_workflow_command returns False when the signal could not be
+        # delivered — most commonly because the task's workflow is no longer
+        # running (completed / timed out / terminated). Surface that as a real
+        # error instead of a misleading 200, so the UI doesn't claim a change
+        # (e.g. a model switch) that never actually happened.
+        if not delivered:
+            raise HTTPException(
+                status_code=409,
+                detail="Task is not running; the command could not be delivered to its workflow.",
+            )
 
         return {"status": "accepted", "command": payload.command}
 
@@ -1417,7 +1416,6 @@ async def stream_task_events(
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
     # Verify agent exists

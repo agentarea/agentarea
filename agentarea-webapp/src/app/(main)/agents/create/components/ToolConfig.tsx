@@ -1,14 +1,16 @@
+import type { McpServerResponse } from "@/api/client/types.gen";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ArrowRight, Globe, Wrench } from "lucide-react";
 import {
+  Control,
   FieldErrors,
   UseFieldArrayAppend,
   UseFieldArrayReturn,
+  UseFormSetValue,
 } from "react-hook-form";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Accordion } from "@/components/ui/accordion";
@@ -21,27 +23,36 @@ import {
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
 import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
-import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 import {
   McpAvailableTool,
   McpInstance,
   resolveMcpRef,
 } from "@/lib/mcp/resolveMcpRef";
-import type { OpenAPIConnection } from "@/app/(main)/mcp-servers/types";
-import type { AgentFormValues } from "../types";
+import type { OpenAPIConnection } from "@/app/(main)/connections/types";
+import type { AgentFormValues, MCPToolConfig } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
 import { MethodsList } from "./MethodsList";
-import { SelectableList } from "./SelectableList";
+import type { Method } from "./MethodsList";
+import { SelectableList } from "@/components/SelectableList";
 import { TriggerControl } from "./TriggerControl";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
+type MCPServer = McpServerResponse;
+
+interface BuiltinTool {
+  name: string;
+  display_name?: string;
+  category?: string;
+  description?: string;
+  available_methods?: Method[];
+}
 
 type ToolConfigProps = {
-  control: any;
-  setValue: any;
+  control: Control<AgentFormValues>;
+  setValue: UseFormSetValue<AgentFormValues>;
   errors: FieldErrors<AgentFormValues>;
   toolFields: UseFieldArrayReturn<
     AgentFormValues,
@@ -54,8 +65,8 @@ type ToolConfigProps = {
     "tools_config.mcp_server_configs"
   >;
   mcpServers: MCPServer[];
-  mcpInstanceList: any[];
-  builtinTools: any[];
+  mcpInstanceList: McpInstance[];
+  builtinTools: unknown[];
   builtinToolFields?: UseFieldArrayReturn<
     AgentFormValues,
     "tools_config.builtin_tools",
@@ -87,7 +98,7 @@ const ToolConfig = ({
   appendTool,
   mcpServers,
   mcpInstanceList,
-  builtinTools,
+  builtinTools: builtinToolsInput,
   builtinToolFields,
   removeBuiltinTool,
   appendBuiltinTool,
@@ -95,6 +106,7 @@ const ToolConfig = ({
   removeOpenapiTool,
   appendOpenapiTool,
 }: ToolConfigProps) => {
+  const builtinTools = builtinToolsInput as BuiltinTool[];
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId] = useState<string | null>(null);
@@ -127,7 +139,7 @@ const ToolConfig = ({
   } | null>(null);
 
   // Keep a local copy of active instances so the list updates immediately after creation
-  const [activeInstances, setActiveInstances] = useState<any[]>(
+  const [activeInstances, setActiveInstances] = useState<McpInstance[]>(
     mcpInstanceList || []
   );
   useEffect(() => {
@@ -143,7 +155,7 @@ const ToolConfig = ({
     setLoadingOpenapiConnections(true);
     listOpenAPIConnections()
       .then(({ data }) => {
-        const items = (data as any)?.items || data || [];
+        const items = (data || []) as OpenAPIConnection[];
         setOpenapiConnections(Array.isArray(items) ? items : []);
       })
       .catch((err) => {
@@ -162,7 +174,7 @@ const ToolConfig = ({
       (acc, tool) => {
         if (tool.available_methods) {
           acc[tool.name] = tool.available_methods.reduce(
-            (methods: Record<string, boolean>, method: any) => {
+            (methods: Record<string, boolean>, method: Method) => {
               methods[method.name] = true;
               return methods;
             },
@@ -189,9 +201,9 @@ const ToolConfig = ({
 
     if (currentState && tool?.available_methods) {
       const disabledMethods = tool.available_methods
-        .filter((method: any) => currentState[method.name] === false)
+        .filter((method: Method) => currentState[method.name] === false)
         .reduce(
-          (acc: Record<string, boolean>, method: any) => {
+          (acc: Record<string, boolean>, method: Method) => {
             acc[method.name] = false;
             return acc;
           },
@@ -207,7 +219,7 @@ const ToolConfig = ({
       // Initialize selectedMethods for this tool if not already set
       if (tool?.available_methods && !currentState) {
         const initialMethods = tool.available_methods.reduce(
-          (acc: Record<string, boolean>, method: any) => {
+          (acc: Record<string, boolean>, method: Method) => {
             acc[method.name] = true;
             return acc;
           },
@@ -291,7 +303,7 @@ const ToolConfig = ({
     const allToolNames = (connection?.available_tools || []).map((t) => t.name);
 
     // Empty allowed_tools means "all enabled" — initialize on first toggle
-    let current: string[] = (field as any).allowed_tools || [];
+    let current: string[] = field.allowed_tools || [];
     if (current.length === 0 && allToolNames.length > 0) {
       current = [...allToolNames];
     }
@@ -357,7 +369,7 @@ const ToolConfig = ({
       disabled_methods: field.disabled_methods || {},
     })) || [];
 
-  // Resolve a connection icon the same way the /mcp-servers page does: the icon
+  // Resolve a connection icon the same way the /connections page does: the icon
   // usually lives on the server spec, so pair the instance with its spec.
   const instanceIconSrc = (instance: McpInstance): string | undefined => {
     const serverSpec = instance.server_spec_id
@@ -415,14 +427,20 @@ const ToolConfig = ({
   const McpMark = ({ src }: { src?: string }) => (
     <span className="relative grid h-4 w-4 shrink-0 place-items-center overflow-hidden">
       {src ? (
-        <img src={src} alt="" className="h-4 w-4 object-contain" />
+        <Image
+          src={src}
+          alt=""
+          width={16}
+          height={16}
+          className="h-4 w-4 object-contain"
+        />
       ) : (
         <Wrench className="h-4 w-4 text-muted-foreground" />
       )}
     </span>
   );
 
-  const handleAddTools = (servers: MCPServer[]) => {
+  const handleAddTools = (servers: McpInstance[]) => {
     if (!servers?.length) return;
 
     const configs = servers.map((server) => ({
@@ -449,7 +467,7 @@ const ToolConfig = ({
       tMcp("defaults.description", { serverName: server.name })
     );
     const initialEnv: Record<string, string> = {};
-    (server.env_schema || []).forEach((envVar: any) => {
+    (server.env_schema || []).forEach((envVar) => {
       const name = (envVar && (envVar.name as string)) || "";
       if (!name) return;
       const defVal = (envVar.default as string | undefined) || "";
@@ -471,8 +489,7 @@ const ToolConfig = ({
         return;
       }
       const serverSpec =
-        mcpServers.find((s) => s.id === (instance as any).server_spec_id) ||
-        null;
+        mcpServers.find((s) => s.id === instance.server_spec_id) || null;
       if (!serverSpec) {
         toast.error("Server specification not found");
         return;
@@ -480,11 +497,10 @@ const ToolConfig = ({
       setSelectedServer(serverSpec);
       setIsEditingInstance(true);
       setEditingInstanceId(instanceId);
-      setInstanceName((instance as any).name || "");
-      setInstanceDescription((instance as any).description || "");
+      setInstanceName(instance.name || "");
+      setInstanceDescription(instance.description || "");
       const env =
-        ((instance as any).json_spec?.environment as Record<string, string>) ||
-        {};
+        (instance.json_spec?.environment as Record<string, string>) || {};
       setEnvVars(env);
       setValidationResult(null);
       setConfigureServerSheetOpen(true);
@@ -596,7 +612,7 @@ const ToolConfig = ({
                         showSelectAll={true}
                         onSelectAll={(checked) => {
                           if (tool.available_methods) {
-                            tool.available_methods.forEach((method: any) => {
+                            tool.available_methods.forEach((method: Method) => {
                               handleMethodToggle(
                                 tool.name,
                                 method.name,
@@ -651,7 +667,7 @@ const ToolConfig = ({
                               const field = (openapiFields || []).find(
                                 (f) => f.openapi_connection_id === connection.id
                               );
-                              const allowedTools: string[] = (field as any)?.allowed_tools || [];
+                              const allowedTools: string[] = field?.allowed_tools || [];
                               const isEnabled =
                                 allowedTools.length === 0 ||
                                 allowedTools.includes(tool.name);
@@ -736,7 +752,7 @@ const ToolConfig = ({
                               Available Tools:
                             </p>
                             <div className="space-y-1">
-                              {getInstanceTools(instance).map((tool: any) => (
+                              {getInstanceTools(instance).map((tool) => (
                                 <div
                                   key={tool.name}
                                   className="flex items-center gap-2 rounded bg-muted/30 p-1"
@@ -839,7 +855,7 @@ const ToolConfig = ({
                       trigger={{
                         id: builtinTool.name,
                         name: displayName,
-                        description: description,
+                        description,
                         icon: IconComponent,
                         available_methods: builtinTool.available_methods,
                       }}
@@ -894,20 +910,20 @@ const ToolConfig = ({
                     onToolStateChange={(toolName, state) => {
                       const trigger = resolveInstanceTrigger(item.mcp_server_id);
                       const allTools = trigger?.available_tools || [];
-                      let currentAllowed: any[] = (item as any).allowed_tools || [];
+                      let currentAllowed: MCPToolConfig[] = item.allowed_tools || [];
 
                       // Empty means "all enabled" — initialize with all tools on first toggle
                       if (currentAllowed.length === 0 && allTools.length > 0) {
-                        currentAllowed = allTools.map((t: any) => ({ tool_name: t.name }));
+                        currentAllowed = allTools.map((t) => ({ tool_name: t.name }));
                       }
 
-                      let newAllowed: any[];
+                      let newAllowed: MCPToolConfig[];
                       if (state === "disabled") {
-                        newAllowed = currentAllowed.filter((t: any) => t.tool_name !== toolName);
+                        newAllowed = currentAllowed.filter((t) => t.tool_name !== toolName);
                       } else {
-                        const existing = currentAllowed.find((t: any) => t.tool_name === toolName);
+                        const existing = currentAllowed.find((t) => t.tool_name === toolName);
                         if (existing) {
-                          newAllowed = currentAllowed.map((t: any) =>
+                          newAllowed = currentAllowed.map((t) =>
                             t.tool_name === toolName
                               ? { ...t, requires_user_confirmation: state === "approval_required" }
                               : t
@@ -940,21 +956,17 @@ const ToolConfig = ({
                     (c) => c.id === item.openapi_connection_id
                   );
                   const displayName =
-                    (item as any).openapi_connection_name ||
+                    item.openapi_connection_name ||
                     connection?.name ||
                     item.openapi_connection_id;
-                  const allowedTools: string[] = (item as any).allowed_tools || [];
+                  const allowedTools: string[] = item.allowed_tools || [];
                   const allTools = connection?.available_tools || [];
                   const activeCount =
                     allowedTools.length === 0
                       ? allTools.length
                       : allowedTools.length;
 
-                  const currentLoadMode =
-                    ((item as any).load_mode as
-                      | "explicit"
-                      | "searchable"
-                      | undefined) ?? "explicit";
+                  const currentLoadMode = item.load_mode ?? "explicit";
 
                   return (
                     <div
@@ -1120,7 +1132,11 @@ const ToolConfig = ({
                   if (check.error) {
                     toast.error("Failed to validate configuration");
                   } else {
-                    const validationData = check.data as any;
+                    const validationData = check.data as {
+                      valid: boolean;
+                      errors: string[];
+                      warnings: string[];
+                    } | null;
                     setValidationResult(validationData);
                     if (validationData?.valid)
                       toast.success("Configuration is valid!");
@@ -1161,24 +1177,26 @@ const ToolConfig = ({
                           );
                         toast.success(`Successfully created ${instanceName}`);
                         if (res.data?.id) {
+                          const created = res.data;
                           setActiveInstances((prev) => {
                             const exists = prev.some(
-                              (i) => i.id === res.data!.id
+                              (i) => i.id === created.id
                             );
-                            return exists ? prev : [res.data!, ...prev];
+                            return exists ? prev : [created, ...prev];
                           });
                           appendTool([
                             {
-                              mcp_server_id: res.data.id,
+                              mcp_server_id: created.id,
                               allowed_tools: [],
-                            } as any,
+                            },
                           ]);
                         }
                         setConfigureServerSheetOpen(false);
-                      } catch (err: any) {
+                      } catch (err) {
                         console.error(err);
                         toast.error(
-                          err?.message || "Failed to create instance"
+                          (err instanceof Error ? err.message : undefined) ||
+                            "Failed to create instance"
                         );
                       } finally {
                         setIsCreating(false);
@@ -1210,20 +1228,25 @@ const ToolConfig = ({
                         port: 8000,
                         environment: envVars,
                       },
-                    } as any;
+                    };
                     const { error } = await updateMCPServerInstance(
                       editingInstanceId,
                       payload
                     );
-                    if (error)
+                    if (error) {
+                      const detail =
+                        error && typeof error === "object" && "detail" in error
+                          ? (error as { detail?: unknown }).detail
+                          : undefined;
                       throw new Error(
-                        typeof (error as any).detail === "string"
-                          ? (error as any).detail
+                        typeof detail === "string"
+                          ? detail
                           : "Failed to update instance"
                       );
+                    }
                     toast.success(`Successfully updated ${instanceName}`);
                     setActiveInstances((prev) =>
-                      prev.map((i: any) =>
+                      prev.map((i) =>
                         i.id === editingInstanceId
                           ? {
                               ...i,
@@ -1253,25 +1276,26 @@ const ToolConfig = ({
                       );
                     toast.success(`Successfully created ${instanceName}`);
                     if (res.data?.id) {
+                      const created = res.data;
                       setActiveInstances((prev) => {
-                        const exists = prev.some((i) => i.id === res.data!.id);
-                        return exists ? prev : [res.data!, ...prev];
+                        const exists = prev.some((i) => i.id === created.id);
+                        return exists ? prev : [created, ...prev];
                       });
                       appendTool([
                         {
-                          mcp_server_id: res.data.id,
+                          mcp_server_id: created.id,
                           allowed_tools: [],
-                        } as any,
+                        },
                       ]);
                     }
                   }
                   setConfigureServerSheetOpen(false);
                   setIsEditingInstance(false);
                   setEditingInstanceId(null);
-                } catch (err: any) {
+                } catch (err) {
                   console.error(err);
                   toast.error(
-                    err?.message ||
+                    (err instanceof Error ? err.message : undefined) ||
                       (isEditingInstance
                         ? "Failed to update instance"
                         : "Failed to create instance")

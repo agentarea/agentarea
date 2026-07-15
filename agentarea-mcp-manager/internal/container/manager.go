@@ -71,6 +71,47 @@ func (m *Manager) SetSecretResolver(resolver SecretResolverInterface) {
 	m.secretResolver = resolver
 }
 
+// ResolveSecretEnvVars resolves the secret env vars named in json_spec["env_vars"]
+// from the encrypted_secrets table. These are secret values stripped out of
+// json_spec.environment at create time (only the names travel in the spec); the
+// values are decrypted here from the DB and never sent over the wire.
+//
+// Returns an empty map when no resolver is configured or no secret names are
+// present. This is the single source of secret resolution shared by the HTTP
+// create path (which owns provisioning) and the DB-sync reconcile loop.
+func (m *Manager) ResolveSecretEnvVars(instanceID string, jsonSpec map[string]interface{}) map[string]string {
+	resolved := make(map[string]string)
+	if m.secretResolver == nil || jsonSpec == nil {
+		return resolved
+	}
+	envVarsRaw, ok := jsonSpec["env_vars"].([]interface{})
+	if !ok || len(envVarsRaw) == 0 {
+		return resolved
+	}
+	envVarNames := make([]string, 0, len(envVarsRaw))
+	for _, v := range envVarsRaw {
+		if name, ok := v.(string); ok {
+			envVarNames = append(envVarNames, name)
+		}
+	}
+	if len(envVarNames) == 0 {
+		return resolved
+	}
+	secretEnvVars, err := m.secretResolver.ResolveInstanceEnvVars(instanceID, envVarNames)
+	if err != nil {
+		m.logger.Error("Failed to resolve secret env vars",
+			slog.String("instance_id", instanceID),
+			slog.String("error", err.Error()))
+		return resolved
+	}
+	if len(secretEnvVars) > 0 {
+		m.logger.Info("Resolved secret env vars from encrypted_secrets",
+			slog.String("instance_id", instanceID),
+			slog.Int("count", len(secretEnvVars)))
+	}
+	return secretEnvVars
+}
+
 // Initialize initializes the container manager
 func (m *Manager) Initialize(ctx context.Context) error {
 	m.logger.Info("Initializing container manager")
@@ -1385,28 +1426,10 @@ func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 			continue
 		}
 
-		// Resolve secret env vars from encrypted_secrets table
-		if m.secretResolver != nil {
-			if envVarsRaw, ok := instance.JSONSpec["env_vars"].([]interface{}); ok && len(envVarsRaw) > 0 {
-				envVarNames := make([]string, 0, len(envVarsRaw))
-				for _, v := range envVarsRaw {
-					if name, ok := v.(string); ok {
-						envVarNames = append(envVarNames, name)
-					}
-				}
-				if len(envVarNames) > 0 {
-					secretEnvVars, err := m.secretResolver.ResolveInstanceEnvVars(instance.InstanceID, envVarNames)
-					if err != nil {
-						m.logger.Error("Failed to resolve secrets for instance",
-							slog.String("instance_id", instance.InstanceID),
-							slog.String("error", err.Error()))
-					} else {
-						for k, v := range secretEnvVars {
-							environment[k] = v
-						}
-					}
-				}
-			}
+		// Resolve secret env vars from encrypted_secrets table (shared with the
+		// HTTP create path via Manager.ResolveSecretEnvVars).
+		for k, v := range m.ResolveSecretEnvVars(instance.InstanceID, instance.JSONSpec) {
+			environment[k] = v
 		}
 
 		environment["MCP_INSTANCE_ID"] = instance.InstanceID

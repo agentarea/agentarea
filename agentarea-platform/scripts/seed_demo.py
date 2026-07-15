@@ -42,7 +42,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from agentarea_agents.domain.models import Agent
-from agentarea_common.infrastructure.database import db
+from agentarea_common.config.database import db
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_llm.domain.models import (
     ModelInstance,
     ModelSpec,
@@ -53,7 +54,6 @@ from agentarea_secrets.database_secret_manager import EncryptedSecret
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
-from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert

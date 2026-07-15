@@ -18,10 +18,6 @@ try:
     from agentarea_triggers.domain.models import (
         TriggerCreate,
     )
-    from agentarea_triggers.infrastructure.repository import (
-        TriggerExecutionRepository,
-        TriggerRepository,
-    )
     from agentarea_triggers.trigger_service import TriggerService
 
     TRIGGERS_AVAILABLE = True
@@ -29,6 +25,8 @@ except ImportError:
     TRIGGERS_AVAILABLE = False
     pytest.skip("Triggers not available", allow_module_level=True)
 
+from agentarea_common.auth.test_utils import create_test_user_context
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
 from agentarea_tasks.task_service import TaskService
 
@@ -62,28 +60,33 @@ class TestTriggerSafetyIntegration:
         return agent_repo
 
     @pytest.fixture
-    async def trigger_repositories(self, db_session):
-        """Create real trigger repositories for testing."""
-        trigger_repo = TriggerRepository(db_session)
-        execution_repo = TriggerExecutionRepository(db_session)
-        return trigger_repo, execution_repo
+    def user_context(self):
+        """Create a test user context for the repository factory."""
+        return create_test_user_context(
+            user_id="safety-test-user", workspace_id="safety-test-workspace"
+        )
+
+    @pytest.fixture
+    def repository_factory(self, db_session, user_context):
+        """Create a repository factory backed by the test db session."""
+        return RepositoryFactory(db_session, user_context)
 
     @pytest.fixture
     async def trigger_service(
-        self, trigger_repositories, mock_event_broker, mock_agent_repository, mock_task_service
+        self, repository_factory, mock_event_broker, mock_agent_repository, mock_task_service
     ):
         """Create trigger service with real repositories."""
-        trigger_repo, execution_repo = trigger_repositories
-
-        return TriggerService(
-            trigger_repository=trigger_repo,
-            trigger_execution_repository=execution_repo,
+        service = TriggerService(
+            repository_factory=repository_factory,
             event_broker=mock_event_broker,
-            agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
+        # Swap in the mock agent repository so agent-existence validation
+        # doesn't require a real Agent row in the test database.
+        service.agent_repository = mock_agent_repository
+        return service
 
     @pytest.fixture
     def sample_agent_id(self):
@@ -106,6 +109,7 @@ class TestTriggerSafetyIntegration:
             failure_threshold=3,  # Low threshold for testing
             task_parameters={"auto_disable_test": True},
             created_by="safety_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -116,7 +120,7 @@ class TestTriggerSafetyIntegration:
         assert trigger.consecutive_failures == 0
 
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Task service failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Task service failure")
 
         # Execute trigger multiple times to reach failure threshold
         execution_results = []
@@ -137,10 +141,11 @@ class TestTriggerSafetyIntegration:
         # Verify auto-disabled event was published
         mock_event_broker.publish.assert_called()
         event_call = mock_event_broker.publish.call_args
-        assert event_call.kwargs["event_type"] == "trigger.auto_disabled"
-        assert event_call.kwargs["data"]["trigger_id"] == str(trigger_id)
-        assert event_call.kwargs["data"]["consecutive_failures"] == 3
-        assert event_call.kwargs["data"]["reason"] == "consecutive_failures_threshold_exceeded"
+        published_event = event_call.args[0]
+        assert published_event.event_type == "trigger.auto_disabled"
+        assert published_event.data["trigger_id"] == str(trigger_id)
+        assert published_event.data["consecutive_failures"] == 3
+        assert published_event.data["reason"] == "consecutive_failures_threshold_exceeded"
 
     async def test_trigger_failure_count_reset_on_success(
         self, trigger_service, mock_task_service, sample_agent_id
@@ -154,13 +159,14 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=5,
             created_by="failure_reset_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
 
         # Cause some failures (but not enough to auto-disable)
-        mock_task_service.create_task_from_params.side_effect = Exception("Temporary failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Temporary failure")
 
         for i in range(3):  # 3 failures (less than threshold of 5)
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
@@ -173,10 +179,10 @@ class TestTriggerSafetyIntegration:
         assert trigger_after_failures.is_active is True  # Still active
 
         # Fix task service and execute successfully
-        mock_task_service.create_task_from_params.side_effect = None
+        mock_task_service.route_or_submit_task.side_effect = None
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        mock_task_service.create_task_from_params.return_value = mock_task
+        mock_task_service.route_or_submit_task.return_value = mock_task
 
         execution_data = {"execution_time": datetime.utcnow().isoformat()}
         success_result = await trigger_service.execute_trigger(trigger_id, execution_data)
@@ -201,13 +207,14 @@ class TestTriggerSafetyIntegration:
                 cron_expression=f"0 {9 + i} * * *",
                 failure_threshold=3,
                 created_by="independent_test",
+                workspace_id="safety-test-workspace",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
 
         # Make task service fail for first trigger only
-        def selective_failure(*args, **kwargs):
-            task_params = kwargs.get("task_parameters", {})
+        def selective_failure(task, *args, **kwargs):
+            task_params = task.task_parameters or {}
             trigger_name = task_params.get("trigger_name", "")
             if "Trigger 0" in trigger_name:
                 raise Exception("Selective failure")
@@ -216,7 +223,7 @@ class TestTriggerSafetyIntegration:
                 mock_task.id = uuid4()
                 return mock_task
 
-        mock_task_service.create_task_from_params.side_effect = selective_failure
+        mock_task_service.route_or_submit_task.side_effect = selective_failure
 
         # Execute all triggers multiple times
         for attempt in range(4):  # Exceed threshold for trigger 0
@@ -251,6 +258,7 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=5,
             created_by="safety_status_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -265,7 +273,7 @@ class TestTriggerSafetyIntegration:
         assert safety_status["should_disable"] is False
 
         # Cause some failures
-        mock_task_service.create_task_from_params.side_effect = Exception("Test failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Test failure")
 
         # 2 failures (not at risk yet)
         for i in range(2):
@@ -309,13 +317,14 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=5,
             created_by="reset_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
 
         # Cause some failures
-        mock_task_service.create_task_from_params.side_effect = Exception("Test failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Test failure")
 
         for i in range(3):
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
@@ -350,13 +359,14 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=2,  # Low threshold
             created_by="recovery_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
 
         # Cause failures to auto-disable
-        mock_task_service.create_task_from_params.side_effect = Exception("Failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Failure")
 
         for i in range(2):  # Reach threshold
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
@@ -368,10 +378,10 @@ class TestTriggerSafetyIntegration:
         assert disabled_trigger.consecutive_failures == 2
 
         # Fix the underlying issue
-        mock_task_service.create_task_from_params.side_effect = None
+        mock_task_service.route_or_submit_task.side_effect = None
         mock_task = MagicMock()
         mock_task.id = uuid4()
-        mock_task_service.create_task_from_params.return_value = mock_task
+        mock_task_service.route_or_submit_task.return_value = mock_task
 
         # Reset failure count (simulating admin intervention)
         await trigger_service.reset_trigger_failure_count(trigger_id)
@@ -399,9 +409,11 @@ class TestTriggerSafetyIntegration:
             name="Webhook Safety Test",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
+            webhook_id=str(uuid4()),
             webhook_type=WebhookType.GENERIC,
             failure_threshold=3,
             created_by="webhook_safety_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -409,7 +421,7 @@ class TestTriggerSafetyIntegration:
         webhook_id = trigger.webhook_id
 
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Webhook failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Webhook failure")
 
         # Simulate multiple webhook requests causing failures
         for i in range(3):  # Reach threshold
@@ -456,18 +468,26 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=5,
             created_by="concurrent_safety_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
 
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Concurrent failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Concurrent failure")
 
-        # Execute trigger concurrently multiple times
+        # Execute trigger concurrently multiple times. The test db_session
+        # fixture is a single shared AsyncSession (not safe for true
+        # concurrent use), so serialize the actual DB access with a lock
+        # while still exercising execute_trigger via overlapping asyncio
+        # tasks/scheduling.
+        db_lock = asyncio.Lock()
+
         async def execute_trigger():
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            return await trigger_service.execute_trigger(trigger_id, execution_data)
+            async with db_lock:
+                return await trigger_service.execute_trigger(trigger_id, execution_data)
 
         # Run 10 concurrent executions
         tasks = [execute_trigger() for _ in range(10)]
@@ -513,12 +533,13 @@ class TestTriggerSafetyIntegration:
                 cron_expression="0 9 * * *",
                 failure_threshold=threshold,
                 created_by="custom_threshold_test",
+                workspace_id="safety-test-workspace",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append((trigger, threshold))
 
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Custom threshold test")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Custom threshold test")
 
         # Execute each trigger up to its threshold
         for trigger, threshold in triggers:
@@ -543,13 +564,14 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=2,
             created_by="event_failure_test",
+            workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
 
         # Make task service and event broker fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Task failure")
+        mock_task_service.route_or_submit_task.side_effect = Exception("Task failure")
         mock_event_broker.publish.side_effect = Exception("Event broker failure")
 
         # Execute trigger to reach threshold

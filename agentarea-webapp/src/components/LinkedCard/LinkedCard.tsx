@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { HoverLink } from "@/components/ui/hover-link";
@@ -75,9 +76,11 @@ export default function LinkedCard({
           {hasIcon ? (
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-zinc-800 dark:text-zinc-200 group-hover:bg-primary/10 dark:group-hover:bg-zinc-700/80 dark:group-hover:text-zinc-50 transition-colors duration-300 border border-transparent dark:border-zinc-700/50 dark:group-hover:border-zinc-600">
               {isStringIcon ? (
-                <img
+                <Image
                   src={icon as string}
                   alt={title}
+                  width={24}
+                  height={24}
                   className={cn(
                     "h-6 w-6 rounded object-contain transition-transform group-hover:scale-110 duration-300",
                     invertIconInDark && "dark:invert"

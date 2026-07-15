@@ -18,7 +18,7 @@ export interface MentionTextareaHandle {
 }
 
 export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextareaProps>(
-  ({ value, onChange, className, placeholder, disabled, ...props }, ref) => {
+  ({ value, onChange, className, placeholder, disabled: _disabled, ...props }, ref) => {
     const contentEditableRef = useRef<HTMLDivElement>(null);
     const isUpdatingRef = useRef(false);
 
@@ -152,7 +152,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
           newRange.setEnd(savedRange.endContainer, savedRange.endOffset);
           selection.removeAllRanges();
           selection.addRange(newRange);
-        } catch (e) {
+        } catch {
           // Ignore errors
         }
       }
@@ -235,7 +235,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
         }}
         data-placeholder={placeholder}
         suppressContentEditableWarning
-        {...(props as any)}
+        {...(props as React.HTMLAttributes<HTMLDivElement>)}
       />
       <style>{`
         [contenteditable][data-placeholder]:empty:before {

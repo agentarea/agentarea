@@ -5,13 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
-from agentarea_common.exceptions.handlers import (
-    invalid_jwt_token_handler,
-    missing_workspace_context_handler,
-    workspace_access_denied_handler,
-    workspace_error_handler,
-    workspace_resource_not_found_handler,
-)
+from agentarea_common.exceptions.handlers import app_error_handler
 from agentarea_common.exceptions.utils import (
     check_workspace_access,
     ensure_workspace_resource_exists,
@@ -108,7 +102,7 @@ class TestWorkspaceErrorHandlers:
 
     @pytest.mark.asyncio
     async def test_workspace_access_denied_handler(self, mock_request):
-        """Test workspace access denied handler returns 404."""
+        """Access denied renders 404 problem+json with a generic detail."""
         error = WorkspaceAccessDenied(
             resource_type="agent",
             resource_id="agent-123",
@@ -116,44 +110,44 @@ class TestWorkspaceErrorHandlers:
             resource_workspace_id="ws-other",
         )
 
-        response = await workspace_access_denied_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == status.HTTP_404_NOT_FOUND
-
-        # Check response content
         content = response.body.decode()
-        assert "Resource not found" in content
-        assert "RESOURCE_NOT_FOUND" in content
+        # Generic, non-leaking detail + machine-readable code; no internal ids.
+        assert "not_found" in content
+        assert "does not exist or you don't have access" in content
+        assert "ws-other" not in content
 
     @pytest.mark.asyncio
     async def test_workspace_resource_not_found_handler(self, mock_request):
-        """Test workspace resource not found handler."""
+        """Resource-not-found renders 404."""
         error = WorkspaceResourceNotFound(
             resource_type="task", resource_id="task-123", workspace_id="ws-123"
         )
 
-        response = await workspace_resource_not_found_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.asyncio
     async def test_missing_workspace_context_handler(self, mock_request):
-        """Test missing workspace context handler."""
+        """Missing context renders 400."""
         error = MissingWorkspaceContext(missing_field="workspace_id")
 
-        response = await missing_workspace_context_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     @pytest.mark.asyncio
     async def test_invalid_jwt_token_handler(self, mock_request):
-        """Test invalid JWT token handler."""
+        """Invalid JWT renders 401 with a WWW-Authenticate challenge."""
         error = InvalidJWTToken(reason="Token expired", token_present=True)
 
-        response = await invalid_jwt_token_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -161,10 +155,10 @@ class TestWorkspaceErrorHandlers:
 
     @pytest.mark.asyncio
     async def test_workspace_error_handler(self, mock_request):
-        """Test generic workspace error handler."""
+        """Generic workspace error renders 500."""
         error = WorkspaceError("Generic workspace error")
 
-        response = await workspace_error_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -179,7 +173,7 @@ class TestWorkspaceErrorHandlers:
             resource_type="agent", resource_id="agent-123", workspace_id="test-workspace"
         )
 
-        response = await workspace_resource_not_found_handler(mock_request, error)
+        response = await app_error_handler(mock_request, error)
 
         assert "X-Workspace-ID" in response.headers
         assert response.headers["X-Workspace-ID"] == "test-workspace"

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,7 +16,6 @@ const ToolCallGroupMessage: React.FC<ToolCallGroupMessageProps> = ({ data }) => 
   const t = useTranslations("Chat.Messages");
   const { tools } = data;
 
-  const hasFailure = tools.some((tool) => !tool.pending && !tool.success);
   const hasPending = tools.some((tool) => tool.pending);
 
   // Collapse a finished section by default (the way coding agents fold away
@@ -102,9 +102,11 @@ const ToolCallGroupMessage: React.FC<ToolCallGroupMessageProps> = ({ data }) => 
                     )}
                   >
                     {tool.server_icon ? (
-                      <img
+                      <Image
                         src={tool.server_icon}
                         alt=""
+                        width={14}
+                        height={14}
                         className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain"
                       />
                     ) : (

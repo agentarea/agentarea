@@ -22,27 +22,33 @@ export const formatRelativeTime = (
   return formatDistanceToNow(new Date(time), { addSuffix: true });
 };
 
-export const formatTimestamp = (timestamp: string): string => {
+// Hook: returns a timestamp formatter bound to the active locale + translations.
+// Must be called from a component/hook — it uses next-intl hooks. (Replaces the
+// old `formatTimestamp()` which called hooks from a plain function, violating
+// the Rules of Hooks.)
+export const useFormatTimestamp = (): ((timestamp: string) => string) => {
   const t = useTranslations("Common");
   const locale = useLocale();
-  const date = new Date(timestamp);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
 
-  const isToday = date.toDateString() === today.toDateString();
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  return (timestamp: string): string => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
 
-  const timeString = date.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    const isToday = date.toDateString() === today.toDateString();
+    const isYesterday = date.toDateString() === yesterday.toDateString();
 
-  if (isToday) {
-    return `${t("today")} ${t("at")} ${timeString}`;
-  } else if (isYesterday) {
-    return `${t("yesterday")} ${t("at")} ${timeString}`;
-  } else {
+    const timeString = date.toLocaleTimeString(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    if (isToday) {
+      return `${t("today")} ${t("at")} ${timeString}`;
+    } else if (isYesterday) {
+      return `${t("yesterday")} ${t("at")} ${timeString}`;
+    }
     return `${date.toLocaleDateString("en-GB")} ${t("at")} ${timeString}`;
-  }
+  };
 };

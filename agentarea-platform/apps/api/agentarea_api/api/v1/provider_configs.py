@@ -1,6 +1,5 @@
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
@@ -12,6 +11,7 @@ from agentarea_api.api.deps.services import (  # type: ignore
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import ProviderConfig  # type: ignore
@@ -37,8 +37,8 @@ class ProviderConfigResponse(BaseModel):
     created_by: str
     is_active: bool
     is_public: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related data
     provider_spec_name: str | None = None
@@ -87,8 +87,8 @@ class ModelInstanceResponse(BaseModel):
     description: str | None
     is_active: bool
     is_public: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related data
     provider_name: str | None = None
@@ -136,8 +136,8 @@ class ProviderConfigWithInstancesResponse(BaseModel):
     user_id: str | None
     is_active: bool
     is_public: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related data
     provider_spec_name: str | None = None

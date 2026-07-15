@@ -23,13 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiKeyStatusPresentation } from "@/lib/status";
 import { revokeAPIKeyAction } from "./actions";
 
-const APIKeyStatus = {
-  ACTIVE: "active",
-  REVOKED: "revoked",
-  EXPIRED: "expired",
-} as const;
-
-type APIKeyStatusType = (typeof APIKeyStatus)[keyof typeof APIKeyStatus];
+type APIKeyStatusType = "active" | "revoked" | "expired";
 
 interface APIKey {
   id: string;

@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from agentarea_common.base.models import BaseModel
-from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
+from agentarea_llm.domain.models import ModelSpec, ProviderConfig, ProviderSpec
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -48,9 +48,9 @@ async def db_session(test_engine):
 
 
 @pytest_asyncio.fixture
-async def model_instance_repository(db_session):
+async def model_instance_repository(db_session, user_context):
     """Provide a ModelInstanceRepository instance."""
-    return ModelInstanceRepository(db_session)
+    return ModelInstanceRepository(db_session, user_context)
 
 
 def create_test_provider_spec(**kwargs) -> ProviderSpec:
@@ -63,6 +63,8 @@ def create_test_provider_spec(**kwargs) -> ProviderSpec:
         "provider_type": "test_provider",
         "icon": "test_icon",
         "is_builtin": True,
+        "workspace_id": "default",
+        "created_by": "system",
     }
     defaults.update(kwargs)
     return ProviderSpec(**defaults)
@@ -95,13 +97,15 @@ def create_test_model_spec(provider_spec_id, **kwargs) -> ModelSpec:
         "description": "Test model description",
         "context_window": 4096,
         "is_active": True,
+        "workspace_id": "default",
+        "created_by": "system",
     }
     defaults.update(kwargs)
     return ModelSpec(**defaults)
 
 
-def create_test_model_instance(provider_config_id, model_spec_id, **kwargs) -> ModelInstance:
-    """Create a test model instance."""
+def create_test_model_instance(provider_config_id, model_spec_id, **kwargs) -> dict:
+    """Build create() kwargs for a test model instance (repo sets workspace_id/created_by)."""
     defaults = {
         "id": uuid4(),
         "provider_config_id": provider_config_id,
@@ -112,7 +116,7 @@ def create_test_model_instance(provider_config_id, model_spec_id, **kwargs) -> M
         "is_public": False,
     }
     defaults.update(kwargs)
-    return ModelInstance(**defaults)
+    return defaults
 
 
 class TestModelInstanceRepository:
@@ -144,7 +148,7 @@ class TestModelInstanceRepository:
         )
 
         # Act - Create
-        created_instance = await model_instance_repository.create(model_instance)
+        created_instance = await model_instance_repository.create(**model_instance)
 
         # Assert - Create
         assert created_instance is not None
@@ -182,8 +186,8 @@ class TestModelInstanceRepository:
         instance1 = create_test_model_instance(provider_config.id, model_spec.id, name="Instance 1")
         instance2 = create_test_model_instance(provider_config.id, model_spec.id, name="Instance 2")
 
-        await model_instance_repository.create(instance1)
-        await model_instance_repository.create(instance2)
+        await model_instance_repository.create(**instance1)
+        await model_instance_repository.create(**instance2)
 
         # Act
         instances = await model_instance_repository.list()
@@ -217,11 +221,11 @@ class TestModelInstanceRepository:
         instance1 = create_test_model_instance(config1.id, model_spec.id, name="Config1 Instance")
         instance2 = create_test_model_instance(config2.id, model_spec.id, name="Config2 Instance")
 
-        await model_instance_repository.create(instance1)
-        await model_instance_repository.create(instance2)
+        await model_instance_repository.create(**instance1)
+        await model_instance_repository.create(**instance2)
 
         # Act
-        config1_instances = await model_instance_repository.list(provider_config_id=config1.id)
+        config1_instances = await model_instance_repository.list_all(provider_config_id=config1.id)
 
         # Assert
         assert len(config1_instances) == 1
@@ -255,11 +259,11 @@ class TestModelInstanceRepository:
             provider_config.id, model_spec2.id, name="GPT-3.5 Instance"
         )
 
-        await model_instance_repository.create(instance1)
-        await model_instance_repository.create(instance2)
+        await model_instance_repository.create(**instance1)
+        await model_instance_repository.create(**instance2)
 
         # Act
-        gpt4_instances = await model_instance_repository.list(model_spec_id=model_spec1.id)
+        gpt4_instances = await model_instance_repository.list_all(model_spec_id=model_spec1.id)
 
         # Assert
         assert len(gpt4_instances) == 1
@@ -287,14 +291,12 @@ class TestModelInstanceRepository:
         model_instance = create_test_model_instance(
             provider_config.id, model_spec.id, name="Original Name"
         )
-        created_instance = await model_instance_repository.create(model_instance)
-
-        # Modify
-        created_instance.name = "Updated Name"
-        created_instance.description = "Updated description"
+        created_instance = await model_instance_repository.create(**model_instance)
 
         # Act
-        updated_instance = await model_instance_repository.update(created_instance)
+        updated_instance = await model_instance_repository.update(
+            created_instance.id, name="Updated Name", description="Updated description"
+        )
 
         # Assert
         assert updated_instance.name == "Updated Name"
@@ -323,7 +325,7 @@ class TestModelInstanceRepository:
         await db_session.flush()
 
         model_instance = create_test_model_instance(provider_config.id, model_spec.id)
-        created_instance = await model_instance_repository.create(model_instance)
+        created_instance = await model_instance_repository.create(**model_instance)
 
         # Act
         delete_result = await model_instance_repository.delete(created_instance.id)
@@ -361,11 +363,11 @@ class TestModelInstanceRepository:
             provider_config.id, model_spec.id, name="Inactive Instance", is_active=False
         )
 
-        await model_instance_repository.create(active_instance)
-        await model_instance_repository.create(inactive_instance)
+        await model_instance_repository.create(**active_instance)
+        await model_instance_repository.create(**inactive_instance)
 
         # Act
-        active_instances = await model_instance_repository.list(is_active=True)
+        active_instances = await model_instance_repository.list_all(is_active=True)
 
         # Assert
         assert len(active_instances) == 1

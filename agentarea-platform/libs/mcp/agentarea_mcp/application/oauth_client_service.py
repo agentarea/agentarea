@@ -86,17 +86,23 @@ class MCPOAuthClientService:
         """Discover the authorization server for a remote MCP endpoint.
 
         Steps:
-            1. GET mcp_url → expect 401 with WWW-Authenticate header
+            1. GET mcp_url → expect a 401/403 auth challenge with WWW-Authenticate
             2. Parse resource_metadata URL from the header
             3. Fetch Protected Resource Metadata (RFC 9728)
             4. Fetch Authorization Server Metadata (RFC 8414)
         """
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            # Step 1: Hit the MCP endpoint to get the 401 challenge
+            # Step 1: Hit the MCP endpoint to get the auth challenge. RFC 9728 says
+            # servers SHOULD answer 401 with WWW-Authenticate, but some (e.g. Vercel)
+            # return 403 to an unauthenticated request. Both are auth challenges — the
+            # status is only a hint to find the metadata URL, which we can also reach
+            # via the /.well-known fallback below when the header is missing.
             resp = await client.get(mcp_url, follow_redirects=True)
 
-            if resp.status_code != 401:
-                raise MCPOAuthDiscoveryError(f"Expected 401 from {mcp_url}, got {resp.status_code}")
+            if resp.status_code not in (401, 403):
+                raise MCPOAuthDiscoveryError(
+                    f"Expected 401/403 auth challenge from {mcp_url}, got {resp.status_code}"
+                )
 
             www_auth = resp.headers.get("www-authenticate", "")
             logger.info("WWW-Authenticate header: %s", www_auth)
@@ -112,15 +118,30 @@ class MCPOAuthClientService:
                 )
             logger.info("Using resource_metadata_url: %s", resource_metadata_url)
 
-            # Step 2: Fetch Protected Resource Metadata (RFC 9728)
+            # Step 2: Fetch Protected Resource Metadata (RFC 9728). If the
+            # path-specific URL isn't served (404) or is access-restricted
+            # (401/403 — some hosts, e.g. Vercel, gate it), fall back to the root
+            # well-known before giving up.
             pr_resp = await client.get(resource_metadata_url)
-            if pr_resp.status_code == 404:
-                # Try root well-known as last resort
+            if pr_resp.status_code in (401, 403, 404):
                 parsed = urlparse(mcp_url)
                 root_url = f"{parsed.scheme}://{parsed.netloc}/.well-known/oauth-protected-resource"
-                logger.info("Path-specific metadata 404, trying root: %s", root_url)
-                pr_resp = await client.get(root_url)
-            pr_resp.raise_for_status()
+                if root_url != resource_metadata_url:
+                    logger.info(
+                        "Protected-resource metadata HTTP %s at %s, trying root: %s",
+                        pr_resp.status_code,
+                        resource_metadata_url,
+                        root_url,
+                    )
+                    pr_resp = await client.get(root_url)
+            if pr_resp.status_code != 200:
+                # Don't let raise_for_status() surface as an unhandled 500 — the
+                # server just doesn't support standard OAuth discovery for us.
+                raise MCPOAuthDiscoveryError(
+                    f"Could not fetch OAuth protected-resource metadata for {mcp_url} "
+                    f"(HTTP {pr_resp.status_code}). The server may not support automated "
+                    f"OAuth discovery."
+                )
             pr_meta = pr_resp.json()
 
             resource = pr_meta.get("resource", mcp_url)
@@ -229,7 +250,13 @@ class MCPOAuthClientService:
         scopes: list[str] | None = None,
     ) -> str:
         """Build the OAuth 2.1 authorization URL with PKCE and resource indicator."""
-        scope_list = scopes or as_metadata.scopes_supported
+        scope_list = list(scopes or as_metadata.scopes_supported or [])
+        # Always request offline_access so the AS issues a refresh_token; without
+        # it many providers (e.g. Vercel) return a ~1h access token and nothing to
+        # renew with, so the connection silently 403s once it expires. Harmless if
+        # the AS ignores unknown scopes.
+        if "offline_access" not in scope_list:
+            scope_list.append("offline_access")
         params: dict[str, str] = {
             "response_type": "code",
             "client_id": client_id,

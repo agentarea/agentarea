@@ -26,8 +26,14 @@ def resolve_event_broker(event_broker: Any) -> EventBroker:
     )
 
 
-def create_event_publisher(event_broker, task_id: str):
-    """Create an event publisher function for chunk events."""
+def create_event_publisher(event_broker, task_id: str, broker_client=None):
+    """Create an event publisher function for chunk events.
+
+    ``broker_client`` (a ``BrokerClient``) additionally XADDs each chunk to the
+    per-task live stream so the A2A read side tails tokens the same way it tails
+    durable events (ADR-0018). Chunks are stream-only (not persisted); the DB
+    keeps only durable events.
+    """
 
     async def publish_chunk_event(
         chunk: str,
@@ -71,8 +77,22 @@ def create_event_publisher(event_broker, task_id: str):
                 original_data=chunk_event["data"],
             )
 
-            # Publish via RedisEventBroker for real-time SSE
+            # Publish via RedisEventBroker (pub/sub) for existing consumers.
             await publisher.publish(domain_event)
+
+            # Also XADD to the per-task live stream (ADR-0018) so the A2A read
+            # side tails chunks. Best-effort: publish_task_event never raises.
+            if broker_client is not None:
+                from agentarea_common.events.task_stream import publish_task_event
+
+                await publish_task_event(
+                    broker_client,
+                    task_id=task_id,
+                    event_type=chunk_event["event_type"],
+                    data=chunk_event["data"],
+                    event_id=chunk_event["event_id"],
+                    timestamp=chunk_event["timestamp"],
+                )
             logger.debug(f"Published LLM chunk event {chunk_index} for task {task_id}")
 
         except Exception as e:

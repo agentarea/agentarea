@@ -41,6 +41,19 @@ jobs:
         working-directory: agentarea-webapp
         run: pnpm install --frozen-lockfile
 
+      - name: Check generated API client is in sync with openapi.json
+        working-directory: agentarea-webapp
+        run: |
+          # Regenerate the hey-api client from the committed spec and fail if the
+          # committed output is stale. (Whether openapi.json itself matches the
+          # backend is verified by the OpenAPI Drift Check workflow.)
+          pnpm generate:client
+          if ! git diff --exit-code -- src/api/client; then
+            echo "::error::Generated API client is out of date with src/api/openapi.json."
+            echo "Run 'pnpm generate:client' (or 'pnpm generate:api') and commit the result."
+            exit 1
+          fi
+
       - name: Build packages
         working-directory: agentarea-webapp
         run: |
@@ -49,7 +62,7 @@ jobs:
 
       - name: Type check
         working-directory: agentarea-webapp
-        run: pnpm run type-check || true  # Don't fail, just warn
+        run: pnpm run type-check
 
       - name: Build application
         working-directory: agentarea-webapp

@@ -8,7 +8,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import TYPE_CHECKING, Any
 
+import aiosmtplib
+
 from . import register_adapter
+from .exceptions import FatalError, RetryableError
 
 if TYPE_CHECKING:
     from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -19,7 +22,7 @@ logger = logging.getLogger(__name__)
 class EmailAdapter:
     """Send messages via SMTP.
 
-    Inbound is handled by data extractors (MailSlurper, IMAP).
+    Inbound is handled by data extractors (e.g. IMAP).
     This adapter handles outbound: formatting events as HTML emails.
 
     Credentials (smtp_host, smtp_port, username, password, from_address, use_tls)
@@ -90,16 +93,19 @@ class EmailAdapter:
 
         Resolves SMTP credentials from the secret store using
         channel_config["secret_key"].
+
+        Failures are raised, never swallowed, so the delivery consumer can act
+        on them: misconfiguration (no reply_to / unresolvable credentials / SMTP
+        auth rejected) raises ``FatalError`` (ACK + DLQ — retrying won't help);
+        transient transport failures (connect/timeout/disconnect) raise
+        ``RetryableError`` so the broker redelivers.
         """
         reply_to = channel_config.get("reply_to")
         if not reply_to:
-            logger.error("No reply_to address in channel config")
-            return
+            raise FatalError("email channel: no reply_to address in channel config")
 
+        # Raises FatalError if credentials cannot be resolved.
         smtp_creds = await self._resolve_smtp_credentials(channel_config)
-        if not smtp_creds:
-            logger.error("Cannot resolve SMTP credentials — set secret_key in channel_origin")
-            return
 
         subject = channel_config.get("subject", "Agent Update")
         from_addr = smtp_creds.get("from_address", "agent@agentarea.local")
@@ -120,50 +126,61 @@ class EmailAdapter:
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(message, "html"))
 
+        smtp_kwargs: dict[str, Any] = {
+            "hostname": smtp_creds.get("smtp_host", "localhost"),
+            "port": smtp_creds.get("smtp_port", 25),
+        }
+        if smtp_creds.get("use_tls"):
+            smtp_kwargs["use_tls"] = True
+        username = smtp_creds.get("username")
+        if username:
+            smtp_kwargs["username"] = username
+            smtp_kwargs["password"] = smtp_creds.get("password", "")
+
         try:
-            from importlib import import_module
-
-            aiosmtplib = import_module("aiosmtplib")
-
-            smtp_kwargs: dict[str, Any] = {
-                "hostname": smtp_creds.get("smtp_host", "localhost"),
-                "port": smtp_creds.get("smtp_port", 25),
-            }
-            if smtp_creds.get("use_tls"):
-                smtp_kwargs["use_tls"] = True
-            username = smtp_creds.get("username")
-            if username:
-                smtp_kwargs["username"] = username
-                smtp_kwargs["password"] = smtp_creds.get("password", "")
-
             await aiosmtplib.send(msg, **smtp_kwargs)
-            logger.info("Email sent to %s: %s", reply_to, subject)
-        except ImportError:
-            logger.error("aiosmtplib not installed — cannot send email")
-        except Exception as e:
-            logger.error("Email send failed: %s", e)
+        except aiosmtplib.SMTPAuthenticationError as exc:
+            # Bad/rejected credentials — retrying with the same secret won't help.
+            raise FatalError(f"email channel: SMTP authentication failed: {exc}") from exc
+        except (
+            aiosmtplib.SMTPConnectError,
+            aiosmtplib.SMTPServerDisconnected,
+            aiosmtplib.SMTPTimeoutError,
+            ConnectionError,
+            TimeoutError,
+            OSError,
+        ) as exc:
+            raise RetryableError(f"email channel: SMTP transport error: {exc}") from exc
+        except aiosmtplib.SMTPException as exc:
+            # Unknown SMTP failure: prefer over-retry per the consumer contract.
+            raise RetryableError(f"email channel: SMTP error: {exc}") from exc
 
-    async def _resolve_smtp_credentials(
-        self, channel_config: dict[str, Any]
-    ) -> dict[str, Any] | None:
+        logger.info("Email sent to %s: %s", reply_to, subject)
+
+    async def _resolve_smtp_credentials(self, channel_config: dict[str, Any]) -> dict[str, Any]:
         """Resolve SMTP credentials from the secret store.
 
         Secret name is derived: channel_cred:{type}:{trigger_id}
+
+        Raises ``FatalError`` when credentials cannot be resolved — a
+        misconfigured channel won't be fixed by redelivery.
         """
         if not self._secret_manager:
-            logger.error("No secret_manager configured on EmailAdapter")
-            return None
+            raise FatalError("email channel: no secret_manager configured on EmailAdapter")
 
         trigger_id = channel_config.get("trigger_id")
         if not trigger_id:
-            logger.error("No trigger_id in channel_config — cannot resolve credentials")
-            return None
+            raise FatalError(
+                "email channel: no trigger_id in channel_config — cannot resolve credentials"
+            )
 
         secret_name = f"channel_cred:{channel_config.get('type', 'email')}:{trigger_id}"
         raw = await self._secret_manager.get_secret(secret_name)
         if not raw:
-            logger.error("Channel credentials not found for trigger %s", trigger_id)
-            return None
+            raise FatalError(
+                f"email channel: credentials not found for trigger {trigger_id} "
+                f"(secret {secret_name!r})"
+            )
 
         return json.loads(raw)
 

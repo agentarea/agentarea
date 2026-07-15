@@ -113,6 +113,7 @@
     "build": "Сборка",
     "govern": "Управление",
     "connections": "Соединения",
+    "clients": "Клиенты",
     "explore": "Каталог",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
@@ -613,7 +614,8 @@
       },
       "actions": {
         "start": "Запустить",
-        "stop": "Остановить"
+        "stop": "Остановить",
+        "connectOAuth": "Подключить"
       },
       "status": {
         "stopped": "Остановлен",

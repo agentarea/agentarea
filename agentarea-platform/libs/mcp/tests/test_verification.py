@@ -2,10 +2,33 @@
 
 import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
+
+
+# ---------------------------------------------------------------------------
+# _in_progress_is_stale — wedged-verifying self-heal
+# ---------------------------------------------------------------------------
+
+
+def test_in_progress_stale_detection():
+    from agentarea_mcp.verification import _in_progress_is_stale
+
+    now = datetime.now(UTC)
+    # Fresh in_progress → live, must not be treated as stale.
+    assert _in_progress_is_stale({"status": "in_progress", "at": now.isoformat()}) is False
+    # Older than the safety deadline (600s) → abandoned → stale.
+    old = (now - timedelta(seconds=700)).isoformat()
+    assert _in_progress_is_stale({"status": "in_progress", "at": old}) is True
+    # Missing / unparseable timestamps are treated as stale (can't trust them live).
+    assert _in_progress_is_stale({"status": "in_progress"}) is True
+    assert _in_progress_is_stale({"status": "in_progress", "at": "not-a-date"}) is True
+    # Naive timestamp is assumed UTC.
+    naive_old = (now - timedelta(seconds=700)).replace(tzinfo=None).isoformat()
+    assert _in_progress_is_stale({"at": naive_old}) is True
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -235,9 +258,12 @@ async def test_verify_list_tools_timeout_enriches_error():
     async def fake_go_health(instance_id, mcp_manager_url):
         return {"healthy": False, "state": "starting"}
 
+    # Container stays alive-but-not-ready and list_tools never answers: the loop
+    # exits via the safety cap, then enriches the error from the health call.
     with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
          patch("agentarea_mcp.verification.get_settings") as mock_settings, \
-         patch("agentarea_mcp.verification._LIST_TOOLS_BACKOFF_DELAYS", [0, 0]):
+         patch("agentarea_mcp.verification._LIST_TOOLS_RETRY_DELAY", 0), \
+         patch("agentarea_mcp.verification._SAFETY_DEADLINE", 0.05):
         mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
 
         from agentarea_mcp.verification import verify
@@ -258,12 +284,12 @@ async def test_verify_list_tools_timeout_enriches_error():
 
 @pytest.mark.asyncio
 async def test_verify_concurrency_second_sees_in_progress_and_skips():
-    """If another verify() is already in_progress, a second call must not re-run."""
+    """A genuinely in-flight (recent) in_progress must not be re-run."""
     inst = _make_instance("docker")
     inst.verification = {
         "schema_version": 1,
         "status": "in_progress",
-        "at": "2026-04-18T00:00:00+00:00",
+        "at": datetime.now(UTC).isoformat(),  # fresh → live
         "error": None,
     }
 
@@ -293,6 +319,70 @@ async def test_verify_concurrency_second_sees_in_progress_and_skips():
     # Returns the in-progress payload without re-running provisioning.
     assert result["status"] == "in_progress"
     assert go_create_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_verify_stale_in_progress_reruns():
+    """A stale in_progress (interrupted previous run) must self-heal by re-running."""
+    inst = _make_instance("docker")
+    inst.verification = {
+        "schema_version": 1,
+        "status": "in_progress",
+        "at": (datetime.now(UTC) - timedelta(seconds=700)).isoformat(),  # abandoned
+        "error": None,
+    }
+    db_mock = _make_db_mock(inst)
+    go_create_calls = 0
+
+    async def fake_go_create(instance, mcp_manager_url):
+        nonlocal go_create_calls
+        go_create_calls += 1
+        return {"status_code": 201, "body": {}}
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        return []
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings:
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+        from agentarea_mcp.verification import verify
+        result = await verify(inst, _list_tools_fn=fake_list_tools, _go_create_fn=fake_go_create)
+
+    assert result["status"] == "succeeded"
+    assert go_create_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_verify_force_reruns_even_when_fresh_in_progress():
+    """force=True (user clicked Verify) re-runs even a recent in_progress."""
+    inst = _make_instance("docker")
+    inst.verification = {
+        "schema_version": 1,
+        "status": "in_progress",
+        "at": datetime.now(UTC).isoformat(),  # fresh, but user forced
+        "error": None,
+    }
+    db_mock = _make_db_mock(inst)
+    go_create_calls = 0
+
+    async def fake_go_create(instance, mcp_manager_url):
+        nonlocal go_create_calls
+        go_create_calls += 1
+        return {"status_code": 201, "body": {}}
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        return []
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings:
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+        from agentarea_mcp.verification import verify
+        result = await verify(
+            inst, force=True, _list_tools_fn=fake_list_tools, _go_create_fn=fake_go_create
+        )
+
+    assert result["status"] == "succeeded"
+    assert go_create_calls == 1
 
 
 @pytest.mark.asyncio
@@ -624,8 +714,8 @@ async def test_list_tools_with_explicit_mcp_url_uses_streamable_directly():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_with_unsuffixed_url_tries_mcp_then_sse():
-    """For bare URLs (no /sse or /mcp suffix), try /mcp first; on failure fall back to /sse."""
+async def test_list_tools_with_unsuffixed_url_tries_bare_then_mcp_then_sse():
+    """For bare URLs, try the URL as-given first, then /mcp, then fall back to /sse."""
     from agentarea_mcp import verification as ver
 
     streamable_targets: list[str] = []
@@ -691,8 +781,151 @@ async def test_list_tools_with_unsuffixed_url_tries_mcp_then_sse():
     }):
         await ver._list_tools("https://example.com")
 
-    assert streamable_targets == ["https://example.com/mcp"]
+    assert streamable_targets == ["https://example.com", "https://example.com/mcp"]
     assert sse_targets == ["https://example.com/sse"]
+
+
+def test_declared_remote_transport_reads_remotes_type():
+    from agentarea_mcp.verification import declared_remote_transport
+
+    spec = {"remotes": [{"type": "streamable-http", "url": "https://mcp.vercel.com"}]}
+    assert declared_remote_transport(spec) == "streamable-http"
+    assert declared_remote_transport({"remotes": [{"type": "sse", "url": "x"}]}) == "sse"
+
+
+def test_declared_remote_transport_none_when_absent():
+    from agentarea_mcp.verification import declared_remote_transport
+
+    assert declared_remote_transport(None) is None
+    assert declared_remote_transport({}) is None
+    assert declared_remote_transport({"remotes": []}) is None
+    assert declared_remote_transport({"remotes": [{"url": "x"}]}) is None
+
+
+def test_transport_candidates_declared_transport_is_authoritative():
+    """A declared transport is honored exactly — no probing, no cross fallback."""
+    from agentarea_mcp.verification import mcp_transport_candidates
+
+    # streamable-http at the root, no SSE fallback
+    assert mcp_transport_candidates("https://mcp.vercel.com", "streamable-http") == (
+        ["https://mcp.vercel.com"],
+        None,
+    )
+    # underscore variant tolerated
+    assert mcp_transport_candidates("https://x", "streamable_http") == (["https://x"], None)
+    # sse declared
+    assert mcp_transport_candidates("https://x", "sse") == ([], "https://x")
+    # unknown/garbage transport falls through to suffix heuristics
+    assert mcp_transport_candidates("https://x", "bogus") == (
+        ["https://x", "https://x/mcp"],
+        "https://x/sse",
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_tools_declared_streamable_does_not_fall_back_to_sse():
+    """When the spec declares streamable-http and it fails, surface the real error
+    instead of silently probing /sse (which would 404 on servers like Vercel)."""
+    from agentarea_mcp import verification as ver
+
+    class _FailStream:
+        def __init__(self, url):
+            pass
+
+        async def __aenter__(self):
+            raise ConnectionError("boom")
+
+        async def __aexit__(self, *args):
+            return False
+
+    def fake_streamable(url, **kw):
+        return _FailStream(url)
+
+    def fake_sse(url, **kw):
+        raise AssertionError("SSE must not be attempted for a declared streamable-http server")
+
+    import sys
+
+    fake_streamable_mod = MagicMock()
+    fake_streamable_mod.streamablehttp_client = fake_streamable
+    fake_sse_mod = MagicMock()
+    fake_sse_mod.sse_client = fake_sse
+    fake_mcp_mod = MagicMock()
+    fake_mcp_mod.ClientSession = MagicMock()
+
+    with patch.dict(sys.modules, {
+        "mcp": fake_mcp_mod,
+        "mcp.client.streamable_http": fake_streamable_mod,
+        "mcp.client.sse": fake_sse_mod,
+    }):
+        with pytest.raises(ConnectionError, match="boom"):
+            await ver._list_tools("https://mcp.vercel.com", None, "streamable-http")
+
+
+@pytest.mark.asyncio
+async def test_list_tools_bare_url_uses_streamable_at_root():
+    """Regression (Vercel): a bare URL whose server serves streamable-HTTP at the
+    root must connect to the URL as-given — not be re-suffixed to /mcp or /sse.
+
+    https://mcp.vercel.com serves streamable-HTTP at the root; appending /mcp or
+    /sse 404s. The 404-on-/sse verification failure came from never trying the
+    provided URL directly.
+    """
+    from agentarea_mcp import verification as ver
+
+    streamable_targets: list[str] = []
+
+    class _FakeStream:
+        def __init__(self, url):
+            streamable_targets.append(url)
+
+        async def __aenter__(self):
+            return (object(), object(), object())
+
+        async def __aexit__(self, *args):
+            return False
+
+    class _FakeSession:
+        def __init__(self, *_a, **_k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            r = MagicMock()
+            r.tools = []
+            return r
+
+    def fake_streamable(url, **kw):
+        return _FakeStream(url)
+
+    def fake_sse(url, **kw):
+        raise AssertionError("SSE must not be reached when the bare URL succeeds")
+
+    import sys
+
+    fake_streamable_mod = MagicMock()
+    fake_streamable_mod.streamablehttp_client = fake_streamable
+    fake_sse_mod = MagicMock()
+    fake_sse_mod.sse_client = fake_sse
+    fake_mcp_mod = MagicMock()
+    fake_mcp_mod.ClientSession = _FakeSession
+
+    with patch.dict(sys.modules, {
+        "mcp": fake_mcp_mod,
+        "mcp.client.streamable_http": fake_streamable_mod,
+        "mcp.client.sse": fake_sse_mod,
+    }):
+        await ver._list_tools("https://mcp.vercel.com")
+
+    assert streamable_targets == ["https://mcp.vercel.com"]
 
 
 # ---------------------------------------------------------------------------
@@ -746,7 +979,12 @@ async def test_monitor_orphan_gc_marks_stale_in_progress_as_failed():
     gc_sqls = [s for s in executed_sqls if "in_progress" in s]
     assert len(gc_sqls) >= 1, "Orphan GC SQL must be executed"
     assert ":null" not in gc_sqls[0]
-    assert {"threshold_minutes": 2} in executed_params
+    from agentarea_mcp.container_monitor import _ORPHAN_THRESHOLD_MINUTES
+    assert {"threshold_minutes": _ORPHAN_THRESHOLD_MINUTES} in executed_params
+    # The orphan backstop must outlast the longest legit verify() so a healthy
+    # but slow cold install is never reaped mid-flight.
+    from agentarea_mcp.verification import _SAFETY_DEADLINE
+    assert _ORPHAN_THRESHOLD_MINUTES * 60 > _SAFETY_DEADLINE
 
 
 # ---------------------------------------------------------------------------
@@ -754,31 +992,25 @@ async def test_monitor_orphan_gc_marks_stale_in_progress_as_failed():
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Constant checks — Phase 1 deadline / backoff values
+# Constant checks — liveness-driven verification
 # ---------------------------------------------------------------------------
 
-def test_total_deadline_is_120():
-    """_TOTAL_DEADLINE must be 120s to accommodate cold image pulls (60-90s)."""
-    from agentarea_mcp.verification import _TOTAL_DEADLINE
-    assert _TOTAL_DEADLINE == 120, (
-        f"_TOTAL_DEADLINE must be 120 (was changed for Phase 1 K8s cold-pull support), got {_TOTAL_DEADLINE}"
+def test_safety_deadline_is_generous():
+    """Verification is liveness-driven: it keeps polling while the container is
+    alive and only treats a runtime-reported death as terminal. The wall-clock
+    cap is just a backstop and must be generous enough for cold `uvx`/`npx`
+    installs (which can take minutes)."""
+    from agentarea_mcp.verification import _SAFETY_DEADLINE
+    assert _SAFETY_DEADLINE >= 300, (
+        f"_SAFETY_DEADLINE must be >= 300s to allow cold command/docker installs, got {_SAFETY_DEADLINE}"
     )
 
 
-def test_list_tools_backoff_delays_extended():
-    """_LIST_TOOLS_BACKOFF_DELAYS must match the Phase 1 extended schedule."""
-    from agentarea_mcp.verification import _LIST_TOOLS_BACKOFF_DELAYS
-    expected = [2, 4, 8, 16, 30, 30]
-    assert _LIST_TOOLS_BACKOFF_DELAYS == expected, (
-        f"Expected {expected}, got {_LIST_TOOLS_BACKOFF_DELAYS}"
-    )
-
-
-def test_list_tools_backoff_delays_has_six_entries():
-    """Backoff schedule must have exactly 6 retry delays (Phase 1 extended from 4)."""
-    from agentarea_mcp.verification import _LIST_TOOLS_BACKOFF_DELAYS
-    assert len(_LIST_TOOLS_BACKOFF_DELAYS) == 6, (
-        f"Expected 6 backoff entries, got {len(_LIST_TOOLS_BACKOFF_DELAYS)}"
+def test_list_tools_retry_delay_is_small():
+    """Between attempts we poll at a small steady interval while provisioning."""
+    from agentarea_mcp.verification import _LIST_TOOLS_RETRY_DELAY
+    assert 0 < _LIST_TOOLS_RETRY_DELAY <= 10, (
+        f"_LIST_TOOLS_RETRY_DELAY must be a small steady interval, got {_LIST_TOOLS_RETRY_DELAY}"
     )
 
 
@@ -791,8 +1023,9 @@ async def test_verify_slow_pod_startup_succeeds_after_multiple_list_tools_failur
     """Go ack returns 201 fast; list_tools fails 4 times (transient) then succeeds.
 
     This simulates a K8s pod that is still pulling its image / initialising
-    when the first few list_tools attempts are made.  With the extended
-    _LIST_TOOLS_BACKOFF_DELAYS the verification must ultimately succeed.
+    when the first few list_tools attempts are made.  As long as the container
+    is alive (health != error) verification keeps polling and must ultimately
+    succeed.
     """
     inst = _make_instance("docker")
     db_mock = _make_db_mock(inst)
@@ -814,10 +1047,13 @@ async def test_verify_slow_pod_startup_succeeds_after_multiple_list_tools_failur
             raise ConnectionRefusedError("pod not ready yet")
         return fake_tools
 
+    async def fake_health(instance_id, mcp_manager_url):
+        # Alive but not ready yet — never terminal.
+        return {"state": "starting", "healthy": False}
+
     with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
          patch("agentarea_mcp.verification.get_settings") as mock_settings, \
-         patch("agentarea_mcp.verification._LIST_TOOLS_BACKOFF_DELAYS", [0, 0, 0, 0, 0, 0]), \
-         patch("agentarea_mcp.verification._TOTAL_DEADLINE", 9999):
+         patch("agentarea_mcp.verification._LIST_TOOLS_RETRY_DELAY", 0):
         mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
 
         from agentarea_mcp.verification import verify
@@ -825,6 +1061,7 @@ async def test_verify_slow_pod_startup_succeeds_after_multiple_list_tools_failur
             inst,
             _list_tools_fn=fake_list_tools,
             _go_create_fn=fake_go_create,
+            _go_health_fn=fake_health,
         )
 
     assert result["status"] == "succeeded", (
@@ -837,11 +1074,11 @@ async def test_verify_slow_pod_startup_succeeds_after_multiple_list_tools_failur
 
 
 @pytest.mark.asyncio
-async def test_verify_slow_pod_startup_extended_deadline_allows_late_success():
-    """The extended _TOTAL_DEADLINE=120 permits success even after many slow retries.
+async def test_verify_slow_pod_startup_many_retries_allows_late_success():
+    """A command server that only becomes ready after many slow retries still
+    succeeds: while the container is alive, verification keeps polling.
 
-    Patches the deadline to a tight value AND uses zero-delay backoff so the
-    test runs fast, but verifies the retry count the extended backoff list enables.
+    Uses zero retry delay so the test runs fast.
     """
     inst = _make_instance("command")
     db_mock = _make_db_mock(inst)
@@ -855,18 +1092,18 @@ async def test_verify_slow_pod_startup_extended_deadline_allows_late_success():
     async def fake_list_tools(endpoint_url, headers=None):
         nonlocal list_tools_attempt
         list_tools_attempt += 1
-        # Succeed on the 6th attempt — last slot in extended backoff list
-        if list_tools_attempt < 6:
+        # Still installing for the first 9 attempts, ready on the 10th.
+        if list_tools_attempt < 10:
             raise ConnectionRefusedError("still starting")
         return fake_tools
 
-    # Use zero-delay backoff (same length as real list) to avoid sleeping
-    zero_delays = [0, 0, 0, 0, 0, 0]
+    async def fake_health(instance_id, mcp_manager_url):
+        # Alive but not ready — never terminal, so polling continues.
+        return {"state": "starting", "healthy": False}
 
     with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
          patch("agentarea_mcp.verification.get_settings") as mock_settings, \
-         patch("agentarea_mcp.verification._LIST_TOOLS_BACKOFF_DELAYS", zero_delays), \
-         patch("agentarea_mcp.verification._TOTAL_DEADLINE", 9999):
+         patch("agentarea_mcp.verification._LIST_TOOLS_RETRY_DELAY", 0):
         mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
 
         from agentarea_mcp.verification import verify
@@ -874,12 +1111,59 @@ async def test_verify_slow_pod_startup_extended_deadline_allows_late_success():
             inst,
             _list_tools_fn=fake_list_tools,
             _go_create_fn=fake_go_create,
+            _go_health_fn=fake_health,
         )
 
     assert result["status"] == "succeeded", (
-        f"Extended backoff must allow success on 6th attempt; got {result}"
+        f"Liveness-driven retries must allow late success; got {result}"
     )
-    assert list_tools_attempt == 6
+    assert list_tools_attempt == 10
+
+
+@pytest.mark.asyncio
+async def test_verify_fails_fast_when_container_dies_mid_provision():
+    """If the runtime reports the container entered an error state while we are
+    still polling, verify() fails immediately (no waiting out the safety cap)."""
+    inst = _make_instance("command")
+    db_mock = _make_db_mock(inst)
+
+    list_tools_attempt = 0
+    health_attempt = 0
+
+    async def fake_go_create(instance, mcp_manager_url):
+        return {"status_code": 201, "body": {}}
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        nonlocal list_tools_attempt
+        list_tools_attempt += 1
+        raise ConnectionRefusedError("still starting")
+
+    async def fake_health(instance_id, mcp_manager_url):
+        nonlocal health_attempt
+        health_attempt += 1
+        # Alive for the first poll, then the container dies.
+        if health_attempt >= 2:
+            return {"state": "error", "healthy": False, "details": "child process exited"}
+        return {"state": "starting", "healthy": False}
+
+    with patch("agentarea_mcp.verification.get_database", return_value=db_mock), \
+         patch("agentarea_mcp.verification.get_settings") as mock_settings, \
+         patch("agentarea_mcp.verification._LIST_TOOLS_RETRY_DELAY", 0), \
+         patch("agentarea_mcp.verification._SAFETY_DEADLINE", 9999):
+        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+
+        from agentarea_mcp.verification import verify
+        result = await verify(
+            inst,
+            _list_tools_fn=fake_list_tools,
+            _go_create_fn=fake_go_create,
+            _go_health_fn=fake_health,
+        )
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "container_failed"
+    # Failed fast on the 2nd health poll — did not spin out the safety cap.
+    assert health_attempt == 2
 
 
 @pytest.mark.asyncio

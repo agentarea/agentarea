@@ -8,7 +8,7 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v : undefined;
 }
 
-function pick(args: Record<string, any> | undefined, keys: string[]): string | undefined {
+function pick(args: Record<string, unknown> | undefined, keys: string[]): string | undefined {
   if (!args) return undefined;
   for (const k of keys) {
     const v = asString(args[k]);
@@ -40,7 +40,7 @@ export interface ToolCallDescription {
 
 export function describeToolCall(
   toolName: string,
-  args?: Record<string, any> | null
+  args?: Record<string, unknown> | null
 ): ToolCallDescription {
   const a = args || {};
   const n = (toolName || "").toLowerCase();

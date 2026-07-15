@@ -87,8 +87,6 @@ groups:
       API_PORT: '{{ .Values.global.api.port }}'
       API_BASE_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       API_AUTH_ENABLED: '{{ .Values.global.api.auth.enabled }}'
-      API_RATE_LIMIT_ENABLED: '{{ .Values.global.api.rateLimit.enabled }}'
-      API_RATE_LIMIT_REQUESTS_PER_MINUTE: '{{ .Values.global.api.rateLimit.requestsPerMinute }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
@@ -101,6 +99,10 @@ groups:
       - name: API_AUTH_HEADER_VALUE
         secretName: "{{ .Values.global.secrets.application }}"
         key: "api-auth-header-value"
+      - name: KRATOS_JWKS_B64
+        conditional: '{{ .Values.kratos.enabled }}'
+        secretName: '{{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}'
+        key: jwks_b64
 
   mcpManager:
     configVars:

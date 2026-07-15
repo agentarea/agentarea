@@ -78,7 +78,7 @@ function ResourceCell({ event }: { event: AuditEvent }) {
       <div className="flex min-w-0 items-center gap-2">
         {resource?.href ? (
           <Link
-            href={resource.href as any}
+            href={resource.href ?? ""}
             className="truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
             onClick={(e) => e.stopPropagation()}
           >
@@ -119,7 +119,7 @@ function ActorCell({ event }: { event: AuditEvent }) {
     <div className="min-w-0">
       {actor?.href ? (
         <Link
-          href={actor.href as any}
+          href={actor.href ?? ""}
           className="block truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
           onClick={(e) => e.stopPropagation()}
         >
@@ -153,7 +153,7 @@ export default function AuditLogClient({
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [resourceFilter, setResourceFilter] = useState("all");
+  const [resourceFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 

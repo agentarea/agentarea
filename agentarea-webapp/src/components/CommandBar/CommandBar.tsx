@@ -74,7 +74,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
       id: 4,
       title: "Go to MCP Servers",
       shortcut: "gm",
-      url: "/mcp-servers",
+      url: "/connections",
       icon: Server,
       category: "navigation",
     },
@@ -82,7 +82,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
       id: 5,
       title: "Go to MCP Marketplace",
       shortcut: "gmp",
-      url: "/mcp-servers/marketplace",
+      url: "/connections/marketplace",
       icon: Store,
       category: "navigation",
     },
@@ -90,7 +90,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
       id: 6,
       title: "Go to MCP Tools",
       shortcut: "gmt",
-      url: "/mcp-servers/tools",
+      url: "/connections/tools",
       icon: Wrench,
       category: "navigation",
     },
@@ -116,7 +116,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
       id: 9,
       title: "Add MCP Server",
       shortcut: "nm",
-      url: "/mcp-servers/add",
+      url: "/connections/add",
       icon: Plus,
       category: "actions",
     },
@@ -152,6 +152,16 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
     (command) =>
       command.title.toLowerCase().includes(search.toLowerCase()) ||
       command.shortcut.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleCommand = useCallback(
+    (url: string) => {
+      setIsOpen(false);
+      setSearch("");
+      setSelectedIndex(0);
+      router.push(url);
+    },
+    [router]
   );
 
   // Handle keyboard shortcuts
@@ -193,7 +203,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
           break;
       }
     },
-    [isOpen, filteredCommands, selectedIndex]
+    [isOpen, filteredCommands, selectedIndex, handleCommand]
   );
 
   useEffect(() => {
@@ -209,13 +219,6 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
   useEffect(() => {
     setSelectedIndex(0);
   }, [search]);
-
-  const handleCommand = (url: string) => {
-    setIsOpen(false);
-    setSearch("");
-    setSelectedIndex(0);
-    router.push(url);
-  };
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -298,7 +301,7 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
                       <div className="px-3 py-1 text-xs font-medium text-muted-foreground/70">
                         {getCategoryTitle(category)}
                       </div>
-                      {categoryCommands.map((command, categoryIndex) => {
+                      {categoryCommands.map((command, _categoryIndex) => {
                         const globalIndex = filteredCommands.findIndex(
                           (c) => c.id === command.id
                         );

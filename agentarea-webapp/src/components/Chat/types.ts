@@ -33,7 +33,7 @@ export interface LLMResponseData extends BaseMessageData {
 export interface ToolCallStartedData extends BaseMessageData {
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   /** MCP server that owns this tool (absent for built-in/sandbox tools). */
   server_name?: string;
   server_icon?: string;
@@ -43,10 +43,10 @@ export interface ToolCallStartedData extends BaseMessageData {
 export interface ToolResultData extends BaseMessageData {
   tool_name: string;
   tool_call_id: string;
-  result: any;
+  result: unknown;
   success: boolean;
   execution_time?: string;
-  arguments?: Record<string, any>;
+  arguments?: Record<string, unknown>;
   /** MCP server that owns this tool (absent for built-in/sandbox tools). */
   server_name?: string;
   server_icon?: string;
@@ -73,7 +73,7 @@ export interface ErrorData extends BaseMessageData {
   is_network_error?: boolean;
   retryable?: boolean;
   tool_name?: string;
-  arguments?: Record<string, any>;
+  arguments?: Record<string, unknown>;
 }
 
 // Workflow Result Message
@@ -119,7 +119,7 @@ export type DynamicStringList = string[] | { path: string };
 // A2UI Action (what happens when a user interacts)
 export interface A2UIAction {
   event?: { name: string; context?: Record<string, DynamicString> };
-  functionCall?: { call: string; args?: Record<string, any> };
+  functionCall?: { call: string; args?: Record<string, unknown> };
 }
 
 // Flat adjacency-list component node (children are ID strings, not nested objects)
@@ -133,20 +133,45 @@ export interface A2UIComponent {
   // Common props
   accessibility?: { label?: string; description?: string };
   weight?: number;
+  action?: A2UIAction;
+  align?: string;
+  alt?: DynamicString;
+  axis?: "horizontal" | "vertical";
+  content?: string;
+  description?: DynamicString;
+  direction?: "horizontal" | "vertical";
+  disabled?: boolean;
+  displayStyle?: string;
+  enableDate?: boolean;
+  enableTime?: boolean;
+  fit?: "contain" | "cover" | "fill" | "none" | "scale-down";
+  justify?: string;
+  label?: DynamicString;
+  max?: DynamicString | DynamicNumber;
+  min?: DynamicString | DynamicNumber;
+  name?: DynamicString;
+  options?: Array<{ label: string; value: string }>;
+  placeholder?: DynamicString;
+  tabs?: Array<{ title: string; child: string }>;
+  text?: DynamicString;
+  trigger?: string;
+  url?: DynamicString;
+  value?: DynamicString | DynamicNumber | DynamicBoolean;
+  variant?: string;
   // Per-component props (open-ended to support all catalog props)
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // A2UI surface state — accumulated from lifecycle events
 export interface A2UISurface {
   surfaceId: string;
   catalogId: string;
-  theme?: Record<string, any>;
+  theme?: Record<string, unknown>;
   sendDataModel?: boolean;
   /** Flat map of component id → component node */
   components: Record<string, A2UIComponent>;
   /** JSON data model for data bindings */
-  dataModel: Record<string, any>;
+  dataModel: Record<string, unknown>;
 }
 
 // The chat message type for a live A2UI surface
@@ -166,12 +191,16 @@ export interface ApprovalRequestData extends BaseMessageData {
   escalation_id: string;
   tool_name: string;
   tool_call_id: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   message: string;
   resolved?: boolean;
   approved?: boolean;
   deny_comment?: string;
-  _onResolve?: (escalationId: string, approved: boolean, comment: string) => void;
+  _onResolve?: (
+    escalationId: string,
+    approved: boolean,
+    comment: string
+  ) => void;
 }
 
 // User message from follow-up (MessageQueued event)
@@ -179,14 +208,57 @@ export interface UserMessageData extends BaseMessageData {
   content: string;
 }
 
+// A single field in a structured user-input request (request_user_input tool)
+export type HumanInputFieldType =
+  | "text"
+  | "textarea"
+  | "select"
+  | "multiselect"
+  | "boolean"
+  | "number"
+  | "secret";
+
+export interface HumanInputField {
+  id: string;
+  question: string;
+  type: HumanInputFieldType;
+  required?: boolean;
+  options?: string[];
+  /** Suggested workspace secret name for `secret` fields. */
+  secret_name?: string;
+}
+
+// Secret values are routed to the vault at the API boundary; the agent only ever
+// receives a `secret_ref`, never the raw value.
+export interface HumanInputSecretValue {
+  value: string;
+  secret_name?: string;
+}
+
+// Structured user-input request message (paired update event: HumanInputReceived)
+export interface HumanInputRequestData extends BaseMessageData {
+  input_request_id: string;
+  tool_call_id?: string;
+  question: string;
+  questions: HumanInputField[];
+  allow_custom_response?: boolean;
+  input_mode?: string;
+  resolved?: boolean;
+  _onSubmit?: (
+    inputRequestId: string,
+    answers: Record<string, unknown>,
+    secrets: Record<string, HumanInputSecretValue>
+  ) => void;
+}
+
 // Tool Call Group Message (groups consecutive tool calls/results into one block)
 export interface ToolCallGroupData extends BaseMessageData {
   tools: Array<{
     tool_name: string;
     tool_call_id: string;
-    result: any;
+    result: unknown;
     success: boolean;
-    arguments?: Record<string, any>;
+    arguments?: Record<string, unknown>;
     execution_time?: string;
     pending?: boolean; // true if still in "calling..." state
     server_name?: string;
@@ -206,6 +278,7 @@ export type MessageComponentType =
   | { type: "system"; data: SystemData }
   | { type: "a2ui_surface"; data: A2UISurfaceData }
   | { type: "approval_request"; data: ApprovalRequestData }
+  | { type: "input_request"; data: HumanInputRequestData }
   | { type: "user_message"; data: UserMessageData };
 
 // Chat Message Types
@@ -226,4 +299,69 @@ export interface WelcomeMessage {
 }
 
 // Unified Chat Message Type
-export type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
+export type ChatMessage =
+  | UserChatMessage
+  | WelcomeMessage
+  | MessageComponentType;
+
+// Raw SSE event payload shape — covers all event types parsed in EventParser.ts.
+// Uses an open index signature so it accepts any backend-emitted event without `any`.
+export interface SseEventData {
+  task_id?: string;
+  aggregate_id?: string;
+  timestamp?: string;
+  agent_id?: string;
+  original_data?: SseEventData;
+  content?: string;
+  thinking?: string;
+  role?: string;
+  tool_calls?: unknown;
+  usage?: unknown;
+  chunk?: string;
+  chunk_index?: number;
+  is_final?: boolean;
+  chunk_type?: string;
+  error?: string;
+  error_type?: string;
+  model_id?: string;
+  provider_type?: string;
+  is_auth_error?: boolean;
+  is_rate_limit_error?: boolean;
+  retry_after?: string | number;
+  is_quota_error?: boolean;
+  quota_type?: string;
+  is_model_error?: boolean;
+  is_network_error?: boolean;
+  status_code?: string | number;
+  retryable?: boolean;
+  tool_name?: string;
+  tool_call_id?: string;
+  arguments?: Record<string, unknown>;
+  server_name?: string;
+  server_icon?: string;
+  result?: unknown;
+  success?: boolean;
+  execution_time?: string;
+  final_response?: string;
+  iterations_completed?: number;
+  total_cost?: string | number;
+  message?: string;
+  goal_description?: string;
+  usage_percentage?: number;
+  cost?: string | number;
+  limit?: string | number;
+  surface_id?: string;
+  catalog_id?: string;
+  theme?: Record<string, unknown>;
+  send_data_model?: boolean;
+  escalation_id?: string;
+  resolved?: boolean;
+  approved?: boolean;
+  deny_comment?: string;
+  input_request_id?: string;
+  question?: string;
+  questions?: unknown[];
+  allow_custom_response?: boolean;
+  input_mode?: string;
+  [key: string]: unknown;
+}

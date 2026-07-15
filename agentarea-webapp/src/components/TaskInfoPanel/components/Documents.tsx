@@ -17,11 +17,11 @@ function toDocItem(artifact: unknown, index: number): DocItem {
     return { name: artifact };
   }
   if (artifact && typeof artifact === "object") {
-    const a = artifact as Record<string, any>;
+    const a = artifact as Record<string, unknown>;
     return {
-      name: a.name || a.filename || a.title || `Artifact ${index + 1}`,
-      href: a.url || a.uri || a.download_url || undefined,
-      meta: a.mime_type || a.content_type || a.type || undefined,
+      name: `${a.name ?? a.filename ?? a.title ?? `Artifact ${index + 1}`}`,
+      href: (a.url ?? a.uri ?? a.download_url) as string | undefined,
+      meta: (a.mime_type ?? a.content_type ?? a.type) as string | undefined,
     };
   }
   return { name: `Artifact ${index + 1}` };

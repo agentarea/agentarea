@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { resolveEscalationAction as resolveEscalation } from "@/lib/server-actions";
+import { useTaskActions } from "@/hooks/useTaskActions";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { MessageRenderer } from "./MessageComponents";
@@ -45,7 +45,7 @@ export default function AgentChat({
   initialMessages = [],
   onTaskCreated,
   className = "",
-  height = "600px",
+  height: _height = "600px",
 }: AgentChatProps) {
   // Hooks for state management
   const { messages, setMessages, addUserMessage } = useChatMessages({
@@ -84,15 +84,9 @@ export default function AgentChat({
     clearFiles,
   } = useFileUpload();
 
-  // Callback for resolving tool escalations (approve/deny)
-  const handleResolveEscalation = React.useCallback(
-    async (escalationId: string, approved: boolean, comment: string) => {
-      const tid = currentTaskId || taskId;
-      if (!tid) return;
-      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
-    },
-    [agent.id, currentTaskId, taskId]
-  );
+  // Single centralized action layer for this task (resolve escalation, submit
+  // structured input incl. secrets → vault). Same layer every task surface uses.
+  const actions = useTaskActions(agent.id, currentTaskId || taskId || null);
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
@@ -117,15 +111,16 @@ export default function AgentChat({
   };
 
   // SSE message handler
-  const handleSSEMessage = React.useCallback(
-    createSSEEventHandler({
-      currentTaskId,
-      setMessages,
-      setIsLoading,
-      setCurrentTaskId,
-      onTaskCreated: callbacks.onTaskCreated.current,
-    }),
-    [currentTaskId, callbacks]
+  const handleSSEMessage = React.useMemo(
+    () =>
+      createSSEEventHandler({
+        currentTaskId,
+        setMessages,
+        setIsLoading,
+        setCurrentTaskId,
+        onTaskCreated: callbacks.onTaskCreated.current,
+      }),
+    [currentTaskId, setMessages, setCurrentTaskId, callbacks]
   );
 
   // Send message handler
@@ -229,7 +224,8 @@ export default function AgentChat({
                   message={message}
                   agent_name={agent.name}
                   onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={handleResolveEscalation}
+                  onResolveEscalation={actions.resolveEscalation}
+                  onSubmitInput={actions.submitInput}
                 />
               );
             } else if (message.role === "user") {

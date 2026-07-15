@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Check, KeyRound, X } from "lucide-react";
+import type { ToolAccessGrant } from "@/api/client/types.gen";
 import { cn } from "@/lib/utils";
 import type { AccessControlRelationship } from "@/types/access-control";
+import { checkToolAccessAction, grantToolAccessAction } from "./actions";
 import styles from "./access-control.module.css";
 
 interface ToolGrantCardProps {
@@ -20,31 +22,10 @@ interface Status {
   detail: string;
 }
 
-interface ToolAccessGrant {
-  scope: "tool" | "arguments";
-  workspace_id: string;
-  user_id: string;
-  tool_name: string;
-  object_id: string;
-  arguments_hash: string | null;
-}
-
 function formatGrant(grant: ToolAccessGrant): string {
   const scope = grant.scope === "tool" ? "whole tool" : "exact arguments";
   const hash = grant.arguments_hash ? ` · ${grant.arguments_hash.slice(0, 12)}` : "";
   return `${grant.tool_name} · ${scope}${hash} · Workspace:${grant.workspace_id} · User:${grant.user_id}`;
-}
-
-async function readErrorDetail(response: Response, fallback: string): Promise<string> {
-  try {
-    const payload = (await response.json()) as { detail?: unknown };
-    if (typeof payload.detail === "string") {
-      return payload.detail;
-    }
-  } catch {
-    // Keep the fallback when the server returns an empty or non-JSON error body.
-  }
-  return fallback;
 }
 
 export default function ToolGrantCard({
@@ -84,15 +65,7 @@ export default function ToolGrantCard({
     setStatus(null);
     try {
       const payload = buildPayload();
-      const response = await fetch("/api/proxy/v1/tool-access/grants", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        throw new Error(await readErrorDetail(response, `Grant failed (${response.status})`));
-      }
-      const result = (await response.json()) as { grant: ToolAccessGrant };
+      const result = await grantToolAccessAction(payload);
       setStatus({
         kind: "allow",
         title: "Grant written",
@@ -114,18 +87,7 @@ export default function ToolGrantCard({
     setStatus(null);
     try {
       const payload = buildPayload();
-      const response = await fetch("/api/proxy/v1/tool-access/checks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        throw new Error(await readErrorDetail(response, `Check failed (${response.status})`));
-      }
-      const result = (await response.json()) as {
-        allowed: boolean;
-        grant: ToolAccessGrant;
-      };
+      const result = await checkToolAccessAction(payload);
       setStatus({
         kind: result.allowed ? "allow" : "deny",
         title: result.allowed ? "Allowed" : "Denied",

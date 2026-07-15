@@ -10,7 +10,7 @@ import { listSkillsAction as listSkills } from "@/lib/server-actions";
 import type { AgentSkill } from "../types";
 import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
-import { SelectableList } from "./SelectableList";
+import { SelectableList } from "@/components/SelectableList";
 
 type SkillsConfigProps = {
   selectedSkills: AgentSkill[];

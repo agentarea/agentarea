@@ -1,6 +1,6 @@
 {{- if .Values.openfga.enabled }}
 {{- $openfgaImage := printf "%s%s%s:%s" (default "" .Values.global.image.registry) (ternary "/" "" (ne (default "" .Values.global.image.registry) "")) (default "openfga/openfga" .Values.openfga.image.repository) (default "v1.18.0" .Values.openfga.image.tag) -}}
-{{- $datastoreUri := printf "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@%s:%v/%s?sslmode=disable&max_conns=20&max_idle_conns=4" (include "agentarea.database.host" .) .Values.global.database.port (.Values.openfga.database.name | default "openfga") -}}
+{{- $datastoreUri := printf "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@%s:%v/%s?sslmode=disable" (include "agentarea.database.host" .) .Values.global.database.port (.Values.openfga.database.name | default "openfga") -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

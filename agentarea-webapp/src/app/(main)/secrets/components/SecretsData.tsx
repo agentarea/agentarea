@@ -20,7 +20,7 @@ export async function SecretsData() {
       console.error("Failed to fetch MCP server instances:", apiError);
       error = "Failed to load connections";
     } else {
-      instances = ((data as any) ?? []) as MCPInstance[];
+      instances = (data as MCPInstance[] | undefined) ?? [];
     }
   } catch (e) {
     console.error("Failed to load secrets data:", e);
@@ -34,14 +34,14 @@ export async function SecretsData() {
           title="Couldn't load connections"
           description={error}
           iconsType="mcp"
-          action={{ label: "View MCP connections", href: "/mcp-servers" }}
+          action={{ label: "View MCP connections", href: "/connections" }}
         />
       ) : instances.length === 0 ? (
         <EmptyState
           title="No MCP connections"
           description="Add an MCP server connection to manage its credentials here."
           iconsType="mcp"
-          action={{ label: "Add connection", href: "/mcp-servers" }}
+          action={{ label: "Add connection", href: "/connections" }}
         />
       ) : (
         <SecretsTable instances={instances} />

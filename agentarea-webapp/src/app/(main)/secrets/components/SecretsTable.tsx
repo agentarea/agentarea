@@ -61,7 +61,7 @@ export function SecretsTable({ instances }: { instances: MCPInstance[] }) {
     <Table
       data={instances}
       columns={columns}
-      onRowClick={(item) => router.push(`/mcp-servers/${item.id}`)}
+      onRowClick={(item) => router.push(`/connections/${item.id}`)}
     />
   );
 }

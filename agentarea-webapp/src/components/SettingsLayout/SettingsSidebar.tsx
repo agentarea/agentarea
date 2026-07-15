@@ -24,7 +24,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 
 export function SettingsSidebarContent() {
@@ -86,7 +85,7 @@ export function SettingsSidebarContent() {
                     isActive={isActive(item.href)}
                     tooltip={item.title}
                   >
-                    <Link href={item.href as any}>
+                    <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -139,11 +138,6 @@ export function SettingsSidebarContent() {
           </a>
         </div>
         <NavUser />
-        {open && (
-          <div className="flex items-center justify-center pb-1 text-[10px] text-muted-foreground/40">
-            v{APP_VERSION}
-          </div>
-        )}
       </SidebarFooter>
     </>
   );

@@ -61,3 +61,45 @@ class TestAllowPrivateOptOut:
     def test_allow_private_still_enforces_scheme(self):
         with pytest.raises(UnsafeUrlError):
             validate_outbound_url("file:///etc/passwd", allow_private=True)
+
+
+class TestEgressAllowlist:
+    def test_none_disables_allowlist_filtering(self):
+        # Backwards-compatible default: no allowlist means public host passes.
+        validate_outbound_url("https://93.184.216.34/x", allowed_hosts=None)
+
+    def test_exact_host_allowed(self):
+        validate_outbound_url(
+            "https://93.184.216.34/x", allowed_hosts=["93.184.216.34"]
+        )
+
+    def test_glob_host_allowed(self):
+        validate_outbound_url(
+            "https://api.github.com/x",
+            allowed_hosts=["*.github.com"],
+            allow_private=True,  # skip DNS; we only assert the allowlist gate here
+        )
+
+    def test_host_not_in_allowlist_rejected(self):
+        with pytest.raises(UnsafeUrlError):
+            validate_outbound_url(
+                "https://evil.example.com/x", allowed_hosts=["*.github.com"]
+            )
+
+    def test_empty_allowlist_is_default_deny(self):
+        with pytest.raises(UnsafeUrlError):
+            validate_outbound_url("https://93.184.216.34/x", allowed_hosts=[])
+
+    def test_allowlist_matches_case_insensitively(self):
+        validate_outbound_url(
+            "https://API.GitHub.com/x",
+            allowed_hosts=["*.github.com"],
+            allow_private=True,
+        )
+
+    def test_allowlist_enforced_even_with_allow_private(self):
+        # Allowlist gate runs before the allow_private short-circuit.
+        with pytest.raises(UnsafeUrlError):
+            validate_outbound_url(
+                "http://192.168.1.50/x", allowed_hosts=["*.github.com"], allow_private=True
+            )

@@ -3,9 +3,10 @@
  * Combines SSE connection, message state, and event handling
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSSE } from "@/hooks/useSSE";
 import { createSSEEventHandler } from "../handlers/eventHandlers";
+import type { SSEEventData } from "../handlers/eventHandlers";
 import { AnyMessage } from "../utils/messageAccumulator";
 
 export interface UseSSEMessagesOptions {
@@ -101,7 +102,7 @@ export interface UseSSEMessagesReturn {
  * ```
  */
 export function useSSEMessages({
-  agentId,
+  agentId: _agentId,
   taskId,
   sseUrl,
   onTaskCreated,
@@ -115,16 +116,17 @@ export function useSSEMessages({
   );
 
   // Create SSE event handler with all dependencies
-  const handleSSEMessage = useCallback(
-    createSSEEventHandler({
-      currentTaskId,
-      setMessages,
-      setIsLoading,
-      setCurrentTaskId,
-      onTaskCreated,
-      onTaskStarted,
-      onTaskFinished,
-    }),
+  const handleSSEMessage = useMemo(
+    () =>
+      createSSEEventHandler({
+        currentTaskId,
+        setMessages,
+        setIsLoading,
+        setCurrentTaskId,
+        onTaskCreated,
+        onTaskStarted,
+        onTaskFinished,
+      }),
     [currentTaskId, onTaskCreated, onTaskStarted, onTaskFinished]
   );
 
@@ -146,7 +148,10 @@ export function useSSEMessages({
 
   // Initialize SSE connection
   useSSE(sseUrl, {
-    onMessage: handleSSEMessage,
+    onMessage: (event) => {
+      if (!event.data || typeof event.data !== "object") return;
+      handleSSEMessage({ type: event.type, data: event.data as SSEEventData });
+    },
     onError: handleSSEError,
     onOpen: handleSSEOpen,
     onClose: handleSSEClose,

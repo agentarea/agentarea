@@ -111,15 +111,24 @@ def _service(repo, catalog):
 
 
 def test_project_catalog_item_marks_read_only_with_provenance():
-    item = _item(spec={"instruction": "hello", "model_id": "gpt", "tools": [{"a": 1}], "planning": True})
+    item = _item(
+        spec={"instruction": "hello", "preferred_models": ["gpt-4o"], "tools": [{"a": 1}], "planning": True}
+    )
     agent = _project_catalog_item(item)
     assert str(agent.id) == item.id
     assert agent.registry_item_id == item.id
     assert agent.is_catalog is True
     assert agent.update_available is False
     assert agent.instruction == "hello"
-    assert agent.model_id == "gpt"
     assert agent.tools == [{"a": 1}]
+
+
+def test_project_catalog_item_never_binds_a_model():
+    # The catalog never binds a concrete model — that's a per-workspace instance.
+    # preferred_models is a UI hint only; the backend never guesses a model_id.
+    item = _item(spec={"instruction": "hello", "preferred_models": ["gpt-4o"]})
+    agent = _project_catalog_item(item)
+    assert agent.model_id is None
 
 
 async def test_get_with_catalog_falls_back_to_projection():
@@ -228,11 +237,19 @@ async def test_install_catalog_agent_unknown_returns_none():
     assert await svc.install_catalog_agent(uuid4()) is None
 
 
-async def test_fork_creates_owned_copy_and_marks_installed():
+async def test_fork_installs_without_a_model():
+    # The catalog never binds a concrete model — that's a per-workspace instance.
+    # The forked agent starts with model_id=None regardless of preferred_models;
+    # the backend never guesses a model (the UI suggests one from the hint).
     item = _item(
         name="Builtin A",
         version="3",
-        spec={"instruction": "ins", "model_id": "m", "tools": [{"x": 1}], "planning": True},
+        spec={
+            "instruction": "ins",
+            "preferred_models": ["gpt-4o"],
+            "tools": [{"x": 1}],
+            "planning": True,
+        },
     )
     repo = FakeAgentRepo()
     catalog = FakeCatalogRepo([item])
@@ -244,7 +261,7 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     kw = repo.created_kwargs[0]
     assert kw["registry_item_id"] == item.id
     assert kw["instruction"] == "ins"
-    assert kw["model_id"] == "m"
+    assert kw["model_id"] is None
     assert kw["tools"] == [{"x": 1}]
     # The install is recorded on the catalog item with the new agent id + version.
     assert catalog.installed == [(item.id, str(agent.id), "3")]

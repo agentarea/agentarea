@@ -1,7 +1,7 @@
 """Integration tests for GET /v1/workspace/dashboard.
 
 Calls get_dashboard() directly against an in-memory SQLite seeded with Agent,
-TaskORM, and GovernancePolicyORM rows. The PostgreSQL-only operators
+TaskORM, and PolicyRuleORM rows. The PostgreSQL-only operators
 (JSON ->> and the Date-cast CTEs) are sidestepped: sum_spend_today,
 sum_spend_mtd, and list_budget_exhausted are patched, and a small session
 proxy intercepts the daily_spend / daily_tasks CTEs. All other queries
@@ -23,8 +23,8 @@ from agentarea_agents.domain.models import Agent
 from agentarea_api.api.v1.dashboard import get_dashboard
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
-from agentarea_governance.domain.policies import monthly_cap_policy
-from agentarea_governance.infrastructure.orm import GovernancePolicyORM
+from agentarea_common.money import to_money
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_tasks.infrastructure.orm import TaskORM
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -49,7 +49,7 @@ def _month_start() -> datetime:
 
 @pytest.fixture(scope="module")
 def user_context() -> UserContext:
-    return UserContext(user_id=USER_ID, workspace_id=WORKSPACE_ID, roles=["user"])
+    return UserContext(user_id=USER_ID, workspace_id=WORKSPACE_ID)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +65,7 @@ async def engine():
     target_tables = [
         Agent.__table__,
         TaskORM.__table__,
-        GovernancePolicyORM.__table__,
+        PolicyRuleORM.__table__,
     ]
 
     async with _engine.begin() as conn:
@@ -110,6 +110,7 @@ async def seeded(session_factory):
             Agent(
                 id=agent_id,
                 name="Dashboard Test Agent",
+                slug="dashboard-test-agent",
                 workspace_id=WORKSPACE_ID,
                 created_by=USER_ID,
                 status="active",
@@ -122,6 +123,7 @@ async def seeded(session_factory):
             Agent(
                 id=other_workspace_agent_id,
                 name="Other Workspace Agent",
+                slug="other-workspace-agent",
                 workspace_id="other-workspace-999",
                 created_by="other-user",
                 status="active",
@@ -204,12 +206,15 @@ async def seeded(session_factory):
         )
 
         session.add(
-            GovernancePolicyORM(
+            PolicyRuleORM(
                 workspace_id=WORKSPACE_ID,
                 created_by=USER_ID,
-                scope_type="workspace",
-                scope_id=WORKSPACE_ID,
-                document=monthly_cap_policy(MONTHLY_CAP_USD).to_json_dict(),
+                subject_type="workspace",
+                subject_id=WORKSPACE_ID,
+                target="spend",
+                effect="cap",
+                params={"amount_usd": str(to_money(MONTHLY_CAP_USD)), "period": "month"},
+                enabled=True,
             )
         )
         await session.commit()
@@ -326,17 +331,19 @@ class TestSpendCard:
         policy_context = UserContext(
             user_id="policy-user-dashboard-002",
             workspace_id=policy_workspace_id,
-            roles=["user"],
         )
 
         async with session_factory() as session:
             session.add(
-                GovernancePolicyORM(
+                PolicyRuleORM(
                     workspace_id=policy_workspace_id,
                     created_by=policy_context.user_id,
-                    scope_type="workspace",
-                    scope_id=policy_workspace_id,
-                    document={},
+                    subject_type="workspace",
+                    subject_id=policy_workspace_id,
+                    target="spend",
+                    effect="cap",
+                    params={},
+                    enabled=True,
                 )
             )
             await session.commit()
@@ -363,7 +370,6 @@ class TestSpendCard:
         other_context = UserContext(
             user_id="no-policy-user",
             workspace_id="workspace-without-policy",
-            roles=["user"],
         )
         result = await _call_dashboard(session_factory, other_context, mtd_usd=50.0)
         assert result.spend.cap_usd is None
@@ -459,7 +465,6 @@ class TestWorkspaceIsolation:
         empty_context = UserContext(
             user_id="user-empty",
             workspace_id="workspace-empty-000",
-            roles=["user"],
         )
         result = await _call_dashboard(session_factory, empty_context, today_usd=0.0, mtd_usd=0.0)
         assert result.blockers.hitl == []

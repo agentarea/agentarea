@@ -15,4 +15,4 @@ Thumbs.db
 coverage/
 .nyc_output/
 .cache/
-*.tsbuildinfo
+*.tsbuildinfoqa/last-run.txt

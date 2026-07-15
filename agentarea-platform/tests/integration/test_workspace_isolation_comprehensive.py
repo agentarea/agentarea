@@ -70,46 +70,46 @@ def comprehensive_contexts():
     return {
         # Enterprise A - Multiple departments
         "enterprise_a_hr": UserContext(
-            user_id="hr_manager", workspace_id="enterprise-a-hr", roles=["manager"]
+            user_id="hr_manager", workspace_id="enterprise-a-hr"
         ),
         "enterprise_a_hr_emp": UserContext(
-            user_id="hr_employee", workspace_id="enterprise-a-hr", roles=["employee"]
+            user_id="hr_employee", workspace_id="enterprise-a-hr"
         ),
         "enterprise_a_finance": UserContext(
-            user_id="finance_manager", workspace_id="enterprise-a-finance", roles=["manager"]
+            user_id="finance_manager", workspace_id="enterprise-a-finance"
         ),
         "enterprise_a_it": UserContext(
-            user_id="it_admin", workspace_id="enterprise-a-it", roles=["admin"]
+            user_id="it_admin", workspace_id="enterprise-a-it"
         ),
         # Enterprise B - Competitor company
         "enterprise_b_hr": UserContext(
-            user_id="hr_manager_b", workspace_id="enterprise-b-hr", roles=["manager"]
+            user_id="hr_manager_b", workspace_id="enterprise-b-hr"
         ),
         "enterprise_b_finance": UserContext(
-            user_id="finance_manager_b", workspace_id="enterprise-b-finance", roles=["manager"]
+            user_id="finance_manager_b", workspace_id="enterprise-b-finance"
         ),
         # Startup C - Small company
         "startup_c_main": UserContext(
-            user_id="founder", workspace_id="startup-c-main", roles=["owner"]
+            user_id="founder", workspace_id="startup-c-main"
         ),
         "startup_c_dev": UserContext(
-            user_id="developer", workspace_id="startup-c-main", roles=["developer"]
+            user_id="developer", workspace_id="startup-c-main"
         ),
         # Government Agency
         "gov_agency_public": UserContext(
-            user_id="public_officer", workspace_id="gov-agency-public", roles=["officer"]
+            user_id="public_officer", workspace_id="gov-agency-public"
         ),
         "gov_agency_classified": UserContext(
             user_id="classified_officer",
             workspace_id="gov-agency-classified",
-            roles=["officer", "classified"],
+            
         ),
         # Malicious actors
         "external_attacker": UserContext(
-            user_id="attacker", workspace_id="attacker-workspace", roles=["user"]
+            user_id="attacker", workspace_id="attacker-workspace"
         ),
         "insider_threat": UserContext(
-            user_id="insider", workspace_id="compromised-workspace", roles=["user"]
+            user_id="insider", workspace_id="compromised-workspace"
         ),
     }
 
@@ -128,14 +128,14 @@ class TestComprehensiveWorkspaceIsolation:
             hr_token = generate_test_jwt_token(
                 user_id="hr_manager",
                 workspace_id="enterprise-a-hr",
-                roles=["manager"],
+                
                 secret_key="test-secret",
             )
 
             finance_token = generate_test_jwt_token(
                 user_id="finance_manager",
                 workspace_id="enterprise-a-finance",
-                roles=["manager"],
+                
                 secret_key="test-secret",
             )
 
@@ -407,17 +407,33 @@ class TestComprehensiveWorkspaceIsolation:
                 )
                 created_records[context_name] = record
 
-            # Test that each repository only sees its own data
+            # Test that each repository only sees data within its own
+            # workspace. Some contexts intentionally share a workspace_id
+            # (e.g. enterprise_a_hr and enterprise_a_hr_emp both belong to
+            # "enterprise-a-hr", startup_c_main/startup_c_dev share
+            # "startup-c-main"), so a workspace's record count matches how
+            # many contexts map to that workspace, not a flat 1-per-context.
+            from collections import Counter
+
+            workspace_counts = Counter(ctx.workspace_id for ctx in comprehensive_contexts.values())
+
             for context_name, repo in repos.items():
+                workspace_id = comprehensive_contexts[context_name].workspace_id
                 records = await repo.list_all()
-                assert len(records) == 1
-                assert records[0].name == f"Record for {context_name}"
-                assert records[0].workspace_id == comprehensive_contexts[context_name].workspace_id
+                assert len(records) == workspace_counts[workspace_id]
+                assert all(r.workspace_id == workspace_id for r in records)
+                assert f"Record for {context_name}" in {r.name for r in records}
 
             # Test cross-workspace access prevention for all combinations
+            # (contexts sharing a workspace_id CAN see each other's data --
+            # that's same-workspace visibility, not a leak).
             for context1_name, repo1 in repos.items():
                 for context2_name, record2 in created_records.items():
-                    if context1_name != context2_name:
+                    same_workspace = (
+                        comprehensive_contexts[context1_name].workspace_id
+                        == comprehensive_contexts[context2_name].workspace_id
+                    )
+                    if context1_name != context2_name and not same_workspace:
                         # Repo1 should not be able to see record2
                         cannot_see = await repo1.get_by_id(record2.id)
                         assert cannot_see is None, (
@@ -442,31 +458,39 @@ class TestComprehensiveWorkspaceIsolation:
                 session, comprehensive_contexts["startup_c_main"]
             )
 
-            # Define concurrent operations
+            # Define concurrent operations. The shared test_session_factory
+            # session is a single AsyncSession (not safe for true concurrent
+            # use), so serialize the actual DB access with a lock while
+            # still exercising these via overlapping asyncio tasks/scheduling.
+            db_lock = asyncio.Lock()
+
             async def create_hr_records():
                 records = []
                 for i in range(20):
-                    record = await hr_repo.create(
-                        name=f"HR Record {i:03d}", category="hr", priority=i % 3 + 1
-                    )
+                    async with db_lock:
+                        record = await hr_repo.create(
+                            name=f"HR Record {i:03d}", category="hr", priority=i % 3 + 1
+                        )
                     records.append(record)
                 return records
 
             async def create_finance_records():
                 records = []
                 for i in range(15):
-                    record = await finance_repo.create(
-                        name=f"Finance Record {i:03d}", category="finance", priority=i % 3 + 1
-                    )
+                    async with db_lock:
+                        record = await finance_repo.create(
+                            name=f"Finance Record {i:03d}", category="finance", priority=i % 3 + 1
+                        )
                     records.append(record)
                 return records
 
             async def create_startup_records():
                 records = []
                 for i in range(10):
-                    record = await startup_repo.create(
-                        name=f"Startup Record {i:03d}", category="startup", priority=i % 3 + 1
-                    )
+                    async with db_lock:
+                        record = await startup_repo.create(
+                            name=f"Startup Record {i:03d}", category="startup", priority=i % 3 + 1
+                        )
                     records.append(record)
                 return records
 

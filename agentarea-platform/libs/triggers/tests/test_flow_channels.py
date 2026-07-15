@@ -1,39 +1,34 @@
-"""Hermetic flow test: inbound channel message -> route -> deliver.
+"""Hermetic flow test: workflow event -> emit -> deliver.
 
 Covers MainFlow.CHANNELS end-to-end without a live broker, Redis, or
 any network connection. All external dependencies are replaced by
 in-memory stubs that implement the same Protocol interfaces used in
 production.
 
-Flow under test:
-  1. ChannelEventSubscriber._handle_message parses a raw pub/sub envelope.
-  2. ChannelRouter.on_task_event resolves the channel_origin, picks an
-     adapter, formats the message, and submits to the delivery stream.
-  3. ChannelDeliveryConsumer._handle claims the message from the stub
+Flow under test (the live delivery path):
+  1. `emit_channel_delivery` runs the routing decision inside the
+     Temporal activity: visibility filter, channel resolution, adapter
+     format, dedup_key construction, and submit to the outbound stream.
+  2. ChannelDeliveryConsumer._handle claims the message from the stub
      broker, deduplicates via an in-memory DedupCache stub, and calls
      adapter.send.
-  4. Assertion: adapter.send received exactly one call with the correct
-     payload; a second submission with the same dedup_key is silently
-     dropped (dedup).
+  3. Assertion: adapter.send received exactly one call with the correct
+     payload; a second emit for the same event (same dedup_key) is
+     silently dropped (dedup).
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_common.broker import BrokerMessage
 from agentarea_common.testing.flows import MainFlow
 from agentarea_triggers.channels import register_adapter
-from agentarea_triggers.channels.delivery_consumer import (
-    ChannelDeliveryConsumer,
-    ChannelDeliveryEmitter,
-)
-from agentarea_triggers.channels.router import ChannelRouter
+from agentarea_triggers.channels.activity_emit import emit_channel_delivery
+from agentarea_triggers.channels.delivery_consumer import ChannelDeliveryConsumer
 
 # ---------------------------------------------------------------------------
 # In-memory stubs (no network, no Redis)
@@ -102,27 +97,6 @@ class _InMemoryDedup:
 # ---------------------------------------------------------------------------
 
 
-def _make_pubsub_envelope(
-    event_type: str,
-    task_id: str,
-    event_id: str,
-    channel_origin: dict[str, Any],
-    result: str = "task completed",
-) -> bytes:
-    """Build a raw pub/sub message that ChannelEventSubscriber expects."""
-    envelope = {
-        "id": event_id,
-        "type": f"workflow.{event_type}",
-        "aggregate_id": task_id,
-        "data": {
-            "task_id": task_id,
-            "original_data": {"result": result},
-            "channel_origin": channel_origin,
-        },
-    }
-    return json.dumps(envelope).encode()
-
-
 async def _run_consumer_once(consumer: ChannelDeliveryConsumer) -> None:
     """Start consumer, let it drain the stub queue, then stop."""
     await consumer.start()
@@ -141,13 +115,13 @@ async def _run_consumer_once(consumer: ChannelDeliveryConsumer) -> None:
 
 @pytest.mark.flow(MainFlow.CHANNELS)
 @pytest.mark.asyncio
-async def test_inbound_channel_message_routed_and_delivered() -> None:
-    """Full CHANNELS flow: inbound pub/sub -> router -> delivery consumer -> adapter.send.
+async def test_workflow_event_emitted_and_delivered() -> None:
+    """Full CHANNELS flow: emit_channel_delivery -> delivery consumer -> adapter.send.
 
     Assert that a WorkflowCompleted event with a known channel_origin is
     formatted by the adapter and delivered exactly once via adapter.send,
-    and that a second submission with the identical dedup_key is silently
-    dropped.
+    and that a second emit of the same event (identical dedup_key) is
+    silently dropped.
     """
     # --- Arrange -----------------------------------------------------------
 
@@ -171,10 +145,6 @@ async def test_inbound_channel_message_routed_and_delivered() -> None:
     stream = f"test:flow:channels:{uuid.uuid4().hex[:8]}"
     dlq_stream = f"{stream}:dlq"
 
-    emitter = ChannelDeliveryEmitter(broker, stream=stream)
-
-    router = ChannelRouter(emitter=emitter)
-
     consumer = ChannelDeliveryConsumer(
         broker=broker,
         dedup=dedup,
@@ -186,31 +156,25 @@ async def test_inbound_channel_message_routed_and_delivered() -> None:
         block_ms=10,
     )
 
-    # --- Act (step 1-2): parse pub/sub envelope and route ------------------
-
-    raw_envelope = _make_pubsub_envelope(
-        event_type="WorkflowCompleted",
-        task_id=task_id,
-        event_id=event_id,
-        channel_origin=channel_origin,
-        result="All done",
-    )
-    raw_message: dict[str, Any] = {
-        "type": "pmessage",
-        "data": raw_envelope,
+    event = {
+        "event_type": "WorkflowCompleted",
+        "task_id": task_id,
+        "event_id": event_id,
+        "data": {"result": "All done"},
     }
 
-    # Import subscriber here to avoid top-level redis import issues in CI
-    # (the subscriber module only does 'import redis.asyncio' at call time).
-    from agentarea_triggers.channels.subscriber import ChannelEventSubscriber
+    # --- Act (step 1): emit runs the routing decision + enqueues -----------
 
-    subscriber = ChannelEventSubscriber(router=router, redis_url="redis://unused")
-    await subscriber._handle_message(raw_message)
+    submitted = await emit_channel_delivery(
+        event=event,
+        channel_origin=channel_origin,
+        broker=broker,
+        stream=stream,
+    )
+    assert submitted is True, "emit_channel_delivery did not enqueue a delivery job"
+    assert len(broker._queue) == 1, "emit did not enqueue exactly one delivery job"
 
-    # Router should have submitted one message to the broker stream.
-    assert len(broker._queue) == 1, "Router did not enqueue a delivery job"
-
-    # --- Act (step 3-4): consumer processes the delivery job ---------------
+    # --- Act (step 2): consumer processes the delivery job -----------------
 
     await _run_consumer_once(consumer)
 
@@ -228,18 +192,15 @@ async def test_inbound_channel_message_routed_and_delivered() -> None:
     assert sent_message == "Task is complete!"
     assert broker.acked, "Message was not ACKed after successful delivery"
 
-    # --- Assert: duplicate dedup_key is dropped ----------------------------
+    # --- Assert: re-emitting the same event is dropped by dedup ------------
 
-    # Submit the same event again (same dedup_key = task_id:event_type:event_id).
-    dedup_key = f"{task_id}:WorkflowCompleted:{event_id}"
-    await emitter.submit(
-        channel_type=adapter_type,
-        channel_config=channel_origin,
-        message="Task is complete!",
-        dedup_key=dedup_key,
+    # Same (task_id, event_type, event_id) => same dedup_key.
+    await emit_channel_delivery(
+        event=event,
+        channel_origin=channel_origin,
+        broker=broker,
+        stream=stream,
     )
-
-    # Reset the consumer's broker queue pointer so we can reuse the same instance.
     await _run_consumer_once(consumer)
 
     # send must still have been called only once total — dedup blocked the repeat.

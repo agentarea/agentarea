@@ -11,17 +11,10 @@ import NetworkLegend from "./components/NetworkLegend";
 import NetworkMetricsPanel from "./components/NetworkMetricsPanel";
 import NodeDetailDrawer from "./components/NodeDetailDrawer";
 import { useNetwork } from "./NetworkProvider";
+import type { NetworkNodeData } from "./types";
 import AccessGraphView from "./views/AccessGraphView";
 import DataFlowView from "./views/DataFlowView";
 import OrgChartView from "./views/OrgChartView";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
 
 export function NetworkHeaderTabs() {
   const { loading, fetchTopology } = useNetwork();

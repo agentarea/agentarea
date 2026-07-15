@@ -1,5 +1,6 @@
 import React from "react";
 import { Streamdown } from "streamdown";
+import type { Components } from "streamdown";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
 import { ToolIcon } from "../utils/toolIcon";
@@ -9,22 +10,22 @@ import { describeToolCall } from "../utils/describeToolCall";
 interface ToolResultData {
   tool_name: string;
   tool_call_id?: string;
-  result: any;
+  result: unknown;
   success: boolean;
   execution_time?: string;
-  arguments?: Record<string, any>;
+  arguments?: Record<string, unknown>;
   server_icon?: string;
 }
 
 const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   const desc = describeToolCall(data.tool_name, data.arguments);
 
-  const formatResult = (result: any) => {
+  const formatResult = (result: unknown) => {
     if (typeof result === "string") {
       return (
         <Streamdown
           className="prose prose-sm dark:prose-invert max-w-none"
-          components={fileAwareMarkdownComponents as any}
+          components={fileAwareMarkdownComponents as Components}
           linkSafety={{ enabled: false }}
         >
           {preprocessFileLinks(result)}

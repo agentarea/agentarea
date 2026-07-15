@@ -19,6 +19,8 @@ import httpx
 from agentarea_execution.interfaces import ActivityDependencies
 from temporalio import activity
 
+from agentarea_mcp.tool_serialization import serialize_mcp_tool
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,11 +30,14 @@ async def discover_mcp_tools(
     instance_name: str | None = None,
     headers: dict[str, str] | None = None,
     timeout: float = 15.0,
+    transport: str | None = None,
 ) -> list[dict]:
     """Connect to a running MCP server and list tools.
 
     Plain async function — importable by verify() and any other non-Temporal caller.
-    Tries streamable-HTTP first, falls back to SSE transport.
+    Transport selection is delegated to the shared ``mcp_transport_candidates``
+    (single source of truth) so remote servers that serve streamable-HTTP at the
+    root (e.g. Vercel) are hit at the URL as-given, not re-suffixed to /mcp or /sse.
 
     Args:
         endpoint_url: Direct URL (for url-type MCPs or already-resolved container URL).
@@ -40,6 +45,8 @@ async def discover_mcp_tools(
         instance_name: Instance name (used as fallback gateway path).
         headers: Extra request headers (e.g. auth).
         timeout: Per-attempt connection timeout in seconds.
+        transport: Declared MCP wire transport ("streamable-http"|"sse"); when set,
+            it is honored exactly with no probing.
 
     Returns:
         List of tool dicts with keys: name, description, inputSchema.
@@ -49,14 +56,17 @@ async def discover_mcp_tools(
     """
     from agentarea_common.config import get_settings
 
+    from agentarea_mcp.verification import mcp_transport_candidates
+
     settings = get_settings()
     custom_headers: dict[str, str] = dict(headers) if headers else {}
 
     if endpoint_url:
-        url = endpoint_url.rstrip("/")
-        mcp_url = f"{url}/mcp" if not url.endswith("/mcp") else url
+        # Do NOT pre-append /mcp — let the shared resolver honor the URL as-given
+        # (bare root, /mcp, or /sse) so root-streamable remotes aren't broken.
+        base_url = endpoint_url.rstrip("/")
     else:
-        mcp_url = None
+        base_url = None
         mcp_manager_url = settings.mcp.MCP_MANAGER_URL
         if instance_id:
             try:
@@ -68,42 +78,45 @@ async def discover_mcp_tools(
                         data = resp.json()
                         direct = data.get("details", {}).get("direct_http_endpoint")
                         if direct:
-                            mcp_url = f"{direct}/mcp"
+                            base_url = f"{direct}/mcp"
             except Exception as exc:
                 logger.debug("Direct endpoint resolution failed: %s", exc)
 
-        if not mcp_url:
+        if not base_url:
             gateway_url = settings.mcp.MCP_GATEWAY_URL
-            mcp_url = f"{gateway_url}/mcp/{instance_name}/mcp"
+            base_url = f"{gateway_url}/mcp/{instance_name}/mcp"
 
-    logger.info("Tool discovery connecting to %s", mcp_url)
+    logger.info("Tool discovery connecting to %s", base_url)
 
     from mcp import ClientSession
 
-    try:
-        from mcp.client.streamable_http import streamablehttp_client
+    streamable_urls, sse_url = mcp_transport_candidates(base_url, transport)
 
-        async with streamablehttp_client(
-            mcp_url,
-            timeout=timedelta(seconds=timeout),
-            headers=custom_headers or None,
-        ) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as sess:
-                await sess.initialize()
-                result = await sess.list_tools()
-    except Exception as transport_err:
-        logger.info(
-            "Streamable HTTP failed for %s (%s), trying SSE fallback",
-            mcp_url,
-            transport_err,
-        )
+    result = None
+    last_err: BaseException | None = None
+    for streamable_url in streamable_urls:
+        try:
+            from mcp.client.streamable_http import streamablehttp_client
+
+            async with streamablehttp_client(
+                streamable_url,
+                timeout=timedelta(seconds=timeout),
+                headers=custom_headers or None,
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as sess:
+                    await sess.initialize()
+                    result = await sess.list_tools()
+            break
+        except Exception as transport_err:
+            last_err = transport_err
+            logger.info(
+                "Streamable HTTP failed for %s (%s), trying next transport",
+                streamable_url,
+                transport_err,
+            )
+
+    if result is None and sse_url is not None:
         from mcp.client.sse import sse_client
-
-        sse_url = mcp_url.rstrip("/")
-        if sse_url.endswith("/mcp"):
-            sse_url = sse_url[:-4] + "/sse"
-        elif not sse_url.endswith("/sse"):
-            sse_url = sse_url + "/sse"
 
         async with sse_client(
             sse_url,
@@ -114,14 +127,10 @@ async def discover_mcp_tools(
                 await sess.initialize()
                 result = await sess.list_tools()
 
-    tools = [
-        {
-            "name": t.name,
-            "description": t.description or "",
-            "inputSchema": t.inputSchema if t.inputSchema else {},
-        }
-        for t in result.tools
-    ]
+    if result is None:
+        raise last_err or RuntimeError(f"No usable MCP transport for {base_url}")
+
+    tools = [serialize_mcp_tool(t) for t in result.tools]
 
     if instance_id:
         logger.info("Discovered %d tools for instance %s", len(tools), instance_id)

@@ -33,6 +33,21 @@ export function WorkplaceChat({
   const t = useTranslations("Workplace.hero");
   const [selectedAgent, setSelectedAgent] = useState<Agent>(initialAgent);
 
+  // The workspace chat starts without a task in the URL. Once the first message
+  // creates a task, adopt its URL so a refresh reconnects to the live stream and
+  // follow-up messages have a task to target (instead of being lost in memory).
+  //
+  // Use the native History API (supported by the App Router) instead of
+  // router.replace: it rewrites the URL in place WITHOUT re-running the route or
+  // unmounting this chat, so the in-flight event stream keeps going and the UI
+  // doesn't flicker. A hard refresh still lands on /tasks/[id], which replays
+  // history from the DB.
+  const handleTaskCreated = React.useCallback((taskId: string) => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/tasks/${taskId}`);
+    }
+  }, []);
+
   return (
     <FullChat
       agent={selectedAgent}
@@ -43,6 +58,7 @@ export function WorkplaceChat({
       startCentered
       badgeSuggestions={badgeSuggestions}
       welcomeComponent={<ChatWelcome icon={Sparkles} title={t("title")} />}
+      onTaskCreated={handleTaskCreated}
     />
   );
 }

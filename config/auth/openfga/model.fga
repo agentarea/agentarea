@@ -43,6 +43,13 @@ type Agent
     define own: owners
     define run_task: tasks
 
+type Client
+  relations
+    define users: [User, Workspace#members]
+    define owners: [User]
+    define use: users or owners
+    define manage: owners
+
 type Session
   relations
     define tasks: [Task]

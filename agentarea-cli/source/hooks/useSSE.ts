@@ -13,7 +13,7 @@ export interface SSEState {
 	output: string;
 }
 
-export function useSSE(taskId?: string) {
+export function useSSE(agentId?: string, taskId?: string) {
 	const [state, setState] = useState<SSEState>({
 		isConnected: false,
 		isLoading: false,
@@ -24,78 +24,86 @@ export function useSSE(taskId?: string) {
 		output: '',
 	});
 
-	const connect = useCallback(async (id: string) => {
-		setState(prev => ({...prev, isLoading: true, error: null}));
+	const connect = useCallback(
+		async (id: string, forAgentId?: string) => {
+			setState(prev => ({...prev, isLoading: true, error: null}));
 
-		try {
-			await sseService.connect(
-				id,
-				// onMessage handler
-				event => {
-					logger.debug(`SSE event: ${event.eventType}`);
+			try {
+				await sseService.connect(
+					forAgentId ?? agentId ?? '',
+					id,
+					// onMessage handler
+					event => {
+						logger.debug(`SSE event: ${event.eventType}`);
 
-					setState(prev => {
-						let newOutput = prev.output;
-						let newProgress = prev.progress;
-						let newStatus = prev.currentStatus;
+						setState(prev => {
+							let newOutput = prev.output;
+							let newProgress = prev.progress;
+							let newStatus = prev.currentStatus;
 
-						// Process different event types
-						if (event.eventType === 'output' && 'content' in event.data) {
-							newOutput += event.data.content + '\n';
-						} else if (
-							event.eventType === 'progress' &&
-							'percentage' in event.data
-						) {
-							newProgress = {
-								current: event.data.current as number,
-								total: event.data.total as number,
-								percentage: event.data.percentage as number,
+							if (event.eventType === 'output' && 'content' in event.data) {
+								newOutput += event.data.content + '\n';
+							} else if (
+								event.eventType === 'progress' &&
+								'percentage' in event.data
+							) {
+								newProgress = {
+									current: event.data.current as number,
+									total: event.data.total as number,
+									percentage: event.data.percentage as number,
+								};
+							} else if (
+								event.eventType === 'status' &&
+								'status' in event.data
+							) {
+								newStatus = event.data.status as TaskStatus;
+							}
+
+							return {
+								...prev,
+								events: [...prev.events, event],
+								output: newOutput,
+								progress: newProgress,
+								currentStatus: newStatus,
 							};
-						} else if (event.eventType === 'status' && 'status' in event.data) {
-							newStatus = event.data.status as TaskStatus;
-						}
-
-						return {
+						});
+					},
+					// onError handler
+					error => {
+						logger.error('SSE connection error:', error);
+						setState(prev => ({
 							...prev,
-							events: [...prev.events, event],
-							output: newOutput,
-							progress: newProgress,
-							currentStatus: newStatus,
-						};
-					});
-				},
-				// onError handler
-				error => {
-					logger.error('SSE connection error:', error);
-					setState(prev => ({
-						...prev,
-						isConnected: false,
-						isLoading: false,
-						error: error.message,
-					}));
-				},
-			);
+							isConnected: false,
+							isLoading: false,
+							error: error.message,
+						}));
+					},
+				);
 
-			setState(prev => ({
-				...prev,
-				isConnected: true,
-				isLoading: false,
-			}));
+				setState(prev => ({
+					...prev,
+					isConnected: true,
+					isLoading: false,
+				}));
 
-			logger.info(`Connected to SSE stream for task ${id}`);
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : 'Failed to connect to stream';
+				logger.info(`Connected to SSE stream for task ${id}`);
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error
+						? error.message
+						: 'Failed to connect to stream';
 
-			setState(prev => ({
-				...prev,
-				isLoading: false,
-				error: errorMessage,
-			}));
+				setState(prev => ({
+					...prev,
+					isLoading: false,
+					error: errorMessage,
+				}));
 
-			logger.error('SSE connection failed:', errorMessage);
-		}
-	}, []);
+				logger.error('SSE connection failed:', errorMessage);
+			}
+		},
+		[agentId],
+	);
 
 	const disconnect = useCallback((id: string) => {
 		sseService.disconnect(id);

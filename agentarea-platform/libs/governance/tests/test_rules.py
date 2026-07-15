@@ -8,6 +8,7 @@ from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
     PolicySubjectType,
+    egress_allowlist_from_rules,
     parse_target,
     rules_to_document,
 )
@@ -143,3 +144,49 @@ class TestCompiler:
         assert doc.tools.denied == ["danger"]
         assert "approve_me" in doc.approval.escalation_rules
         assert doc.content_safety.prompt_injection_detection_enabled is True
+
+
+class TestEgressRules:
+    def test_egress_rule_does_not_compile_into_runtime_document(self):
+        # Egress is enforced at the container network layer (enterprise), never
+        # in the in-process runtime document.
+        doc = rules_to_document(
+            [_rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com"])]
+        )
+        assert doc == PolicyDocument()
+
+    def test_allowlist_extraction_by_target(self):
+        rules = [
+            _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "api.github.com"]),
+            _rule("mcp:slack", PolicyEffect.EGRESS, allowed_hosts=["slack.com"]),
+            _rule("tool:send_email", PolicyEffect.ALLOW),  # non-egress ignored
+        ]
+        assert egress_allowlist_from_rules(rules) == {
+            "mcp:github": ["*.github.com", "api.github.com"],
+            "mcp:slack": ["slack.com"],
+        }
+
+    def test_allowlist_dedupes_and_merges_same_target(self):
+        rules = [
+            _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com"]),
+            _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "raw.github.com"]),
+        ]
+        assert egress_allowlist_from_rules(rules) == {
+            "mcp:github": ["*.github.com", "raw.github.com"]
+        }
+
+    def test_disabled_egress_rule_skipped(self):
+        rule = _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com"])
+        rule.enabled = False
+        assert egress_allowlist_from_rules([rule]) == {}
+
+    def test_declared_empty_allowlist_is_default_deny(self):
+        # A target present with an empty list = declared, nothing allowed.
+        assert egress_allowlist_from_rules(
+            [_rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=[])]
+        ) == {"mcp:github": []}
+
+    def test_malformed_allowed_hosts_skipped(self):
+        assert egress_allowlist_from_rules(
+            [_rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts="not-a-list")]
+        ) == {}

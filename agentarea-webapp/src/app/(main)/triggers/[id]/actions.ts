@@ -35,8 +35,8 @@ export async function updateTriggerAction(
   triggerId: string,
   body: {
     name?: string;
-    config?: Record<string, any>;
-    task_parameters?: Record<string, any>;
+    config?: Record<string, unknown>;
+    task_parameters?: Record<string, unknown>;
     failure_threshold?: number;
   }
 ) {

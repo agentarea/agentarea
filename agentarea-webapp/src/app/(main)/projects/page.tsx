@@ -42,7 +42,10 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
       }
     >
       <Suspense key={searchQuery} fallback={<ProjectsSkeleton />}>
-        <ProjectsContent searchQuery={searchQuery} />
+        <ProjectsContent
+          searchQuery={searchQuery}
+          searchParams={resolvedSearchParams}
+        />
       </Suspense>
     </ContentBlock>
   );

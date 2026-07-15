@@ -14,7 +14,7 @@ from agentarea_agents.infrastructure.collection_repository import SkillCollectio
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import (
     KetoError,
     KetoUnavailableError,

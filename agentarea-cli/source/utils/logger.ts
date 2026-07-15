@@ -26,13 +26,15 @@ class Logger {
 
 	debug(...args: unknown[]): void {
 		if (this.shouldLog('debug')) {
-			console.log('[DEBUG]', ...args);
+			// Diagnostics go to stderr so stdout carries only command data
+			// (JSON from `api`/`policies list` etc. stays pipeable into jq).
+			console.error('[DEBUG]', ...args);
 		}
 	}
 
 	info(...args: unknown[]): void {
 		if (this.shouldLog('info')) {
-			console.log('[INFO]', ...args);
+			console.error('[INFO]', ...args);
 		}
 	}
 

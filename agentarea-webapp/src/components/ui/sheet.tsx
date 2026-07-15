@@ -80,17 +80,20 @@ const SheetContent = React.forwardRef<
     },
     ref
   ) => {
-    const mergedPointerDownOutside = disableOutsideClose
-      ? (e: Event) => {
+    type PointerDownHandler = React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>["onPointerDownOutside"];
+    type InteractHandler = React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>["onInteractOutside"];
+
+    const mergedPointerDownOutside: PointerDownHandler = disableOutsideClose
+      ? (e) => {
           e.preventDefault();
-          onPointerDownOutside?.(e as any);
+          onPointerDownOutside?.(e);
         }
       : onPointerDownOutside;
 
-    const mergedInteractOutside = disableOutsideClose
-      ? (e: Event) => {
+    const mergedInteractOutside: InteractHandler = disableOutsideClose
+      ? (e) => {
           e.preventDefault();
-          onInteractOutside?.(e as any);
+          onInteractOutside?.(e);
         }
       : onInteractOutside;
 
@@ -100,8 +103,8 @@ const SheetContent = React.forwardRef<
         <SheetPrimitive.Content
           ref={ref}
           className={cn(sheetVariants({ side }), className)}
-          onPointerDownOutside={mergedPointerDownOutside as any}
-          onInteractOutside={mergedInteractOutside as any}
+          onPointerDownOutside={mergedPointerDownOutside}
+          onInteractOutside={mergedInteractOutside}
           {...props}
         >
           <SheetPrimitive.Close className="absolute right-3 top-3 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-secondary">

@@ -12,9 +12,12 @@ export async function GET(
     // Use session-based token retrieval only; do not handle workspace
     const token = await getAuthToken();
 
-    // Forward native SSE stream from backend
+    // Forward native SSE stream from backend.
+    // NOTE: request the canonical no-trailing-slash path. The trailing-slash
+    // variant 307-redirects to this one, and undici throws `TypeError: fetch
+    // failed` when it follows a redirect into a long-lived event-stream body.
     const backendUrl = env.API_URL;
-    const eventsUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream/`;
+    const eventsUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
 
     // Create headers for backend request
     const headers: Record<string, string> = {

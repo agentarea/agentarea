@@ -68,14 +68,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -96,7 +94,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -140,14 +137,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -168,7 +163,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -304,11 +298,6 @@
             "title": "Pushnotifications",
             "type": "boolean"
           },
-          "stateTransitionHistory": {
-            "default": false,
-            "title": "Statetransitionhistory",
-            "type": "boolean"
-          },
           "streaming": {
             "default": false,
             "title": "Streaming",
@@ -381,11 +370,6 @@
             "title": "Name",
             "type": "string"
           },
-          "protocolVersion": {
-            "default": "0.3.0",
-            "title": "Protocolversion",
-            "type": "string"
-          },
           "provider": {
             "anyOf": [
               {
@@ -436,27 +420,11 @@
             "type": "array"
           },
           "supportedInterfaces": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/AgentInterface"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Supportedinterfaces"
-          },
-          "supportsAuthenticatedExtendedCard": {
-            "default": true,
-            "title": "Supportsauthenticatedextendedcard",
-            "type": "boolean"
-          },
-          "url": {
-            "title": "Url",
-            "type": "string"
+            "items": {
+              "$ref": "#/components/schemas/AgentInterface"
+            },
+            "title": "Supportedinterfaces",
+            "type": "array"
           },
           "version": {
             "default": "1.0.0",
@@ -466,7 +434,7 @@
         },
         "required": [
           "name",
-          "url",
+          "supportedInterfaces",
           "capabilities",
           "skills"
         ],
@@ -610,21 +578,17 @@
         "type": "object"
       },
       "AgentInterface": {
+        "description": "A2A v1.0.0 AgentInterface \u2014 a (url, protocolBinding, protocolVersion) tuple.",
         "properties": {
           "protocolBinding": {
+            "default": "JSONRPC",
             "title": "Protocolbinding",
             "type": "string"
           },
           "protocolVersion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Protocolversion"
+            "default": "1.0",
+            "title": "Protocolversion",
+            "type": "string"
           },
           "tenant": {
             "anyOf": [
@@ -643,8 +607,7 @@
           }
         },
         "required": [
-          "url",
-          "protocolBinding"
+          "url"
         ],
         "title": "AgentInterface",
         "type": "object"
@@ -676,7 +639,6 @@
           "last_activity_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -929,7 +891,6 @@
           "last_activity_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -1033,6 +994,26 @@
               }
             ],
             "title": "Outputmodes"
+          },
+          "securityRequirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Securityrequirements"
           },
           "tags": {
             "anyOf": [
@@ -1472,7 +1453,6 @@
             "title": "Changes"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -1662,6 +1642,20 @@
         "title": "Body_upload_skill_v1_skills_upload_post",
         "type": "object"
       },
+      "Body_upload_workspace_file_v1_files_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_workspace_file_v1_files_post",
+        "type": "object"
+      },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
         "description": "Budget-related ceilings.",
@@ -1774,6 +1768,13 @@
             "title": "Automations",
             "type": "array"
           },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/BundleChannel"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
           "description": {
             "default": "",
             "title": "Description",
@@ -1855,6 +1856,13 @@
               "$ref": "#/components/schemas/BundleAutomation"
             },
             "title": "Automations",
+            "type": "array"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/BundleChannel"
+            },
+            "title": "Channels",
             "type": "array"
           },
           "description": {
@@ -2028,6 +2036,63 @@
           "prompt"
         ],
         "title": "BundleAutomation",
+        "type": "object"
+      },
+      "BundleChannel": {
+        "additionalProperties": false,
+        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` \u2192 ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
+        "properties": {
+          "agent": {
+            "description": "BundleAgent key that handles inbound messages.",
+            "minLength": 1,
+            "title": "Agent",
+            "type": "string"
+          },
+          "bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Maps a credential the channel needs to a ${setup.x} reference, e.g. {'bot_token': '${setup.telegram_bot_token}'}.",
+            "title": "Bindings",
+            "type": "object"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name for the created channel trigger.",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "Handle the incoming message: {{ message_text }}",
+            "description": "Task query template used for each inbound message.",
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "type": {
+            "const": "telegram",
+            "default": "telegram",
+            "description": "Channel provider. Only Telegram in v0.1.0.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "agent"
+        ],
+        "title": "BundleChannel",
         "type": "object"
       },
       "BundleMcp": {
@@ -2330,6 +2395,212 @@
         "title": "CheckResponse",
         "type": "object"
       },
+      "ClientCreate": {
+        "additionalProperties": false,
+        "description": "Payload for registering a client (agent-proxy).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "default": "harness",
+            "maxLength": 32,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ClientCreate",
+        "type": "object"
+      },
+      "ClientRef": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ClientRef",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "properties": {
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mcp_endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Endpoint Url"
+          },
+          "mcp_instances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientRef"
+            },
+            "title": "Mcp Instances",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientRef"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "created_by",
+          "name",
+          "description",
+          "kind",
+          "source_project_id"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for a client. Unset fields remain unchanged.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          }
+        },
+        "title": "ClientUpdate",
+        "type": "object"
+      },
       "CodeToolConfig": {
         "properties": {
           "name": {
@@ -2625,6 +2896,21 @@
           "wallet_type"
         ],
         "title": "CreateWalletRequest",
+        "type": "object"
+      },
+      "CreateWorkspaceBody": {
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateWorkspaceBody",
         "type": "object"
       },
       "DailySpendPoint": {
@@ -3060,6 +3346,7 @@
           "mcp",
           "skill",
           "agent",
+          "channel",
           "automation",
           "policy"
         ],
@@ -3345,7 +3632,6 @@
             "title": "Error"
           },
           "occurred_at": {
-            "format": "date-time",
             "title": "Occurred At",
             "type": "string"
           },
@@ -3589,7 +3875,6 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -3904,7 +4189,6 @@
           "accepted_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -3925,7 +4209,6 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -3941,7 +4224,6 @@
             "title": "Email"
           },
           "expires_at": {
-            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -3987,7 +4269,6 @@
           "accepted_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4008,7 +4289,6 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4024,7 +4304,6 @@
             "title": "Email"
           },
           "expires_at": {
-            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4123,7 +4402,6 @@
             "type": "object"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4148,7 +4426,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -4215,6 +4492,58 @@
           }
         },
         "title": "MCPAuthConfigUpdateRequest",
+        "type": "object"
+      },
+      "MCPInstanceConsumer": {
+        "description": "An agent that has this MCP instance attached, and which of its tools it enabled.",
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "agent_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Slug"
+          },
+          "confirm_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Confirm Tools",
+            "type": "array"
+          },
+          "enabled_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Tools"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name"
+        ],
+        "title": "MCPInstanceConsumer",
         "type": "object"
       },
       "MCPServerConnectionCreateRequest": {
@@ -4470,7 +4799,6 @@
             "title": "Auth Config Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4531,7 +4859,6 @@
             "title": "Tools"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -4615,7 +4942,6 @@
             "title": "Cmd"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4705,7 +5031,6 @@
             "type": "array"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -4963,6 +5288,30 @@
         "title": "MPPConfigSchema",
         "type": "object"
       },
+      "McpInstanceAssociationBody": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "McpInstanceAssociationBody",
+        "type": "object"
+      },
       "McpToolConfig-Input": {
         "properties": {
           "name": {
@@ -5114,7 +5463,6 @@
             "title": "Invitation Id"
           },
           "joined_at": {
-            "format": "date-time",
             "title": "Joined At",
             "type": "string"
           },
@@ -5267,7 +5615,6 @@
             "title": "Config Name"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5362,7 +5709,6 @@
             "title": "Provider Name"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -5774,14 +6120,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -5802,7 +6146,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6317,7 +6660,6 @@
           "created_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6468,7 +6810,8 @@
           "deny",
           "cap",
           "approval",
-          "safety"
+          "safety",
+          "egress"
         ],
         "title": "PolicyEffect",
         "type": "string"
@@ -7157,7 +7500,6 @@
       "ProviderConfigResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7227,7 +7569,6 @@
             "title": "Provider Spec Name"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7337,7 +7678,6 @@
       "ProviderSpecResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7395,7 +7735,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7418,7 +7757,6 @@
       "ProviderSpecWithModelsResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7483,7 +7821,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7556,7 +7893,6 @@
       "RegistryItemResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7629,7 +7965,6 @@
             "type": "boolean"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7666,7 +8001,6 @@
       "RegistryResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7708,7 +8042,6 @@
           "last_synced_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7738,7 +8071,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -8539,6 +8871,23 @@
         "title": "SkillUpdateRequest",
         "type": "object"
       },
+      "SourceProjectBody": {
+        "properties": {
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "title": "SourceProjectBody",
+        "type": "object"
+      },
       "SpecPreviewRequest": {
         "properties": {
           "spec_content": {
@@ -8902,7 +9251,6 @@
             "type": "string"
           },
           "timestamp": {
-            "format": "date-time",
             "title": "Timestamp",
             "type": "string"
           }
@@ -9000,7 +9348,6 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9113,7 +9460,6 @@
           "ended_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9162,7 +9508,6 @@
           "started_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9217,7 +9562,6 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9654,7 +9998,7 @@
                 "type": "null"
               }
             ],
-            "description": "Polling extractor identifier (e.g. 'mailslurper', 'imap').",
+            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
             "title": "Data Extractor"
           },
           "data_extractor_config": {
@@ -9809,7 +10153,6 @@
             "title": "Error Message"
           },
           "executed_at": {
-            "format": "date-time",
             "title": "Executed At",
             "type": "string"
           },
@@ -9914,7 +10257,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9976,7 +10318,6 @@
           "last_execution_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9992,7 +10333,6 @@
           "next_run_time": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10022,7 +10362,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -10105,7 +10444,6 @@
           "last_execution_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10325,7 +10663,6 @@
             "title": "Cron Expression"
           },
           "fires_at": {
-            "format": "date-time",
             "title": "Fires At",
             "type": "string"
           },
@@ -10646,7 +10983,6 @@
           "created_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10691,7 +11027,6 @@
           "updated_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10929,7 +11264,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11070,7 +11404,6 @@
             "title": "Supports Vision"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -11097,7 +11430,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11205,7 +11537,6 @@
             "title": "Supports Vision"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -14784,6 +15115,537 @@
         ]
       }
     },
+    "/v1/clients/": {
+      "get": {
+        "operationId": "list_clients_v1_clients__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ClientResponse"
+                  },
+                  "title": "Response List Clients V1 Clients  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Clients",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "create_client_v1_clients__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}": {
+      "delete": {
+        "operationId": "delete_client_v1_clients__client_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "get": {
+        "operationId": "get_client_v1_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "patch": {
+        "operationId": "update_client_v1_clients__client_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/mcp-instances": {
+      "post": {
+        "operationId": "add_mcp_instance_to_client_v1_clients__client_id__mcp_instances_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpInstanceAssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Mcp Instance To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}": {
+      "delete": {
+        "operationId": "remove_mcp_instance_from_client_v1_clients__client_id__mcp_instances__mcp_instance_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mcp_instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mcp Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Mcp Instance From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/pull-from-project": {
+      "post": {
+        "operationId": "pull_from_project_v1_clients__client_id__pull_from_project_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceProjectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pull From Project",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/skills": {
+      "post": {
+        "operationId": "add_skill_to_client_v1_clients__client_id__skills_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Skill To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/skills/{skill_id}": {
+      "delete": {
+        "operationId": "remove_skill_from_client_v1_clients__client_id__skills__skill_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Skill From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
     "/v1/files": {
       "get": {
         "operationId": "list_workspace_files_v1_files_get",
@@ -14805,6 +15667,46 @@
           }
         ],
         "summary": "List Workspace Files",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      },
+      "post": {
+        "description": "Upload a file to the workspace's artifact root.",
+        "operationId": "upload_workspace_file_v1_files_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_workspace_file_v1_files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Workspace File",
         "tags": [
           "v1",
           "protected",
@@ -15162,7 +16064,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nIdempotent: accepting twice (or accepting when already a member)\nreturns the same membership.",
+        "description": "Accept an invitation as the authenticated user.\n\nIdempotent for the same acceptor.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -16220,6 +17122,61 @@
           }
         ],
         "summary": "Update Mcp Server Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/{instance_id}/consumers": {
+      "get": {
+        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON \u2014 no separate store.",
+        "operationId": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MCPInstanceConsumer"
+                  },
+                  "title": "Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mcp Server Instance Consumers",
         "tags": [
           "v1",
           "protected",
@@ -22481,7 +23438,7 @@
     },
     "/v1/triggers/": {
       "get": {
-        "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
+        "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    secret_manager: Injected secret manager (to resolve credential presence)\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
         "operationId": "list_triggers_v1_triggers__get",
         "parameters": [
           {
@@ -22779,7 +23736,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific trigger by ID.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    The trigger data\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Get a specific trigger by ID.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    secret_manager: Injected secret manager (to resolve credential presence)\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    The trigger data\n\nRaises:\n    HTTPException: If trigger not found",
         "operationId": "get_trigger_v1_triggers__trigger_id__get",
         "parameters": [
           {
@@ -23752,6 +24709,53 @@
           "protected",
           "workspaces"
         ]
+      },
+      "post": {
+        "description": "Create a new shared workspace owned by the current user.\n\nProvisions the workspace row (baseline governance policies are seeded by\nthe creation hook in ``get_workspace_service``) and grants the creator\nmembership in the relationship graph so the workspace immediately shows up\nin their accessible list and the switcher.",
+        "operationId": "create_workspace_v1_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Workspace",
+        "tags": [
+          "v1",
+          "protected",
+          "workspaces"
+        ]
       }
     },
     "/v1/workspaces/{workspace_id}/invitations": {
@@ -23974,7 +24978,7 @@
     },
     "/v1/workspaces/{workspace_id}/members/{user_id}": {
       "delete": {
-        "description": "Remove a member from the workspace. Self-removal allowed; removing\nothers requires the caller to be a member of the workspace (owner-only\ncheck belongs to the permissions PR).",
+        "description": "Remove a member from the workspace.",
         "operationId": "remove_member_v1_workspaces__workspace_id__members__user_id__delete",
         "parameters": [
           {

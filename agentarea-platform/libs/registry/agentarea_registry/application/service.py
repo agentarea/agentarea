@@ -886,7 +886,12 @@ class RegistryService:
                         "name": name,
                         "description": entry.get("description"),
                         "instruction": entry.get("instruction", ""),
-                        "model_id": entry.get("model_id"),
+                        # Catalog is global; model instances are per-workspace. Carry
+                        # model *preferences* (slugs, priority order) — never a concrete
+                        # ``model_id`` (instance UUID), which is resolved per workspace
+                        # at install time. Falls back to legacy ``model_id`` slugs from
+                        # not-yet-resynced catalog data.
+                        "preferred_models": _agent_preferred_models(entry),
                         "tools": tools,
                         "planning": entry.get("planning", False),
                         "events_config": entry.get("events_config"),
@@ -925,6 +930,22 @@ class RegistryService:
                 }
             )
         return items
+
+
+def _agent_preferred_models(entry: dict[str, Any]) -> list[str]:
+    """Extract a catalog agent's preferred model slugs in priority order.
+
+    Prefers the ``preferred_models`` list. Older catalog entries stored a single
+    model slug under ``model_id`` (e.g. ``"gpt-4o"``) — never an instance UUID —
+    so that is accepted as a one-element fallback for backward compatibility.
+    """
+    preferred = entry.get("preferred_models")
+    if isinstance(preferred, list):
+        return [m for m in preferred if isinstance(m, str) and m]
+    legacy = entry.get("model_id")
+    if isinstance(legacy, str) and legacy:
+        return [legacy]
+    return []
 
 
 def _humanize_identifier(identifier: str) -> str:

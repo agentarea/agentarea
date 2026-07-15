@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { McpServerResponse } from "@/api/client/types.gen";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   getAgent,
@@ -38,9 +39,9 @@ export default async function EditAgentPage({ params }: Props) {
   ]);
 
   const agent = requireApiData(agentResponse, "agent");
-  const rawMcpServers =
-    (mcpResponse.data as any)?.items || mcpResponse.data || [];
-  const mcpServers = rawMcpServers.map((server: any) => ({
+  const rawMcpServers: McpServerResponse[] =
+    (mcpResponse.data as { items?: McpServerResponse[] } | null)?.items ?? [];
+  const mcpServers = rawMcpServers.map((server) => ({
     ...server,
     status: ["published", "draft", "pending", "rejected"].includes(
       server.status

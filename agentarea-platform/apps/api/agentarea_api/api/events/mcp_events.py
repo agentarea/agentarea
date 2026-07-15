@@ -1,133 +1,39 @@
-"""MCP event handlers using existing EventBroker architecture.
+"""MCP event handler on the broker-neutral event bus (ADR-0018).
 
 Lifecycle is owned by the substrate (Go MCP manager + Docker); Python's
-`verify()` function + `container_monitor.py` sweep handle tool discovery and
-orphan cleanup. These Redis subscribers remain for observability logging of
-events from the Go MCP Manager.
+`verify()` + `container_monitor.py` sweep handle tool discovery and orphan
+cleanup. This consumer remains for observability logging of status-change
+events emitted by the Go MCP manager, now delivered as ``IntegrationEvent``s
+over Redis Streams instead of FastStream pub/sub.
 """
 
 import logging
-from typing import Any
 
-from agentarea_mcp.events import MCPEventType
-from faststream.redis.fastapi import RedisRouter
+from agentarea_common.events.ports import IntegrationEvent
 
 logger = logging.getLogger(__name__)
 
+# CloudEvents `type` for the MCP status-change event. The Go MCP manager XADDs
+# to the stream derived from this (``events:<type>``); both sides must agree.
+MCP_STATUS_CHANGED_TYPE = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
 
-def register_mcp_event_handlers(router: RedisRouter) -> None:
-    """Register MCP event handlers with the FastStream router."""
 
-    @router.subscriber(MCPEventType.SERVER_CREATING.value)
-    async def handle_server_creating_event(message: dict[str, Any]) -> None:
-        """Handle MCP server creating events from infrastructure."""
-        logger.info(f"Received MCPServerCreating event: {message}")
+async def handle_mcp_status_changed(event: IntegrationEvent) -> None:
+    """Log MCP server instance status changes from the Go MCP manager.
 
-        try:
-            event_data = message.get("data", {})
-            config_id = event_data.get("config_id") or message.get("config_id")
-            runtime_id = event_data.get("runtime_id") or message.get("runtime_id")
+    Status persistence and tool discovery are handled by Temporal workflows;
+    this handler is observability only.
+    """
+    data = event.data or {}
+    instance_id = data.get("instance_id")
+    if not instance_id:
+        logger.warning("MCPServerInstanceStatusChanged event missing instance_id")
+        return
 
-            if not config_id:
-                logger.warning("MCPServerCreating event missing config_id")
-                return
-
-            logger.info(f"MCP server {config_id} is creating with runtime {runtime_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to handle server creating event: {e}")
-
-    @router.subscriber(MCPEventType.SERVER_READY.value)
-    async def handle_server_ready_event(message: dict[str, Any]) -> None:
-        """Handle MCP server ready events from infrastructure."""
-        logger.info(f"Received MCPServerReady event: {message}")
-
-        try:
-            event_data = message.get("data", {})
-            config_id = event_data.get("config_id") or message.get("config_id")
-            endpoint = event_data.get("endpoint") or message.get("endpoint")
-
-            if not config_id:
-                logger.warning("MCPServerReady event missing config_id")
-                return
-
-            logger.info(f"MCP server {config_id} is ready at {endpoint}")
-
-        except Exception as e:
-            logger.error(f"Failed to handle server ready event: {e}")
-
-    @router.subscriber(MCPEventType.SERVER_FAILED.value)
-    async def handle_server_failed_event(message: dict[str, Any]) -> None:
-        """Handle MCP server failed events from infrastructure."""
-        logger.info(f"Received MCPServerFailed event: {message}")
-
-        try:
-            event_data = message.get("data", {})
-            config_id = event_data.get("config_id") or message.get("config_id")
-            error_message = event_data.get("error_message") or message.get("error_message")
-
-            if not config_id:
-                logger.warning("MCPServerFailed event missing config_id")
-                return
-
-            logger.error(f"MCP server {config_id} failed: {error_message}")
-
-        except Exception as e:
-            logger.error(f"Failed to handle server failed event: {e}")
-
-    @router.subscriber(MCPEventType.SERVER_STOPPED.value)
-    async def handle_server_stopped_event(message: dict[str, Any]) -> None:
-        """Handle MCP server stopped events from infrastructure."""
-        logger.info(f"Received MCPServerStopped event: {message}")
-
-        try:
-            event_data = message.get("data", {})
-            config_id = event_data.get("config_id") or message.get("config_id")
-            reason = event_data.get("reason") or message.get("reason", "unknown")
-
-            if not config_id:
-                logger.warning("MCPServerStopped event missing config_id")
-                return
-
-            logger.info(f"MCP server {config_id} stopped: {reason}")
-
-        except Exception as e:
-            logger.error(f"Failed to handle server stopped event: {e}")
-
-    @router.subscriber("MCPServerInstanceStatusChanged")
-    async def handle_instance_status_change(message: dict[str, Any]) -> None:
-        """Log MCP server instance status change events from Go MCP Manager.
-
-        Status persistence and tool discovery are handled by Temporal workflows.
-        This handler remains for observability.
-        """
-        logger.info(f"Received MCPServerInstanceStatusChanged event: {message}")
-
-        try:
-            event_data = message.get("data", {})
-            if isinstance(event_data, dict) and "data" in event_data:
-                status_data = event_data["data"]
-            else:
-                status_data = event_data
-
-            instance_id = status_data.get("instance_id")
-            status = status_data.get("status")
-            container_id = status_data.get("container_id")
-            url = status_data.get("url")
-
-            if not instance_id:
-                logger.warning("MCPServerInstanceStatusChanged event missing instance_id")
-                return
-
-            logger.info(
-                "MCP instance %s status: %s (container=%s, url=%s)",
-                instance_id,
-                status,
-                container_id,
-                url,
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to handle instance status change event: {e}")
-
-    logger.info("MCP event handlers registered")
+    logger.info(
+        "MCP instance %s status: %s (container=%s, url=%s)",
+        instance_id,
+        data.get("status"),
+        data.get("container_id"),
+        data.get("url"),
+    )

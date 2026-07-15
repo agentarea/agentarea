@@ -174,7 +174,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             description = await handle.describe()
-            temporal_status = description.status.name.lower()
+            status = description.status
+            temporal_status = status.name.lower() if status is not None else "unknown"
 
             status_map = {
                 "running": "running",
@@ -338,7 +339,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
     async def send_workflow_command(
         self, execution_id: str, command: str, payload: dict[str, Any]
     ) -> bool:
-        """Send a generic command signal to a running Temporal workflow."""
+        """Send a generic command signal to a running Temporal workflow.
+
+        Returns True when the signal was accepted. Returns False only when
+        the target workflow is not running (completed / timed out / evicted
+        history) — an expected outcome the API maps to 409, not a server
+        error. Any other failure is re-raised so it can't masquerade as
+        "task not running".
+        """
         client = await self._get_client()
 
         try:
@@ -348,5 +356,16 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}' to {execution_id}: {e}")
-            return False
+            msg = str(e).lower()
+            if "not found" in msg or "already completed" in msg or "no execution" in msg:
+                logger.info(
+                    "Workflow command '%s' not delivered: workflow %s is not running",
+                    command,
+                    execution_id,
+                )
+                return False
+            logger.error(
+                f"Failed to send workflow command '{command}' to {execution_id}: {e}",
+                exc_info=True,
+            )
+            raise

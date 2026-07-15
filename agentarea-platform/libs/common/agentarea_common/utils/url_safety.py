@@ -12,8 +12,10 @@ topology-aware layer is the per-cluster egress network policy; see the wiki page
 ``operations/enterprise-deployment-hardening`` in the agentarea-wiki repo.
 """
 
+import fnmatch
 import ipaddress
 import socket
+from collections.abc import Iterable
 from urllib.parse import urlsplit
 
 __all__ = ["UnsafeUrlError", "validate_outbound_url"]
@@ -23,6 +25,16 @@ _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 class UnsafeUrlError(ValueError):
     """Raised when a URL is not safe to request (bad scheme or non-public host)."""
+
+
+def _host_in_allowlist(host: str, allowed_hosts: Iterable[str]) -> bool:
+    """Case-insensitive glob match of ``host`` against allowlist patterns.
+
+    Patterns are host/FQDN globs, e.g. ``api.github.com`` or ``*.github.com``.
+    An empty allowlist matches nothing (default-deny).
+    """
+    host_lower = host.lower()
+    return any(fnmatch.fnmatch(host_lower, pattern.lower()) for pattern in allowed_hosts)
 
 
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -36,7 +48,12 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
-def validate_outbound_url(url: str, *, allow_private: bool = False) -> None:
+def validate_outbound_url(
+    url: str,
+    *,
+    allow_private: bool = False,
+    allowed_hosts: Iterable[str] | None = None,
+) -> None:
     """Validate that ``url`` is safe to fetch; raise ``UnsafeUrlError`` otherwise.
 
     Enforces an http/https scheme and, unless ``allow_private`` is set, resolves
@@ -45,6 +62,14 @@ def validate_outbound_url(url: str, *, allow_private: bool = False) -> None:
     ``allow_private`` is the self-host opt-out for installs that legitimately
     target private endpoints (e.g. a custom on-LAN Ollama). Keep it ``False`` for
     hosted/multi-tenant deployments.
+
+    ``allowed_hosts`` is the egress allowlist for the cases the platform makes the
+    request itself (url-type MCP, BYOK endpoints): when provided, the host must
+    glob-match at least one pattern (e.g. ``*.github.com``) or the request is
+    refused. ``None`` disables allowlist filtering (backwards-compatible default);
+    an empty iterable means default-deny. Container-hosted MCPs egress out of the
+    platform's sight — those are enforced by the enterprise EgressEnforcer, not
+    here.
     """
     parts = urlsplit(url)
     scheme = parts.scheme.lower()
@@ -54,6 +79,9 @@ def validate_outbound_url(url: str, *, allow_private: bool = False) -> None:
     host = parts.hostname
     if not host:
         raise UnsafeUrlError("URL has no host")
+
+    if allowed_hosts is not None and not _host_in_allowlist(host, allowed_hosts):
+        raise UnsafeUrlError(f"URL host {host!r} is not in the egress allowlist; refusing request")
 
     if allow_private:
         return

@@ -183,6 +183,16 @@ func (h *Handler) createInstance(c *gin.Context) {
 				req.Environment[k] = v
 			}
 		}
+
+		// Resolve secret env vars (json_spec.env_vars -> encrypted_secrets) and
+		// merge them in. This HTTP path owns provisioning, so secrets must be
+		// injected here — they are stripped out of json_spec.environment at create
+		// time and only their names travel in the spec. Request-level env wins.
+		for k, v := range h.containerManager.ResolveSecretEnvVars(req.InstanceID, req.JSONSpec) {
+			if _, exists := req.Environment[k]; !exists {
+				req.Environment[k] = v
+			}
+		}
 	}
 
 	if req.Image == "" {

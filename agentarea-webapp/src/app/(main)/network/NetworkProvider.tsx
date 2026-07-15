@@ -10,21 +10,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-actions";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: { id: string; source: string; target: string; relation: string }[];
-  governance: any[];
-  deployment_mode: string;
-}
+import type { TopologyResponse } from "./types";
 
 interface NetworkContextValue {
   topology: TopologyResponse | null;

@@ -59,6 +59,19 @@ class TestKratosAuthProvider:
         assert provider.audience == "test-api"
         assert provider.get_provider_name() == "kratos"
 
+    def test_provider_initialization_accepts_decoded_jwks_json(self, sample_jwks):
+        """Test provider accepts JWKS JSON decoded from a Kubernetes Secret env var."""
+        config = {
+            "jwks_b64": json.dumps(sample_jwks),
+            "issuer": "https://test.agentarea.dev",
+            "audience": "test-api",
+        }
+        provider = KratosAuthProvider(config)
+
+        assert provider.issuer == "https://test.agentarea.dev"
+        assert provider.audience == "test-api"
+        assert provider.get_provider_name() == "kratos"
+
     def test_provider_initialization_missing_jwks(self):
         """Test provider initialization fails without JWKS."""
         config = {

@@ -5,5 +5,21 @@ name: "AgentArea CodeQL config"
 # code. The security-and-quality suite flags them as py/unused-global-variable.
 # They are required boilerplate and must not be deleted, so exclude generated
 # migrations from analysis to remove the noise.
+#
+# Test code is not shipped. The security-and-quality correctness queries
+# (py/call/wrong-arguments, py/call/wrong-named-argument, py/unused-import in
+# fixture-only conftests, etc.) produce noise on tests without catching shipped
+# vulnerabilities, so exclude test suites and fixtures from analysis.
+#
+# The Ory Keto files under config/auth/keto are an Ory Permission Language (OPL)
+# schema: every `class X implements Namespace` is a ReBAC namespace consumed by
+# the Keto compiler, so CodeQL's js/unused-* queries flag them all as dead code.
 paths-ignore:
   - "**/alembic/versions/**"
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/conftest.py"
+  - "**/*.spec.ts"
+  - "**/*.test.ts"
+  - "**/e2e/**"
+  - "config/auth/keto/**"

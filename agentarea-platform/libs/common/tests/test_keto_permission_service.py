@@ -50,6 +50,21 @@ async def test_agent_execute_maps_to_operate():
 
 
 @pytest.mark.asyncio
+async def test_client_use_maps_to_use_relation():
+    svc, keto = _svc(check_return=True)
+    await svc.check("u1", "use", "client", "c1")
+    assert keto.check.await_args.kwargs["namespace"] == "Client"
+    assert keto.check.await_args.kwargs["relation"] == "use"
+
+
+@pytest.mark.asyncio
+async def test_client_delete_maps_to_manage():
+    svc, keto = _svc(check_return=True)
+    await svc.check("u1", "delete", "client", "c1")
+    assert keto.check.await_args.kwargs["relation"] == "manage"
+
+
+@pytest.mark.asyncio
 async def test_unknown_resource_type_allows_without_calling_keto():
     svc, keto = _svc(check_return=False)
     allowed = await svc.check("u1", "view", "dashboard", "x")

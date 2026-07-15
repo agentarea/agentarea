@@ -2,10 +2,73 @@
 Test that provider specs are correctly populated for integration tests.
 """
 
+from uuid import UUID, uuid4
+
 import pytest
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_OLLAMA_PROVIDER_ID = UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b")
+
+
+@pytest.fixture
+async def populated_db_session(db_session: AsyncSession) -> AsyncSession:
+    """Populate the (in-memory) test db_session with an Ollama provider + models."""
+    ollama_provider = ProviderSpec(
+        id=_OLLAMA_PROVIDER_ID,
+        provider_key="ollama",
+        name="Ollama",
+        description="Local and open source models through Ollama",
+        provider_type="ollama_chat",
+        icon="ollama",
+        is_builtin=True,
+        workspace_id="default",
+        created_by="system",
+    )
+    db_session.add(ollama_provider)
+
+    model_specs = [
+        ModelSpec(
+            id=uuid4(),
+            provider_spec_id=_OLLAMA_PROVIDER_ID,
+            model_name="qwen2.5",
+            display_name="Qwen 2.5",
+            description="Alibaba's Qwen 2.5 model",
+            context_window=8192,
+            is_active=True,
+            workspace_id="default",
+            created_by="system",
+        ),
+        ModelSpec(
+            id=uuid4(),
+            provider_spec_id=_OLLAMA_PROVIDER_ID,
+            model_name="llama2",
+            display_name="Llama 2",
+            description="Meta's Llama 2 model",
+            context_window=4096,
+            is_active=True,
+            workspace_id="default",
+            created_by="system",
+        ),
+        ModelSpec(
+            id=uuid4(),
+            provider_spec_id=_OLLAMA_PROVIDER_ID,
+            model_name="mistral",
+            display_name="Mistral",
+            description="Mistral's open source model",
+            context_window=8192,
+            is_active=True,
+            workspace_id="default",
+            created_by="system",
+        ),
+    ]
+    for model_spec in model_specs:
+        db_session.add(model_spec)
+
+    await db_session.commit()
+
+    return db_session
 
 
 @pytest.mark.asyncio

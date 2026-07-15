@@ -8,6 +8,21 @@ import { TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { TabsWithNavigation } from "./components/TabsWithNavigation";
 
+type GridItem = {
+  id: React.Key;
+  itemLink?: (item: GridItem) => string;
+};
+
+type Column<T> = {
+  header: string;
+  accessor: string;
+  render?(value: unknown, item?: T): React.ReactNode;
+  headerClassName?: string;
+  cellClassName?: string;
+  sortable?: boolean;
+  sortableDirection?: "asc" | "desc";
+};
+
 const TabsView = ({
   searchParams,
   leftComponent,
@@ -53,7 +68,7 @@ const TabsView = ({
   );
 };
 
-export default function GridAndTableViews({
+export default function GridAndTableViews<T extends GridItem>({
   searchParams,
   emptyState,
   leftComponent,
@@ -70,10 +85,10 @@ export default function GridAndTableViews({
   emptyState?: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
-  data: any[];
-  columns: any[];
-  cardContent: (item: any) => React.ReactNode;
-  itemLink?: (item: any) => string;
+  data: T[];
+  columns: Column<T>[];
+  cardContent: (item: T) => React.ReactNode;
+  itemLink?: (item: T) => string;
   cardClassName?: string;
   gridClassName?: string;
 }) {
@@ -102,11 +117,12 @@ export default function GridAndTableViews({
                 gridClassName
               )}
             >
-              {data.map((item) =>
-                item.itemLink || itemLink ? (
+              {data.map((item) => {
+                const linkFunction = item.itemLink || itemLink;
+                return linkFunction ? (
                   <Link
                     key={item.id}
-                    href={(item.itemLink || itemLink)(item)}
+                    href={linkFunction(item)}
                     className={cn("card card-shadow group", cardClassName)}
                   >
                     {cardContent(item)}
@@ -118,12 +134,20 @@ export default function GridAndTableViews({
                   >
                     {cardContent(item)}
                   </div>
-                )
-              )}
+                );
+              })}
             </div>
           </TabsContent>
           <TabsContent value="table">
-            <Table data={data} columns={columns} />
+            <Table
+              data={data}
+              columns={columns}
+              onRowClick={
+                itemLink
+                  ? (item) => window.location.assign(itemLink(item))
+                  : undefined
+              }
+            />
           </TabsContent>
         </>
       )}
@@ -131,7 +155,7 @@ export default function GridAndTableViews({
   );
 }
 
-export function GridAndTableSectionsViews({
+export function GridAndTableSectionsViews<T extends GridItem>({
   searchParams,
   emptyState,
   leftComponent,
@@ -152,13 +176,13 @@ export function GridAndTableSectionsViews({
     sectionId: string;
     sectioName?: string;
     cardClassName?: string;
-    data: any[];
+    data: T[];
     emptyState?: React.ReactNode;
-    itemLink?: (item: any) => string;
+    itemLink?: (item: T) => string;
   }[];
-  columns: any[];
-  cardContent: (item: any) => React.ReactNode;
-  itemLink?: (item: any) => string;
+  columns: Column<T>[];
+  cardContent: (item: T) => React.ReactNode;
+  itemLink?: (item: T) => string;
   cardClassName?: string;
   gridClassName?: string;
 }) {
@@ -229,7 +253,20 @@ export function GridAndTableSectionsViews({
                     </div>
                   </TabsContent>
                   <TabsContent value="table">
-                    <Table data={sectionData.data} columns={columns} />
+                    {(() => {
+                      const linkFn = sectionData.itemLink || itemLink;
+                      return (
+                        <Table
+                          data={sectionData.data}
+                          columns={columns}
+                          onRowClick={
+                            linkFn
+                              ? (item) => window.location.assign(linkFn(item))
+                              : undefined
+                          }
+                        />
+                      );
+                    })()}
                   </TabsContent>
                 </>
               ) : (

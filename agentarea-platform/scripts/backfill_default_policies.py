@@ -19,7 +19,7 @@ import asyncio
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import db
+from agentarea_common.config.database import db
 from agentarea_common.workspaces import Workspace
 from agentarea_governance.application import (
     GovernancePolicyService,

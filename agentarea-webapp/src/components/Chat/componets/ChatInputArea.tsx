@@ -535,7 +535,7 @@ export function ChatInputArea({
         ref={fileInputRef}
         type="file"
         multiple
-        onChange={(e) => {
+        onChange={(_e) => {
           // This is a bit hacky, but we don't have a direct handler for file select
           // The parent component should handle this via fileInputRef
         }}

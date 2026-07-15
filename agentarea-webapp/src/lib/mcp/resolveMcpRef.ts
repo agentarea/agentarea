@@ -1,5 +1,5 @@
-import type { components } from "@/api/schema";
-import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
+import type { McpServerInstanceResponse, McpServerResponse } from "@/api/client/types.gen";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
 
 /**
  * Resolves an agent's MCP tool reference to a concrete instance/server.
@@ -12,8 +12,8 @@ import { getMCPConnectionIconSrc } from "@/app/(main)/mcp-servers/utils";
  * it), surfaced here as `status: "unresolved"` rather than a misleading icon.
  */
 
-export type McpInstance = components["schemas"]["MCPServerInstanceResponse"];
-export type McpServer = components["schemas"]["MCPServerResponse"];
+export type McpInstance = McpServerInstanceResponse;
+export type McpServer = McpServerResponse;
 
 export interface McpAvailableTool {
   name: string;

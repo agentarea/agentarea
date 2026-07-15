@@ -587,6 +587,8 @@ class SkillsToolset(Toolset):
                     )
                 key = next(iter(normalized))
                 updated = await service.set_content(UUID(skill_id), normalized[key])
+                if updated is None:
+                    return json.dumps({"error": f"Skill {skill_id} not found"})
                 return json.dumps(
                     {
                         "id": str(updated.id),

@@ -4,11 +4,12 @@ import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import TriggerCard from "./TriggerCard";
+import type { EnrichedTrigger, TriggerCatalogEntry } from "./triggerDisplay";
 import TriggersTable from "./TriggersTable";
 
 interface TriggersListProps {
-  triggers: any[];
-  catalog: any[];
+  triggers: EnrichedTrigger[];
+  catalog: TriggerCatalogEntry[];
   viewMode: "grid" | "table";
   searchQuery: string;
 }

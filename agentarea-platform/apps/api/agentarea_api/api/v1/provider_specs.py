@@ -1,9 +1,9 @@
-from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,8 +22,8 @@ class ProviderSpecResponse(BaseModel):
     icon: str | None
     icon_url: str | None
     is_builtin: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(
@@ -61,8 +61,8 @@ class ModelSpecResponse(BaseModel):
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(cls, model_spec: ModelSpec) -> "ModelSpecResponse":
@@ -94,8 +94,8 @@ class ProviderSpecWithModelsResponse(BaseModel):
     icon: str | None
     icon_url: str | None
     is_builtin: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
     models: list[ModelSpecResponse]
 
     @classmethod

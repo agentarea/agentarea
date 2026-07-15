@@ -1,5 +1,6 @@
 "use client";
 
+import type { AgentCreate } from "@/api/client/types.gen";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -7,7 +8,6 @@ import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { updateAgentAction } from "@/lib/server-actions";
-import type { components } from "@/api/schema";
 
 type Agent = {
   id: string;
@@ -18,7 +18,7 @@ type Agent = {
 
 // Derived from the backend union (the old single ToolConfigYAML was split into
 // discriminated Code/Mcp/Agent/OpenApi variants); track it via AgentCreate.tools.
-type ToolConfig = NonNullable<components["schemas"]["AgentCreate"]["tools"]>[number];
+type ToolConfig = NonNullable<AgentCreate["tools"]>[number];
 
 interface DelegationConfigProps {
   agentId: string;
