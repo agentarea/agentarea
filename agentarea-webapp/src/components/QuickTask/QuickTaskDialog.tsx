@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { components } from "@/api/schema";
+import type { AgentResponse, ProjectResponse } from "@/api/client/types.gen";
 import FullChat, {
   type Agent,
   type ProjectOption,
@@ -19,12 +19,12 @@ import { cn } from "@/lib/utils";
 export const QUICK_TASK_OPEN_EVENT = "workplace:quick-task-open";
 
 /** Agents carry a couple of presentational fields not in the generated schema. */
-type ApiAgent = components["schemas"]["AgentResponse"] & {
+type ApiAgent = AgentResponse & {
   icon?: string | null;
   color_token?: string | null;
 };
 
-type ApiProject = components["schemas"]["ProjectResponse"];
+type ApiProject = ProjectResponse;
 
 /** The /v1/policies endpoint is untyped in the client; describe what we read. */
 type ApiPolicy = {
