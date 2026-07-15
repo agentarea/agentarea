@@ -35,7 +35,7 @@ function ActivitySkeleton() {
     <div className="flex min-h-0 flex-1 flex-col">
       <BoardSectionHeader
         icon={<Activity />}
-        color="hsl(var(--violet))"
+        color="var(--violet)"
         title={t("activity")}
         meta={t("activityMeta")}
       />
@@ -79,7 +79,7 @@ function ListSkeleton({
             key={i}
             className="flex items-center gap-3 border-b border-border/60 px-6 py-3"
           >
-            <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
+            <Skeleton className="h-6 w-6 shrink-0 rounded-md" />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <Skeleton className="h-3 w-32" />
               <Skeleton className="h-3 w-48" />
@@ -109,7 +109,7 @@ export default function DashboardSkeleton() {
         bottomRight={
           <ListSkeleton
             icon={<Shield />}
-            color="hsl(var(--chart-4))"
+            color="var(--amber)"
             title={t("blockers")}
             rows={4}
           />

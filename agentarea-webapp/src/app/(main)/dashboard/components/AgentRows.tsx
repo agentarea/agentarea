@@ -91,7 +91,7 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
                 start={
                   <AgentAvatar
                     agent={{ id: a.agent_id, name: a.name }}
-                    size="md"
+                    size="sm"
                     status={inferStatus(a)}
                   />
                 }

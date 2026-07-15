@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownAZ,
-  ChevronDown,
   Clock,
   Filter,
   Inbox,
@@ -23,6 +22,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { GroupHeader } from "@/components/ui/group-header";
 import {
   Select,
   SelectContent,
@@ -485,28 +485,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             {groups.map((g) => (
               <div key={g.key}>
                 {group !== "none" && (
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(g.key)}
-                    className="skill-hatch sticky top-0 z-[2] flex h-9 w-full items-center gap-2 border-b border-zinc-100 px-4 dark:border-zinc-800/70"
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                        collapsed[g.key] && "-rotate-90"
-                      )}
-                    />
-                    <span
-                      className="h-[9px] w-[9px] rounded-[3px]"
-                      style={{ backgroundColor: g.color }}
-                    />
-                    <span className="text-[12.5px] font-semibold">
-                      {g.label}
-                    </span>
-                    <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
-                      {g.items.length}
-                    </span>
-                  </button>
+                  <GroupHeader
+                    label={g.label}
+                    count={g.items.length}
+                    color={g.color}
+                    collapsed={collapsed[g.key]}
+                    onToggle={() => toggleGroup(g.key)}
+                  />
                 )}
                 {!collapsed[g.key] &&
                   g.items.map((skill) => (

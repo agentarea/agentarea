@@ -25,7 +25,7 @@ export function ActivityStrip({ data }: Props) {
     <div className="flex min-h-0 flex-1 flex-col">
       <BoardSectionHeader
         icon={<Activity />}
-        color="hsl(var(--violet))"
+        color="var(--violet)"
         title={t("activity")}
         meta={t("activityMeta")}
       />

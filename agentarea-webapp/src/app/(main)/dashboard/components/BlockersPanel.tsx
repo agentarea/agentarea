@@ -3,8 +3,8 @@ import { useTranslations } from "next-intl";
 import { Shield } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
+import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
-import { cn } from "@/lib/utils";
 import type { DashboardData } from "@/lib/api-dashboard";
 import { formatRelTime } from "./relTime";
 
@@ -17,7 +17,7 @@ type BlockerRow = {
   href: string;
 };
 
-type Group = { label: string; dot: string; rows: BlockerRow[] };
+type Group = { label: string; color: string; rows: BlockerRow[] };
 
 export function BlockersPanel({
   blockers,
@@ -31,7 +31,7 @@ export function BlockersPanel({
   const groups: Group[] = [
     {
       label: t("awaitingInput"),
-      dot: "bg-amber-500",
+      color: "#f59e0b",
       rows: blockers.hitl.map((b) => ({
         key: b.task_id,
         question: b.description,
@@ -43,7 +43,7 @@ export function BlockersPanel({
     },
     {
       label: t("walletExhausted"),
-      dot: "bg-blue-500",
+      color: "#3b82f6",
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
@@ -58,7 +58,7 @@ export function BlockersPanel({
     },
     {
       label: t("failed24h"),
-      dot: "bg-red-500",
+      color: "#ef4444",
       rows: blockers.failed_24h.map((b) => ({
         key: b.task_id,
         question: b.error?.split("\n")[0] || t("taskFailed"),
@@ -77,7 +77,7 @@ export function BlockersPanel({
       <div className="px-6 pb-3 pt-4">
         <BoardSectionHeader
           icon={<Shield />}
-          color="hsl(var(--chart-4))"
+          color="var(--amber)"
           title={t("blockers")}
           pill={total > 0 ? total : undefined}
           meta={total === 0 ? t("healthy") : undefined}
@@ -91,18 +91,14 @@ export function BlockersPanel({
           </div>
         ) : (
           groups.map((g) => (
-            <div key={g.label}>
-              <div className="flex h-[34px] items-center gap-2.5 border-b border-t border-border/60 px-6 [background-image:var(--hatch-soft)] lg:sticky lg:top-0 lg:z-[2]">
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", g.dot)} />
-                <span className="text-[12.5px] font-semibold text-foreground">
-                  {g.label}
-                </span>
-                <span className="flex-1" />
-                <span className="rounded-full bg-muted px-2 font-mono text-[11.5px] font-medium leading-[18px] text-muted-foreground">
-                  {g.rows.length}
-                </span>
-              </div>
-
+            <CollapsibleGroup
+              key={g.label}
+              label={g.label}
+              count={g.rows.length}
+              color={g.color}
+              sticky={false}
+              headerClassName="px-6 lg:sticky lg:top-0 lg:z-[2]"
+            >
               {g.rows.map((r) => (
                 <Link key={r.key} href={r.href} className="block">
                   <InteractiveListRow
@@ -127,7 +123,7 @@ export function BlockersPanel({
                   </InteractiveListRow>
                 </Link>
               ))}
-            </div>
+            </CollapsibleGroup>
           ))
         )}
       </div>

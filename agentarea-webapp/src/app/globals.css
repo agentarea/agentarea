@@ -208,6 +208,8 @@
     --board-crop: #bcbfc5;
     /* violet accent — spend hero chart + budget bar */
     --violet: #5e6ad2;
+    /* amber accent — kept warm in both themes (unlike --chart-4) */
+    --amber: #d99a00;
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -314,6 +316,8 @@
     --board-crop: #4c4f56;
     /* violet accent — spend hero chart + budget bar (dark) */
     --violet: #8b93ff;
+    /* amber accent — kept warm in both themes (dark) */
+    --amber: #e8b23e;
   }
 }
 
