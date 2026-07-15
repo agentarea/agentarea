@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight, Bot } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { Button } from "@/components/ui/button";
 import { BoardSectionHeader } from "@/components/board";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { cn } from "@/lib/utils";
@@ -60,12 +61,20 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-6 pb-3 pt-4">
+      <div className="border-b border-border/60 px-6 pb-3 pt-4">
         <BoardSectionHeader
           icon={<Bot />}
           color="hsl(var(--primary))"
           title={t("agents")}
           pill={t("agentsActive", { count: agents.length })}
+          meta={
+            <Button asChild variant="ghost" size="xs" className="text-muted-foreground">
+              <Link href="/agents">
+                {t("viewAllAgents")}
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          }
         />
       </div>
 
@@ -119,13 +128,6 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
           ))}
         </div>
       )}
-
-      <Link
-        href="/agents"
-        className="flex h-[42px] shrink-0 items-center justify-center gap-1.5 border-t border-border/60 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-      >
-        {t("viewAllAgents")} <ArrowUpRight className="h-3.5 w-3.5" />
-      </Link>
     </div>
   );
 }

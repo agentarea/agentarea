@@ -85,7 +85,7 @@ function StatCard({
         />
       </div>
 
-      <div className="hidden min-w-0 sm:-mx-3 sm:mt-2 sm:block sm:h-[26px] lg:mx-0 lg:mt-0 lg:-mr-3.5 lg:-my-2 lg:flex-1 lg:self-stretch">
+      <div className="hidden min-w-0 sm:-mx-3 sm:mt-2 sm:block sm:h-[26px] lg:relative lg:mx-0 lg:mt-0 lg:-mr-3.5 lg:-my-2 lg:h-auto lg:flex-1 lg:self-stretch">
         <Sparkline
           values={values}
           width={200}
@@ -94,7 +94,7 @@ function StatCard({
           fill={t.color}
           strokeWidth={1.8}
           showDot={false}
-          className="h-full w-full"
+          className="h-full w-full lg:absolute lg:inset-0"
         />
       </div>
     </div>

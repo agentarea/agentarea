@@ -74,7 +74,7 @@ export function BlockersPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-6 pb-3 pt-4">
+      <div className="border-b border-border/60 px-6 pb-3 pt-4">
         <BoardSectionHeader
           icon={<Shield />}
           color="var(--amber)"
