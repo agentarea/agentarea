@@ -158,14 +158,18 @@ class TestWorkspaceDataIsolation:
             u2_workspace_records = await repo_u2.list_all()
             assert len(u2_workspace_records) == 4  # Should see all workspace records
 
-            # Test creator-scoped filtering
-            u1_creator_records = await repo_u1.list_all(creator_scoped=True)
+            # Test creator-scoped filtering. list_all() no longer accepts
+            # creator_scoped -- per its docstring, access control/filtering
+            # now belongs to the (ReBAC) authorization layer, not the
+            # repository -- so filter the workspace-scoped results
+            # client-side to verify created_by is still tracked correctly.
+            u1_creator_records = [r for r in u1_workspace_records if r.created_by == "user1"]
             assert len(u1_creator_records) == 2  # Should only see own records
             u1_names = {r.name for r in u1_creator_records}
             assert "User1 Record 1" in u1_names
             assert "User1 Record 2" in u1_names
 
-            u2_creator_records = await repo_u2.list_all(creator_scoped=True)
+            u2_creator_records = [r for r in u2_workspace_records if r.created_by == "user2"]
             assert len(u2_creator_records) == 2  # Should only see own records
             u2_names = {r.name for r in u2_creator_records}
             assert "User2 Record 1" in u2_names

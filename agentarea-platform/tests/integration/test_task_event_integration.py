@@ -1,25 +1,43 @@
 """Integration tests for TaskEvent functionality."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+import pytest_asyncio
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
-from agentarea_common.config import get_database
+from agentarea_common.config.database import DatabaseSettings
 from agentarea_tasks.application.task_event_service import TaskEventService
 from agentarea_tasks.domain.models import TaskEvent
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 pytestmark = [pytest.mark.integration, pytest.mark.golden]
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session():
-    """Create a database session for testing."""
-    database = get_database()
-    async with database.async_session_factory() as session:
+    """Create a database session for testing.
+
+    Uses a fresh, function-scoped engine instead of the process-wide
+    get_database() singleton. asyncio_mode=auto gives each test its own
+    event loop by default; the singleton's pooled asyncpg connections
+    stay bound to whichever loop first created them, so reusing it across
+    tests raised "Future attached to a different loop" / "Event loop is
+    closed" once an earlier test's loop had already closed. NullPool opens
+    a fresh connection per checkout and the engine is disposed at the end
+    of this same test, so it never outlives its own loop.
+    """
+    settings = DatabaseSettings()
+    engine = create_async_engine(settings.url, poolclass=NullPool)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session:
         yield session
         await session.rollback()  # Rollback any changes after test
+
+    await engine.dispose()
 
 
 @pytest.fixture
@@ -97,18 +115,21 @@ class TestTaskEventRepositoryIntegration:
                 event_type="LLMCallStarted",
                 data={"model": "gpt-4"},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
                 event_type="LLMCallCompleted",
                 data={"tokens": 150},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
                 event_type="TaskCompleted",
                 data={"result": "success"},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
         ]
 
@@ -140,18 +161,21 @@ class TestTaskEventRepositoryIntegration:
                 event_type="LLMCallStarted",
                 data={"model": "gpt-4"},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_2,
                 event_type="LLMCallStarted",
                 data={"model": "claude-3"},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_1,
                 event_type="TaskCompleted",
                 data={"result": "success"},
                 workspace_id="test-workspace",
+                created_by="test_user",
             ),
         ]
 
@@ -164,9 +188,12 @@ class TestTaskEventRepositoryIntegration:
         llm_started_events = await task_event_repository.get_events_by_type("LLMCallStarted")
         task_completed_events = await task_event_repository.get_events_by_type("TaskCompleted")
 
-        # Verify filtering by type
-        assert len(llm_started_events) == 2
-        assert len(task_completed_events) == 1
+        # Verify filtering by type. Events created by earlier runs of this
+        # test persist in the shared "test-workspace" (each run commits for
+        # real, no cross-run cleanup), so use >= like the equivalent
+        # service-level test below rather than an exact count.
+        assert len(llm_started_events) >= 2
+        assert len(task_completed_events) >= 1
 
         assert all(event.event_type == "LLMCallStarted" for event in llm_started_events)
         assert all(event.event_type == "TaskCompleted" for event in task_completed_events)
@@ -189,6 +216,7 @@ class TestTaskEventRepositoryIntegration:
             event_type="LLMCallStarted",
             data={"model": "gpt-4"},
             workspace_id="workspace1",
+            created_by="test_user",
         )
 
         event2 = TaskEvent.create_workflow_event(
@@ -196,6 +224,7 @@ class TestTaskEventRepositoryIntegration:
             event_type="LLMCallStarted",
             data={"model": "claude-3"},
             workspace_id="workspace2",
+            created_by="test_user",
         )
 
         # Save events using respective repositories
@@ -276,7 +305,7 @@ class TestTaskEventServiceIntegration:
 
         # Verify each event can be retrieved
         for i, event in enumerate(created_events):
-            task_id = uuid4(events_data[i]["task_id"])
+            task_id = UUID(events_data[i]["task_id"])
             retrieved_events = await task_event_service.get_task_events(task_id)
             assert len(retrieved_events) == 1
             assert retrieved_events[0].id == event.id
@@ -290,6 +319,7 @@ class TestTaskEventServiceIntegration:
             event_type="LLMCallStarted",
             data={"model": "gpt-4"},
             workspace_id="test-workspace",
+            created_by="test_user",
         )
 
         await task_event_service.create_workflow_event(
@@ -297,6 +327,7 @@ class TestTaskEventServiceIntegration:
             event_type="LLMCallStarted",
             data={"model": "claude-3"},
             workspace_id="test-workspace",
+            created_by="test_user",
         )
 
         await task_event_service.create_workflow_event(
@@ -304,6 +335,7 @@ class TestTaskEventServiceIntegration:
             event_type="TaskCompleted",
             data={"result": "success"},
             workspace_id="test-workspace",
+            created_by="test_user",
         )
 
         await db_session.commit()

@@ -5,9 +5,13 @@ through all layers (API -> Service -> TaskManager -> TemporalExecutor -> Workflo
 """
 
 import logging
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.auth.context import UserContext
+from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.events.broker import EventBroker
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
@@ -202,6 +206,24 @@ class TestWorkspaceIdPropagation:
             )
 
         logger.info("✅ TaskService correctly requires workspace_id parameter")
+
+
+@pytest.fixture
+def user_context():
+    """Create a test user context."""
+    return UserContext(user_id="test-user", workspace_id="test-workspace")
+
+
+@pytest.fixture
+def repository_factory(db_session, user_context):
+    """Create a repository factory backed by the test db session."""
+    return RepositoryFactory(db_session, user_context)
+
+
+@pytest.fixture
+def event_broker():
+    """Mock event broker for testing."""
+    return AsyncMock(spec=EventBroker)
 
 
 @pytest.fixture
