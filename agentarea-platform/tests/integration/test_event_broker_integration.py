@@ -53,7 +53,7 @@ async def test_event_broker_setup():
         raise
 
 
-async def test_event_publishing(event_broker: RedisEventBroker, task_id: UUID):
+async def _event_publishing(event_broker: RedisEventBroker, task_id: UUID):
     """Test event publishing exactly like workflow activities do."""
     logger.info("=== Testing Event Publishing (like workflow activities) ===")
 
@@ -102,7 +102,7 @@ async def test_event_publishing(event_broker: RedisEventBroker, task_id: UUID):
         return False
 
 
-async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID):
+async def _event_subscription(event_broker: RedisEventBroker, task_id: UUID):
     """Test event subscription exactly like stream_task_events does."""
     logger.info("=== Testing Event Subscription (like stream_task_events) ===")
 
@@ -235,7 +235,7 @@ async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID)
 
         # Now publish an event
         logger.info("Publishing test event for subscription...")
-        await test_event_publishing(event_broker, task_id)
+        await _event_publishing(event_broker, task_id)
 
         # Wait for listener to process
         await asyncio.sleep(2)
@@ -277,10 +277,10 @@ async def test_full_integration():
         event_broker = await test_event_broker_setup()
 
         # Step 2: Test publishing
-        publish_success = await test_event_publishing(event_broker, task_id)
+        publish_success = await _event_publishing(event_broker, task_id)
 
         # Step 3: Test subscription (includes publishing)
-        subscribe_success = await test_event_subscription(event_broker, task_id)
+        subscribe_success = await _event_subscription(event_broker, task_id)
 
         # Step 4: Cleanup
         if hasattr(event_broker, "_connected") and event_broker._connected:

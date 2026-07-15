@@ -55,31 +55,31 @@ def workspace_contexts():
     return {
         # Company A workspaces
         "company_a_dev": UserContext(
-            user_id="dev1", workspace_id="company-a-dev", roles=["developer"]
+            user_id="dev1", workspace_id="company-a-dev"
         ),
         "company_a_prod": UserContext(
-            user_id="dev1", workspace_id="company-a-prod", roles=["developer"]
+            user_id="dev1", workspace_id="company-a-prod"
         ),
         "company_a_admin": UserContext(
-            user_id="admin1", workspace_id="company-a-dev", roles=["admin"]
+            user_id="admin1", workspace_id="company-a-dev"
         ),
         # Company B workspaces
         "company_b_dev": UserContext(
-            user_id="dev2", workspace_id="company-b-dev", roles=["developer"]
+            user_id="dev2", workspace_id="company-b-dev"
         ),
         "company_b_prod": UserContext(
-            user_id="dev2", workspace_id="company-b-prod", roles=["developer"]
+            user_id="dev2", workspace_id="company-b-prod"
         ),
         "company_b_admin": UserContext(
-            user_id="admin2", workspace_id="company-b-dev", roles=["admin"]
+            user_id="admin2", workspace_id="company-b-dev"
         ),
         # Shared service workspace
         "shared_service": UserContext(
-            user_id="service", workspace_id="shared-service", roles=["service"]
+            user_id="service", workspace_id="shared-service"
         ),
         # Malicious user trying to access other workspaces
         "malicious_user": UserContext(
-            user_id="hacker", workspace_id="hacker-workspace", roles=["user"]
+            user_id="hacker", workspace_id="hacker-workspace"
         ),
     }
 
