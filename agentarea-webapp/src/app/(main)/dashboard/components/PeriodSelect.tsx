@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Calendar, Check, ChevronsUpDown } from "lucide-react";
+import { CalendarRange, ChevronDown } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import { cn } from "@/lib/utils";
 
 type Preset = { id: string; labelKey: string; days: number | "mtd" };
@@ -36,13 +34,15 @@ function rangeLabel(preset: Preset, locale: string): string {
 }
 
 /**
- * Date-range selector shown in the Dashboard header. Presentational for now —
- * it reflects the chosen preset; wiring it to refetch scoped data is a
- * follow-up once the dashboard endpoint accepts a period parameter.
+ * Date-range selector shown in the Dashboard header. Reuses the Skills
+ * "Display" popover menu pattern ({@link MenuRow} / {@link MenuSectionLabel}).
+ * Presentational for now — it reflects the chosen preset; wiring it to refetch
+ * scoped data is a follow-up once the dashboard endpoint accepts a period.
  */
 export function PeriodSelect() {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
+  const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Preset>(PRESETS[1]);
   // The range label depends on the current date and locale, so it can't be
   // computed during SSR without risking a hydration mismatch. Show the stable
@@ -52,42 +52,37 @@ export function PeriodSelect() {
   const label = mounted ? rangeLabel(active, locale) : t(active.labelKey);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         className={cn(
-          "inline-flex h-[30px] items-center gap-[7px] rounded-[7px] border border-border bg-background px-[11px]",
-          "text-[12.5px] font-medium text-foreground/80 transition-colors hover:bg-muted",
-          "data-[state=open]:bg-muted"
+          "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
+          "text-foreground/80 hover:bg-muted/60",
+          "data-[state=open]:bg-muted data-[state=open]:text-foreground"
         )}
       >
-        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+        <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="tabular-nums">{label}</span>
-        <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground/70" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <DropdownMenuLabel className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
-          {t("period")}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[288px] p-1.5">
+        <MenuSectionLabel>{t("period")}</MenuSectionLabel>
         {PRESETS.map((p) => (
-          <DropdownMenuItem
+          <MenuRow
             key={p.id}
-            onSelect={() => setActive(p)}
-            className="flex items-center gap-2 text-[13px]"
-          >
-            <span className="flex-1">{t(p.labelKey)}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {mounted ? rangeLabel(p, locale) : ""}
-            </span>
-            <Check
-              className={cn(
-                "h-3.5 w-3.5 text-primary",
-                active.id === p.id ? "opacity-100" : "opacity-0"
-              )}
-            />
-          </DropdownMenuItem>
+            label={<span className="whitespace-nowrap">{t(p.labelKey)}</span>}
+            selected={active.id === p.id}
+            onClick={() => {
+              setActive(p);
+              setOpen(false);
+            }}
+            trailing={
+              <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+                {mounted ? rangeLabel(p, locale) : ""}
+              </span>
+            }
+          />
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -23,6 +23,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { GroupHeader } from "@/components/ui/group-header";
+import { MenuRow, MenuSectionLabel, MenuSeparator } from "@/components/ui/menu-row";
 import {
   Select,
   SelectContent,
@@ -346,9 +347,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-52 p-1.5">
-            <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {t("display.grouping")}
-            </p>
+            <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
             <MenuRow
               icon={<Layers className="h-3.5 w-3.5" />}
               label={t("display.source")}
@@ -367,10 +366,8 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               selected={group === "none"}
               onClick={() => onGroup("none")}
             />
-            <div className="my-1 h-px bg-border" />
-            <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-              {t("display.ordering")}
-            </p>
+            <MenuSeparator />
+            <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
             <MenuRow
               icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
               label={t("display.name")}
@@ -508,34 +505,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         )}
       </div>
     </div>
-  );
-}
-
-function MenuRow({
-  icon,
-  label,
-  selected,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px]",
-        selected ? "text-primary" : "text-foreground/80 hover:bg-muted"
-      )}
-    >
-      <span className={selected ? "text-primary" : "text-muted-foreground"}>
-        {icon}
-      </span>
-      {label}
-    </button>
   );
 }
 
