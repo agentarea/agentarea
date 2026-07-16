@@ -677,7 +677,7 @@ export default function FullChat({
       </div>
 
       {/* Badge Suggestions */}
-      {startCentered && (
+      {startCentered && (badgeSuggestions?.length ?? 0) > 0 && (
         <div className="flex-none w-full pb-4">
           <BadgeSuggestions
             suggestions={badgeSuggestions || []}

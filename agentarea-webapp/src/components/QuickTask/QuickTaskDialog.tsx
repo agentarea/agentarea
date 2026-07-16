@@ -3,24 +3,67 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ArrowUp, Loader2, Paperclip, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { AgentResponse, ProjectResponse } from "@/api/client/types.gen";
+import FullChat, {
+  type Agent,
+  type ProjectOption,
+  type TaskPolicyOption,
+} from "@/components/Chat/FullChat";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { createTask, getAgents } from "@/components/actions";
+import { Kbd } from "@/components/ui/kbd";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getAgents } from "@/components/actions";
+import { listPoliciesAction, listProjectsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 
 export const QUICK_TASK_OPEN_EVENT = "workplace:quick-task-open";
 
-interface QuickAgent {
+/** Agents carry a couple of presentational fields not in the generated schema. */
+type ApiAgent = AgentResponse & {
+  icon?: string | null;
+  color_token?: string | null;
+};
+
+type ApiProject = ProjectResponse;
+
+/** The /v1/policies endpoint is untyped in the client; describe what we read. */
+type ApiPolicy = {
   id: string;
-  name: string;
+  target?: string | null;
+  effect?: string | null;
+  params?: Record<string, unknown> | null;
+  subject_type?: string | null;
+  priority?: number | null;
+};
+
+function formatPolicyName(policy: ApiPolicy) {
+  const effect = String(policy.effect ?? "policy");
+  const target = String(policy.target ?? "*");
+  return `${effect} ${target}`;
+}
+
+function formatPolicyDescription(policy: ApiPolicy) {
+  const subjectType = String(policy.subject_type ?? "workspace");
+  const priority = Number.isFinite(policy.priority) ? policy.priority : 0;
+  return `${subjectType} - priority ${priority}`;
+}
+
+/** Composer-shaped skeleton shown while agents/projects/policies load. */
+function QuickTaskComposerSkeleton() {
+  return (
+    <div className="rounded-2xl border p-3" aria-hidden="true">
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <div className="mt-3 flex items-center gap-2">
+        <Skeleton className="h-7 w-28 rounded-md" />
+        <Skeleton className="h-7 w-24 rounded-md" />
+        <Skeleton className="h-7 w-32 rounded-md" />
+        <div className="ml-auto flex gap-2">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function QuickTaskDialog() {
@@ -28,13 +71,11 @@ export default function QuickTaskDialog() {
   const t = useTranslations("QuickTask");
 
   const [open, setOpen] = React.useState(false);
-  const [agents, setAgents] = React.useState<QuickAgent[]>([]);
-  const [agentsLoaded, setAgentsLoaded] = React.useState(false);
-  const [currentAgentId, setCurrentAgentId] = React.useState<string>("");
-  const [input, setInput] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [dataLoaded, setDataLoaded] = React.useState(false);
+  const [agents, setAgents] = React.useState<Agent[]>([]);
+  const [projects, setProjects] = React.useState<ProjectOption[]>([]);
+  const [policies, setPolicies] = React.useState<TaskPolicyOption[]>([]);
+  const [selectedAgent, setSelectedAgent] = React.useState<Agent | null>(null);
 
   // Cmd+J & event listener
   React.useEffect(() => {
@@ -53,184 +94,105 @@ export default function QuickTaskDialog() {
     };
   }, []);
 
-  // Lazy-load agents on first open
+  // Lazy-load agents + projects + policies on FIRST open only (cached after).
+  // Nothing is fetched at app startup — the effect bails out while closed.
   React.useEffect(() => {
-    if (!open || agentsLoaded) return;
+    if (!open || dataLoaded) return;
     let cancelled = false;
-    getAgents()
-      .then(({ data }) => {
+    Promise.all([getAgents(), listProjectsAction(), listPoliciesAction()])
+      .then(([agentsRes, projectsRes, policiesRes]) => {
         if (cancelled) return;
-        const list: QuickAgent[] = (data || []).map((a: unknown) => {
-          const item = a as { id?: unknown; name?: unknown };
-          return { id: String(item.id ?? ""), name: String(item.name ?? "") };
-        });
-        setAgents(list);
-        setCurrentAgentId((prev) => prev || list[0]?.id || "");
-        setAgentsLoaded(true);
+        const agentList: Agent[] = ((agentsRes.data ?? []) as ApiAgent[]).map(
+          (a) => ({
+            id: String(a.id),
+            name: a.name,
+            description: a.description ?? null,
+            icon: a.icon ?? null,
+            color_token: a.color_token ?? null,
+          })
+        );
+        const projectList: ProjectOption[] = (
+          (projectsRes.data ?? []) as ApiProject[]
+        ).map((p) => ({
+          id: String(p.id),
+          name: p.name,
+          description: p.description ?? null,
+        }));
+        const policyList: TaskPolicyOption[] = (
+          (policiesRes.data ?? []) as ApiPolicy[]
+        ).map((p) => ({
+          id: String(p.id),
+          name: formatPolicyName(p),
+          description: formatPolicyDescription(p),
+          policy: {
+            id: String(p.id),
+            target: p.target ?? "",
+            effect: p.effect ?? "",
+            params: p.params ?? {},
+          },
+        }));
+        setAgents(agentList);
+        setProjects(projectList);
+        setPolicies(policyList);
+        setSelectedAgent((prev) => prev || agentList[0] || null);
+        setDataLoaded(true);
       })
       .catch(() => {
         if (cancelled) return;
-        setAgents([]);
-        setAgentsLoaded(true);
+        setDataLoaded(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [open, agentsLoaded]);
+  }, [open, dataLoaded]);
 
-  // Focus on open / reset on close
-  React.useEffect(() => {
-    if (open) {
-      setTimeout(() => textareaRef.current?.focus(), 80);
-    } else {
-      setInput("");
-    }
-  }, [open]);
-
-  const submitTask = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || !currentAgentId || isLoading) return;
-
-    setIsLoading(true);
-    try {
-      const { data, error } = await createTask(currentAgentId, {
-        description: trimmed,
-      });
-      const taskId = (data as { id?: string } | null | undefined)?.id;
-      if (error || !taskId) {
-        setIsLoading(false);
-        return;
-      }
+  const handleTaskCreated = React.useCallback(
+    (taskId: string) => {
       setOpen(false);
-      setInput("");
-      setIsLoading(false);
       router.push(`/tasks/${taskId}`);
-    } catch {
-      setIsLoading(false);
-    }
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      void submitTask();
-      return;
-    }
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void submitTask();
-    }
-  };
-
-  const canSubmit = input.trim().length > 0 && !!currentAgentId && !isLoading;
-  const currentAgent = agents.find((a) => a.id === currentAgentId);
+    },
+    [router]
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         data-quick-task-dialog
+        closeClassName="right-2 top-2"
         className={cn(
-          "top-[28%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-2xl border bg-background/95 p-3 shadow-2xl backdrop-blur-sm",
+          // extra top padding gives the close button its own strip above the composer
+          "top-[24%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-2xl border bg-background px-3 pb-3 pt-7 shadow-2xl",
           "data-[state=closed]:slide-out-to-top-[20%] data-[state=open]:slide-in-from-top-[20%]"
         )}
       >
         <DialogTitle className="sr-only">{t("title")}</DialogTitle>
 
-        <div
-          className={cn(
-            "rounded-xl border bg-background transition-shadow",
-            "focus-within:ring-1 focus-within:ring-ring/30"
-          )}
-        >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={t("placeholderGeneric")}
-            disabled={isLoading}
-            rows={3}
-            className={cn(
-              "w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm",
-              "outline-none placeholder:text-muted-foreground/70",
-              "disabled:opacity-60"
-            )}
-          />
-
-          <div className="flex items-center justify-between px-2 pb-2">
-            <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
-              <SelectTrigger
-                className={cn(
-                  "h-7 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs font-medium",
-                  "hover:bg-muted/60 focus:ring-0 focus:ring-offset-0",
-                  "[&>svg:last-child]:h-3 [&>svg:last-child]:w-3 [&>svg:last-child]:opacity-60"
-                )}
-              >
-                <Sparkles
-                  className="h-3 w-3 text-orange-400"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
-                <SelectValue placeholder={t("selectAgent")}>
-                  {currentAgent?.name ?? t("selectAgent")}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent align="start">
-                {agents.length === 0 ? (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    {agentsLoaded ? t("noAgentsShort") : t("loading")}
-                  </div>
-                ) : (
-                  agents.map((agent) => (
-                    <SelectItem
-                      key={agent.id}
-                      value={agent.id}
-                      className="text-xs"
-                    >
-                      {agent.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                disabled
-                className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground"
-                aria-label={t("attach")}
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                onClick={submitTask}
-                disabled={!canSubmit}
-                className="h-7 w-7 rounded-full"
-                aria-label={t("send")}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
-                )}
-              </Button>
+        {selectedAgent ? (
+          <>
+            <FullChat
+              agent={selectedAgent}
+              availableAgents={agents}
+              onAgentChange={setSelectedAgent}
+              availableProjects={projects}
+              availableTaskPolicies={policies}
+              onTaskCreated={handleTaskCreated}
+              startCentered
+              className="!h-auto !max-w-none !gap-0 !py-0"
+            />
+            <div className="mt-2.5 flex items-center justify-end gap-4 text-[11px] text-muted-foreground/70">
+              <span className="inline-flex items-center gap-1.5">
+                <Kbd keys={["↵"]} />
+                {t("toCreate")}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Kbd keys={["Esc"]} />
+                {t("toClose")}
+              </span>
             </div>
-          </div>
-        </div>
-
-        <div className="mt-2 flex items-center justify-end px-1">
-          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
-            <kbd className="rounded border border-border/60 bg-muted/40 px-1 py-0.5 font-mono text-[10px] leading-none">
-              &#8984;&#8629;
-            </kbd>
-            {t("toCreate")}
-          </span>
-        </div>
+          </>
+        ) : (
+          <QuickTaskComposerSkeleton />
+        )}
       </DialogContent>
     </Dialog>
   );

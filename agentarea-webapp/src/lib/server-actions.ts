@@ -90,6 +90,7 @@ import {
   listModelInstances,
   listModelSpecs,
   listOpenAPIConnections,
+  listPolicies,
   listProjectFiles,
   listProjects,
   listProviderSpecs,
@@ -705,6 +706,10 @@ export async function pullClientFromProjectAction(
 // Project Actions
 export async function listProjectsAction() {
   return await listProjects();
+}
+
+export async function listPoliciesAction() {
+  return await listPolicies({ enabled: true });
 }
 
 export async function getProjectAction(projectId: string) {

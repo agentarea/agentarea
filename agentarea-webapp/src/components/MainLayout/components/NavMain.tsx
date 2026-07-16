@@ -293,6 +293,18 @@ export function NavMain({
                 asChild
                 isActive={isItemActive(item.url)}
                 tooltip={item.titleKey ? t(item.titleKey) : item.title}
+                className={cn(
+                  // Smoothly animate color/background changes when the active item switches
+                  "transition-colors duration-200 [&>svg]:transition-colors [&>svg]:duration-200",
+                  // Icons are gray by default (light + dark)
+                  "[&>svg]:text-zinc-400 dark:[&>svg]:text-zinc-500",
+                  // Active: neutral gray bg (darker than hover, not bluish), distinct from hover
+                  "data-[active=true]:bg-zinc-200/80 dark:data-[active=true]:bg-zinc-700/50",
+                  // Active: no bold, normal text color
+                  "data-[active=true]:font-normal data-[active=true]:text-foreground",
+                  // Active: icon turns slightly blue
+                  "[&[data-active=true]>svg]:text-primary dark:[&[data-active=true]>svg]:text-primary"
+                )}
               >
                 <Link href={item.url}>
                   {item.icon && <item.icon />}
