@@ -32,6 +32,17 @@ class WorkspaceContextFormatter(logging.Formatter):
         if trace_ids:
             log_entry.update(trace_ids)
 
+        # The whole point of logger.exception()/exc_info=True is the cause; this
+        # formatter replaces the base class's rendering, so it has to carry the
+        # traceback itself or the reason is silently dropped. json.dumps escapes
+        # the embedded newlines, so the record stays one physical line.
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            log_entry["exception"] = record.exc_text
+        if record.stack_info:
+            log_entry["stack"] = self.formatStack(record.stack_info)
+
         # Add audit event data if present
         if hasattr(record, "audit_event"):
             log_entry["audit_event"] = cast(Any, record).audit_event
