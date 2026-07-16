@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight, Bot } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { BoardSectionHeader } from "@/components/board";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
@@ -79,15 +80,17 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
       </div>
 
       {agents.length === 0 ? (
-        <div className="px-6 py-8 text-center text-[12px] text-muted-foreground">
-          {t("noAgents")}{" "}
-          <Link
-            href="/agents"
-            className="text-foreground underline-offset-2 hover:underline"
-          >
-            {t("createFirstAgent")}
-          </Link>
-          .
+        <div className="min-h-0 flex-1 lg:overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col justify-center">
+            <EmptyState
+              iconsType="agent"
+              accentClassName="text-primary"
+              title={t("noAgents")}
+              description={t("noAgentsHint")}
+              additionAction={{ label: t("createFirstAgent"), href: "/agents" }}
+              className="border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+            />
+          </div>
         </div>
       ) : (
         <div className="min-h-0 flex-1 lg:overflow-y-auto">

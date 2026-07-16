@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Shield } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import EmptyState from "@/components/EmptyState";
 import { BoardSectionHeader } from "@/components/board";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
@@ -80,14 +81,19 @@ export function BlockersPanel({
           color="var(--amber)"
           title={t("blockers")}
           pill={total > 0 ? total : undefined}
-          meta={total === 0 ? t("healthy") : undefined}
         />
       </div>
 
       <div className="min-h-0 flex-1 lg:overflow-y-auto">
         {total === 0 ? (
-          <div className="px-6 py-8 text-center text-[12px] text-muted-foreground">
-            {t("nothingBlocking")}
+          <div className="flex min-h-0 flex-1 flex-col justify-center">
+            <EmptyState
+              iconsType="healthy"
+              accentClassName="text-emerald-500"
+              title={t("nothingBlocking")}
+              description={t("allClearHint")}
+              className="border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+            />
           </div>
         ) : (
           groups.map((g) => (
