@@ -125,8 +125,7 @@ class Activities:
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
-    RESOLVE_SKILL_FILE: Final[str] = "resolve_skill_file_activity"
-    EXECUTE_SKILL_SCRIPT: Final[str] = "execute_skill_script_activity"
+    MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
     CLEANUP_SANDBOX_WORKFLOW: Final[str] = "cleanup_sandbox_workflow_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"

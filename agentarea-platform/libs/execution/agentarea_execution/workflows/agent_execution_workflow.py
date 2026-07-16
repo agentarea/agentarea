@@ -72,10 +72,10 @@ from ..models import (
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
-    ExecuteSkillScriptRequest,
-    ExecuteSkillScriptResult,
     LLMCallRequest,
     LLMCallResult,
+    MaterializeSkillFilesRequest,
+    MaterializeSkillFilesResult,
     MCPToolRequest,
     ReadOutputRequest,
     ReadOutputResult,
@@ -86,8 +86,6 @@ from ..models import (
     ResolveModelRequest,
     SearchHistoryRequest,
     SearchHistoryResult,
-    SkillFileRequest,
-    SkillFileResult,
     StoreHistoryRequest,
     StoreHistoryResult,
     StoreOutputRequest,
@@ -827,45 +825,6 @@ class AgentExecutionWorkflow:
             registry = SkillCatalogBuilder.build_registry(skill_entries)
             self._skill_tool = SkillActivationTool(registry)
             available_tools.append(self._skill_tool.get_openai_function_definition())
-
-            # Inject run_skill_script tool for executing skill-bundled scripts
-            available_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "run_skill_script",
-                        "description": (
-                            "Execute a script bundled with an activated skill in an isolated sandbox. "
-                            "The skill must be activated first via activate_skill."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "skill_name": {
-                                    "type": "string",
-                                    "description": "Name of the activated skill that owns the script",
-                                },
-                                "script_name": {
-                                    "type": "string",
-                                    "description": "Filename of the script to run (e.g. calculator.py)",
-                                },
-                                "args": {
-                                    "type": "string",
-                                    "description": "Arguments to pass to the script",
-                                },
-                                "artifact_paths": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": (
-                                        "Relative output files to upload as task artifacts after the script runs"
-                                    ),
-                                },
-                            },
-                            "required": ["skill_name", "script_name"],
-                        },
-                    },
-                }
-            )
 
         # Disclosure is a PDP decision: never offer the model a tool the gate
         # would reject (same policy, one decision, both ends).
@@ -1739,7 +1698,6 @@ class AgentExecutionWorkflow:
         regular_calls: list[ToolCall] = []
         recall_calls: list[ToolCall] = []
         skill_calls: list[ToolCall] = []
-        script_calls: list[ToolCall] = []
         read_output_calls: list[ToolCall] = []
         activate_source_calls: list[ToolCall] = []
         load_tools_calls: list[ToolCall] = []
@@ -1761,8 +1719,6 @@ class AgentExecutionWorkflow:
                 load_tools_calls.append(tool_call)
             elif tool_name == "activate_skill":
                 skill_calls.append(tool_call)
-            elif tool_name == "run_skill_script":
-                script_calls.append(tool_call)
             elif tool_name in self._agent_tool_registry:
                 agent_calls.append(tool_call)
             else:
@@ -1779,7 +1735,6 @@ class AgentExecutionWorkflow:
                 *activate_source_calls,
                 *load_tools_calls,
                 *skill_calls,
-                *script_calls,
                 *agent_calls,
                 *regular_calls,
             ]
@@ -1816,10 +1771,6 @@ class AgentExecutionWorkflow:
         # Execute skill activations (local, no activity needed)
         for tool_call in skill_calls:
             await self._execute_skill_activation(tool_call)
-
-        # Execute skill scripts (via MCP Manager sandbox)
-        for tool_call in script_calls:
-            await self._execute_skill_script(tool_call)
 
         # Run agent delegations in parallel (fan-out)
         if agent_calls:
@@ -2732,6 +2683,20 @@ class AgentExecutionWorkflow:
         if skill_name and skill_name not in self.state.activated_skills:
             self.state.activated_skills.append(skill_name)
 
+        # A skill is a folder of files, so activating it puts that folder in the
+        # task's sandbox. The workspace persists across shell calls, so one
+        # upload is enough and the agent reaches the scripts with plain bash —
+        # no second execution tool.
+        materialized = await self._materialize_skill_files(skill_name)
+        if materialized:
+            result_text = f"{result_text}\n\n{materialized}"
+            self.state.messages[-1] = Message(
+                role="tool",
+                content=result_text,
+                tool_call_id=tool_call.id,
+                name="activate_skill",
+            )
+
         self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
@@ -2744,146 +2709,52 @@ class AgentExecutionWorkflow:
             },
         )
 
-    async def _execute_skill_script(self, tool_call: ToolCall) -> None:
-        """Execute a skill-bundled script via MCP Manager sandbox."""
-        if not await self._gate_tool_call(tool_call):
-            return
-        try:
-            args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
-            args = {}
+    async def _materialize_skill_files(self, skill_name: str) -> str:
+        """Copy an activated skill's folder into the sandbox; describe it to the agent.
 
-        skill_name = args.get("skill_name", "")
-        script_name = args.get("script_name", "")
-        script_args = args.get("args", "")
-        artifact_paths = args.get("artifact_paths") or []
-        if not isinstance(artifact_paths, list):
-            artifact_paths = []
-
-        # Validate skill is activated
-        if skill_name not in self.state.activated_skills:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: skill '{skill_name}' has not been activated. Call activate_skill first.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
-            )
-            return
-
-        # Fetch script content from skill package via existing activity
+        Returns a note for the LLM, or an empty string when there is nothing to
+        say. Failure to materialize is not fatal: the skill's instructions still
+        stand on their own, so the agent keeps working with a degraded skill
+        rather than a dead task.
+        """
         skill_config = next(
             (s for s in self.state.agent_config.get("skills", []) if s.get("name") == skill_name),
             None,
         )
-        if not skill_config:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: skill '{skill_name}' not found in agent config.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
+        skill_id = (skill_config or {}).get("id")
+        if not skill_id:
+            return ""
+
+        try:
+            result = await workflow.execute_activity(
+                Activities.MATERIALIZE_SKILL_FILES,
+                args=[
+                    MaterializeSkillFilesRequest(
+                        skill_id=UUID(skill_id),
+                        skill_name=skill_name,
+                        workflow_id=workflow.info().workflow_id,
+                        workspace_id=str(self.state.workspace_id)
+                        if self.state.workspace_id
+                        else None,
+                        task_id=str(self.state.task_id) if self.state.task_id else None,
+                    )
+                ],
+                result_type=MaterializeSkillFilesResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=make_retry_policy(2),
             )
-            return
+        except Exception as e:
+            workflow.logger.warning(f"Could not materialize skill '{skill_name}': {e}")
+            return ""
 
-        # Try to fetch script from skill package (S3)
-        script_content = None
-        skill_id = skill_config.get("id")
-        if skill_id:
-            try:
-                file_result = await workflow.execute_activity(
-                    Activities.RESOLVE_SKILL_FILE,
-                    args=[
-                        SkillFileRequest(
-                            skill_id=UUID(skill_id),
-                            file_path=script_name,
-                            workspace_id=self.state.workspace_id,
-                            user_context_data=self.state.user_context_data,
-                        )
-                    ],
-                    result_type=SkillFileResult,
-                    start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=make_retry_policy(2),
-                )
-                if file_result.success:
-                    script_content = file_result.content_text
-                    if not script_content and file_result.content:
-                        script_content = file_result.content.decode("utf-8")
-            except Exception as e:
-                workflow.logger.warning(f"Could not fetch script from S3: {e}")
+        if not result.success:
+            workflow.logger.warning(f"Could not materialize skill '{skill_name}': {result.error}")
+            return ""
 
-        if not script_content:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: script '{script_name}' not found in skill '{skill_name}'.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
-            )
-            return
-
-        # Execute via MCP Manager sandbox. The activity layer owns scoping
-        # to the current task — workflow code stays oblivious to sandbox
-        # internals.
-        script_args_list = [script_args] if script_args else []
-        result = await workflow.execute_activity(
-            Activities.EXECUTE_SKILL_SCRIPT,
-            args=[
-                ExecuteSkillScriptRequest(
-                    script_content=script_content,
-                    script_name=script_name,
-                    args=script_args_list,
-                    artifact_paths=[str(path) for path in artifact_paths],
-                    timeout_seconds=1800,
-                    workspace_id=str(self.state.workspace_id) if self.state.workspace_id else None,
-                    task_id=str(self.state.task_id) if self.state.task_id else None,
-                )
-            ],
-            result_type=ExecuteSkillScriptResult,
-            start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-            retry_policy=make_retry_policy(2),
-        )
-
-        # Build result message
-        output_parts = []
-        if result.stdout:
-            output_parts.append(result.stdout)
-        if result.stderr:
-            output_parts.append(f"STDERR: {result.stderr}")
-        if result.exit_code != 0:
-            output_parts.append(f"Exit code: {result.exit_code}")
-        if result.artifacts:
-            output_parts.append(f"Artifacts: {json.dumps(result.artifacts, ensure_ascii=False)}")
-        content = "\n".join(output_parts) or "(no output)"
-
-        # Offload large script outputs to MinIO (hybrid/dynamic strategy)
-        content = await self._maybe_offload_output(content, f"script_{tool_call.id}")
-
-        self.state.messages.append(
-            Message(
-                role="tool",
-                content=content,
-                tool_call_id=tool_call.id,
-                name="run_skill_script",
-            )
-        )
-
-        self._events.add_event(
-            EventTypes.TOOL_CALL_COMPLETED,
-            {
-                "tool_name": "run_skill_script",
-                "tool_call_id": tool_call.id,
-                "skill_name": skill_name,
-                "script_name": script_name,
-                "exit_code": result.exit_code,
-                "success": result.exit_code == 0,
-                "result": content,
-                "artifact_paths": result.artifacts or [],
-                "iteration": self.state.current_iteration,
-            },
+        listing = "\n".join(f"- {path}" for path in result.paths)
+        return (
+            f"This skill's files are in {result.directory}/ in your sandbox:\n{listing}\n"
+            f'Run them with the shell tool, e.g. bash("python {result.directory}/<script>").'
         )
 
     async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:

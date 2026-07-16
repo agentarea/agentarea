@@ -567,27 +567,23 @@ class RecallHistoryResult(BaseModel):
     summary: str = ""
 
 
-class ExecuteSkillScriptRequest(BaseModel):
-    """Request to execute a skill script in a sandbox via MCP Manager."""
+class MaterializeSkillFilesRequest(BaseModel):
+    """Request to copy a skill's bundle into the task's sandbox workspace."""
 
-    script_content: str
-    script_name: str  # e.g. "calculator.py" — determines interpreter
-    args: list[str] = Field(default_factory=list)
-    env: dict[str, str] = Field(default_factory=dict)
-    artifact_paths: list[str] = Field(default_factory=list)
-    timeout_seconds: int = 1800
+    skill_id: UUID
+    skill_name: str
+    workflow_id: str | None = None
     workspace_id: str | None = None
     task_id: str | None = None
 
 
-class ExecuteSkillScriptResult(BaseModel):
-    """Result of skill script execution."""
+class MaterializeSkillFilesResult(BaseModel):
+    """Where a skill's files landed in the sandbox."""
 
-    stdout: str = ""
-    stderr: str = ""
-    exit_code: int = 0
-    execution_time_ms: int = 0
-    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    success: bool = False
+    directory: str = ""
+    paths: list[str] = Field(default_factory=list)
+    error: str | None = None
 
 
 # === Context Store Activity Models ===
@@ -677,31 +673,4 @@ class DiscoverToolProvidersResult(BaseModel):
 
     providers: list[ToolProviderData] = Field(default_factory=list)
     success: bool = True
-    error: str | None = None
-
-
-class SkillFileRequest(BaseModel):
-    """Request to resolve a skill file from S3.
-
-    Used by workflows to access individual files from skill packages.
-    """
-
-    skill_id: UUID
-    file_path: str  # Relative path within the skill package
-    workspace_id: str
-    user_context_data: dict[str, Any] | None = None
-
-
-class SkillFileResult(BaseModel):
-    """Result of skill file resolution.
-
-    Contains either the file content or a presigned URL.
-    """
-
-    success: bool = True
-    content: bytes | None = None  # File content as bytes
-    content_text: str | None = None  # File content as text (for text files)
-    presigned_url: str | None = None  # Presigned URL for direct access
-    content_type: str | None = None  # MIME type
-    size: int = 0  # File size in bytes
     error: str | None = None

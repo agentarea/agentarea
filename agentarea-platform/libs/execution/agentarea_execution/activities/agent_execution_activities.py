@@ -54,14 +54,14 @@ from ..models import (
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
-    ExecuteSkillScriptRequest,
-    ExecuteSkillScriptResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
     GoalEvaluationResult,
     LLMCallRequest,
     LLMCallResult,
+    MaterializeSkillFilesRequest,
+    MaterializeSkillFilesResult,
     MCPToolRequest,
     MCPToolResult,
     ReadOutputRequest,
@@ -75,8 +75,6 @@ from ..models import (
     SearchableToolEntry,
     SearchHistoryRequest,
     SearchHistoryResult,
-    SkillFileRequest,
-    SkillFileResult,
     SkillInfo,
     StoreHistoryRequest,
     StoreHistoryResult,
@@ -1600,95 +1598,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 return UpdateTaskStatusResult(success=False, error=str(e))
 
     @activity.defn
-    async def resolve_skill_file_activity(
-        request: SkillFileRequest,
-    ) -> SkillFileResult:
-        """Resolve a file from a skill package.
-
-        This activity retrieves a file from a skill's S3 storage,
-        returning either the content directly or a presigned URL
-        for larger files.
-        """
-        try:
-            from agentarea_agents.infrastructure.skill_storage_service import (
-                SkillStorageService,
-            )
-
-            user_context = create_system_context(request.workspace_id)
-
-            async with ActivityContext(container, user_context) as ctx:
-                # Get skill from database
-                skill_service = await ctx.get_skill_service()
-                skill = await skill_service.get(request.skill_id)
-
-                if not skill:
-                    return SkillFileResult(
-                        success=False,
-                        error=f"Skill {request.skill_id} not found",
-                    )
-
-                # Handle content-only skills
-                if not skill.s3_path:
-                    # For content-only skills, check if requesting the main file
-                    if request.file_path.lower() in ("skill.md", "readme.md"):
-                        content = skill.content or ""
-                        return SkillFileResult(
-                            success=True,
-                            content=content.encode("utf-8"),
-                            content_text=content,
-                            content_type="text/markdown",
-                            size=len(content),
-                        )
-                    return SkillFileResult(
-                        success=False,
-                        error=f"Skill {request.skill_id} has no file storage (content-only)",
-                    )
-
-                # Get file from S3
-                storage_service = SkillStorageService()
-
-                try:
-                    content = await storage_service.get_file_content(
-                        skill.s3_path,
-                        request.file_path,
-                    )
-
-                    # Determine content type
-                    content_type = storage_service._guess_content_type(request.file_path)
-
-                    # For text files, also provide text representation
-                    content_text = None
-                    if content_type.startswith("text/") or content_type in (
-                        "application/json",
-                        "application/x-yaml",
-                    ):
-                        try:
-                            content_text = content.decode("utf-8")
-                        except UnicodeDecodeError:
-                            pass  # Binary content
-
-                    return SkillFileResult(
-                        success=True,
-                        content=content,
-                        content_text=content_text,
-                        content_type=content_type,
-                        size=len(content),
-                    )
-
-                except FileNotFoundError:
-                    return SkillFileResult(
-                        success=False,
-                        error=f"File not found: {request.file_path}",
-                    )
-
-        except Exception as e:
-            logger.error(f"Failed to resolve skill file: {e}")
-            return SkillFileResult(
-                success=False,
-                error=str(e),
-            )
-
-    @activity.defn
     @auto_heartbeater
     async def compact_messages_activity(
         request: CompactMessagesRequest,
@@ -1944,130 +1853,108 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     summary=f"Failed to recall history: {e}",
                 )
 
-    @activity.defn(name="execute_skill_script_activity")
-    async def execute_skill_script_activity(
-        request: ExecuteSkillScriptRequest,
-    ) -> ExecuteSkillScriptResult:
-        """Execute a skill script through the sandbox control/data plane.
+    @activity.defn(name="materialize_skill_files_activity")
+    async def materialize_skill_files_activity(
+        request: MaterializeSkillFilesRequest,
+    ) -> MaterializeSkillFilesResult:
+        """Copy a skill's bundle into the task's sandbox workspace.
 
-        The activity schedules a sandbox execution, then polls the durable
-        execution record while the data-plane runner owns actual process
-        execution.
+        The sandbox workspace persists for the life of the workflow, so the
+        bundle is uploaded once at activation and stays on disk for every later
+        shell call. A skill carrying only prose is still a bundle — its text is
+        written as SKILL.md, so there is one kind of skill, not two.
         """
-        import asyncio
-        import time
-
         import httpx
+        from agentarea_agents.infrastructure.skill_storage_service import (
+            SkillStorageService,
+        )
         from agentarea_common.config.mcp import MCPSettings
 
-        mcp_settings = MCPSettings()
-        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions"
-
-        command_payload: dict[str, Any] = {
-            "script_content": request.script_content,
-            "script_name": request.script_name,
-            "args": request.args,
-            "env": request.env,
-            "artifact_paths": request.artifact_paths,
-            "timeout_seconds": request.timeout_seconds,
-        }
-        # Resolve task scope from Temporal context — the workflow stays
-        # oblivious to sandbox internals. Activity context is unavailable
-        # only in unit-test paths that call the activity directly; the
-        # sandbox tolerates a missing workflow_id (legacy stateless mode).
-        workflow_id: str | None = None
-        try:
-            workflow_id = activity.info().workflow_id
-            command_payload["workflow_id"] = workflow_id
-        except Exception as exc:
-            logger.debug("activity.info() unavailable, running without workflow_id: %s", exc)
-
-        payload: dict[str, Any] = {
-            "workflow_id": workflow_id,
-            "workspace_id": request.workspace_id,
-            "task_id": request.task_id,
-            "runtime": {"provider": "agentarea-k8s"},
-            "command": command_payload,
-        }
-        payload = {key: value for key, value in payload.items() if value}
+        from .skill_materialization import (
+            assemble_skill_bundle,
+            build_skill_input_files,
+            skill_workspace_dir,
+        )
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(url, json=payload)
-
-                if resp.status_code >= 400:
-                    logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")
-                    return ExecuteSkillScriptResult(
-                        stderr=f"MCP Manager returned {resp.status_code}: {resp.text[:300]}",
-                        exit_code=1,
+            user_context = create_system_context(request.workspace_id)
+            async with ActivityContext(container, user_context) as ctx:
+                skill_service = await ctx.get_skill_service()
+                skill = await skill_service.get(request.skill_id)
+                if not skill:
+                    return MaterializeSkillFilesResult(
+                        success=False, error=f"Skill {request.skill_id} not found"
                     )
 
-                data = resp.json()
-                if isinstance(data, dict) and data.get("id"):
-                    deadline = time.monotonic() + request.timeout_seconds + 60
-                    while data.get("status") not in {"completed", "failed", "cancelled"}:
-                        if time.monotonic() >= deadline:
-                            return ExecuteSkillScriptResult(
-                                stderr=(
-                                    "Timed out waiting for sandbox execution "
-                                    f"{data.get('id')} to complete"
+                # A skill is a folder. Files may be absent, prose may be absent,
+                # but the folder always gets a manifest — there is one kind of
+                # skill, not a "content-only" second kind.
+                bundled: list[tuple[str, bytes]] = []
+                if skill.s3_path:
+                    storage_service = SkillStorageService()
+                    for info in await storage_service.list_files(skill.s3_path):
+                        relative_path = getattr(info, "path", None) or getattr(info, "name", "")
+                        if not relative_path:
+                            continue
+                        bundled.append(
+                            (
+                                relative_path,
+                                await storage_service.get_file_content(
+                                    skill.s3_path, relative_path
                                 ),
-                                exit_code=1,
                             )
-                        await asyncio.sleep(2)
-                        status_resp = await client.get(
-                            f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions/{data['id']}"
                         )
-                        if status_resp.status_code >= 400:
-                            return ExecuteSkillScriptResult(
-                                stderr=(
-                                    f"MCP Manager status returned {status_resp.status_code}: "
-                                    f"{status_resp.text[:300]}"
-                                ),
-                                exit_code=1,
-                            )
-                        data = status_resp.json()
 
-                    if data.get("status") != "completed":
-                        return ExecuteSkillScriptResult(
-                            stderr=(
-                                f"Sandbox execution {data.get('status')}: "
-                                f"{data.get('error') or 'no error detail'}"
-                            ),
-                            exit_code=1,
+                files = assemble_skill_bundle(skill.content, bundled)
+                input_files = build_skill_input_files(request.skill_name, files)
+                if not input_files:
+                    return MaterializeSkillFilesResult(
+                        success=False,
+                        error=f"Skill '{request.skill_name}' bundle contained no usable paths",
+                    )
+
+                mcp_settings = MCPSettings()
+                payload: dict[str, Any] = {
+                    "workflow_id": request.workflow_id,
+                    "workspace_id": request.workspace_id,
+                    "task_id": request.task_id,
+                    "runtime": {"provider": "agentarea-k8s"},
+                    "command": {
+                        # Uploading the files is the whole job; the command is a no-op.
+                        "script_name": "materialize.sh",
+                        "script_content": "true",
+                        "input_files": input_files,
+                        "workflow_id": request.workflow_id,
+                        "timeout_seconds": 60,
+                    },
+                }
+                payload = {key: value for key, value in payload.items() if value}
+
+                url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions"
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code >= 400:
+                        logger.error(
+                            "Skill materialization failed: %s %s",
+                            resp.status_code,
+                            resp.text[:300],
                         )
-                    data = data.get("result") or {}
+                        return MaterializeSkillFilesResult(
+                            success=False,
+                            error=f"sandbox returned {resp.status_code}",
+                        )
 
-                stdout = await _offload_large_activity_output(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    output_id=_activity_output_id("skill_stdout"),
-                    content=data.get("stdout", "") or "",
-                )
-                stderr = await _offload_large_activity_output(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    output_id=_activity_output_id("skill_stderr"),
-                    content=data.get("stderr", "") or "",
-                )
-                artifacts = await _store_sandbox_artifacts(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    artifacts=data.get("artifacts") or [],
-                )
-                return ExecuteSkillScriptResult(
-                    stdout=stdout,
-                    stderr=stderr,
-                    exit_code=data.get("exit_code", 0),
-                    execution_time_ms=data.get("execution_time_ms", 0),
-                    artifacts=artifacts,
+                directory = skill_workspace_dir(request.skill_name)
+                return MaterializeSkillFilesResult(
+                    success=True,
+                    directory=directory,
+                    paths=[f["path"] for f in input_files],
                 )
 
         except Exception as e:
-            logger.error(f"Sandbox execution error: {e}")
-            return ExecuteSkillScriptResult(
-                stderr=f"Failed to execute script: {e}",
-                exit_code=1,
+            logger.error(f"Skill materialization error: {e}", exc_info=True)
+            return MaterializeSkillFilesResult(
+                success=False, error=f"Failed to materialize skill files: {e}"
             )
 
     @activity.defn(name="cleanup_sandbox_workflow_activity")
@@ -2227,12 +2114,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
         create_execution_plan_activity,
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
-        resolve_skill_file_activity,
         compact_messages_activity,
         resolve_agent_tools_activity,
         recall_history_activity,
         update_task_status_activity,
-        execute_skill_script_activity,
+        materialize_skill_files_activity,
         cleanup_sandbox_workflow_activity,
         store_context_output_activity,
         read_context_output_activity,
