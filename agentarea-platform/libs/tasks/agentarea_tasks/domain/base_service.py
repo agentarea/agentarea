@@ -12,6 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.events.outbox_publisher import OutboxPublisher
 
 from .events import TaskStatusChanged, TaskUpdated
 from .models import AgentTask, Task
@@ -42,15 +43,25 @@ class BaseTaskService(ABC):
     their specific execution behavior (Requirement 1.2).
     """
 
-    def __init__(self, task_repository, event_broker: EventBroker):
-        """Initialize with repository and event broker.
+    def __init__(
+        self,
+        task_repository,
+        event_broker: EventBroker,
+        outbox_publisher: OutboxPublisher | None = None,
+    ):
+        """Initialize with repository, event broker, and optional outbox.
 
         Args:
             task_repository: Repository for task persistence
-            event_broker: Event broker for publishing domain events
+            event_broker: Event broker for publishing domain events (fallback only)
+            outbox_publisher: Transactional outbox. When provided, domain events
+                are enqueued to the outbox on the service's session so they commit
+                atomically with the aggregate change; the worker relay publishes
+                them to the broker later. Preferred over the direct broker path.
         """
         self.task_repository = task_repository
         self.event_broker = event_broker
+        self.outbox_publisher = outbox_publisher
 
     async def create_task(self, task: AgentTask) -> AgentTask:
         """Create a new task with validation and event publishing.
@@ -207,29 +218,27 @@ class BaseTaskService(ABC):
             metadata=updated_task_domain.metadata,
         )
 
-        # Publish update event
-        try:
+        # Enqueue update event(s). With the outbox this happens on the same
+        # session as the aggregate change, so a failure must propagate rather
+        # than be swallowed (that swallowing was the bug this outbox replaces).
+        await self._publish_task_event(
+            TaskUpdated(
+                task_id=str(updated_task.id),
+                status=updated_task.status,
+                metadata=updated_task.metadata,
+            )
+        )
+
+        # Publish status change event if status changed
+        if old_status != new_status:
             await self._publish_task_event(
-                TaskUpdated(
+                TaskStatusChanged(
                     task_id=str(updated_task.id),
-                    status=updated_task.status,
-                    metadata=updated_task.metadata,
+                    old_status=old_status,
+                    new_status=new_status,
+                    status_timestamp=updated_task.updated_at or datetime.now(),
                 )
             )
-
-            # Publish status change event if status changed
-            if old_status != new_status:
-                await self._publish_task_event(
-                    TaskStatusChanged(
-                        task_id=str(updated_task.id),
-                        old_status=old_status,
-                        new_status=new_status,
-                        status_timestamp=updated_task.updated_at or datetime.now(),
-                    )
-                )
-        except Exception as e:
-            # Log the error but don't fail the operation
-            logger.error(f"Failed to publish task update events: {e}")
 
         logger.info(f"Updated task {updated_task.id}")
         return updated_task
@@ -377,19 +386,22 @@ class BaseTaskService(ABC):
             raise TaskValidationError(str(e)) from e
 
     async def _publish_task_event(self, event) -> None:
-        """Publish a task-related domain event.
+        """Enqueue a task-related domain event for publication.
 
-        This method handles event publishing with error handling to ensure
-        that event publishing failures don't break the main task operations.
+        When an outbox publisher is wired, the event is written to the outbox on
+        the current session so it commits atomically with the task change; the
+        worker relay publishes it to the broker later. A failure here propagates
+        (it is part of the same transaction) — the operation must fail rather
+        than silently drop the event. Only the legacy no-outbox path (tests /
+        callers that inject a raw broker) publishes directly.
 
         Args:
             event: The domain event to publish
         """
-        try:
-            await self.event_broker.publish(event)
-        except Exception as e:
-            # Log the error but don't fail the operation
-            logger.error(f"Failed to publish event {event.__class__.__name__}: {e}")
+        if self.outbox_publisher is not None:
+            await self.outbox_publisher.publish(event)
+            return
+        await self.event_broker.publish(event)
 
     # Abstract methods that subclasses must implement
 

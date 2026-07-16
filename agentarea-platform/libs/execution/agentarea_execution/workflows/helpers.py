@@ -8,6 +8,7 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     decide_tool_policy,
 )
+from agentarea_common.events.contract import canonical_type, ensure_terminal_message
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -105,17 +106,31 @@ class EventManager:
         self._pending_events: list[dict[str, Any]] = []
 
     def add_event(self, event_type: str, data: dict[str, Any]) -> None:
-        """Add an event to the workflow event log."""
+        """Add an event to the workflow event log.
+
+        The ``EventTypes`` constants already hold canonical dotted names, so the
+        wire speaks one vocabulary. ``canonical_type`` is applied defensively
+        (it only strips a leading ``workflow.`` prefix; a no-op for canonical
+        inputs).
+
+        Terminal events (completed/failed/cancelled) get a user-facing
+        ``message`` (and ``reason``) so a client attaching after completion
+        renders the final state from catch-up alone. No-op for other types.
+        """
+        event_type = canonical_type(event_type)
         event = {
             "event_id": str(uuid4()),
             "event_type": event_type,
             "timestamp": datetime.now(UTC).isoformat(),
-            "data": {
-                "task_id": self.task_id,
-                "agent_id": self.agent_id,
-                "execution_id": self.execution_id,
-                **data,
-            },
+            "data": ensure_terminal_message(
+                event_type,
+                {
+                    "task_id": self.task_id,
+                    "agent_id": self.agent_id,
+                    "execution_id": self.execution_id,
+                    **data,
+                },
+            ),
         }
         if self.publish_immediately:
             # Add only to pending events for immediate publishing; NOT to _events

@@ -70,10 +70,8 @@ async def _get_redis():
     broker = await cm.get_event_broker()
     if isinstance(broker, RedisEventBroker):
         await broker._ensure_connected()
-        if broker._raw_redis is not None:
-            return broker._raw_redis
-        # Fallback: create a raw client
-        return await broker._create_raw_redis()
+        if broker.raw_redis is not None:
+            return broker.raw_redis
     raise HTTPException(status_code=500, detail="Redis not available")
 
 

@@ -1,4 +1,4 @@
-import type { MessageComponentType } from "@/components/Chat/types";
+import type { Part } from "@/lib/events/contract";
 import { describeToolCall } from "@/components/Chat/utils/describeToolCall";
 import { fileBasename, isFileLike } from "@/components/Chat/utils/fileIcon";
 import type {
@@ -16,21 +16,6 @@ interface ServerInfo {
   id?: string;
 }
 
-interface RawEventPayload {
-  tool_call_id?: string;
-  server_name?: string;
-  mcp_server_name?: string;
-  server_icon?: string;
-  mcp_server_icon?: string;
-  server_instance_id?: string;
-  server_id?: string;
-  original_data?: RawEventPayload;
-}
-
-interface RawEvent {
-  data?: RawEventPayload;
-}
-
 interface ToolUse {
   name: string;
   success: boolean;
@@ -38,6 +23,7 @@ interface ToolUse {
   result?: unknown;
   executionTime?: string;
   toolCallId?: string;
+  server?: ServerInfo;
 }
 
 function skillNameFromArgs(args?: Record<string, unknown>): string {
@@ -75,57 +61,60 @@ function extractFilesFromText(text: string, into: Set<string>) {
   }
 }
 
-/**
- * Map tool_call_id → MCP server info, read from the raw event stream.
- * MCP tool names aren't self-describing, so server attribution comes from the
- * event payload (server_name / server_icon / server_instance_id).
- */
-function buildServerMap(rawEvents: RawEvent[]): Map<string, ServerInfo> {
-  const map = new Map<string, ServerInfo>();
-  for (const ev of rawEvents || []) {
-    const d: RawEventPayload = ev?.data?.original_data ?? ev?.data ?? {};
-    const id = d.tool_call_id ?? ev?.data?.tool_call_id;
-    const name = d.server_name ?? d.mcp_server_name;
-    const icon = d.server_icon ?? d.mcp_server_icon;
-    const sid = d.server_instance_id ?? d.server_id;
-    if (id && (name || sid)) {
-      map.set(id, { name: name || "MCP server", icon, id: sid });
-    }
-  }
-  return map;
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
 }
 
-function collectToolUses(messages: MessageComponentType[]): ToolUse[] {
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * Read MCP server attribution off a tool part. MCP tool names aren't
+ * self-describing, so the server info (name / icon / instance id) rides on the
+ * tool.call / tool.result part data.
+ */
+function serverInfoFromPart(data: Record<string, unknown>): ServerInfo | undefined {
+  const name = asString(data.server_name) ?? asString(data.mcp_server_name);
+  const icon = asString(data.server_icon) ?? asString(data.mcp_server_icon);
+  const id = asString(data.server_instance_id) ?? asString(data.server_id);
+  if (!name && !id) return undefined;
+  return { name: name ?? "MCP server", icon, id };
+}
+
+/**
+ * Collect tool invocations from the reduced part list. Supersede-by-id already
+ * folded each tool.call/tool.result pair into a single part, so one part == one
+ * invocation. tool.result parts carry the outcome; an unresolved tool.call part
+ * still counts as a (successful, in-flight) use.
+ */
+function collectToolUses(parts: Part[]): ToolUse[] {
   const uses: ToolUse[] = [];
-  for (const m of messages) {
-    if (m.type === "tool_result") {
-      uses.push({
-        name: m.data.tool_name,
-        success: m.data.success !== false,
-        args: m.data.arguments,
-        result: m.data.result,
-        executionTime: m.data.execution_time,
-        toolCallId: m.data.tool_call_id,
-      });
-    } else if (m.type === "tool_call_started") {
-      uses.push({
-        name: m.data.tool_name,
-        success: true,
-        args: m.data.arguments,
-        toolCallId: m.data.tool_call_id,
-      });
-    } else if (m.type === "tool_call_group") {
-      for (const t of m.data.tools) {
-        uses.push({
-          name: t.tool_name,
-          success: t.success !== false,
-          args: t.arguments,
-          result: t.result,
-          executionTime: t.execution_time,
-          toolCallId: t.tool_call_id,
-        });
-      }
-    }
+  for (const part of parts) {
+    if (part.kind !== "tool") continue;
+    const data = part.data;
+    const name =
+      asString(data.tool_name) ?? asString(data.name) ?? "";
+    if (!name) continue;
+    const isResult = part.eventType === "tool.result";
+    const exitCode =
+      typeof data.exit_code === "number" ? data.exit_code : null;
+    const success = isResult
+      ? exitCode != null
+        ? exitCode === 0
+        : data.success !== false
+      : true;
+    uses.push({
+      name,
+      success,
+      args: asRecord(data.arguments) ?? asRecord(data.args),
+      result: data.result,
+      executionTime: asString(data.execution_time),
+      toolCallId: asString(data.tool_call_id),
+      server: serverInfoFromPart(data),
+    });
   }
   return uses;
 }
@@ -153,18 +142,16 @@ function addToolToGroup(group: ServiceGroup, use: ToolUse) {
 }
 
 /**
- * Derive the side-panel activity summary from the parsed timeline messages.
+ * Derive the side-panel activity summary from the reduced event parts.
  * Tools group by the service that ran them: each MCP server (with its logo)
  * gets its own group; built-in/shell tools collapse into a single "Sandbox"
  * group (shown by total runtime). Files touched are surfaced separately.
  */
 export function buildActivitySummary(
-  messages: MessageComponentType[],
-  eventCount: number,
-  rawEvents: RawEvent[] = []
+  parts: Part[],
+  eventCount: number
 ): TaskActivitySummary {
-  const uses = collectToolUses(messages);
-  const serverMap = buildServerMap(rawEvents);
+  const uses = collectToolUses(parts);
 
   const learnedSkills = new Map<string, string | undefined>();
   const delegatedAgents = new Set<string>();
@@ -206,7 +193,7 @@ export function buildActivitySummary(
     if (use.args) extractFilesFromText(JSON.stringify(use.args), files);
     if (typeof use.result === "string") extractFilesFromText(use.result, files);
 
-    const server = use.toolCallId ? serverMap.get(use.toolCallId) : undefined;
+    const server = use.server;
     const group = server
       ? groupFor(`mcp:${server.name}`, () => ({
           key: `mcp:${server.name}`,
@@ -236,16 +223,22 @@ export function buildActivitySummary(
 
   let totalTokens = 0;
   let totalCost = 0;
-  for (const m of messages) {
-    if (m.type === "llm_response" && m.data.usage) {
-      totalTokens += m.data.usage.usage?.total_tokens || 0;
-      totalCost += Number(m.data.usage.cost) || 0;
-    }
+  let llmCalls = 0;
+  for (const part of parts) {
+    if (part.kind !== "llm") continue;
+    if (part.eventType !== "llm.call.completed") continue;
+    llmCalls += 1;
+    const usage = asRecord(part.data.usage);
+    const inner = asRecord(usage?.usage);
+    const totalTokensValue = inner?.total_tokens;
+    if (typeof totalTokensValue === "number") totalTokens += totalTokensValue;
+    const cost = Number(usage?.cost ?? part.data.cost);
+    if (!Number.isNaN(cost)) totalCost += cost;
   }
 
   return {
     events: eventCount,
-    llmCalls: messages.filter((m) => m.type === "llm_response").length,
+    llmCalls,
     totalTokens,
     totalCost,
     toolsCalled,

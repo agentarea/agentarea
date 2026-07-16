@@ -2,6 +2,7 @@
 
 import pytest
 from agentarea_common.events.adapters.redis_streams import topic_for
+from agentarea_common.events.contract import ensure_terminal_message
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_common.events.task_stream import (
     TASK_STREAM_MAXLEN,
@@ -115,6 +116,76 @@ async def test_feed_drops_excluded_types_from_snapshot_and_live():
 
 
 @pytest.mark.asyncio
+async def test_feed_includes_chunks_when_not_excluded():
+    # Default (no exclude_types): chunks and finals both yielded, in order.
+    snapshot = await _snapshot_of(_env(1), _env(2, "LLMCallChunk"))
+    stream = _FakeStream([_evt(3, "LLMCallChunk"), _evt(4, "TaskCompleted")])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL
+        )
+    )
+    assert [(e.event_id, e.event_type) for e in out] == [
+        (_uid(1), "Step"),
+        (_uid(2), "LLMCallChunk"),
+        (_uid(3), "LLMCallChunk"),
+        (_uid(4), "TaskCompleted"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_feed_excludes_chunks_still_terminates_with_finals():
+    # With chunks excluded: chunks dropped, finals + terminal still yielded and
+    # the feed terminates on the terminal event.
+    snapshot = await _snapshot_of(_env(1, "LLMCallChunk"), _env(2, "Step"))
+    stream = _FakeStream(
+        [_evt(3, "LLMCallChunk"), _evt(4, "Step"), _evt(5, "TaskCompleted"), _evt(6, "Step")]
+    )
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=_TERMINAL,
+            exclude_types=frozenset({"LLMCallChunk"}),
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(2), _uid(4), _uid(5)]
+    assert [e.event_type for e in out] == ["Step", "Step", "TaskCompleted"]
+
+
+@pytest.mark.asyncio
+async def test_catch_up_replay_equals_live_replay():
+    # The same event set delivered via snapshot-only vs live-only yields the
+    # same normalized (id, type) sequence.
+    events = [(1, "Step"), (2, "LLMCallChunk"), (3, "Step"), (4, "TaskCompleted")]
+
+    snapshot_only = await _snapshot_of(*[_env(n, t) for n, t in events])
+    via_snapshot = await _collect(
+        iter_task_event_feed(
+            stream=_FakeStream([]),
+            task_id=_TASK,
+            snapshot=snapshot_only,
+            terminal_types=_TERMINAL,
+        )
+    )
+
+    empty_snapshot = await _snapshot_of()
+    via_live = await _collect(
+        iter_task_event_feed(
+            stream=_FakeStream([_evt(n, t) for n, t in events]),
+            task_id=_TASK,
+            snapshot=empty_snapshot,
+            terminal_types=_TERMINAL,
+        )
+    )
+
+    normalized = [(e.event_id, e.event_type) for e in via_snapshot]
+    assert normalized == [(e.event_id, e.event_type) for e in via_live]
+    assert normalized == [(_uid(n), t) for n, t in events]
+
+
+@pytest.mark.asyncio
 async def test_publish_task_event_uses_bounded_stream():
     captured = {}
 
@@ -141,6 +212,98 @@ async def test_publish_task_event_uses_bounded_stream():
     assert restored.type == "TaskCompleted"
     assert restored.subject == _TASK
     assert restored.data == {"result": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_feed_terminates_on_canonical_terminal_row():
+    # New canonical row: terminal_types are the canonical task.* names; a
+    # persisted "task.completed" row must end the feed.
+    canonical_terminal = frozenset({"task.completed", "task.failed", "task.cancelled"})
+    snapshot = await _snapshot_of(_env(1), _env(2, "task.completed"))
+    stream = _FakeStream([_evt(99)])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=canonical_terminal
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(1), _uid(2)]
+    assert stream.read_args == {}
+
+
+@pytest.mark.asyncio
+async def test_feed_terminates_on_canonical_history():
+    # Canonical rows across the snapshot/live boundary; terminal detection fires
+    # on the canonical "task.completed" row.
+    canonical_terminal = frozenset({"task.completed", "task.failed", "task.cancelled"})
+    snapshot = await _snapshot_of(_env(1, "task.started"), _env(2, "tool.result"))
+    stream = _FakeStream([_evt(3, "llm.call.completed"), _evt(4, "task.completed"), _evt(5)])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=canonical_terminal
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3), _uid(4)]
+
+
+@pytest.mark.asyncio
+async def test_feed_excludes_chunks_by_canonical_name():
+    # exclude_types passed as canonical "llm.call.chunk" drops chunk rows.
+    canonical_terminal = frozenset({"task.completed"})
+    snapshot = await _snapshot_of(_env(1, "llm.call.chunk"), _env(2, "llm.call.chunk"))
+    stream = _FakeStream([_evt(3, "llm.call.chunk"), _evt(4, "task.completed")])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=canonical_terminal,
+            exclude_types=frozenset({"llm.call.chunk"}),
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(4)]
+
+
+def test_terminal_message_added_for_completed():
+    # A terminal completed event with no message gets a human-readable one.
+    data = ensure_terminal_message("task.completed", {"final_response": "All done."})
+    assert data["message"] == "All done."
+
+
+def test_terminal_message_added_for_failed_with_reason():
+    data = ensure_terminal_message(
+        "task.failed", {"error": "Provider quota exceeded", "error_type": "QuotaExceeded"}
+    )
+    assert data["message"]
+    assert data["reason"] == "Provider quota exceeded"
+
+
+def test_terminal_message_added_for_cancelled():
+    data = ensure_terminal_message("task.cancelled", {})
+    assert data["message"]
+    assert data["reason"]
+
+
+def test_terminal_message_preserved_when_present():
+    # Existing message is never overwritten (additive).
+    data = ensure_terminal_message(
+        "task.completed", {"message": "custom", "final_response": "ignored"}
+    )
+    assert data["message"] == "custom"
+
+
+def test_terminal_message_noop_for_non_terminal():
+    # Non-terminal events pass through unchanged.
+    src = {"chunk": "hi"}
+    data = ensure_terminal_message("llm.call.chunk", src)
+    assert data == src
+    assert "message" not in data
+
+
+def test_terminal_message_accepts_prefixed_and_canonical():
+    prefixed = ensure_terminal_message("workflow.task.cancelled", {})
+    assert prefixed["message"]
+    canonical = ensure_terminal_message("task.cancelled", {})
+    assert canonical["message"]
 
 
 @pytest.mark.asyncio

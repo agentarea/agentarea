@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.router import create_event_broker_from_router
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +16,8 @@ def resolve_event_broker(event_broker: Any) -> EventBroker:
     if isinstance(event_broker, EventBroker):
         return event_broker
 
-    if hasattr(event_broker, "broker"):
-        return create_event_broker_from_router(event_broker)
-
     raise TypeError(
-        "event_broker must implement EventBroker or expose a RedisRouter-style "
-        f"'broker' attribute, got {type(event_broker).__name__}"
+        f"event_broker must implement EventBroker, got {type(event_broker).__name__}"
     )
 
 
@@ -53,7 +48,7 @@ def create_event_publisher(event_broker, task_id: str, broker_client=None):
             publisher = resolve_event_broker(event_broker)
 
             chunk_event = {
-                "event_type": "LLMCallChunk",
+                "event_type": "llm.call.chunk",
                 "event_id": str(uuid4()),
                 "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "data": {

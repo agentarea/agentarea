@@ -3,7 +3,7 @@ import { ChevronRight, Lightbulb } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type { Components } from "streamdown";
 import { cn } from "@/lib/utils";
-import { stripA2UIFromStreamingContent } from "../utils/messageAccumulator";
+import { stripA2UIFromStreamingContent } from "@/lib/events/a2ui";
 import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
 import MessageWrapper from "./MessageWrapper";
 

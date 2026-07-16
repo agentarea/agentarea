@@ -339,8 +339,8 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 assert questions[1]["type"] == "secret"
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "HumanInputRequested" in published_types, published_types
-                assert "WorkflowCompleted" not in published_types, published_types
+                assert "input.request" in published_types, published_types
+                assert "task.completed" not in published_types, published_types
 
                 await handle.signal(
                     AgentExecutionWorkflow.workflow_command,
@@ -365,8 +365,8 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 assert result.final_response == "continued with input"
                 assert _request_input_llm_calls == 2
                 published_types = {e.get("event_type") for e in _published}
-                assert "HumanInputReceived" in published_types, published_types
-                assert "WorkflowCompleted" in published_types, published_types
+                assert "input.response" in published_types, published_types
+                assert "task.completed" in published_types, published_types
                 assert "running" in _status_updates
                 assert "completed" in _status_updates
 

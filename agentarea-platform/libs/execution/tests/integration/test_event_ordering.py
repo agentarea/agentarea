@@ -88,20 +88,24 @@ async def _run_workflow(
 class TestEventOrdering:
     @pytest.mark.asyncio
     async def test_iteration_completed_before_workflow_completed(self):
-        """When LLM calls completion, IterationCompleted must precede WorkflowCompleted."""
+        """When LLM calls completion, IterationCompleted must precede task.completed.
+
+        The emit-side canonicalizes ``WorkflowCompleted`` to ``task.completed``;
+        ``IterationCompleted`` is a timeline event and passes through unchanged.
+        """
         result, capture = await _run_workflow([llm_response_completion()])
 
         assert result.success is True
 
         types = capture.event_types
         assert "IterationCompleted" in types, f"Missing IterationCompleted in {types}"
-        assert "WorkflowCompleted" in types, f"Missing WorkflowCompleted in {types}"
+        assert "task.completed" in types, f"Missing task.completed in {types}"
 
         iter_idx = types.index("IterationCompleted")
-        wf_idx = types.index("WorkflowCompleted")
+        wf_idx = types.index("task.completed")
         assert iter_idx < wf_idx, (
             f"IterationCompleted (idx={iter_idx}) must come before "
-            f"WorkflowCompleted (idx={wf_idx}). Sequence: {types}"
+            f"task.completed (idx={wf_idx}). Sequence: {types}"
         )
 
     @pytest.mark.asyncio
@@ -116,7 +120,7 @@ class TestEventOrdering:
 
     @pytest.mark.asyncio
     async def test_multi_iteration_event_ordering(self):
-        """Tool call then completion: two IterationCompleted, WorkflowCompleted last."""
+        """Tool call then completion: two IterationCompleted, task.completed last."""
         result, capture = await _run_workflow([
             llm_response_tool_call("search"),
             llm_response_completion(),
@@ -126,15 +130,15 @@ class TestEventOrdering:
 
         types = capture.event_types
         iter_completed = [i for i, t in enumerate(types) if t == "IterationCompleted"]
-        wf_completed = [i for i, t in enumerate(types) if t == "WorkflowCompleted"]
+        wf_completed = [i for i, t in enumerate(types) if t == "task.completed"]
 
         assert len(iter_completed) == 2, (
             f"Expected 2 IterationCompleted events, got {len(iter_completed)}. Sequence: {types}"
         )
-        assert len(wf_completed) >= 1, f"Missing WorkflowCompleted in {types}"
+        assert len(wf_completed) >= 1, f"Missing task.completed in {types}"
 
-        # WorkflowCompleted must come after the last IterationCompleted
+        # task.completed must come after the last IterationCompleted
         assert wf_completed[0] > iter_completed[-1], (
-            f"WorkflowCompleted (idx={wf_completed[0]}) must come after last "
+            f"task.completed (idx={wf_completed[0]}) must come after last "
             f"IterationCompleted (idx={iter_completed[-1]}). Sequence: {types}"
         )

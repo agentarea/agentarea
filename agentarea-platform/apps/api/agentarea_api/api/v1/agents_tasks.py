@@ -22,6 +22,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -305,15 +306,11 @@ class TaskSSEEvent(BaseModel):
     data: dict[str, Any]
 
 
+# Canonical terminal types (the vocabulary rows/streams now carry directly).
 _TERMINAL_EVENT_TYPES = {
-    "task_completed",
-    "task_failed",
-    "task_cancelled",
-    "workflow_completed",
-    "workflow_failed",
-    "WorkflowCompleted",
-    "WorkflowFailed",
-    "WorkflowCancelled",
+    TASK_COMPLETED,
+    TASK_FAILED,
+    TASK_CANCELLED,
 }
 
 
@@ -323,6 +320,7 @@ async def _tail_task_events_sse(
     execution_id: str | None,
     *,
     emit_connected: bool = True,
+    include_chunks: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
@@ -347,13 +345,13 @@ async def _tail_task_events_sse(
             },
         )
 
-    # Exclude high-volume incremental chunks: this SSE historically carried only
-    # DB-persisted events (chunks are stream-only). Flip this to surface live
-    # tokens in the UI as a deliberate, separately-verified change.
+    # Chunks are surfaced by default (include_chunks=True). Clients can opt out
+    # via ?include_chunks=false, which drops the high-volume incremental
+    # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
-        exclude_types=frozenset({"LLMCallChunk"}),
+        include_chunks=include_chunks,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -1414,6 +1412,9 @@ async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
+    include_chunks: bool = Query(
+        True, description="Include incremental llm.call.chunk token events in the stream"
+    ),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
@@ -1433,7 +1434,9 @@ async def stream_task_events(
         # truth, no pub/sub race) via the shared helper.
         async def event_stream() -> AsyncGenerator[str, None]:
             try:
-                async for chunk in _tail_task_events_sse(task_id, agent_id, task.execution_id):
+                async for chunk in _tail_task_events_sse(
+                    task_id, agent_id, task.execution_id, include_chunks=include_chunks
+                ):
                     yield chunk
 
             except Exception as e:
@@ -1484,10 +1487,9 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
     # {
     #   "event_id": "...",
     #   "timestamp": "...",
-    #   "event_type": "workflow.LLMCallChunk",
+    #   "event_type": "llm.call.chunk",
     #   "data": {
     #       "aggregate_id": "...",
-    #       "original_event_type": "LLMCallChunk",
     #       "original_data": {"task_id": "...", "chunk": "...", ...}
     #   }
     # }

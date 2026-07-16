@@ -125,10 +125,9 @@ async def initialize_services():
         else:
             register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
-        from agentarea_common.events.router import create_event_broker_from_router, get_event_router
+        from agentarea_common.events.factory import create_event_broker
 
-        event_router = get_event_router(settings.broker)
-        event_broker = create_event_broker_from_router(event_router)
+        event_broker = create_event_broker(settings.broker)
         register_singleton(EventBroker, event_broker)
 
         # Secret manager is created per-request with session and user_context

@@ -33,6 +33,13 @@ from agentarea_api.api.v1.a2a_auth import (
 from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
+from agentarea_common.events.contract import (
+    LLM_CHUNK,
+    TASK_CANCELLED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    canonical_type,
+)
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.a2a_push import (
     delete_push_config,
@@ -459,21 +466,17 @@ def extract_text_from_event_data(event_data: dict[str, Any]) -> str:
     return ""
 
 
-# Real workflow terminal event types. The feed yields unprefixed types (as
-# stored in task_events); the ``workflow.*`` forms are kept for back-compat.
+# Canonical terminal event type -> A2A task state (the vocabulary rows/streams
+# now carry directly).
 _TERMINAL_EVENT_STATES = {
-    "workflow.WorkflowCompleted": TaskState.COMPLETED,
-    "workflow.WorkflowFailed": TaskState.FAILED,
-    "workflow.WorkflowCancelled": TaskState.CANCELED,
-    "WorkflowCompleted": TaskState.COMPLETED,
-    "WorkflowFailed": TaskState.FAILED,
-    "WorkflowCancelled": TaskState.CANCELED,
+    TASK_COMPLETED: TaskState.COMPLETED,
+    TASK_FAILED: TaskState.FAILED,
+    TASK_CANCELLED: TaskState.CANCELED,
 }
-# Incremental output event types.
-_CHUNK_EVENT_TYPES = {"workflow.LLMCallChunk", "LLMCallChunk"}
-# Terminal task event types the feed watches to end an A2A stream (unprefixed,
-# as stored in task_events and emitted on the per-task stream).
-_A2A_TERMINAL_TYPES = frozenset({"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"})
+# Incremental output event type (canonical).
+_CHUNK_EVENT_TYPES = {LLM_CHUNK}
+# Terminal task event types the feed watches to end an A2A stream (canonical).
+_A2A_TERMINAL_TYPES = frozenset({TASK_COMPLETED, TASK_FAILED, TASK_CANCELLED})
 
 
 def _sse(response: JSONRPCResponse) -> str:
@@ -492,7 +495,7 @@ def map_workflow_event_to_sse(
     Returns ``(frames, is_terminal)``. Terminal events emit a final artifact-update
     (when text is present) followed by a final status-update with ``final=True``.
     """
-    event_type = event.get("event_type", "")
+    event_type = canonical_type(event.get("event_type", ""))
     event_data: dict[str, Any] = event.get("event_data", {}) or {}
     frames: list[str] = []
 

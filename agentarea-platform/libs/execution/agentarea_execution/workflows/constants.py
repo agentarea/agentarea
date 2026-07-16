@@ -45,25 +45,37 @@ HISTORY_SEARCH_MAX_RESULTS: Final[int] = 20
 
 # Event types
 class EventTypes:
-    """Workflow event type constants."""
+    """Workflow event type constants.
 
-    WORKFLOW_STARTED: Final[str] = "WorkflowStarted"
-    WORKFLOW_COMPLETED: Final[str] = "WorkflowCompleted"
-    WORKFLOW_FAILED: Final[str] = "WorkflowFailed"
-    WORKFLOW_CANCELLED: Final[str] = "WorkflowCancelled"
+    Semantic part-taxonomy events hold the canonical dotted names directly (the
+    wire vocabulary — see agentarea_common.events.contract). Timeline/system
+    events that are NOT part of that taxonomy keep their bare names.
+    """
 
+    # Task lifecycle (canonical dotted).
+    WORKFLOW_STARTED: Final[str] = "task.started"
+    WORKFLOW_COMPLETED: Final[str] = "task.completed"
+    WORKFLOW_FAILED: Final[str] = "task.failed"
+    WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
+
+    # Timeline/system — not in the part taxonomy, kept bare.
     ITERATION_STARTED: Final[str] = "IterationStarted"
     ITERATION_COMPLETED: Final[str] = "IterationCompleted"
 
-    LLM_CALL_STARTED: Final[str] = "LLMCallStarted"
-    LLM_CALL_CHUNK: Final[str] = "LLMCallChunk"
-    LLM_CALL_COMPLETED: Final[str] = "LLMCallCompleted"
-    LLM_CALL_FAILED: Final[str] = "LLMCallFailed"
+    # LLM part (canonical dotted).
+    LLM_CALL_STARTED: Final[str] = "llm.call.started"
+    LLM_CALL_CHUNK: Final[str] = "llm.call.chunk"
+    LLM_CALL_COMPLETED: Final[str] = "llm.call.completed"
+    LLM_CALL_FAILED: Final[str] = "llm.call.failed"
 
-    TOOL_CALL_STARTED: Final[str] = "ToolCallStarted"
-    TOOL_CALL_COMPLETED: Final[str] = "ToolCallCompleted"
-    TOOL_CALL_FAILED: Final[str] = "ToolCallFailed"
+    # Tool part (canonical dotted). Failed is a tool.result whose data carries
+    # ``error`` (no ``success``); the constant names stay distinct so callers can
+    # branch pre-emit, even though both collapse to the same wire type.
+    TOOL_CALL_STARTED: Final[str] = "tool.call"
+    TOOL_CALL_COMPLETED: Final[str] = "tool.result"
+    TOOL_CALL_FAILED: Final[str] = "tool.result"
 
+    # Timeline/system — not in the part taxonomy, kept bare.
     BUDGET_WARNING: Final[str] = "BudgetWarning"
     BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
 
@@ -80,12 +92,15 @@ class EventTypes:
     AGENT_DELEGATION_COMPLETED: Final[str] = "AgentDelegationCompleted"
     AGENT_DELEGATION_FAILED: Final[str] = "AgentDelegationFailed"
 
-    HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
-    HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
-    HUMAN_APPROVAL_DENIED: Final[str] = "HumanApprovalDenied"
-    HUMAN_INPUT_REQUESTED: Final[str] = "HumanInputRequested"
-    HUMAN_INPUT_RECEIVED: Final[str] = "HumanInputReceived"
+    # Human-in-the-loop parts (canonical dotted). Approval received/denied both
+    # map to ``approval.response`` (the decision lives in the data payload).
+    HUMAN_APPROVAL_REQUESTED: Final[str] = "approval.request"
+    HUMAN_APPROVAL_RECEIVED: Final[str] = "approval.response"
+    HUMAN_APPROVAL_DENIED: Final[str] = "approval.response"
+    HUMAN_INPUT_REQUESTED: Final[str] = "input.request"
+    HUMAN_INPUT_RECEIVED: Final[str] = "input.response"
 
+    # Timeline/system — not in the part taxonomy, kept bare.
     MODEL_CHANGED: Final[str] = "ModelChanged"
     MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
     MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"

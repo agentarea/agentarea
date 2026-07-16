@@ -172,11 +172,14 @@ def _make_request(**overrides) -> AgentExecutionRequest:
 
 
 def _extract_error_from_published_events(captured: list[list[str]]) -> str | None:
-    """Find the WorkflowFailed event payload and return its 'error' field."""
+    """Find the failure event payload and return its 'error' field.
+
+    The emit-side canonicalizes ``WorkflowFailed`` to ``task.failed``.
+    """
     for batch in captured:
         for event_json in batch:
             event = json.loads(event_json)
-            if event.get("event_type") == "WorkflowFailed":
+            if event.get("event_type") == "task.failed":
                 return event["data"]["error"]
     return None
 

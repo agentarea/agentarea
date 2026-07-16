@@ -16,24 +16,43 @@ import {
   formatTextForTextarea,
   restoreMentionIds,
 } from "@/utils/mentions";
+import {
+  applyEvent,
+  initialState,
+  type EventState,
+} from "@/lib/events/reducer";
+import { normalizeSSEEvent } from "@/lib/events/normalize";
+import { canonicalType } from "@/lib/events/contract";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { BadgeSuggestions } from "./componets/BadgeSuggestions";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
 import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { createSSEEventHandler } from "./handlers/eventHandlers";
 import { parseSSEStream } from "./handlers/sseParser";
 import { useA2UIActions } from "./hooks/useA2UIActions";
-import {
-  useChatMessages,
-  type ChatMessage,
-  type UserChatMessage,
-} from "./hooks/useChatMessages";
 import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
-import { MessageRenderer } from "./MessageComponents";
+
+// A user message the person typed. Not a task event — interleaved by arrival.
+interface UserChatMessage {
+  id: string;
+  content: string;
+  role: "user";
+  timestamp: string;
+  files?: File[];
+}
+
+// Anchor a user message after the last part present when it was sent, so it
+// keeps its slot as later agent parts supersede in place (stable partId).
+interface UserEntry {
+  message: UserChatMessage;
+  afterPartId: string | null;
+}
 
 export interface Agent {
   id: string;
@@ -154,7 +173,6 @@ interface FullChatProps {
   availableTaskPolicies?: TaskPolicyOption[];
   startCentered?: boolean;
   taskId?: string;
-  initialMessages?: ChatMessage[];
   onTaskCreated?: (taskId: string) => void;
   onTaskStarted?: (taskId: string) => void;
   onTaskFinished?: (taskId: string) => void;
@@ -172,7 +190,6 @@ export default function FullChat({
   placeholder,
   welcomeComponent,
   taskId,
-  initialMessages = [],
   onTaskCreated,
   onTaskStarted,
   onTaskFinished,
@@ -183,26 +200,47 @@ export default function FullChat({
 }: FullChatProps) {
   const t = useTranslations("Chat");
 
-  // Hooks for state management
-  const { messages, setMessages, hasUserMessages, addUserMessage } =
-    useChatMessages({
-      agentName: agent.name,
-      agentId: agent.id,
-      initialMessages,
-    });
+  // Unified event core: SSE events fold through the reducer into ordered parts
+  // (supersede-by-id). User messages the person typed aren't task events, so
+  // they're tracked separately and interleaved by arrival order.
+  const [eventState, setEventState] =
+    React.useState<EventState>(initialState);
+  const [userEntries, setUserEntries] = React.useState<UserEntry[]>([]);
+  const eventStateRef = React.useRef<EventState>(eventState);
+  eventStateRef.current = eventState;
+
+  const parts = eventState.parts;
+  const hasUserMessages = userEntries.length > 0;
+
+  const pushEvent = React.useCallback(
+    (eventType: string, data: Record<string, unknown>) => {
+      const next = applyEvent(eventStateRef.current, { eventType, data });
+      eventStateRef.current = next;
+      setEventState(next);
+    },
+    []
+  );
+
+  const addUserMessage = React.useCallback((message: UserChatMessage) => {
+    const order = eventStateRef.current.order;
+    const afterPartId = order.length ? order[order.length - 1] : null;
+    setUserEntries((prev) => [...prev, { message, afterPartId }]);
+  }, []);
 
   // Ref so the agent-change effect can call the latest clearFiles without
   // listing an unstable function reference as a dep (useFileUpload doesn't
   // memoize it).
   const clearFilesRef = React.useRef<() => void>(() => {});
 
-  // Clear messages when agent changes
+  // Clear conversation when agent changes
   React.useEffect(() => {
-    setMessages([]);
+    eventStateRef.current = initialState();
+    setEventState(eventStateRef.current);
+    setUserEntries([]);
     setInput("");
     setInputDisplay("");
     clearFilesRef.current();
-  }, [agent.id, setMessages]);
+  }, [agent.id]);
 
   const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
     agent.id,
@@ -227,7 +265,7 @@ export default function FullChat({
     scrollToBottom,
     checkIfAtBottom,
   } = useScrollManagement({
-    messagesCount: messages.length,
+    messagesCount: parts.length + userEntries.length,
   });
 
   const {
@@ -349,20 +387,80 @@ export default function FullChat({
     handleMentionInputChange(e);
   };
 
-  // SSE message handler
-  const handleSSEMessage = React.useMemo(
-    () =>
-      createSSEEventHandler({
-        currentTaskId,
-        setMessages,
-        setIsLoading,
-        setTaskLifecycleStatus,
-        setCurrentTaskId,
-        onTaskCreated: callbacks.onTaskCreated.current,
-        onTaskStarted: callbacks.onTaskStarted.current,
-        onTaskFinished: callbacks.onTaskFinished.current,
-      }),
-    [currentTaskId, setMessages, setCurrentTaskId, callbacks]
+  // Structured input / A2UI form submit routes through the shared action layer.
+  const handleFormSubmit = React.useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, HumanInputSecretValue>
+    ) => {
+      const { error } = await actions.submitInput(
+        inputRequestId,
+        answers,
+        secrets
+      );
+      if (error) toast.error("Failed to submit response");
+    },
+    [actions]
+  );
+
+  // SSE handler: adopt the task id on creation (lifecycle callbacks + URL
+  // rewrite), track lifecycle status, then fold every event into the reducer.
+  const currentTaskIdRef = React.useRef<string | null>(currentTaskId);
+  currentTaskIdRef.current = currentTaskId;
+
+  const handleSSEMessage = React.useCallback(
+    (event: { type: string; data: Record<string, unknown> }) => {
+      const rawType =
+        (typeof event.data?.event_type === "string" && event.data.event_type) ||
+        (typeof event.data?.original_event_type === "string" &&
+          event.data.original_event_type) ||
+        event.type;
+
+      // Adopt the created task id once, before folding events.
+      if (rawType === "task_created") {
+        const newTaskId =
+          typeof event.data?.task_id === "string" ? event.data.task_id : null;
+        if (newTaskId && !currentTaskIdRef.current) {
+          currentTaskIdRef.current = newTaskId;
+          setCurrentTaskId(newTaskId);
+          callbacks.onTaskCreated.current?.(newTaskId);
+          callbacks.onTaskStarted.current?.(newTaskId);
+        }
+        return;
+      }
+
+      const canonical = canonicalType(rawType);
+      if (canonical === "task.completed") {
+        setTaskLifecycleStatus("completed");
+        setIsLoading(false);
+        const finishedId = currentTaskIdRef.current;
+        if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
+      } else if (canonical === "task.failed") {
+        const errorText = String(
+          event.data?.error || event.data?.message || ""
+        ).toLowerCase();
+        const blocked =
+          errorText.includes("insufficient balance") ||
+          errorText.includes("no resource package") ||
+          errorText.includes("quota exceeded");
+        setTaskLifecycleStatus(blocked ? "blocked" : "failed");
+        setIsLoading(false);
+        const finishedId = currentTaskIdRef.current;
+        if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
+      } else if (canonical === "task.cancelled") {
+        setTaskLifecycleStatus("cancelled");
+        setIsLoading(false);
+      } else if (rawType === "execution_paused") {
+        setTaskLifecycleStatus("paused");
+      } else if (rawType === "execution_resumed") {
+        setTaskLifecycleStatus("running");
+      }
+
+      const normalized = normalizeSSEEvent(event.type, event.data);
+      if (normalized) pushEvent(normalized.eventType, normalized.data);
+    },
+    [callbacks, setCurrentTaskId, pushEvent]
   );
 
   // Send message handler
@@ -434,14 +532,9 @@ export default function FullChat({
         buffered: true,
       });
     } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `Sorry, I couldn't process your message. Error: ${error}`,
-        role: "assistant",
-        timestamp: new Date().toISOString(),
-        agent_id: agent.id,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      toast.error("Failed to send message", {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -504,6 +597,44 @@ export default function FullChat({
     }
   };
 
+  // Interleave user messages with agent parts. Each user message is anchored
+  // after the part that was last present when it was sent (null = before all
+  // parts), so it holds its slot while later parts supersede in place.
+  const renderItems = React.useMemo(() => {
+    const items: Array<
+      | { kind: "user"; message: UserChatMessage }
+      | { kind: "part"; partId: string }
+    > = [];
+    const usersByAnchor = new Map<string | null, UserChatMessage[]>();
+    for (const entry of userEntries) {
+      const list = usersByAnchor.get(entry.afterPartId) ?? [];
+      list.push(entry.message);
+      usersByAnchor.set(entry.afterPartId, list);
+    }
+    for (const message of usersByAnchor.get(null) ?? []) {
+      items.push({ kind: "user", message });
+    }
+    for (const part of parts) {
+      items.push({ kind: "part", partId: part.partId });
+      for (const message of usersByAnchor.get(part.partId) ?? []) {
+        items.push({ kind: "user", message });
+      }
+    }
+    return items;
+  }, [userEntries, parts]);
+
+  const partsById = React.useMemo(() => {
+    const map = new Map(parts.map((p) => [p.partId, p]));
+    return map;
+  }, [parts]);
+
+  const terminalTone =
+    eventState.status === "failed"
+      ? "danger"
+      : eventState.status === "cancelled"
+        ? "warning"
+        : "success";
+
   // Keydown handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (handleMentionKeyDown(e)) {
@@ -565,31 +696,34 @@ export default function FullChat({
             hasUserMessages ? "flex-1" : "min-h-0"
           }`}
         >
-          {messages.map((message, index) => {
-            if ("type" in message) {
-              return (
-                <MessageRenderer
-                  key={`${message.data.id}-${message.data.event_type}-${index}`}
-                  message={message}
-                  agent_name={agent.name}
-                  onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={actions.resolveEscalation}
-                  onSubmitInput={actions.submitInput}
-                />
-              );
-            } else if (message.role === "user") {
+          {renderItems.map((item) => {
+            if (item.kind === "user") {
               return (
                 <UserMessageComponent
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  timestamp={message.timestamp}
-                  files={message.files}
+                  key={item.message.id}
+                  id={item.message.id}
+                  content={item.message.content}
+                  timestamp={item.message.timestamp}
+                  files={item.message.files}
                 />
               );
             }
-            return null;
+            const part = partsById.get(item.partId);
+            if (!part) return null;
+            return (
+              <PartRenderer
+                key={part.partId}
+                part={part}
+                onFormSubmit={handleFormSubmit}
+                onA2UIAction={dispatchA2UIAction}
+              />
+            );
           })}
+          {eventState.terminalMessage && (
+            <StatusIndicator tone={terminalTone}>
+              {eventState.terminalMessage}
+            </StatusIndicator>
+          )}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
 

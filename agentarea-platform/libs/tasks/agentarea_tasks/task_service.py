@@ -61,7 +61,16 @@ class TaskService(BaseTaskService):
         """
         # Create repositories using factory
         task_repository = repository_factory.create_repository(TaskRepository)
-        super().__init__(task_repository, event_broker)
+        # Route domain events through the transactional outbox on this service's
+        # session so they commit atomically with the task change (the worker
+        # relay publishes them to the broker later). event_broker is kept as the
+        # fallback for the base class when no outbox is available.
+        from agentarea_common.events.outbox_publisher import OutboxPublisher
+
+        outbox_publisher = OutboxPublisher(
+            repository_factory.session, repository_factory.user_context
+        )
+        super().__init__(task_repository, event_broker, outbox_publisher=outbox_publisher)
 
         self.repository_factory = repository_factory
         self.task_manager = task_manager

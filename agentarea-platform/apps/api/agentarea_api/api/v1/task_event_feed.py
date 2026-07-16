@@ -15,6 +15,7 @@ from uuid import UUID
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
 from agentarea_common.config import get_settings
 from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream
+from agentarea_common.events.contract import LLM_CHUNK
 from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_event_feed
 from sqlalchemy import text
 
@@ -46,18 +47,27 @@ async def _load_snapshot(task_id: str) -> list[TaskEventEnvelope]:
     ]
 
 
+# Incremental LLM chunk event type (canonical) dropped when a caller opts out
+# of chunks.
+CHUNK_EVENT_TYPES = frozenset({LLM_CHUNK})
+
+
 async def open_task_event_feed(
     task_id: UUID | str,
     *,
     terminal_types: frozenset[str],
     exclude_types: frozenset[str] = frozenset(),
+    include_chunks: bool = True,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's events (catch-up then live) and close the broker when done.
 
     ``terminal_types`` ends the feed after a terminal event; ``exclude_types``
-    drops event types the caller does not want (e.g. SSE excludes high-volume
-    ``LLMCallChunk`` to preserve its historical behaviour).
+    drops event types the caller does not want. ``include_chunks`` defaults to
+    True (high-volume ``llm.call.chunk`` events are surfaced); pass False to add
+    the chunk types to ``exclude_types``.
     """
+    if not include_chunks:
+        exclude_types = exclude_types | CHUNK_EVENT_TYPES
     tid = str(task_id)
     redis_url = getattr(get_settings().broker, "REDIS_URL", "redis://localhost:6379")
     broker = RedisStreamsBroker(redis_url)

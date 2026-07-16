@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
 
 import redis.asyncio as redis
-from faststream.redis import RedisBroker
 
 from .base_events import DomainEvent, EventEnvelope
 from .broker import EventBroker
@@ -34,81 +33,66 @@ class JSONEncoder(json.JSONEncoder):
 
 
 class RedisEventBroker(EventBroker):
-    """Redis event broker using framework-independent shared event format.
+    """Redis event broker using the framework-independent shared event format.
 
-    Uses CloudEvents-compatible format for cross-language communication
-    between Python services and Go MCP Manager.
-
-    For cross-language channels (MCP events), uses raw Redis client to avoid
-    FastStream binary framing. For internal channels, uses FastStream broker.
+    Publishes CloudEvents-compatible messages via a raw ``redis.asyncio``
+    client so Python and Go (MCP Manager) consumers read identical bytes.
+    The former FastStream publish path had no Python consumer and was removed;
+    every channel now goes through the single raw-redis publish.
     """
 
-    def __init__(self, redis_broker: RedisBroker):
+    def __init__(self, redis_client_or_url: redis.Redis | str):
         super().__init__()
-        self.redis_broker = redis_broker
-        self._connected = False
-        self._raw_redis: redis.Redis | None = None
+        if isinstance(redis_client_or_url, str):
+            self._redis_url: str | None = redis_client_or_url
+            self._raw_redis: redis.Redis | None = None
+        else:
+            self._redis_url = None
+            self._raw_redis = redis_client_or_url
+        self._connected = self._raw_redis is not None
 
-    async def _ensure_connected(self):
-        """Ensure the Redis broker is connected before publishing."""
-        if not self._connected:
-            try:
-                await self.redis_broker.connect()
-                # Create raw Redis client for cross-language publishing
-                # FastStream's broker adds binary framing that's incompatible with Go
-                if hasattr(self.redis_broker, "_connection"):
-                    conn = self.redis_broker._connection
-                    if hasattr(conn, "redis"):
-                        self._raw_redis = cast(redis.Redis, cast(Any, conn).redis)
-                    else:
-                        # Fallback: create new Redis client from connection params
-                        self._raw_redis = await self._create_raw_redis()
-                else:
-                    self._raw_redis = await self._create_raw_redis()
-                self._connected = True
-                logger.info("Redis event broker connected successfully")
-            except Exception as e:
-                logger.warning(f"Failed to connect Redis broker: {e}")
-                raise
+    async def _ensure_connected(self) -> None:
+        """Ensure a raw Redis client exists before publishing."""
+        if self._raw_redis is None:
+            self._raw_redis = self._create_raw_redis()
+        self._connected = True
 
-    async def _create_raw_redis(self) -> redis.Redis:
-        """Create a raw Redis client for cross-language publishing."""
-        from agentarea_common.config import get_settings
+    def _create_raw_redis(self) -> redis.Redis:
+        """Create a raw Redis client from the configured URL or settings."""
+        url = self._redis_url
+        if url is None:
+            from agentarea_common.config import get_settings
 
-        settings = get_settings()
-        redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
-        return redis.from_url(redis_url, decode_responses=True)
+            settings = get_settings()
+            url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
+        return redis.from_url(url, decode_responses=True)
+
+    @property
+    def raw_redis(self) -> redis.Redis | None:
+        """Expose the underlying raw Redis client (may be None until connected)."""
+        return self._raw_redis
 
     async def is_connected(self) -> bool:
-        """Check if the Redis broker is connected."""
+        """Check if the Redis client has been created."""
         return self._connected
-
-    def _is_cross_language_channel(self, channel: str) -> bool:
-        """Check if channel is for cross-language communication (Go services)."""
-        channel_lower = channel.lower()
-        return "mcp" in channel_lower or channel.startswith("MCPServerInstance")
 
     @override
     async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:
-        """Publish event using shared framework-independent format.
+        """Publish an event using the shared framework-independent format.
 
-        Converts internal event format to CloudEvents-compatible format
-        for cross-language compatibility with Go services.
+        Converts the internal event to a CloudEvents-compatible payload and
+        publishes it via raw Redis for cross-language (Go) and Python
+        consumers.
         """
-        # Ensure we're connected before publishing
         await self._ensure_connected()
 
-        # Normalize input to EventEnvelope for type safety
         event_any = cast(Any, event)
         to_envelope = getattr(event_any, "to_envelope", None)
         if callable(to_envelope):
-            # Supports typed Pydantic BaseEvent models without importing them here
             envelope = cast(EventEnvelope, to_envelope())
         else:
             envelope = EventEnvelope.from_any(cast(EventEnvelope | DomainEvent, event))
 
-        # Convert to shared event format (CloudEvents compatible)
-        # This ensures cross-language compatibility with Go services
         channel = get_channel_for_event_type(envelope.event_type)
 
         shared_event = SharedEventFormat.create_event(
@@ -119,23 +103,14 @@ class RedisEventBroker(EventBroker):
             event_id=envelope.event_id,
         )
 
-        logger.info(f"Publishing event to channel: {channel}")
-
-        # Serialize to JSON using shared format
         serialized_message = SharedEventFormat.serialize(shared_event)
 
-        # Publish via FastStream for internal Python consumers (SSE streaming)
-        await self.redis_broker.publish(message=serialized_message, channel=channel)
+        logger.info(f"Publishing event to channel: {channel}")
 
-        # Also publish via raw Redis for non-FastStream consumers:
-        # - MCP events → Go MCP Manager
-        # - Workflow events → cross-language / external subscribers
-        #   (outbound channel delivery now happens in-process from the
-        #   Temporal activity via channels.activity_emit, not off this bus)
-        if self._raw_redis and (
-            self._is_cross_language_channel(channel) or "workflow" in channel.lower()
-        ):
-            await self._raw_redis.publish(channel, serialized_message)
+        raw = self._raw_redis
+        if raw is None:
+            raise RuntimeError("Redis client is not connected")
+        await raw.publish(channel, serialized_message)
 
     def _get_channel_for_event(self, event_type: str) -> str:
         """Get channel name for event type."""
@@ -147,23 +122,16 @@ class RedisEventBroker(EventBroker):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit with thorough cleanup."""
-        if self._connected:
-            try:
-                # Close the Redis broker
-                await self.redis_broker.close()
-                self._connected = False
-                logger.info("Redis event broker disconnected")
-            except Exception as e:
-                logger.warning(f"Error closing Redis event broker: {e}")
-
-        # Additional cleanup for any remaining connections
-        try:
-            if hasattr(self.redis_broker, "_connection") and self.redis_broker._connection:
-                await self.redis_broker._connection.close()
-        except Exception as e:
-            logger.debug(f"Error during additional Redis cleanup: {e}")
+        """Async context manager exit with cleanup."""
+        await self.close()
 
     async def close(self):
-        """Explicit close method for manual cleanup."""
-        await self.__aexit__(None, None, None)
+        """Close the raw Redis client if this broker owns it."""
+        if self._raw_redis is not None and self._redis_url is not None:
+            try:
+                await self._raw_redis.aclose()
+            except Exception as e:
+                logger.warning("Error closing Redis event broker: %s", e, exc_info=True)
+            finally:
+                self._raw_redis = None
+        self._connected = False

@@ -1646,7 +1646,7 @@ class AgentExecutionWorkflow:
 
         # Parse and publish A2UI events if agent has A2UI enabled
         if self.state.agent_config.get("a2ui_enabled", False) and content:
-            from .a2ui_parser import A2UI_DELIMITER, parse_a2ui_response
+            from .a2ui_parser import A2UI_DELIMITER, A2UI_TYPE_TO_CANONICAL, parse_a2ui_response
 
             if A2UI_DELIMITER in content:
                 a2ui_result = parse_a2ui_response(content)
@@ -1655,11 +1655,14 @@ class AgentExecutionWorkflow:
                     content = a2ui_result.text_content
                     response["content"] = content
 
-                    # Publish each A2UI event through the existing pipeline
+                    # Publish each A2UI event through the existing pipeline. The
+                    # LLM speaks the A2UI protocol type names; translate to the
+                    # canonical dotted vocabulary before emitting.
                     for a2ui_event in a2ui_result.a2ui_events:
                         event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
                         event_data["task_id"] = str(self.state.task_id)
-                        self._events.add_event(a2ui_event["type"], event_data)
+                        canonical_a2ui = A2UI_TYPE_TO_CANONICAL[a2ui_event["type"]]
+                        self._events.add_event(canonical_a2ui, event_data)
 
                     await self._publish_events_immediately()
 
@@ -2714,6 +2717,8 @@ class AgentExecutionWorkflow:
                 "tool_name": "activate_skill",
                 "tool_call_id": tool_call.id,
                 "skill_name": skill_name,
+                "success": True,
+                "result": result_text,
                 "iteration": self.state.current_iteration,
             },
         )
@@ -2853,6 +2858,9 @@ class AgentExecutionWorkflow:
                 "skill_name": skill_name,
                 "script_name": script_name,
                 "exit_code": result.exit_code,
+                "success": result.exit_code == 0,
+                "result": content,
+                "artifact_paths": result.artifacts or [],
                 "iteration": self.state.current_iteration,
             },
         )

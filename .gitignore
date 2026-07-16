@@ -12,6 +12,7 @@ eggs/
 .eggs/
 
 parts/
+!agentarea-webapp/src/lib/events/parts/
 sdist/
 var/
 wheels/

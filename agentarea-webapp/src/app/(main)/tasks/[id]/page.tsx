@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
-import { MessageRenderer } from "@/components/Chat/MessageComponents";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
@@ -22,12 +23,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useTaskConversation } from "@/hooks/useTaskConversation";
+import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
+import { useTaskActions } from "@/hooks/useTaskActions";
 import { cancelAgentTaskAction as cancelAgentTask } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
+// Statuses where the workflow is still alive and a free-text message should be
+// queued for the next iteration rather than starting a new task. "completed" is
+// included: a conversational task writes "completed" after each reply but stays
+// alive in its follow-up window.
+const QUEUEABLE_STATUSES = ["running", "paused", "blocked", "completed"];
+
 export default function TaskDetailsPage() {
   const { task, taskStatus, policy, loading, error, refresh } = useTaskContext();
+  const router = useRouter();
 
   const [, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
@@ -37,34 +48,44 @@ export default function TaskDetailsPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Single conversation stack: live event feed, derived messages (+ optimistic
-  // echoes), and the full action set with state-aware send routing.
   const status = taskStatus?.status || task?.status || "";
-  const {
-    events: taskEvents,
-    messages: executionMessages,
-    loading: eventsLoading,
-    isActive,
-    refresh: refreshEvents,
-    actions,
-  } = useTaskConversation(task?.agent_id || null, task?.id || null, { status });
+  const agentId = task?.agent_id || null;
+  const taskId = task?.id || null;
 
-  // Side-panel activity summary (tools/skills used, failures, LLM calls)
+  // Unified event core: one SSE hook folds history + live tail into ordered
+  // parts (supersede-by-id), a lifecycle timeline, the single active form, and
+  // the terminal message/status.
+  const {
+    parts,
+    status: streamStatus,
+    pendingForm,
+    terminalMessage,
+    loading: eventsLoading,
+  } = useTaskEvents(agentId, taskId, {
+    includeHistory: true,
+    autoConnect: true,
+  });
+
+  const actions = useTaskActions(agentId, taskId);
+
+  // Side-panel activity summary derived from the reduced parts.
   const activitySummary = useMemo(
-    () => buildActivitySummary(executionMessages, taskEvents.length, taskEvents),
-    [executionMessages, taskEvents]
+    () => buildActivitySummary(parts, parts.length),
+    [parts]
   );
 
-  // Auto-scroll to bottom when new messages arrive
+  const isActive =
+    QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
+
+  // Auto-scroll to bottom as parts arrive.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [executionMessages.length]);
+  }, [parts.length, terminalMessage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refresh();
-    await refreshEvents();
     setRefreshing(false);
   };
 
@@ -97,7 +118,25 @@ export default function TaskDetailsPage() {
     }
   };
 
-  // Chat input handler — routing (answer input / queue / new task) lives in the hook.
+  // Answer the single active form (input request) — resumes the workflow.
+  const handleFormSubmit = useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, HumanInputSecretValue>
+    ) => {
+      const { error } = await actions.submitInput(
+        inputRequestId,
+        answers,
+        secrets
+      );
+      if (error) toast.error("Failed to submit response");
+    },
+    [actions]
+  );
+
+  // Free-text send routes by task state: answer a pending form, queue for a
+  // live task, or start a follow-up task and navigate to it.
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const message = chatInput.trim();
@@ -106,7 +145,29 @@ export default function TaskDetailsPage() {
     setChatInput("");
     setSendingMessage(true);
     try {
-      await actions.sendMessage(message);
+      if (pendingForm && pendingForm.eventType === "input.request") {
+        const { error } = await actions.submitInput(
+          pendingForm.partId,
+          { answer: message },
+          {}
+        );
+        if (error) toast.error("Failed to submit response");
+        return;
+      }
+
+      if (QUEUEABLE_STATUSES.includes(status)) {
+        const { error } = await actions.queueMessage(message);
+        if (error) toast.error("Failed to send message");
+        return;
+      }
+
+      const newTaskId = await actions.createFollowupTask(message);
+      if (newTaskId) router.push(`/tasks/${newTaskId}`);
+      else toast.error("Failed to create new task");
+    } catch (err) {
+      toast.error("Failed to send message", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setSendingMessage(false);
     }
@@ -147,8 +208,6 @@ export default function TaskDetailsPage() {
     );
   }
 
-  // Current status from taskStatus or fallback to task.status (isActive comes
-  // from the conversation hook, which also treats waiting_for_input as active).
   const currentStatus = taskStatus?.status || task.status;
   const executionTime = taskStatus?.execution_time || "N/A";
   const startTime = taskStatus?.start_time || task.created_at || "";
@@ -160,13 +219,19 @@ export default function TaskDetailsPage() {
     task.result?.total_cost;
   const totalCost =
     rawCost != null && !Number.isNaN(Number(rawCost)) ? Number(rawCost) : null;
-  // Prefer the resolved policy's run budget; fall back to the creation param.
   const rawBudget =
     policy?.budget?.run_budget_usd ?? task.parameters?.budget_usd;
   const budgetLimit =
     rawBudget != null && !Number.isNaN(Number(rawBudget))
       ? Number(rawBudget)
       : null;
+
+  const terminalTone =
+    streamStatus === "failed"
+      ? "danger"
+      : streamStatus === "cancelled"
+        ? "warning"
+        : "success";
 
   return (
     <>
@@ -192,19 +257,24 @@ export default function TaskDetailsPage() {
                 </div>
               )}
 
-              {/* Execution events rendered directly */}
-              {executionMessages.map((message, index) => (
-                <MessageRenderer
-                  key={`${message.data.id}-${message.data.event_type}-${index}`}
-                  message={message}
-                  agent_name={task.agent_name || undefined}
-                  onResolveEscalation={actions.resolveEscalation}
-                  onSubmitInput={actions.submitInput}
+              {/* Ordered event parts (supersede-by-id → stable React keys). */}
+              {parts.map((part) => (
+                <PartRenderer
+                  key={part.partId}
+                  part={part}
+                  onFormSubmit={handleFormSubmit}
                 />
               ))}
 
+              {/* Terminal message from the last lifecycle event. */}
+              {terminalMessage && (
+                <StatusIndicator tone={terminalTone}>
+                  {terminalMessage}
+                </StatusIndicator>
+              )}
+
               {/* Empty state */}
-              {!eventsLoading && executionMessages.length === 0 && (
+              {!eventsLoading && parts.length === 0 && !terminalMessage && (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   No execution events yet.
                 </div>

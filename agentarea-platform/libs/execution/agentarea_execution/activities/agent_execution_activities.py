@@ -35,6 +35,7 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
+from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import to_money
 from prometheus_client import Counter
 
@@ -1472,7 +1473,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         errors.append(f"DB storage failed for {event['event_type']}: {db_error!s}")
 
                     # 3. Handle LLM error events locally for immediate action
-                    if event["event_type"].startswith("LLM") and "Failed" in event["event_type"]:
+                    if canonical_type(event["event_type"]) == LLM_FAILED:
                         try:
                             await handle_llm_error_event(domain_event)
                         except Exception as handler_error:
