@@ -48,6 +48,7 @@ with workflow.unsafe.imports_passed_through():
         build_output_summary,
         caller_can_approve,
         decide_tool_action,
+        filter_disclosed_tools,
         policy_approvers,
         resolve_effective_budget,
     )
@@ -866,7 +867,13 @@ class AgentExecutionWorkflow:
                 }
             )
 
-        self.state.available_tools = available_tools
+        # Disclosure is a PDP decision: never offer the model a tool the gate
+        # would reject (same policy, one decision, both ends).
+        disclosed = filter_disclosed_tools(self.state.effective_policy, available_tools)
+        withheld = len(available_tools) - len(disclosed)
+        if withheld:
+            workflow.logger.info(f"Policy withheld {withheld} tool(s) from the model")
+        self.state.available_tools = disclosed
 
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
@@ -2037,13 +2044,27 @@ class AgentExecutionWorkflow:
     async def _deny_tool_call(self, tool_call: ToolCall, tool_name: str, reason: str) -> None:
         """Reject a tool call by policy: surface the reason to the LLM, never run it."""
         workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
+        message = f"Tool call denied by policy: {reason}"
         self.state.messages.append(
             Message(
                 role="tool",
-                content=f"Tool call denied by policy: {reason}",
+                content=message,
                 tool_call_id=tool_call.id,
                 name=tool_name,
             )
+        )
+        # A denial is an outcome of the call, not just a log line: emit it so
+        # watchers see a denied tool instead of a call that never resolves.
+        self._events.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "success": False,
+                "iteration": self.state.current_iteration,
+                "error": message,
+                "denied_by_policy": True,
+            },
         )
 
     async def _require_tool_approval(

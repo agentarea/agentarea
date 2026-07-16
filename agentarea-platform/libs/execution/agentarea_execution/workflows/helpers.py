@@ -79,6 +79,53 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     return ToolAction.DENY
 
 
+# Workflow control flow, not capabilities: these tools reach no external system,
+# are never policy-gated on execution, and must survive a deny-by-default policy
+# — without completion the agent can never finish, without request_user_input it
+# can never ask. Keep in sync with the ungated branches of _execute_tool_calls.
+CONTROL_FLOW_TOOLS = frozenset(
+    {
+        "completion",
+        "task_complete",
+        "request_user_input",
+        "recall_history",
+        "read_tool_output",
+        "activate_tool_source",
+        "load_tools",
+    }
+)
+
+
+def tool_definition_name(tool: dict[str, Any]) -> str | None:
+    """Read a tool's name from either definition shape (OpenAI function or bare)."""
+    if tool.get("type") == "function":
+        return cast(dict[str, Any], tool.get("function") or {}).get("name")
+    return tool.get("name")
+
+
+def filter_disclosed_tools(
+    effective_policy: dict[str, Any] | None, tools: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Offer the model only the capability tools policy would actually let it call.
+
+    Disclosure is a PDP decision, not a presentation detail: showing a tool the
+    gate will reject pollutes the context with capabilities the agent cannot
+    have and invites calls that can only fail. Tools needing approval stay
+    disclosed — the gate escalates them to a human rather than rejecting them.
+    """
+    disclosed: list[dict[str, Any]] = []
+    for tool in tools:
+        name = tool_definition_name(tool)
+        if not name:
+            continue
+        if name in CONTROL_FLOW_TOOLS:
+            disclosed.append(tool)
+            continue
+        if decide_tool_action(effective_policy, name) is not ToolAction.DENY:
+            disclosed.append(tool)
+    return disclosed
+
+
 def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
     """Whether the caller may resolve an escalation.
 
