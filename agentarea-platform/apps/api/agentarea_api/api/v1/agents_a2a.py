@@ -393,10 +393,11 @@ def convert_a2a_message_to_task(
         if client_metadata:
             a2a_metadata["client_metadata"] = client_metadata
 
+    _first_line = (message_content or "").strip().splitlines()[0] if message_content else ""
     return AgentTask(
         id=UUID(task_id) if task_id else uuid4(),
-        title="A2A Message Task",
-        description="Task created from A2A message",
+        title=(_first_line[:80] or "A2A Message Task"),
+        description=(message_content.strip() if message_content else "Task created from A2A message"),
         query=message_content,
         user_id=user_id,
         workspace_id=workspace_id,

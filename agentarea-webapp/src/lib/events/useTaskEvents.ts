@@ -49,6 +49,29 @@ function isTerminal(eventType: string): boolean {
   return TERMINAL_TYPES.has(canonicalType(eventType));
 }
 
+// SSE transport/control frames (connection lifecycle, keepalives) are not task
+// events and must never render or feed the reducer.
+const CONTROL_TYPES = new Set([
+  "connected",
+  "disconnected",
+  "ping",
+  "pong",
+  "keepalive",
+  "heartbeat",
+  "open",
+  "close",
+  "stream_error",
+]);
+
+function isControl(eventType: string): boolean {
+  return CONTROL_TYPES.has(eventType.toLowerCase());
+}
+
+function eventIdOf(data: RawData): string | null {
+  const id = (data as { event_id?: unknown }).event_id;
+  return typeof id === "string" && id ? id : null;
+}
+
 function rowLevel(canonical: string): EventLevel {
   if (canonical.endsWith(".failed") || canonical === "task.cancelled")
     return "error";
@@ -137,6 +160,9 @@ export function useTaskEvents(
   const rawRef = useRef<DisplayEvent[]>([]);
   const rawCountRef = useRef(0);
   const loadedHistory = useRef(false);
+  // Event ids already folded in — makes SSE reconnect replays (catch-up resends
+  // the whole history) idempotent instead of duplicating every row.
+  const seenIds = useRef<Set<string>>(new Set());
   const terminalReachedRef = useRef(false);
   const disconnectRef = useRef<() => void>(() => {});
 
@@ -148,10 +174,17 @@ export function useTaskEvents(
 
   const push = useCallback(
     (event: EventInput) => {
+      if (isControl(event.eventType)) return;
+      const data = event.data as RawData;
+      const id = eventIdOf(data);
+      if (id) {
+        if (seenIds.current.has(id)) return;
+        seenIds.current.add(id);
+      }
       const next = applyEvent(stateRef.current, event);
       stateRef.current = next;
       setState(next);
-      pushRaw(event.eventType, event.data as RawData);
+      pushRaw(event.eventType, data);
     },
     [pushRaw]
   );
@@ -187,6 +220,7 @@ export function useTaskEvents(
   useEffect(() => {
     terminalReachedRef.current = false;
     loadedHistory.current = false;
+    seenIds.current = new Set();
     rawRef.current = [];
     rawCountRef.current = 0;
     setRawEvents([]);
@@ -216,6 +250,12 @@ export function useTaskEvents(
         const rows: DisplayEvent[] = [];
         for (const event of data.events) {
           const input = normalizeHistory(event);
+          if (isControl(input.eventType)) continue;
+          const id = eventIdOf(input.data as RawData);
+          if (id) {
+            if (seenIds.current.has(id)) continue;
+            seenIds.current.add(id);
+          }
           next = applyEvent(next, input);
           rows.push(
             toDisplayRow(input.eventType, input.data as RawData, rows.length)
@@ -242,6 +282,7 @@ export function useTaskEvents(
 
   const refresh = useCallback(() => {
     loadedHistory.current = false;
+    seenIds.current = new Set();
     rawRef.current = [];
     rawCountRef.current = 0;
     setRawEvents([]);

@@ -76,6 +76,9 @@ export default function TaskDetailsPage() {
 
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
+  // Whether the task is still executing, from the event stream (the record's
+  // status can lag). Drives the info panel's live/idle indicators.
+  const isRunning = streamStatus === "running";
 
   // Auto-scroll to bottom as parts arrive.
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -233,6 +236,17 @@ export default function TaskDetailsPage() {
         ? "warning"
         : "success";
 
+  // A successful task's answer already renders as the last assistant part, so a
+  // terminal message that just repeats it would double up. Show the terminal
+  // banner only when it adds something (a failure reason, or a completion whose
+  // text isn't already in the transcript).
+  const lastAssistantText = [...parts]
+    .reverse()
+    .find((p) => p.kind === "llm")
+    ?.data?.content as string | undefined;
+  const showTerminalMessage =
+    !!terminalMessage && terminalMessage.trim() !== (lastAssistantText || "").trim();
+
   return (
     <>
       <div className="flex h-full w-full">
@@ -266,8 +280,9 @@ export default function TaskDetailsPage() {
                 />
               ))}
 
-              {/* Terminal message from the last lifecycle event. */}
-              {terminalMessage && (
+              {/* Terminal message from the last lifecycle event (only when it
+                  adds info beyond the last assistant part). */}
+              {showTerminalMessage && (
                 <StatusIndicator tone={terminalTone}>
                   {terminalMessage}
                 </StatusIndicator>
@@ -331,7 +346,7 @@ export default function TaskDetailsPage() {
                 result: task.result,
               }}
               currentStatus={currentStatus}
-              isActive={isActive}
+              isActive={isRunning}
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}
