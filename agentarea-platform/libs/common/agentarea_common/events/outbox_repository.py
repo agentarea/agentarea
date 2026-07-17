@@ -62,16 +62,25 @@ class OutboxRepository:
         await self.session.flush()
         return row
 
-    async def fetch_unpublished(self, limit: int = 100) -> list[EventOutbox]:
-        """Fetch and lock unpublished rows for the relay.
+    async def fetch_unpublished(
+        self, limit: int = 100, max_attempts: int | None = None
+    ) -> list[EventOutbox]:
+        """Fetch and lock deliverable unpublished rows for the relay.
 
         ``FOR UPDATE SKIP LOCKED`` lets concurrent relay loops divide the work
         with no coordination. On SQLite (tests) ``skip_locked`` is a no-op.
+
+        ``max_attempts`` excludes rows that have exhausted their retries. The
+        bound has to live here rather than in the relay loop: exhausted rows are
+        never marked published, so they stay the oldest unpublished rows
+        forever. Skipping them after fetching still lets a batch-sized pile of
+        them fill every fetch and starve live events permanently.
         """
+        stmt = select(EventOutbox).where(EventOutbox.published_at.is_(None))
+        if max_attempts is not None:
+            stmt = stmt.where(EventOutbox.attempts < max_attempts)
         stmt = (
-            select(EventOutbox)
-            .where(EventOutbox.published_at.is_(None))
-            .order_by(EventOutbox.created_at.asc())
+            stmt.order_by(EventOutbox.created_at.asc())
             .limit(limit)
             .with_for_update(skip_locked=True)
         )

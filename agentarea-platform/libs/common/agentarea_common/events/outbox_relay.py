@@ -8,8 +8,10 @@ Runs inside the existing worker (no new app unit). Each pass:
 3. ``mark_published`` on success; on failure ``mark_failed`` (records the error,
    increments ``attempts``) and leaves the row for a later retry.
 
-Rows that exceed ``max_attempts`` are logged loudly and skipped so a permanently
-poisoned event cannot wedge the loop — they are never silently dropped.
+Rows that exceed ``max_attempts`` are excluded by the fetch query itself, so a
+permanently poisoned event cannot wedge the loop — live events queued behind it
+still flow. Exhausted rows are logged loudly when they give up and left in the
+table for inspection; they are never silently dropped.
 """
 
 from __future__ import annotations
@@ -84,25 +86,23 @@ class OutboxRelay:
     async def process_batch(self) -> int:
         """Publish one batch of pending rows. Returns the count published.
 
-        Each row is committed independently: publishing to the broker is an
-        external side effect, so we mark the row published in its own commit to
-        avoid re-publishing on a later crash. One session/transaction wraps the
-        locked ``fetch`` so ``FOR UPDATE SKIP LOCKED`` holds for the whole batch.
+        One session/transaction wraps the whole batch so ``FOR UPDATE SKIP
+        LOCKED`` holds across it and concurrent relays never pick up the same
+        rows. Delivery is therefore at-least-once: publishing is an external
+        side effect that cannot join the transaction, so a crash or a failed
+        commit after publishing re-delivers that batch. Consumers dedup by
+        ``event_id`` (see task_stream and the frontend reducer), which is what
+        makes the duplicate harmless — committing per row instead would release
+        the batch's locks early and hand a concurrent relay the same rows,
+        trading a rare duplicate for a routine one.
         """
         published = 0
         async with self._session_factory() as session:
             repo = OutboxRepository(session, _RELAY_CONTEXT)
-            rows = await repo.fetch_unpublished(limit=self._batch_size)
+            rows = await repo.fetch_unpublished(
+                limit=self._batch_size, max_attempts=self._max_attempts
+            )
             for row in rows:
-                if row.attempts >= self._max_attempts:
-                    logger.error(
-                        "OutboxRelay giving up on event %s (type=%s) after %d attempts: %s",
-                        row.event_id,
-                        row.event_type,
-                        row.attempts,
-                        row.last_error,
-                    )
-                    continue
                 try:
                     envelope = EventEnvelope.from_dict(row.payload)
                     await self._event_broker.publish(envelope)
@@ -115,6 +115,14 @@ class OutboxRelay:
                         exc_info=True,
                     )
                     await repo.mark_failed(row.id, str(exc))
+                    if row.attempts + 1 >= self._max_attempts:
+                        logger.error(
+                            "OutboxRelay giving up on event %s (type=%s) after %d attempts: %s",
+                            row.event_id,
+                            row.event_type,
+                            row.attempts + 1,
+                            exc,
+                        )
                 else:
                     await repo.mark_published(row.id)
                     published += 1
