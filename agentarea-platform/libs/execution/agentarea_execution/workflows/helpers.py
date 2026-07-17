@@ -26,7 +26,7 @@ def resolve_effective_budget(
 ) -> Money | None:
     """Single source of truth for the run budget.
 
-    The legacy ``request.budget_usd`` and the governance policy ceiling
+    The per-request ``request.budget_usd`` and the governance policy ceiling
     (``effective_policy.budget.run_budget_usd``) are reconciled so the
     loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)
     enforce the same number. The tightest of the two wins — a lower ceiling

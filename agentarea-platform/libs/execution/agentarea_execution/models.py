@@ -343,6 +343,11 @@ class MCPToolResult(BaseModel):
     result: str = ""
     execution_time: str = ""
     error: str | None = None
+    # A command's verdict is data, not prose: consumers (UI, rollups) need the
+    # exit code as a field, and `success` alone cannot carry it.
+    exit_code: int | None = None
+    outcome: str | None = None  # "exit" | "timeout" | "error"
+    artifact_paths: list[str] = Field(default_factory=list)
     service_cost: float = 0.0
     payment: dict[str, Any] | None = None
     # Tool-call attribution surfaced to the UI.

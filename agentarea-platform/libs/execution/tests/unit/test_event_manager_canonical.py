@@ -2,7 +2,7 @@
 
 The ``EventTypes`` constants hold canonical dotted names directly, so every
 emitted + persisted event carries the canonical name and the wire speaks one
-vocabulary. There is no legacy alias bridge.
+vocabulary. There is no alias bridge.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def test_workflow_started_emits_task_started():
 
 
 def test_timeline_event_passes_through_unchanged():
-    # System/timeline events not in the part taxonomy keep their legacy name.
+    # System/timeline events not in the part taxonomy keep their bare name.
     mgr = _mgr()
     mgr.add_event(EventTypes.BUDGET_WARNING, {"percentage": 80})
     assert _only_event(mgr)["event_type"] == "BudgetWarning"

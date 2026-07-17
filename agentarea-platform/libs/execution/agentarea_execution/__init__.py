@@ -25,7 +25,7 @@ This architecture allows for:
 - Integration with existing AgentArea services
 """
 
-from .interfaces import ActivityDependencies, ActivityServicesInterface
+from .interfaces import ActivityDependencies
 
 # Lazy imports to avoid Temporal sandbox issues.
 # agentarea_execution.models imports agentarea_common.money which triggers
@@ -79,7 +79,6 @@ def create_activities_for_worker(dependencies: ActivityDependencies):
 
 __all__ = [
     "ActivityDependencies",
-    "ActivityServicesInterface",  # Keep for backward compatibility
     "AgentExecutionRequest",
     "AgentExecutionResult",
     "LLMReasoningRequest",

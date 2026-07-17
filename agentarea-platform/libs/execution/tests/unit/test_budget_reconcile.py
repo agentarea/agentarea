@@ -1,4 +1,4 @@
-"""Single-source-of-truth reconciliation between the legacy request budget
+"""Single-source-of-truth reconciliation between the per-request budget
 and the governance policy run budget.
 
 Both the loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)

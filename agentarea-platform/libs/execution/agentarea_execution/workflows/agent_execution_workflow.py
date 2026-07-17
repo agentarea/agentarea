@@ -1940,7 +1940,7 @@ class AgentExecutionWorkflow:
         self._pending_input_requests.pop(input_request_id, None)
 
     def _normalize_user_input_questions(self, tool_args: dict[str, Any]) -> list[dict[str, Any]]:
-        """Normalize legacy question/options and rich questions[] into form fields."""
+        """Normalize the simple question/options form and rich questions[] into form fields."""
         raw_questions = tool_args.get("questions")
         if isinstance(raw_questions, list) and raw_questions:
             questions = []
@@ -2256,7 +2256,12 @@ class AgentExecutionWorkflow:
                     {
                         "tool_name": tool_name,
                         "tool_call_id": tool_call.id,
+                        # Say it outright: a consumer should not have to infer
+                        # failure from the presence of an error field.
+                        "success": False,
                         "error": error_message,
+                        "exit_code": result_dict.get("exit_code"),
+                        "artifact_paths": result_dict.get("artifact_paths") or [],
                         "arguments": tool_args,
                         "execution_time": execution_time,
                         "iteration": self.state.current_iteration,
@@ -2292,6 +2297,10 @@ class AgentExecutionWorkflow:
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "success": success,
+                    # The command's own verdict, so the UI and the rollups stop
+                    # having to guess it out of the result text.
+                    "exit_code": result_dict.get("exit_code"),
+                    "artifact_paths": result_dict.get("artifact_paths") or [],
                     "iteration": self.state.current_iteration,
                     "result": result_text,
                     "arguments": tool_args,

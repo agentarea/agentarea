@@ -32,7 +32,7 @@ class TestAgentToolSettings:
 class TestMcpToolSettings:
     """allowed_tools is now typed permission objects (was the list[Any] FIXME)."""
 
-    def test_allowed_tools_coerces_legacy_strings(self):
+    def test_allowed_tools_coerces_plain_strings(self):
         settings = McpToolSettings(allowed_tools=["read_file"])
         assert settings.allowed_tools is not None
         assert settings.allowed_tools[0].tool_name == "read_file"

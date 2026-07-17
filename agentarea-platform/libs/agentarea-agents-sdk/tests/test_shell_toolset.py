@@ -83,7 +83,7 @@ async def test_bash_propagates_workflow_id_from_ctx():
     )
     result = await tool.bash("echo ok")
 
-    assert result == "ok"
+    assert result["result"] == "ok"
     assert len(fake.calls) == 1
     url, payload = fake.calls[0]
     assert url == "http://mcp-manager:8000/sandbox/executions"
@@ -140,7 +140,9 @@ async def test_bash_returns_stdout_only_on_success():
     )
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     result = await tool.bash("echo hello")
-    assert result == "hello"
+    assert result["result"] == "hello"
+    assert result["exit_code"] == 0
+    assert result["success"] is True
 
 
 @pytest.mark.asyncio
@@ -151,9 +153,11 @@ async def test_bash_includes_stderr_and_exit_code_on_failure():
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     result = await tool.bash("false")
 
-    assert "exit_code: 2" in result
-    assert "partial" in result
-    assert "boom" in result
+    assert "exit_code: 2" in result["result"]
+    assert "partial" in result["result"]
+    assert "boom" in result["result"]
+    assert result["exit_code"] == 2
+    assert result["success"] is False
 
 
 @pytest.mark.asyncio
@@ -161,7 +165,8 @@ async def test_bash_handles_empty_command():
     fake = _RecordingClient(_FakeResponse(payload={}))
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     result = await tool.bash("   ")
-    assert result.startswith("Error:")
+    assert result["success"] is False
+    assert result["result"].startswith("Error:")
     assert fake.calls == []
 
 
@@ -169,7 +174,8 @@ async def test_bash_handles_empty_command():
 async def test_bash_returns_error_when_unconfigured():
     tool = ShellToolset()  # no mcp_manager_url, no ctx
     result = await tool.bash("echo x")
-    assert result.startswith("Error:")
+    assert result["success"] is False
+    assert result["result"].startswith("Error:")
 
 
 @pytest.mark.asyncio
@@ -177,7 +183,8 @@ async def test_bash_surfaces_http_error():
     fake = _RecordingClient(_FakeResponse(status_code=500, text="boom"))
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
     result = await tool.bash("echo x")
-    assert "HTTP 500" in result
+    assert "HTTP 500" in result["result"]
+    assert result["success"] is False
 
 
 @pytest.mark.asyncio
@@ -191,7 +198,8 @@ async def test_bash_surfaces_network_error():
 
     tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=_Broken())
     result = await tool.bash("echo x")
-    assert "failed to reach sandbox" in result
+    assert "failed to reach sandbox" in result["result"]
+    assert result["success"] is False
 
 
 @pytest.mark.asyncio

@@ -42,7 +42,3 @@ class ActivityDependencies:
     workflow_executor: Any = field(default=None)
     broker_client: "BrokerClient | None" = field(default=None)
     channel_delivery_settings: "ChannelDeliverySettings | None" = field(default=None)
-
-
-# Legacy alias for backward compatibility during transition
-ActivityServicesInterface = ActivityDependencies

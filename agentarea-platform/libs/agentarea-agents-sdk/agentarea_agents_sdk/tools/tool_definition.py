@@ -62,8 +62,7 @@ class ToolsetMetadata(BaseModel):
 
 
 # Decorator-driven registry: every ``@toolset(namespace=...)``-decorated class
-# self-registers here at import time. Replaces the legacy ``code_tools.yaml`` —
-# the class IS the source of truth, no parallel YAML to drift against.
+# self-registers here at import time. The class IS the source of truth.
 _TOOLSET_REGISTRY: dict[str, type] = {}
 
 

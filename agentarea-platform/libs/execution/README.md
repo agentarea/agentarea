@@ -182,7 +182,7 @@ from google.adk.agents import Agent
 async def execute_agent_task_activity(
     request: AgentExecutionRequest,
     available_tools: List[Dict[str, Any]],
-    activity_services: ActivityServicesInterface,
+    activity_services: ActivityDependencies,
 ) -> Dict[str, Any]:
     # 1. Get real agent config from AgentArea
     agent_config = await activity_services.agent_service.build_agent_config(request.agent_id)

@@ -1229,6 +1229,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     result=result_text,
                     execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
+                    exit_code=result.get("exit_code"),
+                    outcome=result.get("outcome"),
+                    artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=float(result.get("service_cost") or 0.0),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)

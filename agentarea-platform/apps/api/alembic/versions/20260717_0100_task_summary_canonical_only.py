@@ -4,8 +4,10 @@ Two problems with the previous definition:
 
 1. ``tools_failed`` matched only ``'ToolCallFailed'``. That name is never
    emitted: the contract has no distinct failed-tool type — ``TOOL_CALL_FAILED``
-   and ``TOOL_CALL_COMPLETED`` are both ``tool.result``, and failure is carried
-   by ``data->>'success'``. The counter was therefore always 0.
+   and ``TOOL_CALL_COMPLETED`` are both ``tool.result``, and failure rides in the
+   payload. The counter was therefore always 0. It now reads the command's own
+   verdict: a non-zero ``exit_code``, or ``success=false`` for tools that have no
+   exit code to report.
 2. Every other FILTER accepted the pre-contract names alongside the canonical
    ones. The emit side speaks the canonical contract now and the legacy names
    are being retired, so the dual matching is dead weight that hides drift.
@@ -28,8 +30,8 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-# Canonical vocabulary only. A failed tool is a tool.result carrying
-# success=false, not an event type of its own.
+# Canonical vocabulary only. A failed tool is a tool.result whose payload says
+# so — a non-zero exit_code, or success=false — not an event type of its own.
 CREATE_VIEW_CANONICAL_ONLY = """
 CREATE OR REPLACE VIEW task_summary AS
 SELECT
@@ -53,7 +55,7 @@ SELECT
     COUNT(*) FILTER (WHERE e.event_type = 'tool.call')                 AS tools_called,
     COUNT(*) FILTER (
         WHERE e.event_type = 'tool.result'
-          AND e.data ->> 'success' = 'false'
+          AND (e.data ->> 'success' = 'false' OR (e.data ->> 'exit_code') NOT IN ('0', ''))
     )                         AS tools_failed,
     COUNT(*) FILTER (WHERE e.event_type = 'AgentDelegationStarted')    AS delegations_started,
     COUNT(*) FILTER (WHERE e.event_type = 'AgentDelegationCompleted')  AS delegations_completed,
@@ -83,7 +85,13 @@ SELECT
         WHERE e3.task_id = t.id
           AND (
               e3.event_type IN ('task.failed', 'llm.call.failed')
-              OR (e3.event_type = 'tool.result' AND e3.data ->> 'success' = 'false')
+              OR (
+                  e3.event_type = 'tool.result'
+                  AND (
+                      e3.data ->> 'success' = 'false'
+                      OR (e3.data ->> 'exit_code') NOT IN ('0', '')
+                  )
+              )
           )
         ORDER BY e3.timestamp DESC
         LIMIT 1

@@ -71,12 +71,12 @@ class ShellToolset(Toolset):
         command: str,
         timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
         artifact_paths: list[str] | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """Run a bash command and return stdout, stderr, exit code, and requested artifacts."""
         if not self._mcp_manager_url:
-            return "Error: shell tool is not configured (mcp_manager_url missing)"
+            return _tool_error("shell tool is not configured (mcp_manager_url missing)")
         if not isinstance(command, str) or not command.strip():
-            return "Error: command must be a non-empty string"
+            return _tool_error("command must be a non-empty string")
         if timeout_seconds <= 0 or timeout_seconds > MAX_TIMEOUT_SECONDS:
             timeout_seconds = DEFAULT_TIMEOUT_SECONDS
         requested_artifacts = _normalize_artifact_paths(artifact_paths)
@@ -122,12 +122,12 @@ class ShellToolset(Toolset):
                     await client.aclose()
         except httpx.HTTPError as exc:
             logger.exception("bash request to %s failed", url)
-            return f"Error: failed to reach sandbox: {exc}"
+            return _tool_error(f"failed to reach sandbox: {exc}")
         except SandboxHTTPError as exc:
-            return f"Error: {exc}"
+            return _tool_error(str(exc))
 
         if not requested_artifacts and not data.get("artifacts"):
-            return _format_result(data)
+            return _shell_outcome(data)
 
         return await self._format_result_with_artifacts(data)
 
@@ -189,7 +189,7 @@ class ShellToolset(Toolset):
 
         return input_files
 
-    async def _format_result_with_artifacts(self, data: dict[str, Any]) -> str:
+    async def _format_result_with_artifacts(self, data: dict[str, Any]) -> dict[str, Any]:
         artifact_refs: list[dict[str, Any]] = []
         for artifact in data.get("artifacts") or []:
             if not isinstance(artifact, dict):
@@ -235,9 +235,13 @@ class ShellToolset(Toolset):
                 entry["error"] = f"failed to store artifact: {exc}"
             artifact_refs.append(entry)
 
-        return json.dumps(
+        # The artifact branch reports the same structured outcome as the plain
+        # one: an exit code that only exists when no files were requested is
+        # exactly the kind of gap that let a failed command look green.
+        outcome = _shell_outcome(data, artifacts=artifact_refs)
+        outcome["result"] = json.dumps(
             {
-                "exit_code": data.get("exit_code", 0),
+                "exit_code": outcome["exit_code"],
                 "execution_time_ms": data.get("execution_time_ms", 0),
                 "output": _format_result(data),
                 "artifacts": artifact_refs,
@@ -245,6 +249,7 @@ class ShellToolset(Toolset):
             ensure_ascii=False,
             indent=2,
         )
+        return outcome
 
     def _artifact_path(self, requested_path: str) -> str:
         clean = PurePosixPath(requested_path.replace("\\", "/")).name
@@ -309,6 +314,47 @@ async def wait_for_sandbox_execution(
             record = resp.json()
         except ValueError as exc:
             raise SandboxHTTPError(f"invalid sandbox status response: {resp.text}") from exc
+
+
+def _tool_error(message: str) -> dict[str, Any]:
+    """The tool could not run at all — distinct from a command that ran and failed."""
+    return {"success": False, "result": f"Error: {message}", "error": message, "outcome": "error"}
+
+
+def _shell_outcome(
+    data: dict[str, Any], artifacts: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Shape a sandbox execution into a structured tool outcome.
+
+    The exit code is data, not prose: every agent runtime worth copying —
+    OpenAI's shell tool, Gemini's, Claude Code's — surfaces it as its own field
+    rather than a line inside the output. Burying it meant no consumer could see
+    that a command had failed, so a red command rendered green and the
+    failed-tool metric could only ever read zero.
+
+    ``success`` is derived from it, matching MCP's isError ("the tool ran and
+    the operation failed") and Anthropic's bash guidance. It stays a heuristic —
+    grep exits 1 on no-match — but the exit code travels alongside, so a
+    consumer that knows better can override it. That is the point of carrying
+    both.
+    """
+    exit_code = int(data.get("exit_code", 0) or 0)
+    outcome: dict[str, Any] = {
+        "success": exit_code == 0,
+        "result": _format_result(data),
+        "exit_code": exit_code,
+        "outcome": "exit",
+    }
+    paths = [
+        str(a.get("artifact_path"))
+        for a in (artifacts or [])
+        if isinstance(a, dict) and a.get("artifact_path")
+    ]
+    if paths:
+        outcome["artifact_paths"] = paths
+    if artifacts:
+        outcome["artifacts"] = artifacts
+    return outcome
 
 
 def _normalize_artifact_paths(paths: list[str] | None) -> list[str]:

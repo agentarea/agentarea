@@ -65,23 +65,6 @@ class ToolMessage:
     role: str = field(default="tool", init=False)
 
 
-# Legacy compatibility - maps to the original Message class
-@dataclass
-class Message:
-    """Legacy message class for backward compatibility.
-
-    This maintains the original interface while providing the new structure.
-    """
-
-    role: str
-    content: str
-    timestamp: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    tool_call_id: str | None = None
-    name: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None
-
-
 # Factory functions for easy message creation
 def create_system_message(content: str, **kwargs) -> SystemMessage:
     """Create a system message."""

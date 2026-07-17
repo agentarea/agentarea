@@ -191,7 +191,7 @@ class LLMModel:
         if isinstance(msg, dict | list):
             return msg
 
-        # If it's a legacy SDK message dict-like
+        # Any object exposing role/content
         if hasattr(msg, "role") and hasattr(msg, "content"):
             return {"role": getattr(msg, "role"), "content": getattr(msg, "content")}
 
