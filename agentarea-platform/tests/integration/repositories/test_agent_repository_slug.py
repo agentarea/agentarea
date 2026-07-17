@@ -47,7 +47,7 @@ async def slug_db_session(slug_test_engine):
 
 
 def _ctx(workspace_id: str = "ws-a", user_id: str = "user-a") -> UserContext:
-    return UserContext(user_id=user_id, workspace_id=workspace_id, roles=["user"])
+    return UserContext(user_id=user_id, workspace_id=workspace_id)
 
 
 class TestAgentRepositoryGetBySlug:

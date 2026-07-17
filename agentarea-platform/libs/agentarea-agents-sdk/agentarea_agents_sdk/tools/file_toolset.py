@@ -239,7 +239,10 @@ class FileToolset(Toolset):
             return f"Error searching files with pattern '{pattern}': {e}"
 
     def _relative(self, obj: Any) -> str:
-        path = getattr(obj, "path", None) or (obj.get("path") if isinstance(obj, dict) else "")
+        raw = getattr(obj, "path", None)
+        if raw is None and isinstance(obj, dict):
+            raw = obj.get("path")
+        path = str(raw or "")
         if self.base_prefix and path.startswith(self.base_prefix + "/"):
             return path[len(self.base_prefix) + 1 :]
-        return str(path or "")
+        return path

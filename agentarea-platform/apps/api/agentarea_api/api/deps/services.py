@@ -17,9 +17,8 @@ from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep, RepositoryFactoryDep
 from agentarea_common.config import get_settings
+from agentarea_common.config.database import get_db_session
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.event_stream_service import EventStreamService
-from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_service import ProviderService
@@ -200,21 +199,6 @@ async def _create_task_manager(repository_factory: RepositoryFactoryDep):
     return TemporalTaskManager(task_repository)
 
 
-async def get_event_stream_service(
-    event_broker: EventBrokerDep,
-) -> EventStreamService:
-    """Get an EventStreamService instance for the current request."""
-    from agentarea_common.events.redis_event_broker import RedisEventBroker
-
-    if isinstance(event_broker, RedisEventBroker):
-        return EventStreamService(event_broker.redis_broker)
-    else:
-        raise ValueError(
-            f"Expected RedisEventBroker but got {type(event_broker).__name__}. "
-            "EventStreamService requires a Redis-backed broker."
-        )
-
-
 async def get_temporal_workflow_service() -> TemporalWorkflowService:
     """Get a TemporalWorkflowService instance for the current request.
 
@@ -356,7 +340,6 @@ TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
 TaskManagerDep = Annotated[BaseTaskManager, Depends(get_task_manager)]
 ReadAgentServiceDep = Annotated[AgentService, Depends(get_read_agent_service)]
 ReadTaskServiceDep = Annotated[TaskService, Depends(get_read_task_service)]
-EventStreamServiceDep = Annotated[EventStreamService, Depends(get_event_stream_service)]
 TemporalWorkflowServiceDep = Annotated[
     TemporalWorkflowService, Depends(get_temporal_workflow_service)
 ]
@@ -560,9 +543,9 @@ async def get_public_webhook_manager(
                 }
 
             # Create a FRESH session for the execution phase to avoid greenlet reuse issues
-            from agentarea_common.infrastructure.database import db
+            from agentarea_common.config.database import get_database
 
-            async with db.session() as fresh_session:
+            async with get_database().session() as fresh_session:
                 workspace_id = trigger.workspace_id or "system"
                 created_by = trigger.created_by or "system"
                 ctx = UserContext(

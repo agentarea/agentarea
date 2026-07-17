@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { TriggerResponse } from "@/api/client/types.gen";
 import { listTriggers } from "@/lib/api";
 
 /**
@@ -9,7 +10,7 @@ import { listTriggers } from "@/lib/api";
 export const getTriggersCached = cache(async () => {
   const res = await listTriggers();
   if (res.error) {
-    return { triggers: [] as any[], error: true };
+    return { triggers: [] as TriggerResponse[], error: true };
   }
-  return { triggers: (res.data as any[]) || [], error: false };
+  return { triggers: (res.data ?? []) as TriggerResponse[], error: false };
 });

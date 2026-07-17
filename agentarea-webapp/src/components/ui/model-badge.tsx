@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +43,7 @@ export default function ModelBadge({
     }
     if (!iconUrl) return null;
     return (
-      <img
+      <Image
         src={iconUrl}
         alt={providerName || "Model"}
         width={iconSize}

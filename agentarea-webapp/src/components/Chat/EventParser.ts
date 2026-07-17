@@ -1,4 +1,4 @@
-import { A2UISurface, MessageComponentType } from "./types";
+import { A2UISurface, HumanInputField, LLMResponseData, MessageComponentType, SseEventData } from "./types";
 
 // FIXME: Performance — this is a large switch statement that runs synchronously per-event
 // on every call from the useMemo chain in page.tsx. Adding new event types increases the
@@ -7,8 +7,9 @@ import { A2UISurface, MessageComponentType } from "./types";
 // Parse event data into appropriate message component type
 export const parseEventToMessage = (
   eventType: string,
-  eventData: any
+  rawData: Record<string, unknown>
 ): MessageComponentType | null => {
+  const eventData = rawData as SseEventData;
   const baseData = {
     id: eventData.task_id || eventData.aggregate_id || Date.now().toString(),
     timestamp: eventData.timestamp || new Date().toISOString(),
@@ -33,8 +34,8 @@ export const parseEventToMessage = (
           content,
           thinking: thinking || undefined,
           role: originalData.role || eventData.role || "assistant",
-          tool_calls: originalData.tool_calls || eventData.tool_calls,
-          usage: originalData.usage || eventData.usage,
+          tool_calls: (originalData.tool_calls || eventData.tool_calls) as LLMResponseData["tool_calls"],
+          usage: (originalData.usage || eventData.usage) as LLMResponseData["usage"],
         },
       };
     }
@@ -42,10 +43,10 @@ export const parseEventToMessage = (
     case "LLMCallChunk": {
       // Extract chunk information for streaming display
       const originalData = eventData.original_data || eventData;
-      const chunk = originalData.chunk || eventData.chunk;
+      const chunk = originalData.chunk || eventData.chunk || "";
       const chunkIndex = originalData.chunk_index || eventData.chunk_index || 0;
       const isFinal = originalData.is_final || eventData.is_final || false;
-      const chunkType = originalData.chunk_type || eventData.chunk_type || "text";
+      const chunkType = (originalData.chunk_type || eventData.chunk_type || "text") as "text" | "thinking";
 
       // Create or update streaming message
       // Note: This requires special handling in the chat component to accumulate chunks
@@ -226,7 +227,7 @@ export const parseEventToMessage = (
 
     case "WorkflowCompleted": {
       // Extract final workflow result
-      const result = eventData.result || eventData.final_response;
+      const result = (eventData.result as string | undefined) || eventData.final_response;
       const originalData = eventData.original_data || eventData;
 
       // Only create message if there's a meaningful result
@@ -343,14 +344,38 @@ export const parseEventToMessage = (
         type: "approval_request",
         data: {
           ...baseData,
-          escalation_id: originalData.escalation_id || eventData.escalation_id,
-          tool_name: originalData.tool_name || eventData.tool_name,
-          tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
+          escalation_id: originalData.escalation_id || eventData.escalation_id || "",
+          tool_name: originalData.tool_name || eventData.tool_name || "",
+          tool_call_id: originalData.tool_call_id || eventData.tool_call_id || "",
           arguments: originalData.arguments || eventData.arguments || {},
           message: originalData.message || eventData.message || "Approval required",
           resolved: eventData.resolved ?? originalData.resolved ?? false,
           approved: eventData.approved ?? originalData.approved,
           deny_comment: eventData.deny_comment ?? originalData.deny_comment,
+        },
+      };
+    }
+
+    case "HumanInputRequested": {
+      const originalData = eventData.original_data || eventData;
+      const rawQuestions = originalData.questions ?? eventData.questions;
+      const questions = Array.isArray(rawQuestions) ? (rawQuestions as HumanInputField[]) : [];
+
+      return {
+        type: "input_request",
+        data: {
+          ...baseData,
+          input_request_id:
+            originalData.input_request_id || eventData.input_request_id || "",
+          tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
+          question: originalData.question || eventData.question || "",
+          questions,
+          allow_custom_response:
+            originalData.allow_custom_response ??
+            eventData.allow_custom_response ??
+            true,
+          input_mode: originalData.input_mode || eventData.input_mode,
+          resolved: eventData.resolved ?? originalData.resolved ?? false,
         },
       };
     }
@@ -376,6 +401,7 @@ export const parseEventToMessage = (
     case "A2UIDeleteSurface":
     case "HumanApprovalDenied":
     case "HumanApprovalReceived":
+    case "HumanInputReceived":
       // These update existing messages, handled in eventHandlers
       return null;
 
@@ -462,6 +488,7 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "A2UIUpdateDataModel",
     "A2UIDeleteSurface",
     "HumanApprovalRequested",
+    "HumanInputRequested",
     "MessageQueued",
   ];
 

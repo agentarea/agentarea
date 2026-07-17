@@ -6,7 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import UserContextDep
-from ..infrastructure.database import get_db_session, get_read_db_session
+from ..config.database import get_db_session, get_read_db_session
 from .repository_factory import RepositoryFactory
 
 

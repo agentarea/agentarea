@@ -112,6 +112,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "clients": "Clients",
     "explore": "Explore",
     "providers": "Providers",
     "providerConfigs": "Models",
@@ -1547,6 +1548,7 @@
     "send": "Send",
     "toSend": "to send",
     "toCreate": "to create",
+    "toClose": "to close",
     "errorCreate": "Couldn't create the task. Try again.",
     "noAgents": {
       "title": "No agents yet",

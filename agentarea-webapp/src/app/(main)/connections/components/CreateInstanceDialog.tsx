@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import type { McpServerInstanceResponse } from "@/api/client/types.gen";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,14 +117,16 @@ export function CreateInstanceDialog({
           throw new Error(errorMessage);
         }
 
-        const created = instanceResult.data as any;
+        const created = instanceResult.data as McpServerInstanceResponse | null;
         const vStatus = created?.verification?.status;
         onOpenChange(false);
         resetForm();
-        if (vStatus === "in_progress" || vStatus === "never_attempted") {
-          setVerifyingInstance({ id: created.id, name: instanceName });
-        } else {
-          router.push(`/connections/${created.id}`);
+        if (created) {
+          if (vStatus === "in_progress" || vStatus === "never_attempted") {
+            setVerifyingInstance({ id: created.id, name: instanceName });
+          } else {
+            router.push(`/connections/${created.id}`);
+          }
         }
       } catch (error) {
         const errorMessage =
@@ -173,9 +177,11 @@ export function CreateInstanceDialog({
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <img
+              <Image
                 src={specIcon}
                 alt=""
+                width={20}
+                height={20}
                 className="h-5 w-5 shrink-0 rounded object-contain"
               />
               <span>Configure {mcpServer.name} Instance</span>
@@ -188,7 +194,7 @@ export function CreateInstanceDialog({
 
           <div className="space-y-4">
             <MCPInstanceConfigForm
-              server={mcpServer as any}
+              server={mcpServer}
               instanceName={instanceName}
               instanceDescription={instanceDescription}
               envVars={envVars}
@@ -213,7 +219,7 @@ export function CreateInstanceDialog({
                   if (checkResult.error) {
                     toast.error(t("errors.validateFailed"));
                   } else {
-                    const validationData = checkResult.data as any;
+                    const validationData = checkResult.data as { valid: boolean; errors: string[]; warnings: string[] } | null;
                     setValidationResult(validationData);
                     if (validationData?.valid)
                       toast.success(t("success.valid"));

@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.base.models import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -48,26 +47,28 @@ async def db_session(test_engine):
 
 
 @pytest_asyncio.fixture
-async def agent_repository(db_session):
+async def agent_repository(db_session, user_context):
     """Provide an AgentRepository instance."""
-    return AgentRepository(db_session)
+    return AgentRepository(db_session, user_context)
 
 
-def create_test_agent(**kwargs) -> Agent:
-    """Create a test agent with default values."""
+def create_test_agent(**kwargs) -> dict:
+    """Create test agent data with default values."""
+    uid = uuid4()
     defaults = {
         "id": uuid4(),
-        "name": f"test_agent_{uuid4().hex[:8]}",
+        "name": f"test_agent_{uid.hex[:8]}",
+        "slug": f"test-agent-{uid.hex[:8]}",
         "status": "active",
         "description": "Test agent",
         "instruction": "You are a helpful test agent",
-        "model_id": str(uuid4()),  # model_id is String in the model
-        "tools_config": None,
+        "model_id": str(uuid4()),
+        "tools": None,
         "events_config": None,
         "planning": False,
     }
     defaults.update(kwargs)
-    return Agent(**defaults)
+    return defaults
 
 
 class TestAgentRepository:
@@ -80,12 +81,12 @@ class TestAgentRepository:
         agent = create_test_agent(name="Test Agent")
 
         # Act - Create
-        created_agent = await agent_repository.create(agent)
+        created_agent = await agent_repository.create(**agent)
 
         # Assert - Create
         assert created_agent is not None
         assert created_agent.name == "Test Agent"
-        assert created_agent.id == agent.id
+        assert created_agent.id == agent["id"]
 
         # Act - Get
         retrieved_agent = await agent_repository.get(created_agent.id)
@@ -102,8 +103,8 @@ class TestAgentRepository:
         agent1 = create_test_agent(name="Agent 1")
         agent2 = create_test_agent(name="Agent 2")
 
-        await agent_repository.create(agent1)
-        await agent_repository.create(agent2)
+        await agent_repository.create(**agent1)
+        await agent_repository.create(**agent2)
 
         # Act
         agents = await agent_repository.list()
@@ -119,14 +120,14 @@ class TestAgentRepository:
         """Test updating an agent."""
         # Arrange
         agent = create_test_agent(name="Original Name")
-        created_agent = await agent_repository.create(agent)
+        created_agent = await agent_repository.create(**agent)
 
         # Modify
         created_agent.name = "Updated Name"
         created_agent.description = "Updated description"
 
         # Act
-        updated_agent = await agent_repository.update(created_agent)
+        updated_agent = await agent_repository.update_from_entity(created_agent)
 
         # Assert
         assert updated_agent.name == "Updated Name"
@@ -141,7 +142,7 @@ class TestAgentRepository:
         """Test deleting an agent."""
         # Arrange
         agent = create_test_agent()
-        created_agent = await agent_repository.create(agent)
+        created_agent = await agent_repository.create(**agent)
 
         # Act
         delete_result = await agent_repository.delete(created_agent.id)

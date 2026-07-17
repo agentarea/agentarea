@@ -1,6 +1,23 @@
 """Domain exceptions for the tasks library."""
 
 
+class AgentModelNotConfiguredError(Exception):
+    """Raised when starting a run for an agent that has no model configured.
+
+    Maps to HTTP 422 Unprocessable Entity at the API boundary. A catalog agent
+    installed into a workspace with no matching model instance lands here until
+    the user selects a model, instead of failing deep inside the workflow with
+    an empty model name.
+    """
+
+    def __init__(self, agent_id):
+        self.agent_id = str(agent_id)
+        super().__init__(
+            f"Agent {self.agent_id} has no model configured. "
+            "Select a model for this agent before starting a run."
+        )
+
+
 class BudgetCapExceededError(Exception):
     """Raised when a workspace's month-to-date spend has reached its monthly cap.
 

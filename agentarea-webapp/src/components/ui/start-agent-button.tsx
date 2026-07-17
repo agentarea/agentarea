@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { Slot, Slottable } from "@radix-ui/react-slot";
 import { ArrowRight } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -62,11 +63,12 @@ export const StartAgentButton = React.forwardRef<
       tabIndex={asChild && isDisabled ? -1 : undefined}
       {...props}
     >
-      <img
+      <Image
         src="/simple-logo.svg"
         alt=""
         aria-hidden="true"
         width={icon}
+        height={icon}
         className={cn(
           "h-auto shrink-0 group-disabled:opacity-50",
           light ? "invert" : null

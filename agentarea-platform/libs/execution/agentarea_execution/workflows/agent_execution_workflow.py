@@ -1,8 +1,8 @@
 import json
+from collections.abc import Callable
 from typing import Any, cast
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 from temporalio.workflow import ParentClosePolicy
 
@@ -112,13 +112,17 @@ from .constants import (
     EventTypes,
     ExecutionStatus,
 )
+from .retry import make_retry_policy
+
+JsonDict = dict[str, Any]
+AgentToolRegistry = dict[str, JsonDict]
 
 
 @workflow.defn
 class AgentExecutionWorkflow:
     """Agent execution workflow without ADK dependency."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.state = AgentExecutionState()
         self.event_manager: EventManager | None = None
         self.budget_tracker: BudgetTracker | None = None
@@ -131,7 +135,7 @@ class AgentExecutionWorkflow:
         # immediately on completion rather than entering await_input.
         self._workflow_metadata: dict[str, Any] = {}
         # Maps sanitized agent tool names to their config (type=agent entries)
-        self._agent_tool_registry: dict[str, dict] = {}
+        self._agent_tool_registry: AgentToolRegistry = {}
         # A2UI action queue — frontend signals land here, workflow loop drains them
         self._a2ui_action_queue: list[dict[str, Any]] = []
         self._skill_tool: SkillActivationTool | None = None
@@ -145,6 +149,18 @@ class AgentExecutionWorkflow:
         self._message_queue: list[dict[str, Any]] = []
         # Track if completion event has been published (to avoid double-publish at termination)
         self._completion_event_published = False
+
+    @property
+    def _events(self) -> EventManager:
+        if self.event_manager is None:
+            raise RuntimeError("Workflow event manager is not initialized")
+        return self.event_manager
+
+    @property
+    def _budget(self) -> BudgetTracker:
+        if self.budget_tracker is None:
+            raise RuntimeError("Workflow budget tracker is not initialized")
+        return self.budget_tracker
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -187,7 +203,7 @@ class AgentExecutionWorkflow:
     _MAX_A2UI_QUEUE_SIZE = 50
 
     @workflow.signal
-    async def handle_a2ui_action(self, action_data: dict) -> None:
+    async def handle_a2ui_action(self, action_data: dict[str, Any]) -> None:
         """Signal from frontend when user interacts with an A2UI surface.
 
         The action is queued and injected as a user message on the next LLM call,
@@ -199,7 +215,7 @@ class AgentExecutionWorkflow:
         self._a2ui_action_queue.append(action_data)
         workflow.logger.info(
             f"A2UI action received: {action_data.get('name', 'unknown')} "
-            f"on surface {action_data.get('surface_id', 'unknown')}"
+            + f"on surface {action_data.get('surface_id', 'unknown')}"
         )
 
     @workflow.signal
@@ -231,7 +247,7 @@ class AgentExecutionWorkflow:
             event_type = (
                 EventTypes.HUMAN_APPROVAL_RECEIVED if approved else EventTypes.HUMAN_APPROVAL_DENIED
             )
-            self.event_manager.add_event(
+            cast(EventManager, self.event_manager).add_event(
                 event_type,
                 {
                     "escalation_id": escalation_id,
@@ -245,13 +261,14 @@ class AgentExecutionWorkflow:
             )
             workflow.logger.info(
                 f"Escalation {escalation_id} resolved by '{resolved_by or 'unknown'}': "
-                f"approved={approved}" + (f" comment='{comment}'" if comment else "")
+                + f"approved={approved}"
+                + (f" comment='{comment}'" if comment else "")
             )
 
     @workflow.signal
-    async def workflow_command(self, command: str, payload: dict) -> None:
+    async def workflow_command(self, command: str, payload: dict[str, Any]) -> None:
         """Generic command signal for mid-execution control."""
-        handlers = {
+        handlers: dict[str, Callable[[dict[str, Any]], None]] = {
             "change_model": self._handle_change_model,
             "update_budget": self._handle_update_budget,
             "queue_message": self._handle_queue_message,
@@ -272,7 +289,7 @@ class AgentExecutionWorkflow:
         else:
             workflow.logger.warning(f"Unknown workflow command: {command}")
 
-    def _handle_change_model(self, payload: dict) -> None:
+    def _handle_change_model(self, payload: dict[str, Any]) -> None:
         """Handle a change_model command: update cached model info and agent config."""
         info = ChangeModelPayload(**payload)
         old = self.state.resolved_model
@@ -295,15 +312,15 @@ class AgentExecutionWorkflow:
             f"Model changed: {old.get('model_name') if old else 'none'} -> {info.model_name}"
         )
 
-    def _handle_update_budget(self, payload: dict) -> None:
+    def _handle_update_budget(self, payload: dict[str, Any]) -> None:
         """Handle an update_budget command (stub for future use)."""
         pass
 
-    def _handle_queue_message(self, payload: dict) -> None:
+    def _handle_queue_message(self, payload: dict[str, Any]) -> None:
         """Queue a user message for the agent's next iteration."""
         msg_id = str(workflow.uuid4())
         # Accept both "message" and "content" keys for robustness
-        text = payload.get("message") or payload.get("content") or ""
+        text = cast(str, payload.get("message") or payload.get("content") or "")
         if not text:
             workflow.logger.warning("queue_message received with empty text, ignoring")
             return
@@ -318,7 +335,7 @@ class AgentExecutionWorkflow:
             )
         workflow.logger.info(f"Message queued: {msg_id}")
 
-    def _handle_submit_user_input(self, payload: dict) -> None:
+    def _handle_submit_user_input(self, payload: dict[str, Any]) -> None:
         """Resolve a pending structured user-input request."""
         input_request_id = str(payload.get("input_request_id") or "")
         pending = self._pending_input_requests.get(input_request_id)
@@ -329,22 +346,21 @@ class AgentExecutionWorkflow:
             return
 
         pending["resolved"] = True
-        pending["submission"] = {
-            "answers": payload.get("answers") or {},
-            "secret_refs": payload.get("secret_refs") or {},
-        }
+        answers = cast(dict[str, Any], payload.get("answers") or {})
+        secret_refs = cast(dict[str, Any], payload.get("secret_refs") or {})
+        pending["submission"] = {"answers": answers, "secret_refs": secret_refs}
         if self.event_manager:
             self.event_manager.add_event(
                 "UserInputSubmitted",
                 {
                     "input_request_id": input_request_id,
-                    "answer_keys": sorted((payload.get("answers") or {}).keys()),
-                    "secret_keys": sorted((payload.get("secret_refs") or {}).keys()),
+                    "answer_keys": sorted(answers.keys()),
+                    "secret_keys": sorted(secret_refs.keys()),
                 },
             )
         workflow.logger.info(f"User input submitted: {input_request_id}")
 
-    def _handle_remove_message(self, payload: dict) -> None:
+    def _handle_remove_message(self, payload: dict[str, Any]) -> None:
         """Remove a queued message by ID before the agent sees it."""
         msg_id = payload["message_id"]
         self._message_queue = [m for m in self._message_queue if m["id"] != msg_id]
@@ -441,7 +457,7 @@ class AgentExecutionWorkflow:
             Activities.BUILD_AGENT_CONFIG,
             args=[agent_config_request],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         # Convert result to dict for state storage (supports Pydantic BaseModel or plain dict)
@@ -467,10 +483,11 @@ class AgentExecutionWorkflow:
                     Activities.RESOLVE_MODEL,
                     args=[resolve_model_request],
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                    retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
                 )
                 workflow.logger.info(
-                    f"Model resolved and cached: {self.state.resolved_model.get('model_name')}"
+                    "Model resolved and cached: "
+                    f"{self.state.resolved_model.get('model_name') if self.state.resolved_model else None}"
                 )
             except Exception as e:
                 workflow.logger.warning(
@@ -500,7 +517,7 @@ class AgentExecutionWorkflow:
                 args=[tools_request],
                 result_type=DiscoverToolProvidersResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Reconstruct ToolProviders from serialized data
@@ -539,7 +556,7 @@ class AgentExecutionWorkflow:
                 args=[tools_request],
                 result_type=ToolDiscoveryResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Normalize tools to list[dict] for state storage, accepting multiple shapes
@@ -885,7 +902,7 @@ class AgentExecutionWorkflow:
             args=[resolve_request],
             result_type=ResolveAgentToolsResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         # Build registry: sanitized tool name → {agent_id, agent_name, config}
@@ -1054,7 +1071,7 @@ class AgentExecutionWorkflow:
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
-            total_cost=self.budget_tracker.cost,
+            total_cost=self._budget.cost,
             tokens_used=self.state.tokens_used,
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
@@ -1075,11 +1092,11 @@ class AgentExecutionWorkflow:
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.WORKFLOW_CONTINUED_AS_NEW,
             {
                 "iteration": self.state.current_iteration,
-                "total_cost": serialize_money(self.budget_tracker.cost),
+                "total_cost": serialize_money(self._budget.cost),
                 "messages_carried": len(self.state.messages),
                 "continued_from_run_id": workflow.info().run_id,
                 "reason": "Temporal event history size limit approaching",
@@ -1216,7 +1233,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
     def _should_continue_execution(self) -> tuple[bool, str]:
@@ -1270,11 +1287,11 @@ class AgentExecutionWorkflow:
         """Execute a single iteration."""
         iteration = self.state.current_iteration
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.ITERATION_STARTED,
             {
                 "iteration": iteration,
-                "budget_remaining": serialize_money(self.budget_tracker.get_remaining()),
+                "budget_remaining": serialize_money(self._budget.get_remaining()),
             },
         )
         await self._publish_events_immediately()
@@ -1285,20 +1302,20 @@ class AgentExecutionWorkflow:
             # Check budget warnings
             await self._check_budget_status()
 
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.ITERATION_COMPLETED,
-                {"iteration": iteration, "total_cost": serialize_money(self.budget_tracker.cost)},
+                {"iteration": iteration, "total_cost": serialize_money(self._budget.cost)},
             )
 
             # Emit WorkflowCompleted after IterationCompleted for conversational agents.
             # Stateless runs publish the completion event from _finalize_execution.
             if self._awaiting_input:
-                self.event_manager.add_event(
+                self._events.add_event(
                     EventTypes.WORKFLOW_COMPLETED,
                     {
                         "success": True,
                         "iterations_completed": self.state.current_iteration,
-                        "total_cost": serialize_money(self.budget_tracker.cost),
+                        "total_cost": serialize_money(self._budget.cost),
                         "result": self.state.final_response,
                     },
                 )
@@ -1310,7 +1327,7 @@ class AgentExecutionWorkflow:
                 f"Iteration {iteration} failed: {error_details}",
                 exc_info=True,
             )
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.LLM_CALL_FAILED,
                 {"iteration": iteration, "error": error_details},
             )
@@ -1403,7 +1420,7 @@ class AgentExecutionWorkflow:
             if self.context_manager.needs_compaction():
                 await self._compact_context_if_needed()
             elif self.context_manager.should_warn():
-                self.event_manager.add_event(
+                self._events.add_event(
                     EventTypes.CONTEXT_WARNING,
                     {
                         "iteration": self.state.current_iteration,
@@ -1446,7 +1463,7 @@ class AgentExecutionWorkflow:
         workflow.logger.info(f"Calling LLM in iteration {self.state.current_iteration}")
 
         # Add event for LLM call start
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.LLM_CALL_STARTED,
             {
                 "iteration": self.state.current_iteration,
@@ -1494,7 +1511,7 @@ class AgentExecutionWorkflow:
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=LLM_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(LLM_RETRY_ATTEMPTS),
             )
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -1533,7 +1550,7 @@ class AgentExecutionWorkflow:
                 "cost": cost_value,
                 "usage": usage_payload,
             }
-            self.budget_tracker.add_cost(usage_info["cost"])
+            self._budget.add_cost(usage_info["cost"])
 
             # Accumulate cumulative token usage for governance token-budget gating
             total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
@@ -1554,12 +1571,12 @@ class AgentExecutionWorkflow:
                 if A2UI_DELIMITER in content_value:
                     display_content = content_value.split(A2UI_DELIMITER, 1)[0].rstrip()
 
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
                 {
                     "iteration": self.state.current_iteration,
                     "cost": usage_info["cost"],
-                    "total_cost": serialize_money(self.budget_tracker.cost),
+                    "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,
                     "content": display_content,
                     "thinking": thinking_value,
@@ -1593,7 +1610,7 @@ class AgentExecutionWorkflow:
 
             # Generic LLM error event for workflow tracking
             user_error = self._get_user_facing_error(e)
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.LLM_CALL_FAILED,
                 {
                     "iteration": self.state.current_iteration,
@@ -1606,7 +1623,7 @@ class AgentExecutionWorkflow:
             if is_provider_quota_block:
                 self.state.status = ExecutionStatus.BLOCKED
                 self.state.blocked_reason = user_error
-                self.event_manager.add_event(
+                self._events.add_event(
                     EventTypes.WORKFLOW_FAILED,
                     {
                         "error": user_error,
@@ -1642,7 +1659,7 @@ class AgentExecutionWorkflow:
                     for a2ui_event in a2ui_result.a2ui_events:
                         event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
                         event_data["task_id"] = str(self.state.task_id)
-                        self.event_manager.add_event(a2ui_event["type"], event_data)
+                        self._events.add_event(a2ui_event["type"], event_data)
 
                     await self._publish_events_immediately()
 
@@ -1845,7 +1862,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
     async def _execute_request_user_input(self, tool_call: ToolCall) -> None:
@@ -1881,10 +1898,10 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.HUMAN_INPUT_REQUESTED,
             {
                 "input_request_id": input_request_id,
@@ -1917,7 +1934,7 @@ class AgentExecutionWorkflow:
 
         submission = pending_request.get("submission") or {}
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.HUMAN_INPUT_RECEIVED,
             {
                 "input_request_id": input_request_id,
@@ -1940,7 +1957,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         self.state.messages.append(
@@ -2052,10 +2069,10 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.HUMAN_APPROVAL_REQUESTED,
             {
                 "escalation_id": escalation_id,
@@ -2075,7 +2092,7 @@ class AgentExecutionWorkflow:
         approved = escalation.approved
         if not approved:
             deny_msg = escalation.deny_comment or "Denied by user"
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.HUMAN_APPROVAL_DENIED,
                 {
                     "escalation_id": escalation_id,
@@ -2095,7 +2112,7 @@ class AgentExecutionWorkflow:
                 )
             )
         else:
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.HUMAN_APPROVAL_RECEIVED,
                 {
                     "escalation_id": escalation_id,
@@ -2120,7 +2137,7 @@ class AgentExecutionWorkflow:
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
         return bool(approved)
 
@@ -2166,7 +2183,7 @@ class AgentExecutionWorkflow:
             return
 
         # Publish tool call started event (only after approval if required)
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.TOOL_CALL_STARTED,
             {
                 "tool_name": tool_name,
@@ -2211,7 +2228,7 @@ class AgentExecutionWorkflow:
                 args=[mcp_request],
                 start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Normalize result to a dict for robust access
@@ -2258,7 +2275,7 @@ class AgentExecutionWorkflow:
                         name=tool_name,
                     )
                 )
-                self.event_manager.add_event(
+                self._events.add_event(
                     EventTypes.TOOL_CALL_FAILED,
                     {
                         "tool_name": tool_name,
@@ -2293,7 +2310,7 @@ class AgentExecutionWorkflow:
             )
 
             # Publish tool completion event
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.TOOL_CALL_COMPLETED,
                 {
                     "tool_name": tool_name,
@@ -2329,7 +2346,7 @@ class AgentExecutionWorkflow:
             )
 
             # Publish tool failure event
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.TOOL_CALL_FAILED,
                 {
                     "tool_name": tool_name,
@@ -2374,7 +2391,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=SearchHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if search_result.success and search_result.results:
                     self.state.messages.append(
@@ -2404,7 +2421,7 @@ class AgentExecutionWorkflow:
                 Activities.RECALL_HISTORY,
                 args=[request],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             # Format events for the agent
@@ -2473,7 +2490,7 @@ class AgentExecutionWorkflow:
                 ],
                 result_type=ReadOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             content = (
@@ -2515,7 +2532,7 @@ class AgentExecutionWorkflow:
                 ],
                 result_type=StoreOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
             if store_result.success:
                 return build_output_summary(content, output_id)
@@ -2593,7 +2610,7 @@ class AgentExecutionWorkflow:
             )
         )
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
                 "tool_name": "load_tools",
@@ -2651,7 +2668,7 @@ class AgentExecutionWorkflow:
             )
         )
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
                 "tool_name": "activate_tool_source",
@@ -2691,7 +2708,7 @@ class AgentExecutionWorkflow:
         if skill_name and skill_name not in self.state.activated_skills:
             self.state.activated_skills.append(skill_name)
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
                 "tool_name": "activate_skill",
@@ -2762,7 +2779,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=SkillFileResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if file_result.success:
                     script_content = file_result.content_text
@@ -2801,7 +2818,7 @@ class AgentExecutionWorkflow:
             ],
             result_type=ExecuteSkillScriptResult,
             start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=2),
+            retry_policy=make_retry_policy(2),
         )
 
         # Build result message
@@ -2828,7 +2845,7 @@ class AgentExecutionWorkflow:
             )
         )
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
                 "tool_name": "run_skill_script",
@@ -2863,7 +2880,7 @@ class AgentExecutionWorkflow:
 
         message = tool_args.get("message", "")
 
-        self.event_manager.add_event(
+        self._events.add_event(
             EventTypes.AGENT_DELEGATION_STARTED,
             {
                 "tool_name": tool_name,
@@ -2892,7 +2909,7 @@ class AgentExecutionWorkflow:
                 args=[create_task_request],
                 result_type=CreateDelegationTaskResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
             if create_task_result.status != "created" or not create_task_result.task_id:
@@ -2966,7 +2983,7 @@ class AgentExecutionWorkflow:
                 )
             )
 
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.AGENT_DELEGATION_COMPLETED,
                 {
                     "tool_name": tool_name,
@@ -2984,7 +3001,7 @@ class AgentExecutionWorkflow:
 
             # Account for child's cost in parent budget
             if child_result.total_cost > 0:
-                self.budget_tracker.add_cost(child_result.total_cost)
+                self._budget.add_cost(child_result.total_cost)
 
             workflow.logger.info(
                 f"Agent delegation to '{agent_name}' completed "
@@ -3012,7 +3029,7 @@ class AgentExecutionWorkflow:
                 )
             )
 
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.AGENT_DELEGATION_FAILED,
                 {
                     "tool_name": tool_name,
@@ -3085,7 +3102,7 @@ class AgentExecutionWorkflow:
                     ],
                     result_type=StoreHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=2),
+                    retry_policy=make_retry_policy(2),
                 )
                 if store_hist_result.success:
                     self.state.history_chunk_counter += 1
@@ -3112,7 +3129,7 @@ class AgentExecutionWorkflow:
                 args=[compact_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=2),
+                retry_policy=make_retry_policy(2),
             )
 
             # Rebuild message list: system prompt + summary + kept recent messages
@@ -3157,7 +3174,7 @@ class AgentExecutionWorkflow:
             self.context_manager.mark_compacted()
 
             # Publish compaction event
-            self.event_manager.add_event(
+            self._events.add_event(
                 EventTypes.CONTEXT_COMPACTED,
                 {
                     "iteration": self.state.current_iteration,
@@ -3182,33 +3199,33 @@ class AgentExecutionWorkflow:
 
     async def _check_budget_status(self) -> None:
         """Check budget status and send warnings if needed."""
-        if self.budget_tracker.should_warn():
-            self.event_manager.add_event(
+        if self._budget.should_warn():
+            self._events.add_event(
                 EventTypes.BUDGET_WARNING,
                 {
-                    "usage_percentage": self.budget_tracker.get_usage_percentage(),
-                    "cost": serialize_money(self.budget_tracker.cost),
-                    "limit": serialize_money(self.budget_tracker.budget_limit),
-                    "message": self.budget_tracker.get_warning_message(),
+                    "usage_percentage": self._budget.get_usage_percentage(),
+                    "cost": serialize_money(self._budget.cost),
+                    "limit": serialize_money(self._budget.budget_limit),
+                    "message": self._budget.get_warning_message(),
                 },
             )
             await self._publish_events_immediately()
-            self.budget_tracker.mark_warning_sent()
+            self._budget.mark_warning_sent()
 
-        if self.budget_tracker.is_exceeded():
-            self.event_manager.add_event(
+        if self._budget.is_exceeded():
+            self._events.add_event(
                 EventTypes.BUDGET_EXCEEDED,
                 {
-                    "cost": serialize_money(self.budget_tracker.cost),
-                    "limit": serialize_money(self.budget_tracker.budget_limit),
-                    "message": self.budget_tracker.get_exceeded_message(),
+                    "cost": serialize_money(self._budget.cost),
+                    "limit": serialize_money(self._budget.budget_limit),
+                    "message": self._budget.get_exceeded_message(),
                 },
             )
             await self._publish_events_immediately()
 
     async def _publish_events(self) -> None:
         """Publish pending events using Pydantic models."""
-        events = self.event_manager.get_events()
+        events = self._events.get_events()
         if not events:
             return
 
@@ -3226,24 +3243,24 @@ class AgentExecutionWorkflow:
                 Activities.PUBLISH_WORKFLOW_EVENTS,
                 args=[events_request],
                 start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(EVENT_PUBLISH_RETRY_ATTEMPTS),
             )
 
-            self.event_manager.clear_events()
+            self._events.clear_events()
 
         except Exception as e:
             workflow.logger.warning(f"Failed to publish events: {e}")
 
     async def _publish_events_immediately(self) -> None:
         """Publish events immediately as they occur - fire and forget using Pydantic models."""
-        pending_events = self.event_manager.get_pending_events()
+        pending_events = self._events.get_pending_events()
 
         # Only proceed if we have events to publish
         if not pending_events:
             return
 
         # Clear pending events immediately since we're not waiting for confirmation
-        self.event_manager.clear_pending_events()
+        self._events.clear_pending_events()
 
         events_json = [json.dumps(event) for event in pending_events]
 
@@ -3262,7 +3279,7 @@ class AgentExecutionWorkflow:
             Activities.PUBLISH_WORKFLOW_EVENTS,
             args=[events_request],
             start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=1),  # Single attempt only
+            retry_policy=make_retry_policy(1),  # Single attempt only
         )
 
     async def _finalize_execution(self, result: dict[str, Any]) -> AgentExecutionResult:
@@ -3284,12 +3301,12 @@ class AgentExecutionWorkflow:
             event_type = (
                 EventTypes.WORKFLOW_COMPLETED if self.state.success else EventTypes.WORKFLOW_FAILED
             )
-            self.event_manager.add_event(
+            self._events.add_event(
                 event_type,
                 {
                     "success": self.state.success,
                     "iterations_completed": self.state.current_iteration,
-                    "total_cost": serialize_money(self.budget_tracker.cost),
+                    "total_cost": serialize_money(self._budget.cost),
                     "final_response": self.state.final_response,
                     "status": self.state.status,
                     "blocked_reason": self.state.blocked_reason,
@@ -3322,7 +3339,7 @@ class AgentExecutionWorkflow:
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
         try:
@@ -3330,7 +3347,7 @@ class AgentExecutionWorkflow:
                 Activities.CLEANUP_SANDBOX_WORKFLOW,
                 args=[workflow.info().workflow_id],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=1),
+                retry_policy=make_retry_policy(1),
             )
         except Exception as e:
             workflow.logger.warning(f"Sandbox workflow cleanup failed: {e}")
@@ -3390,7 +3407,7 @@ class AgentExecutionWorkflow:
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
     @staticmethod

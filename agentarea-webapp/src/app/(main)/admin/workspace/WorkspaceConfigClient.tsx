@@ -157,13 +157,13 @@ export default function WorkspaceConfigClient() {
 
       if (error) {
         toast({
-          title: (error as any)?.detail?.[0]?.msg || t("import.error"),
+          title: (error as { detail?: Array<{ msg: string }> })?.detail?.[0]?.msg || t("import.error"),
           variant: "destructive",
         });
         return;
       }
 
-      const result = data as any;
+      const result = data as { imported_count?: number };
       const successMsg = result?.imported_count
         ? `${t("import.success")} (${result.imported_count} items)`
         : t("import.success");

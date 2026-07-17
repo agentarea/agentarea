@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "agentarea-operator"
-version = "0.0.10"
+version = "0.0.12"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

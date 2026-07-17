@@ -15,8 +15,9 @@ from uuid import UUID
 from agentarea_agents.domain.models import Agent
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_common.money import to_money
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
@@ -50,7 +51,7 @@ class HitlBlocker(BaseModel):
     agent_id: UUID
     agent_name: str
     description: str
-    created_at: datetime
+    created_at: UtcDatetime
 
 
 class WalletExhaustedBlocker(BaseModel):
@@ -65,7 +66,7 @@ class FailedTaskBlocker(BaseModel):
     agent_id: UUID
     agent_name: str
     error: str | None
-    occurred_at: datetime
+    occurred_at: UtcDatetime
 
 
 class Blockers(BaseModel):
@@ -80,7 +81,7 @@ class AgentRow(BaseModel):
     tasks_done_today: int
     tasks_failed_today: int
     recent_task_names: list[str]
-    last_activity_at: datetime | None
+    last_activity_at: UtcDatetime | None
     cost_today_usd: float
     cost_mtd_usd: float
 

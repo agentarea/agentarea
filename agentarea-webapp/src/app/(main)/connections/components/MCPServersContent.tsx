@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
+import type { PaginatedResponseMcpServerResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
 import { listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
@@ -30,8 +31,8 @@ export default async function MCPServersContent({
     );
   }
 
-  const serversData = serversResponse.data as any;
-  const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
+  const serversData = serversResponse.data as PaginatedResponseMcpServerResponse | null;
+  const mcpServers = (serversData?.items ?? []) as MCPServer[];
 
   // Only your configured connections live here — discovery is in Explore.
   return (

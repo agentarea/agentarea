@@ -5,6 +5,12 @@ import path from "path";
 import "./src/env";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "**" },
+    ],
+  },
   /* config options here */
   // eslint: {
   //   // Do not fail the build on ESLint warnings; errors are handled via lint script
@@ -17,6 +23,22 @@ const nextConfig: NextConfig = {
       {
         source: "/api/static/:path*",
         destination: `${backendUrl}/static/:path*`,
+      },
+    ];
+  },
+  async redirects() {
+    // The MCP "Connections" feature now lives under /connections.
+    // Keep old /mcp-servers bookmarks and deep links working.
+    return [
+      {
+        source: "/mcp-servers",
+        destination: "/connections",
+        permanent: false,
+      },
+      {
+        source: "/mcp-servers/:path*",
+        destination: "/connections/:path*",
+        permanent: false,
       },
     ];
   },
@@ -40,8 +62,13 @@ const nextConfig: NextConfig = {
     // its SVG imports need SVGR treatment to become React components.
     // Previously tsup + esbuild-plugin-svgr handled this; now webpack does it.
 
+    interface WebpackRule {
+      oneOf?: WebpackRule[];
+      test?: RegExp;
+      exclude?: RegExp | RegExp[];
+    }
     // Remove SVGs from the default static-asset rule so our loader takes over
-    const rules: any[] = config.module.rules;
+    const rules = (config.module?.rules ?? []) as WebpackRule[];
     for (const rule of rules) {
       if (rule && typeof rule === "object" && rule.oneOf) {
         for (const oneOfRule of rule.oneOf) {

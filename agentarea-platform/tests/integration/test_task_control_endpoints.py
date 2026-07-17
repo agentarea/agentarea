@@ -31,6 +31,7 @@ class TestTaskControlEndpoints:
         """Base URL for API tests."""
         return "http://localhost:8000"
 
+    @pytest.mark.requires_server
     @pytest.mark.asyncio
     async def test_pause_endpoint_validation(self, base_url, test_agent_id, test_task_id):
         """Test pause endpoint validation without actual workflow."""
@@ -66,6 +67,7 @@ class TestTaskControlEndpoints:
                     500,
                 ]  # Any of these are acceptable for this test
 
+    @pytest.mark.requires_server
     @pytest.mark.asyncio
     async def test_resume_endpoint_validation(self, base_url, test_agent_id, test_task_id):
         """Test resume endpoint validation without actual workflow."""
@@ -185,9 +187,9 @@ class TestWorkflowSignalIntegration:
         workflow = AgentExecutionWorkflow()
 
         # Check initial state
-        assert hasattr(workflow, "_is_paused"), "Workflow missing _is_paused attribute"
+        assert hasattr(workflow, "_paused"), "Workflow missing _paused attribute"
         assert hasattr(workflow, "_pause_reason"), "Workflow missing _pause_reason attribute"
 
         # Check initial values
-        assert workflow._is_paused is False, "Workflow should start unpaused"
+        assert workflow._paused is False, "Workflow should start unpaused"
         assert workflow._pause_reason == "", "Workflow should start with empty pause reason"

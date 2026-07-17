@@ -6,6 +6,7 @@ from typing import Annotated, Any
 import httpx
 from agentarea_api.api.deps.services import (
     AgentServiceDep,
+    BaseSecretManagerDep,
     MCPServerInstanceServiceDep,
     MCPServerServiceDep,
     SkillServiceDep,
@@ -107,6 +108,7 @@ async def get_bundle_service(
     mcp_server_service: MCPServerServiceDep,
     mcp_instance_service: MCPServerInstanceServiceDep,
     skill_service: SkillServiceDep,
+    secret_manager: BaseSecretManagerDep,
     trigger_service: Annotated[Any, Depends(get_trigger_service)],
 ) -> BundleService:
     """Compose BundleService from the existing domain services."""
@@ -117,6 +119,7 @@ async def get_bundle_service(
         mcp_instance_service=mcp_instance_service,
         skill_service=skill_service,
         trigger_service=trigger_service,
+        secret_manager=secret_manager,
     )
 
 

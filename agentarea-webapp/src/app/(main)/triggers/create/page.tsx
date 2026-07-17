@@ -24,7 +24,7 @@ export default async function CreateTriggerPage() {
         backLink: { label: tCreate("back"), href: "/triggers" },
       }}
     >
-      <CreateTriggerForm agents={(agents as any[]) || []} />
+      <CreateTriggerForm agents={agents ?? []} />
     </ContentBlock>
   );
 }

@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
+import { Button } from "@/components/ui/button";
 import {
-  enableTriggerAction,
-  disableTriggerAction,
   deleteTriggerAction,
+  disableTriggerAction,
+  enableTriggerAction,
 } from "./actions";
 
 export default function TriggerHeaderControls({
@@ -24,6 +24,12 @@ export default function TriggerHeaderControls({
   const router = useRouter();
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
+  const handleDelete = async (id: string) => {
+    const result = await deleteTriggerAction(id);
+    return result.error
+      ? { error: { detail: [{ msg: result.error }] } }
+      : { error: undefined };
+  };
 
   const handleToggle = async () => {
     setIsToggling(true);
@@ -31,7 +37,9 @@ export default function TriggerHeaderControls({
       const action = active ? disableTriggerAction : enableTriggerAction;
       const { error } = await action(triggerId);
       if (error) {
-        toast.error(active ? "Failed to disable trigger" : "Failed to enable trigger");
+        toast.error(
+          active ? "Failed to disable trigger" : "Failed to enable trigger"
+        );
       } else {
         setActive(!active);
         toast.success(active ? "Trigger disabled" : "Trigger enabled");
@@ -77,7 +85,7 @@ export default function TriggerHeaderControls({
         size="xs"
         itemId={triggerId}
         itemName={triggerName}
-        onDelete={deleteTriggerAction}
+        onDelete={handleDelete}
         redirectPath="/triggers"
         title="Delete Trigger"
         description={`Are you sure you want to delete "${triggerName}"? This action cannot be undone.`}

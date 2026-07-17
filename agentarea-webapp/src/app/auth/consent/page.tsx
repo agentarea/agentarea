@@ -11,12 +11,19 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 
 const KNOWN_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 
+interface ConsentRequest {
+  client?: { client_name?: string; client_id?: string };
+  requested_scope?: string[];
+  requested_access_token_audience?: string[];
+  subject?: string;
+}
+
 export default function ConsentPage() {
   const t = useTranslations("AuthConsent");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [consentRequest, setConsentRequest] = useState<any>(null);
+  const [consentRequest, setConsentRequest] = useState<ConsentRequest | null>(null);
   const searchParams = useSearchParams();
   const consentChallenge = searchParams.get("consent_challenge");
 

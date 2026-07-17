@@ -12,6 +12,7 @@ dependencies = [
     "agentarea-common",
     "pydantic>=2.4.2",
     "temporalio>=1.0.0",
+    "aiosmtplib>=3.0",
 ]
 
 [tool.uv.sources]

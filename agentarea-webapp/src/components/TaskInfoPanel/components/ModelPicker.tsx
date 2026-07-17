@@ -15,6 +15,7 @@ import {
   listModelInstancesAction,
   sendTaskCommandAction,
 } from "@/lib/server-actions";
+import { ModelInstance } from "@/types/provider";
 
 interface ModelPickerProps {
   agentId: string;
@@ -32,7 +33,7 @@ export default function ModelPicker({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<ModelInstance[]>([]);
 
   if (!isActive) {
     return null;
@@ -46,7 +47,7 @@ export default function ModelPicker({
     setLoading(true);
     try {
       const { data } = await listModelInstancesAction({ is_active: true });
-      setModels(data || []);
+      setModels(Array.isArray(data) ? data : []);
       setOpen(true);
     } catch {
       // ignore
@@ -81,7 +82,7 @@ export default function ModelPicker({
               <SelectValue placeholder="Select model" />
             </SelectTrigger>
             <SelectContent>
-              {models.map((model: any) => (
+              {models.map((model) => (
                 <SelectItem key={model.id} value={model.id} className="text-xs">
                   <ModelBadge
                     size="sm"

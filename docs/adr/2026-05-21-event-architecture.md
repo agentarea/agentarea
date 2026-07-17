@@ -26,6 +26,14 @@
 > The final outbound delivery design is open and will be decided when the work
 > resumes. This ADR is preserved as a reference for the generic event_outbox pattern
 > in case a real multi-subscriber demand emerges later.
+>
+> **Correction (2026-06-29):** The "what actually shipped" claim above is stale. The
+> `channel_inbox` table + `ss1_add_channel_inbox` migration are **not in tree** (only
+> orphaned `.pyc` remain; the source was never committed). Inbound dedup was reworked
+> to a broker-native primitive: `agentarea_common/broker/dedup.py` (`DedupCache`, Redis
+> SETNX + TTL). `channels/inbound_subscriber.py` claims a stable `dedup_key` before
+> side effects and ACKs duplicates. There is no `channel_inbox` DB table; do not rely
+> on this note's original wording.
 
 ---
 

@@ -17,10 +17,10 @@ interface TaskInfoPanelDockProps {
 
 export default function TaskInfoPanelDock({
   panel,
-  storageKey,
+  storageKey: _storageKey,
   className,
   widthPx = 360,
-  collapsedWidthPx = 16,
+  collapsedWidthPx: _collapsedWidthPx = 16,
   defaultOpen = true,
 }: TaskInfoPanelDockProps) {
   const t = useTranslations("TaskInfoPanel");

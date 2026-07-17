@@ -17,30 +17,9 @@ import MCPNode from "../components/nodes/MCPNode";
 import OpenAPINode from "../components/nodes/OpenAPINode";
 import SkillNode from "../components/nodes/SkillNode";
 import TriggerNode from "../components/nodes/TriggerNode";
+import type { NetworkNodeData, TopologyResponse } from "../types";
 import { layoutClusters, type Lane } from "../utils/clusterLayout";
 import { computeHighlightSets } from "../utils/highlight";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface NetworkEdgeData {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: NetworkEdgeData[];
-  governance: any[];
-  deployment_mode: string;
-}
 
 interface Props {
   topology: TopologyResponse;

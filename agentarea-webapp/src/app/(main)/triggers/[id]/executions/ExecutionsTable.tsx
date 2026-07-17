@@ -1,20 +1,21 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
+import type { TriggerExecutionResponse } from "@/api/client/types.gen";
 import Table from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
 
 interface ExecutionsTableProps {
-  executions: any[];
+  executions: TriggerExecutionResponse[];
   triggerId: string;
   currentPage: number;
 }
 
 export default function ExecutionsTable({
   executions,
-  triggerId,
-  currentPage,
+  triggerId: _triggerId,
+  currentPage: _currentPage,
 }: ExecutionsTableProps) {
   const columns = [
     {

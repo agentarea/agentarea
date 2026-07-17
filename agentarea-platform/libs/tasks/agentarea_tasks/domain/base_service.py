@@ -116,22 +116,6 @@ class BaseTaskService(ABC):
             metadata=created_task_domain.metadata,
         )
 
-        # Publish creation event - temporarily disabled due to event creation issue
-        try:
-            # await self._publish_task_event(
-            #     TaskCreated(
-            #         task_id=str(created_task.id),
-            #         agent_id=str(created_task.agent_id),
-            #         description=created_task.description,
-            #         parameters=created_task.task_parameters,
-            #         metadata=created_task.metadata,
-            #     )
-            # )
-            pass  # Temporarily disabled
-        except Exception as e:
-            # Log the error but don't fail the operation
-            logger.error(f"Failed to publish TaskCreated event: {e}")
-
         logger.info(f"Created task {created_task.id} for agent {created_task.agent_id}")
         return created_task
 

@@ -221,11 +221,17 @@ export function MCPServerSpecCard({
   server,
   onConfigure,
 }: MCPServerSpecCardProps) {
-  const spec = (server as any).json_spec as Record<string, any> | undefined;
-  const specIcon = spec?.icons?.[0]?.src as string | undefined;
+  const spec = server.json_spec as
+    | {
+        icons?: Array<{ src?: string }>;
+        repository?: { url?: string; source?: string };
+        title?: string;
+      }
+    | undefined;
+  const specIcon = spec?.icons?.[0]?.src;
   const displayTitle = spec?.title || server.name;
-  const repoUrl = spec?.repository?.url as string | undefined;
-  const repoSource = spec?.repository?.source as string | undefined;
+  const repoUrl = spec?.repository?.url;
+  const repoSource = spec?.repository?.source;
 
   return (
     <LinkedCard

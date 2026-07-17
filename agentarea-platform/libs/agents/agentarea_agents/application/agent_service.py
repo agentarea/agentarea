@@ -28,6 +28,10 @@ def _project_catalog_item(item: CatalogAgentItem) -> Agent:
     the read/update paths can resolve it back to the registry item. The catalog
     metadata (``is_catalog``, ``registry_item_id``, ``update_available``) is
     attached as plain attributes for the API layer to surface.
+
+    ``model_id`` is left unset: the catalog never binds a concrete model (that is
+    a per-workspace instance). ``spec.preferred_models`` is a hint the UI may use
+    to suggest a model; the backend never guesses one.
     """
     spec = item.spec or {}
     tools = spec.get("tools")
@@ -41,7 +45,7 @@ def _project_catalog_item(item: CatalogAgentItem) -> Agent:
         status="active",
         description=item.description if item.description is not None else spec.get("description"),
         instruction=spec.get("instruction"),
-        model_id=spec.get("model_id"),
+        model_id=None,
         tools=tools,
         events_config=spec.get("events_config"),
         planning=spec.get("planning"),
@@ -104,7 +108,8 @@ class AgentService(BaseCrudService[Agent]):
         repo = self._get_agent_repository()
         tenant_agents = await repo.list_all()
 
-        catalog_items = await self._get_catalog_repository().list_items()
+        catalog_repo = self._get_catalog_repository()
+        catalog_items = await catalog_repo.list_items()
         forked_by_item: dict[str, Agent] = {
             str(a.registry_item_id): a
             for a in tenant_agents
@@ -207,6 +212,9 @@ class AgentService(BaseCrudService[Agent]):
         if not isinstance(tools, list):
             tools = None
 
+        # The catalog never binds a concrete model — that is a per-workspace
+        # instance. The forked agent starts with no model; the UI uses
+        # ``spec.preferred_models`` to suggest one. The backend never guesses.
         slug = await self._resolve_unique_slug(item.name)
         repo = self._get_agent_repository()
         agent = await repo.create(
@@ -217,7 +225,7 @@ class AgentService(BaseCrudService[Agent]):
             if item.description is not None
             else spec.get("description"),
             instruction=spec.get("instruction"),
-            model_id=spec.get("model_id"),
+            model_id=None,
             tools=tools,
             events_config=spec.get("events_config"),
             planning=spec.get("planning"),

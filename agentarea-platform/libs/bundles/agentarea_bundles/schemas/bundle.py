@@ -236,6 +236,45 @@ class BundlePolicy(BaseModel):
         return v
 
 
+class BundleChannel(BaseModel):
+    """A messaging channel that lets an agent receive and reply to messages.
+
+    Installs as an inbound trigger (e.g. a Telegram webhook): a message to the
+    bot becomes a task for ``agent``, and the reply is delivered back on the same
+    channel. Credentials (a bot token) enter via ``bindings`` → ``${setup.x}``,
+    exactly like an MCP's secret bindings, so the token is never inlined.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1)
+    type: Literal["telegram"] = Field(
+        default="telegram", description="Channel provider. Only Telegram in v0.1.0."
+    )
+    name: str = Field(min_length=1, description="Display name for the created channel trigger.")
+    agent: str = Field(min_length=1, description="BundleAgent key that handles inbound messages.")
+    bindings: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Maps a credential the channel needs to a ${setup.x} reference, e.g. "
+            "{'bot_token': '${setup.telegram_bot_token}'}."
+        ),
+    )
+    prompt: str = Field(
+        default="Handle the incoming message: {{ message_text }}",
+        min_length=1,
+        description="Task query template used for each inbound message.",
+    )
+    enabled: bool = Field(default=False)
+
+    @field_validator("key")
+    @classmethod
+    def _valid_key(cls, v: str) -> str:
+        if not _KEY_RE.match(v):
+            raise ValueError(f"channel key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
+        return v
+
+
 class BundleMetadata(BaseModel):
     """Marketplace presentation metadata (parity with plugin/app listings)."""
 
@@ -266,6 +305,7 @@ class Bundle(BaseModel):
     mcps: list[BundleMcp] = Field(default_factory=list)
     skills: list[BundleSkill] = Field(default_factory=list)
     agents: list[BundleAgent] = Field(default_factory=list)
+    channels: list[BundleChannel] = Field(default_factory=list)
     automations: list[BundleAutomation] = Field(default_factory=list)
     policies: list[BundlePolicy] = Field(default_factory=list)
 

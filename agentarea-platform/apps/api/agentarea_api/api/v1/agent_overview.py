@@ -13,7 +13,8 @@ from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from croniter import croniter
@@ -40,7 +41,7 @@ class DailyTaskCounts(BaseModel):
 
 
 class UpcomingItem(BaseModel):
-    fires_at: datetime
+    fires_at: UtcDatetime
     kind: str  # "trigger" | "pending_task" | "running_task"
     title: str
     trigger_id: UUID | None = None
@@ -53,7 +54,7 @@ class AgentOverviewResponse(BaseModel):
     cost_mtd_usd: float
     tasks_done_today: int
     tasks_failed_today: int
-    last_activity_at: datetime | None
+    last_activity_at: UtcDatetime | None
     daily_spend: list[DailySpendPoint]
     daily_tasks: list[DailyTaskCounts]
     upcoming: list[UpcomingItem]

@@ -1,16 +1,37 @@
 "use server";
 
-import type { components } from "@/api/schema";
+import { revalidatePath } from "next/cache";
+import type {
+  CreateWalletRequest,
+  FundWalletRequest,
+  McpServerCreate,
+  McpServerInstanceCreate,
+  McpServerInstanceUpdate,
+  ModelInstanceBulkCreateRequest,
+  ModelInstanceCreate,
+  PaginatedResponseSkillResponse,
+  ProviderConfigCreate,
+  ProviderConfigUpdate,
+  SkillResponse,
+  UpdateWalletRequest,
+} from "@/api/client/types.gen";
+import {
+  zProviderConfigCreate,
+  zProviderConfigUpdate,
+} from "@/api/client/zod.gen";
 import { env } from "@/env";
 import {
   addAgentToProject,
+  addMcpInstanceToClient,
   addMcpInstanceToProject,
   addSkillMember,
+  addSkillToClient,
   addSkillToProject,
   bulkCreateModelInstances,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
   createAgentWallet,
+  createClient,
   createMCPAuthConfig,
   createMCPServer,
   createMCPServerInstance,
@@ -20,6 +41,7 @@ import {
   createProviderConfig,
   createSkill,
   deleteAgentWallet,
+  deleteClient,
   deleteModelInstance,
   deleteOpenAPIConnection,
   deleteProject,
@@ -39,11 +61,11 @@ import {
   fundAgentWallet,
   getAgent,
   getAgentTaskStatus,
-  getTaskPolicySnapshot,
   getAgentWallet,
   getAgentWalletBalance,
   getAgentWalletPayments,
   getAllTasks,
+  getClient,
   getMCPHealthStatus,
   getMCPServerInstance,
   getModelSpec,
@@ -55,17 +77,20 @@ import {
   getSkillFile,
   getSkillFiles,
   getTask,
+  getTaskPolicySnapshot,
   importWorkspace,
   installAgent,
   installSkill,
   listAgents,
   listAgentTasks,
+  listClients,
   listMCPAuthConfigs,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
   listModelSpecs,
   listOpenAPIConnections,
+  listPolicies,
   listProjectFiles,
   listProjects,
   listProviderSpecs,
@@ -76,22 +101,26 @@ import {
   listWorkspaceFiles,
   pauseAgentTask,
   previewOpenAPISpec,
+  pullClientFromProject,
   removeAgentFromProject,
+  removeMcpInstanceFromClient,
   removeMcpInstanceFromProject,
+  removeSkillFromClient,
   removeSkillFromProject,
   removeSkillMember,
   resolveEscalation,
   resumeAgentTask,
   sendTaskCommand,
+  submitTaskInput,
   testModelInstance,
   updateAgent,
   updateAgentWallet,
+  updateClient,
   updateMCPServerInstance,
   updateOpenAPIConnection,
   updateProject,
   updateProviderConfig,
   updateSkill,
-  uploadProjectFile,
   workspaceFileHistory,
 } from "@/lib/api";
 import {
@@ -159,7 +188,7 @@ export async function resumeAgentTaskAction(agentId: string, taskId: string) {
 export async function sendTaskCommandAction(
   agentId: string,
   taskId: string,
-  payload: { command: string; [key: string]: any }
+  payload: { command: string; [key: string]: unknown }
 ) {
   return await sendTaskCommand(agentId, taskId, payload);
 }
@@ -224,31 +253,47 @@ export async function getMCPHealthStatusAction() {
 }
 
 export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
-  json_spec: Record<string, any>;
+  json_spec: Record<string, unknown>;
 }) {
   return await checkMCPServerInstanceConfiguration(checkRequest);
 }
 
-export async function createMCPServerAction(
-  server: components["schemas"]["MCPServerCreate"]
-) {
+export async function createMCPServerAction(server: McpServerCreate) {
   return await createMCPServer(server);
 }
 
-export async function listSkillsAction(params?: {
+type ListSkillsActionOptions = {
   page?: number;
   page_size?: number;
   search?: string;
   source_type?: string;
   network_scope?: string;
   from_registry?: boolean;
-  paginated?: boolean;
-}) {
-  return await listSkills(params);
+};
+
+export async function listSkillsAction(
+  params: ListSkillsActionOptions & { paginated: true }
+): Promise<{
+  data: PaginatedResponseSkillResponse | undefined;
+  error: unknown;
+}>;
+export async function listSkillsAction(
+  params?: ListSkillsActionOptions & { paginated?: false }
+): Promise<{ data: SkillResponse[]; error: unknown }>;
+export async function listSkillsAction(
+  params: ListSkillsActionOptions & { paginated?: boolean } = {}
+): Promise<
+  | { data: PaginatedResponseSkillResponse | undefined; error: unknown }
+  | { data: SkillResponse[]; error: unknown }
+> {
+  if (params.paginated) {
+    return await listSkills({ ...params, paginated: true });
+  }
+  return await listSkills({ ...params, paginated: false });
 }
 
 export async function createMCPServerInstanceAction(
-  instance: components["schemas"]["MCPServerInstanceCreate"]
+  instance: McpServerInstanceCreate
 ) {
   return await createMCPServerInstance(instance);
 }
@@ -259,7 +304,7 @@ export async function getMCPServerInstanceAction(instanceId: string) {
 
 export async function updateMCPServerInstanceAction(
   instanceId: string,
-  instance: components["schemas"]["MCPServerInstanceUpdate"]
+  instance: McpServerInstanceUpdate
 ) {
   return await updateMCPServerInstance(instanceId, instance);
 }
@@ -280,27 +325,34 @@ export async function listProviderSpecsWithModelsAction(params?: {
   return await listProviderSpecsWithModels(params);
 }
 
-export async function createProviderConfigAction(
-  config: components["schemas"]["ProviderConfigCreate"]
-) {
-  return await createProviderConfig(config);
+export async function createProviderConfigAction(config: ProviderConfigCreate) {
+  const parsed = zProviderConfigCreate.safeParse(config);
+  if (!parsed.success) {
+    return { data: undefined, error: parsed.error };
+  }
+  return await createProviderConfig(parsed.data as ProviderConfigCreate);
 }
 
 export async function updateProviderConfigAction(
   configId: string,
-  config: components["schemas"]["ProviderConfigUpdate"]
+  config: ProviderConfigUpdate
 ) {
-  return await updateProviderConfig(configId, config);
+  const parsed = zProviderConfigUpdate.safeParse(config);
+  if (!parsed.success) {
+    return { data: undefined, error: parsed.error };
+  }
+  return await updateProviderConfig(
+    configId,
+    parsed.data as ProviderConfigUpdate
+  );
 }
 
-export async function createModelInstanceAction(
-  instance: components["schemas"]["ModelInstanceCreate"]
-) {
+export async function createModelInstanceAction(instance: ModelInstanceCreate) {
   return await createModelInstance(instance);
 }
 
 export async function bulkCreateModelInstancesAction(
-  body: components["schemas"]["ModelInstanceBulkCreateRequest"]
+  body: ModelInstanceBulkCreateRequest
 ) {
   return await bulkCreateModelInstances(body);
 }
@@ -333,8 +385,8 @@ export async function createMCPAuthConfigAction(body: {
   name: string;
   description?: string;
   auth_type: string;
-  config?: Record<string, any>;
-  credentials?: Record<string, any>;
+  config?: Record<string, unknown>;
+  credentials?: Record<string, unknown>;
 }) {
   return await createMCPAuthConfig(body);
 }
@@ -388,6 +440,18 @@ export async function resolveEscalationAction(
     approved,
     comment
   );
+}
+
+export async function submitTaskInputAction(
+  agentId: string,
+  taskId: string,
+  submission: {
+    input_request_id: string;
+    answers: Record<string, unknown>;
+    secrets: Record<string, string | { value: string; secret_name?: string }>;
+  }
+) {
+  return await submitTaskInput(agentId, taskId, submission);
 }
 
 export async function listSkillMembersAction(skillId: string) {
@@ -484,7 +548,13 @@ export async function discoverOpenAPIToolsAction(connectionId: string) {
 export async function createOpenAPIConnectionAction(
   body: Parameters<typeof createOpenAPIConnection>[0]
 ) {
-  return await createOpenAPIConnection(body);
+  const result = await createOpenAPIConnection(body);
+  if (!result.error) {
+    // Invalidate the list so the new connection is present when the form
+    // navigates to /connections (the client no longer calls router.refresh).
+    revalidatePath("/connections");
+  }
+  return result;
 }
 
 export async function updateOpenAPIConnectionAction(
@@ -564,9 +634,82 @@ export async function validateConnectionAction(
   return { data: await res.json(), error: null };
 }
 
+// Client (agent-proxy) Actions
+export async function listClientsAction() {
+  return await listClients();
+}
+
+export async function getClientAction(clientId: string) {
+  return await getClient(clientId);
+}
+
+export async function createClientAction(payload: {
+  name: string;
+  description?: string | null;
+  kind?: string;
+  source_project_id?: string | null;
+}) {
+  return await createClient(payload);
+}
+
+export async function updateClientAction(
+  clientId: string,
+  payload: {
+    name?: string;
+    description?: string | null;
+    source_project_id?: string | null;
+  }
+) {
+  return await updateClient(clientId, payload);
+}
+
+export async function deleteClientAction(clientId: string) {
+  return await deleteClient(clientId);
+}
+
+export async function addSkillToClientAction(
+  clientId: string,
+  skillId: string
+) {
+  return await addSkillToClient(clientId, skillId);
+}
+
+export async function removeSkillFromClientAction(
+  clientId: string,
+  skillId: string
+) {
+  return await removeSkillFromClient(clientId, skillId);
+}
+
+export async function addMcpInstanceToClientAction(
+  clientId: string,
+  mcpInstanceId: string,
+  namespacePrefix?: string | null
+) {
+  return await addMcpInstanceToClient(clientId, mcpInstanceId, namespacePrefix);
+}
+
+export async function removeMcpInstanceFromClientAction(
+  clientId: string,
+  mcpInstanceId: string
+) {
+  return await removeMcpInstanceFromClient(clientId, mcpInstanceId);
+}
+
+export async function pullClientFromProjectAction(
+  clientId: string,
+  projectId: string | null
+) {
+  return await pullClientFromProject(clientId, projectId);
+}
+
 // Project Actions
 export async function listProjectsAction() {
   return await listProjects();
+}
+
+export async function listPoliciesAction() {
+  return await listPolicies({ enabled: true });
 }
 
 export async function getProjectAction(projectId: string) {
@@ -578,7 +721,7 @@ export async function createProjectAction(project: {
   description?: string | null;
   instructions?: string | null;
 }) {
-  return await createProject(project as any);
+  return await createProject(project);
 }
 
 export async function updateProjectAction(
@@ -589,7 +732,7 @@ export async function updateProjectAction(
     instructions?: string | null;
   }
 ) {
-  return await updateProject(projectId, project as any);
+  return await updateProject(projectId, project);
 }
 
 export async function deleteProjectAction(projectId: string) {
@@ -693,6 +836,29 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
+export async function uploadWorkspaceFileAction(formData: FormData) {
+  const authToken = await getAuthToken();
+  const uploadUrl = `${env.API_URL}/v1/files`;
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({
+      detail: "Upload failed",
+    }));
+    return { data: null, error: errorData };
+  }
+
+  // 204 No Content — no JSON body to parse
+  return { data: { ok: true }, error: null };
+}
+
 export async function downloadWorkspaceFileAction(filePath: string) {
   return await downloadWorkspaceFile(filePath);
 }
@@ -746,11 +912,17 @@ export async function getAgentWalletAction(agentId: string) {
   return await getAgentWallet(agentId);
 }
 
-export async function createAgentWalletAction(agentId: string, body: any) {
+export async function createAgentWalletAction(
+  agentId: string,
+  body: CreateWalletRequest
+) {
   return await createAgentWallet(agentId, body);
 }
 
-export async function updateAgentWalletAction(agentId: string, body: any) {
+export async function updateAgentWalletAction(
+  agentId: string,
+  body: UpdateWalletRequest
+) {
   return await updateAgentWallet(agentId, body);
 }
 
@@ -774,7 +946,10 @@ export async function getAgentWalletPaymentsAction(
   return await getAgentWalletPayments(agentId, params);
 }
 
-export async function fundAgentWalletAction(agentId: string, body: any) {
+export async function fundAgentWalletAction(
+  agentId: string,
+  body: FundWalletRequest
+) {
   return await fundAgentWallet(agentId, body);
 }
 

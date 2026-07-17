@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 interface DeleteButtonProps {
   itemId: string;
   itemName: string;
-  onDelete: (itemId: string) => Promise<{ error?: any }>;
+  onDelete: (itemId: string) => Promise<{ error?: { detail?: Array<{ msg?: string }> } }>;
   onSuccess?: () => void;
   redirectPath?: string;
   title?: string;

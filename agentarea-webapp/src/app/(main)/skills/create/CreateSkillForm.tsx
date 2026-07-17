@@ -238,7 +238,7 @@ export function CreateSkillForm() {
       if (error) {
         toast({
           title: tCreate("error.createFailed"),
-          description: (error as any)?.detail || tCreate("error.createFailed"),
+          description: (error as { detail?: string })?.detail || tCreate("error.createFailed"),
           variant: "destructive",
         });
         return;
@@ -291,7 +291,7 @@ export function CreateSkillForm() {
         toast({
           title: tCreate("error.githubImportFailed"),
           description:
-            (error as any)?.detail || tCreate("error.githubImportFailed"),
+            (error as { detail?: string })?.detail || tCreate("error.githubImportFailed"),
           variant: "destructive",
         });
         return;
@@ -329,7 +329,7 @@ export function CreateSkillForm() {
       if (error) {
         toast({
           title: tCreate("error.uploadFailed"),
-          description: (error as any)?.detail || tCreate("error.uploadFailed"),
+          description: (error as { detail?: string })?.detail || tCreate("error.uploadFailed"),
           variant: "destructive",
         });
         return;

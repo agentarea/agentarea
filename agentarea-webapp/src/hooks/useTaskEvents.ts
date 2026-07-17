@@ -5,8 +5,9 @@ import {
   mapSSEToDisplayEvent,
   mapTaskEventToDisplayEvent,
   SSEMessage,
-  TaskEventResponse,
+  TaskEvent,
   UseTaskEventsOptions,
+  WorkflowEventType,
 } from "@/types/events";
 import { getTaskEvents } from "./actions";
 import { useSSE } from "./useSSE";
@@ -20,16 +21,26 @@ import { useSSE } from "./useSSE";
  * merge related events server-side or in a single pass, and render directly.
  *
  */
-function deduplicateHistoryEvents(events: any[]): any[] {
+interface EventDedupMetadata {
+  escalation_id?: string;
+  comment?: string;
+  tool_call_id?: string;
+  original_data?: { tool_call_id?: string };
+}
+
+const dedupMeta = (e: TaskEvent): EventDedupMetadata =>
+  (e.metadata ?? {}) as EventDedupMetadata;
+
+function deduplicateHistoryEvents(events: TaskEvent[]): TaskEvent[] {
   // Index resolved escalations
   const resolvedEscalations = new Map<string, { approved: boolean; comment?: string }>();
   for (const e of events) {
     if (e.event_type === "HumanApprovalReceived" || e.event_type === "HumanApprovalDenied") {
-      const eid = e.metadata?.escalation_id || "";
+      const eid = dedupMeta(e).escalation_id || "";
       if (eid) {
         resolvedEscalations.set(eid, {
           approved: e.event_type === "HumanApprovalReceived",
-          comment: e.metadata?.comment,
+          comment: dedupMeta(e).comment,
         });
       }
     }
@@ -39,7 +50,7 @@ function deduplicateHistoryEvents(events: any[]): any[] {
   const completedToolCallIds = new Set(
     events
       .filter((e) => e.event_type === "ToolCallCompleted")
-      .map((e) => e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "")
+      .map((e) => dedupMeta(e).tool_call_id || dedupMeta(e).original_data?.tool_call_id || "")
       .filter(Boolean)
   );
 
@@ -47,16 +58,16 @@ function deduplicateHistoryEvents(events: any[]): any[] {
   const approvalToolCallIds = new Set(
     events
       .filter((e) => e.event_type === "HumanApprovalRequested")
-      .map((e) => e.metadata?.tool_call_id || "")
+      .map((e) => dedupMeta(e).tool_call_id || "")
       .filter(Boolean)
   );
 
-  const deduplicatedEvents: any[] = [];
+  const deduplicatedEvents: TaskEvent[] = [];
 
   for (const e of events) {
     // Remove ToolCallStarted if completed exists
     if (e.event_type === "ToolCallStarted") {
-      const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
+      const tcId = dedupMeta(e).tool_call_id || dedupMeta(e).original_data?.tool_call_id || "";
       if (completedToolCallIds.has(tcId)) {
         continue;
       }
@@ -64,7 +75,7 @@ function deduplicateHistoryEvents(events: any[]): any[] {
 
     // Remove ToolCallCompleted if it was approval-gated (merged into approval entry)
     if (e.event_type === "ToolCallCompleted") {
-      const tcId = e.metadata?.tool_call_id || e.metadata?.original_data?.tool_call_id || "";
+      const tcId = dedupMeta(e).tool_call_id || dedupMeta(e).original_data?.tool_call_id || "";
       if (approvalToolCallIds.has(tcId)) {
         continue;
       }
@@ -77,7 +88,7 @@ function deduplicateHistoryEvents(events: any[]): any[] {
 
     // Merge resolution into HumanApprovalRequested
     if (e.event_type === "HumanApprovalRequested") {
-      const eid = e.metadata?.escalation_id || "";
+      const eid = dedupMeta(e).escalation_id || "";
       const resolution = resolvedEscalations.get(eid);
       if (resolution) {
         deduplicatedEvents.push({
@@ -97,6 +108,28 @@ function deduplicateHistoryEvents(events: any[]): any[] {
   }
 
   return deduplicatedEvents;
+}
+
+type SSEInnerData = SSEMessage["data"]["data"];
+
+type SSEPayloadFields = Partial<SSEInnerData> & {
+  budget_remaining?: number;
+  total_cost?: number;
+  goal_description?: string;
+  max_iterations?: number;
+  message_count?: number;
+  message?: string;
+};
+
+interface RawSSEPayload extends SSEPayloadFields {
+  original_data?: SSEPayloadFields;
+  data?: SSEPayloadFields;
+  original_event_type?: string;
+  event_type?: string;
+  event_id?: string;
+  original_timestamp?: string;
+  timestamp?: string;
+  aggregate_id?: string;
 }
 
 export function useTaskEvents(
@@ -208,24 +241,22 @@ export function useTaskEvents(
 
   // Handle SSE messages
   const handleSSEMessage = useCallback(
-    (sseEvent: { type: string; data: any }) => {
+    (sseEvent: { type: string; data: unknown }) => {
       try {
-        console.log("Raw SSE event received:", sseEvent);
-
         // Handle different SSE event formats
-        let parsedData: any;
+        let parsedData: RawSSEPayload;
 
         // Parse the data based on its type
         if (typeof sseEvent.data === "string") {
           try {
             parsedData = JSON.parse(sseEvent.data);
-          } catch (parseError) {
+          } catch {
             console.error("Failed to parse SSE data as JSON:", sseEvent.data);
             // If JSON parsing fails, treat as raw string
             parsedData = { message: sseEvent.data };
           }
         } else if (sseEvent.data && typeof sseEvent.data === "object") {
-          parsedData = sseEvent.data;
+          parsedData = sseEvent.data as RawSSEPayload;
         } else {
           console.warn("Unexpected SSE data format:", sseEvent.data);
           parsedData = { message: String(sseEvent.data) };
@@ -239,10 +270,9 @@ export function useTaskEvents(
         const eventData: SSEMessage = {
           event: sseEvent.type,
           data: {
-            event_type:
-              parsedData.original_event_type ||
+            event_type: (parsedData.original_event_type ||
               parsedData.event_type ||
-              (sseEvent.type as any),
+              sseEvent.type) as WorkflowEventType,
             event_id: parsedData.event_id || new Date().getTime().toString(),
             timestamp:
               parsedData.original_timestamp ||
@@ -330,11 +360,8 @@ export function useTaskEvents(
           },
         };
 
-        console.log("Processed SSE event data:", eventData);
-
         // Convert to display event
         const displayEvent = mapSSEToDisplayEvent(eventData);
-        console.log("Display event:", displayEvent);
 
         // Regular event - add normally (avoid duplicates)
         eventsRef.current = [

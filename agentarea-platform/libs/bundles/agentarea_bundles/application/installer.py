@@ -74,6 +74,7 @@ class BundleInstaller:
         trigger_repository: Any,
         governance_service: Any,
         user_context: Any,
+        secret_manager: Any = None,
     ) -> None:
         self._mcp_server_service = mcp_server_service
         self._mcp_instance_service = mcp_instance_service
@@ -85,6 +86,7 @@ class BundleInstaller:
         self._trigger_repository = trigger_repository
         self._governance_service = governance_service
         self._user_context = user_context
+        self._secret_manager = secret_manager
 
     async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
         # Block on missing required setup before touching anything.
@@ -101,6 +103,7 @@ class BundleInstaller:
         agent_ids = await self._install_agents(
             package, setup_values, mcp_tool_names, skill_ids, result
         )
+        await self._install_channels(package, setup_values, agent_ids, result)
         await self._install_automations(package, agent_ids, result)
         await self._install_policies(package, agent_ids, result)
         return result
@@ -323,6 +326,93 @@ class BundleInstaller:
                 )
             )
         return agent_ids
+
+    # -- channels -----------------------------------------------------------
+
+    async def _install_channels(
+        self,
+        package: Bundle,
+        setup_values: dict[str, Any],
+        agent_ids: dict[str, UUID],
+        result: InstallResult,
+    ) -> None:
+        """Provision messaging channels (e.g. Telegram) as inbound triggers.
+
+        A channel becomes a webhook trigger bound to its agent: a message to the
+        bot creates a task, and the reply is delivered back on the same chat. The
+        bot token is resolved from setup and stored encrypted under the exact key
+        the outbound delivery adapter reads — ``channel_cred:{type}:{trigger_id}``
+        (see channels/adapters.py ``_resolve_token``). Imported disabled by
+        default; the user activates after pointing the bot at the webhook URL.
+        """
+        import json
+
+        from agentarea_triggers.schemas.dto import TriggerCreate
+
+        existing_names = {t.name for t in await self._trigger_repository.list_all()}
+        for channel in package.channels:
+            trigger_name = f"{package.name}:{channel.key}"
+            agent_id = agent_ids.get(channel.agent)
+            if agent_id is None:
+                result.entities.append(
+                    InstalledEntity(
+                        kind=EntityKind.CHANNEL,
+                        key=channel.key,
+                        name=trigger_name,
+                        action=InstallAction.SKIPPED,
+                        detail=f"agent '{channel.agent}' was not created",
+                    )
+                )
+                continue
+            if trigger_name in existing_names:
+                result.entities.append(
+                    InstalledEntity(
+                        kind=EntityKind.CHANNEL,
+                        key=channel.key,
+                        name=trigger_name,
+                        action=InstallAction.REUSED,
+                    )
+                )
+                continue
+
+            credentials = {
+                name: resolve_placeholders(ref, setup_values)
+                for name, ref in channel.bindings.items()
+            }
+
+            dto = TriggerCreate(
+                name=trigger_name,
+                description=channel.name,
+                agent_id=agent_id,
+                trigger_type="webhook",
+                webhook_type=channel.type,
+                task_parameters={"prompt": channel.prompt},
+                enabled=channel.enabled,
+            )
+            domain = dto.to_domain(
+                created_by=self._user_context.user_id,
+                workspace_id=self._user_context.workspace_id,
+            )
+            trigger = await self._trigger_service.create_trigger(domain)
+
+            # Store credentials where the outbound delivery adapter looks them up.
+            if credentials and self._secret_manager is not None:
+                secret_name = f"channel_cred:{channel.type}:{trigger.id}"
+                await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
+
+            if not channel.enabled:
+                await self._trigger_service.disable_trigger(trigger.id)
+
+            result.entities.append(
+                InstalledEntity(
+                    kind=EntityKind.CHANNEL,
+                    key=channel.key,
+                    name=trigger_name,
+                    action=InstallAction.CREATED,
+                    id=str(trigger.id),
+                    detail=f"{channel.type} · enabled={channel.enabled}",
+                )
+            )
 
     # -- automations --------------------------------------------------------
 

@@ -88,6 +88,10 @@ def render_secrets_envs(group_name: str, cfg: dict) -> str | None:
         lines.append(f"{{{{ if {cond} }}}}")
     for sec in secrets:
         name = sec.get("name")
+        sec_cond = sec.get("conditional")
+        if sec_cond:
+            cond = sec_cond.replace('{{', '').replace('}}', '').strip()
+            lines.append(f"{{{{- if {cond} }}}}")
         if "value" in sec and sec["value"] is not None:
             lines.extend([
                 f"- name: {name}",
@@ -101,6 +105,8 @@ def render_secrets_envs(group_name: str, cfg: dict) -> str | None:
                 f"      name: {quote_if_needed(sec.get('secretName'))}",
                 f"      key: {sec.get('key')}",
             ])
+        if sec_cond:
+            lines.append("{{- end }}")
     if conditional:
         lines.append("{{- end }}")
     lines.append("{{- end }}")

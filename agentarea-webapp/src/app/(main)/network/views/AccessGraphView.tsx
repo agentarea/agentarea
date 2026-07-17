@@ -15,28 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface NetworkEdgeData {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: NetworkEdgeData[];
-  governance: any[];
-  deployment_mode: string;
-}
+import type { NetworkNodeData, TopologyResponse } from "../types";
 
 interface Props {
   topology: TopologyResponse;

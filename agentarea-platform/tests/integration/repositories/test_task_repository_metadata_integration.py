@@ -65,7 +65,7 @@ class TestTaskRepositoryMetadataIntegration:
         assert created_task.metadata == {}
 
         # Verify the task can be retrieved from database
-        retrieved_task = await task_repository.get_by_id(created_task.id)
+        retrieved_task = await task_repository.get_task(created_task.id)
         assert retrieved_task is not None
         assert retrieved_task.metadata == {}
 
@@ -100,8 +100,7 @@ class TestTaskRepositoryMetadataIntegration:
 
         task_update = TaskUpdate(
             metadata={},  # Start with valid metadata
-            description="Updated task with SQLAlchemy MetaData",
-            parameters={"updated": "data"},
+            task_parameters={"updated": "data"},
             status="running",
             execution_id="integration-test-execution",
         )
@@ -116,7 +115,6 @@ class TestTaskRepositoryMetadataIntegration:
         # Verify task was updated successfully
         assert updated_task is not None
         assert updated_task.id == original_task.id
-        assert updated_task.description == "Updated task with SQLAlchemy MetaData"
         assert updated_task.status == "running"
         assert updated_task.execution_id == "integration-test-execution"
 

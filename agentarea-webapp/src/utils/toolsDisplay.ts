@@ -139,7 +139,7 @@ export function getToolsForDisplay(agent: Agent): ToolAvatar[] {
  * Extract tools from agent's tools array (new format) or tools_config (legacy format)
  * Used in network topology display
  */
-export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
+export function getToolsFromConfig(toolsConfig: unknown): ToolAvatar[] {
   const toolAvatars: ToolAvatar[] = [];
 
   if (!toolsConfig) {
@@ -185,8 +185,9 @@ export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
 
   // Legacy format: { builtin_tools: [], mcp_server_configs: [] }
   if (typeof toolsConfig === "object") {
-    if (toolsConfig.builtin_tools && Array.isArray(toolsConfig.builtin_tools)) {
-      for (const tool of toolsConfig.builtin_tools) {
+    const cfg = toolsConfig as Record<string, unknown>;
+    if (cfg.builtin_tools && Array.isArray(cfg.builtin_tools)) {
+      for (const tool of cfg.builtin_tools) {
         if (typeof tool === "object" && tool.tool_name) {
           const iconUrl =
             BUILTIN_TOOL_ICONS[tool.tool_name] || BUILTIN_TOOL_ICONS.calculator;
@@ -200,10 +201,10 @@ export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
     }
 
     if (
-      toolsConfig.mcp_server_configs &&
-      Array.isArray(toolsConfig.mcp_server_configs)
+      cfg.mcp_server_configs &&
+      Array.isArray(cfg.mcp_server_configs)
     ) {
-      for (const serverConfig of toolsConfig.mcp_server_configs) {
+      for (const serverConfig of cfg.mcp_server_configs) {
         if (typeof serverConfig === "object" && serverConfig.mcp_server_id) {
           const serverId = serverConfig.mcp_server_id.toLowerCase();
           const iconUrl =
@@ -218,10 +219,10 @@ export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
     }
 
     if (
-      toolsConfig.openapi_configs &&
-      Array.isArray(toolsConfig.openapi_configs)
+      cfg.openapi_configs &&
+      Array.isArray(cfg.openapi_configs)
     ) {
-      for (const openapiConfig of toolsConfig.openapi_configs) {
+      for (const openapiConfig of cfg.openapi_configs) {
         if (typeof openapiConfig === "object" && openapiConfig.openapi_connection_id) {
           const connectionName = (
             openapiConfig.openapi_connection_name ||
@@ -247,7 +248,7 @@ export function getToolsFromConfig(toolsConfig: any): ToolAvatar[] {
  * Convert tools config to avatar URLs (for network topology)
  */
 export function getToolAvatarUrlsFromConfig(
-  toolsConfig: any
+  toolsConfig: unknown
 ): { imageUrl: string }[] {
   const toolAvatars = getToolsFromConfig(toolsConfig);
   return toolAvatars.map((tool) => ({ imageUrl: tool.imageUrl }));

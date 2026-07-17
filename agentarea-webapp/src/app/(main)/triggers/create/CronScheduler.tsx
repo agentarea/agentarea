@@ -216,7 +216,7 @@ export function CronScheduler({ defaultValue = "", name }: CronSchedulerProps) {
     if (frequency === "custom" && !customExpr) {
       setCustomExpr("0 9 * * *");
     }
-  }, [frequency]);
+  }, [customExpr, frequency]);
 
   return (
     <div className="space-y-4">

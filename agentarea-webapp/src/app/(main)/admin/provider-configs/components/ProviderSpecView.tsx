@@ -1,11 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
-import ModelsList from "./ModelsList";
+import ModelsList, { type ModelEntry } from "./ModelsList";
 import { ProviderSpecCard } from "./ProviderItem";
 import { ProviderSpec } from "./types";
 
@@ -30,12 +31,14 @@ export default function ProviderSpecView({
     {
       accessor: "name",
       header: t("name"),
-      render: (value: string, item: any) => (
+      render: (value: string, item: ProviderSpec) => (
         <div className="flex items-center gap-2">
           {item.icon_url && (
-            <img
+            <Image
               src={item.icon_url}
               alt={`${value} icon`}
+              width={20}
+              height={20}
               className="h-5 w-5 flex-shrink-0 rounded dark:invert"
             />
           )}
@@ -55,7 +58,7 @@ export default function ProviderSpecView({
     {
       accessor: "models",
       header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
+      render: (value: unknown) => <ModelsList models={(value as ModelEntry[]) || []} />,
     },
   ];
 

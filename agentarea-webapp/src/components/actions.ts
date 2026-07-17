@@ -1,6 +1,6 @@
 "use server";
 
-import type { components } from "@/api/schema";
+import type { TaskCreate } from "@/api/client/types.gen";
 import { createAgentTask, listAgents } from "@/lib/api";
 
 export async function getAgents() {
@@ -9,7 +9,7 @@ export async function getAgents() {
 
 export async function createTask(
   agentId: string,
-  task: components["schemas"]["TaskCreate"]
+  task: TaskCreate
 ) {
   return await createAgentTask(agentId, task);
 }

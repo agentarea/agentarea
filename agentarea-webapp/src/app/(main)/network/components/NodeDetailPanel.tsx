@@ -7,14 +7,7 @@ import ModelInfo from "@/components/TaskInfoPanel/components/ModelInfo";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import ActionLink from "@/components/TaskInfoPanel/components/ActionLink";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
+import type { NetworkNodeData } from "../types";
 
 const TYPE_CONFIG = {
   agent: { icon: Bot, color: "text-blue-500", href: (id: string) => `/agents/${id}` },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ChevronRight, LayoutGrid, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ const OPTIONS: ConnectionOption[] = [
       "Create a reusable connection from a Docker image, command, or hosted URL.",
     href: "/connections/add",
     iconClass: "bg-primary/5",
-    icon: <img src="/mcp.svg" alt="" className="h-5 w-5 object-contain" />,
+    icon: <Image src="/mcp.svg" alt="" width={20} height={20} className="h-5 w-5 object-contain" />,
   },
   {
     id: "openapi",

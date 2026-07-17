@@ -19,6 +19,7 @@ from agentarea_common.rebac import (
     OpenFGAError,
     OpenFGAUnavailableError,
 )
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.workspaces import (
     InvitationAlreadyAccepted,
     InvitationExpired,
@@ -77,10 +78,10 @@ class InvitationResponse(BaseModel):
     email: str | None
     invited_by: str
     status: str
-    expires_at: datetime
-    accepted_at: datetime | None
+    expires_at: UtcDatetime
+    accepted_at: UtcDatetime | None
     accepted_by_user_id: str | None
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}
 
@@ -107,7 +108,7 @@ class MemberResponse(BaseModel):
     user_id: str
     email: str | None = None
     display_name: str | None = None
-    joined_at: datetime
+    joined_at: UtcDatetime
     invitation_id: UUID | None
 
     model_config = {"from_attributes": True}

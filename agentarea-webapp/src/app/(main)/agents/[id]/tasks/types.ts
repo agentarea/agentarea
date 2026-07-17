@@ -15,11 +15,11 @@ export interface TaskStatus {
   end_time?: string;
   execution_time?: string;
   error?: string;
-  result?: any;
+  result?: unknown;
   message?: string;
-  artifacts?: any;
+  artifacts?: unknown;
   session_id?: string;
-  usage_metadata?: any;
+  usage_metadata?: unknown;
 }
 
 export interface TaskWithStatus extends Task {

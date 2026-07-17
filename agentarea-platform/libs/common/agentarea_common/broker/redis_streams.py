@@ -39,9 +39,15 @@ class RedisStreamsBroker:
                 logger.debug("Redis aclose suppressed: %s", exc)
             self._client = None
 
-    async def submit(self, stream: str, fields: dict[str, str]) -> str:
+    async def submit(
+        self, stream: str, fields: dict[str, str], *, maxlen: int | None = None
+    ) -> str:
         client = await self._get_client()
-        msg_id: str = await client.xadd(stream, fields=cast(Any, dict(fields)))
+        kwargs: dict[str, Any] = {}
+        if maxlen is not None:
+            kwargs["maxlen"] = maxlen
+            kwargs["approximate"] = True
+        msg_id: str = await client.xadd(stream, fields=cast(Any, dict(fields)), **kwargs)
         return msg_id
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
@@ -102,6 +108,26 @@ class RedisStreamsBroker:
         claimed = response[1] if len(response) > 1 else []
         msgs = [BrokerMessage(id=mid, fields=fields) for mid, fields in claimed]
         return await self._enrich_with_delivery_count(client, stream, group, msgs)
+
+    async def tail(
+        self,
+        stream: str,
+        last_id: str = "$",
+        block_ms: int = 5000,
+        count: int = 100,
+    ) -> tuple[str, list[BrokerMessage]]:
+        client = await self._get_client()
+        response: Any = await client.xread(
+            streams={stream: last_id},
+            count=count,
+            block=block_ms,
+        )
+        msgs = _flatten_xread(response)
+        if not msgs:
+            return last_id, []
+        # Advance the cursor to the last entry so the next call returns only
+        # newer entries (live tail). No ACK — this is a broadcast read.
+        return msgs[-1].id, msgs
 
     async def _enrich_with_delivery_count(
         self,

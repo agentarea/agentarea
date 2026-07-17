@@ -1,6 +1,7 @@
 "use client";
 
 import { createElement } from "react";
+import Image from "next/image";
 import { Globe, Plug } from "lucide-react";
 import { getBuiltinToolIcon } from "@/app/(main)/agents/create/utils/builtinToolUtils";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,7 @@ function ToolChip({ tool }: { tool: AgentToolIcon }) {
   if (tool.src) {
     return (
       <div className={CIRCLE} title={tool.label}>
-        <img
+        <Image
           src={tool.src}
           alt={tool.label}
           width={24}
@@ -65,7 +66,7 @@ function ToolGlyph({ tool }: { tool: AgentToolIcon }) {
   }
   if (tool.src) {
     return (
-      <img
+      <Image
         src={tool.src}
         alt={tool.label}
         width={14}

@@ -39,7 +39,7 @@ export function CreateProjectForm() {
       if (error) {
         toast({
           title: "Failed to create project",
-          description: (error as any)?.detail || "Failed to create project",
+          description: (error as { detail?: string })?.detail || "Failed to create project",
           variant: "destructive",
         });
         return;
@@ -50,7 +50,7 @@ export function CreateProjectForm() {
         variant: "success",
       });
 
-      const projectId = (data as any)?.id;
+      const projectId = (data as { id?: string } | undefined)?.id;
       router.push(projectId ? `/projects/${projectId}` : "/projects");
     } catch {
       toast({

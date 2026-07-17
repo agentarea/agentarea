@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
   // Forward browser cookies to Kratos to check the session
   const cookieHeader = request.headers.get("cookie") || "";
 
-  let session: any = null;
+  interface KratosSession {
+    identity?: { id?: string };
+  }
+  let session: KratosSession | null = null;
   try {
     const res = await fetch(`${KRATOS_PUBLIC_URL}/sessions/whoami`, {
       headers: {

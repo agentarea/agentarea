@@ -1,14 +1,14 @@
 import { useTranslations } from "next-intl";
 import { CheckCircle2, Key, Link, RefreshCw, Settings } from "lucide-react";
-import { Control, Controller, FieldErrors } from "react-hook-form";
+import { Control, Controller, FieldErrors, FieldValues, Path } from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ApiKeyEditInput from "./ApiKeyEditInput";
 
-interface BaseInfoProps {
-  control: Control<any>;
-  errors: FieldErrors<any>;
+interface BaseInfoProps<T extends FieldValues = FieldValues> {
+  control: Control<T>;
+  errors: FieldErrors<T>;
   providerSpecId?: string;
   isEdit?: boolean;
   onDiscoverModels?: (apiKey: string, endpointUrl?: string) => Promise<void>;
@@ -19,7 +19,7 @@ interface BaseInfoProps {
   endpointUrlValue?: string;
 }
 
-export default function BaseInfo({
+export default function BaseInfo<T extends FieldValues = FieldValues>({
   control,
   errors,
   providerSpecId,
@@ -30,7 +30,7 @@ export default function BaseInfo({
   discoveryError,
   apiKeyValue,
   endpointUrlValue,
-}: BaseInfoProps) {
+}: BaseInfoProps<T>) {
   const t = useTranslations("ProviderConfigForm");
   return (
     <>
@@ -41,7 +41,7 @@ export default function BaseInfo({
               {t("configurationName")}
             </FormLabel>
             <Controller
-              name="name"
+              name={"name" as Path<T>}
               control={control}
               render={({ field }) => (
                 <Input
@@ -69,7 +69,7 @@ export default function BaseInfo({
               {t("apiKey")}
             </FormLabel>
             <Controller
-              name="api_key"
+              name={"api_key" as Path<T>}
               control={control}
               render={({ field }) =>
                 isEdit ? (
@@ -125,7 +125,7 @@ export default function BaseInfo({
               {t("customEndpointUrl")}
             </FormLabel>
             <Controller
-              name="endpoint_url"
+              name={"endpoint_url" as Path<T>}
               control={control}
               render={({ field }) => (
                 <Input

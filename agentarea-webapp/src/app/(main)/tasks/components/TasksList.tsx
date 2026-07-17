@@ -35,7 +35,7 @@ export default function TasksList({
       header: t("description"),
       render: (value: string, row: TaskWithAgent) => {
         const isDelegation =
-          (row as any).parameters?.source === "agent_delegation";
+          row.parameters?.source === "agent_delegation";
         return (
           <div className="flex items-center gap-2 max-w-[300px]">
             {isDelegation && (

@@ -1,5 +1,6 @@
 """Utility functions for raising workspace-related exceptions."""
 
+from typing import NoReturn
 from uuid import UUID
 
 from ..auth.context_manager import ContextManager
@@ -8,7 +9,7 @@ from .workspace import WorkspaceAccessDenied, WorkspaceResourceNotFound
 
 def raise_workspace_access_denied(
     resource_type: str, resource_id: str, resource_workspace_id: str | None = None
-) -> None:
+) -> NoReturn:
     """Raise WorkspaceAccessDenied exception with current context.
 
     Args:

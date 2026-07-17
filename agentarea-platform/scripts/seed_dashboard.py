@@ -31,10 +31,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
-from agentarea_common.infrastructure.database import db
+from agentarea_common.config.database import db
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
-from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 

@@ -20,20 +20,45 @@ import {
   EVENT_TOOL_CALL_STARTED,
   EVENT_TOOL_CALL_COMPLETED,
 } from "../constants/eventTypes";
+import { A2UIComponent } from "../types";
+
+interface SSEEventPayload {
+  event_type?: string;
+  original_event_type?: string;
+  original_data?: SSEEventPayload;
+  chunk?: string;
+  chunk_index?: number;
+  is_final?: boolean;
+  task_id?: string;
+  chunk_type?: "text" | "thinking";
+  tool_name?: string;
+  tool_call_id?: string;
+  surface_id?: string;
+  components?: A2UIComponent[];
+  path?: string;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+interface SSEEvent {
+  type?: string;
+  event_type?: string;
+  data: SSEEventPayload;
+}
 
 /**
  * Handle LLM chunk events (streaming text)
  * Accumulates chunks into existing streaming message or creates new one
  */
 export function handleLLMChunk(
-  event: any,
+  event: SSEEvent,
   setMessages: React.Dispatch<React.SetStateAction<AnyMessage[]>>
 ): void {
   const originalData = event.data.original_data || event.data;
-  const chunk = originalData.chunk || event.data.chunk;
+  const chunk = originalData.chunk || event.data.chunk || "";
   const chunkIndex = originalData.chunk_index || event.data.chunk_index || 0;
   const isFinal = originalData.is_final || event.data.is_final || false;
-  const taskId = originalData.task_id || event.data.task_id;
+  const taskId = originalData.task_id || event.data.task_id || "";
   const chunkType = originalData.chunk_type || event.data.chunk_type || "text";
 
   // Accumulate chunk
@@ -60,12 +85,12 @@ export function handleLLMChunk(
  * Adds a placeholder message for the tool call
  */
 export function handleToolCallStarted(
-  event: any,
+  event: SSEEvent,
   setMessages: React.Dispatch<React.SetStateAction<AnyMessage[]>>
 ): void {
   const originalData = event.data.original_data || event.data;
-  const toolName = originalData.tool_name || event.data.tool_name;
-  const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+  const toolName = originalData.tool_name || event.data.tool_name || "";
+  const toolCallId = originalData.tool_call_id || event.data.tool_call_id || "";
 
   setMessages((prev) => {
     // Check if this tool call has already been started (deduplication)
@@ -88,12 +113,12 @@ export function handleToolCallStarted(
  * styled tool_result — EventParser maps both event types to that component).
  */
 export function handleToolCallCompleted(
-  event: any,
+  event: SSEEvent,
   setMessages: React.Dispatch<React.SetStateAction<AnyMessage[]>>
 ): void {
   const originalData = event.data.original_data || event.data;
-  const toolName = originalData.tool_name || event.data.tool_name;
-  const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+  const toolName = originalData.tool_name || event.data.tool_name || "";
+  const toolCallId = originalData.tool_call_id || event.data.tool_call_id || "";
   const eventType =
     event.event_type || event.type || EVENT_TOOL_CALL_COMPLETED;
 
@@ -118,7 +143,7 @@ export function handleToolCallCompleted(
  * Clears loading state and triggers onTaskFinished callback
  */
 export function handleWorkflowCompleted(
-  event: any,
+  event: SSEEvent,
   options: {
     setIsLoading: (loading: boolean) => void;
     onTaskFinished?: (taskId: string) => void;
@@ -141,7 +166,7 @@ export function handleWorkflowCompleted(
  * Sets the current task ID and triggers lifecycle callbacks
  */
 export function handleTaskCreated(
-  event: any,
+  event: SSEEvent,
   options: {
     currentTaskId: string | null;
     setCurrentTaskId: (id: string | null) => void;
@@ -177,7 +202,7 @@ export function handleError(setIsLoading: (loading: boolean) => void): void {
  */
 export function handleA2UIEvent(
   eventType: string,
-  event: any,
+  event: SSEEvent,
   setMessages: React.Dispatch<React.SetStateAction<AnyMessage[]>>
 ): void {
   const d = event.data?.original_data || event.data || {};

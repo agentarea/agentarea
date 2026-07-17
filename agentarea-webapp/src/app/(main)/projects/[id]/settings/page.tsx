@@ -10,6 +10,7 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { FormSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getProjectAction, updateProjectAction } from "@/lib/server-actions";
+import type { ProjectResponse } from "@/api/client/types.gen";
 
 export default function ProjectSettingsPage() {
   const params = useParams();
@@ -28,9 +29,10 @@ export default function ProjectSettingsPage() {
       try {
         const { data } = await getProjectAction(projectId);
         if (data) {
-          setName((data as any).name || "");
-          setDescription((data as any).description || "");
-          setInstructions((data as any).instructions || "");
+          const project = data as ProjectResponse;
+          setName(project.name || "");
+          setDescription(project.description || "");
+          setInstructions(project.instructions || "");
         }
       } finally {
         setLoading(false);
@@ -58,7 +60,7 @@ export default function ProjectSettingsPage() {
       if (error) {
         toast({
           title: "Failed to save",
-          description: (error as any)?.detail || "Failed to save project",
+          description: (error as { detail?: string })?.detail || "Failed to save project",
           variant: "destructive",
         });
         return;

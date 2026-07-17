@@ -119,7 +119,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         self.server_url = server_url
         self._connected = False
 
-    async def _ensure_connected(self):
+    async def _ensure_connected(self) -> Client:
         """Ensure client is connected to Temporal server."""
         if not self._connected and self.client is None:
             try:
@@ -141,6 +141,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             except Exception as e:
                 logger.error(f"Failed to connect to Temporal server at {self.server_url}: {e}")
                 raise ConnectionError(f"Cannot connect to Temporal server: {e}") from e
+
+        if self.client is None:
+            raise ConnectionError("Temporal client is not connected")
+        return self.client
 
     def _convert_config_to_temporal(self, config: WorkflowConfig | None) -> dict[str, Any]:
         """Convert our WorkflowConfig to Temporal parameters."""
@@ -183,7 +187,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         config: WorkflowConfig | None = None,
     ) -> str:
         """Start a Temporal workflow."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         temporal_params = self._convert_config_to_temporal(config)
 
@@ -244,7 +248,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             # Add workflow ID reuse policy to handle duplicates gracefully
             temporal_params["id_reuse_policy"] = WorkflowIDReusePolicy.ALLOW_DUPLICATE
 
-            handle = await self.client.start_workflow(
+            handle = await client.start_workflow(
                 workflow_class,
                 args=workflow_args,  # Pass as args parameter
                 id=workflow_id,
@@ -267,11 +271,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
     async def get_workflow_status(self, workflow_id: str) -> WorkflowResult:
         """Get Temporal workflow status."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
             description = await handle.describe()
+            status = description.status
 
             execution_time_seconds = _duration_seconds(getattr(description, "execution_time", None))
             if getattr(description, "execution_time", None) and execution_time_seconds is None:
@@ -281,7 +286,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
             # Get result if workflow is completed
             result = None
-            if description.status.name.lower() in ["completed"]:
+            if status is not None and status.name.lower() in ["completed"]:
                 try:
                     result = await handle.result()
                     if not isinstance(result, dict):
@@ -292,7 +297,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
             return WorkflowResult(
                 workflow_id=workflow_id,
-                status=self._temporal_status_to_workflow_status(description.status.name),
+                status=self._temporal_status_to_workflow_status(status.name)
+                if status is not None
+                else WorkflowStatus.UNKNOWN,
                 start_time=description.start_time.isoformat() if description.start_time else None,
                 end_time=description.close_time.isoformat() if description.close_time else None,
                 execution_time=execution_time_seconds,
@@ -316,10 +323,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
     async def cancel_workflow(self, workflow_id: str) -> bool:
         """Cancel a Temporal workflow."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
             await handle.cancel()
             logger.info(f"Cancelled workflow {workflow_id}")
             return True
@@ -338,10 +345,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         self, workflow_id: str, timeout: timedelta | None = None
     ) -> WorkflowResult:
         """Wait for Temporal workflow completion."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
 
             # Wait for result with timeout
             if timeout:
@@ -359,9 +366,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     f"{type(description.execution_time)}"
                 )
 
+            status = description.status
             return WorkflowResult(
                 workflow_id=workflow_id,
-                status=self._temporal_status_to_workflow_status(description.status.name),
+                status=self._temporal_status_to_workflow_status(status.name)
+                if status is not None
+                else WorkflowStatus.UNKNOWN,
                 result=result if isinstance(result, dict) else {"result": result},
                 start_time=description.start_time.isoformat() if description.start_time else None,
                 end_time=description.close_time.isoformat() if description.close_time else None,
@@ -378,10 +388,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
     async def signal_workflow(self, workflow_id: str, signal_name: str, data: Any = None) -> None:
         """Send signal to Temporal workflow."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
             await handle.signal(signal_name, data)
             logger.debug(f"Sent signal {signal_name} to workflow {workflow_id}")
 
@@ -396,10 +406,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
         Uses the two-arg signal format expected by workflow_command(command, payload).
         """
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
             await handle.signal("workflow_command", args=[command, payload])
             logger.debug(f"Sent workflow command '{command}' to workflow {workflow_id}")
             return True
@@ -412,10 +422,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         self, workflow_id: str, query_name: str, args: dict[str, Any] | None = None
     ) -> Any:
         """Query Temporal workflow."""
-        await self._ensure_connected()
+        client = await self._ensure_connected()
 
         try:
-            handle = self.client.get_workflow_handle(workflow_id)
+            handle = client.get_workflow_handle(workflow_id)
             result = await handle.query(query_name, *(args.values() if args else []))
             return result
 

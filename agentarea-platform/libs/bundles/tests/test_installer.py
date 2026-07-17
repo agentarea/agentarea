@@ -190,6 +190,72 @@ async def test_enabled_automation_not_disabled():
     assert deps["trigger_service"].disabled == []
 
 
+class FakeSecretManager:
+    def __init__(self):
+        self.secrets: dict[str, str] = {}
+
+    async def set_secret(self, name, value):
+        self.secrets[name] = value
+
+
+CHANNEL = """
+schema_version: "0.1.0"
+name: tg
+setup:
+  - {key: bot, label: Bot Token, type: secret, required: true}
+agents: [{key: lead, name: Lead, model: gpt-4o}]
+channels:
+  - {key: inbox, type: telegram, name: TG Inbox, agent: lead, bindings: {bot_token: "${setup.bot}"}, enabled: false}
+"""
+
+
+async def test_channel_installs_telegram_trigger_and_stores_secret():
+    sm = FakeSecretManager()
+    inst, deps = _installer(secret_manager=sm)
+    res = await inst.install(parse_bundle(CHANNEL), {"bot": "12345:secret"})
+
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("channel", "inbox")] == InstallAction.CREATED
+
+    # a trigger was created for the agent and imported disabled
+    ts = deps["trigger_service"]
+    assert len(ts.created) == 1
+    assert ts.created[0].name == "tg:inbox"
+    assert len(ts.disabled) == 1
+
+    # the resolved bot token is stored under the exact key the outbound delivery
+    # adapter reads: channel_cred:{type}:{trigger_id}
+    assert len(sm.secrets) == 1
+    name, blob = next(iter(sm.secrets.items()))
+    assert name.startswith("channel_cred:telegram:")
+    assert "12345:secret" in blob
+
+
+async def test_channel_created_without_secret_manager():
+    # No secret manager → trigger still provisioned; credential just isn't stored.
+    inst, deps = _installer(secret_manager=None)
+    res = await inst.install(parse_bundle(CHANNEL), {"bot": "x"})
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("channel", "inbox")] == InstallAction.CREATED
+    assert len(deps["trigger_service"].created) == 1
+
+
+async def test_channel_skipped_when_agent_missing():
+    pkg = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: tg
+channels:
+  - {key: inbox, type: telegram, name: TG, agent: ghost, bindings: {}, enabled: false}
+"""
+    )
+    inst, deps = _installer()
+    res = await inst.install(pkg, {})
+    actions = {(e.kind, e.key): e.action for e in res.entities}
+    assert actions[("channel", "inbox")] == InstallAction.SKIPPED
+    assert deps["trigger_service"].created == []
+
+
 async def test_idempotent_reuse_of_existing_entities():
     existing_skill = SimpleNamespace(id=uuid4())
     existing_agent = SimpleNamespace(id=uuid4())

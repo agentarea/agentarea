@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
@@ -7,7 +8,7 @@ import Table from "@/components/Table/Table";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import ModelsList from "./ModelsList";
 import { ProviderConfigCard } from "./ProviderItem";
-import { ProviderConfig } from "./types";
+import { ModelInstance, ProviderConfig } from "./types";
 
 interface ProviderConfigsViewProps {
   configs: ProviderConfig[];
@@ -30,12 +31,14 @@ export default function ProviderConfigsView({
     {
       accessor: "name",
       header: t("name"),
-      render: (value: string, item: any) => (
+      render: (value: string, item: ProviderConfig) => (
         <div className="flex items-center gap-2">
           {item.spec?.icon_url && (
-            <img
+            <Image
               src={item.spec.icon_url}
               alt={`${item.spec.name} icon`}
+              width={20}
+              height={20}
               className="h-5 w-5 flex-shrink-0 rounded dark:invert"
             />
           )}
@@ -50,7 +53,7 @@ export default function ProviderConfigsView({
     {
       accessor: "model_instances",
       header: t("models"),
-      render: (value: any[]) => <ModelsList models={value || []} />,
+      render: (value: ModelInstance[]) => <ModelsList models={value || []} />,
     },
   ];
 

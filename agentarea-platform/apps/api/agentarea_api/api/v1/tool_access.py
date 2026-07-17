@@ -19,7 +19,7 @@ from agentarea_common.auth.tool_invocation import (
     tool_workspace_tuple,
     workspace_member_tuple,
 )
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import (
     KetoError,
     KetoUnavailableError,

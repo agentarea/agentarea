@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { AttachmentCard } from "@/components/ui/attachment-card";
-import { formatTimestamp } from "../../../utils/dateUtils";
+import { useFormatTimestamp } from "../../../utils/dateUtils";
 import { renderTextWithMentions } from "@/utils/mentions";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
@@ -14,11 +14,12 @@ interface UserMessageProps {
 }
 
 export const UserMessage: React.FC<UserMessageProps> = ({
-  id,
+  id: _id,
   content,
   timestamp,
   files,
 }) => {
+  const formatTimestamp = useFormatTimestamp();
   const handleFileDownload = (file: File) => {
     const url = URL.createObjectURL(file);
     const a = document.createElement("a");

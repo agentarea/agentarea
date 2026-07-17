@@ -52,10 +52,10 @@ class TemporalScheduleManager:
         self._task_queue = task_queue
         self._connected = temporal_client is not None
 
-    async def _ensure_client(self) -> None:
+    async def _ensure_client(self) -> Client:
         """Lazily connect to Temporal if not already connected."""
-        if self._connected:
-            return
+        if self._connected and self.client is not None:
+            return self.client
         from agentarea_common.config import get_settings
 
         settings = get_settings()
@@ -73,6 +73,7 @@ class TemporalScheduleManager:
             data_converter=pydantic_data_converter,
         )
         self._connected = True
+        return self.client
 
     async def is_healthy(self) -> bool:
         """Return whether Temporal schedule operations can reach a client."""
@@ -93,8 +94,12 @@ class TemporalScheduleManager:
         if not list_schedules:
             return 0
 
+        # Client.list_schedules() is a coroutine returning an async iterator, so
+        # it must be awaited before iterating. Without the await this raised
+        # "'async for' requires an object with __aiter__ method, got coroutine"
+        # against a real server; mocked tests hid it.
         count = 0
-        async for description in list_schedules():
+        async for description in await list_schedules():
             schedule_id = getattr(description, "id", "")
             if str(schedule_id).startswith("cron-trigger-"):
                 count += 1
@@ -213,12 +218,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule update fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Update the schedule
             await handle.update(
@@ -261,12 +266,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule deletion fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Delete the schedule
             await handle.delete()
@@ -292,12 +297,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule pause fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Pause the schedule
             await handle.pause(note=f"Trigger {trigger_id} disabled")
@@ -317,12 +322,12 @@ class TemporalScheduleManager:
         Raises:
             Exception: If schedule unpause fails
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Unpause the schedule
             await handle.unpause(note=f"Trigger {trigger_id} enabled")
@@ -333,6 +338,42 @@ class TemporalScheduleManager:
             logger.error(f"Failed to unpause schedule for trigger {trigger_id}: {e}")
             raise
 
+    def _cron_expressions_from_description(self, description: Any) -> list[str]:
+        """Recover the cron expression(s) a schedule was created with.
+
+        Temporal normalises ``cron_expressions`` into a structured calendar spec
+        server-side, so ``description.schedule.spec.cron_expressions`` is empty
+        after a round-trip through ``describe()``. The original expression still
+        survives in the workflow action args, where ``create_cron_schedule``
+        embeds it as ``{"cron_expression": ...}``; recover it from there when the
+        spec no longer carries it.
+        """
+        spec_crons = list(getattr(description.schedule.spec, "cron_expressions", []) or [])
+        if spec_crons:
+            return spec_crons
+
+        action = getattr(description.schedule, "action", None)
+        args = getattr(action, "args", None) or []
+        if len(args) < 2:
+            return []
+
+        payload = args[1]
+        # Action args come back as raw payloads from a real server, but already
+        # decoded (e.g. a plain dict) from mocked tests -- handle both.
+        if not isinstance(payload, dict):
+            if self.client is None:
+                return []
+            try:
+                payload = self.client.data_converter.payload_converter.from_payloads([payload])[0]
+            except Exception:
+                return []
+
+        if isinstance(payload, dict):
+            cron = payload.get("cron_expression")
+            if cron:
+                return [cron]
+        return []
+
     async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
         """Get information about a Temporal Schedule.
 
@@ -342,12 +383,12 @@ class TemporalScheduleManager:
         Returns:
             Dictionary containing schedule information, or None if not found
         """
-        await self._ensure_client()
+        client = await self._ensure_client()
         schedule_id = f"cron-trigger-{trigger_id}"
 
         try:
             # Get the schedule handle
-            handle = self.client.get_schedule_handle(schedule_id)
+            handle = client.get_schedule_handle(schedule_id)
 
             # Get schedule description
             description = await handle.describe()
@@ -355,7 +396,7 @@ class TemporalScheduleManager:
             return {
                 "schedule_id": schedule_id,
                 "trigger_id": str(trigger_id),
-                "cron_expressions": list(description.schedule.spec.cron_expressions),
+                "cron_expressions": self._cron_expressions_from_description(description),
                 "timezone": str(description.schedule.spec.time_zone_name or ""),
                 "paused": bool(description.schedule.state.paused),
                 "note": str(description.schedule.state.note or ""),
@@ -364,11 +405,11 @@ class TemporalScheduleManager:
                 ],
                 "recent_actions": [
                     {
-                        "scheduled_time": getattr(action, "scheduled_time", None).isoformat()
-                        if getattr(action, "scheduled_time", None)
+                        "scheduled_time": scheduled.isoformat()
+                        if (scheduled := getattr(action, "scheduled_time", None))
                         else None,
-                        "actual_time": getattr(action, "actual_time", None).isoformat()
-                        if getattr(action, "actual_time", None)
+                        "actual_time": actual.isoformat()
+                        if (actual := getattr(action, "actual_time", None))
                         else None,
                         "start_workflow_result": str(getattr(action, "start_workflow_result", ""))
                         if getattr(action, "start_workflow_result", None)

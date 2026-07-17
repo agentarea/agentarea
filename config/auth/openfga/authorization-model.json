@@ -2,19 +2,9 @@
   "schema_version": "1.1",
   "type_definitions": [
     {
-      "type": "User",
-      "relations": {},
-      "metadata": {
-        "relations": {}
-      }
+      "type": "User"
     },
     {
-      "type": "Workspace",
-      "relations": {
-        "members": {
-          "this": {}
-        }
-      },
       "metadata": {
         "relations": {
           "members": {
@@ -28,89 +18,18 @@
             ]
           }
         }
-      }
-    },
-    {
-      "type": "SkillCollection",
+      },
       "relations": {
-        "parents": {
+        "members": {
           "this": {}
-        },
-        "viewers": {
-          "this": {}
-        },
-        "editors": {
-          "this": {}
-        },
-        "owners": {
-          "this": {}
-        },
-        "use": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "viewers"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              }
-            ]
-          }
-        },
-        "configure": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              }
-            ]
-          }
-        },
-        "manage": {
-          "computedUserset": {
-            "relation": "owners"
-          }
         }
       },
+      "type": "Workspace"
+    },
+    {
       "metadata": {
         "relations": {
-          "parents": {
-            "directly_related_user_types": [
-              {
-                "type": "Workspace"
-              }
-            ]
-          },
-          "viewers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
+          "configure": {},
           "editors": {
             "directly_related_user_types": [
               {
@@ -120,11 +39,12 @@
                 "type": "Agent"
               },
               {
-                "type": "Workspace",
-                "relation": "members"
+                "relation": "members",
+                "type": "Workspace"
               }
             ]
           },
+          "manage": {},
           "owners": {
             "directly_related_user_types": [
               {
@@ -134,23 +54,60 @@
                 "type": "Agent"
               }
             ]
+          },
+          "parents": {
+            "directly_related_user_types": [
+              {
+                "type": "Workspace"
+              }
+            ]
+          },
+          "use": {},
+          "viewers": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "type": "Agent"
+              },
+              {
+                "relation": "members",
+                "type": "Workspace"
+              }
+            ]
           }
         }
-      }
-    },
-    {
-      "type": "Skill",
+      },
       "relations": {
-        "collections": {
-          "this": {}
-        },
-        "viewers": {
-          "this": {}
+        "configure": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "editors"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "owners"
+                }
+              }
+            ]
+          }
         },
         "editors": {
           "this": {}
         },
+        "manage": {
+          "computedUserset": {
+            "relation": "owners"
+          }
+        },
         "owners": {
+          "this": {}
+        },
+        "parents": {
           "this": {}
         },
         "use": {
@@ -170,68 +127,17 @@
                 "computedUserset": {
                   "relation": "owners"
                 }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "use"
-                  }
-                }
               }
             ]
           }
         },
-        "configure": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "configure"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "manage": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "manage"
-                  }
-                }
-              }
-            ]
-          }
+        "viewers": {
+          "this": {}
         }
       },
+      "type": "SkillCollection"
+    },
+    {
       "metadata": {
         "relations": {
           "collections": {
@@ -241,16 +147,7 @@
               }
             ]
           },
-          "viewers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          },
+          "configure": {},
           "editors": {
             "directly_related_user_types": [
               {
@@ -261,7 +158,19 @@
               }
             ]
           },
+          "manage": {},
           "owners": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "type": "Agent"
+              }
+            ]
+          },
+          "use": {},
+          "viewers": {
             "directly_related_user_types": [
               {
                 "type": "User"
@@ -272,17 +181,133 @@
             ]
           }
         }
-      }
+      },
+      "relations": {
+        "collections": {
+          "this": {}
+        },
+        "configure": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "editors"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "owners"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "configure"
+                  },
+                  "tupleset": {
+                    "relation": "collections"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "editors": {
+          "this": {}
+        },
+        "manage": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "owners"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "manage"
+                  },
+                  "tupleset": {
+                    "relation": "collections"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "owners": {
+          "this": {}
+        },
+        "use": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "viewers"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "editors"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "owners"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "use"
+                  },
+                  "tupleset": {
+                    "relation": "collections"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "viewers": {
+          "this": {}
+        }
+      },
+      "type": "Skill"
     },
     {
-      "type": "MCPServer",
+      "metadata": {
+        "relations": {
+          "connect": {},
+          "connectors": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "type": "Agent"
+              },
+              {
+                "relation": "members",
+                "type": "Workspace"
+              }
+            ]
+          },
+          "manage": {},
+          "operators": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "type": "Agent"
+              }
+            ]
+          }
+        }
+      },
       "relations": {
-        "connectors": {
-          "this": {}
-        },
-        "operators": {
-          "this": {}
-        },
         "connect": {
           "union": {
             "child": [
@@ -299,28 +324,24 @@
             ]
           }
         },
+        "connectors": {
+          "this": {}
+        },
         "manage": {
           "computedUserset": {
             "relation": "operators"
           }
+        },
+        "operators": {
+          "this": {}
         }
       },
+      "type": "MCPServer"
+    },
+    {
       "metadata": {
         "relations": {
-          "connectors": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
+          "operate": {},
           "operators": {
             "directly_related_user_types": [
               {
@@ -328,24 +349,32 @@
               },
               {
                 "type": "Agent"
+              },
+              {
+                "relation": "members",
+                "type": "Workspace"
+              }
+            ]
+          },
+          "own": {},
+          "owners": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              }
+            ]
+          },
+          "run_task": {},
+          "tasks": {
+            "directly_related_user_types": [
+              {
+                "type": "Task"
               }
             ]
           }
         }
-      }
-    },
-    {
-      "type": "Agent",
+      },
       "relations": {
-        "tasks": {
-          "this": {}
-        },
-        "operators": {
-          "this": {}
-        },
-        "owners": {
-          "this": {}
-        },
         "operate": {
           "union": {
             "child": [
@@ -362,57 +391,85 @@
             ]
           }
         },
+        "operators": {
+          "this": {}
+        },
         "own": {
           "computedUserset": {
             "relation": "owners"
           }
         },
+        "owners": {
+          "this": {}
+        },
         "run_task": {
           "computedUserset": {
             "relation": "tasks"
           }
+        },
+        "tasks": {
+          "this": {}
         }
       },
+      "type": "Agent"
+    },
+    {
       "metadata": {
         "relations": {
-          "tasks": {
-            "directly_related_user_types": [
-              {
-                "type": "Task"
-              }
-            ]
-          },
-          "operators": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
+          "manage": {},
           "owners": {
             "directly_related_user_types": [
               {
                 "type": "User"
               }
             ]
+          },
+          "use": {},
+          "users": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "relation": "members",
+                "type": "Workspace"
+              }
+            ]
           }
         }
-      }
-    },
-    {
-      "type": "Session",
+      },
       "relations": {
-        "tasks": {
+        "manage": {
+          "computedUserset": {
+            "relation": "owners"
+          }
+        },
+        "owners": {
+          "this": {}
+        },
+        "use": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "users"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "owners"
+                }
+              }
+            ]
+          }
+        },
+        "users": {
           "this": {}
         }
       },
+      "type": "Client"
+    },
+    {
       "metadata": {
         "relations": {
           "tasks": {
@@ -423,21 +480,49 @@
             ]
           }
         }
-      }
-    },
-    {
-      "type": "Task",
-      "relations": {},
-      "metadata": {
-        "relations": {}
-      }
-    },
-    {
-      "type": "Tool",
+      },
       "relations": {
-        "workspace": {
+        "tasks": {
           "this": {}
-        },
+        }
+      },
+      "type": "Session"
+    },
+    {
+      "type": "Task"
+    },
+    {
+      "metadata": {
+        "relations": {
+          "callers": {
+            "directly_related_user_types": [
+              {
+                "type": "User"
+              },
+              {
+                "type": "Task"
+              },
+              {
+                "relation": "tasks",
+                "type": "Session"
+              },
+              {
+                "relation": "tasks",
+                "type": "Agent"
+              }
+            ]
+          },
+          "can_call": {},
+          "workspace": {
+            "directly_related_user_types": [
+              {
+                "type": "Workspace"
+              }
+            ]
+          }
+        }
+      },
+      "relations": {
         "callers": {
           "this": {}
         },
@@ -451,27 +536,26 @@
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "workspace"
-                  },
                   "computedUserset": {
                     "relation": "members"
+                  },
+                  "tupleset": {
+                    "relation": "workspace"
                   }
                 }
               }
             ]
           }
+        },
+        "workspace": {
+          "this": {}
         }
       },
+      "type": "Tool"
+    },
+    {
       "metadata": {
         "relations": {
-          "workspace": {
-            "directly_related_user_types": [
-              {
-                "type": "Workspace"
-              }
-            ]
-          },
           "callers": {
             "directly_related_user_types": [
               {
@@ -481,50 +565,36 @@
                 "type": "Task"
               },
               {
-                "type": "Session",
-                "relation": "tasks"
+                "relation": "tasks",
+                "type": "Session"
               },
               {
-                "type": "Agent",
-                "relation": "tasks"
+                "relation": "tasks",
+                "type": "Agent"
+              }
+            ]
+          },
+          "can_call": {},
+          "direct_call": {},
+          "tool": {
+            "directly_related_user_types": [
+              {
+                "type": "Tool"
+              }
+            ]
+          },
+          "workspace": {
+            "directly_related_user_types": [
+              {
+                "type": "Workspace"
               }
             ]
           }
         }
-      }
-    },
-    {
-      "type": "ToolResource",
+      },
       "relations": {
-        "workspace": {
-          "this": {}
-        },
-        "tool": {
-          "this": {}
-        },
         "callers": {
           "this": {}
-        },
-        "direct_call": {
-          "intersection": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "callers"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "workspace"
-                  },
-                  "computedUserset": {
-                    "relation": "members"
-                  }
-                }
-              }
-            ]
-          }
         },
         "can_call": {
           "union": {
@@ -536,54 +606,46 @@
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "tool"
-                  },
                   "computedUserset": {
                     "relation": "can_call"
+                  },
+                  "tupleset": {
+                    "relation": "tool"
                   }
                 }
               }
             ]
           }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "workspace": {
-            "directly_related_user_types": [
+        },
+        "direct_call": {
+          "intersection": {
+            "child": [
               {
-                "type": "Workspace"
-              }
-            ]
-          },
-          "tool": {
-            "directly_related_user_types": [
-              {
-                "type": "Tool"
-              }
-            ]
-          },
-          "callers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
+                "computedUserset": {
+                  "relation": "callers"
+                }
               },
               {
-                "type": "Task"
-              },
-              {
-                "type": "Session",
-                "relation": "tasks"
-              },
-              {
-                "type": "Agent",
-                "relation": "tasks"
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "members"
+                  },
+                  "tupleset": {
+                    "relation": "workspace"
+                  }
+                }
               }
             ]
           }
+        },
+        "tool": {
+          "this": {}
+        },
+        "workspace": {
+          "this": {}
         }
-      }
+      },
+      "type": "ToolResource"
     }
   ]
 }

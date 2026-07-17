@@ -1,6 +1,7 @@
 "use client";
 
 import { createElement, useEffect, useState } from "react";
+import Image from "next/image";
 import { AlertCircle, Globe, Plug } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { getBuiltinToolIcon } from "@/app/(main)/agents/create/utils/builtinToolUtils";
@@ -39,9 +40,11 @@ function ToolTile({ tool }: { tool: AgentToolIcon }) {
     });
   } else if (tool.src) {
     content = (
-      <img
+      <Image
         src={tool.src}
         alt={tool.label}
+        width={24}
+        height={24}
         className="h-full w-full rounded-sm object-contain"
       />
     );

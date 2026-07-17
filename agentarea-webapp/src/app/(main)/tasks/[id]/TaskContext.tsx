@@ -6,7 +6,6 @@ import {
   getAgentTaskStatusAction as getAgentTaskStatus,
   getTaskPolicySnapshotAction as getTaskPolicySnapshot,
 } from "@/lib/server-actions";
-import type { TaskWithAgent } from "@/lib/api";
 import type { EffectivePolicy, EffectivePolicyResponse } from "@/types/policies";
 
 interface TaskData {
@@ -49,25 +48,26 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-function parseTaskData(raw: any): TaskData | null {
-  if (!raw) return null;
+function parseTaskData(raw: unknown): TaskData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
   return {
-    id: String(raw.id),
-    agent_id: String(raw.agent_id),
-    description: raw.description,
-    status: raw.status,
-    created_at: raw.created_at,
-    execution_id: raw.execution_id || undefined,
-    agent_name: raw.agent_name,
-    agent_description: raw.agent_description || undefined,
-    result: typeof raw.result === "object" && raw.result !== null ? raw.result as Record<string, unknown> : undefined,
-    parameters: typeof raw.parameters === "object" && raw.parameters !== null ? raw.parameters as Record<string, unknown> : undefined,
+    id: String(r.id),
+    agent_id: String(r.agent_id),
+    description: r.description as string | undefined,
+    status: r.status as string,
+    created_at: r.created_at as string | undefined,
+    execution_id: r.execution_id ? String(r.execution_id) : undefined,
+    agent_name: r.agent_name as string | undefined,
+    agent_description: r.agent_description ? String(r.agent_description) : undefined,
+    result: typeof r.result === "object" && r.result !== null ? r.result as Record<string, unknown> : undefined,
+    parameters: typeof r.parameters === "object" && r.parameters !== null ? r.parameters as Record<string, unknown> : undefined,
   };
 }
 
 interface TaskProviderProps {
   taskId: string;
-  initialTask?: any;
+  initialTask?: unknown;
   initialError?: string | null;
   children: React.ReactNode;
 }
@@ -106,27 +106,32 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
     }
   }, [taskId]);
 
+  const statusTaskId = task?.id;
+  const statusAgentId = task?.agent_id;
+
   // Load status in background (non-blocking, uses Temporal)
   useEffect(() => {
-    if (!task) return;
+    if (!statusTaskId || !statusAgentId) return;
     const loadStatus = async () => {
       try {
-        const res = await getAgentTaskStatus(task.agent_id, task.id);
+        const res = await getAgentTaskStatus(statusAgentId, statusTaskId);
         if (!res.error) setTaskStatus(res.data as TaskStatus);
       } catch {
         // Status is optional — page works without it
       }
     };
     loadStatus();
-  }, [task?.id]);
+  }, [statusAgentId, statusTaskId]);
+
+  const policyTaskId = task?.id;
 
   // Load the immutable governance policy snapshot for the task (best-effort:
   // legacy tasks return 404, which we treat as "no policy").
   useEffect(() => {
-    if (!task) return;
+    if (!policyTaskId) return;
     const loadPolicy = async () => {
       try {
-        const res = await getTaskPolicySnapshot(task.id);
+        const res = await getTaskPolicySnapshot(policyTaskId);
         if (!res.error && res.data) {
           setPolicy(
             (res.data as EffectivePolicyResponse).effective_policy ?? null
@@ -137,14 +142,14 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
       }
     };
     loadPolicy();
-  }, [task?.id]);
+  }, [policyTaskId]);
 
   // Only fetch client-side if no server data was provided
   useEffect(() => {
     if (!initialTask && !initialError) {
       loadTask();
     }
-  }, []);
+  }, [initialError, initialTask, loadTask]);
 
   return (
     <TaskContext.Provider

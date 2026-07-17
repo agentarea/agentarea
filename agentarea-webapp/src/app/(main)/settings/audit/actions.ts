@@ -274,7 +274,9 @@ async function buildResourceIndex(
   return index;
 }
 
-async function fetchData<T>(promise: Promise<{ data?: T; error?: unknown }>) {
+async function fetchData(
+  promise: Promise<{ data?: unknown; error?: unknown }>
+) {
   const { data, error } = await promise;
   if (error) return [];
   return data;
@@ -378,9 +380,9 @@ function asArray<T>(value: unknown): T[] {
   if (
     value &&
     typeof value === "object" &&
-    Array.isArray((value as any).items)
+    Array.isArray((value as Record<string, unknown>).items)
   ) {
-    return (value as any).items as T[];
+    return (value as Record<string, unknown>).items as T[];
   }
   return [];
 }

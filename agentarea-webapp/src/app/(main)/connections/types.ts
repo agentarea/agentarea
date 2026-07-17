@@ -1,13 +1,13 @@
-import { components } from "@/api/schema";
+import type { McpServerInstanceResponse, McpServerResponse } from "@/api/client/types.gen";
 
 /**
  * Shared types for MCP servers, instances, and OpenAPI connections
  * Based on API schema types
  */
 
-export type MCPServerResponse = components["schemas"]["MCPServerResponse"];
+export type MCPServerResponse = McpServerResponse;
 export type MCPServerInstanceResponse =
-  components["schemas"]["MCPServerInstanceResponse"];
+  McpServerInstanceResponse;
 
 /**
  * Extended MCP Server type with optional fields for UI
@@ -34,7 +34,7 @@ export interface OpenAPIConnection {
   description?: string | null;
   spec_url?: string | null;
   auth_config_id?: string | null;
-  available_tools: Array<{ name: string; description: string; inputSchema?: any }>;
+  available_tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
   custom_headers?: Array<{ name: string; secret: boolean; value: string | null }> | null;
   status: string;
   created_at: string;

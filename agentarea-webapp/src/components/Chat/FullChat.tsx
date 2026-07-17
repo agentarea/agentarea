@@ -1,15 +1,15 @@
 "use client";
 
+import type { PolicyDocument } from "@/api/client/types.gen";
 import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import { useMentions } from "@/hooks/useMentions";
 import {
   pauseAgentTaskAction as pauseAgentTask,
-  resolveEscalationAction as resolveEscalation,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
+import { useTaskActions } from "@/hooks/useTaskActions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
@@ -63,7 +63,7 @@ export interface TaskPolicyOption {
   policy?: TaskPolicyRule;
 }
 
-type TaskPolicyDocument = components["schemas"]["PolicyDocument"];
+type TaskPolicyDocument = PolicyDocument;
 
 function buildTaskPolicyDocument(
   rule: TaskPolicyRule | undefined
@@ -191,13 +191,18 @@ export default function FullChat({
       initialMessages,
     });
 
+  // Ref so the agent-change effect can call the latest clearFiles without
+  // listing an unstable function reference as a dep (useFileUpload doesn't
+  // memoize it).
+  const clearFilesRef = React.useRef<() => void>(() => {});
+
   // Clear messages when agent changes
   React.useEffect(() => {
     setMessages([]);
     setInput("");
     setInputDisplay("");
-    clearFiles();
-  }, [agent.id]);
+    clearFilesRef.current();
+  }, [agent.id, setMessages]);
 
   const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
     agent.id,
@@ -232,16 +237,11 @@ export default function FullChat({
     openFileDialog,
     clearFiles,
   } = useFileUpload();
+  clearFilesRef.current = clearFiles;
 
-  // Callback for resolving tool escalations (approve/deny)
-  const handleResolveEscalation = React.useCallback(
-    async (escalationId: string, approved: boolean, comment: string) => {
-      const tid = currentTaskId || taskId;
-      if (!tid) return;
-      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
-    },
-    [agent.id, currentTaskId, taskId]
-  );
+  // Single centralized action layer for this task (resolve escalation, submit
+  // structured input incl. secrets → vault). Same layer every task surface uses.
+  const actions = useTaskActions(agent.id, currentTaskId || taskId || null);
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
@@ -350,18 +350,19 @@ export default function FullChat({
   };
 
   // SSE message handler
-  const handleSSEMessage = React.useCallback(
-    createSSEEventHandler({
-      currentTaskId,
-      setMessages,
-      setIsLoading,
-      setTaskLifecycleStatus,
-      setCurrentTaskId,
-      onTaskCreated: callbacks.onTaskCreated.current,
-      onTaskStarted: callbacks.onTaskStarted.current,
-      onTaskFinished: callbacks.onTaskFinished.current,
-    }),
-    [currentTaskId, callbacks]
+  const handleSSEMessage = React.useMemo(
+    () =>
+      createSSEEventHandler({
+        currentTaskId,
+        setMessages,
+        setIsLoading,
+        setTaskLifecycleStatus,
+        setCurrentTaskId,
+        onTaskCreated: callbacks.onTaskCreated.current,
+        onTaskStarted: callbacks.onTaskStarted.current,
+        onTaskFinished: callbacks.onTaskFinished.current,
+      }),
+    [currentTaskId, setMessages, setCurrentTaskId, callbacks]
   );
 
   // Send message handler
@@ -467,7 +468,7 @@ export default function FullChat({
         // Let's allow the user to interact again by stopping the loading state.
         setIsLoading(false);
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to pause task", {
         description: "An unexpected error occurred",
       });
@@ -494,7 +495,7 @@ export default function FullChat({
         setIsLoading(true);
         toast.success("Task resumed successfully");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to resume task", {
         description: "An unexpected error occurred",
       });
@@ -572,7 +573,8 @@ export default function FullChat({
                   message={message}
                   agent_name={agent.name}
                   onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={handleResolveEscalation}
+                  onResolveEscalation={actions.resolveEscalation}
+                  onSubmitInput={actions.submitInput}
                 />
               );
             } else if (message.role === "user") {
@@ -675,7 +677,7 @@ export default function FullChat({
       </div>
 
       {/* Badge Suggestions */}
-      {startCentered && (
+      {startCentered && (badgeSuggestions?.length ?? 0) > 0 && (
         <div className="flex-none w-full pb-4">
           <BadgeSuggestions
             suggestions={badgeSuggestions || []}

@@ -147,16 +147,20 @@ class TestA2AAgentDiscovery:
         assert isinstance(agent_card, AgentCard)
         assert agent_card.name == "Test Agent"
         assert agent_card.description == "A test agent for A2A discovery"
-        assert agent_card.url == f"https://api.example.com/api/v1/agents/{sample_agent.id}/a2a/rpc"
         assert agent_card.version == "1.0.0"
         assert agent_card.supported_interfaces is not None
+        assert (
+            agent_card.supported_interfaces[0].url
+            == f"https://api.example.com/api/v1/agents/{sample_agent.id}/a2a/rpc"
+        )
         assert agent_card.supported_interfaces[0].protocol_binding == "JSONRPC"
         assert agent_card.supported_interfaces[0].protocol_version == "1.0"
 
-        # Verify capabilities
+        # Verify capabilities. push_notifications is now always True (webhook
+        # push via the channel-delivery pipeline), and state_transition_history
+        # is no longer a field on AgentCapabilities.
         assert agent_card.capabilities.streaming is True
-        assert agent_card.capabilities.push_notifications is False
-        assert agent_card.capabilities.state_transition_history is True
+        assert agent_card.capabilities.push_notifications is True
         assert agent_card.capabilities.extended_agent_card is True
 
         # Verify skills - should have 3 skills for full-featured agent
@@ -240,9 +244,11 @@ class TestA2AAgentDiscovery:
         assert isinstance(agent_card, AgentCard)
         assert agent_card.name == "Test Agent"
         assert agent_card.description == "A test agent for A2A discovery"
-        assert agent_card.url == f"/api/v1/agents/{sample_agent.id}/a2a/rpc"
         assert agent_card.supported_interfaces is not None
-        assert agent_card.supported_interfaces[0].url == agent_card.url
+        assert (
+            agent_card.supported_interfaces[0].url
+            == f"/api/v1/agents/{sample_agent.id}/a2a/rpc"
+        )
 
         # Verify current agent data is included in description and skills
         assert "A test agent for A2A discovery" in agent_card.description

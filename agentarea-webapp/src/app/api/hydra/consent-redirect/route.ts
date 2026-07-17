@@ -22,8 +22,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing consent_challenge" }, { status: 400 });
   }
 
+  interface HydraConsentRequest {
+    skip?: boolean;
+    client?: { skip_consent?: boolean; audience?: string[] };
+    requested_scope?: string[];
+    requested_access_token_audience?: string[];
+    context?: { workspace_id?: string };
+    subject?: string;
+  }
   // Fetch consent request details from Hydra admin
-  let consentRequest: any;
+  let consentRequest: HydraConsentRequest;
   try {
     const res = await fetch(
       `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${consentChallenge}`
@@ -49,12 +57,12 @@ export async function GET(request: NextRequest) {
     // MCP clients often send empty scopes; we default to openid + offline_access
     // so the issued token works for API access.
     const grantScope =
-      consentRequest.requested_scope?.length > 0
+      consentRequest.requested_scope && consentRequest.requested_scope.length > 0
         ? consentRequest.requested_scope
         : ["openid", "offline_access"];
 
     const grantAudience =
-      consentRequest.requested_access_token_audience?.length > 0
+      consentRequest.requested_access_token_audience && consentRequest.requested_access_token_audience.length > 0
         ? consentRequest.requested_access_token_audience
         : consentRequest.client?.audience || [];
 

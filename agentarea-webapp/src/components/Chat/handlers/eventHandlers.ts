@@ -3,37 +3,60 @@
  * Creates a centralized handler that delegates to specialized handlers
  */
 
+import {
+  EVENT_A2UI_CREATE_SURFACE,
+  EVENT_A2UI_DELETE_SURFACE,
+  EVENT_A2UI_UPDATE_COMPONENTS,
+  EVENT_A2UI_UPDATE_DATA_MODEL,
+  EVENT_CONNECTED,
+  EVENT_ERROR,
+  EVENT_HUMAN_APPROVAL_DENIED,
+  EVENT_HUMAN_APPROVAL_RECEIVED,
+  EVENT_HUMAN_INPUT_RECEIVED,
+  EVENT_LLM_CALL_CHUNK,
+  EVENT_MESSAGE,
+  EVENT_TASK_CREATED,
+  EVENT_TASK_FAILED,
+  EVENT_TOOL_CALL_COMPLETED,
+  EVENT_TOOL_CALL_FAILED,
+  EVENT_TOOL_CALL_STARTED,
+  EVENT_WORKFLOW_COMPLETED,
+  EVENT_WORKFLOW_FAILED,
+} from "../constants/eventTypes";
 import { parseEventToMessage, shouldDisplayEvent } from "../EventParser";
 import { normalizeEventType } from "../utils/eventNormalizer";
 import { AnyMessage } from "../utils/messageAccumulator";
 import {
-  handleLLMChunk,
-  handleToolCallStarted,
-  handleToolCallCompleted,
-  handleWorkflowCompleted,
-  handleTaskCreated,
-  handleError,
   handleA2UIEvent,
+  handleError,
+  handleLLMChunk,
+  handleTaskCreated,
+  handleToolCallCompleted,
+  handleToolCallStarted,
+  handleWorkflowCompleted,
 } from "./messageEventHandlers";
-import {
-  EVENT_LLM_CALL_CHUNK,
-  EVENT_TOOL_CALL_STARTED,
-  EVENT_TOOL_CALL_COMPLETED,
-  EVENT_TOOL_CALL_FAILED,
-  EVENT_WORKFLOW_COMPLETED,
-  EVENT_WORKFLOW_FAILED,
-  EVENT_TASK_FAILED,
-  EVENT_CONNECTED,
-  EVENT_TASK_CREATED,
-  EVENT_ERROR,
-  EVENT_MESSAGE,
-  EVENT_A2UI_CREATE_SURFACE,
-  EVENT_A2UI_UPDATE_COMPONENTS,
-  EVENT_A2UI_UPDATE_DATA_MODEL,
-  EVENT_A2UI_DELETE_SURFACE,
-  EVENT_HUMAN_APPROVAL_RECEIVED,
-  EVENT_HUMAN_APPROVAL_DENIED,
-} from "../constants/eventTypes";
+
+export interface SSEEventData {
+  event_type?: string;
+  original_event_type?: string;
+  escalation_id?: string;
+  input_request_id?: string;
+  comment?: string;
+  error?: string;
+  message?: string;
+  result?: { error?: string };
+  original_data?: {
+    escalation_id?: string;
+    input_request_id?: string;
+    comment?: string;
+  };
+  [key: string]: unknown;
+}
+
+export interface SSEEvent {
+  type: string;
+  data: SSEEventData;
+}
 
 export interface SSEEventHandlerOptions {
   /**
@@ -106,7 +129,7 @@ export interface SSEEventHandlerOptions {
  */
 export function createSSEEventHandler(
   options: SSEEventHandlerOptions
-): (event: { type: string; data: any }) => void {
+): (event: SSEEvent) => void {
   const {
     currentTaskId,
     setMessages,
@@ -118,7 +141,7 @@ export function createSSEEventHandler(
     onTaskFinished,
   } = options;
 
-  return (event: { type: string; data: any }) => {
+  return (event: SSEEvent) => {
     // Get the actual event type from the data if available
     const actualEventType =
       event.data?.event_type || event.data?.original_event_type || event.type;
@@ -137,23 +160,51 @@ export function createSSEEventHandler(
       cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED ||
       cleanEventType === EVENT_HUMAN_APPROVAL_DENIED
     ) {
-      const escalationId = event.data?.escalation_id || event.data?.original_data?.escalation_id;
+      const escalationId =
+        event.data?.escalation_id || event.data?.original_data?.escalation_id;
       if (escalationId) {
         setMessages((prev) =>
           prev.map((msg) => {
             if (
               "type" in msg &&
               msg.type === "approval_request" &&
-              (msg as any).data.escalation_id === escalationId
+              msg.data.escalation_id === escalationId
             ) {
               return {
                 ...msg,
                 data: {
-                  ...(msg as any).data,
+                  ...msg.data,
                   resolved: true,
                   approved: cleanEventType === EVENT_HUMAN_APPROVAL_RECEIVED,
-                  deny_comment: event.data?.comment || event.data?.original_data?.comment,
+                  deny_comment:
+                    event.data?.comment || event.data?.original_data?.comment,
                 },
+              };
+            }
+            return msg;
+          })
+        );
+      }
+      return;
+    }
+
+    // Structured input resolution — mark the existing input_request message resolved.
+    // The submitted secret values never come back over SSE; only the request id does.
+    if (cleanEventType === EVENT_HUMAN_INPUT_RECEIVED) {
+      const inputRequestId =
+        event.data?.input_request_id ||
+        event.data?.original_data?.input_request_id;
+      if (inputRequestId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (
+              "type" in msg &&
+              msg.type === "input_request" &&
+              msg.data.input_request_id === inputRequestId
+            ) {
+              return {
+                ...msg,
+                data: { ...msg.data, resolved: true },
               };
             }
             return msg;
@@ -221,9 +272,16 @@ export function createSSEEventHandler(
 
     if (cleanEventType === EVENT_WORKFLOW_COMPLETED) {
       setTaskLifecycleStatus?.("completed");
-    } else if (cleanEventType === EVENT_WORKFLOW_FAILED || cleanEventType === EVENT_TASK_FAILED) {
-      const errorText =
-        String(event.data?.error || event.data?.message || event.data?.result?.error || "").toLowerCase();
+    } else if (
+      cleanEventType === EVENT_WORKFLOW_FAILED ||
+      cleanEventType === EVENT_TASK_FAILED
+    ) {
+      const errorText = String(
+        event.data?.error ||
+          event.data?.message ||
+          event.data?.result?.error ||
+          ""
+      ).toLowerCase();
       if (
         errorText.includes("insufficient balance") ||
         errorText.includes("no resource package") ||

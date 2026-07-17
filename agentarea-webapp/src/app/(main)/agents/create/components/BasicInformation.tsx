@@ -1,13 +1,14 @@
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
+  Control,
   Controller,
   FieldErrors,
   UseFormRegister,
   UseFormSetValue,
 } from "react-hook-form";
-import type { components } from "@/api/schema";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
@@ -19,11 +20,11 @@ import type { AgentFormValues } from "../../create/types";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import ConfigSheet from "./ConfigSheet";
 
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
+type LLMModelInstance = ModelInstanceResponse;
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
-  control: any;
+  control: Control<AgentFormValues>;
   errors: FieldErrors<AgentFormValues>;
   setValue: UseFormSetValue<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
@@ -35,9 +36,7 @@ const BasicInformation = ({
   register,
   control,
   errors,
-  setValue,
   llmModelInstances,
-  onOpenConfigSheet,
   onRefreshModels,
 }: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
@@ -59,7 +58,7 @@ const BasicInformation = ({
     setSearchableSelectOpen(false);
   };
 
-  const handleAfterSubmit = (config: any) => {
+  const handleAfterSubmit = () => {
     // Обновить список моделей после создания конфигурации
     onRefreshModels?.();
     // Закрыть sheet после успешного создания

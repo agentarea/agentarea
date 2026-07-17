@@ -8,11 +8,11 @@ API Key lifecycle (management — JWT-protected):
 """
 
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,10 +58,10 @@ class APIKeyResponse(BaseModel):
     name: str
     token_prefix: str
     is_active: bool
-    expires_at: datetime | None
+    expires_at: UtcDatetime | None
     access_count: int
-    last_accessed_at: datetime | None
-    created_at: datetime
+    last_accessed_at: UtcDatetime | None
+    created_at: UtcDatetime
 
     class Config:
         """Pydantic config."""

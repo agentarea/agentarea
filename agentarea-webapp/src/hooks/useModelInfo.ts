@@ -81,7 +81,7 @@ export const useModelInfo = (modelId: string | null | undefined): ModelInfo => {
         if (modelSpecs) {
           // Find model spec by model_name or display_name
           const foundModel = modelSpecs.find(
-            (spec) =>
+            (spec: { model_name: string; display_name: string }) =>
               spec.model_name.toLowerCase() === modelId.toLowerCase() ||
               spec.display_name.toLowerCase() === modelId.toLowerCase()
           );

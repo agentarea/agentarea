@@ -13,7 +13,7 @@ import logging
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
-from agentarea_common.infrastructure.database import get_read_db_session
+from agentarea_common.config.database import get_read_db_session
 from agentarea_common.utils.types import (
     AgentCapabilities,
     AgentCard,
