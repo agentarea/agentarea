@@ -194,7 +194,30 @@ class BaseTaskService(ABC):
             metadata=task.metadata,
         )
 
-        # Persist the update
+        # Enqueue the events BEFORE the aggregate write, on the same session:
+        # the repository commits, so a row added afterwards is not covered by
+        # that commit — which is the whole guarantee the outbox exists for. The
+        # payloads describe the state being written, and the values are already
+        # known here. If the write raises, the session rolls back and the rows
+        # go with it.
+        await self._publish_task_event(
+            TaskUpdated(
+                task_id=str(task_domain.id),
+                status=task_domain.status,
+                metadata=task_domain.metadata,
+            )
+        )
+        if old_status != new_status:
+            await self._publish_task_event(
+                TaskStatusChanged(
+                    task_id=str(task_domain.id),
+                    old_status=old_status,
+                    new_status=new_status,
+                    status_timestamp=task_domain.updated_at or datetime.now(),
+                )
+            )
+
+        # Persist the update — this commit covers the outbox rows above.
         updated_task_domain = await self.task_repository.update_task(task_domain)
 
         # Convert back to AgentTask for return
@@ -217,28 +240,6 @@ class BaseTaskService(ABC):
             workspace_id=updated_task_domain.workspace_id,
             metadata=updated_task_domain.metadata,
         )
-
-        # Enqueue update event(s). With the outbox this happens on the same
-        # session as the aggregate change, so a failure must propagate rather
-        # than be swallowed (that swallowing was the bug this outbox replaces).
-        await self._publish_task_event(
-            TaskUpdated(
-                task_id=str(updated_task.id),
-                status=updated_task.status,
-                metadata=updated_task.metadata,
-            )
-        )
-
-        # Publish status change event if status changed
-        if old_status != new_status:
-            await self._publish_task_event(
-                TaskStatusChanged(
-                    task_id=str(updated_task.id),
-                    old_status=old_status,
-                    new_status=new_status,
-                    status_timestamp=updated_task.updated_at or datetime.now(),
-                )
-            )
 
         logger.info(f"Updated task {updated_task.id}")
         return updated_task
@@ -392,8 +393,8 @@ class BaseTaskService(ABC):
         the current session so it commits atomically with the task change; the
         worker relay publishes it to the broker later. A failure here propagates
         (it is part of the same transaction) — the operation must fail rather
-        than silently drop the event. Only the legacy no-outbox path (tests /
-        callers that inject a raw broker) publishes directly.
+        than silently drop the event. Only the no-outbox path (tests / callers
+        that inject a raw broker) publishes directly.
 
         Args:
             event: The domain event to publish
