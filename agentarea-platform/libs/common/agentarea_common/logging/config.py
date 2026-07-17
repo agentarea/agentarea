@@ -6,7 +6,7 @@ import logging.config
 from typing import Any, cast
 
 from ..auth.context import UserContext
-from .filters import LogSanitizerFilter, WorkspaceContextFilter
+from .filters import LogSanitizerFilter, SecretRedactingFilter, WorkspaceContextFilter
 
 
 class WorkspaceContextFormatter(logging.Formatter):
@@ -36,10 +36,12 @@ class WorkspaceContextFormatter(logging.Formatter):
         # formatter replaces the base class's rendering, so it has to carry the
         # traceback itself or the reason is silently dropped. json.dumps escapes
         # the embedded newlines, so the record stays one physical line.
-        if record.exc_info:
-            log_entry["exception"] = self.formatException(record.exc_info)
-        elif record.exc_text:
+        # exc_text first: it is the cache filters redact into. Re-rendering
+        # from exc_info would undo that and put the secret back.
+        if record.exc_text:
             log_entry["exception"] = record.exc_text
+        elif record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
         if record.stack_info:
             log_entry["stack"] = self.formatStack(record.stack_info)
 
@@ -113,13 +115,17 @@ def setup_logging(
             "sanitize": {
                 "()": LogSanitizerFilter,
             },
+            "redact_secrets": {
+                "()": SecretRedactingFilter,
+            },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "level": level,
                 "formatter": "structured" if enable_structured_logging else "standard",
-                "filters": (["workspace_context"] if user_context else []) + ["sanitize"],
+                "filters": (["workspace_context"] if user_context else [])
+                + ["redact_secrets", "sanitize"],
                 "stream": "ext://sys.stdout",
             }
         },

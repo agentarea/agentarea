@@ -10,6 +10,60 @@ from ..auth.context import UserContext
 _CONTROL_CHARS = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
+# Credentials that reach log strings by accident. Each pattern keeps the
+# surrounding context (which host, which endpoint) and replaces only the secret,
+# so a redacted line still says what failed.
+_REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Telegram bot tokens live in the URL path, so any httpx error quoting the
+    # request URL carries the token with it.
+    (re.compile(r"(/bot)\d+:[A-Za-z0-9_-]+"), r"\1<redacted>"),
+    # DSN passwords: scheme://user:secret@host
+    (re.compile(r"(://[^:/\s@]+:)[^@/\s]+(@)"), r"\1<redacted>\2"),
+    (re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}"), r"\1<redacted>"),
+    (
+        re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|secret|password)(=|:\s*)[^&\s\"']+"),
+        r"\1\2<redacted>",
+    ),
+)
+
+
+def _redact(text: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+class SecretRedactingFilter(logging.Filter):
+    """Strip credentials out of log messages and rendered tracebacks.
+
+    Secrets arrive in log strings incidentally — a token in a URL path, a
+    password in a DSN, an SDK error quoting the request it failed on — so no
+    amount of care at call sites covers it. Redacting in the pipeline does,
+    including inside exception text, which the structured formatter renders.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:
+            # Never drop a record because redaction failed.
+            return True
+
+        redacted = _redact(message)
+        if redacted != message:
+            record.msg = redacted
+            record.args = ()
+
+        # Pre-render the traceback so the secret is gone before the formatter
+        # sees it; formatters reuse exc_text when it is already set.
+        if record.exc_info and not record.exc_text:
+            record.exc_text = _redact(logging.Formatter().formatException(record.exc_info))
+        elif record.exc_text:
+            record.exc_text = _redact(record.exc_text)
+
+        return True
+
+
 class LogSanitizerFilter(logging.Filter):
     """Strip CR/LF and control characters from the rendered log message.
 
