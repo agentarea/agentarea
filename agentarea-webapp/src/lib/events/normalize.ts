@@ -32,3 +32,25 @@ export function normalizeSSEEvent(type: string, raw: unknown): EventInput | null
 
   return { eventType, data };
 }
+
+/**
+ * Map a persisted history event into a contract EventInput.
+ *
+ * The row's `id` is the same value the live envelope carries as `event_id`, so
+ * it has to travel with the payload: it is what lets the SSE catch-up replay
+ * dedup against history instead of folding every row a second time.
+ */
+export function normalizeHistory(event: {
+  id?: string;
+  event_type: string;
+  metadata?: Record<string, unknown> | null;
+  message?: string;
+}): EventInput {
+  const meta = asRecord(event.metadata);
+  const original = asRecord(meta.original_data);
+  const data: RawData = { ...meta, ...original };
+  delete data.original_data;
+  if (event.message && data.message === undefined) data.message = event.message;
+  if (event.id && data.event_id === undefined) data.event_id = event.id;
+  return { eventType: event.event_type, data };
+}

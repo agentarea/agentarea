@@ -7,7 +7,7 @@ import type {
   WorkflowEventType,
 } from "@/types/events";
 import { canonicalType, EventInput, Part, TERMINAL_TYPES } from "./contract";
-import { normalizeSSEEvent } from "./normalize";
+import { normalizeHistory, normalizeSSEEvent } from "./normalize";
 import {
   applyEvent,
   EventState,
@@ -20,30 +20,10 @@ import {
  * Single SSE hook over the canonical event contract. Loads history for catch-up,
  * subscribes to the live task stream, and folds every event through the
  * reducer. Returns both the reduced view (parts/timeline, supersede-collapsed)
- * and an append-only raw event log for the debug/events inspector. Replaced the
- * legacy hooks/useSSEMessages, hooks/useTaskConversation and hooks/useTaskEvents
- * pipelines.
+ * and an append-only raw event log for the debug/events inspector.
  */
 
 type RawData = Record<string, unknown>;
-
-function asRecord(value: unknown): RawData {
-  return value && typeof value === "object" ? (value as RawData) : {};
-}
-
-/** Map a persisted history event into a contract EventInput. */
-function normalizeHistory(event: {
-  event_type: string;
-  metadata?: Record<string, unknown> | null;
-  message?: string;
-}): EventInput {
-  const meta = asRecord(event.metadata);
-  const original = asRecord(meta.original_data);
-  const data: RawData = { ...meta, ...original };
-  delete data.original_data;
-  if (event.message && data.message === undefined) data.message = event.message;
-  return { eventType: event.event_type, data };
-}
 
 function isTerminal(eventType: string): boolean {
   return TERMINAL_TYPES.has(canonicalType(eventType));
@@ -164,6 +144,9 @@ export function useTaskEvents(
   // the whole history) idempotent instead of duplicating every row.
   const seenIds = useRef<Set<string>>(new Set());
   const terminalReachedRef = useRef(false);
+  // Live events that arrived while the history fetch was still in flight.
+  const pendingLive = useRef<EventInput[]>([]);
+  const historySettled = useRef(false);
   const disconnectRef = useRef<() => void>(() => {});
 
   const pushRaw = useCallback((eventType: string, data: RawData) => {
@@ -172,9 +155,8 @@ export function useTaskEvents(
     setRawEvents(rawRef.current);
   }, []);
 
-  const push = useCallback(
+  const applyOne = useCallback(
     (event: EventInput) => {
-      if (isControl(event.eventType)) return;
       const data = event.data as RawData;
       const id = eventIdOf(data);
       if (id) {
@@ -187,6 +169,22 @@ export function useTaskEvents(
       pushRaw(event.eventType, data);
     },
     [pushRaw]
+  );
+
+  const push = useCallback(
+    (event: EventInput) => {
+      if (isControl(event.eventType)) return;
+      // History is the older half of this same stream. Folding a live event in
+      // before it lands would order it wrong and — worse — the history fold
+      // rebuilds state from scratch, so the live event would be silently
+      // dropped while its id stayed in seenIds, making it unrecoverable.
+      if (includeHistory && !historySettled.current) {
+        pendingLive.current.push(event);
+        return;
+      }
+      applyOne(event);
+    },
+    [applyOne, includeHistory]
   );
 
   const sseUrl =
@@ -220,6 +218,8 @@ export function useTaskEvents(
   useEffect(() => {
     terminalReachedRef.current = false;
     loadedHistory.current = false;
+    historySettled.current = false;
+    pendingLive.current = [];
     seenIds.current = new Set();
     rawRef.current = [];
     rawCountRef.current = 0;
@@ -271,17 +271,30 @@ export function useTaskEvents(
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load events");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          // Replay whatever streamed in while the fetch was running, in arrival
+          // order and after history. Also runs on failure: a task whose history
+          // could not load must still show live events rather than stall.
+          historySettled.current = true;
+          const buffered = pendingLive.current;
+          pendingLive.current = [];
+          for (const event of buffered) applyOne(event);
+          setLoading(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [agentId, taskId, includeHistory, nonce]);
+  }, [agentId, taskId, includeHistory, nonce, applyOne]);
 
   const refresh = useCallback(() => {
     loadedHistory.current = false;
+    // Buffer live events again: refresh re-runs the history fold, which rebuilds
+    // state from scratch and would otherwise drop anything streaming in now.
+    historySettled.current = false;
+    pendingLive.current = [];
     seenIds.current = new Set();
     rawRef.current = [];
     rawCountRef.current = 0;
