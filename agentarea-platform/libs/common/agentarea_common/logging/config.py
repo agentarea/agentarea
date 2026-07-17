@@ -141,6 +141,28 @@ def setup_logging(
     }
 
     logging.config.dictConfig(config)
+    install_secret_redaction()
+
+
+def install_secret_redaction() -> None:
+    """Put the redacting filter on every handler that exists right now.
+
+    Handler filters only run for records reaching THAT handler, so registering it
+    on our console handler leaves anything logging through its own handlers —
+    uvicorn, gunicorn, a library that configured logging first — unprotected.
+    Re-run this after any code that adds handlers.
+    """
+    for logger in (
+        logging.getLogger(),
+        *(
+            logging.getLogger(name)
+            for name in list(logging.Logger.manager.loggerDict)
+            if isinstance(logging.getLogger(name), logging.Logger)
+        ),
+    ):
+        for handler in logger.handlers:
+            if not any(isinstance(f, SecretRedactingFilter) for f in handler.filters):
+                handler.addFilter(SecretRedactingFilter())
 
 
 def _current_trace_ids() -> dict[str, str]:

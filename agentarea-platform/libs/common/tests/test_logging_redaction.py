@@ -77,6 +77,26 @@ def test_database_password_is_redacted():
     assert "db:5432/agentarea" in entry["message"], "the useful part must survive"
 
 
+def test_a_secret_name_is_not_mistaken_for_a_secret():
+    # A name-based rule redacted "Loaded secret: DATABASE_URL" and
+    # "password: None", hiding the diagnostic while protecting nothing.
+    entry = _emit(lambda log: log.info("Loaded secret: DATABASE_URL"))
+    assert entry["message"] == "Loaded secret: DATABASE_URL"
+
+    entry = _emit(lambda log: log.warning("password: None"))
+    assert entry["message"] == "password: None"
+
+
+def test_secrets_passed_via_extra_are_redacted():
+    entry = _emit(
+        lambda log: log.info(
+            "calling out",
+            extra={"url": f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"},
+        )
+    )
+    assert TELEGRAM_TOKEN not in json.dumps(entry)
+
+
 def test_bearer_token_is_redacted():
     entry = _emit(lambda log: log.warning("upstream said: Authorization: Bearer aat_deadbeefcafe"))
     assert "aat_deadbeefcafe" not in entry["message"]
@@ -85,6 +105,7 @@ def test_bearer_token_is_redacted():
 def test_api_key_query_parameter_is_redacted():
     entry = _emit(lambda log: log.info("GET https://api.example.com/v1?api_key=sk-livesecret42"))
     assert "sk-livesecret42" not in entry["message"]
+    assert "api.example.com/v1" in entry["message"]
 
 
 def test_ordinary_messages_are_untouched():

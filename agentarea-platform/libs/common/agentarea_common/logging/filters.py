@@ -10,20 +10,55 @@ from ..auth.context import UserContext
 _CONTROL_CHARS = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
-# Credentials that reach log strings by accident. Each pattern keeps the
-# surrounding context (which host, which endpoint) and replaces only the secret,
-# so a redacted line still says what failed.
+# Only structural patterns: each one matches a credential by the SHAPE of the
+# string it sits in, never by a nearby identifier. A name-based rule
+# ("secret: ...") cannot tell a value from a key — it redacts
+# "Loaded secret: DATABASE_URL" and "password: None", destroying the diagnostic
+# while protecting nothing. This codebase already learned that lesson with MCP
+# env vars: trust the schema, not a regex over names.
 _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     # Telegram bot tokens live in the URL path, so any httpx error quoting the
     # request URL carries the token with it.
-    (re.compile(r"(/bot)\d+:[A-Za-z0-9_-]+"), r"\1<redacted>"),
-    # DSN passwords: scheme://user:secret@host
+    (re.compile(r"(/bot)\d+:[A-Za-z0-9_-]{20,}"), r"\1<redacted>"),
+    # DSN credentials: scheme://user:secret@host
     (re.compile(r"(://[^:/\s@]+:)[^@/\s]+(@)"), r"\1<redacted>\2"),
+    # Authorization headers.
     (re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}"), r"\1<redacted>"),
+    # Credentials carried in a URL query string.
     (
-        re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|secret|password)(=|:\s*)[^&\s\"']+"),
-        r"\1\2<redacted>",
+        re.compile(r"(?i)([?&](?:api[_-]?key|access[_-]?token|token|password)=)[^&\s\"']+"),
+        r"\1<redacted>",
     ),
+)
+
+
+# Attributes logging itself puts on a record; everything else came from extra=.
+_STANDARD_RECORD_FIELDS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "message",
+        "asctime",
+    }
 )
 
 
@@ -60,6 +95,17 @@ class SecretRedactingFilter(logging.Filter):
             record.exc_text = _redact(logging.Formatter().formatException(record.exc_info))
         elif record.exc_text:
             record.exc_text = _redact(record.exc_text)
+
+        # extra={} fields bypass the message entirely — the structured formatter
+        # serializes each one verbatim, so a credential passed that way would
+        # reach the log untouched.
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_RECORD_FIELDS or key.startswith("_"):
+                continue
+            if isinstance(value, str):
+                cleaned = _redact(value)
+                if cleaned != value:
+                    record.__dict__[key] = cleaned
 
         return True
 
